@@ -1114,9 +1114,9 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ab561859c5d537b185780ca8e7a501a227ed63ca2ad65560f4b41f57320b66c"
+checksum = "b70617312220ada56e308bf4a2287c942629ce36635204eb18faa74db2470514"
 dependencies = [
  "aws-lc-rs",
  "base64",
@@ -6107,9 +6107,9 @@ dependencies = [
 
 [[package]]
 name = "zerofrom"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69faa1f2a1ea75661980b013019ed6687ed0e83d069bc1114e2cc74c6c04c4df"
+checksum = "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272"
 dependencies = [
  "zerofrom-derive",
 ]
