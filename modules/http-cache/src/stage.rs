@@ -13,7 +13,7 @@ use ferron_observability::{
 };
 use futures_util::stream::{self, StreamExt};
 use http::header::{self, HeaderName, HeaderValue};
-use http::{HeaderMap, Method, Response};
+use http::{HeaderMap, Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
@@ -63,7 +63,7 @@ enum LookupResult {
 }
 
 enum CollectBodyOutcome {
-    Complete(Bytes),
+    Complete(Option<Bytes>),
     Overflow {
         prefix: Bytes,
         remainder: UnsyncBoxBody<Bytes, io::Error>,
@@ -270,9 +270,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                 let scope = entry.scope;
                 self.emit_eviction_metrics(ctx, stats);
                 self.emit_request_metric(ctx, "hit", Some(scope), items);
-                ctx.res = Some(HttpResponse::Custom(build_cached_response(
-                    entry, head_only,
-                )?));
+                ctx.res = Some(if entry.body.is_none() {
+                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+                } else {
+                    HttpResponse::Custom(build_cached_response(entry, head_only)?)
+                });
                 LookupResult::Hit
             } else {
                 self.emit_eviction_metrics(ctx, stats);
@@ -311,7 +313,20 @@ impl Stage<HttpContext> for HttpCacheStage {
         }
 
         let response = match ctx.res.take() {
-            Some(HttpResponse::Custom(response)) => response,
+            Some(HttpResponse::Custom(response)) => response.map(Some),
+            Some(HttpResponse::BuiltinError(status, headers)) => {
+                let mut response = Response::new(None);
+                *response.status_mut() = StatusCode::from_u16(status)
+                    .map_err(|e| PipelineError::custom(e.to_string()))?;
+                *response.headers_mut() = headers.unwrap_or_default();
+                response
+            }
+            None => {
+                // No response would implicitly mean "404 Not Found"
+                let mut response = Response::new(None);
+                *response.status_mut() = StatusCode::NOT_FOUND;
+                response
+            }
             other => {
                 ctx.res = other;
                 return Ok(());
@@ -405,13 +420,26 @@ impl Stage<HttpContext> for HttpCacheStage {
             strip_internal_headers(&mut parts.headers);
             append_lsc_cookies_as_set_cookie(&mut parts.headers, &lsc_cookies);
             let body_result =
-                collect_body_with_limit(&mut body, state.config.max_response_size).await?;
+                collect_body_with_limit(body.as_mut(), state.config.max_response_size).await?;
 
             match body_result {
                 CollectBodyOutcome::Complete(body_bytes) => {
-                    let mut outgoing_response =
-                        response_from_parts(parts, body_bytes.clone(), state.head_only)?;
-                    let mut stored_headers = outgoing_response.headers().clone();
+                    let (mut outgoing_response, mut stored_headers, status) =
+                        if let Some(b) = body_bytes.clone() {
+                            let status = parts.status;
+                            let headers = parts.headers.clone();
+                            let res = response_from_parts(parts, b, state.head_only)?;
+                            (HttpResponse::Custom(res), headers, status)
+                        } else {
+                            (
+                                HttpResponse::BuiltinError(
+                                    parts.status.as_u16(),
+                                    Some(parts.headers.clone()),
+                                ),
+                                parts.headers,
+                                parts.status,
+                            )
+                        };
                     for header_name in &state.config.ignored_store_headers {
                         stored_headers.remove(header_name);
                     }
@@ -421,7 +449,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         base_key: state.base_key.clone(),
                         #[allow(clippy::unnecessary_unwrap)]
                         vary: vary_rule.expect("vary rule must exist"),
-                        status: outgoing_response.status(),
+                        status,
                         headers: stored_headers,
                         body: body_bytes,
                         lsc_cookies: lsc_cookies.clone(),
@@ -441,14 +469,18 @@ impl Stage<HttpContext> for HttpCacheStage {
                     self.emit_eviction_metrics(ctx, stats);
                     self.emit_store_metric(ctx, scope);
                     annotate_response_headers(
-                        outgoing_response.headers_mut(),
+                        match &mut outgoing_response {
+                            HttpResponse::Custom(r) => r.headers_mut(),
+                            HttpResponse::BuiltinError(_, Some(h)) => h,
+                            _ => unreachable!(), // These would never be constructed...
+                        },
                         CacheHeaderState::Miss {
                             stored: true,
                             detail: decision.reason,
                         },
                     );
                     self.emit_request_metric(ctx, "miss", Some(scope), items);
-                    ctx.res = Some(HttpResponse::Custom(outgoing_response));
+                    ctx.res = Some(outgoing_response);
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {
                     ctx.events.emit(Event::Log(LogEvent {
@@ -495,7 +527,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                 purge_scope.or(decision.scope),
                 self.store.len(),
             );
-            ctx.res = Some(HttpResponse::Custom(response));
+            let (parts, body) = response.into_parts();
+            ctx.res = Some(if let Some(body) = body {
+                HttpResponse::Custom(Response::from_parts(parts, body))
+            } else {
+                HttpResponse::BuiltinError(parts.status.as_u16(), Some(parts.headers))
+            });
         }
 
         Ok(())
@@ -527,9 +564,11 @@ fn build_cached_response(
     );
 
     if head_only && !headers.contains_key(header::CONTENT_LENGTH) {
-        let value = HeaderValue::from_str(&entry.body.len().to_string())
-            .map_err(|error| PipelineError::custom(error.to_string()))?;
-        headers.insert(header::CONTENT_LENGTH, value);
+        if let Some(body) = &entry.body {
+            let value = HeaderValue::from_str(&body.len().to_string())
+                .map_err(|error| PipelineError::custom(error.to_string()))?;
+            headers.insert(header::CONTENT_LENGTH, value);
+        }
     }
 
     for (name, value) in &headers {
@@ -540,9 +579,14 @@ fn build_cached_response(
         Empty::<Bytes>::new()
             .map_err(|error| match error {})
             .boxed_unsync()
-    } else {
-        Full::new(entry.body)
+    } else if let Some(body) = entry.body {
+        Full::new(body)
             .map_err(|error: std::convert::Infallible| match error {})
+            .boxed_unsync()
+    } else {
+        // No body
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
             .boxed_unsync()
     };
 
@@ -659,9 +703,12 @@ fn build_vary_rule(
 }
 
 async fn collect_body_with_limit(
-    body: &mut UnsyncBoxBody<Bytes, io::Error>,
+    body: Option<&mut UnsyncBoxBody<Bytes, io::Error>>,
     max_size: usize,
 ) -> Result<CollectBodyOutcome, PipelineError> {
+    let Some(body) = body else {
+        return Ok(CollectBodyOutcome::Complete(None));
+    };
     let mut buffer = BytesMut::new();
     while let Some(frame) = body.frame().await {
         let frame = frame.map_err(|error| PipelineError::custom(error.to_string()))?;
@@ -682,7 +729,7 @@ async fn collect_body_with_limit(
         }
     }
 
-    Ok(CollectBodyOutcome::Complete(buffer.freeze()))
+    Ok(CollectBodyOutcome::Complete(Some(buffer.freeze())))
 }
 
 fn response_from_parts(
@@ -826,7 +873,7 @@ mod tests {
             scope: CacheScope::Public,
             status: http::StatusCode::OK,
             headers: HeaderMap::new(),
-            body: Bytes::from_static(b"hello"),
+            body: Some(Bytes::from_static(b"hello")),
             lsc_cookies: Vec::new(),
             age: Duration::from_secs(5),
         };

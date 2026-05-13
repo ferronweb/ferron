@@ -31,7 +31,7 @@ pub struct StoredEntry {
     pub vary: VaryRule,
     pub status: StatusCode,
     pub headers: HeaderMap,
-    pub body: Bytes,
+    pub body: Option<Bytes>,
     pub lsc_cookies: Vec<HeaderValue>,
     pub created_at: Instant,
     pub ttl: Duration,
@@ -46,7 +46,7 @@ pub struct LookupEntry {
     pub scope: CacheScope,
     pub status: StatusCode,
     pub headers: HeaderMap,
-    pub body: Bytes,
+    pub body: Option<Bytes>,
     pub lsc_cookies: Vec<HeaderValue>,
     pub age: Duration,
 }
@@ -391,7 +391,7 @@ mod tests {
             vary,
             status: StatusCode::OK,
             headers,
-            body: Bytes::from(body.to_string()),
+            body: Some(Bytes::from(body.to_string())),
             lsc_cookies: Vec::new(),
             created_at: Instant::now(),
             ttl: Duration::from_secs(60),
@@ -451,7 +451,7 @@ mod tests {
         assert_eq!(len, 1);
         assert_eq!(lookup.scope, CacheScope::Public);
         assert_eq!(lookup.status, StatusCode::OK);
-        assert_eq!(lookup.body, Bytes::from_static(b"cached-body"));
+        assert_eq!(lookup.body, Some(Bytes::from_static(b"cached-body")));
         assert!(lookup.age <= Duration::from_secs(1));
     }
 
@@ -476,12 +476,12 @@ mod tests {
         let (lookup, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
         let lookup = lookup.expect("expected private cache hit");
         assert_eq!(lookup.scope, CacheScope::Private);
-        assert_eq!(lookup.body, Bytes::from_static(b"private"));
+        assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
         let (lookup, _, _) = store.lookup(base_key, &headers, &cookies, None);
         let lookup = lookup.expect("expected public cache hit");
         assert_eq!(lookup.scope, CacheScope::Public);
-        assert_eq!(lookup.body, Bytes::from_static(b"public"));
+        assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
     }
 
     #[test]
@@ -747,7 +747,7 @@ mod tests {
             )
             .0
             .expect("expected unmatched private entry to remain");
-        assert_eq!(remaining.body, Bytes::from_static(b"user-2"));
+        assert_eq!(remaining.body, Some(Bytes::from_static(b"user-2")));
     }
 
     #[test]

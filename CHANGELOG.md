@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Cached responses which are replaced by non-cached default error pages might have been returned as stale.
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included)
 - Forward-proxy DNS validation could be bypassed
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.

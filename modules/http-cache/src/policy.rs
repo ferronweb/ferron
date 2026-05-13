@@ -264,6 +264,7 @@ fn choose_ttl(
         .unwrap_or_else(|| Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
 }
 
+#[inline]
 fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
     let expires = headers.get(header::EXPIRES)?.to_str().ok()?;
     let expires_at = httpdate::parse_http_date(expires).ok()?;
@@ -276,6 +277,7 @@ fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
     expires_at.duration_since(date).ok()
 }
 
+#[inline]
 fn cacheable_by_default(status: StatusCode) -> bool {
     matches!(
         status.as_u16(),
@@ -283,6 +285,7 @@ fn cacheable_by_default(status: StatusCode) -> bool {
     )
 }
 
+#[inline]
 fn contains_token(value: &str, token: &str) -> bool {
     value
         .split(',')
