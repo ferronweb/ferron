@@ -140,6 +140,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             })
             .map(String::from);
 
+        // Set fallback response (404 Not Found default error page)
+        if ctx.res.is_none() {
+            ctx.res = Some(HttpResponse::BuiltinError(404, None))
+        }
+
         // Apply header actions and CORS to the response
         if let Some(HttpResponse::Custom(ref mut response)) = ctx.res {
             let headers = response.headers_mut();
