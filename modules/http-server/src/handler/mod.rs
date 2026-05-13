@@ -643,10 +643,7 @@ async fn request_handler_inner(
     {
         Ok((routing, original)) => (routing, original),
         Err(e) => {
-            emit_error(
-                &events,
-                format!("Invalid request URL percent-encoding: {}", e),
-            );
+            emit_error(&events, format!("Invalid request URL pathname: {}", e));
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
                 400,
