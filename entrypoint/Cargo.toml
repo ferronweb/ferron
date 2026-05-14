@@ -48,8 +48,8 @@ ferron-observability-otlp = { path = "../modules/observability-otlp", optional =
 ferron-observability-prometheus = { path = "../modules/observability-prometheus", optional = true }
 ferron-observability-format-json = { path = "../modules/observability-format-json", optional = true }
 ferron-observability-format-text = { path = "../modules/observability-format-text", optional = true }
-ferron-observability-process-metrics = { path = "../modules/observability-process-metrics", optional = true }
-ferron-observability-admin-metrics = { path = "../modules/observability-admin-metrics", optional = true }
+ferron-metrics-process = { path = "../modules/metrics-process", optional = true }
+ferron-metrics-admin = { path = "../modules/metrics-admin", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
@@ -97,6 +97,6 @@ profile-default = [
     "ferron-observability-prometheus",
     "ferron-observability-format-json",
     "ferron-observability-format-text",
-    "ferron-observability-process-metrics",
-    "ferron-observability-admin-metrics",
+    "ferron-metrics-process",
+    "ferron-metrics-admin",
 ]

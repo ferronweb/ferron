@@ -1,5 +1,5 @@
 [package]
-name = "ferron-observability-process-metrics"
+name = "ferron-metrics-process"
 version = "3.0.0-beta.1"
 edition = "2021"
 

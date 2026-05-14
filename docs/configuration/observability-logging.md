@@ -123,7 +123,7 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 
 #### Process metrics
 
-The `observability-process-metrics` module collects process-level metrics automatically when an observability backend is configured. It reads `/proc/self/stat` every 1 second.
+The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. It reads `/proc/self/stat` every 1 second.
 
 **Platform support:** Linux only. On other platforms, the module is a no-op.
 
@@ -136,7 +136,7 @@ The `observability-process-metrics` module collects process-level metrics automa
 
 #### Admin API metrics
 
-The `observability-admin-metrics` module collects metrics exposed via admin API automatically when an observability backend is configured.
+The `metrics-admin` module collects metrics exposed via admin API automatically when an observability backend is configured.
 
 - `ferron.admin.uptime` (Gauge) — time since the server started.
 - `ferron.admin.connections_active` (Gauge) — currently open TCP connections across all HTTP listeners.

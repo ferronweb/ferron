@@ -1,5 +1,5 @@
 [package]
-name = "ferron-observability-admin-metrics"
+name = "ferron-metrics-admin"
 version = "3.0.0-beta.1"
 edition = "2021"
 
