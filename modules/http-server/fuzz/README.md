@@ -44,10 +44,11 @@ You can seed the fuzzer with known-evil URLs to improve coverage:
 ```bash
 # Example seeds for canonicalize_path
 mkdir -p corpus/canonicalize_path
-echo -n '%2e%2e/' > corpus/canonicalize_path/%2e%2e
-echo -n '%00' > corpus/canonicalize_path/%00
+echo -n '/%2e%2e/' > corpus/canonicalize_path/dot-dot
+echo -n '/%00' > corpus/canonicalize_path/null-byte
 echo -n '///' > corpus/canonicalize_path/triple-slash
-echo -n '%252e%252e' > corpus/canonicalize_path/double-encoded
+echo -n '/%252e%252e' > corpus/canonicalize_path/double-encoded
+echo -n '/%2e%2e/%2e%2e/' > corpus/canonicalize_path/dot-dot-multiple
 ```
 
 Then run:
