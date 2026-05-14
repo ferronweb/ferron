@@ -170,7 +170,9 @@ Returns JSON with server metrics:
   "uptime_sec": 12345,
   "connections_active": 42,
   "requests_total": 100000,
-  "reloads": 3
+  "reloads": 3,
+  "observability_events_dropped": 0,
+  "observability_event_queue_len": 0
 }
 ```
 
@@ -180,6 +182,8 @@ Returns JSON with server metrics:
 | `connections_active` | Currently open TCP connections across all HTTP listeners. |
 | `requests_total` | Total HTTP requests served across all listeners. |
 | `reloads` | Number of configuration reloads performed. |
+| `observability_events_dropped` | Total number of observability events dropped due to backpressure. |
+| `observability_event_queue_len` | Approximate current length of the observability event queue. |
 
 #### `GET /config`
 
