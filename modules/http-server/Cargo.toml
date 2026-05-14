@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 bench = []
+fuzz = []
 
 [dependencies]
 async-channel = "2.5.0"

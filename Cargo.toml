@@ -8,7 +8,7 @@ members = [
     "types/*",
     "utils/*"
 ]
-exclude = ["doctest", "e2e"]
+exclude = ["doctest", "e2e", "modules/http-server/fuzz"]
 
 [profile.release]
 strip = true

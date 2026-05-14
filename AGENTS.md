@@ -8,11 +8,14 @@ Run commands from the repository root.
 
 - `cargo build --workspace` builds every crate.
 - `cargo test --workspace` runs the full test suite.
-- `cargo test -p ferron-http-server` runs one crate’s tests.
+- `cargo test -p ferron-http-server` runs one crate's tests.
 - `cargo run -p ferron -- --help` lists CLI commands.
 - `cargo run -p ferron -- run -c ferron.conf` starts a local server.
 - `cargo fmt --all --check` verifies formatting.
 - `cargo clippy --workspace --all-targets -- -D warnings` enforces lint cleanliness.
+- `cargo install cargo-fuzz` installs the fuzzing tool (one-time).
+- `cd modules/http-server/fuzz && cargo +nightly fuzz run canonicalize_path` runs the URL canonicalizer fuzzer.
+- `cd modules/http-server/fuzz && cargo +nightly fuzz run canonicalize_path_routing` runs the routing canonicalizer fuzzer.
 
 ## Coding style & naming conventions
 Use Rust 2021 idioms, `rustfmt` formatting, and 4-space indentation. Prefer `snake_case` for files, modules, and functions, and `PascalCase` for types and traits. Follow existing extension-point names such as `*ModuleLoader`, `*Configuration*`, and `*Provider*`. Keep modules focused and aligned with the workspace layout.

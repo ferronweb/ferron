@@ -16,9 +16,9 @@ mod loader;
 mod server;
 mod stages;
 pub mod tls_auto;
-#[cfg(any(test, feature = "bench"))]
+#[cfg(any(test, feature = "bench", feature = "fuzz"))]
 pub mod util;
-#[cfg(not(any(test, feature = "bench")))]
+#[cfg(not(any(test, feature = "bench", feature = "fuzz")))]
 mod util;
 mod validator;
 

@@ -38,6 +38,8 @@ pub enum CanonicalizationError {
     MalformedPath,
     /// Malformed percent-encoding such as `%`, `%G`, `%2`, or incomplete triplets.
     MalformedPercent,
+    /// Input contains invalid percent-encoded UTF-8 sequences that cannot be processed.
+    InvalidUtf8,
     /// Dot-segment resolution would escape above root (e.g., `/../admin`).
     RootEscape,
     /// Input contains a null byte (`\0`) in some form that cannot be handled.
@@ -52,6 +54,7 @@ impl fmt::Display for CanonicalizationError {
         match self {
             CanonicalizationError::MalformedPath => write!(f, "malformed request path"),
             CanonicalizationError::MalformedPercent => write!(f, "malformed percent-encoding"),
+            CanonicalizationError::InvalidUtf8 => write!(f, "invalid UTF-8 in percent-encoding"),
             CanonicalizationError::RootEscape => write!(f, "path escapes above root"),
             CanonicalizationError::NullByte => write!(f, "null byte in input"),
             CanonicalizationError::ExcessiveEncoding => write!(f, "excessive nested encoding"),
@@ -134,14 +137,14 @@ fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError>
 /// - Reserved characters remain encoded in both views.
 /// - Hex digits are uppercased in the forwarding view.
 #[inline]
-fn decode_segment(segment: &str) -> (String, String) {
+fn decode_segment(segment: &str) -> Result<(String, String), CanonicalizationError> {
     if !segment.contains('%') {
-        return (segment.to_owned(), segment.to_owned());
+        return Ok((segment.to_owned(), segment.to_owned()));
     }
 
     let bytes = segment.as_bytes();
-    let mut routing = String::with_capacity(segment.len());
-    let mut forwarding = String::with_capacity(segment.len());
+    let mut routing = Vec::with_capacity(segment.len());
+    let mut forwarding = Vec::with_capacity(segment.len());
 
     let mut i = 0;
     while i < bytes.len() {
@@ -152,42 +155,46 @@ fn decode_segment(segment: &str) -> (String, String) {
 
             if is_unreserved(value) {
                 // Decode unreserved characters for routing
-                routing.push(value as char);
+                routing.push(value);
                 // Forwarding keeps the encoding but uppercased
-                forwarding.push('%');
-                forwarding.push(h1.to_ascii_uppercase() as char);
-                forwarding.push(h2.to_ascii_uppercase() as char);
+                forwarding.push(b'%');
+                forwarding.push(h1.to_ascii_uppercase());
+                forwarding.push(h2.to_ascii_uppercase());
             } else {
                 // Reserved characters stay encoded in both views
-                routing.push('%');
-                routing.push(h1.to_ascii_uppercase() as char);
-                routing.push(h2.to_ascii_uppercase() as char);
+                routing.push(b'%');
+                routing.push(h1.to_ascii_uppercase());
+                routing.push(h2.to_ascii_uppercase());
 
-                forwarding.push('%');
-                forwarding.push(h1.to_ascii_uppercase() as char);
-                forwarding.push(h2.to_ascii_uppercase() as char);
+                forwarding.push(b'%');
+                forwarding.push(h1.to_ascii_uppercase());
+                forwarding.push(h2.to_ascii_uppercase());
             }
             i += 3;
         } else {
-            let c = bytes[i] as char;
+            let c = bytes[i];
             routing.push(c);
             forwarding.push(c);
             i += 1;
         }
     }
 
-    (routing, forwarding)
+    let routing = String::from_utf8(routing).map_err(|_| CanonicalizationError::InvalidUtf8)?;
+    let forwarding =
+        String::from_utf8(forwarding).map_err(|_| CanonicalizationError::InvalidUtf8)?;
+
+    Ok((routing, forwarding))
 }
 
 /// Decode only routing view of a single segment (no forwarding allocation).
 #[inline]
-fn decode_segment_routing(segment: &str) -> String {
+fn decode_segment_routing(segment: &str) -> Result<String, CanonicalizationError> {
     if !segment.contains('%') {
-        return segment.to_owned();
+        return Ok(segment.to_owned());
     }
 
     let bytes = segment.as_bytes();
-    let mut routing = String::with_capacity(segment.len());
+    let mut routing = Vec::with_capacity(segment.len());
 
     let mut i = 0;
     while i < bytes.len() {
@@ -197,20 +204,20 @@ fn decode_segment_routing(segment: &str) -> String {
             let value = (hex_value(h1) << 4) | hex_value(h2);
 
             if is_unreserved(value) {
-                routing.push(value as char);
+                routing.push(value);
             } else {
-                routing.push('%');
-                routing.push(h1.to_ascii_uppercase() as char);
-                routing.push(h2.to_ascii_uppercase() as char);
+                routing.push(b'%');
+                routing.push(h1.to_ascii_uppercase());
+                routing.push(h2.to_ascii_uppercase());
             }
             i += 3;
         } else {
-            routing.push(bytes[i] as char);
+            routing.push(bytes[i]);
             i += 1;
         }
     }
 
-    routing
+    String::from_utf8(routing).map_err(|_| CanonicalizationError::InvalidUtf8)
 }
 
 /// Resolves dot-segments from a list of decoded segments using a stack.
@@ -290,7 +297,7 @@ pub fn canonicalize_path_routing(
         validate_segment_encoding(segment)?;
 
         // Decode segment for routing view only
-        let decoded = decode_segment_routing(segment);
+        let decoded = decode_segment_routing(segment)?;
         routing_segments.push(decoded);
     }
 
@@ -367,7 +374,7 @@ pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, Canonicali
         validate_segment_encoding(segment)?;
 
         // Decode the segment
-        let (decoded, encoded) = decode_segment(segment);
+        let (decoded, encoded) = decode_segment(segment)?;
         routing_segments.push(decoded);
         forwarding_segments.push(encoded);
     }
