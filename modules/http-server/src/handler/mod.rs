@@ -147,6 +147,9 @@ struct HttpAccessLog {
     duration_secs: f64,
     request_headers: Vec<(String, String)>,
     timestamp: chrono::DateTime<chrono::Local>,
+    // Optional W3C trace context identifiers (when available)
+    trace_id: Option<String>,
+    span_id: Option<String>,
 }
 
 impl AccessEvent for HttpAccessLog {
@@ -187,6 +190,13 @@ impl AccessEvent for HttpAccessLog {
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
                 value,
             );
+        }
+        // Optionally include trace identifiers when available
+        if let Some(tid) = &self.trace_id {
+            visitor.field_string("trace_id", tid);
+        }
+        if let Some(sid) = &self.span_id {
+            visitor.field_string("span_id", sid);
         }
     }
 }
@@ -411,7 +421,7 @@ pub async fn request_handler(
         Vec::new()
     };
 
-    let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
+    let (mut response_result, auth_user, final_remote_address, trace_ids) = request_handler_inner(
         request,
         pipeline,
         file_pipeline,
@@ -536,6 +546,8 @@ pub async fn request_handler(
             duration_secs,
             request_headers,
             timestamp,
+            trace_id: trace_ids.as_ref().map(|(t, _)| t.clone()),
+            span_id: trace_ids.as_ref().map(|(_, s)| s.clone()),
         })));
 
         if has_traces {
@@ -596,6 +608,7 @@ async fn request_handler_inner(
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
     Option<SocketAddr>,
+    Option<(String, String)>,
 ) {
     // Increment request counter for admin API /status endpoint
     ferron_core::admin::ADMIN_METRICS
@@ -622,7 +635,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None);
+            return (Ok(response), None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -633,6 +646,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -653,7 +667,7 @@ async fn request_handler_inner(
             )
             .await
             {
-                return (Ok(response), None, None);
+                return (Ok(response), None, None, None);
             }
             return (
                 Ok(builtin_error_response(
@@ -664,6 +678,7 @@ async fn request_handler_inner(
                             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     }),
                 )),
+                None,
                 None,
                 None,
             );
@@ -686,7 +701,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None);
+            return (Ok(response), None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -697,6 +712,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -722,7 +738,7 @@ async fn request_handler_inner(
                     )
                     .await
                     {
-                        return (Ok(response), None, None);
+                        return (Ok(response), None, None, None);
                     }
                     return (
                         Ok(builtin_error_response(
@@ -733,6 +749,7 @@ async fn request_handler_inner(
                                     .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                             }),
                         )),
+                        None,
                         None,
                         None,
                     );
@@ -752,7 +769,7 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return (Ok(response), None, None);
+                    return (Ok(response), None, None, None);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -763,6 +780,7 @@ async fn request_handler_inner(
                                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         }),
                     )),
+                    None,
                     None,
                     None,
                 );
@@ -857,8 +875,8 @@ async fn request_handler_inner(
     };
 
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
-    if let Some(tc) = parsed_trace_context {
-        ctx.insert::<trace_context::TraceContextKey>(tc);
+    if let Some(ref tc) = parsed_trace_context {
+        ctx.insert::<trace_context::TraceContextKey>(tc.clone());
     }
 
     // When starting the top-level request span later, prefer external_parent if available
@@ -879,7 +897,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None);
+            return (Ok(response), None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -890,6 +908,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -914,7 +933,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None);
+        return (Ok(response), None, None, None);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -1021,6 +1040,7 @@ async fn request_handler_inner(
         }));
     }
 
+    let trace_ids = parsed_trace_context.as_ref().map(|tc| (tc.trace_id.clone(), tc.span_id.clone()));
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -1047,6 +1067,7 @@ async fn request_handler_inner(
         },
         auth_user,
         Some(final_remote),
+        trace_ids,
     )
 }
 
