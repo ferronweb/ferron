@@ -11,7 +11,6 @@ use std::time::Duration;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-    Variables,
 };
 use ferron_core::util::parse_duration;
 use http::header::HeaderName;
@@ -85,20 +84,6 @@ impl Default for ProxyConfig {
     }
 }
 
-/// Resolve a config value as a string, interpolating `{{env.*}}` variables only.
-///
-/// Upstream URLs are resolved at config parse time, so only `env.*` variables
-/// are available (no HTTP request data at this stage).
-fn resolve_config_value_with_env(value: &ServerConfigurationValue) -> Option<String> {
-    struct EnvResolver;
-    impl Variables for EnvResolver {
-        fn resolve(&self, _name: &str) -> Option<String> {
-            None // No request-scoped variables available at parse time
-        }
-    }
-    value.as_string_with_interpolations(&EnvResolver)
-}
-
 /// Parse expected status codes from a string.
 /// Accepts:
 /// - "2xx" for 200-299
@@ -163,7 +148,7 @@ pub fn parse_proxy_config(
     // Check for shorthand upstreams in args (e.g. `proxy http://a http://b { ... }`)
     let default_timeout = Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS);
     for arg in &entry.args {
-        if let Some(url) = resolve_config_value_with_env(arg) {
+        if let Some(url) = arg.as_string_with_interpolations(ctx) {
             cfg.upstreams.push(Upstream::Static(UpstreamConfig {
                 url: url.clone(),
                 unix_socket: None,
@@ -177,7 +162,7 @@ pub fn parse_proxy_config(
 
     // Parse block if present
     if let Some(children) = &entry.children {
-        parse_proxy_block(children, &mut cfg)?;
+        parse_proxy_block(children, &mut cfg, ctx)?;
     }
 
     if cfg.upstreams.is_empty() {
@@ -205,18 +190,19 @@ pub fn parse_proxy_config(
 fn parse_proxy_block(
     block: &ServerConfigurationBlock,
     cfg: &mut ProxyConfig,
+    ctx: &ferron_http::HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     for (name, entries) in block.directives.iter() {
         match name.as_str() {
             "upstream" => {
                 for entry in entries {
-                    parse_upstream_entry(entry, cfg)?;
+                    parse_upstream_entry(entry, cfg, ctx)?;
                 }
             }
             #[cfg(feature = "srv-lookup")]
             "srv" => {
                 for entry in entries {
-                    parse_srv_entry(entry, cfg)?;
+                    parse_srv_entry(entry, cfg, ctx)?;
                 }
             }
             "lb_algorithm" => {
@@ -335,7 +321,7 @@ fn parse_proxy_block(
             }
             "request_header" => {
                 for entry in entries {
-                    parse_request_header_entry(entry, cfg)?;
+                    parse_request_header_entry(entry, cfg, ctx)?;
                 }
             }
             "proxy_concurrent_conns" => {
@@ -356,11 +342,12 @@ fn parse_proxy_block(
 fn parse_upstream_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
+    ctx: &ferron_http::HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let url = entry
         .args
         .first()
-        .and_then(resolve_config_value_with_env)
+        .and_then(|v| v.as_string_with_interpolations(ctx))
         .ok_or("upstream requires a URL argument")?;
 
     let mut limit: Option<usize> = None;
@@ -398,7 +385,7 @@ fn parse_upstream_entry(
                     if let Some(val) = entries
                         .first()
                         .and_then(|e| e.args.first())
-                        .and_then(resolve_config_value_with_env)
+                        .and_then(|v| v.as_string_with_interpolations(ctx))
                     {
                         unix_socket = Some(val);
                     }
@@ -551,11 +538,12 @@ fn parse_upstream_entry(
 fn parse_srv_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
+    ctx: &ferron_http::HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let srv_name = entry
         .args
         .first()
-        .and_then(|v| v.as_str())
+        .and_then(|v| v.as_string_with_interpolations(ctx))
         .ok_or("srv requires an SRV record name argument")?;
 
     let mut limit: Option<usize> = None;
@@ -622,6 +610,7 @@ fn parse_srv_entry(
 fn parse_request_header_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
+    ctx: &ferron_http::HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     if entry.args.is_empty() {
         return Err("request_header requires at least one argument".into());
@@ -638,7 +627,7 @@ fn parse_request_header_entry(
             let value = entry
                 .args
                 .get(1)
-                .and_then(resolve_config_value_with_env)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
                 .ok_or("request_header +Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
@@ -658,7 +647,7 @@ fn parse_request_header_entry(
             let value = entry
                 .args
                 .get(1)
-                .and_then(resolve_config_value_with_env)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
                 .ok_or("request_header Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
@@ -713,7 +702,7 @@ fn validate_proxy_entries(
             );
         }
         for arg in &entry.args {
-            if arg.as_str().is_none() {
+            if arg.as_string_with_interpolations(&HashMap::new()).is_none() {
                 return Err("Invalid proxy upstream URL — expected a string".into());
             }
         }
@@ -757,6 +746,28 @@ fn validate_str(
         for e in entries {
             if e.args.first().and_then(|v| v.as_str()).is_none() {
                 return Err(format!("Invalid `{name}` — expected a string").into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_interpolated_str(
+    block: &ServerConfigurationBlock,
+    used: &mut HashSet<String>,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(entries) = block.directives.get(name) {
+        used.insert(name.to_string());
+        for e in entries {
+            if e.args
+                .first()
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                .is_none()
+            {
+                return Err(
+                    format!("Invalid `{name}` — expected a string (can be interpolated)").into(),
+                );
             }
         }
     }
@@ -885,7 +896,11 @@ fn validate_upstream_directives(
     if let Some(entries) = block.directives.get("upstream") {
         used.insert("upstream".to_string());
         for e in entries {
-            if e.args.first().and_then(|v| v.as_str()).is_none() {
+            if e.args
+                .first()
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                .is_none()
+            {
                 return Err("The `upstream` directive requires a URL argument".into());
             }
             if let Some(up_block) = &e.children {
@@ -902,7 +917,7 @@ fn validate_upstream_block(
 ) -> Result<(), Box<dyn Error>> {
     validate_number(block, used, "limit", 1)?;
     validate_duration(block, used, "idle_timeout")?;
-    validate_str(block, used, "unix")?;
+    validate_interpolated_str(block, used, "unix")?;
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());

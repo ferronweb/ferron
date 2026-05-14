@@ -7,6 +7,7 @@
 ### Added
 
 - A dropped-events admin metric for non-blocking observability sinks.
+- Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
 
 ### Changed
 

@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
-use crate::config::ProxyConfig;
 use crate::upstream::LoadBalancerAlgorithmInner;
 pub use config::ProxyConfigurationValidator;
 pub use connections::ConnectionManager;
@@ -141,10 +140,6 @@ struct ProxyState {
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
     lb_algorithms: RwLock<HashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>>,
-    /// Cache of parsed proxy configurations, keyed by the `Arc` pointer
-    /// identity of the `LayeredConfiguration`. Config only changes on reload,
-    /// so the parsed result can be reused indefinitely.
-    parsed_configs: RwLock<HashMap<Vec<usize>, Arc<ProxyConfig>>>,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: upstream::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
@@ -164,7 +159,6 @@ impl ProxyState {
             ))),
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             lb_algorithms: RwLock::new(HashMap::new()),
-            parsed_configs: RwLock::new(HashMap::new()),
             active_health_check_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             health_check_tasks: RwLock::new(HashMap::new()),
             active_unhealthy_counters: RwLock::new(HashMap::new()),
@@ -392,40 +386,24 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             })
             .collect::<Vec<_>>();
 
-        // Check the parsed config cache before re-parsing
-        let config = {
-            let guard = self.state.parsed_configs.read();
-            guard.get(&config_key).cloned()
-        };
-
-        let config = match config {
-            Some(cfg) => cfg,
-            None => {
-                let parsed = match config::parse_proxy_config(ctx) {
-                    Ok(Some(cfg)) => Arc::new(cfg),
-                    Ok(None) => return Ok(true),
-                    Err(e) => {
-                        ctx.events.emit(ferron_observability::Event::Log(
-                            ferron_observability::LogEvent {
-                                target: "ferron-proxy",
-                                level: ferron_observability::LogLevel::Error,
-                                message: format!("Proxy config error: {e}"),
-                            },
-                        ));
-                        return Ok(true);
-                    }
-                };
-                let mut guard = self.state.parsed_configs.write();
-                guard.insert(config_key.clone(), Arc::clone(&parsed));
-                drop(guard);
-
-                // Spawn health check task for this config if needed
-                self.state
-                    .ensure_health_check_task(&config_key, &parsed.upstreams);
-
-                parsed
+        let config = match config::parse_proxy_config(ctx) {
+            Ok(Some(cfg)) => Arc::new(cfg),
+            Ok(None) => return Ok(true),
+            Err(e) => {
+                ctx.events.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        target: "ferron-proxy",
+                        level: ferron_observability::LogLevel::Error,
+                        message: format!("Proxy config error: {e}"),
+                    },
+                ));
+                return Ok(true);
             }
         };
+
+        // Spawn health check task for this config if needed
+        self.state
+            .ensure_health_check_task(&config_key, &config.upstreams);
 
         // Set or update per-upstream local limits.
         let conn_manager = self.state.get_conn_manager();
