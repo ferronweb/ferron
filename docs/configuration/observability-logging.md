@@ -119,6 +119,7 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/http-rewrite#metrics).
 - **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/reverse-proxying#metrics).
 - **Process metrics** — CPU time, CPU utilization, and memory usage from `/proc/self/stat`. See [Process metrics](#process-metrics) below.
+- **Admin API metrics** — uptime, active connections, request count, configuration reloads, and observability event backpressure. See [Admin API metrics](#admin-api-metrics) below.
 
 #### Process metrics
 
@@ -132,6 +133,19 @@ The `observability-process-metrics` module collects process-level metrics automa
   - Attributes: `cpu.mode` (`"user"` or `"system"`)
 - `process.memory.usage` (UpDownCounter) — the change in physical memory (RSS) since the last measurement.
 - `process.memory.virtual` (UpDownCounter) — the change in committed virtual memory (VMS) since the last measurement.
+
+#### Admin API metrics
+
+The `observability-admin-metrics` module collects metrics exposed via admin API automatically when an observability backend is configured.
+
+- `ferron.admin.uptime` (Gauge) — time since the server started.
+- `ferron.admin.connections_active` (Gauge) — currently open TCP connections across all HTTP listeners.
+- `ferron.admin.requests_total` (Counter) — total HTTP requests served across all listeners.
+- `ferron.admin.reloads` (Counter) — number of configuration reloads performed.
+- `ferron.admin.observability_events_dropped` (Counter) — total number of observability events dropped due to backpressure.
+- `ferron.admin.observability_event_queue_len` (Gauge) — approximate current length of the observability event queue.
+
+These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 
 ### Tracing
 

@@ -4,11 +4,16 @@
 
 **Not released yet**
 
+### Added
+
+- A dropped-events admin metric for non-blocking observability sinks.
+
 ### Changed
 
+- Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
 - Improved error reporting for some TLS handshake failures.
+- Prometheus label values are now sanitized to reduce high-cardinality labels.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
-- Observability: add a dropped-events admin metric for non-blocking observability sinks and sanitize Prometheus label values to reduce high-cardinality labels.
 
 ### Fixed
 

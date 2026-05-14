@@ -67,6 +67,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_observability_format_json::JsonFormatObservabilityModuleLoader),
         Box::new(ferron_observability_format_text::TextFormatObservabilityModuleLoader),
         Box::new(ferron_observability_process_metrics::ProcessMetricsModuleLoader::default()),
+        Box::new(ferron_observability_admin_metrics::AdminMetricsModuleLoader::default()),
         Box::new(ferron_dns_stalwart::StalwartDnsModuleLoader),
     ]
 }

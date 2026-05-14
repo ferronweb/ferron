@@ -1324,6 +1324,7 @@ dependencies = [
  "ferron-http-scgi",
  "ferron-http-server",
  "ferron-http-static",
+ "ferron-observability-admin-metrics",
  "ferron-observability-consolelog",
  "ferron-observability-format-json",
  "ferron-observability-format-text",
@@ -1768,6 +1769,18 @@ name = "ferron-observability"
 version = "3.0.0-beta.1"
 dependencies = [
  "ferron-core",
+]
+
+[[package]]
+name = "ferron-observability-admin-metrics"
+version = "3.0.0-beta.1"
+dependencies = [
+ "ferron-core",
+ "ferron-observability",
+ "num_cpus",
+ "procfs",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
