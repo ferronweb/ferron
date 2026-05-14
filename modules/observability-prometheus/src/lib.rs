@@ -3,8 +3,8 @@ mod endpoint;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::{Arc, Once};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Once};
 
 use ferron_core::{
     config::ServerConfigurationBlock,
@@ -242,8 +242,8 @@ fn emit_metric(
                 .map(|c| if c.is_control() { '?' } else { c })
                 .collect()
         } else {
-            use std::hash::{Hash, Hasher};
             use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
             let mut hasher = DefaultHasher::new();
             s.hash(&mut hasher);
             format!("hash_{:x}", hasher.finish())

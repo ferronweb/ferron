@@ -1,5 +1,5 @@
-use std::sync::{Arc, Once};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Once};
 
 use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,

@@ -1040,7 +1040,9 @@ async fn request_handler_inner(
         }));
     }
 
-    let trace_ids = parsed_trace_context.as_ref().map(|tc| (tc.trace_id.clone(), tc.span_id.clone()));
+    let trace_ids = parsed_trace_context
+        .as_ref()
+        .map(|tc| (tc.trace_id.clone(), tc.span_id.clone()));
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),

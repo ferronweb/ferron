@@ -1,8 +1,8 @@
 use ferron_core::log_warn;
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, Once};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Once};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::time::{interval, Duration, MissedTickBehavior};

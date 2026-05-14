@@ -4,8 +4,8 @@ mod providers;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, Once};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Once};
 
 use ferron_core::{
     config::ServerConfigurationBlock,
@@ -36,12 +36,10 @@ struct OtlpEventSink {
 
 impl EventSink for OtlpEventSink {
     fn emit(&self, event: Event) {
-        match self
-            .inner
-            .try_send(ConfiguredEvent {
-                event,
-                log_config: self.log_config.clone(),
-            }) {
+        match self.inner.try_send(ConfiguredEvent {
+            event,
+            log_config: self.log_config.clone(),
+        }) {
             Ok(_) => {
                 ferron_core::admin::ADMIN_METRICS
                     .observability_event_queue_len
@@ -64,12 +62,10 @@ impl EventSink for OtlpEventSink {
     }
 
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        match self
-            .inner
-            .try_send(ConfiguredEvent {
-                event: Arc::unwrap_or_clone(event),
-                log_config: self.log_config.clone(),
-            }) {
+        match self.inner.try_send(ConfiguredEvent {
+            event: Arc::unwrap_or_clone(event),
+            log_config: self.log_config.clone(),
+        }) {
             Ok(_) => {
                 ferron_core::admin::ADMIN_METRICS
                     .observability_event_queue_len
