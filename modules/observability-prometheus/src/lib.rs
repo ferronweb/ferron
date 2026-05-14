@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Once};
+use std::sync::atomic::Ordering;
 
 use ferron_core::{
     config::ServerConfigurationBlock,
@@ -47,50 +48,58 @@ struct PrometheusEventSink {
 
 impl EventSink for PrometheusEventSink {
     fn emit(&self, event: Event) {
-        if matches!(event, Event::Metric(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event,
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment dropped-events metric
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(event, Event::Metric(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`prometheus` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`prometheus` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        if matches!(&*event, Event::Metric(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event: Arc::unwrap_or_clone(event),
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment dropped-events metric
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(&*event, Event::Metric(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event: Arc::unwrap_or_clone(event),
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`prometheus` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`prometheus` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 }
@@ -143,6 +152,10 @@ impl Module for PrometheusObservabilityModule {
                 result = rx.recv() => result.ok(),
                 _ = cancel_token.cancelled() => None,
             } {
+                ferron_core::admin::ADMIN_METRICS
+                    .observability_event_queue_len
+                    .fetch_sub(1, Ordering::Relaxed);
+
                 let config = match parse_prometheus_config(&msg.log_config) {
                     Ok(c) => c,
                     Err(e) => {

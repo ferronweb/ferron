@@ -1,4 +1,5 @@
 use std::sync::{Arc, Once};
+use std::sync::atomic::Ordering;
 
 use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,
@@ -24,50 +25,58 @@ struct ConsoleEventSink {
 
 impl EventSink for ConsoleEventSink {
     fn emit(&self, event: Event) {
-        if matches!(event, Event::Access(_) | Event::Log(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event,
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment dropped events metric and warn once
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(event, Event::Access(_) | Event::Log(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment dropped events metric and warn once
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`console` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`console` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        if matches!(&*event, Event::Access(_) | Event::Log(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event: Arc::unwrap_or_clone(event),
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment dropped events metric and warn once
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(&*event, Event::Access(_) | Event::Log(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event: Arc::unwrap_or_clone(event),
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment dropped events metric and warn once
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`console` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`console` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 
@@ -108,6 +117,10 @@ impl Module for ConsoleObservabilityModule {
                     None
                 }
             } {
+                ferron_core::admin::ADMIN_METRICS
+                    .observability_event_queue_len
+                    .fetch_sub(1, Ordering::Relaxed);
+
                 let registry = registry.clone();
                 tokio::task::spawn_blocking(move || {
                     match msg.event {

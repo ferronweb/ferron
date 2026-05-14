@@ -2,6 +2,7 @@ use ferron_core::log_warn;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Once};
+use std::sync::atomic::Ordering;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::time::{interval, Duration, MissedTickBehavior};
@@ -30,50 +31,58 @@ struct LogFileEventSink {
 
 impl EventSink for LogFileEventSink {
     fn emit(&self, event: Event) {
-        if matches!(event, Event::Access(_) | Event::Log(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event,
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment global dropped-events metric
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(event, Event::Access(_) | Event::Log(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment global dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`file` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`file` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        if matches!(&*event, Event::Access(_) | Event::Log(_))
-            && self
-                .inner
-                .try_send(ConfiguredEvent {
-                    event: Arc::unwrap_or_clone(event),
-                    log_config: self.log_config.clone(),
-                })
-                .is_err()
-        {
-            // Increment global dropped-events metric
-            ferron_core::admin::ADMIN_METRICS
-                .observability_events_dropped
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matches!(&*event, Event::Access(_) | Event::Log(_)) {
+            match self.inner.try_send(ConfiguredEvent {
+                event: Arc::unwrap_or_clone(event),
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment global dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-            DROPPED_EVENT.call_once(|| {
-                log_warn!(
-                    "Observability event dropped (`file` observability backend). \
-                    This may be caused by high server load."
-                );
-            });
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`file` observability backend). \
+                            This may be caused by high server load."
+                        );
+                    });
+                }
+            }
         }
     }
 
@@ -299,6 +308,10 @@ impl Module for LogFileObservabilityModule {
 
                     result = rx.recv() => {
                         if let Ok(msg) = result {
+                            ferron_core::admin::ADMIN_METRICS
+                                .observability_event_queue_len
+                                .fetch_sub(1, Ordering::Relaxed);
+
                             match &msg.event {
                                 Event::Access(ae) => {
                                     if let Some(access_log_path) =
