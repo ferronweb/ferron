@@ -34,6 +34,8 @@ pub async fn status_handler(State(_state): State<AdminState>) -> axum::Json<serd
         "connections_active": metrics.connections_active,
         "requests_total": metrics.requests_total,
         "reloads": metrics.reloads,
+        "observability_events_dropped": metrics.observability_events_dropped,
+        "observability_event_queue_len": metrics.observability_event_queue_len,
     }))
 }
 
