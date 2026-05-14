@@ -48,6 +48,8 @@ Each access log entry contains the following fields:
 | `duration_secs` | Request processing duration in seconds |
 | `timestamp` | Request timestamp in CLF format |
 | `header_<name>` | Request header values (one field per header) |
+| `span_id` | Optional trace span ID for the request (if W3C trace context is available) |
+| `trace_id` | Optional trace ID for the request (if W3C trace context is available) |
 
 ### Log formatters
 
