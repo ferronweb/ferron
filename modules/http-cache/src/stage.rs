@@ -342,6 +342,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 message:
                     "Ignoring unsupported LSCache stale purge marker and performing a hard purge"
                         .to_string(),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
         if !purge_ops.is_empty() {
@@ -358,6 +359,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         "Purged {} cache entrie(s) via LSCache controls",
                         stats.purged
                     ),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
             }
         }
@@ -376,6 +378,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 message:
                     "Skipping cache store because X-LiteSpeed-Vary: value=... is not supported yet"
                         .to_string(),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
         let has_set_cookie = response.headers().contains_key(header::SET_COOKIE);
@@ -487,6 +490,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         level: LogLevel::Debug,
                         target: LOG_TARGET,
                         message: "Skipping cache store because the response body exceeded cache.max_response_size".to_string(),
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
                     let mut response = response_from_streaming_parts(parts, prefix, remainder)?;
                     annotate_response_headers(

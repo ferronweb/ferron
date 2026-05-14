@@ -149,24 +149,37 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 
 These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 
+#### HTTP and proxy metrics
+
+Ferron also emits request-path metrics for common observability gaps:
+
+- `ferron.http.server.pre_handler_request_count` (Counter) — malformed or timed-out requests rejected before the normal HTTP handler completes.
+- `ferron.http.server.redirects` (Counter) — redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects.
+- `ferron.http.server.client_ip_rewrites` (Counter) — requests whose client IP was rewritten from a trusted proxy header.
+- `ferron.http.server.cors_preflights` (Counter) — CORS preflight requests handled before the main pipeline.
+- `ferron.http.server.connection_errors` (Counter) — listener and handshake failures, labeled by transport and lifecycle stage.
+- `ferron.proxy.failures` (Counter) — reverse-proxy failures that returned an error before a backend response was produced.
+- `ferron.forward_proxy.requests` (Counter) — forward-proxy requests, labeled by mode (`connect` or `request`) and outcome.
+- `ferron.static.responses` (Counter) — static-file responses across normal, conditional, range, and error paths.
+
 ### Tracing
 
 Each HTTP request generates a root trace span and multiple nested spans for pipeline execution:
 
 #### Root request span
 
-- **`StartSpan("ferron.request_handler")`** — emitted when the request enters the handler.
-  - Attributes: `http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`
-- **`EndSpan("ferron.request_handler", error)`** — emitted when the request completes.
+- **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
+  - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
+- **`EndSpan("ferron.request", error)`** — emitted when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 
 #### Pipeline execution span
 
-- **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages.
+- **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages. This span is a child of `ferron.request`.
 
 #### Per-stage spans
 
-Each pipeline stage generates its own forward and inverse span, enabling flame graph analysis:
+Each pipeline and file-serving stage generates its own forward and inverse span as a child of `ferron.pipeline.execute`, enabling flame graph analysis:
 
 | Span name | Module | Description |
 | --- | --- | --- |
@@ -183,7 +196,7 @@ Each pipeline stage generates its own forward and inverse span, enabling flame g
 - **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
   - Attributes: `http.response.status_code`
 
-Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, enabling correlated queries.
+Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
 
 ### Prometheus export
 

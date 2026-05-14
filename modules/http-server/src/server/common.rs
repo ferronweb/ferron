@@ -257,6 +257,7 @@ pub fn emit_error(observability: &CompositeEventSink, message: impl Into<String>
         level: LogLevel::Error,
         message: message.into(),
         target: LOG_TARGET,
+        trace_context: None,
     }));
 }
 

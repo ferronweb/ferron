@@ -3,15 +3,19 @@ use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpErrorContext, HttpRequest};
 use ferron_observability::{
-    CompositeEventSink, Event, LogEvent, LogLevel, TraceAttributeValue, TraceEvent,
+    CompositeEventSink, Event, EventTraceContext, LogEvent, LogLevel, Parent, TraceAttributeValue,
+    TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use std::borrow::Cow;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::util::error_pages::generate_default_error_page;
 
 use super::{ResponseBody, LOG_TARGET};
+
+static ERROR_PIPELINE_SPAN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
     if let Some(authority) = request.uri().authority() {
@@ -179,19 +183,34 @@ pub(super) fn builtin_error_response(
 
 #[inline]
 pub(super) fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {
+    emit_error_with_trace(events, message, None);
+}
+
+#[inline]
+pub(super) fn emit_error_with_trace(
+    events: &CompositeEventSink,
+    message: impl Into<String>,
+    trace_context: Option<EventTraceContext>,
+) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
         target: LOG_TARGET,
+        trace_context,
     }));
 }
 
 #[inline]
-pub(super) fn emit_warn(events: &CompositeEventSink, message: impl Into<String>) {
+pub(super) fn emit_warn_with_trace(
+    events: &CompositeEventSink,
+    message: impl Into<String>,
+    trace_context: Option<EventTraceContext>,
+) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Warn,
         message: message.into(),
         target: LOG_TARGET,
+        trace_context,
     }));
 }
 
@@ -201,13 +220,22 @@ pub(super) async fn execute_error_pipeline(
     headers: Option<HeaderMap>,
     configuration: LayeredConfiguration,
     events: &CompositeEventSink,
+    parent_span_key: Option<&str>,
 ) -> Option<Response<ResponseBody>> {
     let has_traces = events.has_trace_sinks();
+    let span_key = has_traces.then(|| {
+        format!(
+            "error-pipeline:{}",
+            ERROR_PIPELINE_SPAN_COUNTER.fetch_add(1, Ordering::Relaxed)
+        )
+    });
 
-    if has_traces {
+    if let Some(span_key) = span_key.as_ref() {
         events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(span_key.clone()),
             name: Cow::Borrowed("ferron.pipeline.execute_error"),
-            parent: None,
+            parent: parent_span_key.map(|key| Parent::ByKey(key.to_string())),
+            trace_context: None,
             attributes: vec![(
                 "http.response.status_code",
                 TraceAttributeValue::I64(error_code as i64),
@@ -226,8 +254,9 @@ pub(super) async fn execute_error_pipeline(
         emit_error(events, format!("Error pipeline execution error: {error}"));
     }
 
-    if has_traces {
+    if let Some(span_key) = span_key {
         events.emit(Event::Trace(TraceEvent::EndSpan {
+            key: Cow::Owned(span_key),
             name: Cow::Borrowed("ferron.pipeline.execute_error"),
             error: None,
             attributes: vec![],

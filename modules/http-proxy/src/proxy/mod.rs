@@ -75,6 +75,7 @@ pub async fn execute_proxy(
             level: LogLevel::Error,
             message: "Reverse proxy: no healthy upstream backends available".to_string(),
             target: LOG_TARGET,
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
         // Collect active health check unhealthy metrics
         if let Some(counter) = active_unhealthy_counter {
@@ -102,6 +103,7 @@ pub async fn execute_proxy(
                 level: LogLevel::Error,
                 message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
                 target: LOG_TARGET,
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             // Collect active health check unhealthy metrics
             if let Some(counter) = active_unhealthy_counter {
@@ -174,6 +176,7 @@ pub async fn execute_proxy(
                                 err = e
                             ),
                             target: LOG_TARGET,
+                            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
                         continue; // Loop back to select next backend
                     }
@@ -195,6 +198,7 @@ pub async fn execute_proxy(
                         err = e
                     ),
                     target: LOG_TARGET,
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 // Collect active health check unhealthy metrics
                 if let Some(counter) = active_unhealthy_counter {
@@ -580,6 +584,7 @@ async fn establish_and_send(
                                 "Reverse proxy: TLS handshake with {unix_path} failed: {e}"
                             ),
                             target: LOG_TARGET,
+                            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
                         return Err(
                             std::io::Error::other(format!("TLS handshake failed: {e}")).into()
@@ -615,6 +620,7 @@ async fn establish_and_send(
                 level: LogLevel::Warn,
                 message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
                 target: LOG_TARGET,
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             std::io::Error::other(format!("Connect failed: {e}"))
         })?;
@@ -661,6 +667,7 @@ async fn establish_and_send(
                         level: LogLevel::Warn,
                         message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
                         target: LOG_TARGET,
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
                     return Err(std::io::Error::other(format!("TLS handshake failed: {e}")).into());
                 }
@@ -816,6 +823,7 @@ async fn handle_upgrade(
                                 level: LogLevel::Warn,
                                 message: "Reverse proxy: frontend HTTP upgrade failed".to_string(),
                                 target: LOG_TARGET,
+                                trace_context: None,
                             }));
                         }
                     }
@@ -826,6 +834,7 @@ async fn handle_upgrade(
                     level: LogLevel::Warn,
                     message: "Reverse proxy: backend HTTP upgrade failed".to_string(),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
             }
         }
@@ -910,6 +919,7 @@ async fn establish_connection_without_pool(
                 level: LogLevel::Warn,
                 message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
                 target: LOG_TARGET,
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             std::io::Error::other(format!("Connect failed: {e}"))
         })?;
@@ -956,6 +966,7 @@ async fn establish_connection_without_pool(
                         level: LogLevel::Warn,
                         message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
                         target: LOG_TARGET,
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
                     return Err(std::io::Error::other(format!("TLS handshake failed: {e}")).into());
                 }

@@ -37,6 +37,30 @@ impl Default for StaticFileStage {
     }
 }
 
+fn emit_static_response_metric(
+    ctx: &HttpFileContext,
+    status_code: u16,
+    outcome: &'static str,
+) {
+    ctx.http.events.emit(Event::Metric(MetricEvent {
+        name: "ferron.static.responses",
+        attributes: vec![
+            (
+                "http.response.status_code",
+                MetricAttributeValue::I64(status_code as i64),
+            ),
+            (
+                "ferron.static.outcome",
+                MetricAttributeValue::StaticStr(outcome),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{response}"),
+        description: Some("Number of static file responses by outcome."),
+    }));
+}
+
 #[async_trait(?Send)]
 impl Stage<HttpFileContext> for StaticFileStage {
     #[inline]
@@ -77,6 +101,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .expect("failed to build OPTIONS response");
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(res));
+            emit_static_response_metric(ctx, 204, "options");
             return Ok(false);
         }
 
@@ -89,6 +114,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             );
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(405, Some(allow_headers)));
+            emit_static_response_metric(ctx, 405, "method_not_allowed");
             return Ok(false);
         }
 
@@ -145,6 +171,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             build_etag_header_map(&etag, &vary_header, None, cache_control);
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                        emit_static_response_metric(ctx, 412, "precondition_failed");
                         return Ok(false);
                     }
                     for tag in split_etag_request(val) {
@@ -175,6 +202,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .expect("failed to build 304 response");
                                 ctx.http.req = Some(request);
                                 ctx.http.res = Some(HttpResponse::Custom(response));
+                                emit_static_response_metric(ctx, 304, "not_modified");
                                 return Ok(false);
                             }
                         }
@@ -192,6 +220,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 build_etag_header_map(&etag, &vary_header, None, cache_control);
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                            emit_static_response_metric(ctx, 412, "precondition_failed");
                             return Ok(false);
                         }
 
@@ -206,6 +235,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 build_etag_header_map(&etag, &vary_header, None, cache_control);
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                            emit_static_response_metric(ctx, 412, "precondition_failed");
                             return Ok(false);
                         }
                     }
@@ -214,6 +244,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             build_etag_header_map(&etag, &vary_header, None, cache_control);
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
+                        emit_static_response_metric(ctx, 400, "bad_request");
                         return Ok(false);
                     }
                 }
@@ -373,6 +404,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             .expect("failed to build 416 response");
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::Custom(res));
+                        emit_static_response_metric(ctx, 416, "range_not_satisfiable");
                         return Ok(false);
                     }
 
@@ -410,6 +442,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             .expect("failed to build 206 HEAD response");
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric(ctx, 206, "partial_content");
                     } else {
                         // Stream the range using FileStream with offset/limit
                         let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
@@ -425,6 +458,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             .expect("failed to build 206 response");
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric(ctx, 206, "partial_content");
                     }
                     return Ok(false);
                 } else {
@@ -443,6 +477,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         .expect("failed to build 416 response");
                     ctx.http.req = Some(request);
                     ctx.http.res = Some(HttpResponse::Custom(res));
+                    emit_static_response_metric(ctx, 416, "range_not_satisfiable");
                     return Ok(false);
                 }
             }
@@ -520,6 +555,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .expect("failed to build HEAD response");
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(response));
+            emit_static_response_metric(ctx, 200, "head");
             return Ok(false);
         }
 
@@ -582,6 +618,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         ctx.http.req = Some(request);
         ctx.http.res = Some(HttpResponse::Custom(response));
+        emit_static_response_metric(ctx, 200, "full");
 
         // Emit static file metrics
         let compression_label = match used_compression {

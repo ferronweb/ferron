@@ -10,6 +10,7 @@ use cidr::IpCidr;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use std::net::{IpAddr, SocketAddr};
 
 /// Which header to read the client IP from.
@@ -236,6 +237,19 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         // Preserve the original remote port; only replace the IP.
         let original_port = ctx.remote_address.port();
         ctx.remote_address = SocketAddr::new(ip, original_port);
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.http.server.client_ip_rewrites",
+            attributes: vec![(
+                "ferron.client_ip.header",
+                MetricAttributeValue::StaticStr(config.header.header_name()),
+            )],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{rewrite}"),
+            description: Some(
+                "Number of times the client IP address was rewritten from a trusted proxy header.",
+            ),
+        }));
 
         Ok(true)
     }

@@ -47,16 +47,22 @@ fn bytes_to_hex(buf: &[u8]) -> String {
     s
 }
 
+/// Generate a new random span ID as 16 lowercase hex characters.
+pub fn generate_span_id() -> String {
+    let mut rng = rand::rng();
+    let mut span_bytes = [0u8; 8];
+    rng.fill_bytes(&mut span_bytes);
+    bytes_to_hex(&span_bytes)
+}
+
 /// Generate a new traceparent TraceContext (version 00) with random ids.
 pub fn generate_traceparent(sampled: bool) -> TraceContext {
     let mut rng = rand::rng();
     let mut trace_bytes = [0u8; 16];
-    let mut span_bytes = [0u8; 8];
     rng.fill_bytes(&mut trace_bytes);
-    rng.fill_bytes(&mut span_bytes);
     TraceContext {
         trace_id: bytes_to_hex(&trace_bytes),
-        span_id: bytes_to_hex(&span_bytes),
+        span_id: generate_span_id(),
         sampled,
         tracestate: None,
     }
@@ -87,6 +93,24 @@ use typemap_rev::TypeMapKey;
 pub struct TraceContextKey;
 impl TypeMapKey for TraceContextKey {
     type Value = TraceContext;
+}
+
+/// Convert a request trace context into an observability event trace context.
+pub fn to_event_trace_context(
+    trace_context: &TraceContext,
+) -> ferron_observability::EventTraceContext {
+    ferron_observability::EventTraceContext {
+        trace_id: trace_context.trace_id.clone(),
+        span_id: trace_context.span_id.clone(),
+        sampled: Some(trace_context.sampled),
+    }
+}
+
+/// Return the current request trace context from an HTTP context, if available.
+pub fn current_event_trace_context(
+    ctx: &crate::HttpContext,
+) -> Option<ferron_observability::EventTraceContext> {
+    ctx.get::<TraceContextKey>().map(to_event_trace_context)
 }
 
 #[cfg(test)]

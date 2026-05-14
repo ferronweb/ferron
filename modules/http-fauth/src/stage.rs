@@ -187,6 +187,7 @@ impl ForwardedAuthenticationStage {
                     level: LogLevel::Error,
                     message: format!("fauth: failed to build auth request: {}", e),
                     target: "ferron-http-fauth",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);
@@ -217,6 +218,7 @@ impl ForwardedAuthenticationStage {
                     level: LogLevel::Error,
                     message: format!("fauth: failed to get connection: {}", e),
                     target: "ferron-http-fauth",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);
@@ -238,6 +240,7 @@ impl ForwardedAuthenticationStage {
                     level: LogLevel::Error,
                     message: format!("fauth: auth request failed: {}", e),
                     target: "ferron-http-fauth",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 // Return connection to pool even on error
                 self.client.return_connection(pool_key, conn_item);
@@ -276,6 +279,7 @@ impl ForwardedAuthenticationStage {
                 level: LogLevel::Debug,
                 message: "fauth: authentication successful".to_string(),
                 target: "ferron-http-fauth",
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
 
             Ok(true) // Continue pipeline
@@ -296,6 +300,7 @@ impl ForwardedAuthenticationStage {
                 level: LogLevel::Info,
                 message: format!("fauth: authentication failed with status {}", auth_status),
                 target: "ferron-http-fauth",
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
 
             Ok(false) // Stop pipeline
@@ -334,6 +339,7 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
                     level: LogLevel::Error,
                     message: format!("fauth: configuration error: {}", e),
                     target: "ferron-http-fauth",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);

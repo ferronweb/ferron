@@ -14,6 +14,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::PipelineError;
 use ferron_core::registry::RegistryBuilder;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http_body_util::BodyExt;
 
 pub use config::HttpHeadersConfigurationValidator;
@@ -83,7 +84,21 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                 let response =
                     cors::build_preflight_response(cors, origin, request_method, request_headers);
                 let response = response.map(|b| b.map_err(|e| match e {}).boxed_unsync());
+                let status_code = response.status().as_u16();
                 ctx.res = Some(HttpResponse::Custom(response));
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.http.server.cors_preflights",
+                    attributes: vec![(
+                        "http.response.status_code",
+                        MetricAttributeValue::I64(status_code as i64),
+                    )],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "Number of CORS preflight requests handled before the rest of the HTTP pipeline.",
+                    ),
+                }));
                 return Ok(false);
             }
         }

@@ -152,6 +152,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     level: ferron_observability::LogLevel::Error,
                     message: format!("Service unavailable: {err}"),
                     target: "ferron-http-scgi",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
                 }));
                 ctx.http.res = Some(HttpResponse::BuiltinError(503, None));
                 return Ok(false);
@@ -182,6 +183,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     level: ferron_observability::LogLevel::Warn,
                     message: format!("There were FastCGI errors: {stderr_string_trimmed}"),
                     target: "ferron-http-fcgi",
+                    trace_context: None,
                 }));
             }
         });

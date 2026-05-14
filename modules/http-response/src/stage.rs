@@ -737,6 +737,7 @@ impl Stage<HttpContext> for EarlyHintsStage {
                     level: LogLevel::Warn,
                     target: LOG_TARGET,
                     message: format!("Failed to send 103 Early Hints: {e}"),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
             }
         }

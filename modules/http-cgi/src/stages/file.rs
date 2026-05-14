@@ -217,6 +217,7 @@ impl Stage<HttpFileContext> for CgiStage {
                             level: ferron_observability::LogLevel::Warn,
                             message: format!("There were CGI errors: {stderr_string_trimmed}"),
                             target: "ferron-http-cgi",
+                            trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
                         }));
                     }
                     ctx.http.res = Some(HttpResponse::BuiltinError(500, None));
@@ -239,6 +240,7 @@ impl Stage<HttpFileContext> for CgiStage {
                         level: ferron_observability::LogLevel::Warn,
                         message: format!("There were CGI errors: {stderr_string_trimmed}"),
                         target: "ferron-http-cgi",
+                        trace_context: None,
                     }));
                 }
             }

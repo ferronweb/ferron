@@ -7,12 +7,15 @@
 ### Added
 
 - A dropped-events admin metric for non-blocking observability sinks.
+- HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
 
 ### Changed
 
 - Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
 - Improved error reporting for some TLS handshake failures.
+- HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
+- OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
 
@@ -22,6 +25,7 @@
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included).
 - Forward-proxy DNS validation could be bypassed by performing a DNS rebinding attack against the configured allowed hostnames.
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
+- Malformed and timed-out requests rejected before normal handler completion are now counted by Ferron's observability pipeline.
 - `io_uring` (on Linux) couldn't be disabled via the web server configuration.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 - Misconfigured forwarded authentication could lead to completely bypassing the authentication.

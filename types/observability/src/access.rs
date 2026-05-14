@@ -1,6 +1,11 @@
 pub trait AccessEvent: Send + Sync {
     fn protocol(&self) -> &'static str;
     fn visit(&self, visitor: &mut dyn AccessVisitor);
+
+    #[inline]
+    fn trace_context(&self) -> Option<&crate::EventTraceContext> {
+        None
+    }
 }
 
 pub trait AccessVisitor {

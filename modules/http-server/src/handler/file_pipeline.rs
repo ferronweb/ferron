@@ -4,9 +4,12 @@ use std::time::{Duration, Instant};
 
 use ferron_core::pipeline::{Pipeline, PipelineError};
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http_body_util::BodyExt;
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
+
+use super::PerStageSpanHooks;
 
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
@@ -110,6 +113,7 @@ pub(super) async fn execute_http_file_pipeline(
     ctx: &mut HttpContext,
     file_pipeline: &Pipeline<HttpFileContext>,
     timeout: Option<std::time::Duration>,
+    parent_span_key: Option<&str>,
 ) -> Result<(), FilePipelineExecutionError> {
     let Some(request_path_encoded) = ctx
         .req
@@ -206,12 +210,37 @@ pub(super) async fn execute_http_file_pipeline(
                         )
                         .expect("failed to build redirect response"),
                 ));
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.http.server.redirects",
+                    attributes: vec![
+                        (
+                            "http.response.status_code",
+                            MetricAttributeValue::I64(301),
+                        ),
+                        (
+                            "ferron.http.redirect.reason",
+                            MetricAttributeValue::StaticStr("trailing_slash"),
+                        ),
+                    ],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{redirect}"),
+                    description: Some("Number of HTTP redirects emitted by the server."),
+                }));
                 return Ok(());
             }
         }
     }
 
-    apply_resolved_file_to_context(ctx, resolved_file, file_pipeline, timeout, root_path).await
+    apply_resolved_file_to_context(
+        ctx,
+        resolved_file,
+        file_pipeline,
+        timeout,
+        root_path,
+        parent_span_key,
+    )
+    .await
 }
 
 async fn resolve_and_cache(
@@ -239,6 +268,7 @@ async fn apply_resolved_file_to_context(
     file_pipeline: &Pipeline<HttpFileContext>,
     timeout: Option<std::time::Duration>,
     root_path: PathBuf,
+    parent_span_key: Option<&str>,
 ) -> Result<(), FilePipelineExecutionError> {
     if let Some(path_info) = resolved_file.path_info.as_ref() {
         ctx.variables
@@ -274,8 +304,42 @@ async fn apply_resolved_file_to_context(
         etag: resolved_file.etag,
     };
 
+    let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
+    let mut stage_hooks = PerStageSpanHooks::new(
+        &ctx.events,
+        has_traces,
+        parent_span_key.unwrap_or(""),
+        "file",
+    );
     let pipeline_result = if let Some(timeout) = timeout {
-        vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
+        if has_traces {
+            vibeio::time::timeout(
+                timeout,
+                async {
+                    let executed_stages = file_pipeline
+                        .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
+                        .await?;
+                    file_pipeline
+                        .execute_inverse_with_hooks(&mut file_ctx, executed_stages, &mut stage_hooks)
+                        .await
+                },
+            )
+            .await
+        } else {
+            vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
+        }
+    } else if has_traces {
+        Ok(
+            async {
+                let executed_stages = file_pipeline
+                    .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
+                    .await?;
+                file_pipeline
+                    .execute_inverse_with_hooks(&mut file_ctx, executed_stages, &mut stage_hooks)
+                    .await
+            }
+            .await,
+        )
     } else {
         Ok(file_pipeline.execute(&mut file_ctx).await)
     };

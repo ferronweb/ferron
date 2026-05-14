@@ -11,7 +11,9 @@ use std::time::Instant;
 
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::CompositeEventSink;
+use ferron_observability::{
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use quinn::{AsyncTimer, AsyncUdpSocket, Incoming, Runtime};
 use send_wrapper::SendWrapper;
 use tokio_util::sync::CancellationToken;
@@ -26,6 +28,30 @@ use crate::server::common::{
 };
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
+
+fn emit_connection_error_metric(
+    observability: &CompositeEventSink,
+    transport: &'static str,
+    stage: &'static str,
+) {
+    observability.emit(Event::Metric(MetricEvent {
+        name: "ferron.http.server.connection_errors",
+        attributes: vec![
+            (
+                "network.transport",
+                MetricAttributeValue::StaticStr(transport),
+            ),
+            (
+                "ferron.connection.stage",
+                MetricAttributeValue::StaticStr(stage),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{error}"),
+        description: Some("Number of connection lifecycle errors by transport and stage."),
+    }));
+}
 
 #[derive(Default)]
 pub struct QuicTlsSniResolvers {
@@ -300,6 +326,11 @@ impl QuicListenerHandle {
                                 emit_error(
                                     &ip_observability,
                                     format!("Failed to accept HTTP/3 connection: {error}"),
+                                );
+                                emit_connection_error_metric(
+                                    &ip_observability,
+                                    "quic",
+                                    "http3_accept",
                                 );
                                 return;
                             }

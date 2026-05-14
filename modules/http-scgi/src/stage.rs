@@ -136,6 +136,7 @@ impl Stage<HttpContext> for ScgiStage {
                                 level: ferron_observability::LogLevel::Error,
                                 message: format!("Service unavailable: {err}"),
                                 target: "ferron-http-scgi",
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             return Ok(true);
@@ -156,6 +157,7 @@ impl Stage<HttpContext> for ScgiStage {
                                 level: ferron_observability::LogLevel::Error,
                                 message: format!("Service unavailable: {err}"),
                                 target: "ferron-http-scgi",
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             return Ok(false);

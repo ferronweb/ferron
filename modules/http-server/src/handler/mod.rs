@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,8 +17,9 @@ use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
-    AccessEvent, AccessVisitor, CompositeEventSink, Event, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, Parent, TraceAttributeValue, TraceEvent,
+    AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
+    TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::Empty;
@@ -34,11 +36,13 @@ use self::file_pipeline::{
 };
 use self::request_utils::{
     add_http3_alt_svc_header, builtin_error_response, check_backslash_in_path, emit_error,
-    emit_warn, execute_error_pipeline, get_http_nested_boolean, is_options_star_request,
-    normalize_host_header, normalize_http2_http3_request, sanitize_request_url,
+    emit_error_with_trace, emit_warn_with_trace, execute_error_pipeline,
+    get_http_nested_boolean, is_options_star_request, normalize_host_header,
+    normalize_http2_http3_request, sanitize_request_url,
 };
 
 const LOG_TARGET: &str = "ferron-http-server";
+static SPAN_KEY_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
@@ -56,22 +60,50 @@ pub async fn bench_resolve_http_file_target(
 }
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
-struct PerStageSpanHooks<'a> {
+pub(super) struct PerStageSpanHooks<'a> {
     events: &'a CompositeEventSink,
     has_traces: bool,
+    parent_span_key: &'a str,
+    stage_group: &'a str,
+}
+
+impl<'a> PerStageSpanHooks<'a> {
+    fn new(
+        events: &'a CompositeEventSink,
+        has_traces: bool,
+        parent_span_key: &'a str,
+        stage_group: &'a str,
+    ) -> Self {
+        Self {
+            events,
+            has_traces,
+            parent_span_key,
+            stage_group,
+        }
+    }
+
+    fn stage_key(&self, stage_name: &str, inverse: bool) -> String {
+        let suffix = if inverse { ":inverse" } else { "" };
+        format!(
+            "{}:{}:{}{}",
+            self.parent_span_key, self.stage_group, stage_name, suffix
+        )
+    }
 }
 
 #[async_trait::async_trait(?Send)]
-impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
+impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
     #[inline]
-    async fn before_stage(&mut self, stage: &dyn Stage<HttpContext>) {
+    async fn before_stage(&mut self, stage: &dyn Stage<C>) {
         if !self.has_traces {
             return;
         }
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(self.stage_key(stage_name, false)),
             name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
-            parent: None,
+            parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
+            trace_context: None,
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
@@ -82,13 +114,14 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
     #[inline]
     async fn after_stage(
         &mut self,
-        stage: &dyn Stage<HttpContext>,
+        stage: &dyn Stage<C>,
         result: &Result<bool, PipelineError>,
     ) {
         if !self.has_traces {
             return;
         }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
+            key: Cow::Owned(self.stage_key(stage.name(), false)),
             name: Cow::Owned(format!("ferron.stage.{}", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
@@ -96,14 +129,16 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
     }
 
     #[inline]
-    async fn before_stage_inverse(&mut self, stage: &dyn Stage<HttpContext>) {
+    async fn before_stage_inverse(&mut self, stage: &dyn Stage<C>) {
         if !self.has_traces {
             return;
         }
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(self.stage_key(stage_name, true)),
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
-            parent: None,
+            parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
+            trace_context: None,
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
@@ -114,13 +149,14 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
     #[inline]
     async fn after_stage_inverse(
         &mut self,
-        stage: &dyn Stage<HttpContext>,
+        stage: &dyn Stage<C>,
         result: &Result<(), PipelineError>,
     ) {
         if !self.has_traces {
             return;
         }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
+            key: Cow::Owned(self.stage_key(stage.name(), true)),
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
@@ -147,14 +183,16 @@ struct HttpAccessLog {
     duration_secs: f64,
     request_headers: Vec<(String, String)>,
     timestamp: chrono::DateTime<chrono::Local>,
-    // Optional W3C trace context identifiers (when available)
-    trace_id: Option<String>,
-    span_id: Option<String>,
+    trace_context: Option<EventTraceContext>,
 }
 
 impl AccessEvent for HttpAccessLog {
     fn protocol(&self) -> &'static str {
         "http"
+    }
+
+    fn trace_context(&self) -> Option<&EventTraceContext> {
+        self.trace_context.as_ref()
     }
 
     fn visit(&self, visitor: &mut dyn AccessVisitor) {
@@ -192,13 +230,72 @@ impl AccessEvent for HttpAccessLog {
             );
         }
         // Optionally include trace identifiers when available
-        if let Some(tid) = &self.trace_id {
-            visitor.field_string("trace_id", tid);
-        }
-        if let Some(sid) = &self.span_id {
-            visitor.field_string("span_id", sid);
+        if let Some(trace_context) = &self.trace_context {
+            visitor.field_string("trace_id", &trace_context.trace_id);
+            visitor.field_string("span_id", &trace_context.span_id);
         }
     }
+}
+
+fn next_span_key(prefix: &str) -> String {
+    format!(
+        "{prefix}:{}",
+        SPAN_KEY_COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+fn to_event_trace_context(trace_context: &trace_context::TraceContext) -> EventTraceContext {
+    EventTraceContext {
+        trace_id: trace_context.trace_id.clone(),
+        span_id: trace_context.span_id.clone(),
+        sampled: Some(trace_context.sampled),
+    }
+}
+
+fn resolve_request_trace_context(
+    request: &HttpRequest,
+    generate_enabled: bool,
+    default_sampled: bool,
+) -> (Option<trace_context::TraceContext>, Option<Parent>) {
+    let incoming = request
+        .headers()
+        .get("traceparent")
+        .and_then(|tp_val| tp_val.to_str().ok())
+        .and_then(trace_context::parse_traceparent)
+        .map(|mut trace_context| {
+            trace_context.tracestate = request
+                .headers()
+                .get("tracestate")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
+            trace_context
+        });
+
+    if let Some(parent_context) = incoming {
+        let request_context = trace_context::TraceContext {
+            trace_id: parent_context.trace_id.clone(),
+            span_id: trace_context::generate_span_id(),
+            sampled: parent_context.sampled,
+            tracestate: parent_context.tracestate.clone(),
+        };
+        return (
+            Some(request_context),
+            Some(Parent::ById {
+                trace_id: parent_context.trace_id,
+                span_id: parent_context.span_id,
+                sampled: Some(parent_context.sampled),
+            }),
+        );
+    }
+
+    if generate_enabled {
+        return (
+            Some(trace_context::generate_traceparent(default_sampled)),
+            None,
+        );
+    }
+
+    (None, None)
 }
 
 /// Format HTTP version as a string (e.g. `HTTP/1.1`).
@@ -268,6 +365,22 @@ pub async fn bad_request_handler(
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
     let status_code = if is_timeout { 408 } else { 400 };
+    ferron_core::admin::ADMIN_METRICS
+        .requests_total
+        .fetch_add(1, Ordering::Relaxed);
+    let request_span_key = events.has_trace_sinks().then(|| next_span_key("request"));
+    if let Some(request_span_key) = request_span_key.as_ref() {
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(request_span_key.clone()),
+            name: Cow::Borrowed("ferron.request"),
+            parent: None,
+            trace_context: None,
+            attributes: vec![(
+                "ferron.http.request.stage",
+                TraceAttributeValue::StaticStr("pre_handler"),
+            )],
+        }));
+    }
     emit_error(
         &events,
         format!(
@@ -280,12 +393,34 @@ pub async fn bad_request_handler(
             }
         ),
     );
+    events.emit(Event::Metric(MetricEvent {
+        name: "ferron.http.server.pre_handler_request_count",
+        attributes: vec![
+            (
+                "http.response.status_code",
+                MetricAttributeValue::I64(status_code as i64),
+            ),
+            (
+                "ferron.http.request.stage",
+                MetricAttributeValue::StaticStr("pre_handler"),
+            ),
+            (
+                "error.type",
+                MetricAttributeValue::String(status_code.to_string()),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{request}"),
+        description: Some("Number of malformed or timed-out HTTP requests rejected before request handling."),
+    }));
     let mut response = if let Some(response) = execute_error_pipeline(
         error_pipeline.as_ref(),
         status_code,
         None,
         LayeredConfiguration::default(),
         &events,
+        request_span_key.as_deref(),
     )
     .await
     {
@@ -296,6 +431,17 @@ pub async fn bad_request_handler(
     response
         .headers_mut()
         .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
+    if let Some(request_span_key) = request_span_key {
+        events.emit(Event::Trace(TraceEvent::EndSpan {
+            key: Cow::Owned(request_span_key),
+            name: Cow::Borrowed("ferron.request"),
+            error: Some(format!("HTTP error {}", status_code)),
+            attributes: vec![(
+                "http.response.status_code",
+                TraceAttributeValue::I64(status_code as i64),
+            )],
+        }));
+    }
     Ok(response)
 }
 
@@ -334,23 +480,36 @@ pub async fn request_handler(
     let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
     let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
 
-    // Determine external parent from incoming headers if present (do not generate here)
-    let mut external_parent_outer: Option<Parent> = None;
-    if has_traces {
-        if let Some(tp_val) = request.headers().get("traceparent") {
-            if let Ok(tp_str) = tp_val.to_str() {
-                if let Some(tc) = trace_context::parse_traceparent(tp_str) {
-                    external_parent_outer = Some(Parent::ById {
-                        trace_id: tc.trace_id.clone(),
-                        span_id: tc.span_id.clone(),
-                    });
-                }
-            }
-        }
-    }
+    let (request_trace_context, external_parent) = if has_traces {
+        let global_config = config_resolver.global();
+        let trace_config_node = global_config.as_ref().and_then(|g| {
+            g.directives
+                .get("http")
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.children.as_ref())
+                .and_then(|c| c.directives.get("trace"))
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.children.as_ref())
+        });
+
+        let generate_enabled = trace_config_node
+            .and_then(|c| c.get_value("generate"))
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(true);
+
+        let default_sampled = trace_config_node
+            .and_then(|c| c.get_value("sampled"))
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(false);
+
+        resolve_request_trace_context(&request, generate_enabled, default_sampled)
+    } else {
+        (None, None)
+    };
+    let request_span_key = has_traces.then(|| next_span_key("request"));
 
     // Start tracing span
-    if has_traces {
+    if let Some(request_span_key) = request_span_key.as_ref() {
         let method = method
             .as_ref()
             .expect("trace events require request metadata to be initialized");
@@ -367,8 +526,10 @@ pub async fn request_handler(
             .expect("trace events require request metadata to be initialized");
 
         events.emit(Event::Trace(TraceEvent::StartSpan {
-            name: Cow::Borrowed("ferron.request_handler"),
-            parent: external_parent_outer.clone(),
+            key: Cow::Owned(request_span_key.clone()),
+            name: Cow::Borrowed("ferron.request"),
+            parent: external_parent.clone(),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
             attributes: vec![
                 (
                     "http.request.method",
@@ -385,9 +546,25 @@ pub async fn request_handler(
                     "client.address",
                     TraceAttributeValue::String(initial_client_ip_canonical.clone()),
                 ),
+                (
+                    "url.full",
+                    TraceAttributeValue::String(
+                        request
+                            .uri()
+                            .path_and_query()
+                            .map_or_else(
+                                || request.uri().path().to_string(),
+                                |path_and_query| path_and_query.to_string(),
+                            ),
+                    ),
+                ),
             ],
         }));
     }
+
+    ferron_core::admin::ADMIN_METRICS
+        .requests_total
+        .fetch_add(1, Ordering::Relaxed);
 
     // Increment active requests counter
     if let Some(metric_attrs) = metric_attrs.as_ref() {
@@ -421,7 +598,7 @@ pub async fn request_handler(
         Vec::new()
     };
 
-    let (mut response_result, auth_user, final_remote_address, trace_ids) = request_handler_inner(
+    let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
         request,
         pipeline,
         file_pipeline,
@@ -432,6 +609,8 @@ pub async fn request_handler(
         hostname.clone(),
         encrypted,
         https_port,
+        request_trace_context.clone(),
+        request_span_key.clone(),
         events.clone(),
     )
     .await;
@@ -546,11 +725,10 @@ pub async fn request_handler(
             duration_secs,
             request_headers,
             timestamp,
-            trace_id: trace_ids.as_ref().map(|(t, _)| t.clone()),
-            span_id: trace_ids.as_ref().map(|(_, s)| s.clone()),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         })));
 
-        if has_traces {
+        if let Some(request_span_key) = request_span_key {
             let error_description = response_result.as_ref().err().map(|e| e.to_string());
             let mut end_attrs = Vec::with_capacity(3);
             end_attrs.push((
@@ -568,7 +746,8 @@ pub async fn request_handler(
                 ));
             }
             events.emit(Event::Trace(TraceEvent::EndSpan {
-                name: Cow::Borrowed("ferron.request_handler"),
+                key: Cow::Owned(request_span_key),
+                name: Cow::Borrowed("ferron.request"),
                 error: error_description,
                 attributes: end_attrs,
             }));
@@ -603,18 +782,14 @@ async fn request_handler_inner(
     hostname: Option<String>,
     encrypted: bool,
     https_port: Option<u16>,
+    request_trace_context: Option<trace_context::TraceContext>,
+    request_span_key: Option<String>,
     events: CompositeEventSink,
 ) -> (
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
     Option<SocketAddr>,
-    Option<(String, String)>,
 ) {
-    // Increment request counter for admin API /status endpoint
-    ferron_core::admin::ADMIN_METRICS
-        .requests_total
-        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
         request.version(),
@@ -624,18 +799,26 @@ async fn request_handler_inner(
     }
 
     // Normalize "Host" header
+    let request_log_trace_context = request_trace_context
+        .as_ref()
+        .map(trace_context::to_event_trace_context);
     if let Err(e) = normalize_host_header(&mut request, &events) {
-        emit_error(&events, format!("Host header normalization error: {}", e));
+        emit_error_with_trace(
+            &events,
+            format!("Host header normalization error: {}", e),
+            request_log_trace_context.clone(),
+        );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
             400,
             None,
             LayeredConfiguration::default(),
             &events,
+            request_span_key.as_deref(),
         )
         .await
         {
-            return (Ok(response), None, None, None);
+            return (Ok(response), None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -648,7 +831,6 @@ async fn request_handler_inner(
             )),
             None,
             None,
-            None,
         );
     }
 
@@ -657,17 +839,22 @@ async fn request_handler_inner(
     {
         Ok((routing, original)) => (routing, original),
         Err(e) => {
-            emit_error(&events, format!("Invalid request URL pathname: {}", e));
+            emit_error_with_trace(
+                &events,
+                format!("Invalid request URL pathname: {}", e),
+                request_log_trace_context.clone(),
+            );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
                 400,
                 None,
                 LayeredConfiguration::default(),
                 &events,
+                request_span_key.as_deref(),
             )
             .await
             {
-                return (Ok(response), None, None, None);
+                return (Ok(response), None, None);
             }
             return (
                 Ok(builtin_error_response(
@@ -680,7 +867,6 @@ async fn request_handler_inner(
                 )),
                 None,
                 None,
-                None,
             );
         }
     };
@@ -691,17 +877,22 @@ async fn request_handler_inner(
         .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
         .unwrap_or(true);
     if let Err(e) = check_backslash_in_path(request.uri().path(), reject_backslash) {
-        emit_error(&events, format!("Invalid request URL: {}", e));
+        emit_error_with_trace(
+            &events,
+            format!("Invalid request URL: {}", e),
+            request_log_trace_context.clone(),
+        );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
             400,
             None,
             LayeredConfiguration::default(),
             &events,
+            request_span_key.as_deref(),
         )
         .await
         {
-            return (Ok(response), None, None, None);
+            return (Ok(response), None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -712,7 +903,6 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
-            None,
             None,
             None,
         );
@@ -728,17 +918,22 @@ async fn request_handler_inner(
         match canonicalize_path(request.uri().path()) {
             Ok(full_path) => {
                 if let Err(e) = sanitize_request_url(&mut request, &full_path.forwarding) {
-                    emit_error(&events, format!("URL sanitization error: {}", e));
+                    emit_error_with_trace(
+                        &events,
+                        format!("URL sanitization error: {}", e),
+                        request_log_trace_context.clone(),
+                    );
                     if let Some(response) = execute_error_pipeline(
                         error_pipeline.as_ref(),
                         400,
                         None,
                         LayeredConfiguration::default(),
                         &events,
+                        request_span_key.as_deref(),
                     )
                     .await
                     {
-                        return (Ok(response), None, None, None);
+                        return (Ok(response), None, None);
                     }
                     return (
                         Ok(builtin_error_response(
@@ -751,14 +946,14 @@ async fn request_handler_inner(
                         )),
                         None,
                         None,
-                        None,
                     );
                 }
             }
             Err(e) => {
-                emit_error(
+                emit_error_with_trace(
                     &events,
                     format!("Invalid request URL percent-encoding: {}", e),
+                    request_log_trace_context.clone(),
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -766,10 +961,11 @@ async fn request_handler_inner(
                     None,
                     LayeredConfiguration::default(),
                     &events,
+                    request_span_key.as_deref(),
                 )
                 .await
                 {
-                    return (Ok(response), None, None, None);
+                    return (Ok(response), None, None);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -782,7 +978,6 @@ async fn request_handler_inner(
                     )),
                     None,
                     None,
-                    None,
                 );
             }
         }
@@ -791,71 +986,6 @@ async fn request_handler_inner(
     // Create a partial HttpContext for variable resolution during config resolution.
     // This enables all interpolation variables (request.*, server.*, remote.*) to be
     // resolved dynamically from the context rather than pre-populated in a HashMap.
-    // Parse incoming W3C traceparent (trace-context) headers early so spans can be started with external parents
-    let mut parsed_trace_context: Option<trace_context::TraceContext> = None;
-    let mut external_parent: Option<Parent> = None;
-    if events.has_trace_sinks() {
-        let global_config = config_resolver.global();
-        let trace_config_node = global_config.as_ref().and_then(|g| {
-            g.directives
-                .get("http")
-                .and_then(|entries| entries.first())
-                .and_then(|e| e.children.as_ref())
-                .and_then(|c| c.directives.get("trace"))
-                .and_then(|entries| entries.first())
-                .and_then(|e| e.children.as_ref())
-        });
-
-        let generate_enabled = trace_config_node
-            .and_then(|c| c.get_value("generate"))
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(true);
-
-        let default_sampled = trace_config_node
-            .and_then(|c| c.get_value("sampled"))
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(false);
-
-        if let Some(tp_val) = request.headers().get("traceparent") {
-            if let Ok(tp_str) = tp_val.to_str() {
-                if let Some(tc) = trace_context::parse_traceparent(tp_str) {
-                    external_parent = Some(Parent::ById {
-                        trace_id: tc.trace_id.clone(),
-                        span_id: tc.span_id.clone(),
-                    });
-                    parsed_trace_context = Some(tc);
-                }
-            }
-        }
-        // If no incoming context, generate a new one if enabled.
-        if parsed_trace_context.is_none() && generate_enabled {
-            let gen = trace_context::generate_traceparent(default_sampled);
-            external_parent = Some(Parent::ById {
-                trace_id: gen.trace_id.clone(),
-                span_id: gen.span_id.clone(),
-            });
-            parsed_trace_context = Some(gen);
-        }
-    }
-
-    // Start the request span with external parent if available
-    if events.has_trace_sinks() {
-        events.emit(Event::Trace(TraceEvent::StartSpan {
-            name: std::borrow::Cow::Borrowed("ferron.request"),
-            parent: external_parent,
-            attributes: vec![
-                (
-                    "http.request.method",
-                    TraceAttributeValue::String(request.method().to_string()),
-                ),
-                (
-                    "url.full",
-                    TraceAttributeValue::String(request.uri().to_string()),
-                ),
-            ],
-        }));
-    }
-
     let mut ctx = HttpContext {
         req: Some(request),
         res: None,
@@ -875,7 +1005,7 @@ async fn request_handler_inner(
     };
 
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
-    if let Some(ref tc) = parsed_trace_context {
+    if let Some(ref tc) = request_trace_context {
         ctx.insert::<trace_context::TraceContextKey>(tc.clone());
     }
 
@@ -894,10 +1024,11 @@ async fn request_handler_inner(
             None,
             LayeredConfiguration::default(),
             &events,
+            request_span_key.as_deref(),
         )
         .await
         {
-            return (Ok(response), None, None, None);
+            return (Ok(response), None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -908,7 +1039,6 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
             )),
-            None,
             None,
             None,
         );
@@ -933,7 +1063,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None, None);
+        return (Ok(response), None, None);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -960,6 +1090,7 @@ async fn request_handler_inner(
         &events,
         "",
         &resolution.location_path.path_segments,
+        request_span_key.as_deref(),
     )
     .await;
 
@@ -1005,6 +1136,7 @@ async fn request_handler_inner(
                             &events,
                             "Error ",
                             &resolution.location_path.path_segments,
+                            request_span_key.as_deref(),
                         )
                         .await;
                     }
@@ -1015,34 +1147,6 @@ async fn request_handler_inner(
 
     let auth_user = ctx.auth_user.clone();
     let final_remote = ctx.remote_address;
-
-    if events.has_trace_sinks() {
-        let status = match ctx
-            .res
-            .as_ref()
-            .unwrap_or(&HttpResponse::BuiltinError(404, None))
-        {
-            HttpResponse::BuiltinError(status, _) => *status as i64,
-            HttpResponse::Custom(resp) => resp.status().as_u16() as i64,
-            HttpResponse::Abort => 0,
-        };
-        events.emit(Event::Trace(TraceEvent::EndSpan {
-            name: std::borrow::Cow::Borrowed("ferron.request"),
-            attributes: vec![(
-                "http.response.status_code",
-                TraceAttributeValue::I64(status),
-            )],
-            error: if status >= 400 {
-                Some(format!("HTTP error {}", status))
-            } else {
-                None
-            },
-        }));
-    }
-
-    let trace_ids = parsed_trace_context
-        .as_ref()
-        .map(|tc| (tc.trace_id.clone(), tc.span_id.clone()));
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -1053,6 +1157,7 @@ async fn request_handler_inner(
                     headers.clone(),
                     ctx.configuration.clone(),
                     &events,
+                    request_span_key.as_deref(),
                 )
                 .await
                 {
@@ -1069,7 +1174,6 @@ async fn request_handler_inner(
         },
         auth_user,
         Some(final_remote),
-        trace_ids,
     )
 }
 
@@ -1080,14 +1184,22 @@ async fn execute_pipeline_stages(
     events: &CompositeEventSink,
     log_prefix: &str,
     path_segments: &[String],
+    request_span_key: Option<&str>,
 ) {
     let has_traces = events.has_trace_sinks();
+    let pipeline_span_key = request_span_key.map(|_| next_span_key("pipeline"));
+    let log_trace_context = ctx.get::<trace_context::TraceContextKey>()
+        .map(trace_context::to_event_trace_context);
 
     // Start pipeline execution span
-    if has_traces {
+    if let (true, Some(request_span_key), Some(pipeline_span_key)) =
+        (has_traces, request_span_key, pipeline_span_key.as_ref())
+    {
         events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(pipeline_span_key.clone()),
             name: Cow::Borrowed("ferron.pipeline.execute"),
-            parent: Some(Parent::ByName("ferron.request".to_string())),
+            parent: Some(Parent::ByKey(request_span_key.to_string())),
+            trace_context: None,
             attributes: vec![(
                 "ferron.pipeline.log_prefix",
                 TraceAttributeValue::String(log_prefix.to_string()),
@@ -1141,7 +1253,12 @@ async fn execute_pipeline_stages(
     let instant = std::time::Instant::now();
 
     // Per-stage span hooks — emit StartSpan/EndSpan around each stage
-    let mut stage_hooks = PerStageSpanHooks { events, has_traces };
+    let mut stage_hooks = PerStageSpanHooks::new(
+        events,
+        has_traces && pipeline_span_key.is_some(),
+        pipeline_span_key.as_deref().unwrap_or(""),
+        "http",
+    );
 
     let executed_stages = match if let Some(timeout_duration) =
         timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
@@ -1158,15 +1275,20 @@ async fn execute_pipeline_stages(
     } {
         Ok(Ok(executed_stages)) => Some(executed_stages),
         Ok(Err(error)) => {
-            emit_error(
+            emit_error_with_trace(
                 events,
                 format!("{log_prefix}Pipeline execution error: {error}"),
+                log_trace_context.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
         }
         Err(_) => {
-            emit_error(events, format!("{log_prefix}Pipeline execution timeout"));
+            emit_error_with_trace(
+                events,
+                format!("{log_prefix}Pipeline execution timeout"),
+                log_trace_context.clone(),
+            );
             ctx.res = Some(HttpResponse::BuiltinError(408, None));
             None
         }
@@ -1178,6 +1300,7 @@ async fn execute_pipeline_stages(
                 ctx,
                 file_pipeline,
                 timeout_duration.map(|d| d.saturating_sub(instant.elapsed())),
+                pipeline_span_key.as_deref(),
             )
             .await
             {
@@ -1192,16 +1315,18 @@ async fn execute_pipeline_stages(
                     ctx.res = Some(HttpResponse::BuiltinError(404, None));
                 }
                 Err(FilePipelineExecutionError::Io(error)) => {
-                    emit_error(
+                    emit_error_with_trace(
                         events,
                         format!("{log_prefix}HTTP file resolution error: {error}"),
+                        log_trace_context.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
                 Err(FilePipelineExecutionError::Pipeline(error)) => {
-                    emit_error(
+                    emit_error_with_trace(
                         events,
                         format!("{log_prefix}Pipeline execution error: {error}"),
+                        log_trace_context.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -1211,7 +1336,11 @@ async fn execute_pipeline_stages(
                         .get_value("root", true)
                         .and_then(|v| v.as_string_with_interpolations(ctx))
                     {
-                        emit_warn(events, format!("{log_prefix}Webroot not found: {webroot}"));
+                        emit_warn_with_trace(
+                            events,
+                            format!("{log_prefix}Webroot not found: {webroot}"),
+                            log_trace_context.clone(),
+                        );
                     }
                     ctx.res = Some(HttpResponse::BuiltinError(404, None));
                 }
@@ -1222,17 +1351,19 @@ async fn execute_pipeline_stages(
             .execute_inverse_with_hooks(ctx, executed_stages, &mut stage_hooks)
             .await
         {
-            emit_error(
+            emit_error_with_trace(
                 events,
                 format!("{log_prefix}Pipeline inverse execution error: {error}"),
+                log_trace_context,
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }
     }
 
     // End pipeline execution span
-    if has_traces {
+    if let Some(pipeline_span_key) = pipeline_span_key {
         events.emit(Event::Trace(TraceEvent::EndSpan {
+            key: Cow::Owned(pipeline_span_key),
             name: Cow::Borrowed("ferron.pipeline.execute"),
             error: ctx.res.as_ref().and_then(|r| match r {
                 HttpResponse::BuiltinError(s, _) if *s >= 400 => {

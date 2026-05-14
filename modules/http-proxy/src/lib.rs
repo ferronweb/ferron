@@ -102,6 +102,39 @@ static GLOBAL_CONCURRENT_CONNECTIONS: AtomicUsize =
 /// Used for SRV record resolution via `hickory_resolver`.
 static SECONDARY_RUNTIME_HANDLE: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 
+fn emit_proxy_failure_metric(
+    ctx: &HttpContext,
+    status_code: u16,
+    result: &'static str,
+    error_type: &str,
+) {
+    use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+
+    ctx.events.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.failures",
+        attributes: vec![
+            (
+                "ferron.proxy.result",
+                MetricAttributeValue::StaticStr(result),
+            ),
+            (
+                "http.response.status_code",
+                MetricAttributeValue::I64(status_code as i64),
+            ),
+            (
+                "error.type",
+                MetricAttributeValue::String(error_type.to_string()),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{request}"),
+        description: Some(
+            "Number of reverse proxy requests that failed before a backend response was returned.",
+        ),
+    }));
+}
+
 /// Returns the secondary runtime handle if it has been captured.
 ///
 /// Returns `None` if `Module::start()` has not been called yet.
@@ -395,6 +428,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         target: "ferron-proxy",
                         level: ferron_observability::LogLevel::Error,
                         message: format!("Proxy config error: {e}"),
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
                 return Ok(true);
@@ -469,8 +503,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         target: "ferron-proxy",
                         level: ferron_observability::LogLevel::Error,
                         message: format!("Proxy error: {e}"),
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
+                emit_proxy_failure_metric(ctx, 502, "error", "backend_error");
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
                 return Ok(false);
             }

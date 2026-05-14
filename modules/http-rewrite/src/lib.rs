@@ -182,6 +182,7 @@ impl Stage<HttpContext> for RewriteStage {
                     target: "ferron-rewrite",
                     level: ferron_observability::LogLevel::Info,
                     message: format!("URL rewritten from \"{original_url}\" to \"{rewritten}\""),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 },
             ));
         }

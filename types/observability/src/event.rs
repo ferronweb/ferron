@@ -16,6 +16,7 @@ pub struct LogEvent {
     pub level: LogLevel,
     pub message: String,
     pub target: &'static str, // "where this log came from"
+    pub trace_context: Option<EventTraceContext>,
 }
 
 #[derive(Copy, Clone)]
@@ -107,25 +108,39 @@ pub enum TraceAttributeValue {
     F64(f64),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventTraceContext {
+    pub trace_id: String,
+    pub span_id: String,
+    pub sampled: Option<bool>,
+}
+
 /// Represents a trace event with its name, attributes, and optional span ID.
 #[derive(Clone)]
 pub enum Parent {
-    ByName(String),
-    ById { trace_id: String, span_id: String },
+    ByKey(String),
+    ById {
+        trace_id: String,
+        span_id: String,
+        sampled: Option<bool>,
+    },
 }
 
 #[derive(Clone)]
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
     StartSpan {
+        key: Cow<'static, str>,
         name: Cow<'static, str>,
         parent: Option<Parent>,
+        trace_context: Option<EventTraceContext>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },
     /// End the span with the given name, optional error description, and final attributes.
     /// Attributes here are merged with those from StartSpan and are useful for values
     /// only known at response time (e.g. `http.response.status_code`).
     EndSpan {
+        key: Cow<'static, str>,
         name: Cow<'static, str>,
         error: Option<String>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,

@@ -170,7 +170,7 @@ The `http/json` protocol uses HTTP with JSON encoding:
 
 ## Signal correlation
 
-All three signals from the same HTTP request share the same `trace_id`. This enables correlated queries like "show me all logs and metrics for trace `abc123`" in your observability backend.
+Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. This enables correlated queries like "show me all logs for trace `abc123`" in your observability backend.
 
 ### Trace context propagation
 
@@ -178,17 +178,19 @@ Ferron automatically:
 
 1. **Generates trace IDs** for incoming requests without trace context
 2. **Propagates trace context** via W3C Trace Context headers (`traceparent`, `tracestate`)
-3. **Links all signals** (logs, metrics, traces) with the same trace ID
-4. **Adds span context** to logs for correlation
+3. **Creates one local request span** per request and nests pipeline, stage, and error-pipeline spans under it
+4. **Adds request span context** to OTLP logs and access logs for correlation
+
+Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate metrics using their semantic attributes, resource attributes, and timestamps instead of expecting a metric data point to join directly to a single trace.
 
 ### Example trace flow
 
 ```text
-Request → Ferron (generates trace_id) → OTLP Collector
+Request → Ferron (creates ferron.request span) → OTLP Collector
     ↓
-Logs (trace_id) → OTLP Collector
+Logs / access logs (trace_id + span_id) → OTLP Collector
     ↓
-Metrics (trace_id) → OTLP Collector
+Metrics (semantic attributes) → OTLP Collector
     ↓
 Traces (trace_id) → OTLP Collector
 ```

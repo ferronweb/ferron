@@ -118,6 +118,7 @@ impl RateLimitEngine {
                         key_type_label(&config.key)
                     ),
                     target: "ferron-ratelimit",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",

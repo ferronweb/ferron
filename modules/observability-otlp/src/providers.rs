@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use dashmap::DashMap;
 use ferron_core::{config::ServerConfigurationBlock, registry::Registry};
@@ -17,8 +17,28 @@ use crate::{
 
 /// Correlation context: tracks active spans per host sink instance.
 pub struct CorrelationContext {
-    /// Active spans: span_name -> (trace_id_hex, span)
-    active_spans: DashMap<String, (String, opentelemetry_sdk::trace::Span)>,
+    /// Active spans: span_key -> active span entry
+    active_spans: DashMap<String, ActiveSpan>,
+}
+
+struct ActiveSpan {
+    trace_id_hex: String,
+    span_id_hex: String,
+    sampled: bool,
+    span: opentelemetry_sdk::trace::Span,
+}
+
+#[derive(Debug, Default)]
+struct RequestedIdGenerator;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct RequestedIds {
+    trace_id: Option<opentelemetry::TraceId>,
+    span_id: Option<opentelemetry::SpanId>,
+}
+
+thread_local! {
+    static REQUESTED_IDS: RefCell<Option<RequestedIds>> = const { RefCell::new(None) };
 }
 
 impl CorrelationContext {
@@ -30,27 +50,65 @@ impl CorrelationContext {
 
     pub fn insert_span(
         &self,
-        name: impl Into<String>,
+        key: impl Into<String>,
         trace_id_hex: String,
+        span_id_hex: String,
+        sampled: bool,
         span: opentelemetry_sdk::trace::Span,
     ) {
-        self.active_spans.insert(name.into(), (trace_id_hex, span));
+        self.active_spans.insert(
+            key.into(),
+            ActiveSpan {
+                trace_id_hex,
+                span_id_hex,
+                sampled,
+                span,
+            },
+        );
     }
 
-    pub fn remove_span(&self, name: &str) -> Option<(String, opentelemetry_sdk::trace::Span)> {
-        self.active_spans.remove(name).map(|(_, v)| v)
+    fn remove_span(&self, key: &str) -> Option<ActiveSpan> {
+        self.active_spans.remove(key).map(|(_, v)| v)
     }
 
     /// Look up an active span's trace and span ID for use as a parent.
-    pub fn get_parent_ids(&self, name: &str) -> Option<(String, String)> {
-        use opentelemetry::trace::Span;
-        self.active_spans.get(name).map(|entry| {
-            let (trace_id_hex, span) = entry.value();
+    pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool)> {
+        self.active_spans.get(key).map(|entry| {
+            let span = entry.value();
             (
-                trace_id_hex.clone(),
-                span.span_context().span_id().to_string(),
+                span.trace_id_hex.clone(),
+                span.span_id_hex.clone(),
+                span.sampled,
             )
         })
+    }
+}
+
+impl opentelemetry_sdk::trace::IdGenerator for RequestedIdGenerator {
+    fn new_trace_id(&self) -> opentelemetry::TraceId {
+        if let Some(trace_id) = REQUESTED_IDS.with(|requested| {
+            requested
+                .borrow_mut()
+                .as_mut()
+                .and_then(|requested| requested.trace_id.take())
+        }) {
+            return trace_id;
+        }
+
+        opentelemetry_sdk::trace::RandomIdGenerator::default().new_trace_id()
+    }
+
+    fn new_span_id(&self) -> opentelemetry::SpanId {
+        if let Some(span_id) = REQUESTED_IDS.with(|requested| {
+            requested
+                .borrow_mut()
+                .as_mut()
+                .and_then(|requested| requested.span_id.take())
+        }) {
+            return span_id;
+        }
+
+        opentelemetry_sdk::trace::RandomIdGenerator::default().new_span_id()
     }
 }
 
@@ -215,6 +273,7 @@ fn build_traces_provider(
             .with_span_processor(
                 BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
             )
+            .with_id_generator(RequestedIdGenerator)
             .with_resource(resource.clone())
             .build(),
     )
@@ -314,6 +373,14 @@ pub fn emit_access_log(
         record.set_body(AnyValue::String(body.into()));
     } else {
         record.set_body(AnyValue::String("<unknown access log>".into()));
+    }
+    if let Some(trace_context) = event.trace_context() {
+        if let (Ok(trace_id), Ok(span_id)) = (
+            opentelemetry::TraceId::from_hex(&trace_context.trace_id),
+            opentelemetry::SpanId::from_hex(&trace_context.span_id),
+        ) {
+            record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+        }
     }
     logger.emit(record);
 }
@@ -494,71 +561,31 @@ pub fn emit_trace(
     event: &TraceEvent,
     correlation: &CorrelationContext,
 ) {
-    use opentelemetry::trace::{
-        Span, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState, Tracer,
-    };
-    use opentelemetry::Context;
+    use opentelemetry::trace::{Span, SpanBuilder, Tracer};
 
     let tracer = provider.tracer("ferron");
 
     match event {
         TraceEvent::StartSpan {
+            key,
             name,
             parent,
+            trace_context,
             attributes,
         } => {
-            let mut span = if let Some(parent_val) = parent {
-                match parent_val {
-                    Parent::ByName(parent_name) => {
-                        // Look up the parent span's trace_id and span_id by name
-                        if let Some((trace_id_hex, parent_span_id_hex)) =
-                            correlation.get_parent_ids(parent_name)
-                        {
-                            if let (Ok(trace_id), Ok(span_id)) = (
-                                TraceId::from_hex(&trace_id_hex),
-                                SpanId::from_hex(&parent_span_id_hex),
-                            ) {
-                                let parent_ctx = SpanContext::new(
-                                    trace_id,
-                                    span_id,
-                                    TraceFlags::SAMPLED,
-                                    true,
-                                    TraceState::default(),
-                                );
-                                let parent_cx = Context::new().with_remote_span_context(parent_ctx);
-                                tracer.start_with_context(name.clone(), &parent_cx)
-                            } else {
-                                tracer.start(name.clone())
-                            }
-                        } else {
-                            tracer.start(name.clone())
-                        }
+            let builder = SpanBuilder::from_name(name.clone());
+            let requested_ids = trace_context.as_ref().and_then(parse_requested_ids);
+            let mut span = with_requested_ids(requested_ids, || {
+                if let Some(parent_val) = parent {
+                    if let Some(parent_cx) = build_parent_context(correlation, parent_val) {
+                        tracer.build_with_context(builder, &parent_cx)
+                    } else {
+                        tracer.build(builder)
                     }
-                    Parent::ById {
-                        trace_id: trace_id_hex,
-                        span_id: parent_span_id_hex,
-                    } => {
-                        if let (Ok(trace_id), Ok(span_id)) = (
-                            TraceId::from_hex(trace_id_hex),
-                            SpanId::from_hex(parent_span_id_hex),
-                        ) {
-                            let parent_ctx = SpanContext::new(
-                                trace_id,
-                                span_id,
-                                TraceFlags::SAMPLED,
-                                true,
-                                TraceState::default(),
-                            );
-                            let parent_cx = Context::new().with_remote_span_context(parent_ctx);
-                            tracer.start_with_context(name.clone(), &parent_cx)
-                        } else {
-                            tracer.start(name.clone())
-                        }
-                    }
+                } else {
+                    tracer.build(builder)
                 }
-            } else {
-                tracer.start(name.clone())
-            };
+            });
 
             // Set semantic convention attributes
             for (key, value) in attributes {
@@ -566,22 +593,27 @@ pub fn emit_trace(
             }
 
             let trace_id_hex = span.span_context().trace_id().to_string();
-            correlation.insert_span(name.clone(), trace_id_hex, span);
+            let span_id_hex = span.span_context().span_id().to_string();
+            let sampled = span.span_context().trace_flags().is_sampled();
+            correlation.insert_span(key.clone(), trace_id_hex, span_id_hex, sampled, span);
         }
         TraceEvent::EndSpan {
-            name,
+            key,
+            name: _,
             error,
             attributes,
         } => {
-            if let Some((_, mut span)) = correlation.remove_span(name) {
+            if let Some(mut active_span) = correlation.remove_span(key) {
                 // Apply any final attributes (e.g. http.response.status_code)
                 for (key, value) in attributes {
-                    span.set_attribute(trace_kv(key, value));
+                    active_span.span.set_attribute(trace_kv(key, value));
                 }
                 if let Some(error_desc) = error {
-                    span.set_status(opentelemetry::trace::Status::error(error_desc.clone()));
+                    active_span
+                        .span
+                        .set_status(opentelemetry::trace::Status::error(error_desc.clone()));
                 }
-                span.end();
+                active_span.span.end();
             }
         }
     }
@@ -607,8 +639,76 @@ pub fn emit_log(provider: &opentelemetry_sdk::logs::SdkLoggerProvider, event: &L
         LogLevel::Debug => "DEBUG",
     });
     record.add_attribute("log.target", event.target);
+    if let Some(trace_context) = &event.trace_context {
+        if let (Ok(trace_id), Ok(span_id)) = (
+            opentelemetry::TraceId::from_hex(&trace_context.trace_id),
+            opentelemetry::SpanId::from_hex(&trace_context.span_id),
+        ) {
+            record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+        }
+    }
 
     logger.emit(record);
+}
+
+fn build_parent_context(
+    correlation: &CorrelationContext,
+    parent: &Parent,
+) -> Option<opentelemetry::Context> {
+    use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceId, TraceState};
+
+    let (trace_id_hex, span_id_hex, sampled) = match parent {
+        Parent::ByKey(parent_key) => {
+            let (trace_id_hex, span_id_hex, sampled) = correlation.get_parent_ids(parent_key)?;
+            (trace_id_hex, span_id_hex, Some(sampled))
+        }
+        Parent::ById {
+            trace_id,
+            span_id,
+            sampled,
+        } => (trace_id.clone(), span_id.clone(), *sampled),
+    };
+
+    let (trace_id, span_id) = (
+        TraceId::from_hex(&trace_id_hex).ok()?,
+        SpanId::from_hex(&span_id_hex).ok()?,
+    );
+    let parent_ctx = SpanContext::new(
+        trace_id,
+        span_id,
+        trace_flags(sampled).unwrap_or_default(),
+        true,
+        TraceState::default(),
+    );
+    Some(opentelemetry::Context::new().with_remote_span_context(parent_ctx))
+}
+
+fn trace_flags(sampled: Option<bool>) -> Option<opentelemetry::TraceFlags> {
+    sampled.map(|sampled| {
+        if sampled {
+            opentelemetry::TraceFlags::SAMPLED
+        } else {
+            opentelemetry::TraceFlags::default()
+        }
+    })
+}
+
+fn parse_requested_ids(
+    trace_context: &ferron_observability::EventTraceContext,
+) -> Option<RequestedIds> {
+    Some(RequestedIds {
+        trace_id: opentelemetry::TraceId::from_hex(&trace_context.trace_id).ok(),
+        span_id: opentelemetry::SpanId::from_hex(&trace_context.span_id).ok(),
+    })
+}
+
+fn with_requested_ids<T>(requested_ids: Option<RequestedIds>, f: impl FnOnce() -> T) -> T {
+    REQUESTED_IDS.with(|current| {
+        let previous = current.replace(requested_ids);
+        let result = f();
+        current.replace(previous);
+        result
+    })
 }
 
 /// Convert a TraceAttributeValue into an OTEL KeyValue.

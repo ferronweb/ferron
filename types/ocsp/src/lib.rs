@@ -508,6 +508,7 @@ fn emit_log(
             level,
             message: message.to_string(),
             target,
+            trace_context: None,
         }));
     }
 }

@@ -5,7 +5,10 @@ use std::str::FromStr;
 
 use bytes::Bytes;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, LogEvent, LogLevel};
+use ferron_observability::{
+    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
+};
 use http::header;
 use http::{Request, Response, StatusCode, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -61,6 +64,7 @@ pub async fn execute_forward_proxy(
                 "CONNECT method is disabled for forward proxy",
             );
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+            emit_forward_proxy_metric(ctx, "connect", "connect_disabled", 403, None);
             return Ok(ForwardProxyResult::Handled);
         }
         return handle_connect(ctx, req, config).await;
@@ -86,6 +90,7 @@ async fn handle_connect(
         None => {
             emit_log(ctx, LogLevel::Warn, "CONNECT request missing authority");
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+            emit_forward_proxy_metric(ctx, "connect", "bad_request", 400, None);
             return Ok(ForwardProxyResult::Handled);
         }
     };
@@ -101,6 +106,7 @@ async fn handle_connect(
             &format!("CONNECT to port {port} denied by ACL"),
         );
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "connect", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
     }
 
@@ -112,6 +118,7 @@ async fn handle_connect(
             &format!("CONNECT to {host} denied by domain ACL"),
         );
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "connect", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
     }
 
@@ -119,6 +126,7 @@ async fn handle_connect(
     let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
         emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "connect", "dns_unresolved", 403, None);
         return Ok(ForwardProxyResult::Handled);
     };
     let socket_addrs = resolved_ips
@@ -150,7 +158,15 @@ async fn handle_connect(
                             "Forward proxy: HTTP CONNECT upgrade failed for {connect_address}"
                         ),
                         target: LOG_TARGET,
+                        trace_context: None,
                     }));
+                    emit_forward_proxy_metric_to_events(
+                        &error_logger,
+                        "connect",
+                        "upgrade_failed",
+                        502,
+                        Some("upgrade_failed".to_string()),
+                    );
                     return;
                 }
             },
@@ -161,7 +177,15 @@ async fn handle_connect(
                         "Forward proxy: no upgrade future for CONNECT {connect_address}"
                     ),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
+                emit_forward_proxy_metric_to_events(
+                    &error_logger,
+                    "connect",
+                    "upgrade_failed",
+                    502,
+                    Some("upgrade_failed".to_string()),
+                );
                 return;
             }
         };
@@ -174,7 +198,15 @@ async fn handle_connect(
                     level: LogLevel::Error,
                     message: format!("Forward proxy: cannot connect to {connect_address}: {err}"),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
+                emit_forward_proxy_metric_to_events(
+                    &error_logger,
+                    "connect",
+                    "backend_connect_error",
+                    502,
+                    Some("backend_connect_error".to_string()),
+                );
                 return;
             }
         };
@@ -186,6 +218,7 @@ async fn handle_connect(
                     "Forward proxy: cannot set TCP_NODELAY for {connect_address}: {err}"
                 ),
                 target: LOG_TARGET,
+                trace_context: None,
             }));
         }
 
@@ -198,7 +231,15 @@ async fn handle_connect(
                         "Forward proxy: cannot convert TCP stream to poll I/O for {connect_address}: {err}"
                     ),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
+                emit_forward_proxy_metric_to_events(
+                    &error_logger,
+                    "connect",
+                    "backend_connect_error",
+                    502,
+                    Some("backend_connect_error".to_string()),
+                );
                 return;
             }
         };
@@ -216,7 +257,15 @@ async fn handle_connect(
                          backend→client: {backend_to_client} bytes)"
                     ),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
+                emit_forward_proxy_metric_to_events(
+                    &error_logger,
+                    "connect",
+                    "tunnel_closed",
+                    200,
+                    None,
+                );
             }
             Err(err) => {
                 error_logger.emit(Event::Log(LogEvent {
@@ -225,7 +274,15 @@ async fn handle_connect(
                         "Forward proxy: CONNECT tunnel error for {connect_address}: {err}"
                     ),
                     target: LOG_TARGET,
+                    trace_context: None,
                 }));
+                emit_forward_proxy_metric_to_events(
+                    &error_logger,
+                    "connect",
+                    "tunnel_error",
+                    502,
+                    Some("tunnel_error".to_string()),
+                );
             }
         }
 
@@ -240,6 +297,7 @@ async fn handle_connect(
         .unwrap_or_default();
 
     ctx.res = Some(ferron_http::HttpResponse::Custom(response));
+    emit_forward_proxy_metric(ctx, "connect", "tunnel_established", 200, None);
     Ok(ForwardProxyResult::Handled)
 }
 
@@ -261,6 +319,7 @@ async fn handle_http_forward(
                 "Forward proxy: HTTPS scheme in forward request is not supported",
             );
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+            emit_forward_proxy_metric(ctx, "request", "unsupported_scheme", 400, None);
             return Ok(ForwardProxyResult::Handled);
         }
         Some(other) => {
@@ -270,6 +329,7 @@ async fn handle_http_forward(
                 &format!("Forward proxy: unsupported scheme '{other}'"),
             );
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+            emit_forward_proxy_metric(ctx, "request", "unsupported_scheme", 400, None);
             return Ok(ForwardProxyResult::Handled);
         }
     }
@@ -283,6 +343,7 @@ async fn handle_http_forward(
                 "Forward proxy: missing host in request URI",
             );
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+            emit_forward_proxy_metric(ctx, "request", "bad_request", 400, None);
             return Ok(ForwardProxyResult::Handled);
         }
     };
@@ -297,6 +358,7 @@ async fn handle_http_forward(
             &format!("Forward proxy: port {port} denied by ACL"),
         );
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "request", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
     }
 
@@ -308,6 +370,7 @@ async fn handle_http_forward(
             &format!("Forward proxy: host '{host}' denied by domain ACL"),
         );
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "request", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
     }
 
@@ -315,6 +378,7 @@ async fn handle_http_forward(
     let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
         emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        emit_forward_proxy_metric(ctx, "request", "dns_unresolved", 403, None);
         return Ok(ForwardProxyResult::Handled);
     };
     let addr = format!("{host}:{port}");
@@ -343,6 +407,13 @@ async fn handle_http_forward(
                 status.as_u16(),
                 None,
             ));
+            emit_forward_proxy_metric(
+                ctx,
+                "request",
+                "backend_connect_error",
+                status.as_u16(),
+                Some("backend_connect_error".to_string()),
+            );
             return Ok(ForwardProxyResult::Handled);
         }
     };
@@ -364,6 +435,13 @@ async fn handle_http_forward(
                 &format!("Forward proxy: cannot convert TCP stream to poll I/O: {err}"),
             );
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
+            emit_forward_proxy_metric(
+                ctx,
+                "request",
+                "backend_connect_error",
+                502,
+                Some("backend_connect_error".to_string()),
+            );
             return Ok(ForwardProxyResult::Handled);
         }
     };
@@ -390,6 +468,18 @@ async fn handle_http_forward(
 
     // Forward the request
     let result = http_proxy_forward(stream, proxy_request, ctx).await;
+    let status_code = result.status().as_u16();
+    emit_forward_proxy_metric(
+        ctx,
+        "request",
+        if status_code >= 400 {
+            "backend_error"
+        } else {
+            "proxied"
+        },
+        status_code,
+        (status_code >= 400).then(|| "backend_error".to_string()),
+    );
     ctx.res = Some(ferron_http::HttpResponse::Custom(result));
     Ok(ForwardProxyResult::Handled)
 }
@@ -551,5 +641,51 @@ fn emit_log(ctx: &HttpContext, level: LogLevel, message: &str) {
         level,
         message: message.to_string(),
         target: LOG_TARGET,
+        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+    }));
+}
+
+fn emit_forward_proxy_metric(
+    ctx: &HttpContext,
+    mode: &'static str,
+    result: &'static str,
+    status_code: u16,
+    error_type: Option<String>,
+) {
+    emit_forward_proxy_metric_to_events(&ctx.events, mode, result, status_code, error_type);
+}
+
+fn emit_forward_proxy_metric_to_events(
+    events: &CompositeEventSink,
+    mode: &'static str,
+    result: &'static str,
+    status_code: u16,
+    error_type: Option<String>,
+) {
+    let mut attributes = vec![
+        (
+            "ferron.forward_proxy.mode",
+            MetricAttributeValue::StaticStr(mode),
+        ),
+        (
+            "ferron.forward_proxy.result",
+            MetricAttributeValue::StaticStr(result),
+        ),
+        (
+            "http.response.status_code",
+            MetricAttributeValue::I64(status_code as i64),
+        ),
+    ];
+    if let Some(error_type) = error_type {
+        attributes.push(("error.type", MetricAttributeValue::String(error_type)));
+    }
+
+    events.emit(Event::Metric(MetricEvent {
+        name: "ferron.forward_proxy.requests",
+        attributes,
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{request}"),
+        description: Some("Number of forward proxy requests by mode and outcome."),
     }));
 }

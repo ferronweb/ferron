@@ -160,6 +160,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                     username
                 ),
                 target: "ferron-http-basicauth",
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_lockout_response(ctx));
             return Ok(false);
@@ -178,6 +179,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                         username
                     ),
                     target: "ferron-http-basicauth",
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
                 return Ok(false);
@@ -191,6 +193,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 level: LogLevel::Debug,
                 message: format!("basicauth: user '{}' authenticated successfully", username),
                 target: "ferron-http-basicauth",
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.auth_user = Some(username);
             Ok(true) // Continue pipeline
@@ -205,6 +208,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                     if locked { " (account now locked)" } else { "" }
                 ),
                 target: "ferron-http-basicauth",
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
             Ok(false)

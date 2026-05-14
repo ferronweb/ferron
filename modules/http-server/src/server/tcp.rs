@@ -9,7 +9,9 @@ use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::CompositeEventSink;
+use ferron_observability::{
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
 use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
@@ -20,6 +22,30 @@ use crate::server::tls_resolve::RadixTree;
 use crate::util::proxy_protocol::read_proxy_header;
 
 use super::common::*;
+
+fn emit_connection_error_metric(
+    observability: &CompositeEventSink,
+    transport: &'static str,
+    stage: &'static str,
+) {
+    observability.emit(Event::Metric(MetricEvent {
+        name: "ferron.http.server.connection_errors",
+        attributes: vec![
+            (
+                "network.transport",
+                MetricAttributeValue::StaticStr(transport),
+            ),
+            (
+                "ferron.connection.stage",
+                MetricAttributeValue::StaticStr(stage),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{error}"),
+        description: Some("Number of connection lifecycle errors by transport and stage."),
+    }));
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TcpListenerOptions {
@@ -94,6 +120,7 @@ impl TcpListenerHandle {
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
                             );
+                            emit_connection_error_metric(&global_observability, "tcp", "accept");
                             #[cfg(unix)]
                             if err.raw_os_error() == Some(24) {
                                 vibeio::time::sleep(handle_exhaustion_backoff).await;
@@ -114,6 +141,11 @@ impl TcpListenerHandle {
                         emit_error(
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
+                        );
+                        emit_connection_error_metric(
+                            &global_observability,
+                            "tcp",
+                            "socket_setup",
                         );
                         continue;
                     };
@@ -144,6 +176,11 @@ impl TcpListenerHandle {
                                     emit_error(
                                         &global_observability,
                                         format!("Failed to read PROXY protocol header: {e}"),
+                                    );
+                                    emit_connection_error_metric(
+                                        &global_observability,
+                                        "tcp",
+                                        "proxy_protocol",
                                     );
                                     return;
                                 }
@@ -184,6 +221,7 @@ impl TcpListenerHandle {
                                 Ok(start_handshake) => start_handshake,
                                 Err(e) => {
                                   emit_error(&ip_observability, format!("Failed to start TLS handshake {e}"));
+                                  emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
                                   return;
                                 }
                             };
@@ -216,6 +254,7 @@ impl TcpListenerHandle {
                                         &ip_observability,
                                     );
                                     emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
+                                    emit_connection_error_metric(&tls_observability, "tcp", "tls_handshake");
                                     return;
                                     }
                                 };

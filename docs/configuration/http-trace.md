@@ -3,9 +3,9 @@ title: Trace context
 description: Propagation and generation of W3C Trace Context (traceparent / tracestate).
 ---
 
-Ferron 3 supports W3C Trace Context (traceparent and tracestate) propagation and generation. This enables end-to-end observability by carrying trace identifiers across service boundaries.
+Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) propagation and generation. This enables end-to-end observability by carrying trace identifiers across service boundaries.
 
-Incoming `traceparent` and `tracestate` headers are parsed and used as the parent for the internal `ferron.request` span. If missing, a new trace context can be generated (default behavior). These identifiers are then propagated to upstream services when using the reverse proxy modules.
+Incoming `traceparent` and `tracestate` headers are parsed and used as the parent for Ferron's internal `ferron.request` span. Ferron creates a local request span with the same trace ID and a new span ID, then reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can generate a new one (default behavior).
 
 ## Trace configuration
 

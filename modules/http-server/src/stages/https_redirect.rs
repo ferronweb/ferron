@@ -9,6 +9,7 @@ use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http::{HeaderValue, Response};
 use http_body_util::{BodyExt, Empty};
 
@@ -130,6 +131,23 @@ impl Stage<HttpContext> for HttpsRedirectStage {
                 .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
                 .expect("Failed to build 308 redirect response"),
         ));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.http.server.redirects",
+            attributes: vec![
+                (
+                    "http.response.status_code",
+                    MetricAttributeValue::I64(308),
+                ),
+                (
+                    "ferron.http.redirect.reason",
+                    MetricAttributeValue::StaticStr("https_redirect"),
+                ),
+            ],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{redirect}"),
+            description: Some("Number of HTTP redirects emitted by the server."),
+        }));
 
         // Stop the pipeline — response is ready.
         Ok(false)
