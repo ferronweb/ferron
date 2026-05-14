@@ -18,8 +18,8 @@
 ### Fixed
 
 - Cached responses which are replaced by non-cached default error pages might have been returned as stale.
-- Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included)
-- Forward-proxy DNS validation could be bypassed
+- Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included).
+- Forward-proxy DNS validation could be bypassed by performing a DNS rebinding attack against the configured allowed hostnames.
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
 - `io_uring` (on Linux) couldn't be disabled via the web server configuration.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
