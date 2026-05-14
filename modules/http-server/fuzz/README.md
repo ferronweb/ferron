@@ -1,4 +1,4 @@
-# Fuzzing the URL Canonicalizer
+# Fuzzing the URL canonicalizer
 
 This directory contains fuzz targets for testing the URL canonicalization functions in `ferron-http-server`.
 
@@ -16,7 +16,7 @@ You'll also need a nightly Rust toolchain:
 rustup default nightly
 ```
 
-## Running Fuzzers
+## Running fuzzers
 
 From this directory, run one of the fuzz targets:
 
@@ -37,36 +37,23 @@ Each fuzzer accepts arbitrary byte slices and attempts to find inputs that:
 
 Fuzzed inputs are automatically saved in `corpus/` for each target. You can manually add seed inputs there to accelerate coverage.
 
-## Seed Corpus (Optional)
+## Seed corpus (optional)
 
 You can seed the fuzzer with known-evil URLs to improve coverage:
 
 ```bash
 # Example seeds for canonicalize_path
-echo -n '%2e%2e/' > seeds/%2e%2e
-echo -n '%00' > seeds/%00
-echo -n '///' > seeds/triple-slash
-echo -n '%252e%252e' > seeds/double-encoded
+mkdir -p corpus/canonicalize_path
+echo -n '%2e%2e/' > corpus/canonicalize_path/%2e%2e
+echo -n '%00' > corpus/canonicalize_path/%00
+echo -n '///' > corpus/canonicalize_path/triple-slash
+echo -n '%252e%252e' > corpus/canonicalize_path/double-encoded
 ```
 
 Then run:
 
 ```bash
 cargo +nightly fuzz run canonicalize_path -- -max_len=1024
-```
-
-## Debugging Crashes
-
-When a fuzzer finds a crash, it's saved in `crashes/`. To reproduce it:
-
-```bash
-cargo +nightly fuzz debug canonicalize_path
-```
-
-Or manually run with `cargo run`:
-
-```bash
-cargo run --release --bin canonicalize_path -- <crash_input_file>
 ```
 
 ## Notes
