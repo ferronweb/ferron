@@ -33,11 +33,16 @@ impl EventSink for ConsoleEventSink {
                 })
                 .is_err()
         {
+            // Increment dropped events metric and warn once
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`console` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }
@@ -52,11 +57,16 @@ impl EventSink for ConsoleEventSink {
                 })
                 .is_err()
         {
+            // Increment dropped events metric and warn once
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`console` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }

@@ -20,6 +20,10 @@ pub struct AdminMetrics {
     pub requests_total: AtomicU64,
     /// Total configuration reloads performed.
     pub reloads: AtomicU64,
+    /// Total number of observability events dropped by non-blocking sinks.
+    pub observability_events_dropped: AtomicU64,
+    /// Approximate current number of enqueued observability events across sinks.
+    pub observability_event_queue_len: AtomicU64,
 }
 
 impl AdminMetrics {
@@ -31,6 +35,8 @@ impl AdminMetrics {
             connections_active: AtomicU64::new(0),
             requests_total: AtomicU64::new(0),
             reloads: AtomicU64::new(0),
+            observability_events_dropped: AtomicU64::new(0),
+            observability_event_queue_len: AtomicU64::new(0),
         }
     }
 }

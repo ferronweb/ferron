@@ -182,3 +182,4 @@ For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability]
 - If log files are not being written, verify the file paths are accessible and the Ferron process has write permissions.
 - For global observability configuration (`console_log`, `log`, `error_log` shorthand directives), see [Core directives](/docs/v3/configuration/core-directives#observability).
 - For log format details, see the `json` and `text` formatter sections above.
+- Observability sinks may drop events when under high load; Ferron exposes an admin metric `observability_events_dropped` and a status field to help detect and tune exporter queues.

@@ -12,6 +12,10 @@ pub struct StatusResponse {
     pub requests_total: u64,
     /// Total configuration reloads.
     pub reloads: u64,
+    /// Total observability events dropped by observability sinks.
+    pub observability_events_dropped: u64,
+    /// Approximate current enqueued observability events.
+    pub observability_event_queue_len: u64,
 }
 
 impl StatusResponse {
@@ -22,6 +26,12 @@ impl StatusResponse {
             connections_active: ADMIN_METRICS.connections_active.load(Ordering::Relaxed),
             requests_total: ADMIN_METRICS.requests_total.load(Ordering::Relaxed),
             reloads: ADMIN_METRICS.reloads.load(Ordering::Relaxed),
+            observability_events_dropped: ADMIN_METRICS
+                .observability_events_dropped
+                .load(Ordering::Relaxed),
+            observability_event_queue_len: ADMIN_METRICS
+                .observability_event_queue_len
+                .load(Ordering::Relaxed),
         }
     }
 }

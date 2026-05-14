@@ -8,6 +8,7 @@
 
 - Improved error reporting for some TLS handshake failures.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
+- Observability: add a dropped-events admin metric for non-blocking observability sinks and sanitize Prometheus label values to reduce high-cardinality labels.
 
 ### Fixed
 

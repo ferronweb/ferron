@@ -43,11 +43,16 @@ impl EventSink for OtlpEventSink {
             })
             .is_err()
         {
+            // Increment global dropped-events metric
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`otlp` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }
@@ -61,11 +66,16 @@ impl EventSink for OtlpEventSink {
             })
             .is_err()
         {
+            // Increment global dropped-events metric
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`otlp` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }

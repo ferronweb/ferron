@@ -56,11 +56,16 @@ impl EventSink for PrometheusEventSink {
                 })
                 .is_err()
         {
+            // Increment dropped-events metric
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`prometheus` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }
@@ -75,11 +80,16 @@ impl EventSink for PrometheusEventSink {
                 })
                 .is_err()
         {
+            // Increment dropped-events metric
+            ferron_core::admin::ADMIN_METRICS
+                .observability_events_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             DROPPED_EVENT.call_once(|| {
                 log_warn!(
                     "Observability event dropped (`prometheus` observability backend). \
                     This may be caused by high server load."
-                )
+                );
             });
         }
     }
@@ -211,26 +221,40 @@ fn emit_metric(
     event: &MetricEvent,
     instruments: &mut PrometheusInstrumentCache,
 ) {
+    // Sanitize label values to avoid high-cardinality or invalid label contents.
+    fn sanitize_label_value(s: &str) -> String {
+        let s = s.trim();
+        if s.len() <= 128 {
+            s.chars()
+                .map(|c| if c.is_control() { '?' } else { c })
+                .collect()
+        } else {
+            use std::hash::{Hash, Hasher};
+            use std::collections::hash_map::DefaultHasher;
+            let mut hasher = DefaultHasher::new();
+            s.hash(&mut hasher);
+            format!("hash_{:x}", hasher.finish())
+        }
+    }
+
     let attrs: Vec<(&'static str, String)> = event
         .attributes
         .iter()
         .map(|(k, v)| {
-            (
-                *k,
-                match v {
-                    MetricAttributeValue::F64(val) => val.to_string(),
-                    MetricAttributeValue::I64(val) => val.to_string(),
-                    MetricAttributeValue::String(val) => val.to_owned(),
-                    MetricAttributeValue::StaticStr(val) => val.to_string(),
-                    MetricAttributeValue::Bool(val) => {
-                        if *val {
-                            "1".to_string()
-                        } else {
-                            "0".to_string()
-                        }
+            let raw = match v {
+                MetricAttributeValue::F64(val) => val.to_string(),
+                MetricAttributeValue::I64(val) => val.to_string(),
+                MetricAttributeValue::String(val) => val.to_owned(),
+                MetricAttributeValue::StaticStr(val) => val.to_string(),
+                MetricAttributeValue::Bool(val) => {
+                    if *val {
+                        "1".to_string()
+                    } else {
+                        "0".to_string()
                     }
-                },
-            )
+                }
+            };
+            (*k, sanitize_label_value(&raw))
         })
         .collect();
 
