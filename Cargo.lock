@@ -1777,8 +1777,6 @@ version = "3.0.0-beta.1"
 dependencies = [
  "ferron-core",
  "ferron-observability",
- "num_cpus",
- "procfs",
  "tokio",
  "tokio-util",
 ]
