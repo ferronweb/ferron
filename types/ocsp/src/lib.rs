@@ -416,7 +416,10 @@ async fn background_ocsp_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
-                            &format!("OCSP stapling skipped — no OCSP URL in certificate {ident}"),
+                            &format!(
+                                "OCSP stapling skipped — \
+                                no OCSP URL or incomplete chain in certificate {ident}"
+                            ),
                             "ferron_ocsp",
                         );
                         emit_metric(
