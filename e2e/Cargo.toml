@@ -70,6 +70,10 @@ name = "limit"
 path = "tests/limit.rs"
 
 [[test]]
+name = "ocsp"
+path = "tests/ocsp.rs"
+
+[[test]]
 name = "redirecting"
 path = "tests/redirecting.rs"
 

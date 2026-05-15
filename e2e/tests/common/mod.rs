@@ -23,6 +23,8 @@ static CGI_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static FCGIWRAP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static OCSP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -34,7 +36,12 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     for entry in glob::glob(concat!(env!("CARGO_MANIFEST_DIR"), "/../*")).unwrap() {
         let entry = entry.unwrap();
         let dest = entry.file_name().unwrap().to_str().unwrap().to_string();
-        if dest != "target" && dest != "e2e" && dest != ".git" {
+        if dest != "target"
+            && dest != "e2e"
+            && dest != ".git"
+            && dest != "Dockerfile"
+            && !dest.starts_with("Dockerfile.")
+        {
             builder = builder.with_file(entry, format!("./{dest}"));
         }
     }
@@ -114,6 +121,23 @@ pub async fn build_fcgiwrap_image() -> Result<GenericImage, TestcontainersError>
         .await?;
     fcgiwrap_image.replace(fcgiwrap_image_built.clone());
     Ok(fcgiwrap_image_built)
+}
+
+pub async fn build_ocsp_image() -> Result<GenericImage, TestcontainersError> {
+    let mut ocsp_image = OCSP_IMAGE.lock().await;
+    if let Some(image) = ocsp_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let image = GenericBuildableImage::new("e2e-test-ocsp", "latest")
+        .with_dockerfile(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/images/ocsp/Dockerfile"
+        ))
+        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/ocsp"), ".")
+        .build_image()
+        .await?;
+    ocsp_image.replace(image.clone());
+    Ok(image)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
