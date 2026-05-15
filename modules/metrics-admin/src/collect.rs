@@ -48,7 +48,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.admin.requests_total",
         attributes: vec![],
-        ty: MetricType::Counter,
+        ty: MetricType::Gauge,
         value: MetricValue::U64(
             metrics
                 .requests_total
@@ -61,7 +61,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.admin.reloads",
         attributes: vec![],
-        ty: MetricType::Counter,
+        ty: MetricType::Gauge,
         value: MetricValue::U64(metrics.reloads.load(std::sync::atomic::Ordering::Relaxed)),
         unit: Some("1"),
         description: Some("Number of configuration reloads performed."),
@@ -70,7 +70,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.admin.observability_events_dropped",
         attributes: vec![],
-        ty: MetricType::Counter,
+        ty: MetricType::Gauge,
         value: MetricValue::U64(
             metrics
                 .observability_events_dropped
