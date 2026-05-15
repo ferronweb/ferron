@@ -41,7 +41,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
                 .connections_active
                 .load(std::sync::atomic::Ordering::Relaxed),
         ),
-        unit: Some("s"),
+        unit: Some("1"),
         description: Some("Currently open TCP connections across all HTTP listeners."),
     }));
 
