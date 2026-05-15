@@ -13,11 +13,12 @@
 ### Changed
 
 - Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
-- Improved error reporting for some TLS handshake failures.
 - HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
+- Improved error reporting for some TLS handshake failures.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
+- `X-LiteSpeed-Cache` headers aren't emitted by default anymore; this can be still enabled using `emit_litespeed_headers` subdirective in `cache` directive.
 
 ### Fixed
 
