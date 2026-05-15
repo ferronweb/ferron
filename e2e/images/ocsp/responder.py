@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
+import hashlib
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+
+from asn1crypto import core as asn1core
+from asn1crypto import ocsp as asn1ocsp
+from asn1crypto import pem as asn1pem
+from asn1crypto import x509 as asn1x509
 
 # Cryptography imports
 from cryptography import x509
@@ -13,7 +19,7 @@ from cryptography.x509.ocsp import (
     OCSPResponseBuilder,
 )
 from cryptography.x509.oid import AuthorityInformationAccessOID, NameOID
-from flask import Flask, Response
+from flask import Flask, Response, request
 
 CERT_DIR = sys.argv[1] if len(sys.argv) > 1 else "/certs"
 SERVER_CRT = os.path.join(CERT_DIR, "server.crt")
@@ -107,20 +113,12 @@ def generate():
     )
 
 
-def make_ocsp_response():
-    # Build a simple OCSP response for the generated server cert (signed by CA key)
-    server_cert = x509.load_pem_x509_certificate(open(SERVER_NOCHAIN_CRT, "rb").read())
-    ca_cert = x509.load_pem_x509_certificate(open(CA_CRT, "rb").read())
+def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
+    # ca_cert = issuer
     ca_key = serialization.load_pem_private_key(
         open(CA_KEY, "rb").read(), password=None
     )
 
-    # The only supported CA key types are:
-    # - `Ed25519PrivateKey`
-    # - `Ed448PrivateKey`
-    # - `RSAPrivateKey`
-    # - `DSAPrivateKey`
-    # - `EllipticCurvePrivateKey`
     if not isinstance(
         ca_key,
         (
@@ -131,27 +129,48 @@ def make_ocsp_response():
             ec.EllipticCurvePrivateKey,
         ),
     ):
-        raise ValueError("ca_key must be an RSA private key")
+        raise ValueError("ca_key must be a supported private key type")
 
     builder = OCSPResponseBuilder()
     this_update = datetime.now(timezone.utc)
     next_update = this_update + timedelta(hours=1)
 
-    # add_response args may be positional or named; use keyword names where available
     builder = builder.add_response(
-        cert=server_cert,
-        issuer=ca_cert,
-        algorithm=hashes.SHA256(),
-        cert_status=OCSPCertStatus.GOOD,
+        cert=cert,
+        issuer=issuer,
+        algorithm=algo,
+        cert_status=status,
         this_update=this_update,
         next_update=next_update,
         revocation_time=None,
         revocation_reason=None,
-    ).responder_id(OCSPResponderEncoding.HASH, ca_cert)
+    ).responder_id(OCSPResponderEncoding.HASH, issuer)
 
-    # Sign with CA key and return DER bytes
     ocsp_resp = builder.sign(ca_key, hashes.SHA256())
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
+
+
+def parse_ocsp_request(data):
+    # data is raw DER
+    try:
+        req = asn1ocsp.OCSPRequest.load(data)
+    except Exception:
+        # Maybe PEM-wrapped
+        if asn1pem.detect(data):
+            _, _, der = asn1pem.unarmor(data)
+            req = asn1ocsp.OCSPRequest.load(der)
+        else:
+            raise
+
+    req_list = req["tbs_request"]["request_list"]
+    if len(req_list) == 0:
+        raise ValueError("OCSP request contains no Request entries")
+    req_cert = req_list[0]["req_cert"]
+    hash_oid = req_cert["hash_algorithm"]["algorithm"].dotted
+    issuer_name_hash = bytes(req_cert["issuer_name_hash"])
+    issuer_key_hash = bytes(req_cert["issuer_key_hash"])
+    serial_number = int(req_cert["serial_number"].native)
+    return hash_oid, issuer_name_hash, issuer_key_hash, serial_number
 
 
 app = Flask(__name__)
@@ -165,8 +184,84 @@ def ready():
 @app.route("/", methods=["POST"])
 def ocsp():
     try:
-        # For simplicity respond with OCSP for the server cert regardless of request contents
-        resp = make_ocsp_response()
+        req_der = request.get_data()
+        # Parse OCSP request and validate CertID
+        try:
+            hash_oid, issuer_name_hash, issuer_key_hash, serial = parse_ocsp_request(
+                req_der
+            )
+        except Exception as e:
+            print("Failed to parse OCSP request:", e)
+            return ("", 400)
+
+        # Load CA cert to compute expected hashes
+        ca_pem = open(CA_CRT, "rb").read()
+        if asn1pem.detect(ca_pem):
+            _, _, ca_der = asn1pem.unarmor(ca_pem)
+        else:
+            ca_der = ca_pem
+        ca_asn = asn1x509.Certificate.load(ca_der)
+        issuer_name_der = ca_asn["tbs_certificate"]["subject"].dump()
+        # subject_public_key_info.public_key is a BitString
+        pubkey_bitstring = (
+            ca_asn["tbs_certificate"]["subject_public_key_info"]["public_key"]
+            .cast(asn1core.OctetBitString)
+            .native
+        )
+
+        # Reject request if public key is not a valid bitstring
+        if not isinstance(pubkey_bitstring, bytes):
+            print("Invalid public key bit string")
+            return ("", 500)
+
+        # Determine hash algorithm
+        if hash_oid in ("2.16.840.1.101.3.4.2.1",):
+            # sha256
+            name_hash = hashlib.sha256(issuer_name_der).digest()
+            key_hash = hashlib.sha256(pubkey_bitstring).digest()
+            algo = hashes.SHA256()
+        elif hash_oid in ("1.3.14.3.2.26",):
+            # sha1
+            name_hash = hashlib.sha1(issuer_name_der).digest()
+            key_hash = hashlib.sha1(pubkey_bitstring).digest()
+            algo = hashes.SHA1()
+        else:
+            # default to sha256
+            name_hash = hashlib.sha256(issuer_name_der).digest()
+            key_hash = hashlib.sha256(pubkey_bitstring).digest()
+            algo = hashes.SHA256()
+
+        # Ensure issuer binding matches
+        if name_hash != issuer_name_hash or key_hash != issuer_key_hash:
+            print("Issuer binding does not match CA cert")
+            return ("", 400)
+
+        # Load server cert to compare serial
+        server_cert = x509.load_pem_x509_certificate(
+            open(SERVER_NOCHAIN_CRT, "rb").read()
+        )
+
+        if serial != server_cert.serial_number:
+            # Return a successful OCSP response but with UNKNOWN status for the requested serial
+            ca_cert_obj = x509.load_pem_x509_certificate(open(CA_CRT, "rb").read())
+            resp = make_ocsp_response_for(
+                server_cert,
+                ca_cert_obj,
+                # pubkey_bitstring,
+                algo,
+                status=OCSPCertStatus.UNKNOWN,
+            )
+            return Response(resp, content_type="application/ocsp-response")
+
+        # Serial matches; return GOOD
+        ca_cert_obj = x509.load_pem_x509_certificate(open(CA_CRT, "rb").read())
+        resp = make_ocsp_response_for(
+            server_cert,
+            ca_cert_obj,
+            # pubkey_bitstring,
+            algo,
+            status=OCSPCertStatus.GOOD,
+        )
         return Response(resp, content_type="application/ocsp-response")
     except Exception as e:
         print("ocsp error:", e)

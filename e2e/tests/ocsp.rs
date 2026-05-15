@@ -18,6 +18,12 @@ use crate::common::build_ocsp_image;
 
 mod common;
 
+use rasn::der;
+use rasn_ocsp::{BasicOcspResponse, OcspResponse};
+use sha1::Sha1;
+use sha2::{Digest as Sha2Digest, Sha256};
+use x509_parser::prelude::*;
+
 /// A server certificate verifier that records the OCSP response passed by the server.
 #[derive(Debug)]
 pub struct OcspRecorder {
@@ -141,7 +147,7 @@ async fn create_ferron_container(
 }
 
 #[tokio::test]
-async fn test_ocsp_stapling_smoketest_quic() {
+async fn test_ocsp_stapling_quic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     #[cfg(unix)]
@@ -187,7 +193,7 @@ async fn test_ocsp_stapling_smoketest_quic() {
         )
         .unwrap();
 
-    let network = "e2e-test-ocsp".to_string();
+    let network = "e2e-test-ocsp-quic".to_string();
 
     // Start OCSP responder container which will generate CA and server cert into cert_dir
     let _ocsp = create_ocsp_container(&network, cert_dir.path())
@@ -275,11 +281,89 @@ async fn test_ocsp_stapling_smoketest_quic() {
         "Expected to see an OCSP stapled response after retries"
     );
 
+    // Verify OCSP response correctness: serial and issuer binding
+    if let Some(bytes) = recorder.lock().unwrap().clone() {
+        verify_ocsp_response(&bytes, &server_cert, &cert_dir.path().join("ca.crt"))
+            .expect("OCSP response verification failed");
+    } else {
+        panic!("OCSP recorder has no bytes");
+    }
+
     ferron.stop().await.unwrap();
 }
 
+fn verify_ocsp_response(
+    response_der: &[u8],
+    server_cert_path: &Path,
+    ca_cert_path: &Path,
+) -> Result<(), String> {
+    // Decode OCSP response
+    let ocsp_resp: OcspResponse = der::decode(response_der)
+        .map_err(|e| format!("Failed to decode OCSP response: {:?}", e))?;
+
+    let response_bytes = ocsp_resp
+        .bytes
+        .ok_or_else(|| "OCSP response missing response bytes".to_string())?;
+
+    // Ensure basic response OID
+    let basic_oid = rasn::types::ObjectIdentifier::new(vec![1, 3, 6, 1, 5, 5, 7, 48, 1, 1])
+        .ok_or_else(|| "Invalid OID for basic OCSP response".to_string())?;
+    if response_bytes.r#type != basic_oid {
+        return Err("OCSP response not a BasicOCSPResponse".to_string());
+    }
+
+    let basic: BasicOcspResponse = der::decode(&response_bytes.response)
+        .map_err(|e| format!("Failed to decode BasicOcspResponse: {:?}", e))?;
+
+    let single = basic
+        .tbs_response_data
+        .responses
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No SingleResponse in OCSP response".to_string())?;
+
+    // Parse server cert to get serial
+    let server_pem = std::fs::read(server_cert_path)
+        .map_err(|e| format!("Failed to read server cert: {:?}", e))?;
+    let (_, server_pem) =
+        x509_parser::pem::parse_x509_pem(&server_pem).map_err(|e| format!("Parse PEM: {:?}", e))?;
+    let (_, server_cert) = parse_x509_certificate(&server_pem.contents)
+        .map_err(|e| format!("parse server cert DER: {:?}", e))?;
+
+    // Parse CA cert
+    let ca_pem =
+        std::fs::read(ca_cert_path).map_err(|e| format!("Failed to read CA cert: {:?}", e))?;
+    let (_, ca_pem) =
+        x509_parser::pem::parse_x509_pem(&ca_pem).map_err(|e| format!("Parse PEM: {:?}", e))?;
+    let (_, ca_cert) = parse_x509_certificate(&ca_pem.contents)
+        .map_err(|e| format!("parse CA cert DER: {:?}", e))?;
+
+    // Compare serial numbers (string form)
+    let ocsp_serial = single.cert_id.serial_number.to_string();
+    let server_serial = server_cert.tbs_certificate.serial.to_string();
+    if ocsp_serial != server_serial {
+        return Err(format!(
+            "Serial mismatch: ocsp={} cert={}",
+            ocsp_serial, server_serial
+        ));
+    }
+
+    // Compute issuer key hash (try sha256 then sha1)
+    let pub_key = &ca_cert.public_key().subject_public_key.data;
+    let sha256 = Sha256::digest(pub_key).to_vec();
+    let sha1 = Sha1::digest(pub_key).to_vec();
+
+    let issuer_key_hash = &*single.cert_id.issuer_key_hash;
+
+    if issuer_key_hash != sha256 && issuer_key_hash != sha1 {
+        return Err("Issuer key hash does not match CA public key (sha1/sha256)".to_string());
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
-async fn test_ocsp_stapling_smoketest_tcp() {
+async fn test_ocsp_stapling_tcp() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     #[cfg(unix)]
@@ -410,13 +494,21 @@ async fn test_ocsp_stapling_smoketest_tcp() {
             }
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 
     assert!(
         saw_staple,
         "Expected OCSP stapled response visible via rustls client"
     );
+
+    // Verify stapled OCSP response contents
+    if let Some(bytes) = recorder.lock().unwrap().clone() {
+        verify_ocsp_response(&bytes, &server_cert, &cert_dir.path().join("ca.crt"))
+            .expect("OCSP response verification failed");
+    } else {
+        panic!("OCSP recorder has no bytes");
+    }
 
     ferron.stop().await.unwrap();
 }
