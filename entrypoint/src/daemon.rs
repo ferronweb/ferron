@@ -1,7 +1,8 @@
 //! Unix daemon module for running the web server as a background service.
 //!
 //! This module provides functionality to daemonize the process using `fork` and `setsid`,
-//! manage PID files, and handle Unix signals (SIGINT, SIGHUP) for graceful shutdown and reload.
+//! manage PID files, and handle Unix signals (SIGINT, SIGTERM, SIGHUP) for graceful shutdown
+//! and reload.
 
 #![cfg(unix)]
 
@@ -167,19 +168,25 @@ pub fn check_pid_file(path: &str) -> Result<bool> {
 
 /// Set up Unix signal handlers for graceful shutdown and reload.
 ///
-/// This function spawns a thread that listens for SIGINT and SIGHUP signals:
-/// - SIGINT triggers a graceful shutdown (cancels SHUTDOWN_TOKEN)
+/// This function spawns a thread that listens for SIGINT, SIGTERM and SIGHUP signals:
+/// - SIGINT and SIGTERM trigger a graceful shutdown (cancels SHUTDOWN_TOKEN)
 /// - SIGHUP triggers a configuration reload (cancels RELOAD_TOKEN)
 pub fn setup_signal_handlers() -> Result<()> {
     use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
-    use signal_hook::consts::signal::{SIGHUP, SIGINT};
+    use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
     use signal_hook::iterator::Signals;
 
-    let mut signals = Signals::new([SIGINT, SIGHUP])
-        .context("Failed to set up signal handlers for SIGINT and SIGHUP")?;
+    let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP])
+        .context("Failed to set up signal handlers for SIGINT, SIGTERM and SIGHUP")?;
     std::thread::spawn(move || {
         for signal in signals.forever() {
             match signal {
+                SIGTERM => {
+                    log_debug!("Received SIGTERM, initiating graceful shutdown");
+                    SHUTDOWN_TOKEN
+                        .swap(Arc::new(tokio_util::sync::CancellationToken::new()))
+                        .cancel();
+                }
                 SIGINT => {
                     log_debug!("Received SIGINT, initiating graceful shutdown");
                     SHUTDOWN_TOKEN
@@ -197,7 +204,7 @@ pub fn setup_signal_handlers() -> Result<()> {
         }
     });
 
-    log_debug!("Signal handlers installed for SIGINT and SIGHUP");
+    log_debug!("Signal handlers installed for SIGINT, SIGTERM and SIGHUP");
 
     Ok(())
 }

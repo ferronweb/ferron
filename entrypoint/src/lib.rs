@@ -240,7 +240,7 @@ fn run_daemon(
 
     // Set up signal handlers
     daemon::setup_signal_handlers()?;
-    log_info!("Signal handlers installed (SIGINT -> shutdown, SIGHUP -> reload)");
+    log_info!("Signal handlers installed (SIGINT, SIGTERM -> shutdown, SIGHUP -> reload)");
 
     // Now run the server with the same configuration
     log_info!("Starting web server as daemon...");
