@@ -9,6 +9,6 @@ anyhow = "1"
 notify = "8.2"
 notify-debouncer-mini = "0.7"
 tokio = { version = "1", features = ["sync"] }
-ferronconf = "0.1.0"
+ferronconf = "0.2.0"
 
 ferron-core = { path = "../../core" }

@@ -79,7 +79,7 @@ directory_listing true
 directory_listing false
 ```
 
-This shorthand is useful for simple on/off toggles where the intent is clear. The following directives support flag syntax: `abort`, `compressed`, `precompressed`, `etag`, `directory_listing`, `trailing_slash_redirect`, `url_sanitize`, `keepalive`, `http2`, `http2_only`, `intercept_errors`, `no_verification`, `lb_health_check`, `lb_retry_connection`, `on_demand`, `client_auth`, and others.
+This shorthand can useful for simple on/off toggles where the intent is clear.
 
 ### Duration strings
 
@@ -93,7 +93,9 @@ Several directives accept duration values. The following formats are supported:
 | `d` or `D` | Days | `1d`, `1D` | 1 day |
 | (none) | Hours (default) | `12` | 12 hours |
 
-Plain numbers without a suffix are treated as hours for backward compatibility.
+Plain numbers without a suffix are treated as hours.
+
+## Comments
 
 Comments start with `#`.
 
