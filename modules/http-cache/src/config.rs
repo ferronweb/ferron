@@ -12,6 +12,7 @@ pub struct CacheConfig {
     pub enabled: bool,
     pub max_response_size: usize,
     pub litespeed_override_cache_control: bool,
+    pub emit_litespeed_headers: bool,
     pub vary_headers: Vec<HeaderName>,
     pub ignored_store_headers: Vec<HeaderName>,
 }
@@ -22,6 +23,7 @@ impl Default for CacheConfig {
             enabled: false,
             max_response_size: DEFAULT_MAX_CACHE_RESPONSE_SIZE,
             litespeed_override_cache_control: false,
+            emit_litespeed_headers: false,
             vary_headers: Vec::new(),
             ignored_store_headers: Vec::new(),
         }
@@ -37,6 +39,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     );
     let litespeed_override_cache_control =
         get_nested_bool(configuration, "litespeed_override_cache_control", false);
+    let emit_litespeed_headers = get_nested_bool(configuration, "emit_litespeed_headers", false);
 
     let vary_headers = collect_header_names(configuration, "vary");
     let ignored_store_headers = collect_header_names(configuration, "ignore");
@@ -45,6 +48,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         enabled,
         max_response_size,
         litespeed_override_cache_control,
+        emit_litespeed_headers,
         vary_headers,
         ignored_store_headers,
     }
@@ -232,6 +236,7 @@ mod tests {
         assert!(parsed.enabled);
         assert_eq!(parsed.max_response_size, 4096);
         assert!(!parsed.litespeed_override_cache_control);
+        assert!(!parsed.emit_litespeed_headers);
         assert_eq!(parsed.vary_headers.len(), 1);
         assert_eq!(parsed.ignored_store_headers.len(), 1);
     }
@@ -312,20 +317,21 @@ mod tests {
     }
 
     #[test]
-    fn parses_litespeed_override_flag() {
+    fn parses_litespeed_override_flags() {
         let config = make_layered_config(vec![make_block(vec![(
             "cache",
             vec![(
                 vec![],
-                Some(cache_block(vec![(
-                    "litespeed_override_cache_control",
-                    vec![(vec![], None)],
-                )])),
+                Some(cache_block(vec![
+                    ("litespeed_override_cache_control", vec![(vec![], None)]),
+                    ("emit_litespeed_headers", vec![(vec![], None)]),
+                ])),
             )],
         )])]);
 
         let parsed = parse_cache_config(&config);
         assert!(parsed.enabled);
         assert!(parsed.litespeed_override_cache_control);
+        assert!(parsed.emit_litespeed_headers);
     }
 }

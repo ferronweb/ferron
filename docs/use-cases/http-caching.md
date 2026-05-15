@@ -75,7 +75,10 @@ If your upstream application uses LiteSpeed Cache-style headers, enable override
 example.com {
     cache {
         max_response_size 1048576
-        litespeed_override_cache_control true
+        litespeed_override_cache_control
+
+        # Also, emit X-LiteSpeed-Cache response header
+        emit_litespeed_headers
     }
 }
 ```

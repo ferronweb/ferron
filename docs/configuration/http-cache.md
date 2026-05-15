@@ -58,6 +58,7 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | --- | --- | --- | --- |
 | `max_response_size` | `<int>` | This directive specifies the maximum response body size, in bytes, that can be buffered and stored in the cache. Responses larger than this limit are still served, but they are not stored. | `2097152` |
 | `litespeed_override_cache_control` | `[<bool>]` | This directive specifies whether `X-LiteSpeed-Cache-Control` overrides standard response caching headers such as `Cache-Control` and `Expires` when Ferron decides whether to store a response and what TTL to use. This mode is intentionally non-standard and is intended only for applications that expect LiteSpeed-style cache semantics. | `false` |
+| `emit_litespeed_headers` | `[<bool>]` | This directive specifies whether the `X-LiteSpeed-Cache-Control` response header should be emitted when serving a cached response. | `false` |
 | `vary` | `<string> [<string> ...]` | This directive specifies additional request headers that are added to the cache key, alongside any standard `Vary` response headers returned by the origin. This directive can be specified multiple times. | none |
 | `ignore` | `<string> [<string> ...]` | This directive specifies response headers that are removed from the stored cache representation while leaving the live response unchanged. This directive can be specified multiple times. | none |
 
@@ -68,6 +69,7 @@ example.com {
     cache {
         max_response_size 2097152
         litespeed_override_cache_control
+        emit_litespeed_headers
         vary Accept-Encoding Accept-Language
         ignore Set-Cookie
     }
@@ -109,7 +111,7 @@ When the cache module is enabled, Ferron understands the following response head
 | `X-LiteSpeed-Tag` | Assigns tags to cached responses so they can be purged later. | On private responses, `public:` prefixes remain public tags. |
 | `X-LiteSpeed-Purge` | Purges cached responses by tag, URL, or wildcard. | The `stale` marker currently falls back to an immediate hard purge. |
 | `LSC-Cookie` | Adds cache-safe cookie replay metadata. | Ferron converts this header to `Set-Cookie` before sending the response. |
-| `X-LiteSpeed-Cache` | Exposes cache hit, miss, or bypass status on outgoing responses. | Ferron sets this header itself. Origin-provided values are ignored. |
+| `X-LiteSpeed-Cache` | Exposes cache hit, miss, or bypass status on outgoing responses. | Ferron sets this header itself (if enabled). Origin-provided values are ignored. |
 
 ## Observability
 

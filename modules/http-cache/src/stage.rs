@@ -273,7 +273,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                 ctx.res = Some(if entry.body.is_none() {
                     HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
                 } else {
-                    HttpResponse::Custom(build_cached_response(entry, head_only)?)
+                    HttpResponse::Custom(build_cached_response(
+                        entry,
+                        head_only,
+                        config.emit_litespeed_headers,
+                    )?)
                 });
                 LookupResult::Hit
             } else {
@@ -481,6 +485,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             stored: true,
                             detail: decision.reason,
                         },
+                        state.config.emit_litespeed_headers,
                     );
                     self.emit_request_metric(ctx, "miss", Some(scope), items);
                     ctx.res = Some(outgoing_response);
@@ -499,6 +504,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             stored: false,
                             detail: "response-too-large",
                         },
+                        state.config.emit_litespeed_headers,
                     );
                     self.emit_request_metric(ctx, "miss", None, self.store.len());
                     ctx.res = Some(HttpResponse::Custom(response));
@@ -519,6 +525,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         detail: decision.reason,
                     }
                 },
+                state.config.emit_litespeed_headers,
             );
             let result = if matches!(state.lookup_result, LookupResult::Bypass) {
                 "bypass"
@@ -552,6 +559,7 @@ enum CacheHeaderState<'a> {
 fn build_cached_response(
     entry: LookupEntry,
     head_only: bool,
+    emit_ls_cache: bool,
 ) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
     let mut builder = Response::builder().status(entry.status);
     let mut headers = entry.headers.clone();
@@ -565,6 +573,7 @@ fn build_cached_response(
             scope: entry.scope,
             age: entry.age,
         },
+        emit_ls_cache,
     );
 
     if head_only && !headers.contains_key(header::CONTENT_LENGTH) {
@@ -764,19 +773,27 @@ fn response_from_streaming_parts(
     Ok(Response::from_parts(parts, body))
 }
 
-fn annotate_response_headers(headers: &mut HeaderMap, state: CacheHeaderState<'_>) {
-    headers.remove(&LS_CACHE);
+fn annotate_response_headers(
+    headers: &mut HeaderMap,
+    state: CacheHeaderState<'_>,
+    emit_ls_cache: bool,
+) {
+    if emit_ls_cache {
+        headers.remove(&LS_CACHE);
+    }
     headers.remove(CACHE_STATUS_HEADER);
     headers.remove(header::AGE);
 
     match state {
         CacheHeaderState::Hit { scope, age } => {
-            let ls_value = if scope == CacheScope::Private {
-                "hit,private"
-            } else {
-                "hit"
-            };
-            headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            if emit_ls_cache {
+                let ls_value = if scope == CacheScope::Private {
+                    "hit,private"
+                } else {
+                    "hit"
+                };
+                headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            }
             if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
                 headers.insert(header::AGE, age_value);
             }
@@ -789,7 +806,9 @@ fn annotate_response_headers(headers: &mut HeaderMap, state: CacheHeaderState<'_
             }
         }
         CacheHeaderState::Miss { stored, detail } => {
-            headers.insert(&LS_CACHE, HeaderValue::from_static("miss"));
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("miss"));
+            }
             if let Ok(value) = HeaderValue::from_str(&format!(
                 "FerronCache; fwd=miss; stored={stored}; detail={detail}"
             )) {
@@ -797,7 +816,9 @@ fn annotate_response_headers(headers: &mut HeaderMap, state: CacheHeaderState<'_
             }
         }
         CacheHeaderState::Bypass { detail } => {
-            headers.insert(&LS_CACHE, HeaderValue::from_static("bypass"));
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("bypass"));
+            }
             if let Ok(value) =
                 HeaderValue::from_str(&format!("FerronCache; fwd=bypass; detail={detail}"))
             {
@@ -881,7 +902,7 @@ mod tests {
             lsc_cookies: Vec::new(),
             age: Duration::from_secs(5),
         };
-        let response = build_cached_response(entry, true).unwrap();
+        let response = build_cached_response(entry, true, false).unwrap();
         let collected = response.into_body().collect().await.unwrap().to_bytes();
         assert!(collected.is_empty());
     }

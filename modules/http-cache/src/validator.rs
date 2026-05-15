@@ -10,6 +10,7 @@ const GLOBAL_CACHE_DIRECTIVES: &[&str] = &["max_entries"];
 const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "max_response_size",
     "litespeed_override_cache_control",
+    "emit_litespeed_headers",
     "vary",
     "ignore",
 ];
@@ -145,6 +146,12 @@ fn validate_cache_block(
     if let Some(entries) = block.directives.get("litespeed_override_cache_control") {
         for entry in entries {
             validate_boolean_entry(entry, "litespeed_override_cache_control")?;
+        }
+    }
+
+    if let Some(entries) = block.directives.get("emit_litespeed_headers") {
+        for entry in entries {
+            validate_boolean_entry(entry, "emit_litespeed_headers")?;
         }
     }
 
@@ -315,6 +322,10 @@ mod tests {
                         ("max_response_size", vec![(vec![value_number(2048)], None)]),
                         (
                             "litespeed_override_cache_control",
+                            vec![(vec![value_bool(true)], None)],
+                        ),
+                        (
+                            "emit_litespeed_headers",
                             vec![(vec![value_bool(true)], None)],
                         ),
                         ("vary", vec![(vec![value_string("Accept-Encoding")], None)]),
