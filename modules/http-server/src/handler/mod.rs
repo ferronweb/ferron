@@ -17,9 +17,8 @@ use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
-    AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext,
-    MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
-    TraceEvent,
+    AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::Empty;
@@ -36,9 +35,9 @@ use self::file_pipeline::{
 };
 use self::request_utils::{
     add_http3_alt_svc_header, builtin_error_response, check_backslash_in_path, emit_error,
-    emit_error_with_trace, emit_warn_with_trace, execute_error_pipeline,
-    get_http_nested_boolean, is_options_star_request, normalize_host_header,
-    normalize_http2_http3_request, sanitize_request_url,
+    emit_error_with_trace, emit_warn_with_trace, execute_error_pipeline, get_http_nested_boolean,
+    is_options_star_request, normalize_host_header, normalize_http2_http3_request,
+    sanitize_request_url,
 };
 
 const LOG_TARGET: &str = "ferron-http-server";
@@ -112,11 +111,7 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
     }
 
     #[inline]
-    async fn after_stage(
-        &mut self,
-        stage: &dyn Stage<C>,
-        result: &Result<bool, PipelineError>,
-    ) {
+    async fn after_stage(&mut self, stage: &dyn Stage<C>, result: &Result<bool, PipelineError>) {
         if !self.has_traces {
             return;
         }
@@ -412,7 +407,9 @@ pub async fn bad_request_handler(
         ty: MetricType::Counter,
         value: MetricValue::U64(1),
         unit: Some("{request}"),
-        description: Some("Number of malformed or timed-out HTTP requests rejected before request handling."),
+        description: Some(
+            "Number of malformed or timed-out HTTP requests rejected before request handling.",
+        ),
     }));
     let mut response = if let Some(response) = execute_error_pipeline(
         error_pipeline.as_ref(),
@@ -548,15 +545,10 @@ pub async fn request_handler(
                 ),
                 (
                     "url.full",
-                    TraceAttributeValue::String(
-                        request
-                            .uri()
-                            .path_and_query()
-                            .map_or_else(
-                                || request.uri().path().to_string(),
-                                |path_and_query| path_and_query.to_string(),
-                            ),
-                    ),
+                    TraceAttributeValue::String(request.uri().path_and_query().map_or_else(
+                        || request.uri().path().to_string(),
+                        |path_and_query| path_and_query.to_string(),
+                    )),
                 ),
             ],
         }));
@@ -1188,7 +1180,8 @@ async fn execute_pipeline_stages(
 ) {
     let has_traces = events.has_trace_sinks();
     let pipeline_span_key = request_span_key.map(|_| next_span_key("pipeline"));
-    let log_trace_context = ctx.get::<trace_context::TraceContextKey>()
+    let log_trace_context = ctx
+        .get::<trace_context::TraceContextKey>()
         .map(trace_context::to_event_trace_context);
 
     // Start pipeline execution span

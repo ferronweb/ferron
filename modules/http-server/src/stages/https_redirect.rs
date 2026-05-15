@@ -134,10 +134,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.http.server.redirects",
             attributes: vec![
-                (
-                    "http.response.status_code",
-                    MetricAttributeValue::I64(308),
-                ),
+                ("http.response.status_code", MetricAttributeValue::I64(308)),
                 (
                     "ferron.http.redirect.reason",
                     MetricAttributeValue::StaticStr("https_redirect"),

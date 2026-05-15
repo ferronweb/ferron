@@ -37,11 +37,7 @@ impl Default for StaticFileStage {
     }
 }
 
-fn emit_static_response_metric(
-    ctx: &HttpFileContext,
-    status_code: u16,
-    outcome: &'static str,
-) {
+fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome: &'static str) {
     ctx.http.events.emit(Event::Metric(MetricEvent {
         name: "ferron.static.responses",
         attributes: vec![

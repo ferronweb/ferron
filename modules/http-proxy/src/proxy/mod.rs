@@ -584,7 +584,9 @@ async fn establish_and_send(
                                 "Reverse proxy: TLS handshake with {unix_path} failed: {e}"
                             ),
                             target: LOG_TARGET,
-                            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                            trace_context: ferron_http::trace_context::current_event_trace_context(
+                                ctx,
+                            ),
                         }));
                         return Err(
                             std::io::Error::other(format!("TLS handshake failed: {e}")).into()

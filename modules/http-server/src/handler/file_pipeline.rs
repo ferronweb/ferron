@@ -213,10 +213,7 @@ pub(super) async fn execute_http_file_pipeline(
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.http.server.redirects",
                     attributes: vec![
-                        (
-                            "http.response.status_code",
-                            MetricAttributeValue::I64(301),
-                        ),
+                        ("http.response.status_code", MetricAttributeValue::I64(301)),
                         (
                             "ferron.http.redirect.reason",
                             MetricAttributeValue::StaticStr("trailing_slash"),
@@ -313,33 +310,28 @@ async fn apply_resolved_file_to_context(
     );
     let pipeline_result = if let Some(timeout) = timeout {
         if has_traces {
-            vibeio::time::timeout(
-                timeout,
-                async {
-                    let executed_stages = file_pipeline
-                        .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
-                        .await?;
-                    file_pipeline
-                        .execute_inverse_with_hooks(&mut file_ctx, executed_stages, &mut stage_hooks)
-                        .await
-                },
-            )
-            .await
-        } else {
-            vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
-        }
-    } else if has_traces {
-        Ok(
-            async {
+            vibeio::time::timeout(timeout, async {
                 let executed_stages = file_pipeline
                     .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
                     .await?;
                 file_pipeline
                     .execute_inverse_with_hooks(&mut file_ctx, executed_stages, &mut stage_hooks)
                     .await
-            }
-            .await,
-        )
+            })
+            .await
+        } else {
+            vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
+        }
+    } else if has_traces {
+        Ok(async {
+            let executed_stages = file_pipeline
+                .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
+                .await?;
+            file_pipeline
+                .execute_inverse_with_hooks(&mut file_ctx, executed_stages, &mut stage_hooks)
+                .await
+        }
+        .await)
     } else {
         Ok(file_pipeline.execute(&mut file_ctx).await)
     };
