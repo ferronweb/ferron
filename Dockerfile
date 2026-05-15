@@ -134,8 +134,5 @@ COPY --chown=nobody wwwroot /var/www/ferron/
 # Expose the port 80 (used for HTTP)
 EXPOSE 80
 
-# Set the stop signal to SIGINT (Ferron has handlers for SIGINT, but not for default SIGTERM).
-STOPSIGNAL SIGINT
-
 # Set the command to run the binary
 CMD ["/usr/local/bin/ferron", "run", "-c", "/etc/ferron/ferron.conf"]
