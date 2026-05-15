@@ -141,7 +141,7 @@ async fn create_ferron_container(
 }
 
 #[tokio::test]
-async fn test_ocsp_stapling_basic() {
+async fn test_ocsp_stapling_smoketest_quic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     #[cfg(unix)]
@@ -279,7 +279,7 @@ async fn test_ocsp_stapling_basic() {
 }
 
 #[tokio::test]
-async fn test_ocsp_stapling_tcp() {
+async fn test_ocsp_stapling_smoketest_tcp() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     #[cfg(unix)]
