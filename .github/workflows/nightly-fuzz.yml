@@ -1,0 +1,55 @@
+name: Nightly fuzzing
+
+# Nightly cargo-fuzz runs for high-risk targets
+on:
+  schedule:
+    - cron: '0 3 * * *' # daily at 03:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-fuzz
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Nightly fuzzers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld build-essential pkg-config libclang-dev
+
+      - name: Setup Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --force
+
+      - name: Build workspace
+        run: cargo +nightly build --workspace --release
+
+      - name: Run http-ratelimit fuzz
+        working-directory: modules/http-ratelimit/fuzz
+        run: |
+          cargo +nightly fuzz run rate_limit_concurrent -- -max_total_time=3600 -workers=2
+
+      - name: Run proxy_protocol fuzz
+        working-directory: modules/http-server/fuzz
+        run: |
+          cargo +nightly fuzz run proxy_protocol -- -max_total_time=3600 -workers=2
+
+      - name: Upload fuzz artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: |
+            modules/**/fuzz/artifacts
+            modules/**/fuzz/corpus
