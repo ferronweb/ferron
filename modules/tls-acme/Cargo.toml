@@ -9,7 +9,7 @@ ferron-tls = { path = "../../types/tls" }
 ferron-dns = { path = "../../types/dns" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
-ferron-ocsp = { path = "../../types/ocsp", optional = true }
+ferron-ocsp = { path = "../../types/ocsp" }
 
 # ACME protocol
 instant-acme = { version = "0.8.4", default-features = false, features = [
@@ -61,10 +61,6 @@ async-channel = "2.3"
 parking_lot = "0.12"
 urlencoding = "2.1.3"
 tokio-util = "0.7.18"
-
-[features]
-default = ["ocsp"]
-ocsp = ["dep:ferron-ocsp"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }

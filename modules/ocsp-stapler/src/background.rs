@@ -10,7 +10,10 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
+};
 use hyper::body::Bytes;
 use hyper::Request;
 use hyper_util::client::legacy::Client;
@@ -18,8 +21,10 @@ use hyper_util::rt::TokioExecutor;
 use num_bigint::BigInt;
 use parking_lot::RwLock;
 use rasn::prelude::*;
-use rasn_ocsp::{BasicOcspResponse, CertId, OcspRequest, OcspResponse, OcspResponseStatus, Request as RasnOcspRequest, TbsRequest};
-use rustls::server::{ClientHello, ResolvesServerCert};
+use rasn_ocsp::{
+    BasicOcspResponse, CertId, OcspRequest, OcspResponse, OcspResponseStatus,
+    Request as RasnOcspRequest, TbsRequest,
+};
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
 use sha1::{Digest, Sha1};
@@ -96,7 +101,6 @@ fn build_https_connector() -> Result<
         .build())
 }
 
-
 pub async fn background_ocsp_task(
     mut receiver: mpsc::UnboundedReceiver<CertifiedKey>,
     cache: OcspCache,
@@ -109,7 +113,8 @@ pub async fn background_ocsp_task(
     let mut known_certs: HashMap<Vec<u8>, CertifiedKey> = HashMap::new();
 
     // Build HTTPS client with native certificate store and webpki-roots fallback
-    let https_connector = build_https_connector().expect("failed to create HTTPS connector with native/webpki roots");
+    let https_connector =
+        build_https_connector().expect("failed to create HTTPS connector with native/webpki roots");
 
     let client = Client::builder(TokioExecutor::new())
         .build::<_, http_body_util::Full<Bytes>>(https_connector);

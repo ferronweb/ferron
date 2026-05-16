@@ -28,13 +28,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 
 use ferron_observability::CompositeEventSink;
 use parking_lot::RwLock;
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
-use rustls_pki_types::CertificateDer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -92,50 +90,28 @@ pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
     *state.event_sink.lock() = Some(event_sink);
 }
 
-/// Initialize the OCSP service. Call once during startup.
-///
-/// NOTE: This function is a compatibility check and does not spawn the
-/// background task. The `ocsp-stapler` module is responsible for taking the
-/// startup pieces (via `take_ocsp_startup_state()`) and spawning the task on
-/// its own runtime. This function returns `Err(AlreadyInitialized)` if the
-/// receiver has already been consumed.
-///
-/// The sender channel and cache are created on first access, so certs can be
-/// queued before the background task starts. When the background task runs,
-/// it will process any queued certs.
-pub fn init_ocsp_service(
-    _runtime: &ferron_core::runtime::Runtime,
-) -> Result<(), AlreadyInitialized> {
-    let state = get_or_init_global();
-
-    let _event_sink = state.event_sink.lock().clone();
-
-    // Do not spawn the background task from the types crate. The module
-    // `ocsp-stapler` should call `take_ocsp_startup_state()` and spawn the
-    // task so heavy runtime dependencies live in the module crate. Return
-    // `Err(AlreadyInitialized)` if the receiver has already been taken.
-    let receiver_present = state.receiver.lock().unwrap().is_some();
-    if !receiver_present {
-        return Err(AlreadyInitialized);
-    }
-
-    Ok(())
-}
-
 /// Take the startup pieces required to spawn the OCSP background task from
 /// another crate (e.g., the ocsp-stapler module). This consumes the receiver
 /// so the caller is responsible for spawning the background task. Returns
 /// `Err(AlreadyInitialized)` if the receiver was already taken (service
 /// already initialized).
-pub fn take_ocsp_startup_state(
-) -> Result<(
-    mpsc::UnboundedReceiver<CertifiedKey>,
-    OcspCache,
-    CancellationToken,
-    Option<Arc<CompositeEventSink>>,
-), AlreadyInitialized> {
+#[allow(clippy::type_complexity)]
+pub fn take_ocsp_startup_state() -> Result<
+    (
+        mpsc::UnboundedReceiver<CertifiedKey>,
+        OcspCache,
+        CancellationToken,
+        Option<Arc<CompositeEventSink>>,
+    ),
+    AlreadyInitialized,
+> {
     let state = get_or_init_global();
-    let receiver = state.receiver.lock().unwrap().take().ok_or(AlreadyInitialized)?;
+    let receiver = state
+        .receiver
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or(AlreadyInitialized)?;
     let cache = state.cache.clone();
     let cancel_token = state.cancel_token.clone();
     let event_sink = state.event_sink.lock().clone();
@@ -237,8 +213,6 @@ impl ResolvesServerCert for OcspStapler {
 // Background OCSP task implementation has been moved to the modules/ocsp-stapler crate.
 // This crate retains only the public API surface (OcspStapler, OcspServiceHandle,
 // `take_ocsp_startup_state`, and `get_service_handle`).
-
-
 
 #[cfg(test)]
 mod tests {

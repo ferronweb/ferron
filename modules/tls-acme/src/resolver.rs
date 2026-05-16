@@ -98,10 +98,7 @@ pub struct TcpTlsAcmeResolver {
 }
 
 /// OCSP service handle type alias.
-#[cfg(feature = "ocsp")]
 type OcspHandle = Option<ferron_ocsp::OcspServiceHandle>;
-#[cfg(not(feature = "ocsp"))]
-type OcspHandle = Option<()>;
 
 impl TcpTlsAcmeResolver {
     /// Creates a new `TcpTlsAcmeResolver`.
@@ -173,14 +170,10 @@ impl TcpTlsAcmeResolver {
         // Attach OCSP stapler if enabled
         if self.ocsp_config.enabled {
             if let Some(ref handle) = self.ocsp_handle {
-                #[cfg(feature = "ocsp")]
-                {
-                    config.cert_resolver = Arc::new(ferron_ocsp::OcspStapler::new(
-                        config.cert_resolver.clone(),
-                        handle,
-                    ));
-                }
-                let _ = handle; // suppress unused warning when ocsp feature is disabled
+                config.cert_resolver = Arc::new(ferron_ocsp::OcspStapler::new(
+                    config.cert_resolver.clone(),
+                    handle,
+                ));
             }
         }
 
@@ -242,19 +235,12 @@ impl TcpTlsResolver for TcpTlsAcmeResolver {
 }
 
 /// Gets the OCSP service handle if OCSP stapling is enabled.
-#[cfg(feature = "ocsp")]
 pub fn get_ocsp_handle_if_enabled(ocsp_config: &OcspConfig) -> OcspHandle {
     if ocsp_config.enabled {
         ferron_ocsp::get_service_handle()
     } else {
         None
     }
-}
-
-/// Gets the OCSP service handle (disabled when feature is not enabled).
-#[cfg(not(feature = "ocsp"))]
-pub fn get_ocsp_handle_if_enabled(_ocsp_config: &OcspConfig) -> OcspHandle {
-    None
 }
 
 /// A resolver that always returns the same certified key.

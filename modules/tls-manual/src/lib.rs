@@ -12,7 +12,6 @@ use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 ///
 /// Per RFC 7633, the TLS Feature extension contains a SEQUENCE of feature values.
 /// The `status_request` feature (value 5) indicates OCSP Must-Staple.
-#[cfg(feature = "ocsp")]
 fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
     use x509_parser::prelude::*;
 
@@ -40,7 +39,6 @@ fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
 ///
 /// Used to preload certificates with Must-Staple into the OCSP service for
 /// immediate fetching.
-#[cfg(feature = "ocsp")]
 fn build_certified_key(
     certs: &[CertificateDer<'static>],
     private_key: &PrivateKeyDer<'static>,
@@ -110,30 +108,27 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         }
 
         // Wrap cert_resolver with OCSP stapler if enabled
-        #[cfg(feature = "ocsp")]
-        {
-            if tls_config.ocsp.enabled {
-                let ocsp_handle = ferron_ocsp::get_service_handle()
-                    .expect("OCSP service handle should always be available");
-                let inner_resolver = config_with_tickets.cert_resolver.clone();
-                config_with_tickets.cert_resolver =
-                    Arc::new(ferron_ocsp::OcspStapler::new(inner_resolver, &ocsp_handle));
+        if tls_config.ocsp.enabled {
+            let ocsp_handle = ferron_ocsp::get_service_handle()
+                .expect("OCSP service handle should always be available");
+            let inner_resolver = config_with_tickets.cert_resolver.clone();
+            config_with_tickets.cert_resolver =
+                Arc::new(ferron_ocsp::OcspStapler::new(inner_resolver, &ocsp_handle));
 
-                // Preload the certificate for immediate OCSP fetching.
-                // Without preloading, the first TLS handshake for each server
-                // would not include a stapled OCSP response because the fetch
-                // hasn't completed yet. Preloading ensures the background task
-                // starts fetching as soon as the config is loaded.
-                if let Some(certified_key) = build_certified_key(&certs, &private_key) {
-                    if let Some(leaf) = certs.first() {
-                        if cert_has_must_staple(leaf) {
-                            ferron_core::log_info!(
-                                "OCSP stapling enabled — Must-Staple detected, preloading certificate"
-                            );
-                        }
+            // Preload the certificate for immediate OCSP fetching.
+            // Without preloading, the first TLS handshake for each server
+            // would not include a stapled OCSP response because the fetch
+            // hasn't completed yet. Preloading ensures the background task
+            // starts fetching as soon as the config is loaded.
+            if let Some(certified_key) = build_certified_key(&certs, &private_key) {
+                if let Some(leaf) = certs.first() {
+                    if cert_has_must_staple(leaf) {
+                        ferron_core::log_info!(
+                            "OCSP stapling enabled — Must-Staple detected, preloading certificate"
+                        );
                     }
-                    ocsp_handle.preload(certified_key);
                 }
+                ocsp_handle.preload(certified_key);
             }
         }
 
