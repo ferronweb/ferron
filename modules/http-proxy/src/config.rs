@@ -223,11 +223,7 @@ fn parse_proxy_block(
                 }
             }
             "lb_health_check" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.lb_health_check = val;
                 }
             }
@@ -251,56 +247,32 @@ fn parse_proxy_block(
                 }
             }
             "lb_retry_connection" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.lb_retry_connection = val;
                 }
             }
             "keepalive" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.keepalive = val;
                 }
             }
             "http2" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.http2 = val;
                 }
             }
             "http2_only" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.http2_only = val;
                 }
             }
             "intercept_errors" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.intercept_errors = val;
                 }
             }
             "no_verification" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.no_verification = val;
                 }
             }
@@ -389,11 +361,7 @@ fn parse_upstream_entry(
                     }
                 }
                 "health_check" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_boolean())
-                    {
+                    if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.enabled = val;
                     }
                 }
@@ -497,11 +465,7 @@ fn parse_upstream_entry(
                     }
                 }
                 "health_check_no_verification" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_boolean())
-                    {
+                    if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.no_verification = val;
                     }
                 }
