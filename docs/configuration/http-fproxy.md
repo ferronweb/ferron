@@ -14,7 +14,7 @@ proxy.example.com {
         allow_ports 80 443
         deny_ips "127.0.0.0/8" "169.254.169.254/32"
 
-        connect_method true
+        connect_method
         http_version "1.1"
     }
 }

@@ -55,7 +55,7 @@ example.com {
         origins "https://example.com" "https://app.example.com"
         methods GET POST PUT DELETE
         headers "Content-Type" "Authorization"
-        credentials true
+        credentials
         max_age 86400
         expose_headers "X-Custom-Header"
     }
@@ -104,7 +104,7 @@ api.example.com {
         origins "https://app.example.com" "https://admin.example.com"
         methods GET POST PUT DELETE OPTIONS
         headers "Content-Type" "Authorization" "X-Request-ID"
-        credentials true
+        credentials
         max_age 86400
         expose_headers "X-Total-Count" "X-Page"
     }

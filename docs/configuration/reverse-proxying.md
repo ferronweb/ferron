@@ -103,7 +103,7 @@ example.com {
 
 example.com {
     proxy http://localhost:8080 {
-        keepalive true
+        keepalive
     }
 }
 ```
@@ -237,7 +237,7 @@ example.com {
             health_check_uri "/api/status"
             health_check_method HEAD
             health_check_response_time_threshold "1s"
-            health_check_no_verification true
+            health_check_no_verification
         }
         lb_algorithm two_random
     }

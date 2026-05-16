@@ -204,7 +204,7 @@ The `observability` block configures per-host event sinks for logging and metric
 
 ```ferron
 example.com {
-    observability true {
+    observability {
         provider console
     }
 }

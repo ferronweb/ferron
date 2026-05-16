@@ -89,8 +89,12 @@ A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex a
 http * {
     map request.header.user_agent is_mobile {
         default "0"
-        regex "mobile" "1" { case_insensitive true }
-        regex "android" "1" { case_insensitive true }
+        regex "mobile" "1" {
+            case_insensitive
+        }
+        regex "android" "1" {
+            case_insensitive
+        }
     }
 }
 ```

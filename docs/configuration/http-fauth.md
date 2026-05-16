@@ -185,11 +185,11 @@ secure.example.com {
 ```ferron
 internal.example.com {
     auth_to https://auth.internal:8443/auth {
-        no_verification true
+        no_verification
     }
 
     proxy https://backend:8443 {
-        no_verification true
+        no_verification
     }
 }
 ```

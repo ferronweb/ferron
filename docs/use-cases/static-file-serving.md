@@ -41,7 +41,7 @@ Single-page applications (SPAs) are also supported by Ferron by adding a URL rew
 example.com {
     root /var/www/html
     rewrite "^/.*" "/" {
-        last true
+        last
         directory false
         file false
     }

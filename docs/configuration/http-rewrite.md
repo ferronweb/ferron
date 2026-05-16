@@ -44,7 +44,7 @@ All requests to `/old-path/anything` are internally rewritten to `/new-path/anyt
 ```ferron
 example.com {
     rewrite "^/api/v1/(.*)" "/api/v2/$1" {
-        last true
+        last
     }
     rewrite "^/api/v2/(.*)" "/api/v3/$1"
 }

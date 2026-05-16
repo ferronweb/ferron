@@ -130,7 +130,7 @@ example.com {
     observability {
         provider otlp
         service_name "ferron-dev"
-        no_verify true
+        no_verify
 
         traces "https://localhost:4317" {
             protocol "grpc"

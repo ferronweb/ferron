@@ -27,7 +27,7 @@ example.com {
 
     # Replace only the first occurrence
     replace "http://old-domain.com" "https://new-domain.com" {
-        once true
+        once
     }
 }
 ```
@@ -47,7 +47,7 @@ All occurrences of `foo` in the response body are replaced with `bar`.
 ```ferron
 example.com {
     replace "old" "new" {
-        once true
+        once
     }
 }
 ```
@@ -111,7 +111,7 @@ example.com {
 
 ```ferron
 example.com {
-    replace_last_modified true
+    replace_last_modified
 
     replace "old" "new"
 }

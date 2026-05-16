@@ -35,7 +35,7 @@ tls {
     key "key.pem"
     ticket_keys {
         file "session_tickets.keys"
-        auto_rotate true
+        auto_rotate
         rotation_interval "12h"
         max_keys 3
     }

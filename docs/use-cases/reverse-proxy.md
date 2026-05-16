@@ -47,7 +47,7 @@ example.com {
     location / {
         root /var/www/html
         rewrite "^/.*" "/" {
-            last true
+            last
             directory false
             file false
         }
@@ -138,7 +138,7 @@ Ferron supports reverse proxying to gRPC backends that accept HTTP/2 requests:
 ```ferron
 grpc.example.com {
     proxy http://localhost:3000 {
-        http2_only true
+        http2_only
     }
 }
 ```

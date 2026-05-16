@@ -26,7 +26,7 @@ When reverse proxying, enable error interception so Ferron can serve custom page
 app.example.com {
     location / {
         proxy http://127.0.0.1:3000 {
-            intercept_errors true
+            intercept_errors
         }
     }
 
