@@ -59,7 +59,10 @@ async fn create_otlp_container(
                 if attempts >= 3 {
                     return Err(err);
                 }
-                eprintln!("otlp container start attempt {} failed: {:?}, retrying...", attempts, err);
+                eprintln!(
+                    "otlp container start attempt {} failed: {:?}, retrying...",
+                    attempts, err
+                );
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
@@ -93,12 +96,12 @@ async fn test_otlp_traces_exported() {
         .as_file_mut()
         .write_all(
             r#"*:80 {
-  root \"/var/www/ferron\"
+  root "/var/www/ferron"
   observability {
     provider otlp
-    service_name \"e2e-otlp\"
-    traces \"http://otlp:4318/v1/traces\" {
-      protocol \"http/protobuf\"
+    service_name "e2e-otlp"
+    traces "http://otlp:4318/v1/traces" {
+      protocol "http/protobuf"
     }
   }
 }
