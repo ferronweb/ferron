@@ -46,7 +46,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
             validate_nested!(auth_to, unix, args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(auth_to, limit, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)]);
             validate_nested!(auth_to, idle_timeout, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)]);
-            validate_nested!(auth_to, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(auth_to, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             validate_nested!(auth_to, copy, args(*) => [ServerConfigurationValue::String(_, _)]);
         });
 

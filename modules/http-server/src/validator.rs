@@ -64,12 +64,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
             // URL sanitization
             if is_global {
-                validate_nested!(http, url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(http, url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             }
 
             // HTTP/1.x settings
-            validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // 103 Early Hints
             validate_nested!(http, early_hints, optional);
@@ -79,12 +79,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // W3C Trace Context
             validate_nested!(http, trace, {
-                validate_nested!(trace, generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(trace, sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             });
         });
 
