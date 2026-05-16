@@ -1879,12 +1879,9 @@ dependencies = [
 name = "ferron-ocsp"
 version = "3.0.0-beta.1"
 dependencies = [
- "anyhow",
- "ferron-core",
  "ferron-observability",
  "parking_lot",
  "rustls",
- "rustls-pki-types",
  "tokio",
  "tokio-util",
 ]

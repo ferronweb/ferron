@@ -4,13 +4,10 @@ version = "3.0.0-beta.1"
 edition = "2021"
 
 [dependencies]
-ferron-core = { path = "../../core" }
+#ferron-core = { path = "../../core" }
 ferron-observability = { path = "../observability" }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 
-# Keep only lightweight runtime types here; heavy HTTP/parsing deps live in the module crate
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
-rustls-pki-types = "1"
 parking_lot = "0.12"
-anyhow = "1"
 tokio-util = "0.7"
