@@ -49,7 +49,7 @@ jobs:
           cargo +nightly fuzz run proxy_protocol -- -max_total_time=3600 -workers=2
 
       - name: Upload fuzz artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-artifacts
           path: |
