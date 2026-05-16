@@ -99,6 +99,9 @@ fn validate_cors_block(
     if let Some(entries) = block.directives.get("credentials") {
         used.insert("credentials".to_string());
         for e in entries {
+            if e.args.is_empty() {
+                continue; // allow no-arg form as a shorthand for "true"
+            }
             if e.args.first().and_then(|v| v.as_boolean()).is_none() {
                 return Err("Invalid `credentials` — expected a boolean".into());
             }
