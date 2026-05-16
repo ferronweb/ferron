@@ -89,7 +89,7 @@ echo "Hello after sleep";
         .with_wait_for(WaitFor::seconds(3))
         .with_network(network)
         .with_mount(Mount::bind_mount(
-            wwwroot_dir.to_string_lossy(),
+            wwwroot_dir.path().to_string_lossy().to_string(),
             "/var/www/html",
         ))
         .with_hostname("php-fpm")
