@@ -118,3 +118,11 @@ path = "tests/static.rs"
 [[test]]
 name = "tls"
 path = "tests/tls.rs"
+
+[[test]]
+name = "otlp"
+path = "tests/otlp.rs"
+
+[[test]]
+name = "fcgi_errors"
+path = "tests/fcgi_errors.rs"

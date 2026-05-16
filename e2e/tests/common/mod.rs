@@ -23,6 +23,8 @@ static CGI_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static FCGIWRAP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static OTLP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 static OCSP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 
@@ -121,6 +123,20 @@ pub async fn build_fcgiwrap_image() -> Result<GenericImage, TestcontainersError>
         .await?;
     fcgiwrap_image.replace(fcgiwrap_image_built.clone());
     Ok(fcgiwrap_image_built)
+}
+
+pub async fn build_otlp_image() -> Result<GenericImage, TestcontainersError> {
+    let mut otlp_image = OTLP_IMAGE.lock().await;
+    if let Some(image) = otlp_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let otlp_image_built = GenericBuildableImage::new("e2e-test-otlp", "latest")
+        .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/otlp/Dockerfile"))
+        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/otlp"), ".")
+        .build_image()
+        .await?;
+    otlp_image.replace(otlp_image_built.clone());
+    Ok(otlp_image_built)
 }
 
 pub async fn build_ocsp_image() -> Result<GenericImage, TestcontainersError> {
