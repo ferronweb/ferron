@@ -3,20 +3,23 @@
 //! This crate provides:
 //! - `OcspStapler`: a `ResolvesServerCert` wrapper that attaches OCSP responses
 //! - `OcspServiceHandle`: shared handle to the background OCSP fetching service
-//! - `init_ocsp_service()`: spawns the background service on the secondary runtime
+//! - `take_ocsp_startup_state()`: consume startup pieces so a module can spawn the background task
 //! - `get_service_handle()`: global accessor for TLS providers
 //!
 //! # Architecture
 //!
-//! A single background task runs on the secondary tokio runtime, fetching OCSP
-//! responses over HTTPS and caching them. TLS providers wrap their certificate
+//! A single background task runs in a module-owned runtime (the `ocsp-stapler`
+//! module owns the task and its heavy dependencies). The task fetches OCSP
+//! responses over HTTPS and caches them. TLS providers wrap their certificate
 //! resolver with `OcspStapler`, which intercepts `resolve()` calls and attaches
 //! stapled responses from the cache.
 //!
 //! # Usage
 //!
-//! 1. During startup, call `init_ocsp_service(&runtime)` from your `ModuleLoader`
-//! 2. In your TLS provider, call `get_service_handle()` and wrap your resolver:
+//! 1. Configure an event sink with `set_event_sink(...)` before startup so logs and metrics can be emitted.
+//! 2. The `ocsp-stapler` module should call `take_ocsp_startup_state()` during its ModuleLoader startup
+//!    and spawn the returned receiver task on the module's runtime.
+//! 3. In your TLS provider, call `get_service_handle()` and wrap your resolver:
 //!    ```ignore
 //!    if let Some(handle) = ferron_ocsp::get_service_handle() {
 //!        config.cert_resolver = Arc::new(OcspStapler::new(inner_resolver, &handle));
@@ -91,19 +94,21 @@ pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
 
 /// Initialize the OCSP service. Call once during startup.
 ///
-/// Spawns the background task on the secondary tokio runtime via
-/// `runtime.spawn_secondary_task()`. Returns `Err(AlreadyInitialized)`
-/// if called more than once.
+/// NOTE: This function is a compatibility check and does not spawn the
+/// background task. The `ocsp-stapler` module is responsible for taking the
+/// startup pieces (via `take_ocsp_startup_state()`) and spawning the task on
+/// its own runtime. This function returns `Err(AlreadyInitialized)` if the
+/// receiver has already been consumed.
 ///
-/// The sender channel is created eagerly on first access, so certs can be
-/// queued before this function is called. When the background task starts,
+/// The sender channel and cache are created on first access, so certs can be
+/// queued before the background task starts. When the background task runs,
 /// it will process any queued certs.
 pub fn init_ocsp_service(
-    runtime: &ferron_core::runtime::Runtime,
+    _runtime: &ferron_core::runtime::Runtime,
 ) -> Result<(), AlreadyInitialized> {
     let state = get_or_init_global();
 
-    let event_sink = state.event_sink.lock().clone();
+    let _event_sink = state.event_sink.lock().clone();
 
     // Do not spawn the background task from the types crate. The module
     // `ocsp-stapler` should call `take_ocsp_startup_state()` and spawn the
@@ -229,9 +234,10 @@ impl ResolvesServerCert for OcspStapler {
     }
 }
 
-// The background OCSP implementation has been moved to modules/ocsp-stapler.
-// That module now owns the HTTP client, parsing, and runtime task implementation.
-// Types crate keeps only the public API (OcspStapler, OcspServiceHandle, init/take).
+// Background OCSP task implementation has been moved to the modules/ocsp-stapler crate.
+// This crate retains only the public API surface (OcspStapler, OcspServiceHandle,
+// `take_ocsp_startup_state`, and `get_service_handle`).
+
 
 
 #[cfg(test)]

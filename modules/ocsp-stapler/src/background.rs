@@ -1,3 +1,10 @@
+//! Background OCSP fetching task and helpers owned by the ocsp-stapler module.
+//!
+//! This file contains the runtime-heavy HTTP client, OCSP parsing, caching, and
+//! the long-running task that periodically fetches and refreshes OCSP
+//! responses. Keeping this code in the module crate keeps the types crate
+//! lightweight and free of networking/parsing dependencies.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
