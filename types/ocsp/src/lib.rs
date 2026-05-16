@@ -379,7 +379,11 @@ async fn background_ocsp_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
-                            &format!("OCSP response cached for {ident}, valid until {next_update_time:?}"),
+                            &format!(
+                                "OCSP response cached for {ident}, valid until {}",
+                                chrono::DateTime::<chrono::Utc>::from(next_update_time)
+                                    .format("%Y-%m-%d %H:%M:%S")
+                            ),
                             "ferron_ocsp",
                         );
                         emit_metric(
@@ -634,8 +638,8 @@ async fn fetch_ocsp_response_inner(
 
     if response.status != OcspResponseStatus::Successful {
         return Err(anyhow::anyhow!(
-            "OCSP response status unsuccessful: {:?}",
-            response.status
+            "OCSP response status unsuccessful: {}",
+            response.status.identifier()
         ));
     }
 

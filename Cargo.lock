@@ -1880,6 +1880,7 @@ name = "ferron-ocsp"
 version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "ferron-core",
  "ferron-observability",
  "hex",
