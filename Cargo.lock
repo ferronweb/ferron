@@ -1880,9 +1880,24 @@ name = "ferron-ocsp"
 version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
+ "ferron-core",
+ "ferron-observability",
+ "parking_lot",
+ "rustls",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "ferron-ocsp-stapler"
+version = "3.0.0-beta.1"
+dependencies = [
+ "anyhow",
  "chrono",
  "ferron-core",
  "ferron-observability",
+ "ferron-ocsp",
  "hex",
  "http-body-util",
  "hyper",
@@ -1903,15 +1918,6 @@ dependencies = [
  "tokio-util",
  "webpki-roots",
  "x509-parser",
-]
-
-[[package]]
-name = "ferron-ocsp-stapler"
-version = "3.0.0-beta.1"
-dependencies = [
- "ferron-core",
- "ferron-observability",
- "ferron-ocsp",
 ]
 
 [[package]]
