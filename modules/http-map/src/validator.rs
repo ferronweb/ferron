@@ -230,9 +230,12 @@ impl MapValidator {
                 .into());
             }
             for nested_entry in nested_entries {
+                if nested_entry.args.is_empty() {
+                    continue; // No args means default value (false)
+                }
                 if nested_entry.args.len() != 1 {
                     return Err(format!(
-                        "Invalid `{key}` inside regex block — must have exactly one argument"
+                        "Invalid `{key}` inside regex block — must have zero or one argument"
                     )
                     .into());
                 }
