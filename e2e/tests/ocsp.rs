@@ -414,7 +414,7 @@ async fn test_ocsp_stapling_tcp() {
         .await
         .unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs_f64(1.5)).await;
 
     let server_cert = cert_dir.path().join("server.crt");
     let server_key = cert_dir.path().join("server.key");
