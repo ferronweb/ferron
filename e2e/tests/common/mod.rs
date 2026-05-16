@@ -131,7 +131,10 @@ pub async fn build_otlp_image() -> Result<GenericImage, TestcontainersError> {
         return Ok(image.clone());
     }
     let otlp_image_built = GenericBuildableImage::new("e2e-test-otlp", "latest")
-        .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/otlp/Dockerfile"))
+        .with_dockerfile(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/images/otlp/Dockerfile"
+        ))
         .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/otlp"), ".")
         .build_image()
         .await?;

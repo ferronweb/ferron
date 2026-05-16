@@ -115,7 +115,10 @@ echo "Hello after sleep";
     // Start the request in a background task
     let client_clone = client.clone();
     let req_future = tokio::spawn(async move {
-        client_clone.get(format!("http://localhost:{}/", port)).send().await
+        client_clone
+            .get(format!("http://localhost:{}/", port))
+            .send()
+            .await
     });
 
     // Give the request a short moment to start, then stop the backend to simulate a mid-request reset
@@ -127,7 +130,10 @@ echo "Hello after sleep";
         Ok(join_res) => match join_res.unwrap() {
             Ok(resp) => {
                 // Ferron should surface an upstream error; allow either a 502/5xx or client error
-                assert!(resp.status().is_server_error() || resp.status() == reqwest::StatusCode::BAD_GATEWAY);
+                assert!(
+                    resp.status().is_server_error()
+                        || resp.status() == reqwest::StatusCode::BAD_GATEWAY
+                );
             }
             Err(_) => {
                 // request failed at the client level -> acceptable
