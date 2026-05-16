@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 ferron-http-server = { path = "..", features = ["fuzz"] }
+ppp = "2.3.0"
 
 [[bin]]
 name = "canonicalize_path"
