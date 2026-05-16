@@ -6,6 +6,7 @@
 
 mod config;
 mod cors;
+mod validator;
 
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http_body_util::BodyExt;
 
-pub use config::HttpHeadersConfigurationValidator;
+pub use validator::HttpHeadersConfigurationValidator;
 
 /// Stage for applying response headers and handling CORS preflight requests.
 #[derive(Default)]

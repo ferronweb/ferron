@@ -7,6 +7,7 @@
 
 mod config;
 mod proxy;
+mod validator;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,7 +21,7 @@ use ferron_core::Module;
 use ferron_http::HttpContext;
 
 pub use config::ForwardProxyConfig;
-pub use config::ForwardProxyConfigurationValidator;
+pub use validator::ForwardProxyConfigurationValidator;
 
 /// Global accessor for the secondary Tokio runtime handle.
 ///

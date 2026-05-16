@@ -21,7 +21,7 @@ fn path_resolve_cache_ttl() -> Duration {
     Duration::from_millis(PATH_RESOLVE_CACHE_TTL_MILLIS.load(std::sync::atomic::Ordering::Relaxed))
 }
 
-pub(super) fn set_path_resolve_cache_ttl_millis(ms: u64) {
+pub(crate) fn set_path_resolve_cache_ttl_millis(ms: u64) {
     PATH_RESOLVE_CACHE_TTL_MILLIS.store(ms, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -586,7 +586,7 @@ fn is_not_directory_like(error: &io::Error) -> bool {
 }
 
 #[cfg(any(test, feature = "bench"))]
-pub(crate) async fn bench_resolve_http_file_target(
+pub async fn bench_resolve_http_file_target(
     root_path: &std::path::Path,
     request_path: &str,
     index_files: Option<&[String]>,

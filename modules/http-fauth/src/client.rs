@@ -23,6 +23,7 @@ enum SendRequestInner {
 }
 
 impl SendRequestInner {
+    #[inline]
     fn is_closed(&self) -> bool {
         match self {
             SendRequestInner::Http1(s) => s.is_closed(),
@@ -31,6 +32,7 @@ impl SendRequestInner {
     }
 
     #[allow(dead_code)]
+    #[inline]
     fn is_ready(&self) -> bool {
         match self {
             SendRequestInner::Http1(s) => s.is_ready(),
@@ -38,6 +40,7 @@ impl SendRequestInner {
         }
     }
 
+    #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
         match self {
             SendRequestInner::Http1(s) => s.poll_ready(cx),
@@ -53,6 +56,7 @@ pub struct SendRequestWrapper {
 }
 
 impl SendRequestWrapper {
+    #[inline]
     pub fn http1(inner: hyper::client::conn::http1::SendRequest<ProxyBody>) -> Self {
         Self {
             inner: Some(SendRequestInner::Http1(inner)),
@@ -60,6 +64,7 @@ impl SendRequestWrapper {
         }
     }
 
+    #[inline]
     pub fn http2(inner: hyper::client::conn::http2::SendRequest<ProxyBody>) -> Self {
         Self {
             inner: Some(SendRequestInner::Http2(inner)),
@@ -68,6 +73,7 @@ impl SendRequestWrapper {
     }
 
     /// Check if the connection is closed.
+    #[inline]
     pub fn is_closed(&self) -> bool {
         match &self.inner {
             Some(inner) => inner.is_closed(),
@@ -81,6 +87,7 @@ impl SendRequestWrapper {
     /// - `(true, true)` — ready, caller should use `take_inner()` to extract
     /// - `(false, true)` — not ready yet, keep in pool (connection is alive)
     /// - `(_, false)` — dead/stale, discard
+    #[inline]
     pub fn check_ready(&mut self, timeout: Option<Duration>) -> (bool, bool) {
         let Some(ref inner) = self.inner else {
             return (false, false);
@@ -111,6 +118,7 @@ impl SendRequestWrapper {
     /// Wait until the connection becomes ready, closed, or the idle timeout elapses.
     ///
     /// Returns `true` if the connection is now ready, `false` if closed/timed out.
+    #[inline]
     pub async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
         std::future::poll_fn(|cx| match &mut self.inner {
@@ -141,6 +149,7 @@ impl SendRequestWrapper {
     }
 
     /// Send an HTTP request and receive the response.
+    #[inline]
     pub async fn send_request(
         &mut self,
         req: Request<ProxyBody>,
@@ -163,6 +172,7 @@ impl SendRequestWrapper {
 }
 
 /// HTTP/1.x handshake using vibeio executor.
+#[inline]
 pub async fn http1_handshake<I>(
     io: I,
 ) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>
@@ -177,6 +187,7 @@ where
 }
 
 /// HTTP/2 handshake using vibeio executor.
+#[inline]
 pub async fn http2_handshake<I>(
     io: I,
 ) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>

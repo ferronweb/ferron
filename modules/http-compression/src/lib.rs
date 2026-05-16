@@ -5,7 +5,7 @@
 //!
 //! Supported algorithms: gzip, brotli, deflate, zstd.
 
-mod stages;
+mod stage;
 mod validator;
 
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpContext;
 
-pub use stages::DynamicCompressionStage;
+pub use stage::DynamicCompressionStage;
 pub use validator::DynamicCompressionConfigurationValidator;
 
 /// Module loader for the HTTP dynamic compression module.

@@ -12,6 +12,7 @@ mod send_net_io;
 mod send_request;
 mod upstream;
 mod util;
+mod validator;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -21,9 +22,9 @@ use std::time::Duration;
 use parking_lot::RwLock;
 
 use crate::upstream::LoadBalancerAlgorithmInner;
-pub use config::ProxyConfigurationValidator;
 pub use connections::ConnectionManager;
 pub use upstream::UpstreamInner;
+pub use validator::ProxyConfigurationValidator;
 
 // Re-export low-level send_net_io types for benchmarking and external tools
 use ferron_core::config::validator::ConfigurationValidator;

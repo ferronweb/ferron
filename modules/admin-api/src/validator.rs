@@ -17,75 +17,18 @@ impl ConfigurationValidator for AdminConfigurationValidator {
         is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if is_global {
-            // Check for the admin directive
-            let Some(admin_entries) = config.directives.get("admin") else {
-                return Ok(());
-            };
-            used_directives.insert("admin".to_string());
+            ferron_core::validate_directive!(config, used_directives, admin, optional
+                args(1) => [ServerConfigurationValue::Boolean(_, _)], {
 
-            for admin_entry in admin_entries {
-                let Some(admin_block) = &admin_entry.children else {
-                    return Err("Invalid directive 'admin': missing nested block"
-                        .to_string()
-                        .into());
-                };
+                // Listen address
+                ferron_core::validate_nested!(admin, listen, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
 
-                // Validate listen
-                if let Some(listen_entries) = admin_block.directives.get("listen") {
-                    used_directives.insert("listen".to_string());
-                    for entry in listen_entries {
-                        if entry.args.len() > 1 {
-                            return Err(format!(
-                            "Invalid directive 'admin.listen': expected at most 1 argument(s), got {}",
-                            entry.args.len()
-                        )
-                        .into());
-                        }
-                        if let Some(arg) = entry.args.first() {
-                            if !matches!(
-                                arg,
-                                ServerConfigurationValue::String(_, _)
-                                    | ServerConfigurationValue::InterpolatedString(_, _)
-                            ) {
-                                return Err(
-                                    "Invalid directive 'admin.listen': argument type mismatch"
-                                        .into(),
-                                );
-                            }
-                        }
-                    }
-                }
-
-                // Validate endpoint flag directives: health, status, config, reload
-                for directive_name in &["health", "status", "config", "reload"] {
-                    if let Some(entries) = admin_block.directives.get(*directive_name) {
-                        used_directives.insert(directive_name.to_string());
-                        for entry in entries {
-                            if entry.args.len() > 1 {
-                                return Err(format!(
-                                "Invalid directive 'admin.{}': expected at most 1 argument(s), got {}",
-                                directive_name,
-                                entry.args.len()
-                            )
-                            .into());
-                            }
-                            if let Some(arg) = entry.args.first() {
-                                if !matches!(
-                                    arg,
-                                    ServerConfigurationValue::Boolean(_, _)
-                                        | ServerConfigurationValue::String(_, _)
-                                ) {
-                                    return Err(format!(
-                                        "Invalid directive 'admin.{}': argument type mismatch",
-                                        directive_name
-                                    )
-                                    .into());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                // Endpoint flags
+                ferron_core::validate_nested!(admin, health, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, status, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, config, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, reload, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            });
         }
 
         Ok(())

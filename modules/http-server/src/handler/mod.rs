@@ -1,4 +1,5 @@
 mod file_pipeline;
+mod pipeline;
 mod request_utils;
 
 use std::borrow::Cow;
@@ -7,12 +8,10 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError, Stage, StageHooks};
-use ferron_core::util::parse_duration;
 use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
@@ -30,12 +29,13 @@ use crate::config::ThreeStageResolver;
 use crate::util::canonicalize_cache::canonicalize_path_routing_cached;
 use crate::util::canonicalize_url::canonicalize_path;
 
-use self::file_pipeline::{
-    execute_http_file_pipeline, strip_matched_path_prefix, FilePipelineExecutionError,
-};
+#[cfg(any(test, feature = "bench"))]
+pub use self::file_pipeline::bench_resolve_http_file_target;
+pub(crate) use self::file_pipeline::set_path_resolve_cache_ttl_millis;
+use self::pipeline::*;
 use self::request_utils::{
     add_http3_alt_svc_header, builtin_error_response, check_backslash_in_path, emit_error,
-    emit_error_with_trace, emit_warn_with_trace, execute_error_pipeline, get_http_nested_boolean,
+    emit_error_with_trace, execute_error_pipeline, get_http_nested_boolean,
     is_options_star_request, normalize_host_header, normalize_http2_http3_request,
     sanitize_request_url,
 };
@@ -44,19 +44,6 @@ const LOG_TARGET: &str = "ferron-http-server";
 static SPAN_KEY_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
-
-pub fn set_path_resolve_cache_ttl_millis(ms: u64) {
-    file_pipeline::set_path_resolve_cache_ttl_millis(ms);
-}
-
-#[cfg(any(test, feature = "bench"))]
-pub async fn bench_resolve_http_file_target(
-    root_path: &std::path::Path,
-    request_path: &str,
-    index_files: Option<&[String]>,
-) -> Result<bool, String> {
-    file_pipeline::bench_resolve_http_file_target(root_path, request_path, index_files).await
-}
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
 pub(super) struct PerStageSpanHooks<'a> {
@@ -232,7 +219,7 @@ impl AccessEvent for HttpAccessLog {
     }
 }
 
-fn next_span_key(prefix: &str) -> String {
+pub(super) fn next_span_key(prefix: &str) -> String {
     format!(
         "{prefix}:{}",
         SPAN_KEY_COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -1167,204 +1154,4 @@ async fn request_handler_inner(
         auth_user,
         Some(final_remote),
     )
-}
-
-async fn execute_pipeline_stages(
-    ctx: &mut HttpContext,
-    pipeline: &Pipeline<HttpContext>,
-    file_pipeline: &Pipeline<HttpFileContext>,
-    events: &CompositeEventSink,
-    log_prefix: &str,
-    path_segments: &[String],
-    request_span_key: Option<&str>,
-) {
-    let has_traces = events.has_trace_sinks();
-    let pipeline_span_key = request_span_key.map(|_| next_span_key("pipeline"));
-    let log_trace_context = ctx
-        .get::<trace_context::TraceContextKey>()
-        .map(trace_context::to_event_trace_context);
-
-    // Start pipeline execution span
-    if let (true, Some(request_span_key), Some(pipeline_span_key)) =
-        (has_traces, request_span_key, pipeline_span_key.as_ref())
-    {
-        events.emit(Event::Trace(TraceEvent::StartSpan {
-            key: Cow::Owned(pipeline_span_key.clone()),
-            name: Cow::Borrowed("ferron.pipeline.execute"),
-            parent: Some(Parent::ByKey(request_span_key.to_string())),
-            trace_context: None,
-            attributes: vec![(
-                "ferron.pipeline.log_prefix",
-                TraceAttributeValue::String(log_prefix.to_string()),
-            )],
-        }));
-    }
-
-    // Remove the base URL if path segments were matched
-    if !path_segments.is_empty() {
-        if let Some(req) = ctx.req.take() {
-            let (mut parts, body) = req.into_parts();
-            let mut uri_parts = parts.uri.into_parts();
-            if let Some(path_and_query) = uri_parts.path_and_query {
-                uri_parts.path_and_query =
-                    strip_matched_path_prefix(&path_and_query, path_segments.len());
-                if uri_parts.path_and_query.is_none() {
-                    ctx.res = Some(HttpResponse::BuiltinError(400, None));
-                    return;
-                }
-            }
-            let Ok(new_uri) = http::Uri::from_parts(uri_parts) else {
-                ctx.res = Some(HttpResponse::BuiltinError(400, None));
-                return;
-            };
-            parts.uri = new_uri;
-            ctx.req = Some(http::Request::from_parts(parts, body));
-        }
-    }
-
-    let timeout_duration = ctx.configuration.get_value("timeout", false).map_or(
-        Some(Duration::from_secs(300)),
-        |value| {
-            if !value.as_boolean().unwrap_or(true) {
-                None
-            } else if let Some(s) = value.as_string_with_interpolations(&HashMap::new()) {
-                match parse_duration(&s) {
-                    Ok(d) => Some(d),
-                    Err(e) => {
-                        ferron_core::log_warn!("Invalid timeout duration '{}': {}", s, e);
-                        Some(Duration::from_secs(300))
-                    }
-                }
-            } else {
-                value
-                    .as_number()
-                    .map(|n| Duration::from_millis(n as u64))
-                    .or_else(|| Some(Duration::from_secs(300)))
-            }
-        },
-    );
-    let instant = std::time::Instant::now();
-
-    // Per-stage span hooks — emit StartSpan/EndSpan around each stage
-    let mut stage_hooks = PerStageSpanHooks::new(
-        events,
-        has_traces && pipeline_span_key.is_some(),
-        pipeline_span_key.as_deref().unwrap_or(""),
-        "http",
-    );
-
-    let executed_stages = match if let Some(timeout_duration) =
-        timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
-    {
-        vibeio::time::timeout(
-            timeout_duration,
-            pipeline.execute_without_inverse_with_hooks(ctx, &mut stage_hooks),
-        )
-        .await
-    } else {
-        Ok(pipeline
-            .execute_without_inverse_with_hooks(ctx, &mut stage_hooks)
-            .await)
-    } {
-        Ok(Ok(executed_stages)) => Some(executed_stages),
-        Ok(Err(error)) => {
-            emit_error_with_trace(
-                events,
-                format!("{log_prefix}Pipeline execution error: {error}"),
-                log_trace_context.clone(),
-            );
-            ctx.res = Some(HttpResponse::BuiltinError(500, None));
-            None
-        }
-        Err(_) => {
-            emit_error_with_trace(
-                events,
-                format!("{log_prefix}Pipeline execution timeout"),
-                log_trace_context.clone(),
-            );
-            ctx.res = Some(HttpResponse::BuiltinError(408, None));
-            None
-        }
-    };
-
-    if let Some(executed_stages) = executed_stages {
-        if ctx.res.is_none() {
-            match execute_http_file_pipeline(
-                ctx,
-                file_pipeline,
-                timeout_duration.map(|d| d.saturating_sub(instant.elapsed())),
-                pipeline_span_key.as_deref(),
-            )
-            .await
-            {
-                Ok(()) => {}
-                Err(FilePipelineExecutionError::Forbidden) => {
-                    ctx.res = Some(HttpResponse::BuiltinError(403, None));
-                }
-                Err(FilePipelineExecutionError::BadRequest) => {
-                    ctx.res = Some(HttpResponse::BuiltinError(400, None));
-                }
-                Err(FilePipelineExecutionError::Timeout) => {
-                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
-                }
-                Err(FilePipelineExecutionError::Io(error)) => {
-                    emit_error_with_trace(
-                        events,
-                        format!("{log_prefix}HTTP file resolution error: {error}"),
-                        log_trace_context.clone(),
-                    );
-                    ctx.res = Some(HttpResponse::BuiltinError(500, None));
-                }
-                Err(FilePipelineExecutionError::Pipeline(error)) => {
-                    emit_error_with_trace(
-                        events,
-                        format!("{log_prefix}Pipeline execution error: {error}"),
-                        log_trace_context.clone(),
-                    );
-                    ctx.res = Some(HttpResponse::BuiltinError(500, None));
-                }
-                Err(FilePipelineExecutionError::WebrootNotFound) => {
-                    if let Some(webroot) = ctx
-                        .configuration
-                        .get_value("root", true)
-                        .and_then(|v| v.as_string_with_interpolations(ctx))
-                    {
-                        emit_warn_with_trace(
-                            events,
-                            format!("{log_prefix}Webroot not found: {webroot}"),
-                            log_trace_context.clone(),
-                        );
-                    }
-                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
-                }
-            }
-        }
-
-        if let Err(error) = pipeline
-            .execute_inverse_with_hooks(ctx, executed_stages, &mut stage_hooks)
-            .await
-        {
-            emit_error_with_trace(
-                events,
-                format!("{log_prefix}Pipeline inverse execution error: {error}"),
-                log_trace_context,
-            );
-            ctx.res = Some(HttpResponse::BuiltinError(500, None));
-        }
-    }
-
-    // End pipeline execution span
-    if let Some(pipeline_span_key) = pipeline_span_key {
-        events.emit(Event::Trace(TraceEvent::EndSpan {
-            key: Cow::Owned(pipeline_span_key),
-            name: Cow::Borrowed("ferron.pipeline.execute"),
-            error: ctx.res.as_ref().and_then(|r| match r {
-                HttpResponse::BuiltinError(s, _) if *s >= 400 => {
-                    Some(format!("builtin error {}", s))
-                }
-                _ => None,
-            }),
-            attributes: vec![],
-        }));
-    }
 }
