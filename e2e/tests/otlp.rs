@@ -38,15 +38,32 @@ async fn create_ferron_container(
 async fn create_otlp_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let otlp_image = self::common::build_otlp_image().await?;
-    otlp_image
-        .with_exposed_port(ContainerPort::Tcp(4318))
-        // Use a short fixed wait; test will poll the mock collector endpoint for received payloads
-        .with_wait_for(WaitFor::seconds(2))
-        .with_network(network)
-        .with_hostname("otlp")
-        .start()
-        .await
+    use std::time::Duration;
+
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        let otlp_image = self::common::build_otlp_image().await?;
+        let start_res = otlp_image
+            .with_exposed_port(ContainerPort::Tcp(4318))
+            // short fixed wait; test will poll the mock collector endpoint for received payloads
+            .with_wait_for(WaitFor::seconds(2))
+            .with_network(network)
+            .with_hostname("otlp")
+            .start()
+            .await;
+
+        match start_res {
+            Ok(container) => return Ok(container),
+            Err(err) => {
+                if attempts >= 3 {
+                    return Err(err);
+                }
+                eprintln!("otlp container start attempt {} failed: {:?}, retrying...", attempts, err);
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
 }
 
 #[tokio::test]
