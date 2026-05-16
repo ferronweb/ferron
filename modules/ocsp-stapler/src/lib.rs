@@ -9,6 +9,8 @@
 
 use std::sync::Arc;
 
+mod background;
+
 use ferron_core::{loader::ModuleLoader, log_debug, registry::Registry, Module};
 use ferron_observability::build_composite_sink;
 
@@ -32,8 +34,19 @@ impl Module for OcspStaplerModule {
         // Configure the event sink for the OCSP service before initialization
         ferron_ocsp::set_event_sink(self.event_sink.clone());
 
-        match ferron_ocsp::init_ocsp_service(runtime) {
-            Ok(()) => log_debug!("OCSP stapling service initialized"),
+        // New flow: take the startup pieces from the types crate and spawn the
+        // OCSP background task from this module so heavy deps live here.
+        match ferron_ocsp::take_ocsp_startup_state() {
+            Ok((receiver, cache, cancel_token, event_sink)) => {
+                // Spawn the module-owned background task on the secondary runtime
+                runtime.spawn_secondary_task(crate::background::background_ocsp_task(
+                    receiver,
+                    cache,
+                    cancel_token,
+                    event_sink,
+                ));
+                log_debug!("OCSP stapling service initialized (module-owned task)");
+            }
             Err(ferron_ocsp::AlreadyInitialized) => {
                 log_debug!("OCSP stapling service already running (reusing existing instance)")
             }

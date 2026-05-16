@@ -27,30 +27,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::Context as _;
-use ferron_observability::{
-    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
-};
-use hyper::body::Bytes;
-use hyper::Request;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
-use num_bigint::BigInt;
+use ferron_observability::CompositeEventSink;
 use parking_lot::RwLock;
-use rasn::prelude::*;
-use rasn_ocsp::{
-    BasicOcspResponse, CertId, OcspRequest, OcspResponse, OcspResponseStatus,
-    Request as RasnOcspRequest, TbsRequest,
-};
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
-use sha1::{Digest, Sha1};
-use sha2::Sha256;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use x509_parser::prelude::*;
 
 // Type alias for the OCSP cache to reduce type complexity
 type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Arc<CertifiedKey>>>>>;
@@ -120,22 +103,16 @@ pub fn init_ocsp_service(
 ) -> Result<(), AlreadyInitialized> {
     let state = get_or_init_global();
 
-    // Take the receiver — if already taken, service was already started
-    let receiver = state
-        .receiver
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or(AlreadyInitialized)?;
-
     let event_sink = state.event_sink.lock().clone();
 
-    runtime.spawn_secondary_task(background_ocsp_task(
-        receiver,
-        state.cache.clone(),
-        state.cancel_token.clone(),
-        event_sink,
-    ));
+    // Do not spawn the background task from the types crate. The module
+    // `ocsp-stapler` should call `take_ocsp_startup_state()` and spawn the
+    // task so heavy runtime dependencies live in the module crate. Return
+    // `Err(AlreadyInitialized)` if the receiver has already been taken.
+    let receiver_present = state.receiver.lock().unwrap().is_some();
+    if !receiver_present {
+        return Err(AlreadyInitialized);
+    }
 
     Ok(())
 }
