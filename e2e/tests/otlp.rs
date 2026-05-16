@@ -41,9 +41,8 @@ async fn create_otlp_container(
     let otlp_image = self::common::build_otlp_image().await?;
     otlp_image
         .with_exposed_port(ContainerPort::Tcp(4318))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/ready").with_port(ContainerPort::Tcp(4318)).with_response_matcher(|_| true),
-        )))
+        // Use a short fixed wait; test will poll the mock collector endpoint for received payloads
+        .with_wait_for(WaitFor::seconds(2))
         .with_network(network)
         .with_hostname("otlp")
         .start()
