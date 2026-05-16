@@ -130,11 +130,7 @@ If you were previously using manual certificates for localhost development, you 
 ```ferron
 # Before: manual certificates
 localhost:443 {
-    tls {
-        provider manual
-        cert "/path/to/localhost.crt"
-        key "/path/to/localhost.key"
-    }
+    tls /path/to/localhost.crt /path/to/localhost.key
 }
 
 # After: automatic local provider

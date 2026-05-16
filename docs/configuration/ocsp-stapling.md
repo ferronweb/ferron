@@ -17,11 +17,7 @@ OCSP stapling is **enabled by default**. No configuration is required:
 
 ```ferron
 example.com {
-    tls {
-        provider manual
-        cert "cert.pem"
-        key "key.pem"
-    }
+    tls cert.pem key.pem
 }
 ```
 

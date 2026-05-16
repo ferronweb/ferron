@@ -310,11 +310,7 @@ For manual TLS, Ferron 2 used `tls cert key` while Ferron 3 uses:
 
 ```ferron
 example.com {
-    tls {
-        provider manual
-        cert /path/to/cert.pem
-        key /path/to/key.pem
-    }
+    tls /path/to/cert.pem /path/to/key.pem
 }
 ```
 
