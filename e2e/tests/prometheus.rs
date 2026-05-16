@@ -1,8 +1,11 @@
-use reqwest::header;
 use std::io::Write;
 use std::path::Path;
 
-use testcontainers::{ContainerAsync, GenericImage, ImageExt, TestcontainersError, core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy}, runners::AsyncRunner};
+use testcontainers::{
+    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    runners::AsyncRunner,
+};
 
 mod common;
 
@@ -60,10 +63,10 @@ async fn test_prometheus_metrics_exposed() {
         .as_file_mut()
         .write_all(
             r#"*:80 {
-  root \"/var/www/ferron\"
+  root "/var/www/ferron"
   observability {
     provider prometheus
-    endpoint_listen \"0.0.0.0:8889\"
+    endpoint_listen "0.0.0.0:8889"
   }
 }
 "#
@@ -103,7 +106,11 @@ async fn test_prometheus_metrics_exposed() {
         if let Ok(resp) = client.get(&metrics_url).send().await {
             if resp.status().is_success() {
                 if let Ok(body) = resp.text().await {
-                    if !body.trim().is_empty() && (body.contains("ferron") || body.contains("http_server") || body.contains("request")) {
+                    if !body.trim().is_empty()
+                        && (body.contains("ferron")
+                            || body.contains("http_server")
+                            || body.contains("request"))
+                    {
                         found = true;
                         break;
                     }

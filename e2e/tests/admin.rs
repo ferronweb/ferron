@@ -1,9 +1,12 @@
-use axum::http::StatusCode;
-use reqwest::header;
+use reqwest::StatusCode;
 use std::io::Write;
 use std::path::Path;
 
-use testcontainers::{ContainerAsync, GenericImage, ImageExt, TestcontainersError, core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy}, runners::AsyncRunner};
+use testcontainers::{
+    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    runners::AsyncRunner,
+};
 
 mod common;
 
@@ -61,7 +64,7 @@ async fn test_admin_status_and_config() {
         .write_all(
             r#"{
   admin {
-    listen \"0.0.0.0:8081\"
+    listen "0.0.0.0:8081"
     health true
     status true
     config true
@@ -69,7 +72,7 @@ async fn test_admin_status_and_config() {
   }
 }
 *:80 {
-  root \"/var/www/ferron\"
+  root "/var/www/ferron"
 }
 "#
             .as_bytes(),
@@ -127,7 +130,10 @@ async fn test_admin_status_and_config() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let j: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(j.get("status").and_then(|v| v.as_str()), Some("reload_initiated"));
+    assert_eq!(
+        j.get("status").and_then(|v| v.as_str()),
+        Some("reload_initiated")
+    );
 
     container.stop().await.unwrap();
 }
