@@ -2,8 +2,8 @@
 
 use arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
-use std::sync::{atomic::Ordering, Arc};
 use std::sync::atomic::AtomicUsize;
+use std::sync::{atomic::Ordering, Arc};
 use std::thread;
 
 use ferron_http_ratelimit::registry::TokenBucketRegistry;
@@ -39,11 +39,18 @@ fuzz_target!(|data: &[u8]| {
     let ttl_secs = 60u64;
     let max_buckets = std::cmp::max(10, num_keys * 2);
 
-    let registry = Arc::new(TokenBucketRegistry::new(capacity, refill_rate, ttl_secs, max_buckets));
+    let registry = Arc::new(TokenBucketRegistry::new(
+        capacity,
+        refill_rate,
+        ttl_secs,
+        max_buckets,
+    ));
 
     // Prepare keys and a shared counter for successful consumes per key.
     let keys: Vec<String> = (0..num_keys).map(|i| format!("key-{}", i)).collect();
-    let successes: Vec<Arc<AtomicUsize>> = (0..num_keys).map(|_| Arc::new(AtomicUsize::new(0))).collect();
+    let successes: Vec<Arc<AtomicUsize>> = (0..num_keys)
+        .map(|_| Arc::new(AtomicUsize::new(0)))
+        .collect();
 
     // Precompute operations (each op is a key index). If input runs out, defaults are used.
     let mut ops = Vec::with_capacity(num_ops);

@@ -100,12 +100,23 @@ impl TokenBucketRegistry {
             return None;
         }
 
-        // Create the new bucket
-        let bucket = ConcurrentTokenBucket::new(self.capacity, self.refill_rate);
-        let entry = BucketEntry::new(bucket.clone());
-        self.buckets.insert(key.to_string(), entry);
-
-        Some(bucket)
+        // Create the new bucket (if not inserted by another thread in the meantime)
+        let bucket_entry = self.buckets.entry(key.to_string());
+        match bucket_entry {
+            dashmap::mapref::entry::Entry::Occupied(entry) => {
+                // Another thread created it while we were checking capacity
+                let entry = entry.get();
+                entry.touch();
+                Some(entry.bucket.clone())
+            }
+            dashmap::mapref::entry::Entry::Vacant(vacant) => {
+                // We can create a new bucket
+                let bucket = ConcurrentTokenBucket::new(self.capacity, self.refill_rate);
+                let entry = BucketEntry::new(bucket.clone());
+                vacant.insert(entry);
+                Some(bucket)
+            }
+        }
     }
 
     /// Evict stale buckets that haven't been accessed within the TTL window.
