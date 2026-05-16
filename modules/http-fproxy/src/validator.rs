@@ -134,6 +134,9 @@ fn validate_bool(
     if let Some(entries) = block.directives.get(name) {
         used.insert(name.to_string());
         for e in entries {
+            if e.args.is_empty() {
+                continue; // allow empty args (treat as true)
+            }
             if e.args.first().and_then(|v| v.as_boolean()).is_none() {
                 return Err(format!("Invalid `{name}` — expected a boolean").into());
             }
