@@ -3,7 +3,7 @@ title: "Configuration: OTLP observability"
 description: "OpenTelemetry Protocol (OTLP) export configuration for logs, metrics, and traces."
 ---
 
-This page documents the OTLP (OpenTelemetry Protocol) observability configuration for Ferron. The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors, enabling integration with modern observability platforms like Jaeger, Zipkin, Prometheus, and commercial APM solutions.
+This page documents the OTLP (OpenTelemetry Protocol) observability configuration for Ferron. The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors, allowing integration with modern observability platforms such as Jaeger, Loki, Prometheus, and commercial APM solutions.
 
 ## Directives
 
@@ -141,32 +141,11 @@ example.com {
 
 ## Protocol options
 
-### gRPC protocol
+Ferron supports three OTLP protocols for exporting signals:
 
-The `grpc` protocol uses gRPC for efficient binary communication:
-
-- **Endpoint format** - typically `host:port` (no path)
-- **Example** - `"https://collector:4317"`
-- **Best for** - high-volume production environments
-- **Authorization** - passed as gRPC metadata
-
-### HTTP/protobuf protocol
-
-The `http/protobuf` protocol uses HTTP with Protocol Buffers encoding:
-
-- **Endpoint format** - full URL with path
-- **Example** - `"https://collector:4318/v1/metrics"`
-- **Best for** - compatibility with HTTP-based collectors
-- **Authorization** - passed as HTTP `Authorization` header
-
-### HTTP/json protocol
-
-The `http/json` protocol uses HTTP with JSON encoding:
-
-- **Endpoint format** - full URL with path
-- **Example** - `"https://collector:4318/v1/metrics"`
-- **Best for** - debugging and development
-- **Authorization** - passed as HTTP `Authorization` header
+- `grpc` - gRPC protocol for efficient binary communication, recommended for production environments
+- `http/protobuf` - HTTP with Protocol Buffers encoding, recommended for compatibility with HTTP-based collectors
+- `http/json` - HTTP with JSON encoding, recommended for debugging and development
 
 ## Signal correlation
 
@@ -183,19 +162,9 @@ Ferron automatically:
 
 Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate metrics using their semantic attributes, resource attributes, and timestamps instead of expecting a metric data point to join directly to a single trace.
 
-### Example trace flow
-
-```text
-Request → Ferron (creates ferron.request span) → OTLP Collector
-    ↓
-Logs / access logs (trace_id + span_id) → OTLP Collector
-    ↓
-Metrics (semantic attributes) → OTLP Collector
-    ↓
-Traces (trace_id) → OTLP Collector
-```
-
 ## Integration with observability platforms
+
+Ferron supports integration with various observability platforms via OTLP. Below are some example configurations for popular platforms.
 
 ### Jaeger
 
@@ -259,65 +228,16 @@ Most commercial APM solutions support OTLP:
 - **Honeycomb** - OTLP-compatible endpoint
 - **Grafana Cloud** - OTLP-compatible endpoint
 
-## Performance considerations
-
-### Protocol choice
-
-- **gRPC** - best performance, lowest overhead
-- **HTTP/protobuf** - good balance of performance and compatibility
-- **HTTP/json** - highest overhead, best for debugging
-
-### Batch size and intervals
-
-OTLP batching is handled by the collector. For high-volume sites:
-
-- Use gRPC protocol
-- Configure collector batch processor appropriately
-- Monitor export latency
-
-### Network considerations
-
-- **Local collectors** - low latency, high reliability
-- **Remote collectors** - consider connection pooling and retries
-- **TLS overhead** - use `no_verify` cautiously in development only
-
 ## Notes and troubleshooting
 
-### Troubleshooting
-
-### Connection issues
-
-- Verify collector endpoints are reachable: `curl -v https://collector:4317`
-- Check firewall rules allow outbound connections
-- Test with `no_verify true` temporarily to rule out TLS issues
-
-### Notes
-
-- **TLS certificate verification** - disabling with `no_verify true` should only be used for development or testing with self-signed certificates.
+- **TLS certificate verification** - disabling with `no_verify` should only be used for development or testing with self-signed certificates.
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
 - **Endpoint paths** - HTTP endpoints require full paths (e.g., `/v1/metrics`), while gRPC typically uses just the port.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
+- **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
-### Authentication problems
-
-- Verify authorization tokens/secrets are correct
-- Check if the collector expects `Bearer` prefix in authorization
-- Test with simple endpoints first
-
-### Performance problems
-
-- Monitor export queue length in metrics
-- Consider reducing log volume or sampling traces
-- Check collector resource usage
-
-### Missing data
-
-- Verify signal types are properly configured
-- Check that endpoints are correct (ports, paths)
-- Ensure service_name matches expected values
-
-### See also
+## See also
 
 - [Observability and logging](/docs/v3/configuration/observability-logging) for general observability configuration
 - [Prometheus metrics](/docs/v3/configuration/observability-prometheus) for native Prometheus metrics export

@@ -114,17 +114,6 @@ Notes:
 - The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
 - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
-## Feature flags
-
-The `tls-manual` crate enables the following features by default:
-
-| Feature | Description |
-|---------|-------------|
-| `native-certs` | Enables `client_auth_ca system` via `rustls-native-certs` |
-| `webpki-roots` | Enables `client_auth_ca webpki` via `webpki-roots` |
-
-If you are building a custom deployment without one of these features, the corresponding `client_auth_ca` mode will return an error at runtime.
-
 ## Security considerations
 
 - Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`) — they are simpler and avoid known TLS 1.2 weaknesses.
@@ -140,10 +129,6 @@ The `min_version` or `max_version` value is not recognized. Ensure you use exact
 ### "Maximum TLS version is older than minimum TLS version"
 
 `max_version` must be equal to or newer than `min_version`.
-
-### "native-certs feature not enabled" / "webpki-roots feature not enabled"
-
-The `client_auth_ca` value requires a feature that is not compiled in. Enable the appropriate feature in your `Cargo.toml` or change the `client_auth_ca` value.
 
 ### Client certificate handshake failure
 

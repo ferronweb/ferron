@@ -19,7 +19,7 @@ DNS providers are used by the `tls-acme` module to solve the **DNS-01 ACME chall
 }
 ```
 
-All DNS provider implementations are part of the `dns-stalwart` module.
+All DNS provider implementations are currently part of the `dns-stalwart` module.
 
 ## Providers
 

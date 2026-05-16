@@ -3,7 +3,7 @@ title: "Configuration: URL rewriting"
 description: "The `rewrite` directive for transforming request URLs using regular expression patterns."
 ---
 
-This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early in the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
+This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early fin the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
 
 ## Directives
 
@@ -101,7 +101,7 @@ The regular expression engine used is [`fancy-regex`](https://crates.io/crates/f
 
 ## URL sanitation interaction
 
-When URL sanitization is enabled (the default), dangerous path sequences like `./docs/v3/configuration/` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./routing-url-processing)).
+When URL sanitization is enabled (the default), dangerous path sequences like `/../` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./routing-url-processing)).
 
 ## Pipeline position
 
