@@ -3,9 +3,12 @@
 mod config;
 mod status;
 
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use ferron_core::config::ServerConfiguration;
+use tokio_util::sync::CancellationToken;
 
 use self::status::StatusResponse;
 
@@ -49,7 +52,9 @@ pub async fn config_handler(State(state): State<AdminState>) -> axum::Json<serde
 pub async fn reload_handler(
     State(_state): State<AdminState>,
 ) -> (StatusCode, axum::Json<serde_json::Value>) {
-    ferron_core::shutdown::RELOAD_TOKEN.load().cancel();
+    ferron_core::shutdown::RELOAD_TOKEN
+        .swap(Arc::new(CancellationToken::new()))
+        .cancel();
     (
         StatusCode::OK,
         axum::Json(serde_json::json!({ "status": "reload_initiated" })),
