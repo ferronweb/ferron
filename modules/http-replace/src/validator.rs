@@ -47,6 +47,10 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
                 if let Some(children) = &entry.children {
                     if let Some(once_entries) = children.directives.get("once") {
                         for once_entry in once_entries {
+                            if once_entry.args.is_empty() {
+                                // `once` can be specified without arguments (defaults to true)
+                                continue;
+                            }
                             if once_entry.args.len() != 1 {
                                 return Err(Box::new(std::io::Error::new(
                                     std::io::ErrorKind::InvalidInput,
@@ -72,6 +76,10 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
         // Validate `replace_last_modified` directives
         if let Some(entries) = config.directives.get("replace_last_modified") {
             for entry in entries {
+                if entry.args.is_empty() {
+                    // No arguments means default to true
+                    continue;
+                }
                 if entry.args.len() != 1 {
                     return Err(Box::new(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
