@@ -31,6 +31,7 @@
 - `io_uring` (on Linux) couldn't be disabled via the web server configuration.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 - Misconfigured forwarded authentication could lead to completely bypassing the authentication.
+- Reverse proxy boolean subdirectives with empty values (implying `true`) weren't effective.
 
 ## Ferron 3.0.0-beta.1
 
