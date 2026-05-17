@@ -6,7 +6,7 @@ Usage:
       ./run_soak.sh
 
   - Customize duration and concurrency:
-      DURATION=6h CONCURRENCY=100 ./run_soak.sh
+      DURATION=360m CONCURRENCY=100 ./run_soak.sh
 
   - Run reload hammer (sends HUP to container main process):
       cd e2e/soak

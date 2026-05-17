@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-DURATION=${DURATION:-1h}
+DURATION=${DURATION:-60m}
 CONCURRENCY=${CONCURRENCY:-50}
 SLEEP_BEFORE_START=${SLEEP_BEFORE_START:-5}
+
+# Prepare ferron config for chaos (overwrites ferron-test.conf used by compose)
+cp -v ferron-test.conf .ferron-test.conf
 
 echo "Building and starting ferron (docker-compose)..."
 docker-compose -f docker-compose.yml up --build -d ferron

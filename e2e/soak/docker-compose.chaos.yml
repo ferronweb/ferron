@@ -1,0 +1,26 @@
+services:
+  bad-backend:
+    image: python:3.11-slim
+    container_name: bad-backend
+    volumes:
+      - ./chaos:/opt/chaos
+    command: ["python", "/opt/chaos/bad_backend.py", "--port", "8000"]
+    networks:
+      - ferron-soak
+
+  otlp-hang:
+    image: python:3.11-slim
+    container_name: otlp-hang
+    volumes:
+      - ./chaos:/opt/chaos
+    command: ["python", "/opt/chaos/otlp_hang.py", "--port", "4318"]
+    networks:
+      - ferron-soak
+    ports:
+      - "4318:4318"
+    profiles:
+      - otlp-hang
+
+networks:
+  ferron-soak:
+    driver: bridge

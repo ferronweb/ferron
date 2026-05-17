@@ -24,6 +24,7 @@ Run commands from the repository root. The [`Justfile`](Justfile) provides conve
 - `just package-rpm` — packages as an RPM package.
 - `just installer` — builds the Linux installer.
 - `just soak` — runs the soak test suite.
+- `just chaos` — runs the chaos harness for soak testing.
 
 ### Cargo commands
 
