@@ -1,7 +1,7 @@
 services:
   ferron:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile.alpine
     image: e2e-soak-ferron
     container_name: ferron

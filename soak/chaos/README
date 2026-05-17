@@ -7,10 +7,10 @@ Files:
 - bad_backend.py: a small TCP/HTTP server that can simulate slow backends, partial headers, malformed chunked encoding, and abrupt connection closes.
 - run_chaos.sh: orchestrates a chaos run by bringing up services and exercising scenarios.
 
-Usage (from e2e/soak):
+Usage (from soak):
 
   # Replace ferron config and start chaos compose
-  cd e2e/soak
+  cd soak
   ./chaos/run_chaos.sh
 
 Scenarios available on the bad backend (http://bad-backend:8000):

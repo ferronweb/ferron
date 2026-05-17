@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Prepare ferron config for chaos (overwrites ferron-test.conf used by compose)
-cp -v ferron-chaos.conf ferron-test.conf
+cp -v ferron-chaos.conf .ferron-test.conf
 
 # Start ferron + collector + chaos services
 docker-compose -f docker-compose.yml -f docker-compose.chaos.yml up --build -d
@@ -31,7 +31,6 @@ IFS=',' read -ra SC_ARR <<< "$SCENARIOS"
 
 PIDS=()
 LOGS_DIR="./chaos-logs"
-LOGS_DIR_DISPLAY="../chaos-logs"
 mkdir -p "$LOGS_DIR"
 
 for s in "${SC_ARR[@]}"; do
@@ -85,5 +84,5 @@ done
 echo "Chaos run complete; tailing ferron logs"
 docker-compose -f docker-compose.yml -f docker-compose.chaos.yml logs --no-color ferron | tail -n 200
 
-echo "Logs for scenarios are in $LOGS_DIR_DISPLAY"
+echo "Logs for scenarios are in $LOGS_DIR"
 echo "To stop and remove containers: docker-compose -f docker-compose.yml -f docker-compose.chaos.yml down"

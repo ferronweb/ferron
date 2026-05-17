@@ -49,11 +49,11 @@ installer:
 # Run the soak test with specified duration and concurrency
 [unix]
 soak duration="60m" concurrency="50":
-    cd e2e/soak
+    cd soak
     DURATION={{ duration }} CONCURRENCY={{ concurrency }} ./run_soak.sh
 
 # Run the chaos test with specified duration and concurrency
 [unix]
 chaos duration="60m" concurrency="50":
-    cd e2e/soak/chaos
+    cd soak/chaos
     DURATION={{ duration }} CONCURRENCY={{ concurrency }} ./run_chaos.sh

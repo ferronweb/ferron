@@ -38,7 +38,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run soak test
-        working-directory: e2e/soak
+        working-directory: soak
         run: |
           DURATION="${{ github.event.inputs.duration || '5m' }}" \
           CONCURRENCY="${{ github.event.inputs.concurrency || '50' }}" \
@@ -47,7 +47,7 @@ jobs:
       - name: Collect logs and metrics
         if: always()
         run: |
-          docker compose -f e2e/soak/docker-compose.yml logs > /tmp/soak-logs.txt 2>&1 || true
+          docker compose -f soak/docker-compose.yml logs > /tmp/soak-logs.txt 2>&1 || true
           mkdir -p soak-artifacts
           cp /tmp/soak-logs.txt soak-artifacts/ || true
 
@@ -61,5 +61,5 @@ jobs:
 
       - name: Cleanup
         if: always()
-        working-directory: e2e/soak
+        working-directory: soak
         run: docker compose down || true

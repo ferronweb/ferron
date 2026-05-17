@@ -2,14 +2,14 @@ Soak test scaffolding for Ferron
 
 Usage:
   - Build and run ferron and a load generator:
-      cd e2e/soak
+      cd soak
       ./run_soak.sh
 
   - Customize duration and concurrency:
       DURATION=360m CONCURRENCY=100 ./run_soak.sh
 
   - Run reload hammer (sends HUP to container main process):
-      cd e2e/soak
+      cd soak
       ./reload_hammer.sh
 
 Notes:
