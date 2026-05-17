@@ -630,65 +630,76 @@ fn load_modules(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = None;
+    let watcher = std::rc::Rc::new(std::cell::RefCell::new(None));
     ferron_core::registry::GLOBAL_REGISTRY
         .set(registry.clone())
         .ok();
 
     loop {
-        let (config, mut watcher) = config_adapter
-            .adapt(&config_adapter_params)
-            .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
-        let config = Arc::new(config);
-
-        let mut modules = Vec::new();
-
-        // Configuration validation
-        run_configuration_validators(
+        let (runtime, mut watcher_obtained) = match load_modules_config(
+            config_adapter,
+            config_adapter_params.clone(),
             &mut loaders,
-            &config,
             &global_validator_registry,
             &per_protocol_validator_registry,
-        )?;
+            registry.clone(),
+        ) {
+            Ok((config, watcher, modules)) => {
+                let mut layered_config = LayeredConfiguration::new();
+                layered_config.add_layer(config.global_config.clone());
+                let io_uring_enabled = layered_config
+                    .get_entry("runtime", false)
+                    .and_then(|d| d.children.as_ref().map(|c| c.get_flag("io_uring")))
+                    .unwrap_or(true);
 
-        let mut layered_config = LayeredConfiguration::new();
-        layered_config.add_layer(config.global_config.clone());
-        let io_uring_enabled = layered_config
-            .get_entry("runtime", false)
-            .and_then(|d| d.children.as_ref().map(|c| c.get_flag("io_uring")))
-            .unwrap_or(true);
+                if runtime.is_none() {
+                    runtime = Some(Runtime::new(io_uring_enabled)?);
+                }
+                let runtime = runtime
+                    .as_mut()
+                    .expect("runtime should be initialized at this point");
 
-        if runtime.is_none() {
-            runtime = Some(Runtime::new(io_uring_enabled)?);
-        }
-        let runtime = runtime
-            .as_mut()
-            .expect("runtime should be initialized at this point");
+                // Start all modules
+                for module in modules {
+                    log_debug!("Starting module: {}", module.name());
+                    module.start(runtime)?;
+                }
 
-        for loader in &mut loaders {
-            loader.register_modules(registry.clone(), &mut modules, config.clone())?;
-        }
-
-        // Start all modules
-        for module in modules {
-            log_debug!("Starting module: {}", module.name());
-            module.start(runtime)?;
-        }
+                (runtime, watcher)
+            }
+            Err(e) => {
+                if let (Some(runtime), Some(watcher)) =
+                    (runtime.as_mut(), watcher.borrow_mut().take())
+                {
+                    ferron_core::log_warn!(
+                        "Can't reload the server, \
+                        continuing to run with the previous configuration: {e}"
+                    );
+                    (runtime, watcher)
+                } else {
+                    return Err(e);
+                }
+            }
+        };
 
         // Run the runtime (check for shutdown/reload signal)
+        let watcher = watcher.clone();
         let shutdown = runtime.block_on(async move {
             let shutdown_token = SHUTDOWN_TOKEN.load();
             let reload_token = RELOAD_TOKEN.load();
-            tokio::select! {
+            let response = tokio::select! {
                 _ = shutdown_token.cancelled() => {
                     Ok(true)
                 }
                 _ = reload_token.cancelled() => {
                     Ok(false)
                 }
-                res = watcher.watch() => {
+                res = watcher_obtained.watch() => {
                     res.map(|_| false)
                 }
-            }
+            };
+            watcher.borrow_mut().replace(watcher_obtained);
+            response
         })?;
 
         if shutdown {
@@ -714,4 +725,44 @@ fn print_version() {
     if shadow_rs::is_debug() {
         println!("WARNING: This is a debug build. It is not recommended for production use.");
     }
+}
+
+fn load_modules_config(
+    config_adapter: &dyn ConfigurationAdapter,
+    config_adapter_params: HashMap<String, String>,
+    loaders: &mut [Box<dyn ModuleLoader>],
+    global_validator_registry: &[Box<dyn ferron_core::config::validator::ConfigurationValidator>],
+    per_protocol_validator_registry: &HashMap<
+        &'static str,
+        Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    >,
+    module_registry: Arc<Registry>,
+) -> Result<
+    (
+        Arc<ferron_core::config::ServerConfiguration>,
+        Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
+        Vec<Arc<dyn ferron_core::Module>>,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let (config, watcher) = config_adapter
+        .adapt(&config_adapter_params)
+        .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
+    let config = Arc::new(config);
+
+    let mut modules = Vec::new();
+
+    // Configuration validation
+    run_configuration_validators(
+        loaders,
+        &*config,
+        global_validator_registry,
+        per_protocol_validator_registry,
+    )?;
+
+    for loader in loaders {
+        loader.register_modules(module_registry.clone(), &mut modules, config.clone())?;
+    }
+
+    Ok((config, watcher, modules))
 }
