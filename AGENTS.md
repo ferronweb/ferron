@@ -23,6 +23,7 @@ Run commands from the repository root. The [`Justfile`](Justfile) provides conve
 - `just package-deb` — packages as a Debian package.
 - `just package-rpm` — packages as an RPM package.
 - `just installer` — builds the Linux installer.
+- `just soak` — runs the soak test suite.
 
 ### Cargo commands
 

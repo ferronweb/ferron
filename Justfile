@@ -45,3 +45,9 @@ package-windows target="":
 [unix]
 installer:
     cd installer && make
+
+# Run the soak test with specified duration and concurrency
+[unix]
+soak duration="1h" concurrency="100":
+    cd e2e/soak
+    DURATION={{ duration }} CONCURRENCY={{ concurrency }} ./run_soak.sh
