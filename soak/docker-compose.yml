@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile.alpine
     image: e2e-soak-ferron
     container_name: ferron
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:80"
       - "8889:8889"
