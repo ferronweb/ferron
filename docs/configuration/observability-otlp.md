@@ -14,15 +14,15 @@ example.com {
     observability {
         provider otlp
 
-        logs "https://collector:4318/v1/Logs" {
+        logs "https://collector:4318/v1/logs" {
             protocol "http/protobuf"
         }
 
-        metrics "https://collector:4318/v1/Metrics" {
+        metrics "https://collector:4318/v1/metrics" {
             protocol "http/protobuf"
         }
 
-        traces "https://collector:4317" {
+        traces "https://collector:4317/v1/traces" {
             protocol "grpc"
         }
 
@@ -65,7 +65,7 @@ example.com {
         provider otlp
         service_name "my-ferron-instance"
 
-        traces "https://otlp-collector:4317" {
+        traces "https://otlp-collector:4317/v1/traces" {
             protocol "grpc"
         }
     }
@@ -90,7 +90,7 @@ example.com {
             protocol "http/json"
         }
 
-        traces "https://traces-collector:4317" {
+        traces "https://traces-collector:4317/v1/traces" {
             protocol "grpc"
         }
     }
@@ -115,7 +115,7 @@ example.com {
             protocol "http/protobuf"
         }
 
-        traces "http://localhost:4317" {
+        traces "http://localhost:4317/v1/traces" {
             protocol "grpc"
         }
     }
@@ -132,7 +132,7 @@ example.com {
         service_name "ferron-dev"
         no_verify
 
-        traces "https://localhost:4317" {
+        traces "https://localhost:4317/v1/traces" {
             protocol "grpc"
         }
     }
@@ -232,7 +232,6 @@ Most commercial APM solutions support OTLP:
 
 - **TLS certificate verification** - disabling with `no_verify` should only be used for development or testing with self-signed certificates.
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
-- **Endpoint paths** - HTTP endpoints require full paths (e.g., `/v1/metrics`), while gRPC typically uses just the port.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
