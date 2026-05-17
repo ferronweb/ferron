@@ -1,6 +1,6 @@
 services:
   bad-backend:
-    image: python:3.11-slim
+    image: python:3.14-slim
     container_name: bad-backend
     volumes:
       - ./chaos:/opt/chaos
@@ -9,7 +9,7 @@ services:
       - ferron-soak
 
   otlp-hang:
-    image: python:3.11-slim
+    image: python:3.14-slim
     container_name: otlp-hang
     volumes:
       - ./chaos:/opt/chaos
