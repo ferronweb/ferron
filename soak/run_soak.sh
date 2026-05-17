@@ -9,15 +9,15 @@ SLEEP_BEFORE_START=${SLEEP_BEFORE_START:-5}
 cp -v ferron-test.conf .ferron-test.conf
 
 echo "Building and starting ferron (docker-compose)..."
-docker-compose -f docker-compose.yml up --build -d ferron
+docker compose -f docker-compose.yml up --build -d ferron
 
 echo "Waiting ${SLEEP_BEFORE_START}s for ferron to start..."
 sleep "${SLEEP_BEFORE_START}"
 
 echo "Starting load generator (duration=${DURATION}, concurrency=${CONCURRENCY})..."
-docker-compose run --rm loadgen -z "${DURATION}" -c "${CONCURRENCY}" http://ferron/
+docker compose run --rm loadgen -z "${DURATION}" -c "${CONCURRENCY}" http://ferron/
 
 echo "Soak finished; last ferron logs:"
-docker-compose logs --no-color ferron | tail -n 200
+docker compose logs --no-color ferron | tail -n 200
 
 echo "To stop and remove containers: docker compose down"

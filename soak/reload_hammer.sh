@@ -8,7 +8,7 @@ echo "Reload hammer: sending ${N} HUP signals to ferron with interval ${INTERVAL
 for i in $(seq 1 "${N}"); do
   timestamp=$(date -Iseconds)
   echo "[${timestamp}] sending HUP ($i/${N})"
-  docker kill --signal=HUP ferron || true
+  docker compose kill --signal=HUP ferron || true
   sleep "${INTERVAL}"
 done
 echo "Done."
