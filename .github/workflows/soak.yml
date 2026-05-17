@@ -1,0 +1,91 @@
+name: Soak test (smoke)
+
+on:
+  push:
+    branches:
+      - "develop-3.x"
+    paths:
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "e2e/soak/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/soak.yml"
+  pull_request:
+    branches:
+      - "develop-3.x"
+    paths:
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "e2e/soak/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/soak.yml"
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: "Soak test duration (e.g., 5m, 1h)"
+        required: false
+        default: "5m"
+      concurrency:
+        description: "Load generator concurrency"
+        required: false
+        default: "50"
+
+jobs:
+  soak-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v2
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: Dockerfile.alpine
+          load: true
+          tags: e2e-soak-ferron:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run soak test
+        working-directory: e2e/soak
+        run: |
+          DURATION="${{ github.event.inputs.duration || '5m' }}" \
+          CONCURRENCY="${{ github.event.inputs.concurrency || '50' }}" \
+          ./run_soak.sh
+
+      - name: Collect logs and metrics
+        if: always()
+        run: |
+          docker compose -f e2e/soak/docker-compose.yml logs > /tmp/soak-logs.txt 2>&1 || true
+          mkdir -p soak-artifacts
+          cp /tmp/soak-logs.txt soak-artifacts/ || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-test-artifacts
+          path: soak-artifacts/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        working-directory: e2e/soak
+        run: docker compose down || true
