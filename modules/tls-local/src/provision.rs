@@ -64,13 +64,27 @@ pub fn provision_local_cert(
     }
 
     // Need to generate/load CA
-    let (ca_params, ca_key_pair) = get_or_generate_ca(cache)?;
+    let (ca_params, ca_key_pair) = get_or_generate_ca(cache)
+        .map_err(|e| anyhow::anyhow!("CA certificate generation failed: {e}"))?;
     ferron_core::log_info!(
         "Local CA certificate can be found in \"{}\". Import the CA certificate into your \
     system trust store to trust the generated certificates.",
         cache.ca_path().display()
     );
 
+    Ok(
+        generate_leaf_cert(cache, ca_params, ca_key_pair, san_set, san_hash)
+            .map_err(|e| anyhow::anyhow!("Leaf certificate generation failed: {e}"))?,
+    )
+}
+
+fn generate_leaf_cert(
+    cache: &LocalTlsCache,
+    ca_params: CertificateParams,
+    ca_key_pair: KeyPair,
+    san_set: BTreeSet<String>,
+    san_hash: String,
+) -> Result<Arc<CertifiedKey>, Box<dyn std::error::Error>> {
     // Generate leaf cert
     let mut leaf_cert_params = CertificateParams::default();
     leaf_cert_params.not_before = OffsetDateTime::now_utc().saturating_sub(Duration::days(1));
@@ -98,7 +112,12 @@ pub fn provision_local_cert(
     let key_pem = leaf_key_pair.serialize_pem();
 
     // Cache the leaf cert
-    cache.save_leaf(&san_hash, &cert_pem, &key_pem)?;
+    if let Err(e) = cache.save_leaf(&san_hash, &cert_pem, &key_pem) {
+        ferron_core::log_warn!(
+            "Failed to save leaf certificate and key to cache \
+            (they will be regenerated on restart): {e}"
+        );
+    }
 
     let certified_key = parse_certified_key(&cert_pem, &key_pem)?;
     Ok(Arc::new(certified_key))
@@ -162,7 +181,12 @@ fn get_or_generate_ca(
     let cert_pem = ca_cert.pem();
     let key_pem = key_pair.serialize_pem();
 
-    cache.save_ca(&cert_pem, &key_pem)?;
+    if let Err(e) = cache.save_ca(&cert_pem, &key_pem) {
+        ferron_core::log_warn!(
+            "Failed to save CA certificate and key to cache \
+            (they will be regenerated on restart): {e}"
+        );
+    }
 
     Ok((params, key_pair))
 }

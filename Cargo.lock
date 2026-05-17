@@ -2010,6 +2010,7 @@ dependencies = [
 name = "ferron-tls-local"
 version = "3.0.0-beta.1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "dirs",
  "ferron-core",
