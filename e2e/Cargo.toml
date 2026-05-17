@@ -126,3 +126,7 @@ path = "tests/otlp.rs"
 [[test]]
 name = "fcgi_errors"
 path = "tests/fcgi_errors.rs"
+
+[[test]]
+name = "security"
+path = "tests/security/mod.rs"
