@@ -1,34 +1,8 @@
-name: Soak test (smoke)
+name: Soak test
 
 on:
-  push:
-    branches:
-      - "develop-3.x"
-    paths:
-      - ".dockerignore"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "bin/**"
-      - "core/**"
-      - "e2e/soak/**"
-      - "entrypoint/**"
-      - "modules/**"
-      - "types/**"
-      - ".github/workflows/soak.yml"
-  pull_request:
-    branches:
-      - "develop-3.x"
-    paths:
-      - ".dockerignore"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "bin/**"
-      - "core/**"
-      - "e2e/soak/**"
-      - "entrypoint/**"
-      - "modules/**"
-      - "types/**"
-      - ".github/workflows/soak.yml"
+  schedule:
+    - cron: "0 3 * * *" # daily at 03:00 UTC
   workflow_dispatch:
     inputs:
       duration:
