@@ -727,6 +727,7 @@ fn print_version() {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn load_modules_config(
     config_adapter: &dyn ConfigurationAdapter,
     config_adapter_params: HashMap<String, String>,
@@ -755,7 +756,7 @@ fn load_modules_config(
     // Configuration validation
     run_configuration_validators(
         loaders,
-        &*config,
+        &config,
         global_validator_registry,
         per_protocol_validator_registry,
     )?;
