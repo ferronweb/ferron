@@ -89,7 +89,8 @@ example.com {
 2. The TLS provider loads or obtains certificates
 3. The certificate is **preloaded** into the OCSP service immediately
 4. The background task fetches an OCSP response from the CA's responder
-5. The response is cached and attached to subsequent TLS handshakes
+5. The response is verified to ensure it is valid and matches the certificate
+6. The response is cached and attached to subsequent TLS handshakes
 
 ### Refresh cycle
 
@@ -104,6 +105,44 @@ The background task maintains fresh OCSP responses:
 
 Certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633) are automatically detected. Must-Staple certificates **require** a stapled OCSP response — clients that enforce Must-Staple will reject connections without one. Preloading ensures the response is fetched immediately on startup.
 
+## Response verification
+
+When an OCSP response is fetched, the OCSP stapler performs several verification checks before caching and stapling it:
+
+### Signature verification
+
+The OCSP response is signed by the CA (or an intermediate CA). The server verifies this signature using the issuer certificate's public key. Supported signature algorithms:
+
+| Algorithm | OID | Notes |
+|-----------|-----|-------|
+| RSA-PKCS1-SHA256 | `1.2.840.113549.1.1.11` | Default for most CA-issued certificates |
+| RSA-PKCS1-SHA384 | `1.2.840.113549.1.1.12` | Stronger hash |
+| RSA-PKCS1-SHA512 | `1.2.840.113549.1.1.13` | Strongest hash |
+| RSA-PKCS1-SHA1 | `1.2.840.113549.1.1.5` | Legacy — deprecated |
+
+If the issuer certificate is not directly available, the OCSP response may include intermediate certificates in its `certs` field. The server tries these as fallbacks for signature verification.
+
+### Issuer name and key hash verification
+
+The OCSP response contains hashes of the issuer certificate's subject and public key. The server verifies these match the actual issuer certificate to prevent replay attacks where a valid OCSP response for one certificate is presented for another.
+
+### Serial number verification
+
+The server verifies that the serial number in the OCSP response matches the leaf certificate's serial number. This prevents an attacker from reusing a valid OCSP response for a different certificate.
+
+### Hash algorithms
+
+The OCSP response specifies a hash algorithm used for the issuer name and key hashes. Supported algorithms:
+
+| Algorithm | OID |
+|-----------|-----|
+| SHA-256 | `2.16.840.1.101.3.4.2.1` |
+| SHA-384 | `2.16.840.1.101.3.4.2.2` |
+| SHA-512 | `2.16.840.1.101.3.4.2.3` |
+| SHA-1 | `1.3.14.3.2.26` |
+
+If an unsupported algorithm is encountered, the fetch fails with a verification error.
+
 ## OCSP responder URL
 
 The responder URL is extracted from the certificate's **Authority Information Access (AIA)** extension. Most CA-issued certificates include this automatically.
@@ -112,7 +151,6 @@ If no OCSP URL is found in the certificate, OCSP stapling is silently skipped fo
 
 ## Security considerations
 
-- OCSP requests are sent over **HTTPS only**. The HTTPS client uses the webpki root certificate store for server verification.
 - If the OCSP responder is unreachable, the last cached response is kept and used until a new one is fetched. However, the service does not serve responses past their `nextUpdate` time — it will keep retrying until a fresh response is obtained.
 
 ## Notes and troubleshooting
@@ -158,10 +196,6 @@ openssl s_client -connect example.com:443 -status -servername example.com </dev/
 ```
 
 You should see a `OCSP Response Status: successful` in the output.
-
-## Integration with config reload
-
-On configuration reload (SIGHUP or file change), the OCSP service is reused (not recreated), the TLS provider re-executes and preloads the new certificates, and the background task picks up new certificates from the channel. Zero downtime — old connections continue with old responses.
 
 ## See also
 

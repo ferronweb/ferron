@@ -8,7 +8,6 @@ ferron-core = { path = "../../core" }
 ferron-ocsp = { path = "../../types/ocsp" }
 ferron-observability = { path = "../../types/observability" }
 
-# Heavy runtime and parsing dependencies moved here from types/ocsp
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "tokio"] }
@@ -28,6 +27,7 @@ anyhow = "1"
 num-bigint = "0.4"
 rand = "0.10"
 tokio-util = "0.7"
-x509-parser = "0.18"
+x509-parser = { version = "0.18", features = ["verify-aws"] }
 hex = "0.4"
 chrono = "0.4.44"
+aws-lc-rs = { version = "1", features = ["bindgen"] }

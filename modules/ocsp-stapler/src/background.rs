@@ -6,10 +6,12 @@
 //! lightweight and free of networking/parsing dependencies.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
+use aws_lc_rs::signature::VerificationAlgorithm;
 use ferron_observability::{
     CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue,
@@ -28,7 +30,7 @@ use rasn_ocsp::{
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
 use sha1::{Digest, Sha1};
-use sha2::Sha256;
+use sha2::{Sha256, Sha384, Sha512};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use x509_parser::prelude::*;
@@ -99,6 +101,140 @@ fn build_https_connector() -> Result<
         .enable_http1()
         .enable_http2()
         .build())
+}
+
+/// Verify the signature on the OCSP response using the issuer's public key.
+fn verify_ocsp_signature(
+    basic_response: &BasicOcspResponse,
+    issuer_cert: &X509Certificate,
+) -> anyhow::Result<()> {
+    let spki = issuer_cert.public_key();
+    let alg = match basic_response.signature_algorithm.algorithm.deref().deref() {
+        &[1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
+        &[1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
+        &[1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
+        &[1, 2, 840, 113549, 1, 1, 5] => {
+            &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported OCSP signature algorithm OID: {}",
+                basic_response.signature_algorithm.algorithm
+            ))
+        }
+    };
+
+    let signature = basic_response.signature.as_raw_slice();
+
+    alg.verify_sig(
+        spki.subject_public_key.data.as_ref(),
+        &rasn::der::encode(&basic_response.tbs_response_data)
+            .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?,
+        signature,
+    )
+    .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?;
+
+    Ok(())
+}
+
+/// Verify OCSP signature, trying certificates in the certs field if initial verification fails.
+fn verify_ocsp_signature_with_certs_field(
+    basic_response: &BasicOcspResponse,
+    issuer_cert: &X509Certificate,
+) -> anyhow::Result<()> {
+    let Err(mut last_error) = verify_ocsp_signature(basic_response, issuer_cert) else {
+        return Ok(());
+    };
+
+    if let Some(ref certs) = basic_response.certs {
+        for cert in certs {
+            // Re-encode the cert to DER and parse with x509-parser to get
+            // an X509Certificate struct for signature verification
+            let Ok(cert_der) = rasn::der::encode(cert) else {
+                continue;
+            };
+            let Ok((_, cert)) = X509Certificate::from_der(&cert_der) else {
+                continue;
+            };
+
+            // Verify if the certificate is in fact signed by the issuer
+            if cert
+                .verify_signature(Some(issuer_cert.public_key()))
+                .is_ok()
+            {
+                let Err(new_last_error) =
+                    verify_ocsp_signature_with_certs_field(basic_response, issuer_cert)
+                else {
+                    return Ok(());
+                };
+                last_error = new_last_error;
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+/// Hash the given data using the specified hash algorithm OID.
+///
+/// This is used for computing the issuer name and key hashes in OCSP requests and responses.
+fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec<u8>> {
+    if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256.to_owned() {
+        Ok(Sha256::digest(data).to_vec())
+    } else if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA384.to_owned() {
+        Ok(Sha384::digest(data).to_vec())
+    } else if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA512.to_owned() {
+        Ok(Sha512::digest(data).to_vec())
+    } else if oid == rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1.to_owned() {
+        Ok(Sha1::digest(data).to_vec())
+    } else {
+        Err(anyhow::anyhow!(
+            "Unsupported hash algorithm OID in OCSP response: {}",
+            oid
+        ))
+    }
+}
+
+/// Verify that the SingleResponse matches the leaf and issuer certs.
+///
+/// This includes checking the issuer name and key hashes, and the serial number. This
+/// is important to prevent replay attacks where an attacker could use a valid OCSP response
+/// for a different certificate.
+fn verify_single_res(
+    single_res: &rasn_ocsp::SingleResponse,
+    leaf_cert: &X509Certificate,
+    issuer_cert: &X509Certificate,
+) -> anyhow::Result<()> {
+    // Check for issue name hash
+    if single_res.cert_id.issuer_name_hash.as_ref()
+        != hash_oid(
+            issuer_cert.subject().as_raw(),
+            single_res.cert_id.hash_algorithm.algorithm.clone(),
+        )?
+    {
+        return Err(anyhow::anyhow!(
+            "Issuer name hash mismatch in OCSP response"
+        ));
+    }
+
+    // Check for issue key hash
+    if single_res.cert_id.issuer_key_hash.as_ref()
+        != hash_oid(
+            issuer_cert.public_key().subject_public_key.data.as_ref(),
+            single_res.cert_id.hash_algorithm.algorithm.clone(),
+        )?
+    {
+        return Err(anyhow::anyhow!("Issuer key hash mismatch in OCSP response"));
+    }
+
+    // Check for serial number
+    let serial_number = &leaf_cert.tbs_certificate.serial;
+    let serial_int = BigInt::from_biguint(num_bigint::Sign::Plus, serial_number.to_owned());
+    if single_res.cert_id.serial_number != rasn::types::Integer::from(serial_int) {
+        return Err(anyhow::anyhow!("Serial number mismatch in OCSP response"));
+    }
+
+    Ok(())
 }
 
 pub async fn background_ocsp_task(
@@ -444,9 +580,13 @@ async fn fetch_ocsp_response_inner(
     let basic_response: BasicOcspResponse = rasn::der::decode(&response_bytes.response)
         .map_err(|e| anyhow::anyhow!("Failed to decode BasicOcspResponse: {e}"))?;
 
+    verify_ocsp_signature_with_certs_field(&basic_response, &issuer_cert)?;
+
     // Compute next_update across all single responses
     let mut min_next_update: Option<SystemTime> = None;
     for single_res in basic_response.tbs_response_data.responses {
+        verify_single_res(&single_res, &leaf_cert, &issuer_cert)?;
+
         let next_update = single_res.next_update.map(SystemTime::from);
         if let Some(mut nu) = next_update {
             // Safety margin: 25% of validity period + jitter
@@ -462,7 +602,7 @@ async fn fetch_ocsp_response_inner(
             min_next_update = Some(match min_next_update {
                 Some(min) if nu < min => nu,
                 None => nu,
-                _ => min_next_update.unwrap(),
+                _ => min_next_update.ok_or(anyhow::anyhow!("Failed to compute next update"))?,
             });
         }
     }

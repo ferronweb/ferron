@@ -7,9 +7,9 @@
 ### Added
 
 - A dropped-events admin metric for non-blocking observability sinks.
+- `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
-- `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 
 ### Changed
 
@@ -19,6 +19,7 @@
 - HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
 - Improved error reporting for some TLS handshake failures.
 - Improved error reporting for local automatic TLS failures.
+- OCSP responses are now verified before being cached and stapled.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
 - The web server now warns when local automatic TLS is configured but the cache directory isn't writable, instead of straight-up failing to start.
