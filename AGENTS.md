@@ -48,7 +48,7 @@ Place tests close to the code, usually in inline `#[cfg(test)]` modules. Add tes
 ## Commit & pull request guidelines
 Use Conventional Commits such as `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, and `chore:`. Keep subjects short and imperative. Pull requests should explain the change, list validation performed, and link related issues when relevant. Include screenshots only for UI or documentation work that needs visual confirmation.
 
-All notable changes should also be documented in [`CHANGELOG.md`](CHANGELOG.md) under the appropriate unreleased section. Use `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security` categories when applicable.
+All notable changes (except documentation updates) should also be documented in [`CHANGELOG.md`](CHANGELOG.md) under the appropriate unreleased section. Use `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security` categories when applicable.
 
 ## Security, configuration, and docs
 If you change configuration directives or syntax, read and update the matching pages under `docs/configuration/`. Validate config changes with `cargo run -p ferron -- validate -c ferron.conf`. Documentation should use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
