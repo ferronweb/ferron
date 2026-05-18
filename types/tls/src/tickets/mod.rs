@@ -688,10 +688,7 @@ impl CustomTicketEncryptor {
         let ciphertext = &ticket[AES_CBC_IV_LEN..ticket.len() - 32];
 
         // Verify HMAC-SHA256 (constant-time comparison)
-        let hmac_expected = hmac::sign(&self.hmac_key, &ticket[..ticket.len() - 32]);
-        if hmac_expected.as_ref() != hmac_received {
-            return None;
-        }
+        hmac::verify(&self.hmac_key, &ticket[..ticket.len() - 32], hmac_received).ok()?;
 
         // Decrypt AES-256-CBC
         let mut plaintext = ciphertext.to_vec();
