@@ -124,7 +124,9 @@ impl ForwardedAuthenticationStage {
             .method(original_request.method().clone());
 
         // Copy headers from original request to auth request
-        let headers = auth_request.headers_mut().unwrap();
+        let Some(headers) = auth_request.headers_mut() else {
+            return Err("Failed to get headers for auth request".into());
+        };
         for (name, value) in original_request.headers() {
             headers.insert(name.clone(), value.clone());
         }
