@@ -11,7 +11,7 @@ fn kdlite_error_near(pos: usize, file_contents: &str) -> String {
         })
         .and_then(|part| if part.is_empty() { None } else { Some(part) });
     part.map_or("<end or out of bounds>".to_string(), |p| {
-        snailquote::escape(p).to_string()
+        format!("\"{}\"", p.escape_default())
     })
 }
 
