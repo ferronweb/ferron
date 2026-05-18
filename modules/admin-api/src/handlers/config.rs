@@ -3,7 +3,7 @@
 use ferron_core::config::ServerConfiguration;
 use serde_json::{Map, Value};
 
-/// Known sensitive directive names that should be redacted.
+/// Known sensitive directive names (or substrings thereof) that should be redacted.
 const SENSITIVE_DIRECTIVES: &[&str] = &[
     "key",
     "cert",
@@ -12,6 +12,9 @@ const SENSITIVE_DIRECTIVES: &[&str] = &[
     "secret",
     "token",
     "ticket_keys",
+    "bearer",
+    "passwd",
+    "htpasswd",
 ];
 
 /// Check if a directive name is considered sensitive and should be redacted.
