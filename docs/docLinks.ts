@@ -170,6 +170,11 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/admin-api",
+    target: "_self",
+    label: "Admin API",
+  },
+  {
     href: "/docs/v3/use-cases/logging-observability",
     target: "_self",
     label: "Logging & observability",
