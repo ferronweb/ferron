@@ -15,6 +15,11 @@ use http::{HeaderMap, HeaderValue, Method};
 use crate::brute_force::BruteForceEngine;
 use crate::config::parse_basicauth_config;
 
+/// A fake hash used to thwart user enumeration attacks.
+/// This hash is a valid, hard-coded Argon2 hash for an empty password.
+const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
+p=1$xvAbcK77AZqOdJtrS1LqWA$bd5QzFMwzDFGZ5I7FAX3roi9Gw2m/nFo3Ivw/W25f50";
+
 /// Pipeline stage that enforces HTTP Basic Authentication.
 pub struct BasicAuthStage {
     /// Shared brute-force protection engine.
@@ -170,6 +175,9 @@ impl Stage<HttpContext> for BasicAuthStage {
         let stored_hash = match config.users.get(&username) {
             Some(hash) => hash,
             None => {
+                // Verify a fake hash to thwart user enumeration
+                let _ = Self::verify_password("test", FAKE_HASH).await;
+
                 // Unknown user — record failure for brute-force tracking
                 self.engine.record_failure(&username);
                 ctx.events.emit(Event::Log(LogEvent {
