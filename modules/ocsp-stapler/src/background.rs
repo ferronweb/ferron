@@ -29,8 +29,6 @@ use rasn_ocsp::{
 };
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
-use sha1::{Digest, Sha1};
-use sha2::{Sha256, Sha384, Sha512};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use x509_parser::prelude::*;
@@ -179,20 +177,22 @@ fn verify_ocsp_signature_with_certs_field(
 ///
 /// This is used for computing the issuer name and key hashes in OCSP requests and responses.
 fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec<u8>> {
-    if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256 {
-        Ok(Sha256::digest(data).to_vec())
+    let mut ctx = if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256 {
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
     } else if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA384 {
-        Ok(Sha384::digest(data).to_vec())
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA384)
     } else if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA512 {
-        Ok(Sha512::digest(data).to_vec())
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA512)
     } else if oid == *rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1 {
-        Ok(Sha1::digest(data).to_vec())
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
     } else {
-        Err(anyhow::anyhow!(
+        return Err(anyhow::anyhow!(
             "Unsupported hash algorithm OID in OCSP response: {}",
             oid
         ))
-    }
+    };
+    ctx.update(data.as_ref());
+    Ok(ctx.finish().as_ref().to_vec())
 }
 
 /// Verify that the SingleResponse matches the leaf and issuer certs.
@@ -485,7 +485,9 @@ fn cert_identifier(chain: &[CertificateDer<'_>]) -> String {
             }
             // Fallback: first 8 bytes of SHA-256 SPKI hash
             let pub_key = &cert.public_key().subject_public_key.data;
-            let hash = Sha256::digest(pub_key);
+            let mut hash_ctx = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256);
+            hash_ctx.update(pub_key);
+            let hash = hash_ctx.finish().as_ref().to_vec();
             return format!("<SPKI {}>", hex::encode(&hash[..4]));
         }
     }
@@ -639,19 +641,23 @@ fn create_ocsp_request(
     use_sha256: bool,
 ) -> anyhow::Result<Vec<u8>> {
     // Hash issuer subject DN
-    let issuer_name_hash = if use_sha256 {
-        Sha256::digest(issuer.subject().as_raw()).to_vec()
+    let mut issuer_name_ctx = if use_sha256 {
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
     } else {
-        Sha1::digest(issuer.subject().as_raw()).to_vec()
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
     };
+    issuer_name_ctx.update(issuer.subject().as_raw());
+    let issuer_name_hash = issuer_name_ctx.finish().as_ref().to_vec();
 
     // Hash issuer public key value (excluding tag/length per RFC 6960)
     let pub_key_bytes = &issuer.public_key().subject_public_key.data;
-    let issuer_key_hash = if use_sha256 {
-        Sha256::digest(pub_key_bytes).to_vec()
+    let mut issuer_key_ctx = if use_sha256 {
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
     } else {
-        Sha1::digest(pub_key_bytes).to_vec()
+        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
     };
+    issuer_key_ctx.update(pub_key_bytes);
+    let issuer_key_hash = issuer_key_ctx.finish().as_ref().to_vec();
 
     // Serial number
     let serial_number = &leaf.tbs_certificate.serial;
