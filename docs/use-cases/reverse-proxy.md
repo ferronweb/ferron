@@ -204,21 +204,27 @@ The upstream URL supports [interpolation syntax](/docs/v3/configuration/conditio
 **Unsafe — user-controlled header in upstream URL:**
 
 ```ferron
-# DANGEROUS: attacker can set X-Forwarded-Host to 169.254.169.254 or any internal host
-proxy "http://{{request.header.x_forwarded_host}}:8080"
+example.com {
+    # DANGEROUS: attacker can set X-Forwarded-Host to 169.254.169.254 or any internal host
+    proxy "http://{{request.header.x_forwarded_host}}:8080"
+}
 ```
 
 **Safe — static upstream URL:**
 
 ```ferron
-proxy http://localhost:8080
+example.com {
+    proxy http://localhost:8080
+}
 ```
 
 **Safe — upstream URL derived from trusted, server-controlled variables:**
 
 ```ferron
-# Safe: request.host is resolved by Ferron's TLS/SNI matcher, not user-controlled
-proxy "http://{{request.host}}:8080"
+example.com {
+    # Safe: request.host is resolved by Ferron's TLS/SNI matcher, not user-controlled
+    proxy "http://{{request.host}}:8080"
+}
 ```
 
 If you need to forward the original host to a backend, use the `Host` header manipulation instead:
