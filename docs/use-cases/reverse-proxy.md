@@ -195,6 +195,42 @@ bar.example.com {
 
 For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip `agenda/` or configure URL rewriting in Ferron.
 
+## Security considerations
+
+### SSRF risk with interpolated upstream URLs
+
+The upstream URL supports [interpolation syntax](/docs/v3/configuration/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (e.g., `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs, as an attacker can craft requests to redirect the proxy to internal services.
+
+**Unsafe — user-controlled header in upstream URL:**
+
+```ferron
+# DANGEROUS: attacker can set X-Forwarded-Host to 169.254.169.254 or any internal host
+proxy "http://{{request.header.x_forwarded_host}}:8080"
+```
+
+**Safe — static upstream URL:**
+
+```ferron
+proxy http://localhost:8080
+```
+
+**Safe — upstream URL derived from trusted, server-controlled variables:**
+
+```ferron
+# Safe: request.host is resolved by Ferron's TLS/SNI matcher, not user-controlled
+proxy "http://{{request.host}}:8080"
+```
+
+If you need to forward the original host to a backend, use the `Host` header manipulation instead:
+
+```ferron
+example.com {
+    proxy http://localhost:8080 {
+        request_header Host "{{request.host}}"
+    }
+}
+```
+
 ## Notes and troubleshooting
 
 - If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `lb_health_check_max_fails` settings.
