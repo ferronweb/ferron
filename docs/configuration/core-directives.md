@@ -157,42 +157,6 @@ Notes:
 - The admin listener runs on a separate secondary Tokio runtime, isolated from the primary data-plane runtime.
 - The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`.
 
-#### `GET /health`
-
-Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been initiated. Suitable for load balancer and orchestration health checks.
-
-#### `GET /status`
-
-Returns JSON with server metrics:
-
-```json
-{
-  "uptime_sec": 12345,
-  "connections_active": 42,
-  "requests_total": 100000,
-  "reloads": 3,
-  "observability_events_dropped": 0,
-  "observability_event_queue_len": 0
-}
-```
-
-| Field | Description |
-| --- | --- |
-| `uptime_sec` | Seconds since the server started. |
-| `connections_active` | Currently open TCP connections across all HTTP listeners. |
-| `requests_total` | Total HTTP requests served across all listeners. |
-| `reloads` | Number of configuration reloads performed. |
-| `observability_events_dropped` | Total number of observability events dropped due to backpressure. |
-| `observability_event_queue_len` | Approximate current length of the observability event queue. |
-
-#### `GET /config`
-
-Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
-
-#### `POST /reload`
-
-Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
-
 ### Observability
 
 The `observability` block configures per-host event sinks for logging and metrics. Multiple `observability` directives for the same host accumulate event sinks.
@@ -350,6 +314,119 @@ example.com {
 }
 ```
 
+## Admin API
+
+The admin API provides a built-in HTTP interface for server health checks, status monitoring, configuration inspection, and reload control. It is designed for local access and debugging purposes.
+
+### Security considerations
+
+The admin API is a **privileged control plane** that provides full server configuration access and reload capability. It is **not encrypted**, has **no authentication**, and **no access control** by default. Treat it with the same security posture as a root shell on your server.
+
+#### Current limitations
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| TLS / HTTPS | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
+| Authentication | Not supported | No username/password, API key, or token mechanism. Any client that can reach the listener has full administrative access. |
+| ACL / allowlists | Not supported | No IP-based access control. No whitelist or blacklist mechanism. |
+
+#### Risks of binding to `0.0.0.0`
+
+Setting `listen "0.0.0.0:<port>"` (or omitting the bind address to default to all interfaces) makes the admin API **completely open to any client that can reach the host**. This can happen accidentally in containerized environments (e.g., Docker with bridge networking) or misconfigured networks.
+
+Consequences of an open admin API:
+
+- **Denial of service**: Anyone can send `POST /reload` continuously, causing configuration reload loops that degrade performance.
+- **Configuration leak**: Anyone can send `GET /config` to retrieve the full server configuration. While sensitive values (TLS keys, passwords, tokens) are redacted, the structure reveals hostnames, upstream addresses, routing rules, and other operational details.
+- **Service disruption**: Any endpoint can be disabled via reload with modified configuration, or misconfigured directives can be injected.
+
+#### Hardening recommendations
+
+1. **Always bind to localhost** unless you have a specific, secure reason not to:
+
+   ```ferron
+   {
+       admin {
+           listen "127.0.0.1:8081"
+           health true
+           status true
+           config true
+           reload true
+       }
+   }
+   ```
+
+2. **Disable unnecessary endpoints**. Only enable the endpoints you need:
+
+   ```ferron
+   {
+       admin {
+           listen "127.0.0.1:8081"
+           health true
+           status false
+           config false
+           reload true
+       }
+   }
+   ```
+
+3. **Use a reverse proxy for remote access**. If you need to access the admin API from a remote machine, front it with an authenticating reverse proxy rather than binding to `0.0.0.0`:
+
+   ```
+   Remote user → reverse proxy (auth required) → 127.0.0.1:8081 (admin API)
+   ```
+
+4. **Restrict network access at the infrastructure level**. Use firewall rules, security groups, or VPC networking to ensure only trusted hosts can reach the admin port.
+
+5. **Monitor admin API access**. Use your observability sinks to track requests to admin endpoints for anomaly detection.
+
+6. **Never expose the admin API to the public internet**. If you need remote administration, use SSH tunneling:
+
+   ```bash
+   ssh -L 8081:127.0.0.1:8081 admin@your-server
+   # Then access http://127.0.0.1:8081 locally
+   ```
+
+### API reference
+
+The admin API provides a RESTful interface for server configuration and control. Below are the available endpoints:
+
+#### `GET /health`
+
+Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been initiated. Suitable for load balancer and orchestration health checks.
+
+#### `GET /status`
+
+Returns JSON with server metrics:
+
+```json
+{
+  "uptime_sec": 12345,
+  "connections_active": 42,
+  "requests_total": 100000,
+  "reloads": 3,
+  "observability_events_dropped": 0,
+  "observability_event_queue_len": 0
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `uptime_sec` | Seconds since the server started. |
+| `connections_active` | Currently open TCP connections across all HTTP listeners. |
+| `requests_total` | Total HTTP requests served across all listeners. |
+| `reloads` | Number of configuration reloads performed. |
+| `observability_events_dropped` | Total number of observability events dropped due to backpressure. |
+| `observability_event_queue_len` | Approximate current length of the observability event queue. |
+
+#### `GET /config`
+
+Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
+
+#### `POST /reload`
+
+Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
+
 ## Notes and troubleshooting
 
 - These directives affect startup and listener construction, not per-request routing.
@@ -358,3 +435,4 @@ example.com {
 - Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or `config-json` module (for `.json` files).
 - For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability-logging).
 - For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/http-host).
+- For admin API security hardening, see [Security considerations](#security-considerations) under the Admin API section.
