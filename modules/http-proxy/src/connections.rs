@@ -6,6 +6,8 @@
 
 use std::cell::RefCell;
 use std::net::IpAddr;
+#[cfg(unix)]
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -24,10 +26,10 @@ pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
 /// The pools are stored in `RefCell` for interior mutability within the thread.
 struct ThreadLocalPools {
     /// TCP connection pool.
-    tcp_pool: RefCell<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    tcp_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     /// Unix socket pool (unbounded, separate from TCP pools).
     #[cfg(unix)]
-    unix_pool: RefCell<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    unix_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     /// Last per-thread TCP capacity that was synced into this TLS pool.
     last_global_limit: usize,
 }
@@ -80,16 +82,16 @@ impl ConnectionManager {
             let mut guard = tls.borrow_mut();
             if let Some(pools) = guard.as_mut() {
                 if pools.last_global_limit != per_thread {
-                    pools.tcp_pool.borrow_mut().update_capacity(per_thread);
+                    pools.tcp_pool.update_capacity(per_thread);
                     pools.last_global_limit = per_thread;
                 }
                 return;
             }
 
             *guard = Some(ThreadLocalPools {
-                tcp_pool: RefCell::new(SingleThreadPool::new(per_thread)),
+                tcp_pool: Rc::new(SingleThreadPool::new(per_thread)),
                 #[cfg(unix)]
-                unix_pool: RefCell::new(SingleThreadPool::new_unbounded()),
+                unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
                 last_global_limit: per_thread,
             });
         });
@@ -156,7 +158,7 @@ impl ConnectionManager {
             return TLS_POOLS.with(|tls| {
                 let guard = tls.borrow();
                 let pools = guard.as_ref().unwrap();
-                let result = pools.unix_pool.borrow_mut().pull(key);
+                let result = pools.unix_pool.pull(key);
                 result
             });
         }
@@ -164,7 +166,7 @@ impl ConnectionManager {
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools.tcp_pool.borrow_mut().pull(key);
+            let result = pools.tcp_pool.pull(key);
             result
         })
     }
@@ -192,10 +194,7 @@ impl ConnectionManager {
             return TLS_POOLS.with(|tls| {
                 let guard = tls.borrow();
                 let pools = guard.as_ref().unwrap();
-                let result = pools
-                    .unix_pool
-                    .borrow_mut()
-                    .pull_with_local_limit(key, limit);
+                let result = pools.unix_pool.pull_with_local_limit(key, limit);
                 result
             });
         }
@@ -203,10 +202,7 @@ impl ConnectionManager {
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools
-                .tcp_pool
-                .borrow_mut()
-                .pull_with_local_limit(key, limit);
+            let result = pools.tcp_pool.pull_with_local_limit(key, limit);
             result
         })
     }
@@ -232,15 +228,17 @@ pub fn return_connection_to_pool(
 
         if is_unix {
             #[cfg(unix)]
-            pools
-                .unix_pool
-                .borrow_mut()
-                .return_connection_with_local_limit(key.clone(), wrapper, local_limit_key);
+            pools.unix_pool.return_connection_with_local_limit(
+                key.clone(),
+                wrapper,
+                local_limit_key,
+            );
         } else {
-            pools
-                .tcp_pool
-                .borrow_mut()
-                .return_connection_with_local_limit(key.clone(), wrapper, local_limit_key);
+            pools.tcp_pool.return_connection_with_local_limit(
+                key.clone(),
+                wrapper,
+                local_limit_key,
+            );
         }
     });
 }
