@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
+use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Uri};
@@ -10,11 +11,10 @@ use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
 
 /// Check whether `client_ip_from_header` is configured.
+#[inline]
 fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
-    ctx.configuration
-        .get_value("client_ip_from_header", false)
-        .and_then(|v| v.as_str())
-        .is_some()
+    ClientIpFromHeaderConfig::resolve_from_context(ctx)
+        .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()))
 }
 
 /// Interpolate header value with HTTP request variables.

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::Request;
@@ -26,10 +27,8 @@ impl ForwardedAuthenticationStage {
     }
 
     fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
-        ctx.configuration
-            .get_value("client_ip_from_header", false)
-            .and_then(|v| v.as_str())
-            .is_some()
+        ClientIpFromHeaderConfig::resolve_from_context(ctx)
+            .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()))
     }
 
     fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {

@@ -1351,6 +1351,7 @@ name = "ferron-http"
 version = "3.0.0-beta.1"
 dependencies = [
  "bytes",
+ "cidr",
  "ferron-core",
  "ferron-observability",
  "http",

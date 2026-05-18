@@ -6,179 +6,14 @@
 //! trusted-proxy allowlist. This is disabled by default.
 
 use async_trait::async_trait;
-use cidr::IpCidr;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
-use std::net::{IpAddr, SocketAddr};
-
-/// Which header to read the client IP from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ClientIpHeader {
-    /// Read from `X-Forwarded-For` — takes the first (leftmost) IP in the comma-separated chain.
-    XForwardedFor,
-    /// Read from `Forwarded` (RFC 7239) — parses the first `for=` token.
-    Forwarded,
-}
-
-impl ClientIpHeader {
-    fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "x-forwarded-for" => Some(Self::XForwardedFor),
-            "forwarded" => Some(Self::Forwarded),
-            _ => None,
-        }
-    }
-
-    fn header_name(self) -> &'static str {
-        match self {
-            Self::XForwardedFor => "x-forwarded-for",
-            Self::Forwarded => "forwarded",
-        }
-    }
-}
+use std::net::SocketAddr;
 
 pub struct ClientIpFromHeaderStage;
-
-#[derive(Clone, Debug)]
-struct ClientIpFromHeaderConfig {
-    header: ClientIpHeader,
-    trusted_proxies: Vec<IpCidr>,
-}
-
-impl Default for ClientIpFromHeaderStage {
-    #[inline]
-    fn default() -> Self {
-        Self
-    }
-}
-
-/// Extract the client IP from an `X-Forwarded-For` header value.
-///
-/// `X-Forwarded-For` format: `client, proxy1, proxy2`
-/// The leftmost IP is the original client address.
-fn extract_x_forwarded_for(value: &str) -> Option<IpAddr> {
-    let first = value.split(',').next()?.trim();
-    first.parse::<IpAddr>().ok()
-}
-
-/// Extract the client IP from a `Forwarded` header value (RFC 7239).
-///
-/// Format: `for=192.0.2.60;proto=https, for="[2001:db8:ca1::1]:8080";proto=http`
-/// We take the first `for=` token from the first forwarded element.
-fn extract_forwarded_for(value: &str) -> Option<IpAddr> {
-    // Take the first forwarded element
-    let first_element = split_forwarded_elements(value).first().copied()?;
-
-    // Find `for=` in the first element
-    let for_value = find_forwarded_param(first_element, "for")?;
-
-    // Strip quotes if present
-    let unquoted = for_value
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .unwrap_or(for_value);
-
-    // In RFC 7239, IPv6 addresses are enclosed in brackets: [2001:db8::1]
-    // Strip brackets if present (IPv6 literal)
-    let cleaned = unquoted
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(unquoted);
-
-    // The `for` value can be an obfuscated identifier like "_hidden" or an IP.
-    // We only succeed if it parses as an IP.
-    cleaned.parse::<IpAddr>().ok()
-}
-
-/// Split a `Forwarded` header value into individual forwarded elements,
-/// respecting quoted strings.
-fn split_forwarded_elements(value: &str) -> Vec<&str> {
-    let mut elements = Vec::new();
-    let mut current_start = 0;
-    let mut in_quotes = false;
-
-    for (i, ch) in value.char_indices() {
-        match ch {
-            '"' => in_quotes = !in_quotes,
-            ',' if !in_quotes => {
-                elements.push(value[current_start..i].trim());
-                current_start = i + 1;
-            }
-            _ => {}
-        }
-    }
-
-    let remainder = value[current_start..].trim();
-    if !remainder.is_empty() {
-        elements.push(remainder);
-    }
-
-    elements
-}
-
-/// Find a parameter value in a forwarded element (e.g. `for=...`, `proto=...`).
-fn find_forwarded_param<'a>(element: &'a str, param_name: &str) -> Option<&'a str> {
-    let prefix = format!("{param_name}=");
-
-    // Split by `;` to get individual parameters
-    for part in element.split(';') {
-        let part = part.trim();
-        if let Some(val) = part.strip_prefix(&prefix) {
-            return Some(val.trim());
-        }
-    }
-
-    None
-}
-
-fn parse_trusted_proxy_allowlist(
-    children: Option<&ferron_core::config::ServerConfigurationBlock>,
-    ctx: &HttpContext,
-) -> Vec<IpCidr> {
-    let mut trusted_proxies = Vec::new();
-    let Some(children) = children else {
-        return trusted_proxies;
-    };
-
-    if let Some(entries) = children.directives.get("trusted_proxy") {
-        for entry in entries {
-            for arg in &entry.args {
-                if let Some(value) = arg.as_string_with_interpolations(ctx) {
-                    if let Ok(cidr) = value.parse::<IpCidr>() {
-                        trusted_proxies.push(cidr);
-                    }
-                }
-            }
-        }
-    }
-
-    trusted_proxies
-}
-
-/// Resolve which header to use from the configuration. Returns `None` if the
-/// directive is absent or invalid (meaning this stage is a no-op).
-fn resolve_config_from_context(ctx: &HttpContext) -> Option<ClientIpFromHeaderConfig> {
-    let entry = ctx.configuration.get_entry("client_ip_from_header", true)?;
-    let header_value = entry.args.first()?.as_string_with_interpolations(ctx)?;
-    let header = ClientIpHeader::from_str(&header_value)?;
-    let trusted_proxies = parse_trusted_proxy_allowlist(entry.children.as_ref(), ctx);
-
-    Some(ClientIpFromHeaderConfig {
-        header,
-        trusted_proxies,
-    })
-}
-
-fn is_trusted_proxy(ip: IpAddr, trusted_proxies: &[IpCidr]) -> bool {
-    if trusted_proxies.is_empty() {
-        return false;
-    }
-
-    let ip = ip.to_canonical();
-    trusted_proxies.iter().any(|cidr| cidr.contains(&ip))
-}
 
 #[async_trait(?Send)]
 impl Stage<HttpContext> for ClientIpFromHeaderStage {
@@ -202,34 +37,16 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = match resolve_config_from_context(ctx) {
+        let config = match ClientIpFromHeaderConfig::resolve_from_context(ctx) {
             Some(c) => c,
             None => return Ok(true), // Directive not set — no-op
         };
 
-        if !is_trusted_proxy(ctx.remote_address.ip(), &config.trusted_proxies) {
+        if !config.is_trusted_proxy(ctx.remote_address.ip()) {
             return Ok(true);
         }
 
-        let req = match ctx.req.as_ref() {
-            Some(r) => r,
-            None => return Ok(true), // No request yet — let pipeline continue
-        };
-
-        let header_value = match req.headers().get(config.header.header_name()) {
-            Some(v) => match v.to_str() {
-                Ok(s) => s,
-                Err(_) => return Ok(true), // Non-UTF8 header — skip
-            },
-            None => return Ok(true), // Header not present — skip
-        };
-
-        let ip = match config.header {
-            ClientIpHeader::XForwardedFor => extract_x_forwarded_for(header_value),
-            ClientIpHeader::Forwarded => extract_forwarded_for(header_value),
-        };
-
-        let Some(ip) = ip else {
+        let Some(ip) = config.extract_client_ip(&ctx) else {
             // Header present but couldn't be parsed — skip silently
             return Ok(true);
         };
@@ -241,7 +58,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             name: "ferron.http.server.client_ip_rewrites",
             attributes: vec![(
                 "ferron.client_ip.header",
-                MetricAttributeValue::StaticStr(config.header.header_name()),
+                MetricAttributeValue::StaticStr(config.header_name()),
             )],
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
@@ -543,60 +360,5 @@ mod tests {
         assert!(result);
         // "_hidden" is not an IP, so the stage should skip
         assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
-    }
-
-    // ── Helper tests ──
-
-    #[test]
-    fn client_ip_header_from_str_valid() {
-        assert_eq!(
-            ClientIpHeader::from_str("x-forwarded-for"),
-            Some(ClientIpHeader::XForwardedFor)
-        );
-        assert_eq!(
-            ClientIpHeader::from_str("X-Forwarded-For"),
-            Some(ClientIpHeader::XForwardedFor)
-        );
-        assert_eq!(
-            ClientIpHeader::from_str("FORWARDED"),
-            Some(ClientIpHeader::Forwarded)
-        );
-        assert_eq!(
-            ClientIpHeader::from_str("forwarded"),
-            Some(ClientIpHeader::Forwarded)
-        );
-    }
-
-    #[test]
-    fn client_ip_header_from_str_invalid() {
-        assert_eq!(ClientIpHeader::from_str("x-real-ip"), None);
-        assert_eq!(ClientIpHeader::from_str("cf-connecting-ip"), None);
-        assert_eq!(ClientIpHeader::from_str(""), None);
-    }
-
-    #[test]
-    fn split_forwarded_elements_single() {
-        let elements = split_forwarded_elements("for=192.0.2.60;proto=https");
-        assert_eq!(elements, vec!["for=192.0.2.60;proto=https"]);
-    }
-
-    #[test]
-    fn split_forwarded_elements_multiple() {
-        let elements =
-            split_forwarded_elements("for=192.0.2.60;proto=https, for=10.0.0.1;proto=http");
-        assert_eq!(
-            elements,
-            vec!["for=192.0.2.60;proto=https", "for=10.0.0.1;proto=http",]
-        );
-    }
-
-    #[test]
-    fn split_forwarded_elements_quoted_comma() {
-        let elements =
-            split_forwarded_elements("for=\"example.com, inc.\";proto=https, for=10.0.0.1");
-        assert_eq!(
-            elements,
-            vec!["for=\"example.com, inc.\";proto=https", "for=10.0.0.1",]
-        );
     }
 }
