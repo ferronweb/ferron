@@ -155,15 +155,13 @@ impl Stage<HttpContext> for BasicAuthStage {
                 return Ok(false);
             }
         };
+        let ip = ctx.remote_address.ip();
 
         // Check brute-force lockout
-        if self.engine.is_locked(&username) {
+        if self.engine.is_locked(ip) {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
-                message: format!(
-                    "basicauth: account '{}' locked (brute-force protection)",
-                    username
-                ),
+                message: format!("basicauth: IP '{ip}' locked (brute-force protection)"),
                 target: "ferron-http-basicauth",
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
@@ -179,7 +177,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 let _ = Self::verify_password("test", FAKE_HASH).await;
 
                 // Unknown user — record failure for brute-force tracking
-                self.engine.record_failure(&username);
+                self.engine.record_failure(ip);
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     message: format!(
@@ -195,8 +193,7 @@ impl Stage<HttpContext> for BasicAuthStage {
         };
 
         if Self::verify_password(&password, stored_hash).await {
-            // Authentication successful — clear brute-force history
-            self.engine.clear_history(&username);
+            // Authentication successful
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
                 message: format!("basicauth: user '{}' authenticated successfully", username),
@@ -207,13 +204,17 @@ impl Stage<HttpContext> for BasicAuthStage {
             Ok(true) // Continue pipeline
         } else {
             // Authentication failed — record failure
-            let locked = self.engine.record_failure(&username);
+            let locked = self.engine.record_failure(ctx.remote_address.ip());
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!(
                     "basicauth: authentication failed for user '{}'{}",
                     username,
-                    if locked { " (account now locked)" } else { "" }
+                    if locked {
+                        format!(" (client {ip} now locked)")
+                    } else {
+                        "".to_string()
+                    }
                 ),
                 target: "ferron-http-basicauth",
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),

@@ -13,6 +13,7 @@
 ### Changed
 
 - Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
+- Brute-force protection now uses IP-based locking instead of username-based locking, preventing locking out users.
 - Configuration failures when reloading the server no longer cause the server to stop; instead, they are logged and the server continues to run.
 - HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
 - Improved error reporting for some TLS handshake failures.

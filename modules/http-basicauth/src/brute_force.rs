@@ -4,6 +4,7 @@
 //! that exceed the configured threshold within a sliding time window.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -96,7 +97,7 @@ impl AttemptTracker {
 /// eviction to prevent unbounded memory growth.
 pub struct BruteForceEngine {
     /// Per-username attempt trackers.
-    trackers: Mutex<HashMap<String, AttemptTracker>>,
+    trackers: Mutex<HashMap<IpAddr, AttemptTracker>>,
     /// Configuration for this engine.
     config: BruteForceConfig,
 }
@@ -110,18 +111,16 @@ impl BruteForceEngine {
         }
     }
 
-    /// Check if a username is currently locked out.
+    /// Check if an IP address is currently locked out.
     ///
-    /// Returns `true` if the username is locked and should be rejected immediately.
-    pub fn is_locked(&self, username: &str) -> bool {
+    /// Returns `true` if the IP address is locked and should be rejected immediately.
+    pub fn is_locked(&self, ip: IpAddr) -> bool {
         if !self.config.enabled {
             return false;
         }
 
         let mut trackers = self.trackers.lock();
-        let tracker = trackers
-            .entry(username.to_string())
-            .or_insert_with(AttemptTracker::new);
+        let tracker = trackers.entry(ip).or_insert_with(AttemptTracker::new);
 
         // Check lock status (pruning happens implicitly on access)
         if tracker.is_locked() {
@@ -139,15 +138,13 @@ impl BruteForceEngine {
     /// Record a failed authentication attempt for a username.
     ///
     /// Returns `true` if the account has now been locked out.
-    pub fn record_failure(&self, username: &str) -> bool {
+    pub fn record_failure(&self, ip: IpAddr) -> bool {
         if !self.config.enabled {
             return false;
         }
 
         let mut trackers = self.trackers.lock();
-        let tracker = trackers
-            .entry(username.to_string())
-            .or_insert_with(AttemptTracker::new);
+        let tracker = trackers.entry(ip).or_insert_with(AttemptTracker::new);
 
         // Prune old attempts outside the window
         let window = Duration::from_secs(self.config.window_secs);
@@ -161,14 +158,6 @@ impl BruteForceEngine {
         // Record the failure
         let lockout_duration = Duration::from_secs(self.config.lockout_duration_secs);
         tracker.record_failure(self.config.max_attempts, lockout_duration)
-    }
-
-    /// Clear the attempt history for a username (called on successful authentication).
-    pub fn clear_history(&self, username: &str) {
-        let mut trackers = self.trackers.lock();
-        if let Some(tracker) = trackers.get_mut(username) {
-            tracker.clear();
-        }
     }
 
     /// Evict stale trackers that have no recent attempts and no active lockout.
@@ -212,60 +201,23 @@ mod tests {
     fn allows_attempts_below_threshold() {
         let engine = BruteForceEngine::new(make_test_config());
 
-        assert!(!engine.is_locked("alice"));
-        engine.record_failure("alice");
-        assert!(!engine.is_locked("alice"));
-        engine.record_failure("alice");
-        assert!(!engine.is_locked("alice"));
+        assert!(!engine.is_locked("127.0.0.1".parse().unwrap()));
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        assert!(!engine.is_locked("127.0.0.1".parse().unwrap()));
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        assert!(!engine.is_locked("127.0.0.1".parse().unwrap()));
     }
 
     #[test]
     fn locks_after_max_attempts() {
         let engine = BruteForceEngine::new(make_test_config());
 
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        let locked = engine.record_failure("alice");
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        let locked = engine.record_failure("127.0.0.1".parse().unwrap());
 
         assert!(locked, "account should be locked after 3 failures");
-        assert!(engine.is_locked("alice"));
-    }
-
-    #[test]
-    fn clears_history_on_success() {
-        let engine = BruteForceEngine::new(make_test_config());
-
-        // 2 failures
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        assert!(!engine.is_locked("alice"));
-
-        // Clear on success
-        engine.clear_history("alice");
-
-        // Should need 3 fresh failures to lock
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        assert!(engine.is_locked("alice"));
-    }
-
-    #[test]
-    fn clear_allows_fresh_attempts() {
-        let engine = BruteForceEngine::new(make_test_config());
-
-        // 2 failures
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        engine.clear_history("alice");
-
-        // After clearing, should need 3 fresh failures to lock
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        assert!(!engine.is_locked("alice"));
-        // 3rd failure triggers lockout
-        assert!(engine.record_failure("alice"));
-        assert!(engine.is_locked("alice"));
+        assert!(engine.is_locked("127.0.0.1".parse().unwrap()));
     }
 
     #[test]
@@ -277,37 +229,21 @@ mod tests {
         let engine = BruteForceEngine::new(config);
 
         for _ in 0..100 {
-            engine.record_failure("alice");
+            engine.record_failure("127.0.0.1".parse().unwrap());
         }
 
-        assert!(!engine.is_locked("alice"));
+        assert!(!engine.is_locked("127.0.0.1".parse().unwrap()));
     }
 
     #[test]
     fn different_users_tracked_separately() {
         let engine = BruteForceEngine::new(make_test_config());
 
-        engine.record_failure("alice");
-        engine.record_failure("alice");
-        engine.record_failure("alice");
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        engine.record_failure("127.0.0.1".parse().unwrap());
+        engine.record_failure("127.0.0.1".parse().unwrap());
 
-        assert!(engine.is_locked("alice"));
-        assert!(!engine.is_locked("bob"));
-    }
-
-    #[test]
-    fn evict_removes_stale_trackers() {
-        let engine = BruteForceEngine::new(make_test_config());
-
-        engine.record_failure("alice");
-        engine.record_failure("bob");
-        engine.clear_history("bob");
-
-        // Evict should remove bob (no attempts, not locked) but keep alice
-        engine.evict_stale();
-
-        let trackers = engine.trackers.lock();
-        assert!(trackers.contains_key("alice"));
-        assert!(!trackers.contains_key("bob"));
+        assert!(engine.is_locked("127.0.0.1".parse().unwrap()));
+        assert!(!engine.is_locked("127.0.0.2".parse().unwrap()));
     }
 }

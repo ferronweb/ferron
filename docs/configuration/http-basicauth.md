@@ -76,10 +76,10 @@ Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Plain numbers withou
 1. The stage extracts the `Authorization: Basic <credentials>` header from the request.
 2. If the header is missing or malformed, a 401 response is returned with a `WWW-Authenticate` challenge.
 3. The credentials are decoded from base64 (`username:password`).
-4. Brute-force lockout is checked — if the account is locked, the request is rejected immediately.
+4. Brute-force lockout is checked — if the IP is locked, the request is rejected immediately.
 5. The username is looked up in the configured `users` block.
 6. If the user exists, the password is verified against the stored hash.
-7. On success, `ctx.auth_user` is set to the authenticated username and brute-force history is cleared.
+7. On success, `ctx.auth_user` is set to the authenticated username.
 8. On failure, the attempt is recorded and a 401 response is returned.
 
 ### Forward proxy (CONNECT) support
@@ -90,11 +90,10 @@ When a CONNECT request is received and authentication fails, a **407 Proxy Authe
 
 When brute-force protection is enabled:
 
-- Each failed authentication attempt is recorded per-username with a timestamp.
-- If `max_attempts` failures occur within the `window` duration, the account is locked.
-- During lockout, **all** authentication attempts for that username are rejected immediately.
+- Each failed authentication attempt is recorded per-IP with a timestamp.
+- If `max_attempts` failures occur within the `window` duration, the IP is locked.
+- During lockout, **all** authentication attempts for that IP are rejected immediately.
 - After `lockout_duration`, the lockout expires and the attempt history is reset.
-- On successful authentication, the attempt history is cleared for that user.
 
 ### Stage ordering
 
@@ -177,7 +176,6 @@ example.com {
 ## Notes and troubleshooting
 
 - The `realm` value is shown in the browser's authentication dialog.
-- Unknown users are still tracked for brute-force purposes — repeated attempts with a non-existent username will eventually trigger a lockout for that username.
 - Configuration validation fails if any password value is not a recognized hash format.
 - This module does not currently support session-based authentication — credentials are checked on every request.
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
