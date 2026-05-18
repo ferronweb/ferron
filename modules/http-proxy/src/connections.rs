@@ -6,7 +6,6 @@
 
 use std::cell::RefCell;
 use std::net::IpAddr;
-#[cfg(unix)]
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
