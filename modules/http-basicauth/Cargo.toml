@@ -12,6 +12,7 @@ http-body-util = "0.1"
 bytes = "1"
 base64 = "0.22"
 password-auth = { version = "1.0", features = ["pbkdf2", "scrypt"] }
+tokio = { version = "1", features = ["sync"] }
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }

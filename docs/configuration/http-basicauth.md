@@ -5,6 +5,54 @@ description: "HTTP Basic Authentication with hashed passwords, brute-force prote
 
 This page documents the `basic_auth` directive for configuring HTTP Basic Authentication for request-level access control. Only **hashed passwords** are supported — plaintext passwords are rejected at configuration validation time for security reasons.
 
+## Global directives
+
+### `basic_auth_concurrency`
+
+```ferron
+{
+    basic_auth_concurrency 64
+}
+```
+
+This is a **global-only** directive that limits the number of concurrent password verification tasks across all `basic_auth` blocks. Password hashing is computationally expensive, and this limit prevents a flood of authentication requests from exhausting server resources.
+
+| Value type | Description | Default |
+| --- | --- | --- |
+| `<positive integer>` | Maximum concurrent password verification tasks. | `128` |
+| `false` | Disable the limit (unlimited concurrency). | disabled |
+
+**Configuration example — reduce concurrency:**
+
+```ferron
+{
+    basic_auth_concurrency 32
+}
+```
+
+**Configuration example — disable the limit:**
+
+```ferron
+{
+    basic_auth_concurrency false
+}
+```
+
+**Configuration example — set minimum of 1:**
+
+```ferron
+{
+    basic_auth_concurrency 1
+}
+```
+
+Notes:
+
+- Values less than `1` are treated as `1`.
+- Setting this too low may cause authentication requests to queue under load, increasing latency.
+- Setting this to `false` removes the limit entirely — use only if you understand the resource implications.
+- When the limit is reached, additional authentication requests will wait until a slot becomes available rather than being rejected.
+
 ## `basic_auth`
 
 ```ferron
@@ -172,11 +220,13 @@ example.com {
 - **Use strong passwords.** The security of the hash depends on the entropy of the original password.
 - **Plaintext passwords are rejected.** This module does not support plaintext passwords at all.
 - **Brute-force protection is enabled by default.** This provides a reasonable baseline of protection without requiring additional configuration.
+- **Tune `basic_auth_concurrency` to your workload.** Setting it too low may cause authentication queuing under high load; setting it too high may allow a flood of expensive hash operations to exhaust resources.
 
 ## Notes and troubleshooting
 
 - The `realm` value is shown in the browser's authentication dialog.
 - Configuration validation fails if any password value is not a recognized hash format.
 - This module does not currently support session-based authentication — credentials are checked on every request.
+- The `basic_auth_concurrency` directive is **global-only** and must be placed in the top-level block, not inside a host block.
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
 - For routing and URL processing, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).

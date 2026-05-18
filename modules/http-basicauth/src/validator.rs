@@ -6,7 +6,10 @@
 use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+};
+use ferron_core::validate_directive;
 
 /// Recognized directives inside a `basic_auth { ... }` block.
 const BASICAUTH_DIRECTIVES: &[&str] = &["realm", "users", "brute_force_protection"];
@@ -23,8 +26,12 @@ impl ConfigurationValidator for BasicAuthValidator {
         &self,
         config: &ServerConfigurationBlock,
         used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if is_global {
+            validate_directive!(config, used_directives, basic_auth_concurrency, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
+        }
+
         if let Some(entries) = config.directives.get("basic_auth") {
             used_directives.insert("basic_auth".to_string());
             for entry in entries {

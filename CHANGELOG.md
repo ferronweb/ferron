@@ -9,6 +9,7 @@
 - A dropped-events admin metric for non-blocking observability sinks.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
+- `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 
 ### Changed
 

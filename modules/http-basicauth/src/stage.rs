@@ -4,13 +4,14 @@
 //! configured users. Returns 401 for regular requests and 407 for CONNECT
 //! requests when authentication fails.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Method};
+use tokio::sync::Semaphore;
 
 use crate::brute_force::BruteForceEngine;
 use crate::config::parse_basicauth_config;
@@ -19,6 +20,10 @@ use crate::config::parse_basicauth_config;
 /// This hash is a valid, hard-coded Argon2 hash for an empty password.
 const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
 p=1$xvAbcK77AZqOdJtrS1LqWA$bd5QzFMwzDFGZ5I7FAX3roi9Gw2m/nFo3Ivw/W25f50";
+
+pub(crate) static GLOBAL_CONCURRENCY_SEMAPHORE: LazyLock<
+    tokio::sync::RwLock<Option<Arc<Semaphore>>>,
+> = LazyLock::new(|| tokio::sync::RwLock::new(None));
 
 /// Pipeline stage that enforces HTTP Basic Authentication.
 pub struct BasicAuthStage {
@@ -54,9 +59,18 @@ impl BasicAuthStage {
     async fn verify_password(plain: &str, hash: &str) -> bool {
         let plain = plain.to_string();
         let hash = hash.to_string();
-        vibeio::spawn_blocking(move || password_auth::verify_password(&plain, &hash).is_ok())
-            .await
-            .unwrap_or(false)
+        let sem = GLOBAL_CONCURRENCY_SEMAPHORE.read().await.clone();
+        let _permit = if let Some(sem) = sem {
+            sem.acquire_owned().await.ok()
+        } else {
+            None
+        };
+        let result =
+            vibeio::spawn_blocking(move || password_auth::verify_password(&plain, &hash).is_ok())
+                .await
+                .unwrap_or(false);
+        drop(_permit);
+        result
     }
 
     /// Build an authentication challenge response.

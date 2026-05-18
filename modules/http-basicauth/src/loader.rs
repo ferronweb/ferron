@@ -7,7 +7,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 
 use crate::brute_force::{BruteForceConfig, BruteForceEngine};
-use crate::stage::BasicAuthStage;
+use crate::stage::{BasicAuthStage, GLOBAL_CONCURRENCY_SEMAPHORE};
 use crate::validator::BasicAuthValidator;
 
 #[derive(Default)]
@@ -42,5 +42,34 @@ impl ModuleLoader for HttpBasicAuthModuleLoader {
         registry.with_stage::<ferron_http::HttpContext, _>(move || {
             Arc::new(BasicAuthStage::new(engine.clone()))
         })
+    }
+
+    fn register_modules(
+        &mut self,
+        _registry: Arc<ferron_core::registry::Registry>,
+        _modules: &mut Vec<Arc<dyn ferron_core::Module>>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let basic_auth_concurrency = config
+            .global_config
+            .get_value("basic_auth_concurrency")
+            .and_then(|v| {
+                if v.as_boolean() == Some(false) {
+                    None
+                } else {
+                    Some(v.as_number().unwrap_or(128).max(1) as usize)
+                }
+            });
+
+        *GLOBAL_CONCURRENCY_SEMAPHORE.blocking_write() =
+            if let Some(basic_auth_concurrency) = basic_auth_concurrency {
+                Some(Arc::new(tokio::sync::Semaphore::new(
+                    basic_auth_concurrency,
+                )))
+            } else {
+                None
+            };
+
+        Ok(())
     }
 }
