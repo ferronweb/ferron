@@ -157,16 +157,16 @@ impl ConnectionManager {
             return TLS_POOLS.with(|tls| {
                 let guard = tls.borrow();
                 let pools = guard.as_ref().unwrap();
-                let result = pools.unix_pool.pull(key);
-                result
+                
+                pools.unix_pool.pull(key)
             });
         }
 
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools.tcp_pool.pull(key);
-            result
+            
+            pools.tcp_pool.pull(key)
         })
     }
 
@@ -193,16 +193,16 @@ impl ConnectionManager {
             return TLS_POOLS.with(|tls| {
                 let guard = tls.borrow();
                 let pools = guard.as_ref().unwrap();
-                let result = pools.unix_pool.pull_with_local_limit(key, limit);
-                result
+                
+                pools.unix_pool.pull_with_local_limit(key, limit)
             });
         }
 
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools.tcp_pool.pull_with_local_limit(key, limit);
-            result
+            
+            pools.tcp_pool.pull_with_local_limit(key, limit)
         })
     }
 }

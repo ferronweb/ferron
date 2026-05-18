@@ -240,8 +240,8 @@ where
 
         // Try to get an idle connection.
         let inner = state.idle.get_mut(&key).and_then(|conns| {
-            let inner = conns.pop();
-            inner
+            
+            conns.pop()
         });
 
         if inner.is_some() {
