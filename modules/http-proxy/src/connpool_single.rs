@@ -239,10 +239,7 @@ where
         }
 
         // Try to get an idle connection.
-        let inner = state.idle.get_mut(&key).and_then(|conns| {
-            
-            conns.pop()
-        });
+        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop());
 
         if inner.is_some() {
             state.idle_total = state.idle_total.saturating_sub(1);
