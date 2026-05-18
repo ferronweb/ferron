@@ -344,18 +344,28 @@ mod tests {
         assert!(ctx.res.is_some());
     }
 
-    #[tokio::test]
-    async fn rejects_unknown_user() {
-        let engine = Arc::new(BruteForceEngine::new(Default::default()));
-        let stage = BasicAuthStage::new(engine);
-        let config = make_basicauth_config(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc")]);
+    #[test]
+    fn rejects_unknown_user() {
+        // Had to use `vibeio`, since this test uses vibeio::spawn_blocking,
+        // which would fail on Tokio.
+        let rt = vibeio::RuntimeBuilder::new()
+            .driver(vibeio::DriverKind::Mock)
+            .default_blocking_pool(64)
+            .build()
+            .expect("failed to build runtime");
+        rt.block_on(async move {
+            let engine = Arc::new(BruteForceEngine::new(Default::default()));
+            let stage = BasicAuthStage::new(engine);
+            let config =
+                make_basicauth_config(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc")]);
 
-        let auth_header = make_basic_auth_header("bob", "somepassword");
-        let mut ctx = make_test_context_with_auth_header(Some(&auth_header), Some(config));
-        let result = stage.run(&mut ctx).await.unwrap();
+            let auth_header = make_basic_auth_header("bob", "somepassword");
+            let mut ctx = make_test_context_with_auth_header(Some(&auth_header), Some(config));
+            let result = stage.run(&mut ctx).await.unwrap();
 
-        assert!(!result, "should stop pipeline");
-        assert!(ctx.res.is_some());
+            assert!(!result, "should stop pipeline");
+            assert!(ctx.res.is_some());
+        });
     }
 
     #[tokio::test]
