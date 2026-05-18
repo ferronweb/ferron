@@ -372,7 +372,7 @@ Consequences of an open admin API:
 
 3. **Use a reverse proxy for remote access**. If you need to access the admin API from a remote machine, front it with an authenticating reverse proxy rather than binding to `0.0.0.0`:
 
-   ```
+   ```text
    Remote user → reverse proxy (auth required) → 127.0.0.1:8081 (admin API)
    ```
 
