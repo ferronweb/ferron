@@ -109,11 +109,11 @@ fn verify_ocsp_signature(
     issuer_cert: &X509Certificate,
 ) -> anyhow::Result<()> {
     let spki = issuer_cert.public_key();
-    let alg = match basic_response.signature_algorithm.algorithm.deref().deref() {
-        &[1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
-        &[1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
-        &[1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
-        &[1, 2, 840, 113549, 1, 1, 5] => {
+    let alg = match *basic_response.signature_algorithm.algorithm.deref().deref() {
+        [1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
+        [1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
+        [1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
+        [1, 2, 840, 113549, 1, 1, 5] => {
             &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
         }
         _ => {
@@ -179,13 +179,13 @@ fn verify_ocsp_signature_with_certs_field(
 ///
 /// This is used for computing the issuer name and key hashes in OCSP requests and responses.
 fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec<u8>> {
-    if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256.to_owned() {
+    if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256 {
         Ok(Sha256::digest(data).to_vec())
-    } else if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA384.to_owned() {
+    } else if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA384 {
         Ok(Sha384::digest(data).to_vec())
-    } else if oid == rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA512.to_owned() {
+    } else if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA512 {
         Ok(Sha512::digest(data).to_vec())
-    } else if oid == rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1.to_owned() {
+    } else if oid == *rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1 {
         Ok(Sha1::digest(data).to_vec())
     } else {
         Err(anyhow::anyhow!(

@@ -62,13 +62,9 @@ impl ModuleLoader for HttpBasicAuthModuleLoader {
             });
 
         *GLOBAL_CONCURRENCY_SEMAPHORE.blocking_write() =
-            if let Some(basic_auth_concurrency) = basic_auth_concurrency {
-                Some(Arc::new(tokio::sync::Semaphore::new(
-                    basic_auth_concurrency,
-                )))
-            } else {
-                None
-            };
+            basic_auth_concurrency.map(|basic_auth_concurrency| {
+                Arc::new(tokio::sync::Semaphore::new(basic_auth_concurrency))
+            });
 
         Ok(())
     }
