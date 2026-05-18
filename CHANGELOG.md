@@ -37,6 +37,7 @@
 - Misconfigured forwarded authentication could lead to completely bypassing the authentication.
 - Rate limiting had a race condition when first creating a new bucket for a key, which could lead to allowing more requests than the configured capacity.
 - Reverse proxy boolean subdirectives with empty values (implying `true`) weren't effective.
+- Reverse proxy didn't remove headers as indicated by the "Connection" header, per RFC 7230.
 
 ## Ferron 3.0.0-beta.1
 

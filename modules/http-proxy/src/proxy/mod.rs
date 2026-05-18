@@ -736,12 +736,16 @@ async fn send_via_wrapper(
     let status = response.status();
     metrics.status_code = Some(status.as_u16());
 
-    let (parts, body) = response.into_parts();
+    let (mut parts, body) = response.into_parts();
 
     // Handle HTTP 101 Switching Protocols (upgrades)
     if status == StatusCode::SWITCHING_PROTOCOLS {
         let response_upgrade = Response::from_parts(parts.clone(), ());
         handle_upgrade(response_upgrade, extensions, ctx, item).await?;
+
+        // Remove some response headers as indicated by "Connection" header (RFC 7230)
+        remove_headers_rfc7230(&mut parts);
+
         Ok(HttpResponse::Custom(Response::from_parts(
             parts,
             body.map_err(std::io::Error::other).boxed_unsync(),
@@ -773,15 +777,11 @@ async fn send_via_wrapper(
             pool_return_info,
         );
 
-        let mut builder = Response::builder().status(parts.status);
-        for (name, value) in parts.headers {
-            if let Some(n) = name {
-                builder = builder.header(n, value);
-            }
-        }
-        let response = builder
-            .body(tracked_body.boxed_unsync())
-            .expect("Failed to build response");
+        // Remove some response headers as indicated by "Connection" header (RFC 7230)
+        remove_headers_rfc7230(&mut parts);
+
+        let mut response = Response::from_parts(parts, tracked_body.boxed_unsync());
+        *response.version_mut() = http::Version::default();
 
         Ok(HttpResponse::Custom(response))
     }
@@ -1048,6 +1048,27 @@ async fn send_request_without_pool_item(
         .expect("Failed to build response");
 
     Ok(HttpResponse::Custom(response))
+}
+
+/// Remove headers from the response as indicated by the "Connection" header,
+/// per RFC 7230.
+fn remove_headers_rfc7230(parts: &mut http::response::Parts) {
+    if let Some(connection) = parts.headers.get(http::header::CONNECTION) {
+        for header in connection
+            .to_str()
+            .unwrap_or("")
+            .split(',')
+            .map(|h| h.trim().to_string())
+            .collect::<Vec<_>>()
+        {
+            if header.eq_ignore_ascii_case("upgrade") {
+                // Don't break HTTP upgrade handling
+                continue;
+            }
+            parts.headers.remove(header);
+        }
+        parts.headers.remove(http::header::CONNECTION);
+    }
 }
 
 #[cfg(test)]
