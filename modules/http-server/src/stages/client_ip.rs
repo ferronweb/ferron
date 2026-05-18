@@ -46,7 +46,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             return Ok(true);
         }
 
-        let Some(ip) = config.extract_client_ip(&ctx) else {
+        let Some(ip) = config.extract_client_ip(ctx) else {
             // Header present but couldn't be parsed — skip silently
             return Ok(true);
         };
