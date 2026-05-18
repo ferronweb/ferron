@@ -72,7 +72,7 @@ The SSH connection provides encryption and authentication, compensating for the 
 
 For more complex setups, you can front the admin API with an authenticating reverse proxy:
 
-```
+```text
 Remote user → Reverse Proxy (basic auth / OAuth) → 127.0.0.1:8081 (admin API)
 ```
 
