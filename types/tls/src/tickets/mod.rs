@@ -503,6 +503,12 @@ pub fn load_ticket_keys(filename: &str) -> std::io::Result<Vec<TicketKeyComponen
         }
 
         let key = parse_ticket_key_record(chunk, i)?;
+
+        // Check if the key is all zeros (invalid) and skip it with a warning
+        if key.0.iter().all(|&b| b == 0) {
+            continue;
+        }
+
         keys.push(key);
     }
 
