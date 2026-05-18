@@ -61,7 +61,7 @@ impl HttpBufferStage {
             if let Some(data) = frame.data_ref() {
                 let frame_size = data.len();
                 // Check if adding this frame would exceed the limit
-                if collected_size + frame_size > max_size {
+                if collected_size.saturating_add(frame_size) > max_size {
                     // Add the frame (we'll go slightly over, which is acceptable)
                     buffered_frames.push(Frame::data(data.clone()));
                     break;
@@ -100,7 +100,7 @@ impl HttpBufferStage {
 
             if let Some(data) = frame.data_ref() {
                 let frame_size = data.len();
-                if collected_size + frame_size > max_size {
+                if collected_size.saturating_add(frame_size) > max_size {
                     buffered_frames.push(Frame::data(data.clone()));
                     break;
                 }
@@ -148,18 +148,26 @@ impl Stage<HttpContext> for HttpBufferStage {
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // Parse request buffer size
-        let request_buffer_size = ctx
+        let request_buffer_size: Option<usize> = ctx
             .configuration
             .get_value("buffer_request", true)
             .and_then(|v| v.as_number())
-            .map(|n| n as usize);
+            .map(|n| {
+                n.try_into()
+                    .map_err(|_| PipelineError::custom("Invalid `buffer_request` directive value"))
+            })
+            .transpose()?;
 
         // Parse response buffer size and store in state for run_inverse()
         let response_buffer_size = ctx
             .configuration
             .get_value("buffer_response", true)
             .and_then(|v| v.as_number())
-            .map(|n| n as usize);
+            .map(|n| {
+                n.try_into()
+                    .map_err(|_| PipelineError::custom("Invalid `buffer_response` directive value"))
+            })
+            .transpose()?;
 
         // Apply request buffering
         if let Some(max_size) = request_buffer_size {
