@@ -42,6 +42,7 @@
 - Rate limiting had a race condition when first creating a new bucket for a key, which could lead to allowing more requests than the configured capacity.
 - Reverse proxy boolean subdirectives with empty values (implying `true`) weren't effective.
 - Reverse proxy didn't remove headers as indicated by the "Connection" header, per RFC 7230.
+- RFC 2136 dynamic DNS updates for ACME DNS-01 challenge didn't work due to "invalid socket address" errors even when configured correctly.
 
 ## Ferron 3.0.0-beta.1
 

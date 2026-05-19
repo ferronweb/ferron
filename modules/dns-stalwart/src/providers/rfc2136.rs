@@ -31,7 +31,8 @@ impl Provider<DnsContext<'static>> for Rfc2136DnsProvider {
 
         let addr = match url.scheme().map(|s| s.as_str()) {
             Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
-                url.host()
+                url.authority()
+                    .map(|a| a.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
                     .to_socket_addrs()
                     .map_err(|e| {
@@ -41,7 +42,8 @@ impl Provider<DnsContext<'static>> for Rfc2136DnsProvider {
                     .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
             ),
             Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
-                url.host()
+                url.authority()
+                    .map(|a| a.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
                     .to_socket_addrs()
                     .map_err(|e| {
