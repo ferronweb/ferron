@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 ferron-dns = { path = "../../types/dns" }
-dns-update = "0.3.0"
+dns-update = "0.4.0"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 hex = "0.4.3"
