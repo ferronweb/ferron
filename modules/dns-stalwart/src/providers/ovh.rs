@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use dns_update::{providers::ovh::OvhEndpoint, DnsUpdater};
 use ferron_core::providers::Provider;
@@ -45,15 +46,16 @@ impl Provider<DnsContext<'static>> for OvhDnsProvider {
             .ok_or(anyhow::anyhow!(
                 "Missing or invalid endpoint for 'ovh' DNS provider"
             ))?;
-
         let endpoint = match endpoint_name.as_str() {
             "ovh-eu" => OvhEndpoint::OvhEu,
             "ovh-ca" => OvhEndpoint::OvhCa,
             "kimsufi-eu" => OvhEndpoint::KimsufiEu,
             "kimsufi-ca" => OvhEndpoint::KimsufiCa,
-            "soyoustart-eu" => OvhEndpoint::SoyoustartCa,
-            "soyoustart-ca" => OvhEndpoint::SoyoustartEu,
-            _ => Err(anyhow::anyhow!("Invalid OVH endpoint name"))?,
+            "soyoustart-eu" => OvhEndpoint::SoyoustartEu,
+            "soyoustart-ca" => OvhEndpoint::SoyoustartCa,
+            _ => Err(anyhow::anyhow!(
+                "Invalid OVH endpoint name for 'ovh' DNS provider"
+            ))?,
         };
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(

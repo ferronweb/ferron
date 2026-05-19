@@ -1,5 +1,6 @@
+use std::collections::HashMap;
 use std::net::ToSocketAddrs;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use base64::Engine;
 use dns_update::DnsUpdater;

@@ -7,32 +7,32 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct MythicBeastsDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for MythicBeastsDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "mythicbeasts"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let username = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("username")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid username for 'mythicbeasts' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let password = ctx
             .config
-            .get_value("account_id")
+            .get_value("password")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
+                "Missing or invalid password for 'mythicbeasts' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
+            DnsUpdater::new_mythicbeasts(&username, &password, None)?,
             60,
         )));
         Ok(())

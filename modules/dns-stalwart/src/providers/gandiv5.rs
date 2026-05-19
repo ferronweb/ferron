@@ -7,25 +7,25 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DigitalOceanDnsProvider;
+pub struct GandiV5DnsProvider;
 
-impl Provider<DnsContext<'static>> for DigitalOceanDnsProvider {
+impl Provider<DnsContext<'static>> for GandiV5DnsProvider {
     fn name(&self) -> &'static str {
-        "digitalocean"
+        "gandiv5"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let personal_access_token = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("personal_access_token")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid OAuth token for 'digitalocean' DNS provider"
+                "Missing or invalid personal access token for 'gandiv5' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_digitalocean(&oauth_token, None)?,
-            30,
+            DnsUpdater::new_gandiv5(&personal_access_token, None)?,
+            300,
         )));
         Ok(())
     }

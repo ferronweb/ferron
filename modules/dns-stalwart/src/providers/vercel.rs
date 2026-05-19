@@ -7,32 +7,29 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct VercelDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for VercelDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "vercel"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let auth_token = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("auth_token")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid auth token for 'vercel' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let team_id = ctx
             .config
-            .get_value("account_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
-            ))?;
+            .get_value("team_id")
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
+            DnsUpdater::new_vercel(&auth_token, team_id, None)?,
             60,
         )));
         Ok(())

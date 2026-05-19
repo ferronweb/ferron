@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use dns_update::DnsUpdater;
 use ferron_core::providers::Provider;
@@ -22,13 +23,8 @@ impl Provider<DnsContext<'static>> for CloudflareDnsProvider {
                 "Missing or invalid API key for 'cloudflare' DNS provider"
             ))?;
 
-        let email = ctx
-            .config
-            .get_value("email")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_cloudflare(&api_key, email.as_deref(), None)?,
+            DnsUpdater::new_cloudflare(&api_key, None)?,
             60,
         )));
         Ok(())

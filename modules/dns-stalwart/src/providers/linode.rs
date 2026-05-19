@@ -7,25 +7,25 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DigitalOceanDnsProvider;
+pub struct LinodeDnsProvider;
 
-impl Provider<DnsContext<'static>> for DigitalOceanDnsProvider {
+impl Provider<DnsContext<'static>> for LinodeDnsProvider {
     fn name(&self) -> &'static str {
-        "digitalocean"
+        "linode"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let auth_token = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("auth_token")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid OAuth token for 'digitalocean' DNS provider"
+                "Missing or invalid auth token for 'linode' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_digitalocean(&oauth_token, None)?,
-            30,
+            DnsUpdater::new_linode(&auth_token, None)?,
+            300,
         )));
         Ok(())
     }

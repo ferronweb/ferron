@@ -7,33 +7,33 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct ConstellixDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for ConstellixDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "constellix"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let api_key = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("api_key")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid API key for 'constellix' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let secret_key = ctx
             .config
-            .get_value("account_id")
+            .get_value("secret_key")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
+                "Missing or invalid API secret for 'constellix' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
-            60,
+            DnsUpdater::new_constellix(&api_key, &secret_key, None)?,
+            30,
         )));
         Ok(())
     }

@@ -7,32 +7,32 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct NifcloudDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for NifcloudDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "nifcloud"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let api_key = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("api_key")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid API key for 'nifcloud' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let api_secret = ctx
             .config
-            .get_value("account_id")
+            .get_value("api_secret")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
+                "Missing or invalid API secret for 'nifcloud' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
+            DnsUpdater::new_nifcloud(&api_key, &api_secret, None)?,
             60,
         )));
         Ok(())

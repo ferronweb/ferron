@@ -7,32 +7,37 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct UltraDnsDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for UltraDnsDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "ultradns"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let username = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("username")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid username for 'ultradns' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let password = ctx
             .config
-            .get_value("account_id")
+            .get_value("password")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
+                "Missing or invalid password for 'ultradns' DNS provider"
             ))?;
+
+        let endpoint = ctx
+            .config
+            .get_value("endpoint")
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
+            DnsUpdater::new_ultradns(&username, &password, endpoint, None)?,
             60,
         )));
         Ok(())

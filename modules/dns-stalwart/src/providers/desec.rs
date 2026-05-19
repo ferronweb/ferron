@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use dns_update::DnsUpdater;
 use ferron_core::providers::Provider;

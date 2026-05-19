@@ -7,33 +7,33 @@ use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 
-pub struct DnsimpleDnsProvider;
+pub struct NameDotComDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for NameDotComDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "namedotcom"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
+        let username = ctx
             .config
-            .get_value("oauth_token")
+            .get_value("username")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
+                "Missing or invalid username for 'namedotcom' DNS provider"
             ))?;
 
-        let account_id = ctx
+        let api_token = ctx
             .config
-            .get_value("account_id")
+            .get_value("api_token")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
+                "Missing or invalid API token for 'namedotcom' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
-            60,
+            DnsUpdater::new_namedotcom(&username, &api_token, None)?,
+            600,
         )));
         Ok(())
     }

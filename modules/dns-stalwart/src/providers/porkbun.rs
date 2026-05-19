@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use dns_update::DnsUpdater;
 use ferron_core::providers::Provider;
@@ -22,16 +23,16 @@ impl Provider<DnsContext<'static>> for PorkbunDnsProvider {
                 "Missing or invalid API key for 'porkbun' DNS provider"
             ))?;
 
-        let secret_key = ctx
+        let api_secret = ctx
             .config
-            .get_value("secret_key")
+            .get_value("api_secret")
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
             .ok_or(anyhow::anyhow!(
-                "Missing or invalid secret key for 'porkbun' DNS provider"
+                "Missing or invalid API secret for 'porkbun' DNS provider"
             ))?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_porkbun(&api_key, &secret_key, None)?,
+            DnsUpdater::new_porkbun(&api_key, &api_secret, None)?,
             600,
         )));
         Ok(())
