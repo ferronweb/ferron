@@ -9,6 +9,7 @@ pub enum AcmeCause {
     Http4xx,
     Http5xx,
     InvalidResponse,
+    Forbidden,
     #[default]
     Unknown,
 }
@@ -25,6 +26,7 @@ impl std::fmt::Display for AcmeCause {
             AcmeCause::Http4xx => write!(f, "HTTP 4xx"),
             AcmeCause::Http5xx => write!(f, "HTTP 5xx"),
             AcmeCause::InvalidResponse => write!(f, "invalid response"),
+            AcmeCause::Forbidden => write!(f, "forbidden by policy"),
             AcmeCause::Unknown => write!(f, "unknown (see details)"),
         }
     }
@@ -75,6 +77,11 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         || s.contains("key authorization")
     {
         return AcmeCause::InvalidResponse;
+    }
+
+    // --- Forbidden by policy ---
+    if s.contains("forbidden") || s.contains("not allowed") {
+        return AcmeCause::Forbidden;
     }
 
     AcmeCause::Unknown
