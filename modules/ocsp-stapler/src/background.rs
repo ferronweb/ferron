@@ -11,7 +11,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use aws_lc_rs::signature::VerificationAlgorithm;
 use ferron_observability::{
     CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue,
@@ -107,20 +106,71 @@ fn verify_ocsp_signature(
     issuer_cert: &X509Certificate,
 ) -> anyhow::Result<()> {
     let spki = issuer_cert.public_key();
-    let alg = match *basic_response.signature_algorithm.algorithm.deref().deref() {
-        [1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
-        [1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
-        [1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
-        [1, 2, 840, 113549, 1, 1, 5] => {
-            &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
-        }
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unsupported OCSP signature algorithm OID: {}",
-                basic_response.signature_algorithm.algorithm
-            ))
-        }
-    };
+    let alg: &dyn aws_lc_rs::signature::VerificationAlgorithm =
+        match *basic_response.signature_algorithm.algorithm.deref().deref() {
+            // RSA + PKCS#1
+            [1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
+            [1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
+            [1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
+            [1, 2, 840, 113549, 1, 1, 5] => {
+                &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
+            }
+
+            // ED25519
+            [1, 3, 101, 112, 1] => &aws_lc_rs::signature::ED25519,
+
+            // ECDSA
+            [1, 2, 840, 10045, 4, 3, algo] => {
+                // Get curve OID
+                let curve_oid: Option<ObjectIdentifier> = basic_response
+                    .signature_algorithm
+                    .parameters
+                    .as_ref()
+                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v.as_bytes()).ok());
+                let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
+                match (curve_oid_u32, algo) {
+                    // P-256
+                    (Some([1, 2, 840, 10045, 3, 1, 7]), 2) => {
+                        &aws_lc_rs::signature::ECDSA_P256_SHA256_ASN1
+                    }
+                    (Some([1, 2, 840, 10045, 3, 1, 7]), 3) => {
+                        &aws_lc_rs::signature::ECDSA_P256_SHA384_ASN1
+                    }
+                    (Some([1, 2, 840, 10045, 3, 1, 7]), 4) => {
+                        &aws_lc_rs::signature::ECDSA_P256_SHA512_ASN1
+                    }
+
+                    // P-384
+                    (Some([1, 3, 132, 0, 34]), 2) => &aws_lc_rs::signature::ECDSA_P384_SHA256_ASN1,
+                    (Some([1, 3, 132, 0, 34]), 3) => &aws_lc_rs::signature::ECDSA_P384_SHA384_ASN1,
+                    (Some([1, 3, 132, 0, 34]), 4) => &aws_lc_rs::signature::ECDSA_P384_SHA512_ASN1,
+
+                    // P-521
+                    (Some([1, 3, 132, 0, 35]), 2) => &aws_lc_rs::signature::ECDSA_P521_SHA256_ASN1,
+                    (Some([1, 3, 132, 0, 35]), 3) => &aws_lc_rs::signature::ECDSA_P521_SHA384_ASN1,
+                    (Some([1, 3, 132, 0, 35]), 4) => &aws_lc_rs::signature::ECDSA_P521_SHA512_ASN1,
+
+                    // secp256k1 (not common in OCSP but handle just in case)
+                    (Some([1, 3, 132, 0, 10]), 2) => {
+                        &aws_lc_rs::signature::ECDSA_P256K1_SHA256_ASN1
+                    }
+
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "Unsupported OCSP signature algorithm OID: {}",
+                            basic_response.signature_algorithm.algorithm
+                        ))
+                    }
+                }
+            }
+
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported OCSP signature algorithm OID: {}",
+                    basic_response.signature_algorithm.algorithm
+                ))
+            }
+        };
 
     let signature = basic_response.signature.as_raw_slice();
 
