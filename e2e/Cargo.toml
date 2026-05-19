@@ -84,6 +84,10 @@ name = "ocsp"
 path = "tests/ocsp.rs"
 
 [[test]]
+name = "ocsp_forged"
+path = "tests/ocsp_forged.rs"
+
+[[test]]
 name = "prometheus"
 path = "tests/prometheus.rs"
 
