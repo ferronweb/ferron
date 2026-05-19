@@ -42,8 +42,8 @@ impl OvhDnsProvider {
       "ovh-ca" => OvhEndpoint::OvhCa,
       "kimsufi-eu" => OvhEndpoint::KimsufiEu,
       "kimsufi-ca" => OvhEndpoint::KimsufiCa,
-      "soyoustart-eu" => OvhEndpoint::SoyoustartCa,
-      "soyoustart-ca" => OvhEndpoint::SoyoustartEu,
+      "soyoustart-eu" => OvhEndpoint::SoyoustartEu,
+      "soyoustart-ca" => OvhEndpoint::SoyoustartCa,
       _ => Err(anyhow::anyhow!("Invalid OVH endpoint name"))?,
     };
     Ok(

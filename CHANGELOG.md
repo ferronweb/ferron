@@ -12,6 +12,7 @@
 ### Fixed
 
 - 403 Forbidden responses were returned when URL sanitizer was disabled, even when it should have returned 404 Not Found.
+- So You Start endpoint names for OVH DNS provider were swapped.
 
 ## Ferron 2.7.0
 
