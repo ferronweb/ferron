@@ -29,6 +29,8 @@ static OCSP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static OCSP_FORGED_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static BIND9_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -179,6 +181,26 @@ pub async fn build_ocsp_forged_image() -> Result<GenericImage, TestcontainersErr
         .await?;
     ocsp_forged_image.replace(image.clone());
     Ok(image)
+}
+
+pub async fn build_bind9_image() -> Result<GenericImage, TestcontainersError> {
+    let mut bind9_image = BIND9_IMAGE.lock().await;
+    if let Some(image) = bind9_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let bind9_image_built = GenericBuildableImage::new("e2e-test-bind9", "latest")
+        .with_dockerfile(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/images/bind9/Dockerfile"
+        ))
+        .with_file(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/images/bind9/entrypoint.sh"),
+            "/entrypoint.sh",
+        )
+        .build_image()
+        .await?;
+    bind9_image.replace(bind9_image_built.clone());
+    Ok(bind9_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
