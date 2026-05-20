@@ -84,6 +84,21 @@ openssl rand 80 >> session_tickets.keys
 
 **Important:** Keys must be generated using cryptographically secure randomness.
 
+#### Rotating key files
+
+Manual ticket key rotation can be done like tihs:
+
+```bash
+# Rotate keys, keeping some previous keys from the old file
+mv session_tickets.keys session_tickets.keys.old
+openssl rand 80 > session_tickets.keys
+# Append truncated old file, without some oldest keys
+head -c -80 session_tickets.keys.old >> session_tickets.keys
+
+# Reload the server
+sudo kill -HUP $(pidof ferron)
+```
+
 ### File permissions
 
 The ticket key file contains sensitive cryptographic material. Set restrictive permissions:

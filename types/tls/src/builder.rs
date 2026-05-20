@@ -141,78 +141,80 @@ pub fn build_ticketer(config: &ServerConfigurationBlock) -> Option<Arc<dyn Produ
         return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
     };
 
-    if rot_config.auto_rotate {
-        // Ensure key file exists (generate if missing)
-        if !std::path::Path::new(&rot_config.file).exists() {
-            ferron_core::log_info!(
-                "Generating initial ticket keys at {} ({} keys)",
-                rot_config.file,
-                rot_config.max_keys
+    // Ensure key file exists (generate if missing)
+    if !std::path::Path::new(&rot_config.file).exists() {
+        if !rot_config.auto_rotate {
+            ferron_core::log_warn!(
+                "Ticket keys file {} does not exist and auto-rotation is disabled; \
+                TLS session tickets will not be used",
+                rot_config.file
             );
-            if let Err(e) = generate_initial_ticket_keys(&rot_config.file, rot_config.max_keys) {
-                ferron_core::log_warn!("Failed to generate initial ticket keys: {e}");
-                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
-            }
-        } else {
-            // Validate existing file
-            if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
-                ferron_core::log_warn!("Invalid ticket keys file: {e}");
-                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
-            }
+            return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
         }
+        ferron_core::log_info!(
+            "Generating initial ticket keys at {} ({} keys)",
+            rot_config.file,
+            rot_config.max_keys
+        );
+        if let Err(e) = generate_initial_ticket_keys(&rot_config.file, rot_config.max_keys) {
+            ferron_core::log_warn!("Failed to generate initial ticket keys: {e}");
+            return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+        }
+    } else {
+        // Validate existing file
+        if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
+            ferron_core::log_warn!("Invalid ticket keys file: {e}");
+            return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+        }
+    }
 
-        // Load keys and create rotator
-        match load_ticket_keys(&rot_config.file) {
-            Ok(raw_keys) => {
-                ferron_core::log_info!(
-                    "Loaded {} ticket keys from {} (rotation interval: {:?})",
-                    raw_keys.len(),
-                    rot_config.file,
-                    rot_config.rotation_interval
-                );
+    // Load keys and create rotator
+    match load_ticket_keys(&rot_config.file) {
+        Ok(raw_keys) => {
+            ferron_core::log_info!(
+                "Loaded {} ticket keys from {}{}",
+                raw_keys.len(),
+                rot_config.file,
+                if rot_config.auto_rotate {
+                    format!(" (rotation interval: {:?})", rot_config.rotation_interval)
+                } else {
+                    String::new()
+                }
+            );
 
-                let ticket_keys: Vec<TicketKey> = raw_keys
-                    .iter()
-                    .map(|(name, aes, hmac)| TicketKey::new(*name, *aes, *hmac))
-                    .collect();
+            let ticket_keys: Vec<TicketKey> = raw_keys
+                .iter()
+                .map(|(name, aes, hmac)| TicketKey::new(*name, *aes, *hmac))
+                .collect();
 
-                match TicketKeyRotator::new(
-                    ticket_keys,
-                    rot_config.rotation_interval,
-                    rot_config.file.clone(),
-                ) {
-                    Ok(rotator) => {
+            match TicketKeyRotator::new(
+                ticket_keys,
+                rot_config
+                    .auto_rotate
+                    .then_some(rot_config.rotation_interval),
+                rot_config.file.clone(),
+            ) {
+                Ok(rotator) => {
+                    if rot_config.auto_rotate {
                         ferron_core::log_info!(
-                            "TLS session ticket key rotation enabled (interval: {:?}, max_keys: {})",
+                            "TLS session ticket key rotation enabled \
+                              (interval: {:?}, max_keys: {})",
                             rot_config.rotation_interval,
                             rot_config.max_keys
                         );
-                        Some(Arc::new(rotator) as Arc<dyn ProducesTickets>)
                     }
-                    Err(e) => {
-                        ferron_core::log_warn!("Failed to create ticket key rotator: {e}");
-                        rustls::crypto::aws_lc_rs::Ticketer::new().ok()
-                    }
+                    Some(Arc::new(rotator) as Arc<dyn ProducesTickets>)
+                }
+                Err(e) => {
+                    ferron_core::log_warn!("Failed to create ticket key rotator: {e}");
+                    rustls::crypto::aws_lc_rs::Ticketer::new().ok()
                 }
             }
-            Err(e) => {
-                ferron_core::log_warn!("Failed to load ticket keys: {e}");
-                rustls::crypto::aws_lc_rs::Ticketer::new().ok()
-            }
         }
-    } else {
-        // Static mode: just validate and use default ticketer
-        if std::path::Path::new(&rot_config.file).exists() {
-            if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
-                ferron_core::log_warn!("Invalid ticket keys file: {e}");
-                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
-            }
-            ferron_core::log_info!(
-                "TLS session ticket keys validated from {} (static mode, no rotation)",
-                rot_config.file
-            );
+        Err(e) => {
+            ferron_core::log_warn!("Failed to load ticket keys: {e}");
+            rustls::crypto::aws_lc_rs::Ticketer::new().ok()
         }
-        rustls::crypto::aws_lc_rs::Ticketer::new().ok()
     }
 }
 

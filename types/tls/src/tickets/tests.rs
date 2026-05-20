@@ -362,7 +362,7 @@ fn create_test_ticket_key() -> TicketKey {
 #[test]
 fn test_encrypt_decrypt_roundtrip() {
     let key = create_test_ticket_key();
-    let encryptor = CustomTicketEncryptor::new(&key, 3600).expect("Failed to create encryptor");
+    let encryptor = CustomTicketEncryptor::new(&key).expect("Failed to create encryptor");
 
     let plaintext = b"test session data";
     let ticket = encryptor.encrypt(plaintext).expect("Failed to encrypt");
@@ -378,8 +378,8 @@ fn test_decrypt_with_wrong_key_fails() {
     let key1 = create_test_ticket_key();
     let key2 = create_test_ticket_key();
 
-    let encryptor1 = CustomTicketEncryptor::new(&key1, 3600).expect("Failed to create encryptor");
-    let encryptor2 = CustomTicketEncryptor::new(&key2, 3600).expect("Failed to create encryptor");
+    let encryptor1 = CustomTicketEncryptor::new(&key1).expect("Failed to create encryptor");
+    let encryptor2 = CustomTicketEncryptor::new(&key2).expect("Failed to create encryptor");
 
     let plaintext = b"secret session data";
     let ticket = encryptor1.encrypt(plaintext).expect("Failed to encrypt");
@@ -391,7 +391,7 @@ fn test_decrypt_with_wrong_key_fails() {
 #[test]
 fn test_decrypt_too_short_ticket() {
     let key = create_test_ticket_key();
-    let encryptor = CustomTicketEncryptor::new(&key, 3600).expect("Failed to create encryptor");
+    let encryptor = CustomTicketEncryptor::new(&key).expect("Failed to create encryptor");
 
     let short_ticket = vec![0u8; 40];
     let result = encryptor.decrypt(&short_ticket);
@@ -401,7 +401,7 @@ fn test_decrypt_too_short_ticket() {
 #[test]
 fn test_decrypt_tampered_ticket() {
     let key = create_test_ticket_key();
-    let encryptor = CustomTicketEncryptor::new(&key, 3600).expect("Failed to create encryptor");
+    let encryptor = CustomTicketEncryptor::new(&key).expect("Failed to create encryptor");
 
     let plaintext = b"tamper test";
     let mut ticket = encryptor.encrypt(plaintext).expect("Failed to encrypt");
@@ -417,7 +417,7 @@ fn test_decrypt_tampered_ticket() {
 #[test]
 fn test_different_plaintexts() {
     let key = create_test_ticket_key();
-    let encryptor = CustomTicketEncryptor::new(&key, 3600).expect("Failed to create encryptor");
+    let encryptor = CustomTicketEncryptor::new(&key).expect("Failed to create encryptor");
 
     let test_cases = vec![
         vec![],
@@ -451,15 +451,10 @@ fn test_ticket_key_rotator_creation() {
     )
     .expect("Failed to persist keys");
 
-    let rotator = TicketKeyRotator::new(
-        keys,
-        std::time::Duration::from_secs(3600),
-        key_file.to_str().unwrap().to_string(),
-    )
-    .expect("Failed to create rotator");
+    let rotator = TicketKeyRotator::new(keys, None, key_file.to_str().unwrap().to_string())
+        .expect("Failed to create rotator");
 
     assert!(rotator.enabled());
-    assert_eq!(rotator.lifetime(), 7200);
 }
 
 #[test]
@@ -474,12 +469,8 @@ fn test_ticket_key_rotator_encrypt_decrypt() {
     )
     .expect("Failed to persist keys");
 
-    let rotator = TicketKeyRotator::new(
-        keys.clone(),
-        std::time::Duration::from_secs(3600),
-        key_file.to_str().unwrap().to_string(),
-    )
-    .expect("Failed to create rotator");
+    let rotator = TicketKeyRotator::new(keys.clone(), None, key_file.to_str().unwrap().to_string())
+        .expect("Failed to create rotator");
 
     let plaintext = b"rotator test data";
     let ticket = <TicketKeyRotator as ProducesTickets>::encrypt(&rotator, plaintext)
@@ -504,12 +495,8 @@ fn test_ticket_key_rotator_multiple_keys() {
     persist_ticket_keys(key_file.to_str().unwrap(), &key_components)
         .expect("Failed to persist keys");
 
-    let rotator = TicketKeyRotator::new(
-        keys.clone(),
-        std::time::Duration::from_secs(3600),
-        key_file.to_str().unwrap().to_string(),
-    )
-    .expect("Failed to create rotator");
+    let rotator = TicketKeyRotator::new(keys.clone(), None, key_file.to_str().unwrap().to_string())
+        .expect("Failed to create rotator");
 
     let plaintext = b"multi-key test";
     let ticket = <TicketKeyRotator as ProducesTickets>::encrypt(&rotator, plaintext)
@@ -521,15 +508,55 @@ fn test_ticket_key_rotator_multiple_keys() {
 }
 
 #[test]
+fn test_ticket_key_rotator_rotates() {
+    let keys = vec![create_test_ticket_key()];
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let key_file = temp_dir.path().join("rotator4.keys");
+
+    persist_ticket_keys(
+        key_file.to_str().unwrap(),
+        &[(keys[0].key_name, keys[0].aes_key, keys[0].hmac_key)],
+    )
+    .expect("Failed to persist keys");
+
+    let rotator = TicketKeyRotator::new(
+        keys.clone(),
+        Some(Duration::from_secs(1)),
+        key_file.to_str().unwrap().to_string(),
+    )
+    .expect("Failed to create rotator");
+
+    let plaintext = b"rotate test";
+    let ticket_key_contents_before = std::fs::read(&key_file).expect("Failed to read key file");
+    let ticket = <TicketKeyRotator as ProducesTickets>::encrypt(&rotator, plaintext)
+        .expect("Failed to encrypt");
+    let ticket_key_contents = std::fs::read(&key_file).expect("Failed to read key file");
+    assert_eq!(
+        ticket_key_contents, ticket_key_contents_before,
+        "Key file should not change before rotation"
+    );
+
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    let _ticket = <TicketKeyRotator as ProducesTickets>::encrypt(&rotator, plaintext)
+        .expect("Failed to encrypt");
+    let ticket_key_contents_after = std::fs::read(&key_file).expect("Failed to read key file");
+    assert_ne!(
+        ticket_key_contents_after, ticket_key_contents_before,
+        "Key file should change after rotation"
+    );
+
+    let decrypted = <TicketKeyRotator as ProducesTickets>::decrypt(&rotator, &ticket)
+        .expect("Failed to decrypt after rotation");
+    assert_eq!(decrypted, plaintext);
+}
+
+#[test]
 fn test_ticket_key_rotator_empty_keys_fails() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let key_file = temp_dir.path().join("empty.keys");
 
-    let result = TicketKeyRotator::new(
-        vec![],
-        std::time::Duration::from_secs(3600),
-        key_file.to_str().unwrap().to_string(),
-    );
+    let result = TicketKeyRotator::new(vec![], None, key_file.to_str().unwrap().to_string());
 
     assert!(result.is_err());
 }

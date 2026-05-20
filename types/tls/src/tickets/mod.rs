@@ -614,16 +614,13 @@ struct CustomTicketEncryptor {
     decrypt_key: PaddedBlockDecryptingKey,
     /// HMAC-SHA256 key
     hmac_key: HmacKey,
-    #[allow(dead_code)]
     /// Key name (sent in clear with tickets)
-    key_name: [u8; 16],
-    /// Ticket lifetime in seconds
-    _lifetime: u32,
+    _key_name: [u8; 16],
 }
 
 impl CustomTicketEncryptor {
     /// Create a new encryptor from a ticket key.
-    fn new(key: &TicketKey, lifetime: u32) -> Result<Self, aws_lc_rs::error::Unspecified> {
+    fn new(key: &TicketKey) -> Result<Self, aws_lc_rs::error::Unspecified> {
         // Create AES keys for both encryption and decryption
         let aes_unbound = UnboundCipherKey::new(&AES_256, &key.aes_key)?;
         let encrypt_key = PaddedBlockEncryptingKey::cbc_pkcs7(aes_unbound)?;
@@ -638,8 +635,7 @@ impl CustomTicketEncryptor {
             encrypt_key,
             decrypt_key,
             hmac_key,
-            key_name: key.key_name,
-            _lifetime: lifetime,
+            _key_name: key.key_name,
         })
     }
 
@@ -708,7 +704,7 @@ struct TicketRotatorState {
     /// Previous encryptor (for decrypting old tickets)
     previous: Option<CustomTicketEncryptor>,
     /// When to perform the next rotation
-    next_switch_time: u64,
+    next_switch_time: Option<u64>,
 }
 
 /// Automatic ticket key rotator.
@@ -727,7 +723,7 @@ pub struct TicketKeyRotator {
     /// Current state
     state: RwLock<TicketRotatorState>,
     /// How often to rotate (in seconds)
-    rotation_interval: u32,
+    rotation_interval: Option<u32>,
     /// Path to the key file (for persistence)
     key_file: String,
 }
@@ -738,7 +734,7 @@ impl TicketKeyRotator {
     /// # Arguments
     ///
     /// * `keys` - Initial keys to use (first key is for encryption, all for decryption)
-    /// * `rotation_interval` - How often to rotate keys
+    /// * `rotation_interval` - How often to rotate keys, set to `None` to disable rotation
     /// * `key_file` - Path to persist keys
     ///
     /// # Returns
@@ -746,21 +742,21 @@ impl TicketKeyRotator {
     /// A new `TicketKeyRotator` or an error if keys are invalid.
     pub fn new(
         keys: Vec<TicketKey>,
-        rotation_interval: std::time::Duration,
+        rotation_interval: Option<std::time::Duration>,
         key_file: String,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         if keys.is_empty() {
             return Err("At least one ticket key is required".into());
         }
 
-        let lifetime = rotation_interval.as_secs() as u32;
+        let lifetime = rotation_interval.map(|d| d.as_secs() as u32);
 
         // Create encryptor from the first key
-        let current = CustomTicketEncryptor::new(&keys[0], lifetime * 2)?;
+        let current = CustomTicketEncryptor::new(&keys[0])?;
 
         // If we have multiple keys, create previous encryptor
         let previous = if keys.len() > 1 {
-            Some(CustomTicketEncryptor::new(&keys[1], lifetime * 2)?)
+            Some(CustomTicketEncryptor::new(&keys[1])?)
         } else {
             None
         };
@@ -768,7 +764,7 @@ impl TicketKeyRotator {
         let state = TicketRotatorState {
             current,
             previous,
-            next_switch_time: UnixTime::now().as_secs().saturating_add(lifetime as u64),
+            next_switch_time: lifetime.map(|l| UnixTime::now().as_secs().saturating_add(l as u64)),
         };
 
         Ok(Self {
@@ -791,7 +787,7 @@ impl TicketKeyRotator {
         // Fast path: no rotation needed
         {
             let read = self.state.read().ok()?;
-            if now <= read.next_switch_time {
+            if read.next_switch_time.is_none_or(|t| now <= t) {
                 return Some(read);
             }
         }
@@ -805,8 +801,7 @@ impl TicketKeyRotator {
         };
 
         // Create new encryptor
-        let new_encryptor =
-            CustomTicketEncryptor::new(&new_ticket_key, self.rotation_interval * 2).ok()?;
+        let new_encryptor = CustomTicketEncryptor::new(&new_ticket_key).ok()?;
 
         // Persist the new key to file
         // Read existing keys, prepend new one, trim to reasonable count
@@ -833,14 +828,16 @@ impl TicketKeyRotator {
         let mut write = self.state.write().ok()?;
 
         // Double-check time (another thread might have rotated)
-        if now <= write.next_switch_time {
+        if write.next_switch_time.is_none_or(|t| now <= t) {
             drop(write);
             return self.state.read().ok();
         }
 
         // Rotate: current → previous, new → current
         write.previous = Some(std::mem::replace(&mut write.current, new_encryptor));
-        write.next_switch_time = now.saturating_add(self.rotation_interval as u64);
+        write.next_switch_time = self
+            .rotation_interval
+            .map(|interval| now.saturating_add(interval as u64));
 
         ferron_core::log_info!("TLS session ticket keys rotated successfully");
 
@@ -860,7 +857,8 @@ impl ProducesTickets for TicketKeyRotator {
     /// Tickets remain valid for 2 rotation intervals to allow the previous
     /// key to still decrypt tickets issued with the old current key.
     fn lifetime(&self) -> u32 {
-        self.rotation_interval * 2
+        // If rotation is disabled, return a large lifetime to effectively never expire tickets
+        self.rotation_interval.map_or(u32::MAX, |l| l * 2)
     }
 
     /// Encrypt plaintext into a ticket.
