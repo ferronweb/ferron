@@ -87,6 +87,10 @@ impl Stage<HttpContext> for ScgiStage {
             .client_address(ctx.remote_address)
             .request_uri(original_request_uri);
 
+        if let Some(hostname) = ctx.hostname.clone() {
+            env_builder = env_builder.server(hostname);
+        }
+
         for (env_var_key, env_var_value) in config.environment {
             env_builder = env_builder.var(env_var_key, env_var_value);
         }

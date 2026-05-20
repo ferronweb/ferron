@@ -135,6 +135,10 @@ impl Stage<HttpFileContext> for CgiStage {
             )
             .request_uri(original_request_uri);
 
+        if let Some(hostname) = ctx.http.hostname.clone() {
+            env_builder = env_builder.server(hostname);
+        }
+
         for (env_var_key, env_var_value) in config.environment {
             env_builder = env_builder.var(env_var_key, env_var_value);
         }

@@ -1025,6 +1025,8 @@ async fn request_handler_inner(
 
     // Fill in the resolved configuration
     ctx.configuration = resolution.configuration.clone();
+    ctx.hostname = (!resolution.location_path.hostname_segments.is_empty())
+        .then_some(resolution.location_path.hostname_segments.join("."));
 
     // Handle OPTIONS * requests (RFC 2616 Section 9.2)
     // Early response before pipeline execution
