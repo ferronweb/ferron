@@ -31,6 +31,8 @@ static OCSP_FORGED_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static BIND9_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static AUTH_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -201,6 +203,26 @@ pub async fn build_bind9_image() -> Result<GenericImage, TestcontainersError> {
         .await?;
     bind9_image.replace(bind9_image_built.clone());
     Ok(bind9_image_built)
+}
+
+pub async fn build_auth_backend_image() -> Result<GenericImage, TestcontainersError> {
+    let mut auth_backend_image = AUTH_BACKEND_IMAGE.lock().await;
+    if let Some(image) = auth_backend_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let auth_backend_image_built = GenericBuildableImage::new("e2e-test-auth-backend", "latest")
+        .with_dockerfile(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/images/auth-backend/Dockerfile"
+        ))
+        .with_file(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/images/auth-backend"),
+            ".",
+        )
+        .build_image()
+        .await?;
+    auth_backend_image.replace(auth_backend_image_built.clone());
+    Ok(auth_backend_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
