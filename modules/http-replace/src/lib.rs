@@ -39,9 +39,9 @@ pub struct HttpReplaceModuleLoader;
 impl ModuleLoader for HttpReplaceModuleLoader {
     fn register_global_configuration_validators(
         &mut self,
-        _registry: &mut Vec<Box<dyn ConfigurationValidator>>,
+        registry: &mut Vec<Box<dyn ConfigurationValidator>>,
     ) {
-        // No global validators — replace directives are per-host
+        registry.push(Box::new(ReplaceConfigurationValidator));
     }
 
     fn register_per_protocol_configuration_validators(
