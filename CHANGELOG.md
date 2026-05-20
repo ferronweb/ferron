@@ -17,6 +17,7 @@
 - Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
 - Brute-force protection now uses IP-based locking instead of username-based locking, preventing locking out users.
 - Configuration failures when reloading the server no longer cause the server to stop; instead, they are logged and the server continues to run.
+- Forwarded authentication now supports interpolated string values for the backend URL.
 - HTTP Basic Auth now return a 429 Too Many Requests status code when the user has exceeded the maximum number of failed attempts.
 - HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
 - Improved error reporting for some TLS handshake failures.
@@ -35,6 +36,7 @@
 - Cached responses which are replaced by non-cached default error pages might have been returned as stale.
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included).
 - Forward-proxy DNS validation could be bypassed by performing a DNS rebinding attack (along with exploiting a race condition) against the configured allowed hostnames.
+- Forwarded authentication would fail with 500 Internal Server Error when using `auth_to { ... }` syntax.
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
 - Manual TLS session ticket key rotation didn't use the session ticket key files, instead using in-memory key generation.
 - Malformed and timed-out requests rejected before normal handler completion are now counted by Ferron's observability pipeline.

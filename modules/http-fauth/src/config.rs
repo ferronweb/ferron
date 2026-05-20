@@ -3,7 +3,7 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationValue};
+use ferron_core::config::ServerConfigurationValue;
 use http::header::HeaderName;
 
 /// Parsed forwarded authentication configuration.
@@ -37,9 +37,11 @@ impl Default for ForwardedAuthConfig {
 }
 
 /// Parse forwarded authentication configuration from HTTP context.
-pub fn parse_forwarded_auth_from_layered_config(
-    block: &LayeredConfiguration,
+pub fn parse_forwarded_auth_from_context(
+    ctx: &ferron_http::HttpContext,
 ) -> Result<Option<ForwardedAuthConfig>, Box<dyn std::error::Error>> {
+    let block = &ctx.configuration;
+
     let mut config = ForwardedAuthConfig::default();
 
     // Get auth_to directive
@@ -51,14 +53,14 @@ pub fn parse_forwarded_auth_from_layered_config(
     };
 
     // Parse backend URL (required)
-    if auth_to_entry.args.len() != 1 {
-        return Err("auth_to directive requires exactly one argument (backend URL)".into());
-    }
-
-    let backend_url = match &auth_to_entry.args[0] {
-        ServerConfigurationValue::String(url, _) => Some(url.clone()),
-        ServerConfigurationValue::Boolean(false, _) => return Ok(None), // Disabled
-        ServerConfigurationValue::Boolean(true, _) => None,
+    let backend_url = match &auth_to_entry.args.first() {
+        Some(ServerConfigurationValue::String(url, _)) => Some(url.clone()),
+        Some(ServerConfigurationValue::InterpolatedString(_, _)) => {
+            auth_to_entry.args[0].as_string_with_interpolations(ctx)
+        }
+        Some(ServerConfigurationValue::Boolean(false, _)) => return Ok(None), // Disabled
+        Some(ServerConfigurationValue::Boolean(true, _)) => None,
+        None => None,
         _ => return Err("auth_to backend URL must be a string".into()),
     };
 
@@ -68,10 +70,12 @@ pub fn parse_forwarded_auth_from_layered_config(
         if backend_url.is_none() {
             if let Some(url_entries) = children.directives.get("url") {
                 if let Some(entry) = url_entries.first() {
-                    if entry.args.len() == 1 {
-                        if let ServerConfigurationValue::String(url, _) = &entry.args[0] {
-                            config.backend_url = url.clone();
-                        }
+                    if let Some(url) = entry
+                        .args
+                        .first()
+                        .and_then(|a| a.as_string_with_interpolations(ctx))
+                    {
+                        config.backend_url = url;
                     }
                 }
             }
@@ -80,10 +84,12 @@ pub fn parse_forwarded_auth_from_layered_config(
         // Parse unix socket
         if let Some(unix_entries) = children.directives.get("unix") {
             if let Some(entry) = unix_entries.first() {
-                if entry.args.len() == 1 {
-                    if let ServerConfigurationValue::String(path, _) = &entry.args[0] {
-                        config.unix_socket = Some(path.clone());
-                    }
+                if let Some(path) = entry
+                    .args
+                    .first()
+                    .and_then(|a| a.as_string_with_interpolations(ctx))
+                {
+                    config.unix_socket = Some(path);
                 }
             }
         }
@@ -152,11 +158,4 @@ pub fn parse_forwarded_auth_from_layered_config(
     }
 
     Ok(Some(config))
-}
-
-/// Parse forwarded authentication configuration from HTTP context.
-pub fn parse_forwarded_auth_from_context(
-    ctx: &ferron_http::HttpContext,
-) -> Result<Option<ForwardedAuthConfig>, Box<dyn std::error::Error>> {
-    parse_forwarded_auth_from_layered_config(&ctx.configuration)
 }
