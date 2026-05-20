@@ -1796,6 +1796,7 @@ dependencies = [
  "chrono",
  "ferron-core",
  "ferron-observability",
+ "tempfile",
  "tokio",
  "tokio-util",
 ]

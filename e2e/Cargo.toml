@@ -144,3 +144,7 @@ path = "tests/fauth.rs"
 [[test]]
 name = "security"
 path = "tests/security/mod.rs"
+
+[[test]]
+name = "log_rotation"
+path = "tests/log_rotation.rs"
