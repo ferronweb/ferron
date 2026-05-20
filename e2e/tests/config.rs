@@ -23,6 +23,7 @@ async fn create_ferron_container(
                 .with_response_matcher(|_| true),
         )))
         .with_network("bridge")
+        .with_env_var("FERRON_ROOT", "/var/www/ferron")
         .with_mount(Mount::bind_mount(
             webroot_dir.to_string_lossy(),
             "/var/www/ferron",
@@ -81,7 +82,7 @@ async fn test_config() {
       }
 
       ferron:80 {
-        root "/var/www/ferron"
+        root {{env.FERRON_ROOT}}
 
         location /phpmyadmin {
           status 403
