@@ -124,7 +124,7 @@ Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Plain numbers withou
 1. The stage extracts the `Authorization: Basic <credentials>` header from the request.
 2. If the header is missing or malformed, a 401 response is returned with a `WWW-Authenticate` challenge.
 3. The credentials are decoded from base64 (`username:password`).
-4. Brute-force lockout is checked — if the IP is locked, the request is rejected immediately.
+4. Brute-force lockout is checked — if the IP is locked, the request is rejected immediately with a 429 response.
 5. The username is looked up in the configured `users` block.
 6. If the user exists, the password is verified against the stored hash.
 7. On success, `ctx.auth_user` is set to the authenticated username.

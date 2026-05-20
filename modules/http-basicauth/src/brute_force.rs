@@ -3,20 +3,19 @@
 //! Tracks failed authentication attempts per username and locks out accounts
 //! that exceed the configured threshold within a sliding time window.
 
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
-use parking_lot::Mutex;
+use dashmap::DashMap;
 
 /// Configuration for brute-force protection.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct BruteForceConfig {
     /// Whether brute-force protection is enabled.
     pub enabled: bool,
     /// Maximum failed attempts allowed within the window before lockout.
     pub max_attempts: usize,
-    /// How long to lock the account after exceeding max attempts (seconds).
+    /// How long to lock the IP after exceeding max attempts (seconds).
     pub lockout_duration_secs: u64,
     /// Sliding window for counting attempts (seconds).
     pub window_secs: u64,
@@ -63,7 +62,7 @@ impl AttemptTracker {
         self.attempts.retain(|&t| t >= cutoff);
     }
 
-    /// Check if the account is currently locked out.
+    /// Check if the IP is currently locked out.
     fn is_locked(&self) -> bool {
         if let Some(until) = self.locked_until {
             Instant::now() < until
@@ -72,7 +71,13 @@ impl AttemptTracker {
         }
     }
 
-    /// Record a failed attempt. Returns `true` if the account is now locked.
+    /// Returns the duration to wait before retrying, if the IP is locked.
+    fn retry_after(&self) -> Option<Duration> {
+        self.locked_until
+            .and_then(|until| until.checked_duration_since(Instant::now()))
+    }
+
+    /// Record a failed attempt. Returns `true` if the IP is now locked.
     fn record_failure(&mut self, max_attempts: usize, lockout_duration: Duration) -> bool {
         self.attempts.push(Instant::now());
 
@@ -97,7 +102,7 @@ impl AttemptTracker {
 /// eviction to prevent unbounded memory growth.
 pub struct BruteForceEngine {
     /// Per-username attempt trackers.
-    trackers: Mutex<HashMap<IpAddr, AttemptTracker>>,
+    trackers: DashMap<IpAddr, AttemptTracker>,
     /// Configuration for this engine.
     config: BruteForceConfig,
 }
@@ -106,9 +111,22 @@ impl BruteForceEngine {
     /// Create a new brute-force engine with the given configuration.
     pub fn new(config: BruteForceConfig) -> Self {
         Self {
-            trackers: Mutex::new(HashMap::new()),
+            trackers: DashMap::new(),
             config,
         }
+    }
+
+    /// Get the retry duration for an IP address, if it is currently locked out.
+    ///
+    /// Returns `None` if brute-force protection is not enabled, the IP is not locked
+    /// or the lockout has been expired.
+    pub fn retry_after(&self, ip: IpAddr) -> Option<Duration> {
+        if !self.config.enabled {
+            return None;
+        }
+
+        let tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        tracker.retry_after()
     }
 
     /// Check if an IP address is currently locked out.
@@ -119,8 +137,7 @@ impl BruteForceEngine {
             return false;
         }
 
-        let mut trackers = self.trackers.lock();
-        let tracker = trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        let mut tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
 
         // Check lock status (pruning happens implicitly on access)
         if tracker.is_locked() {
@@ -135,16 +152,15 @@ impl BruteForceEngine {
         false
     }
 
-    /// Record a failed authentication attempt for a username.
+    /// Record a failed authentication attempt for an IP.
     ///
-    /// Returns `true` if the account has now been locked out.
+    /// Returns `true` if the IP is now locked out.
     pub fn record_failure(&self, ip: IpAddr) -> bool {
         if !self.config.enabled {
             return false;
         }
 
-        let mut trackers = self.trackers.lock();
-        let tracker = trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        let mut tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
 
         // Prune old attempts outside the window
         let window = Duration::from_secs(self.config.window_secs);
@@ -166,11 +182,10 @@ impl BruteForceEngine {
     /// In practice, the engine evicts lazily when trackers are accessed.
     #[allow(dead_code)]
     pub fn evict_stale(&self) {
-        let mut trackers = self.trackers.lock();
         let window = Duration::from_secs(self.config.window_secs);
         let cutoff = Instant::now().checked_sub(window).unwrap_or(Instant::now());
 
-        trackers.retain(|_, tracker| {
+        self.trackers.retain(|_, tracker| {
             // Keep if locked until a future time
             if let Some(until) = tracker.locked_until {
                 if Instant::now() < until {

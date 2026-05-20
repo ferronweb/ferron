@@ -6,6 +6,7 @@
 
 use std::sync::{Arc, LazyLock};
 
+use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
@@ -13,7 +14,7 @@ use ferron_observability::{Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Method};
 use tokio::sync::Semaphore;
 
-use crate::brute_force::BruteForceEngine;
+use crate::brute_force::{BruteForceConfig, BruteForceEngine};
 use crate::config::parse_basicauth_config;
 
 /// A fake hash used to thwart user enumeration attacks.
@@ -27,14 +28,16 @@ pub(crate) static GLOBAL_CONCURRENCY_SEMAPHORE: LazyLock<
 
 /// Pipeline stage that enforces HTTP Basic Authentication.
 pub struct BasicAuthStage {
-    /// Shared brute-force protection engine.
-    engine: Arc<BruteForceEngine>,
+    /// A map of cached brute force engines
+    engines: DashMap<BruteForceConfig, BruteForceEngine>,
 }
 
 impl BasicAuthStage {
     /// Create a new basic auth stage with the shared engine.
-    pub fn new(engine: Arc<BruteForceEngine>) -> Self {
-        Self { engine }
+    pub fn new() -> Self {
+        Self {
+            engines: DashMap::new(),
+        }
     }
 
     /// Extract the username from a Basic auth header value.
@@ -102,17 +105,19 @@ impl BasicAuthStage {
         HttpResponse::BuiltinError(status, Some(headers))
     }
 
-    /// Build a lockout response (account temporarily locked due to brute-force protection).
-    fn make_lockout_response(ctx: &HttpContext) -> HttpResponse {
-        let is_connect = ctx
-            .req
-            .as_ref()
-            .map(|r| r.method() == Method::CONNECT)
-            .unwrap_or(false);
+    /// Build a lockout response (IP temporarily locked due to brute-force protection).
+    fn make_lockout_response(ctx: &HttpContext, engine: &BruteForceEngine) -> HttpResponse {
+        let retry_after = engine.retry_after(ctx.remote_address.ip());
+        let mut header_map = HeaderMap::new();
+        if let Some(duration) = retry_after {
+            header_map.insert(
+                http::header::RETRY_AFTER,
+                HeaderValue::from_str(&duration.as_secs().to_string())
+                    .expect("retry-after value should be valid header value"),
+            );
+        }
 
-        let status = if is_connect { 407 } else { 401 };
-
-        HttpResponse::BuiltinError(status, None)
+        HttpResponse::BuiltinError(429, Some(header_map))
     }
 }
 
@@ -144,6 +149,17 @@ impl Stage<HttpContext> for BasicAuthStage {
             None => return Ok(true), // No basicauth configured — pass through
         };
 
+        let engine = if let Some(engine) = self.engines.get(&config.brute_force) {
+            // Fast path
+            engine
+        } else {
+            // Use .entry(..).or_insert_with(..) to avoid insertion race conditions
+            self.engines
+                .entry(config.brute_force.clone())
+                .or_insert_with(|| BruteForceEngine::new(config.brute_force.clone()))
+                .downgrade()
+        };
+
         // Extract the Authorization header
         let auth_header = ctx
             .req
@@ -172,14 +188,14 @@ impl Stage<HttpContext> for BasicAuthStage {
         let ip = ctx.remote_address.ip();
 
         // Check brute-force lockout
-        if self.engine.is_locked(ip) {
+        if engine.is_locked(ip) {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!("basicauth: IP '{ip}' locked (brute-force protection)"),
                 target: "ferron-http-basicauth",
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
-            ctx.res = Some(Self::make_lockout_response(ctx));
+            ctx.res = Some(Self::make_lockout_response(ctx, &engine));
             return Ok(false);
         }
 
@@ -191,7 +207,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 let _ = Self::verify_password("test", FAKE_HASH).await;
 
                 // Unknown user — record failure for brute-force tracking
-                self.engine.record_failure(ip);
+                engine.record_failure(ip);
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     message: format!(
@@ -218,7 +234,7 @@ impl Stage<HttpContext> for BasicAuthStage {
             Ok(true) // Continue pipeline
         } else {
             // Authentication failed — record failure
-            let locked = self.engine.record_failure(ctx.remote_address.ip());
+            let locked = engine.record_failure(ctx.remote_address.ip());
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!(
@@ -236,6 +252,12 @@ impl Stage<HttpContext> for BasicAuthStage {
             ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
             Ok(false)
         }
+    }
+}
+
+impl Default for BasicAuthStage {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -347,8 +369,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_missing_auth_header() {
-        let engine = Arc::new(BruteForceEngine::new(Default::default()));
-        let stage = BasicAuthStage::new(engine);
+        let stage = BasicAuthStage::new();
         let config = make_basicauth_config(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc")]);
 
         let mut ctx = make_test_context_with_auth_header(None, Some(config));
@@ -368,8 +389,7 @@ mod tests {
             .build()
             .expect("failed to build runtime");
         rt.block_on(async move {
-            let engine = Arc::new(BruteForceEngine::new(Default::default()));
-            let stage = BasicAuthStage::new(engine);
+            let stage = BasicAuthStage::new();
             let config =
                 make_basicauth_config(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc")]);
 
@@ -384,8 +404,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_config_passes_through() {
-        let engine = Arc::new(BruteForceEngine::new(Default::default()));
-        let stage = BasicAuthStage::new(engine);
+        let stage = BasicAuthStage::new();
 
         let mut ctx = make_test_context_with_auth_header(None, None);
         let result = stage.run(&mut ctx).await.unwrap();

@@ -6,7 +6,6 @@ use std::sync::Arc;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 
-use crate::brute_force::{BruteForceConfig, BruteForceEngine};
 use crate::stage::{BasicAuthStage, GLOBAL_CONCURRENCY_SEMAPHORE};
 use crate::validator::BasicAuthValidator;
 
@@ -35,13 +34,7 @@ impl ModuleLoader for HttpBasicAuthModuleLoader {
     }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        // Create a shared brute-force engine with default config.
-        // The actual per-request config (max_attempts, window, etc.) is read from
-        // the LayeredConfiguration at runtime, but the engine itself needs initial defaults.
-        let engine = Arc::new(BruteForceEngine::new(BruteForceConfig::default()));
-        registry.with_stage::<ferron_http::HttpContext, _>(move || {
-            Arc::new(BasicAuthStage::new(engine.clone()))
-        })
+        registry.with_stage::<ferron_http::HttpContext, _>(move || Arc::new(BasicAuthStage::new()))
     }
 
     fn register_modules(

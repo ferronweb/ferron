@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 vibeio = { version = "0.2.6", default-features = false }
-parking_lot = "0.12"
+dashmap = "6.2.1"
 http = "1"
 http-body-util = "0.1"
 bytes = "1"
