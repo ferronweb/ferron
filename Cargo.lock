@@ -1705,7 +1705,7 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "new_mime_guess",
+ "multi-mime-guess",
  "phf",
  "send_wrapper",
  "tokio-util",
@@ -3208,20 +3208,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-mime-guess"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef72c813fbf35c4e47b064f9aa20897a04bb1ff478ada442e09160a291e87f50"
+dependencies = [
+ "glob",
+ "phf",
+ "phf_codegen",
+ "serde_json",
+]
+
+[[package]]
 name = "ndk-context"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
-
-[[package]]
-name = "new_mime_guess"
-version = "4.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02a2dfb3559d53e90b709376af1c379462f7fb3085a0177deb73e6ea0d99eff4"
-dependencies = [
- "mime",
- "unicase",
-]
 
 [[package]]
 name = "nix"
@@ -3591,6 +3593,16 @@ dependencies = [
  "phf_macros",
  "phf_shared",
  "serde",
+]
+
+[[package]]
+name = "phf_codegen"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49aa7f9d80421bca176ca8dbfebe668cc7a2684708594ec9f3c0db0805d5d6e1"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
 ]
 
 [[package]]
@@ -5182,12 +5194,6 @@ name = "unarray"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
-
-[[package]]
-name = "unicase"
-version = "2.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-ident"

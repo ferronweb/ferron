@@ -20,8 +20,11 @@ pub fn get_content_type(path: &std::path::Path, config: &LayeredConfiguration) -
         }
     }
 
-    // Fall back to new_mime_guess
-    new_mime_guess::from_path(path)
-        .first()
-        .map(|mime| mime.to_string())
+    // Fall back to multi-mime-guess
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    multi_mime_guess::lookup(&ext).map(|mime| mime.to_string())
 }
