@@ -33,6 +33,8 @@ static BIND9_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static AUTH_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static LSCACHE_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -223,6 +225,27 @@ pub async fn build_auth_backend_image() -> Result<GenericImage, TestcontainersEr
         .await?;
     auth_backend_image.replace(auth_backend_image_built.clone());
     Ok(auth_backend_image_built)
+}
+
+pub async fn build_lscache_backend_image() -> Result<GenericImage, TestcontainersError> {
+    let mut lscache_backend_image = LSCACHE_BACKEND_IMAGE.lock().await;
+    if let Some(image) = lscache_backend_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let lscache_backend_image_built =
+        GenericBuildableImage::new("e2e-test-lscache-backend", "latest")
+            .with_dockerfile(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/images/lscache-backend/Dockerfile"
+            ))
+            .with_file(
+                concat!(env!("CARGO_MANIFEST_DIR"), "/images/lscache-backend"),
+                ".",
+            )
+            .build_image()
+            .await?;
+    lscache_backend_image.replace(lscache_backend_image_built.clone());
+    Ok(lscache_backend_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {

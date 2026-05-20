@@ -48,7 +48,11 @@ fn file_exists(path: &Path) -> bool {
     path.exists()
 }
 
-fn setup_test_dirs() -> (tempfile::TempDir, tempfile::NamedTempFile, tempfile::TempDir) {
+fn setup_test_dirs() -> (
+    tempfile::TempDir,
+    tempfile::NamedTempFile,
+    tempfile::TempDir,
+) {
     #[cfg(unix)]
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
@@ -106,13 +110,9 @@ async fn test_log_rotation_basic() {
         )
         .unwrap();
 
-    let container = create_ferron_container(
-        webroot_dir.path(),
-        config_file.path(),
-        log_dir.path(),
-    )
-    .await
-    .unwrap();
+    let container = create_ferron_container(webroot_dir.path(), config_file.path(), log_dir.path())
+        .await
+        .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))
@@ -173,13 +173,9 @@ async fn test_log_rotation_keep_limit() {
         )
         .unwrap();
 
-    let container = create_ferron_container(
-        webroot_dir.path(),
-        config_file.path(),
-        log_dir.path(),
-    )
-    .await
-    .unwrap();
+    let container = create_ferron_container(webroot_dir.path(), config_file.path(), log_dir.path())
+        .await
+        .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))
@@ -207,14 +203,8 @@ async fn test_log_rotation_keep_limit() {
 
     let access_log_1 = log_dir.path().join("access.log.1");
     let access_log_2 = log_dir.path().join("access.log.2");
-    assert!(
-        file_exists(&access_log_1),
-        "Expected access.log.1 to exist"
-    );
-    assert!(
-        file_exists(&access_log_2),
-        "Expected access.log.2 to exist"
-    );
+    assert!(file_exists(&access_log_1), "Expected access.log.1 to exist");
+    assert!(file_exists(&access_log_2), "Expected access.log.2 to exist");
 
     container.stop().await.unwrap();
 }
@@ -241,13 +231,9 @@ async fn test_log_rotation_keep_zero() {
         )
         .unwrap();
 
-    let container = create_ferron_container(
-        webroot_dir.path(),
-        config_file.path(),
-        log_dir.path(),
-    )
-    .await
-    .unwrap();
+    let container = create_ferron_container(webroot_dir.path(), config_file.path(), log_dir.path())
+        .await
+        .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))
@@ -295,13 +281,9 @@ async fn test_log_rotation_disabled() {
         )
         .unwrap();
 
-    let container = create_ferron_container(
-        webroot_dir.path(),
-        config_file.path(),
-        log_dir.path(),
-    )
-    .await
-    .unwrap();
+    let container = create_ferron_container(webroot_dir.path(), config_file.path(), log_dir.path())
+        .await
+        .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))
@@ -357,13 +339,9 @@ async fn test_error_log_rotation_config_accepted() {
         )
         .unwrap();
 
-    let container = create_ferron_container(
-        webroot_dir.path(),
-        config_file.path(),
-        log_dir.path(),
-    )
-    .await
-    .unwrap();
+    let container = create_ferron_container(webroot_dir.path(), config_file.path(), log_dir.path())
+        .await
+        .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))

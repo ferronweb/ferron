@@ -148,3 +148,7 @@ path = "tests/security/mod.rs"
 [[test]]
 name = "log_rotation"
 path = "tests/log_rotation.rs"
+
+[[test]]
+name = "lscache"
+path = "tests/lscache.rs"

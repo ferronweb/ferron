@@ -1,0 +1,723 @@
+use std::io::Write;
+#[cfg(unix)]
+use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+
+use testcontainers::{
+    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    runners::AsyncRunner,
+};
+
+mod common;
+
+async fn create_backend_container(
+    network: &str,
+) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
+    let backend_image = self::common::build_lscache_backend_image().await?;
+    backend_image
+        .with_exposed_port(ContainerPort::Tcp(3000))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(3000))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("backend")
+        .start()
+        .await
+}
+
+async fn create_ferron_container(
+    network: &str,
+    config_file: &std::path::Path,
+) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
+    let ferron_image = self::common::build_ferron_image().await?;
+    ferron_image
+        .with_exposed_port(ContainerPort::Tcp(80))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("ferron")
+        .with_mount(Mount::bind_mount(
+            config_file.to_string_lossy().to_string(),
+            "/etc/ferron.conf",
+        ))
+        .start()
+        .await
+}
+
+struct LSCacheTestContext {
+    _backend: ContainerAsync<GenericImage>,
+    _ferron: ContainerAsync<GenericImage>,
+    base_url: String,
+    client: reqwest::Client,
+}
+
+impl LSCacheTestContext {
+    async fn new(test_name: &str, config: &str) -> Self {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        #[cfg(unix)]
+        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+        #[cfg(unix)]
+        let mut config_file = tempfile::Builder::new()
+            .permissions(Permissions::from_mode(0o666))
+            .tempfile()
+            .unwrap();
+        #[cfg(not(unix))]
+        let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+        let network = format!("e2e-test-lscache-{}", test_name);
+
+        let backend = create_backend_container(&network).await.unwrap();
+
+        config_file
+            .as_file_mut()
+            .write_all(config.as_bytes())
+            .unwrap();
+
+        let ferron = create_ferron_container(&network, config_file.path())
+            .await
+            .unwrap();
+
+        let port = ferron
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        Self {
+            _backend: backend,
+            _ferron: ferron,
+            base_url: format!("http://localhost:{}", port),
+            client: reqwest::Client::new(),
+        }
+    }
+
+    async fn get(&self, path: &str) -> reqwest::Response {
+        self.client
+            .get(format!(
+                "{}/{}",
+                self.base_url,
+                path.trim_start_matches('/')
+            ))
+            .send()
+            .await
+            .unwrap()
+    }
+
+    async fn get_with_headers(&self, path: &str, headers: &[(&str, &str)]) -> reqwest::Response {
+        let mut req = self.client.get(format!(
+            "{}/{}",
+            self.base_url,
+            path.trim_start_matches('/')
+        ));
+        for (name, value) in headers {
+            req = req.header(*name, *value);
+        }
+        req.send().await.unwrap()
+    }
+}
+
+const BASE_CONFIG_EMIT_LS: &str = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+  }
+}
+"#;
+
+const BASE_CONFIG_OVERRIDE_LS: &str = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    litespeed_override_cache_control true
+  }
+}
+"#;
+
+#[tokio::test]
+async fn test_lscache_miss_then_hit() {
+    let ctx = LSCacheTestContext::new("miss-hit", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/cache-test?ls-cache-control=public,max-age=60&body=first")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "first");
+
+    let resp = ctx
+        .get("/cache-test?ls-cache-control=public,max-age=60&body=second")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "first");
+}
+
+#[tokio::test]
+async fn test_lscache_private_cache() {
+    let ctx = LSCacheTestContext::new("private", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/private-test?ls-cache-control=private,max-age=60&body=private-content")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+
+    let resp = ctx
+        .get("/private-test?ls-cache-control=private,max-age=60&body=private-content")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit,private");
+}
+
+#[tokio::test]
+async fn test_lscache_no_store() {
+    let ctx = LSCacheTestContext::new("no-store", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx.get("/nostore?ls-cache-control=no-store&body=v1").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert!(ls_cache == "miss" || ls_cache == "bypass");
+    assert_eq!(resp.text().await.unwrap(), "v1");
+
+    let resp = ctx.get("/nostore?ls-cache-control=no-store&body=v2").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v2");
+}
+
+#[tokio::test]
+async fn test_lscache_no_cache() {
+    let ctx = LSCacheTestContext::new("no-cache", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx.get("/nocache?ls-cache-control=no-cache&body=v1").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v1");
+
+    let resp = ctx.get("/nocache?ls-cache-control=no-cache&body=v2").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v2");
+}
+
+#[tokio::test]
+async fn test_lscache_override_standard_no_store() {
+    let ctx = LSCacheTestContext::new("override", BASE_CONFIG_OVERRIDE_LS).await;
+
+    let resp = ctx
+        .get("/override?ls-cache-control=public,max-age=60&cache-control=no-store&body=cached")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "cached");
+
+    let resp = ctx
+        .get("/override?ls-cache-control=public,max-age=60&cache-control=no-store&body=should-not-appear")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "cached");
+}
+
+#[tokio::test]
+async fn test_lscache_vary_cookie() {
+    let ctx = LSCacheTestContext::new("vary-cookie", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get_with_headers(
+            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=no-cookie",
+            &[],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "no-cookie");
+
+    let resp = ctx
+        .get_with_headers(
+            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=session-abc",
+            &[("Cookie", "session=abc")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "session-abc");
+
+    let resp = ctx
+        .get_with_headers(
+            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=session-abc-repeat",
+            &[("Cookie", "session=abc")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "session-abc");
+
+    let resp = ctx
+        .get_with_headers(
+            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=no-cookie-hit",
+            &[],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "no-cookie");
+}
+
+#[tokio::test]
+async fn test_lscache_tag() {
+    let ctx = LSCacheTestContext::new("tag", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/tag-test?ls-cache-control=public,max-age=60&ls-tag=Page1,Cat1&body=tagged")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "tagged");
+
+    let resp = ctx
+        .get("/tag-test?ls-cache-control=public,max-age=60&ls-tag=Page1,Cat1&body=tagged-hit")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "tagged");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_by_tag() {
+    let ctx = LSCacheTestContext::new("purge-tag", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=before-purge")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "before-purge");
+
+    let resp = ctx
+        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=before-purge-verify")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "before-purge");
+
+    let resp = ctx
+        .get("/purge-trigger?ls-purge=tag=MyPage&body=purge-response")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx
+        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=after-purge")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "after-purge");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_by_url() {
+    let ctx = LSCacheTestContext::new("purge-url", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx.get("/url-purge-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "OK");
+
+    let resp = ctx.get("/url-purge-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+
+    let resp = ctx
+        .get("/purge-url-trigger?ls-purge=url=/url-purge-test&body=purge-url-response")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx.get("/url-purge-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_all() {
+    let ctx = LSCacheTestContext::new("purge-all", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/page-a?ls-cache-control=public,max-age=60&ls-tag=TagA&body=page-a")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx
+        .get("/page-b?ls-cache-control=public,max-age=60&ls-tag=TagB&body=page-b")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx.get("/purge-all-trigger?ls-purge=*").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx
+        .get("/page-a?ls-cache-control=public,max-age=60&ls-tag=TagA&body=page-a-new")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "page-a-new");
+
+    let resp = ctx
+        .get("/page-b?ls-cache-control=public,max-age=60&ls-tag=TagB&body=page-b-new")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "page-b-new");
+}
+
+#[tokio::test]
+async fn test_lsc_cookie_to_set_cookie() {
+    let ctx = LSCacheTestContext::new("lsc-cookie", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/cookie-test?ls-cache-control=public,max-age=60&lsc-cookie=test_cookie=123&body=cookie-set")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "cookie-set");
+
+    let resp = ctx
+        .get("/cookie-test?ls-cache-control=public,max-age=60&lsc-cookie=test_cookie=123&body=cookie-hit")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    let set_cookie = resp
+        .headers()
+        .get_all("Set-Cookie")
+        .iter()
+        .find(|h| h.to_str().unwrap().contains("test_cookie=123"));
+    assert!(
+        set_cookie.is_some(),
+        "Set-Cookie header with test_cookie=123 not found"
+    );
+    assert_eq!(resp.text().await.unwrap(), "cookie-set");
+}
+
+#[tokio::test]
+async fn test_lscache_s_maxage() {
+    let ctx = LSCacheTestContext::new("s-maxage", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v1")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "s-maxage-v1");
+
+    let resp = ctx
+        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v2")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "s-maxage-v1");
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    let resp = ctx
+        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v3")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "s-maxage-v3");
+}
+
+#[tokio::test]
+async fn test_lscache_public_tag_with_private_cache() {
+    let ctx = LSCacheTestContext::new("public-tag-private", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/priv-pub-tag?ls-cache-control=private,max-age=60&ls-tag=public:PubTag,PrivTag&body=priv-with-pub-tag")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "priv-with-pub-tag");
+
+    let resp = ctx
+        .get("/priv-pub-tag?ls-cache-control=private,max-age=60&ls-tag=public:PubTag,PrivTag&body=priv-with-pub-tag-hit")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit,private");
+    assert_eq!(resp.text().await.unwrap(), "priv-with-pub-tag");
+}
+
+#[tokio::test]
+async fn test_lscache_bypass_uncacheable_status() {
+    let ctx = LSCacheTestContext::new("bypass-status", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx.get("/error?status=500&body=error").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert!(ls_cache == "bypass" || ls_cache == "miss");
+}
+
+#[tokio::test]
+async fn test_lscache_shared_cache_control() {
+    let ctx = LSCacheTestContext::new("shared", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/shared-test?ls-cache-control=shared,private,max-age=60&body=shared-content")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert!(ls_cache == "miss" || ls_cache == "hit");
+    assert_eq!(resp.text().await.unwrap(), "shared-content");
+
+    let resp = ctx
+        .get("/shared-test?ls-cache-control=shared,private,max-age=60&body=shared-content-hit")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "shared-content");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_private_scope() {
+    let ctx = LSCacheTestContext::new("purge-private", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v1")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "private-v1");
+
+    let resp = ctx
+        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v1-verify")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "private-v1");
+
+    let resp = ctx
+        .get("/priv-purge-trigger?ls-purge=private,*&body=purge-private")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx
+        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v2")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "private-v2");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_stale_flag() {
+    let ctx = LSCacheTestContext::new("purge-stale", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get("/stale-test?ls-cache-control=public,max-age=60&ls-tag=StaleTag&body=stale-v1")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "stale-v1");
+
+    let resp = ctx
+        .get("/stale-purge?ls-purge=stale,tag=StaleTag&body=purge-stale")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx
+        .get("/stale-test?ls-cache-control=public,max-age=60&ls-tag=StaleTag&body=stale-v2")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "stale-v2");
+}
+
+#[tokio::test]
+async fn test_lscache_vary_value() {
+    // Note: vary values aren't supported by Ferron cache implementation.
+    let ctx = LSCacheTestContext::new("vary-value", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get(
+            "/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=desktop",
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "desktop");
+
+    let resp = ctx
+        .get("/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=mobile-version")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "mobile-version");
+
+    let resp = ctx
+        .get("/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=mobile-hit")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "mobile-hit");
+}
+
+#[tokio::test]
+async fn test_lscache_multiple_vary_cookies() {
+    let ctx = LSCacheTestContext::new("vary-multi-cookie", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get_with_headers(
+            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=default",
+            &[],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "default");
+
+    let resp = ctx
+        .get_with_headers(
+            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=en-dark",
+            &[("Cookie", "lang=en;theme=dark")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "en-dark");
+
+    let resp = ctx
+        .get_with_headers(
+            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=en-dark-hit",
+            &[("Cookie", "lang=en;theme=dark")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "en-dark");
+
+    let resp = ctx
+        .get_with_headers(
+            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=fr-light",
+            &[("Cookie", "lang=fr;theme=light")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "fr-light");
+}
+
+#[tokio::test]
+async fn test_lscache_combined_vary_cookie_and_value() {
+    let ctx = LSCacheTestContext::new("vary-combined", BASE_CONFIG_EMIT_LS).await;
+
+    let resp = ctx
+        .get_with_headers(
+            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=us&body=region-us",
+            &[("Cookie", "region=west")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "region-us");
+
+    let resp = ctx
+        .get_with_headers(
+            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=eu&body=region-eu",
+            &[("Cookie", "region=east")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "region-eu");
+
+    let resp = ctx
+        .get_with_headers(
+            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=us&body=region-us-hit",
+            &[("Cookie", "region=west")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "region-us-hit");
+}
