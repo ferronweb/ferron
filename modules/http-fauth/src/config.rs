@@ -53,7 +53,7 @@ pub fn parse_forwarded_auth_from_context(
     };
 
     // Parse backend URL (required)
-    let backend_url = match &auth_to_entry.args.first() {
+    let mut backend_url = match &auth_to_entry.args.first() {
         Some(ServerConfigurationValue::String(url, _)) => Some(url.clone()),
         Some(ServerConfigurationValue::InterpolatedString(_, _)) => {
             auth_to_entry.args[0].as_string_with_interpolations(ctx)
@@ -75,7 +75,7 @@ pub fn parse_forwarded_auth_from_context(
                         .first()
                         .and_then(|a| a.as_string_with_interpolations(ctx))
                     {
-                        config.backend_url = url;
+                        backend_url = Some(url);
                     }
                 }
             }
