@@ -877,7 +877,7 @@ macro_rules! validate_nested {
 
     // Internal helper to check argument types
     (@check_args $block:expr, $directive:ident, [$pattern:pat $(if $guard:expr)?], $subdirective_name:ident) => {
-        if !matches!($directive.args[0], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[0], $pattern $(if $guard)?) {
             return Err(format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position 0",
                 stringify!($block), stringify!($subdirective_name)
@@ -918,7 +918,7 @@ macro_rules! validate_nested {
                         stringify!($block), $count, stringify!($name), directive.args.len()
                     ).into());
                 }
-                if !matches!(directive.args[0], $pattern $(if $guard)?) {
+                if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
@@ -937,7 +937,7 @@ macro_rules! validate_nested {
                         stringify!($block), $min, $name, directive.args.len()
                     ).into());
                 }
-                if !matches!(directive.args[0], $pattern $(if $guard)?) {
+                if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
@@ -956,7 +956,7 @@ macro_rules! validate_nested {
                         stringify!($block), $max, $name, directive.args.len()
                     ).into());
                 }
-                if !matches!(directive.args[0], $pattern $(if $guard)?) {
+                if  !directive.args.is_empty() && !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
@@ -975,7 +975,7 @@ macro_rules! validate_nested {
                         stringify!($block), $range, $name, directive.args.len()
                     ).into());
                 }
-                if !matches!(directive.args[0], $pattern $(if $guard)?) {
+                if !directive.args.is_empty() && !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
@@ -988,7 +988,7 @@ macro_rules! validate_nested {
     ($block:expr, $name:ident, args(?) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
-                if !matches!(directive.args[0], $pattern $(if $guard)?) {
+                if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
