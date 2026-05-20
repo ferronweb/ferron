@@ -92,10 +92,7 @@ impl TicketKeyRotationConfig {
             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))?;
 
         // Extract auto_rotate (optional, default: false)
-        let auto_rotate = ticket_keys_block
-            .get_value("auto_rotate")
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(false);
+        let auto_rotate = ticket_keys_block.get_flag("auto_rotate");
 
         // Extract rotation_interval (optional, default: 12h)
         let rotation_interval = ticket_keys_block
