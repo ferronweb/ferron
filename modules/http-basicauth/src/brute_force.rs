@@ -19,6 +19,8 @@ pub struct BruteForceConfig {
     pub lockout_duration_secs: u64,
     /// Sliding window for counting attempts (seconds).
     pub window_secs: u64,
+    /// List of users to track for brute-force protection.
+    pub _users: Vec<String>,
 }
 
 impl BruteForceConfig {
@@ -35,6 +37,7 @@ impl Default for BruteForceConfig {
             max_attempts: Self::DEFAULT_MAX_ATTEMPTS,
             lockout_duration_secs: Self::DEFAULT_LOCKOUT_DURATION_SECS,
             window_secs: Self::DEFAULT_WINDOW_SECS,
+            _users: Vec::new(),
         }
     }
 }
@@ -209,6 +212,7 @@ mod tests {
             max_attempts: 3,
             lockout_duration_secs: 60,
             window_secs: 10,
+            ..Default::default()
         }
     }
 

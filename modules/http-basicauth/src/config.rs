@@ -67,7 +67,7 @@ fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAut
     if let Some(users_entries) = block.directives.get("users") {
         for users_entry in users_entries {
             if let Some(ref users_block) = users_entry.children {
-                parse_users_block(users_block, &mut config.users);
+                parse_users_block(users_block, &mut config.users, &mut config.brute_force);
             }
         }
     }
@@ -82,7 +82,11 @@ fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAut
     }
 }
 
-fn parse_users_block(block: &ServerConfigurationBlock, users: &mut HashMap<String, String>) {
+fn parse_users_block(
+    block: &ServerConfigurationBlock,
+    users: &mut HashMap<String, String>,
+    bfc: &mut BruteForceConfig,
+) {
     // Each directive inside `users { ... }` is a username with the hash as its argument.
     // e.g.: `alice "$argon2id$..."`
     for (username, entries) in block.directives.iter() {
@@ -90,6 +94,7 @@ fn parse_users_block(block: &ServerConfigurationBlock, users: &mut HashMap<Strin
             if let Some(hash_val) = entry.args.first() {
                 if let Some(hash_str) = hash_val.as_str() {
                     users.insert(username.clone(), hash_str.to_string());
+                    bfc._users.push(username.clone());
                 }
             }
         }
