@@ -1,8 +1,7 @@
 //! OCSP stapler module for Ferron.
 //!
 //! This module initializes the OCSP stapling service on the secondary tokio
-//! runtime during server startup. It is a thin `ModuleLoader` shim — the actual
-//! OCSP logic lives in the `ferron-ocsp` crate.
+//! runtime during server startup.
 //!
 //! Once loaded, any TLS provider can use `ferron_ocsp::get_service_handle()` to
 //! wrap its certificate resolver with `OcspStapler` for automatic OCSP stapling.
