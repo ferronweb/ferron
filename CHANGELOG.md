@@ -26,6 +26,7 @@
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
 - Some file serving errors are now handled more gracefully, returning a 403 Forbidden (for permission denied) or 400 Bad Request (for invalid filename or too long one) status code instead of a generic 500 Internal Server Error.
+- Syntax for passive and active health checks, load balancing algorithm, and connection retries has been updated to use a more consistent and readable format (**potentially breaking**).
 - The web server now warns when local automatic TLS is configured but the cache directory isn't writable, instead of straight-up failing to start.
 - The web server process now performs graceful shutdown when SIGTERM is sent to the process on Unix.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).

@@ -173,7 +173,7 @@ struct ProxyState {
     conn_state: upstream::ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
-    lb_algorithms: RwLock<HashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>>,
+    algorithms: RwLock<HashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>>,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: upstream::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
@@ -192,7 +192,7 @@ impl ProxyState {
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             ))),
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            lb_algorithms: RwLock::new(HashMap::new()),
+            algorithms: RwLock::new(HashMap::new()),
             active_health_check_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             health_check_tasks: RwLock::new(HashMap::new()),
             active_unhealthy_counters: RwLock::new(HashMap::new()),
@@ -452,7 +452,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 let resolved = uc
                     .resolve(
                         Arc::clone(&self.state.failed_backends),
-                        config.lb_health_check_max_fails,
+                        config.passive_check.max_fails,
                     )
                     .await;
                 for resolved_upstream in resolved {
@@ -462,16 +462,16 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         }
 
         let algorithm = {
-            let guard = self.state.lb_algorithms.read();
+            let guard = self.state.algorithms.read();
             if let Some(alg) = guard.get(&config_key) {
                 Arc::clone(alg)
             } else {
                 drop(guard);
-                let mut guard = self.state.lb_algorithms.write();
+                let mut guard = self.state.algorithms.write();
                 if let Some(alg) = guard.get(&config_key) {
                     Arc::clone(alg)
                 } else {
-                    let alg = Arc::new(config.lb_algorithm.into());
+                    let alg = Arc::new(config.algorithm.into());
                     guard.insert(config_key.clone(), Arc::clone(&alg));
                     alg
                 }

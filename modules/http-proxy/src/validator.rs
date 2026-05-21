@@ -37,7 +37,7 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
         }
         if let Some(entries) = config.directives.get("proxy") {
             used_directives.insert("proxy".to_string());
-            validate_proxy_entries(entries, used_directives)?;
+            validate_proxy_entries(entries)?;
         }
         Ok(())
     }
@@ -45,7 +45,6 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
 
 fn validate_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
-    used_directives: &mut HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
     for entry in entries {
         if entry.args.len() > 1 {
@@ -59,42 +58,32 @@ fn validate_proxy_entries(
             }
         }
         if let Some(block) = &entry.children {
-            validate_proxy_block(block, used_directives)?;
+            validate_proxy_block(block)?;
         }
     }
     Ok(())
 }
 
-fn validate_proxy_block(
-    block: &ServerConfigurationBlock,
-    used_directives: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
-    validate_str(block, used_directives, "lb_algorithm")?;
-    validate_bool(block, used_directives, "lb_health_check")?;
-    validate_number(block, used_directives, "lb_health_check_max_fails", 0)?;
-    validate_duration(block, used_directives, "lb_health_check_window")?;
-    validate_bool(block, used_directives, "lb_retry_connection")?;
-    validate_bool(block, used_directives, "keepalive")?;
-    validate_bool(block, used_directives, "http2")?;
-    validate_bool(block, used_directives, "http2_only")?;
-    validate_bool(block, used_directives, "intercept_errors")?;
-    validate_bool(block, used_directives, "no_verification")?;
-    validate_enum(block, used_directives, "proxy_header", &["v1", "v2"])?;
-    validate_request_header(block, used_directives)?;
-    validate_number(block, used_directives, "proxy_concurrent_conns", 0)?;
-    validate_upstream_directives(block, used_directives)?;
+fn validate_proxy_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+    validate_str(block, "algorithm")?;
+    validate_passive_check_directives(block)?;
+    validate_bool(block, "retry_connection")?;
+    validate_bool(block, "keepalive")?;
+    validate_bool(block, "http2")?;
+    validate_bool(block, "http2_only")?;
+    validate_bool(block, "intercept_errors")?;
+    validate_bool(block, "no_verification")?;
+    validate_enum(block, "proxy_header", &["v1", "v2"])?;
+    validate_request_header(block)?;
+    validate_number(block, "proxy_concurrent_conns", 0)?;
+    validate_upstream_directives(block)?;
     #[cfg(feature = "srv-lookup")]
-    validate_srv_directives(block, used_directives)?;
+    validate_srv_directives(block)?;
     Ok(())
 }
 
-fn validate_str(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+fn validate_str(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if e.args.first().and_then(|v| v.as_str()).is_none() {
                 return Err(format!("Invalid `{name}` — expected a string").into());
@@ -106,11 +95,9 @@ fn validate_str(
 
 fn validate_interpolated_str(
     block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if e.args
                 .first()
@@ -126,13 +113,8 @@ fn validate_interpolated_str(
     Ok(())
 }
 
-fn validate_bool(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+fn validate_bool(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if e.args.is_empty() {
                 continue;
@@ -147,12 +129,10 @@ fn validate_bool(
 
 fn validate_number(
     block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
     name: &str,
     min: i64,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
                 if val < min {
@@ -166,13 +146,8 @@ fn validate_number(
     Ok(())
 }
 
-fn validate_duration(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
                 parse_duration(val).map_err(|e| format!("Invalid `{name}` duration: {e}"))?;
@@ -186,12 +161,10 @@ fn validate_duration(
 
 fn validate_enum(
     block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
     name: &str,
     variants: &[&str],
 ) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
-        used.insert(name.to_string());
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
                 if !variants.contains(&val) {
@@ -209,12 +182,8 @@ fn validate_enum(
     Ok(())
 }
 
-fn validate_request_header(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("request_header") {
-        used.insert("request_header".to_string());
         for e in entries {
             if e.args.is_empty() {
                 return Err("request_header requires at least one argument".into());
@@ -241,12 +210,8 @@ fn validate_request_header(
     Ok(())
 }
 
-fn validate_upstream_directives(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+fn validate_upstream_directives(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("upstream") {
-        used.insert("upstream".to_string());
         for e in entries {
             if e.args
                 .first()
@@ -256,20 +221,18 @@ fn validate_upstream_directives(
                 return Err("The `upstream` directive requires a URL argument".into());
             }
             if let Some(up_block) = &e.children {
-                validate_upstream_block(up_block, used)?;
+                validate_upstream_block(up_block)?;
             }
         }
     }
     Ok(())
 }
 
-fn validate_upstream_block(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
-    validate_number(block, used, "limit", 1)?;
-    validate_duration(block, used, "idle_timeout")?;
-    validate_interpolated_str(block, used, "unix")?;
+fn validate_upstream_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+    validate_active_check_directives(block)?;
+    validate_number(block, "limit", 1)?;
+    validate_duration(block, "idle_timeout")?;
+    validate_interpolated_str(block, "unix")?;
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());
@@ -279,18 +242,14 @@ fn validate_upstream_block(
 
 /// Validate SRV upstream directives.
 #[cfg(feature = "srv-lookup")]
-fn validate_srv_directives(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+fn validate_srv_directives(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("srv") {
-        used.insert("srv".to_string());
         for e in entries {
             if e.args.first().and_then(|v| v.as_str()).is_none() {
                 return Err("The `srv` directive requires an SRV record name argument".into());
             }
             if let Some(srv_block) = &e.children {
-                validate_srv_block(srv_block, used)?;
+                validate_srv_block(srv_block)?;
             }
         }
     }
@@ -298,12 +257,48 @@ fn validate_srv_directives(
 }
 
 #[cfg(feature = "srv-lookup")]
-fn validate_srv_block(
+fn validate_srv_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+    validate_number(block, "limit", 1)?;
+    validate_duration(block, "idle_timeout")?;
+    validate_str(block, "dns_servers")?;
+    Ok(())
+}
+
+fn validate_passive_check_directives(
     block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    validate_number(block, used, "limit", 1)?;
-    validate_duration(block, used, "idle_timeout")?;
-    validate_str(block, used, "dns_servers")?;
+    if let Some(block) = block
+        .directives
+        .get("passive_check")
+        .and_then(|d| d.first())
+        .and_then(|d| d.children.as_ref())
+    {
+        validate_number(block, "max_fails", 0)?;
+        validate_duration(block, "window")?;
+    }
+    Ok(())
+}
+
+fn validate_active_check_directives(
+    block: &ServerConfigurationBlock,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(block) = block
+        .directives
+        .get("active_check")
+        .and_then(|d| d.first())
+        .and_then(|d| d.children.as_ref())
+    {
+        validate_str(block, "uri")?;
+        validate_str(block, "method")?;
+        validate_duration(block, "interval")?;
+        validate_duration(block, "timeout")?;
+        validate_str(block, "expect_status")?;
+        validate_duration(block, "response_time_threshold")?;
+        validate_str(block, "body_match")?;
+        validate_number(block, "consecutive_fails", 1)?;
+        validate_number(block, "consecutive_passes", 1)?;
+        validate_bool(block, "no_verification")?;
+    }
+
     Ok(())
 }

@@ -84,7 +84,7 @@ ferron-random:80 {
     upstream "http://backend-1:3000"
     upstream "http://backend-2:3000"
     upstream "http://backend-3:3000"
-    lb_algorithm "random"
+    algorithm "random"
   }
 }
 
@@ -93,7 +93,7 @@ ferron-round-robin:80 {
     upstream "http://backend-1:3000"
     upstream "http://backend-2:3000"
     upstream "http://backend-3:3000"
-    lb_algorithm "round_robin"
+    algorithm "round_robin"
   }
 }
 
@@ -102,7 +102,7 @@ ferron-least-conn:80 {
     upstream "http://backend-1:3000"
     upstream "http://backend-2:3000"
     upstream "http://backend-3:3000"
-    lb_algorithm "least_conn"
+    algorithm "least_conn"
   }
 }
 
@@ -111,7 +111,7 @@ ferron-two-random:80 {
     upstream "http://backend-1:3000"
     upstream "http://backend-2:3000"
     upstream "http://backend-3:3000"
-    lb_algorithm "two_random"
+    algorithm "two_random"
   }
 }
 "#,

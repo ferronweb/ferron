@@ -65,7 +65,7 @@ example.com {
         upstream http://localhost:3000
         upstream http://localhost:3001
 
-        lb_algorithm two_random
+        algorithm two_random
     }
 }
 ```
@@ -89,9 +89,10 @@ example.com {
         upstream http://localhost:3000
         upstream http://localhost:3001
 
-        lb_health_check
-        lb_health_check_max_fails 3
-        lb_health_check_window "5s"
+        passive_check {
+            max_fails 3
+            window "5s"
+        }
     }
 }
 ```
@@ -104,12 +105,14 @@ Ferron also supports active health checks. To enable active health checking:
 example.com {
     proxy {
         upstream http://localhost:3000 {
-            health_check true
-            health_check_uri "/health"
+            active_check {
+                uri "/health"
+            }
         }
         upstream http://localhost:3001 {
-            health_check true
-            health_check_uri "/health"
+            active_check {
+                uri "/health"
+            }
         }
     }
 }

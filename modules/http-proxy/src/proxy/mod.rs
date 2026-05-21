@@ -66,7 +66,7 @@ pub async fn execute_proxy(
     let upstreams = resolve_upstreams(
         &config.upstreams,
         Arc::clone(&failed_backends),
-        config.lb_health_check_max_fails,
+        config.passive_check.max_fails,
     )
     .await;
 
@@ -86,14 +86,14 @@ pub async fn execute_proxy(
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
-    // Backend selection loop — retries on connection failure when lb_retry_connection is enabled
+    // Backend selection loop — retries on connection failure when retry_connection is enabled
     loop {
         // Select upstream via load balancing (tracker already initialized inside)
         let Some(selected) = determine_proxy_to(
             &upstreams,
             &failed_backends,
-            config.lb_health_check,
-            config.lb_health_check_max_fails,
+            config.passive_check.enabled,
+            config.passive_check.max_fails,
             algorithm,
             conn_state,
             health_check_state,
@@ -153,18 +153,18 @@ pub async fn execute_proxy(
             Err(e) => {
                 mark_backend_failure(
                     Arc::clone(&failed_backends),
-                    config.lb_health_check,
+                    config.passive_check.enabled,
                     &selected.upstream,
                     &mut metrics,
                 );
 
                 // Check if we should retry with another backend
-                if config.lb_retry_connection {
+                if config.retry_connection {
                     // Count how many healthy backends remain
                     let healthy_count = count_healthy_backends(
                         &upstreams,
                         &failed_backends,
-                        config.lb_health_check_max_fails,
+                        config.passive_check.max_fails,
                     );
 
                     if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {

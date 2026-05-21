@@ -394,7 +394,7 @@ example.com {
         upstream http://localhost:3000
         upstream http://localhost:3001
 
-        lb_algorithm round_robin
+        algorithm round_robin
         keepalive
     }
 }

@@ -15,16 +15,12 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, and `unix` properties. Default: none
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
-- `lb_algorithm <algorithm: string>` (`http-proxy`)
-  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`. Default: `lb_algorithm two_random`
-- `lb_health_check [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether passive health checking is enabled. Failed backends are temporarily excluded. Default: `lb_health_check false`
-- `lb_health_check_max_fails <count: integer>` (`http-proxy`)
-  - This directive specifies the maximum consecutive failures before a backend is marked unhealthy. Default: `lb_health_check_max_fails 3`
-- `lb_health_check_window <duration: string>` (`http-proxy`)
-  - This directive specifies the time window for the failure counter. After this duration, the failure count resets. Default: `lb_health_check_window 5s`
-- `lb_retry_connection [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `lb_retry_connection true`
+- `algorithm <algorithm: string>` (`http-proxy`)
+  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`. Default: `algorithm two_random`
+- `passive_check [bool: boolean]` (`http-proxy`)
+  - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
+- `retry_connection [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
 **Configuration example:**
 
@@ -37,13 +33,21 @@ example.com {
             idle_timeout "30s"
         }
 
-        lb_algorithm two_random
-        lb_health_check
-        lb_health_check_max_fails 3
-        lb_health_check_window "5s"
+        algorithm two_random
+        passive_check {
+            max_fails 3
+            window "5s"
+        }
     }
 }
 ```
+
+#### Passive health check nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `max_fails` | `<count: integer>` | Maximum consecutive failures before marking backend unhealthy. | 3 |
+| `window` | `<duration: string>` | Time window for the failure counter. After this duration, the counter resets. | `5s` |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -225,38 +229,30 @@ Ferron maintains a keep-alive connection pool for upstream backends. Key behavio
 Passive health checking tracks connection failures per backend:
 
 1. Each failed connection increments a counter for that backend.
-2. If the counter exceeds `lb_health_check_max_fails` within `lb_health_check_window`, the backend is temporarily excluded from selection.
+2. If the counter exceeds `max_fails` within the `window` duration, the backend is temporarily excluded from selection.
 3. After the window expires, the counter resets and the backend becomes eligible again.
-4. When `lb_retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
+4. When `retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
 
 ### Active health checking
 
 Active health checks proactively probe backend health on a schedule, independent of incoming traffic. This allows quick detection of backend failures before they affect client requests.
 
-#### Directives
+Active health checks are configured per-upstream inside an `active_check` block.
 
-- `health_check [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether active health checking is enabled for this upstream. Default: `health_check false`
-- `health_check_method <method: string>` (`http-proxy`)
-  - This directive specifies the HTTP method for probe requests. Supported values: `GET`, `HEAD`. Default: `health_check_method GET`
-- `health_check_uri <path: string>` (`http-proxy`)
-  - This directive specifies the endpoint to probe for health checks. Default: `health_check_uri /health`
-- `health_check_interval <duration: string>` (`http-proxy`)
-  - This directive specifies the interval between health check probes. Default: `health_check_interval 10s`
-- `health_check_timeout <duration: string>` (`http-proxy`)
-  - This directive specifies the maximum wait time for a probe response. Default: `health_check_timeout 5s`
-- `health_check_expect_status <status: string>` (`http-proxy`)
-  - This directive specifies the expected HTTP status code(s) for a successful probe. Supports: `2xx`, `3xx`, `2xx,3xx`, specific codes (`200,201`), or ranges (`200-299`). Default: `health_check_expect_status 2xx,3xx`
-- `health_check_response_time_threshold <duration: string>` (`http-proxy`)
-  - This directive specifies an optional response time threshold; if exceeded, the probe is marked unhealthy. Default: disabled
-- `health_check_body_match <substring: string>` (`http-proxy`)
-  - This directive specifies an optional substring to match in the response body (GET only). Default: disabled
-- `health_check_consecutive_fails <count: integer>` (`http-proxy`)
-  - This directive specifies the number of consecutive failures before marking an upstream as unhealthy. Default: `health_check_consecutive_fails 2`
-- `health_check_consecutive_passes <count: integer>` (`http-proxy`)
-  - This directive specifies the number of consecutive successes before marking an upstream as healthy when recovering. Default: `health_check_consecutive_passes 2`
-- `health_check_no_verification <boolean>` (`http-proxy`)
-  - This directive specifies whether TLS certificate verification should be skipped for HTTPS health check probes. When set to `true`, the health check will accept any TLS certificate without validation. Default: `health_check_no_verification false`
+#### `active_check` nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `uri` | `<path: string>` | The endpoint to probe for health checks. | `/health` |
+| `method` | `<method: string>` | HTTP method for probe requests. Supported values: `GET`, `HEAD`. | `GET` |
+| `interval` | `<duration: string>` | Interval between health check probes. | `10s` |
+| `timeout` | `<duration: string>` | Maximum wait time for a probe response. | `5s` |
+| `expect_status` | `<status: string>` | Expected HTTP status code(s) for a successful probe. Supports: `2xx`, `3xx`, `2xx,3xx`, specific codes (`200,204`), or ranges (`200-299`). | `2xx,3xx` |
+| `response_time_threshold` | `<duration: string>` | Optional response time threshold; if exceeded, the probe is marked unhealthy. | disabled |
+| `body_match` | `<substring: string>` | Optional substring to match in the response body (GET only). | disabled |
+| `consecutive_fails` | `<count: integer>` | Number of consecutive failures before marking an upstream as unhealthy. | 2 |
+| `consecutive_passes` | `<count: integer>` | Number of consecutive successes before marking an upstream as healthy when recovering. | 2 |
+| `no_verification` | `[bool: boolean]` | Whether to skip TLS certificate verification for HTTPS probes. | `false` |
 
 **Configuration example:**
 
@@ -264,22 +260,24 @@ Active health checks proactively probe backend health on a schedule, independent
 example.com {
     proxy {
         upstream http://localhost:3000 {
-            health_check true
-            health_check_uri "/health"
-            health_check_interval "10s"
-            health_check_timeout "5s"
-            health_check_expect_status "200,204"
-            health_check_consecutive_fails 2
-            health_check_consecutive_passes 2
+            active_check {
+                uri "/health"
+                interval "10s"
+                timeout "5s"
+                expect_status "200,204"
+                consecutive_fails 2
+                consecutive_passes 2
+            }
         }
         upstream https://localhost:3001 {
-            health_check true
-            health_check_uri "/api/status"
-            health_check_method HEAD
-            health_check_response_time_threshold "1s"
-            health_check_no_verification
+            active_check {
+                uri "/api/status"
+                method HEAD
+                response_time_threshold "1s"
+                no_verification
+            }
         }
-        lb_algorithm two_random
+        algorithm two_random
     }
 }
 ```
@@ -302,14 +300,14 @@ The proxy module emits the following metrics:
 
 ## Notes and troubleshooting
 
-- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`lb_health_check_max_fails`).
+- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).
 - For active health checks:
   - Ensure the probe endpoint is configured and reachable on all backends (e.g., `/health` must return 2xx by default).
-  - If upstreams are incorrectly marked unhealthy, check logs for "marked unhealthy" messages and verify the `health_check_expect_status` and response times.
+  - If upstreams are incorrectly marked unhealthy, check logs for "marked unhealthy" messages and verify the `expect_status` and response times.
   - Probe endpoints should be lightweight and low-latency to avoid impacting performance.
   - Use HEAD requests when the response body is not needed for faster probes.
-  - Optional: Use `health_check_body_match` to ensure critical responses contain expected content (e.g., `"ok"` or `"healthy"`).
-  - For HTTPS probes with self-signed certificates, use `health_check_no_verification true` to skip TLS certificate validation.
+  - Optional: Use `body_match` to ensure critical responses contain expected content (e.g., `"ok"` or `"healthy"`).
+  - For HTTPS probes with self-signed certificates, use `no_verification true` to skip TLS certificate validation.
   - Both passive and active health checks work together: either can mark a backend as unhealthy.
 - For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).

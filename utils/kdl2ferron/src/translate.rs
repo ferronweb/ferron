@@ -460,13 +460,11 @@ pub fn process_block(
                     _ => None,
                 });
                 if let Some(val) = val {
-                    let name = match node.name() {
-                        "tls_cipher_suite" => "cipher_suite",
-                        "tls_ecdh_curve" => "ecdh_curve",
-                        "tls_min_version" => "min_version",
-                        "tls_max_version" => "max_version",
-                        _ => unreachable!(),
-                    };
+                    let name = node
+                        .name()
+                        .strip_prefix("tls_")
+                        .unwrap_or(node.name())
+                        .to_string();
                     nested_directives
                         .entry("tls")
                         .or_insert_with(|| ferronconf::Block {
@@ -1708,7 +1706,7 @@ pub fn process_block(
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                        name: "lb_health_check".to_string(),
+                        name: "passive_check".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
                             ferronconf::Span { line: 0, column: 0 },
@@ -1720,22 +1718,47 @@ pub fn process_block(
             "lb_health_check_max_fails" => {
                 if let Some(e) = node.entries.first() {
                     if let kdlite::dom::Value::Integer(i) = &e.value {
-                        nested_directives
+                        let proxy_statements = &mut nested_directives
                             .entry("proxy")
                             .or_insert_with(|| ferronconf::Block {
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
-                            .statements
-                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                                name: "lb_health_check_max_fails".to_string(),
+                            .statements;
+                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "passive_check")) {
+                            match passive_check {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                    statements: vec![],
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                }).statements,
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name: "passive_check".to_string(),
+                                args: vec![],
+                                span: ferronconf::Span { line: 0, column: 0 },
+                                block: None,
+                            }));
+                            match proxy_statements.last_mut().expect("passive_check directive should be present") {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                    statements: vec![],
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                }).statements,
+                                _ => unreachable!(),
+                            }
+                        };
+                        passive_check_statements.push(ferronconf::Statement::Directive(
+                            ferronconf::Directive {
+                                name: "max_fails".to_string(),
                                 args: vec![ferronconf::Value::Integer(
                                     *i as i64,
                                     ferronconf::Span { line: 0, column: 0 },
                                 )],
                                 block: None,
                                 span: ferronconf::Span { line: 0, column: 0 },
-                            }));
+                            },
+                        ));
                     }
                 }
             }
@@ -1757,7 +1780,13 @@ pub fn process_block(
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                        name: node.name().to_string(),
+                        // Strip "proxy_" and "lb_" prefixes from directive names
+                        name: node
+                            .name()
+                            .to_string()
+                            .strip_prefix("proxy_")
+                            .unwrap_or(node.name().strip_prefix("lb_").unwrap_or(node.name()))
+                            .to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
                             ferronconf::Span { line: 0, column: 0 },
@@ -1780,7 +1809,7 @@ pub fn process_block(
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                            name: "lb_algorithm".to_string(),
+                            name: "algorithm".to_string(),
                             args: vec![ferronconf::Value::String(
                                 alg,
                                 ferronconf::Span { line: 0, column: 0 },
@@ -1793,22 +1822,47 @@ pub fn process_block(
             "lb_health_check_window" => {
                 if let Some(e) = node.entries.first() {
                     if let kdlite::dom::Value::Integer(i) = &e.value {
-                        nested_directives
+                        let proxy_statements = &mut nested_directives
                             .entry("proxy")
                             .or_insert_with(|| ferronconf::Block {
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
-                            .statements
-                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                                name: "lb_health_check_window".to_string(),
+                            .statements;
+                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "passive_check")) {
+                            match passive_check {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                    statements: vec![],
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                }).statements,
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name: "passive_check".to_string(),
+                                args: vec![],
+                                span: ferronconf::Span { line: 0, column: 0 },
+                                block: None,
+                            }));
+                            match proxy_statements.last_mut().expect("passive_check directive should be present") {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                    statements: vec![],
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                }).statements,
+                                _ => unreachable!(),
+                            }
+                        };
+                        passive_check_statements.push(ferronconf::Statement::Directive(
+                            ferronconf::Directive {
+                                name: "window".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     format!("{}ms", i),
                                     ferronconf::Span { line: 0, column: 0 },
                                 )],
                                 block: None,
                                 span: ferronconf::Span { line: 0, column: 0 },
-                            }));
+                            },
+                        ));
                     }
                 }
             }

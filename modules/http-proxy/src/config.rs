@@ -32,15 +32,31 @@ pub enum HeaderAction {
     Append(HeaderName, String),
 }
 
+/// Passive health check configuration for the reverse proxy.
+#[derive(Clone)]
+pub struct HealthCheckConfig {
+    pub enabled: bool,
+    pub max_fails: u64,
+    pub window: Duration,
+}
+
+impl Default for HealthCheckConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_fails: 3,
+            window: Duration::from_millis(5000),
+        }
+    }
+}
+
 /// Parsed reverse proxy configuration.
 #[derive(Clone)]
 pub struct ProxyConfig {
     pub upstreams: Vec<Upstream>,
-    pub lb_algorithm: LoadBalancerAlgorithm,
-    pub lb_health_check: bool,
-    pub lb_health_check_max_fails: u64,
-    pub lb_health_check_window: Duration,
-    pub lb_retry_connection: bool,
+    pub algorithm: LoadBalancerAlgorithm,
+    pub passive_check: HealthCheckConfig,
+    pub retry_connection: bool,
     pub keepalive: bool,
     pub http2: bool,
     pub http2_only: bool,
@@ -62,11 +78,9 @@ impl Default for ProxyConfig {
     fn default() -> Self {
         Self {
             upstreams: Vec::new(),
-            lb_algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
-            lb_health_check: false,
-            lb_health_check_max_fails: 3,
-            lb_health_check_window: Duration::from_millis(5000),
-            lb_retry_connection: true,
+            algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
+            passive_check: HealthCheckConfig::default(),
+            retry_connection: true,
             keepalive: true,
             http2: false,
             http2_only: false,
@@ -203,13 +217,13 @@ fn parse_proxy_block(
                     parse_srv_entry(entry, cfg, ctx)?;
                 }
             }
-            "lb_algorithm" => {
+            "algorithm" => {
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
                     .and_then(|v| v.as_str())
                 {
-                    cfg.lb_algorithm = match val {
+                    cfg.algorithm = match val {
                         "random" => LoadBalancerAlgorithm::Random,
                         "round_robin" => LoadBalancerAlgorithm::RoundRobin,
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
@@ -222,33 +236,19 @@ fn parse_proxy_block(
                     };
                 }
             }
-            "lb_health_check" => {
+            "passive_check" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
-                    cfg.lb_health_check = val;
+                    cfg.passive_check.enabled = val;
+                    if val {
+                        if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
+                            parse_passive_health_check(&children, &mut cfg.passive_check)?;
+                        }
+                    }
                 }
             }
-            "lb_health_check_max_fails" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v: &ServerConfigurationValue| v.as_number())
-                {
-                    cfg.lb_health_check_max_fails = val as u64;
-                }
-            }
-            "lb_health_check_window" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
-                {
-                    cfg.lb_health_check_window = parse_duration(val)
-                        .map_err(|e| format!("Invalid lb_health_check_window: {e}"))?;
-                }
-            }
-            "lb_retry_connection" => {
+            "retry_connection" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
-                    cfg.lb_retry_connection = val;
+                    cfg.retry_connection = val;
                 }
             }
             "keepalive" => {
@@ -309,6 +309,154 @@ fn parse_proxy_block(
     Ok(())
 }
 
+fn parse_passive_health_check(
+    entries: &ServerConfigurationBlock,
+    health_check_config: &mut HealthCheckConfig,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    for (name, entries) in entries.directives.iter() {
+        match name.as_str() {
+            "max_fails" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    health_check_config.max_fails = val as u64;
+                }
+            }
+            "window" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.window = parse_duration(val)
+                        .map_err(|e| format!("Invalid lb_health_check_window: {e}"))?;
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn parse_active_health_check(
+    entries: &ServerConfigurationBlock,
+    health_check_config: &mut UpstreamHealthCheckConfig,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    for (name, entries) in entries.directives.iter() {
+        match name.as_str() {
+            "uri" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.uri = val.to_string();
+                }
+            }
+            "method" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.method = match val.to_uppercase().as_str() {
+                        "GET" => HealthCheckMethod::Get,
+                        "HEAD" => HealthCheckMethod::Head,
+                        _ => {
+                            return Err(format!(
+                                "Invalid health_check_method: {val}, must be GET or HEAD"
+                            )
+                            .into())
+                        }
+                    };
+                }
+            }
+            "interval" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.interval = parse_duration(val)
+                        .map_err(|e| format!("Invalid health_check_interval: {e}"))?;
+                }
+            }
+            "timeout" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.timeout = parse_duration(val)
+                        .map_err(|e| format!("Invalid health_check_timeout: {e}"))?;
+                }
+            }
+            "expect_status" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.expect_status = parse_expected_status(val)?;
+                }
+            }
+            "response_time_threshold" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.response_time_threshold =
+                        Some(parse_duration(val).map_err(|e| {
+                            format!("Invalid health_check_response_time_threshold: {e}")
+                        })?);
+                }
+            }
+            "body_match" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    health_check_config.body_match = Some(val.to_string());
+                }
+            }
+            "consecutive_fails" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        health_check_config.consecutive_fails = val as u64;
+                    }
+                }
+            }
+            "consecutive_passes" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        health_check_config.consecutive_passes = val as u64;
+                    }
+                }
+            }
+            "no_verification" => {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                    health_check_config.no_verification = val;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 fn parse_upstream_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
@@ -360,113 +508,16 @@ fn parse_upstream_entry(
                         unix_socket = Some(val);
                     }
                 }
-                "health_check" => {
+                "active_check" => {
                     if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.enabled = val;
-                    }
-                }
-                "health_check_uri" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.uri = val.to_string();
-                    }
-                }
-                "health_check_method" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.method = match val.to_uppercase().as_str() {
-                            "GET" => HealthCheckMethod::Get,
-                            "HEAD" => HealthCheckMethod::Head,
-                            _ => {
-                                return Err(format!(
-                                    "Invalid health_check_method: {val}, must be GET or HEAD"
-                                )
-                                .into())
+                        if val {
+                            if let Some(children) =
+                                entries.first().and_then(|e| e.children.as_ref())
+                            {
+                                parse_active_health_check(&children, &mut health_check_config)?;
                             }
-                        };
-                    }
-                }
-                "health_check_interval" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.interval = parse_duration(val)
-                            .map_err(|e| format!("Invalid health_check_interval: {e}"))?;
-                    }
-                }
-                "health_check_timeout" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.timeout = parse_duration(val)
-                            .map_err(|e| format!("Invalid health_check_timeout: {e}"))?;
-                    }
-                }
-                "health_check_expect_status" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.expect_status = parse_expected_status(val)?;
-                    }
-                }
-                "health_check_response_time_threshold" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.response_time_threshold =
-                            Some(parse_duration(val).map_err(|e| {
-                                format!("Invalid health_check_response_time_threshold: {e}")
-                            })?);
-                    }
-                }
-                "health_check_body_match" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        health_check_config.body_match = Some(val.to_string());
-                    }
-                }
-                "health_check_consecutive_fails" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v: &ServerConfigurationValue| v.as_number())
-                    {
-                        if val > 0 {
-                            health_check_config.consecutive_fails = val as u64;
                         }
-                    }
-                }
-                "health_check_consecutive_passes" => {
-                    if let Some(val) = entries
-                        .first()
-                        .and_then(|e| e.args.first())
-                        .and_then(|v: &ServerConfigurationValue| v.as_number())
-                    {
-                        if val > 0 {
-                            health_check_config.consecutive_passes = val as u64;
-                        }
-                    }
-                }
-                "health_check_no_verification" => {
-                    if let Some(val) = entries.first().map(|e| e.get_flag()) {
-                        health_check_config.no_verification = val;
                     }
                 }
                 _ => {}
