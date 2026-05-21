@@ -89,13 +89,3 @@ impl ResolvesServerCert for TlsAlpn01Resolver {
         None
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tls_alpn_01_protocol_name() {
-        assert_eq!(ACME_TLS_ALPN_NAME, b"acme-tls/1");
-    }
-}

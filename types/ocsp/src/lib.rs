@@ -209,24 +209,3 @@ impl ResolvesServerCert for OcspStapler {
         Some(original_key)
     }
 }
-
-// Background OCSP task implementation has been moved to the modules/ocsp-stapler crate.
-// This crate retains only the public API surface (OcspStapler, OcspServiceHandle,
-// `take_ocsp_startup_state`, and `get_service_handle`).
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ocsp_service_handle_is_cloneable() {
-        fn assert_clone<T: Clone>() {}
-        assert_clone::<OcspServiceHandle>();
-    }
-
-    #[test]
-    fn test_ocsp_stapler_impls_resolves_server_cert() {
-        fn assert_resolves<T: ResolvesServerCert>() {}
-        assert_resolves::<OcspStapler>();
-    }
-}

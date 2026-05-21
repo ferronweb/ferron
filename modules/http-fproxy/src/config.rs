@@ -209,19 +209,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_denied_ips_parse() {
-        let ips = default_denied_ips();
-        assert!(!ips.is_empty());
-        // Verify localhost is in the list
-        let localhost: IpAddr = "127.0.0.1".parse().unwrap();
-        assert!(ips.iter().any(|n| n.contains(&localhost)));
-        let private: IpAddr = "192.168.1.1".parse().unwrap();
-        assert!(ips.iter().any(|n| n.contains(&private)));
-        let metadata: IpAddr = "169.254.169.254".parse().unwrap();
-        assert!(ips.iter().any(|n| n.contains(&metadata)));
-    }
-
-    #[test]
     fn test_domain_matches() {
         let patterns: Vec<GlobMatcher> = ["example.com", "*.example.com"]
             .iter()

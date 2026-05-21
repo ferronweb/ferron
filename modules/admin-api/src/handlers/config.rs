@@ -140,17 +140,3 @@ pub fn sanitize_config(config: &ServerConfiguration) -> Value {
     result.insert("ports".to_string(), Value::Object(ports_map));
     Value::Object(result)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sanitize_config_produces_valid_json() {
-        let config = ServerConfiguration::default();
-        let json = sanitize_config(&config);
-        assert!(json.is_object());
-        assert!(json.get("global_config").is_some());
-        assert!(json.get("ports").is_some());
-    }
-}

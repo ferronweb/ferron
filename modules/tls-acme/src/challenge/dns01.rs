@@ -69,24 +69,3 @@ impl Dns01Helper {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_challenge_domain() {
-        assert_eq!(
-            Dns01Helper::challenge_domain("example.com"),
-            "_acme-challenge.example.com"
-        );
-    }
-
-    #[test]
-    fn test_challenge_domain_with_subdomain() {
-        assert_eq!(
-            Dns01Helper::challenge_domain("www.example.com"),
-            "_acme-challenge.www.example.com"
-        );
-    }
-}

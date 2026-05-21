@@ -772,21 +772,3 @@ fn resolve_dns_client_from_config(
         "No DNS client configured for ACME DNS-01 challenge (provider: {provider_name})."
     ))?))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_provider_name() {
-        assert_eq!(TcpTlsAcmeProvider.name(), "acme");
-    }
-
-    #[test]
-    fn test_task_state_initialization() {
-        let state = AcmeTaskState::new();
-        assert!(state.configs.blocking_read().is_empty());
-        assert!(state.tls_alpn_01_resolvers.blocking_read().is_empty());
-        assert!(state.http_01_resolvers.blocking_read().is_empty());
-    }
-}

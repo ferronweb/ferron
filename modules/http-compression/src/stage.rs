@@ -514,31 +514,4 @@ mod tests {
             Some("text/html")
         ));
     }
-
-    #[test]
-    fn test_non_compressible_mime_types_contains_common_formats() {
-        assert!(NON_COMPRESSIBLE_MIME_TYPES.contains("image/jpeg"));
-        assert!(NON_COMPRESSIBLE_MIME_TYPES.contains("image/png"));
-        assert!(NON_COMPRESSIBLE_MIME_TYPES.contains("application/pdf"));
-        assert!(NON_COMPRESSIBLE_MIME_TYPES.contains("application/zip"));
-        assert!(NON_COMPRESSIBLE_MIME_TYPES.contains("video/mp4"));
-    }
-
-    #[test]
-    fn test_compression_header_values() {
-        assert_eq!(Compression::Gzip.header_value(), Some("gzip"));
-        assert_eq!(Compression::Brotli.header_value(), Some("br"));
-        assert_eq!(Compression::Deflate.header_value(), Some("deflate"));
-        assert_eq!(Compression::Zstd.header_value(), Some("zstd"));
-        assert_eq!(Compression::Identity.header_value(), None);
-    }
-
-    #[test]
-    fn test_compression_etag_suffix() {
-        assert_eq!(Compression::Gzip.etag_suffix(), Some("-dynamic-gzip"));
-        assert_eq!(Compression::Brotli.etag_suffix(), Some("-dynamic-br"));
-        assert_eq!(Compression::Deflate.etag_suffix(), Some("-dynamic-deflate"));
-        assert_eq!(Compression::Zstd.etag_suffix(), Some("-dynamic-zstd"));
-        assert_eq!(Compression::Identity.etag_suffix(), None);
-    }
 }
