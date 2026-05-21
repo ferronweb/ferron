@@ -834,10 +834,13 @@ fn parse_affinity_entry(
                                 method = match val.to_lowercase().as_str() {
                                     "consistent" => HashMethod::Consistent,
                                     "modulus" => HashMethod::Modulus,
-                                    _ => return Err(format!(
-                                        "Invalid hash method: {val}, must be consistent or modulus"
-                                    )
-                                    .into()),
+                                    _ => {
+                                        return Err(format!(
+                                            "Invalid hash method: {val}, \
+                                             must be consistent or modulus"
+                                        )
+                                        .into())
+                                    }
                                 };
                             }
                         }
