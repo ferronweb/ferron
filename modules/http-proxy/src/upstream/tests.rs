@@ -4,6 +4,15 @@ fn make_upstream(url: &str) -> UpstreamInner {
     UpstreamInner {
         proxy_to: url.to_string(),
         proxy_unix: None,
+        weight: 1,
+    }
+}
+
+fn make_upstream_with_weight(url: &str, weight: u32) -> UpstreamInner {
+    UpstreamInner {
+        proxy_to: url.to_string(),
+        proxy_unix: None,
+        weight,
     }
 }
 
@@ -335,4 +344,107 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         selected.upstream.proxy_to == "http://backend1"
             || selected.upstream.proxy_to == "http://backend2"
     );
+}
+
+#[test]
+fn test_select_backend_index_weighted_round_robin_equal_weights() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 1),
+        make_upstream_with_weight("http://backend2", 1),
+        make_upstream_with_weight("http://backend3", 1),
+    ];
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+
+    // With equal weights, should cycle like round-robin
+    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+}
+
+#[test]
+fn test_select_backend_index_weighted_round_robin_unequal_weights() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 5),
+        make_upstream_with_weight("http://backend2", 1),
+        make_upstream_with_weight("http://backend3", 1),
+    ];
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+
+    // Over 7 selections (total weight), backend1 should be selected 5 times,
+    // backend2 and backend3 once each
+    let mut counts = [0usize; 3];
+    for _ in 0..7 {
+        let idx = select_backend_index(&algorithm, &backends, None);
+        counts[idx] += 1;
+    }
+    assert_eq!(counts[0], 5);
+    assert_eq!(counts[1], 1);
+    assert_eq!(counts[2], 1);
+}
+
+#[test]
+fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 5),
+        make_upstream_with_weight("http://backend2", 1),
+    ];
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+
+    // With weights 5:1, smooth WRR should distribute as:
+    // A, A, B, A, A, A (not AAAAAA B)
+    let selections: Vec<usize> = (0..6)
+        .map(|_| select_backend_index(&algorithm, &backends, None))
+        .collect();
+
+    // Backend1 (weight 5) should be selected 5 times
+    let b1_count = selections.iter().filter(|&&x| x == 0).count();
+    let b2_count = selections.iter().filter(|&&x| x == 1).count();
+    assert_eq!(b1_count, 5);
+    assert_eq!(b2_count, 1);
+
+    // Verify smooth distribution: backend2 should not be at the very end
+    // In smooth WRR with 5:1, the pattern is typically: 0, 0, 1, 0, 0, 0
+    assert!(selections.iter().position(|&x| x == 1).unwrap() < 5);
+}
+
+#[test]
+fn test_select_backend_index_weighted_round_robin_single_backend() {
+    let backends = vec![make_upstream_with_weight("http://backend1", 10)];
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+
+    for _ in 0..10 {
+        assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    }
+}
+
+#[test]
+fn test_weighted_round_robin_state_resize() {
+    let mut state = WeightedRoundRobinState::new();
+
+    // Start with 2 backends
+    let weights1 = [3u32, 1];
+    let idx1 = state.next(&weights1);
+    assert!(idx1 < 2);
+
+    // Resize to 3 backends
+    let weights2 = [3u32, 1, 2];
+    let idx2 = state.next(&weights2);
+    assert!(idx2 < 3);
+
+    // Resize back to 2 backends
+    let idx3 = state.next(&weights1);
+    assert!(idx3 < 2);
+}
+
+#[test]
+fn test_load_balancer_algorithm_weighted_round_robin_from() {
+    assert!(matches!(
+        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::WeightedRoundRobin),
+        LoadBalancerAlgorithmInner::WeightedRoundRobin(_)
+    ));
 }

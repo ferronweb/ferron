@@ -10,6 +10,7 @@
 - `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
+- `weighted_round_robin` load balancing algorithm with per-upstream `weight` directive for proportional traffic distribution.
 - 58 newly-supported DNS providers for the ACME DNS-01 challenge: Alibaba Cloud DNS, ArvanCloud, AutoDNS, Azure DNS, Baidu Cloud DNS, BlueCat Address Manager v2, ClouDNS, Constellix, cPanel, DDNSS.de, DNS Made Easy, Domeneshop, DreamHost, DuckDNS, Dynu, EasyDNS, Akamai Edge DNS, Exoscale, FreeMyIP, Gandi v5, Gcore, GleSYS, GoDaddy, Hetzner DNS, hosting.de, Hostinger, Huawei Cloud DNS, Hurricane Electric, IBM Cloud, Infoblox NIOS, Infomaniak, INWX, IONOS, IPv64, Joker, AWS Lightsail, Linode, LuaDNS, Mythic Beasts, Namecheap, Name.com, NameSilo, netcup, Netlify, Nifcloud, NS1, Oracle Cloud DNS, Plesk, ANS SafeDNS, Scaleway, Tencent Cloud DNSPod, TransIP, UltraDNS, Vercel, Vultr, Websupport, Volcano Engine, and Yandex Cloud DNS.
 
 ### Changed

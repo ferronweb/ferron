@@ -1085,10 +1085,12 @@ mod tests {
             UpstreamInner {
                 proxy_to: "http://backend1".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
             UpstreamInner {
                 proxy_to: "http://backend2".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
         ];
 
@@ -1107,10 +1109,12 @@ mod tests {
             UpstreamInner {
                 proxy_to: "http://backend1".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
             UpstreamInner {
                 proxy_to: "http://backend2".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
         ];
 
@@ -1134,10 +1138,12 @@ mod tests {
             UpstreamInner {
                 proxy_to: "http://backend1".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
             UpstreamInner {
                 proxy_to: "http://backend2".to_string(),
                 proxy_unix: None,
+                weight: 1,
             },
         ];
 

@@ -167,6 +167,7 @@ pub fn parse_proxy_config(
                 limit: None,
                 idle_timeout: Some(default_timeout),
                 health_check_config: UpstreamHealthCheckConfig::default(),
+                weight: 1,
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -228,6 +229,7 @@ fn parse_proxy_block(
                         "round_robin" => LoadBalancerAlgorithm::RoundRobin,
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
                         "two_random" => LoadBalancerAlgorithm::TwoRandomChoices,
+                        "weighted_round_robin" => LoadBalancerAlgorithm::WeightedRoundRobin,
                         _ => {
                             return Err(
                                 format!("Unsupported load balancing algorithm: {val}").into()
@@ -472,6 +474,7 @@ fn parse_upstream_entry(
     let mut idle_timeout: Option<Duration> = None;
     let mut unix_socket: Option<String> = None;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
+    let mut weight: u32 = 1;
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
@@ -508,6 +511,17 @@ fn parse_upstream_entry(
                         unix_socket = Some(val);
                     }
                 }
+                "weight" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        if val > 0 {
+                            weight = val as u32;
+                        }
+                    }
+                }
                 "active_check" => {
                     if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.enabled = val;
@@ -535,6 +549,7 @@ fn parse_upstream_entry(
         limit,
         idle_timeout,
         health_check_config,
+        weight,
     }));
 
     // Populate the O(1) lookup map
@@ -562,6 +577,7 @@ fn parse_srv_entry(
     let mut limit: Option<usize> = None;
     let mut idle_timeout: Option<Duration> = None;
     let mut dns_servers: Vec<IpAddr> = Vec::new();
+    let mut weight: u32 = 1;
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
@@ -601,6 +617,17 @@ fn parse_srv_entry(
                             .collect();
                     }
                 }
+                "weight" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        if val > 0 {
+                            weight = val as u32;
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -615,6 +642,7 @@ fn parse_srv_entry(
         dns_servers,
         limit,
         idle_timeout,
+        weight,
     }));
 
     Ok(())

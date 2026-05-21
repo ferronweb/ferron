@@ -35,7 +35,11 @@ async fn create_ferron_container(
     let ferron_image = self::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
-        // No wait strategy here because we want to test availability which might take time due to backends
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/%")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
         .with_network(network)
         .with_hostname("ferron")
         .with_mount(Mount::bind_mount(
@@ -114,6 +118,21 @@ ferron-two-random:80 {
     algorithm "two_random"
   }
 }
+
+ferron-weighted-round-robin:80 {
+  proxy {
+    upstream "http://backend-1:3000" {
+      weight 2
+    }
+    upstream "http://backend-2:3000" {
+      weight 2
+    }
+    upstream "http://backend-3:3000" {
+      weight 1
+    }
+    algorithm "weighted_round_robin"
+  }
+}
 "#,
         )
         .unwrap();
@@ -152,4 +171,5 @@ ferron-two-random:80 {
     test_algo("ferron-round-robin").await;
     test_algo("ferron-least-conn").await;
     test_algo("ferron-two-random").await;
+    test_algo("ferron-weighted-round-robin").await;
 }

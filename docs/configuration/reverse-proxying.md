@@ -16,7 +16,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
-  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`. Default: `algorithm two_random`
+  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `weighted_round_robin`. Default: `algorithm two_random`
 - `passive_check [bool: boolean]` (`http-proxy`)
   - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
 - `retry_connection [bool: boolean]` (`http-proxy`)
@@ -41,6 +41,28 @@ example.com {
     }
 }
 ```
+
+**Weighted round-robin example:**
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080 {
+            weight 5
+        }
+        upstream http://localhost:8081 {
+            weight 2
+        }
+        upstream http://localhost:8082 {
+            weight 1
+        }
+
+        algorithm weighted_round_robin
+    }
+}
+```
+
+In this example, the first backend receives approximately 62.5% of requests (5/8), the second receives 25% (2/8), and the third receives 12.5% (1/8). The smooth weighted round-robin algorithm distributes requests evenly over time rather than sending all requests to one backend before moving to the next.
 
 #### Passive health check nested directives
 
@@ -173,6 +195,7 @@ example.com {
 | `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
+| `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Only used with `weighted_round_robin` algorithm. | 1 |
 
 ### `srv` (feature-gated)
 
@@ -193,6 +216,7 @@ example.com {
 | `dns_servers` | `<string>` | Comma-separated DNS server IPs. Uses system resolver if empty. | system |
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
+| `weight` | `<number>` | Weight for weighted load balancing algorithms. Applied to all backends resolved from this SRV record. | 1 |
 
 ## Load balancing algorithms
 
@@ -202,6 +226,7 @@ example.com {
 | `round_robin` | Cycles through backends in order. |
 | `least_conn` | Selects the backend with the fewest active tracked connections. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
+| `weighted_round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 
 ## Forwarding headers
 
