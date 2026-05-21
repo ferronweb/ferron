@@ -94,7 +94,7 @@ impl CacheStore {
                 DefaultHashBuilder::default(),
                 StoreLifecycle,
             ),
-            variants_by_base: DashMap::with_hasher(FxBuildHasher::default()),
+            variants_by_base: DashMap::with_hasher(FxBuildHasher),
             max_entries: AtomicUsize::new(max_entries),
         }
     }
