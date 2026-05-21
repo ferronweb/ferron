@@ -27,8 +27,9 @@ use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, 
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::upstream::{
-    determine_proxy_to, mark_backend_failure, resolve_upstreams, ConnectionsTrackState,
-    HealthCheckStateMap, LoadBalancerAlgorithmInner, UpstreamInner,
+    determine_proxy_to, mark_backend_failure, resolve_affinity_index, resolve_upstreams,
+    AffinityType, ConnectionsTrackState, HealthCheckStateMap, LoadBalancerAlgorithmInner,
+    UpstreamInner,
 };
 use crate::util::TtlCache;
 use crate::ProxyMetrics;
@@ -86,6 +87,9 @@ pub async fn execute_proxy(
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
+    // Extract affinity key and resolve affinity index
+    let affinity_index = extract_affinity_index(&config.affinity, ctx, &upstreams, algorithm);
+
     // Backend selection loop — retries on connection failure when retry_connection is enabled
     loop {
         // Select upstream via load balancing (tracker already initialized inside)
@@ -98,6 +102,7 @@ pub async fn execute_proxy(
             conn_state,
             health_check_state,
             &metrics.selected_backends,
+            affinity_index,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
@@ -148,6 +153,16 @@ pub async fn execute_proxy(
                     metrics.active_unhealthy_backends =
                         guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                 }
+
+                // Set affinity cookie if needed
+                let resp = maybe_set_affinity_cookie(
+                    resp,
+                    &config.affinity,
+                    affinity_index,
+                    &selected.upstream,
+                    &upstreams,
+                );
+
                 return Ok((resp, metrics));
             }
             Err(e) => {
@@ -209,6 +224,144 @@ pub async fn execute_proxy(
                 return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
             }
         }
+    }
+}
+
+/// Extract the affinity key from the request and resolve it to a backend index.
+fn extract_affinity_index(
+    affinity: &Option<crate::config::AffinityConfig>,
+    ctx: &HttpContext,
+    upstreams: &[UpstreamInner],
+    algorithm: &LoadBalancerAlgorithmInner,
+) -> Option<usize> {
+    let affinity = affinity.as_ref()?;
+
+    let key = match &affinity.affinity_type {
+        AffinityType::Cookie(cfg) => {
+            // Read cookie from request headers
+            let req = ctx.req.as_ref()?;
+            let cookie_header = req.headers().get(http::header::COOKIE)?;
+            let cookie_str = cookie_header.to_str().ok()?;
+            parse_cookie_value(cookie_str, &cfg.name)?
+                .as_bytes()
+                .to_vec()
+        }
+        AffinityType::Header(header_name) => {
+            let req = ctx.req.as_ref()?;
+            let header_value = req.headers().get(header_name)?;
+            header_value.as_bytes().to_vec()
+        }
+        AffinityType::Ip => ctx.remote_address.ip().to_string().into_bytes(),
+        AffinityType::Hash { variable, .. } => {
+            // For hash affinity, use the variable value as the key
+            // Variables are resolved from the request context
+            resolve_variable(variable, ctx)?.into_bytes()
+        }
+    };
+
+    if key.is_empty() {
+        return None;
+    }
+
+    resolve_affinity_index(&affinity.affinity_type, &key, upstreams, algorithm)
+}
+
+/// Parse a specific cookie value from a Cookie header string.
+fn parse_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
+    for pair in cookie_header.split(';') {
+        let pair = pair.trim();
+        if let Some(eq_pos) = pair.find('=') {
+            let cookie_name = &pair[..eq_pos];
+            if cookie_name == name {
+                return Some(pair[eq_pos + 1..].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Resolve a variable name to its value from the request context.
+fn resolve_variable(variable: &str, ctx: &HttpContext) -> Option<String> {
+    // Support common built-in variables
+    let req = ctx.req.as_ref()?;
+    match variable {
+        "request.uri" => Some(req.uri().to_string()),
+        "request.uri.path" => Some(req.uri().path().to_string()),
+        "request.host" => req.uri().host().map(|s| s.to_string()),
+        "request.method" => Some(req.method().as_str().to_string()),
+        "remote.ip" => Some(ctx.remote_address.ip().to_string()),
+        _ => {
+            // Try to parse as a header variable: request.header.<name>
+            if let Some(header_name) = variable.strip_prefix("request.header.") {
+                let header_name = header_name.replace('_', "-");
+                req.headers()
+                    .get(header_name.as_str())
+                    .map(|v| v.to_str().unwrap_or("").to_string())
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Set the affinity cookie on the response if using cookie affinity
+/// and no valid cookie was present in the request.
+fn maybe_set_affinity_cookie(
+    resp: HttpResponse,
+    affinity: &Option<crate::config::AffinityConfig>,
+    _affinity_index: Option<usize>,
+    selected_upstream: &UpstreamInner,
+    _upstreams: &[UpstreamInner],
+) -> HttpResponse {
+    let affinity = match affinity {
+        Some(a) => a,
+        None => return resp,
+    };
+
+    let cookie_cfg = match &affinity.affinity_type {
+        AffinityType::Cookie(cfg) => cfg,
+        _ => return resp,
+    };
+
+    // Only set cookie if we have a valid affinity index (meaning we used affinity routing)
+    // or if this is the first request (no cookie was present)
+    let backend_id = crate::upstream::backend_affinity_id(selected_upstream);
+
+    // Build Set-Cookie header value
+    let mut cookie_value = format!(
+        "{}={}; Path={}",
+        cookie_cfg.name, backend_id, cookie_cfg.path
+    );
+
+    if let Some(ttl) = cookie_cfg.ttl {
+        // Format as Max-Age in seconds
+        cookie_value.push_str(&format!("; Max-Age={}", ttl.as_secs()));
+    }
+
+    if let Some(ref domain) = cookie_cfg.domain {
+        cookie_value.push_str(&format!("; Domain={domain}"));
+    }
+
+    if cookie_cfg.secure {
+        cookie_value.push_str("; Secure");
+    }
+
+    if cookie_cfg.httponly {
+        cookie_value.push_str("; HttpOnly");
+    }
+
+    cookie_value.push_str(&format!("; SameSite={}", cookie_cfg.samesite.as_str()));
+
+    // Set the cookie on the response
+    match resp {
+        HttpResponse::Custom(mut resp) => {
+            if let Ok(header_value) = http::HeaderValue::from_str(&cookie_value) {
+                resp.headers_mut()
+                    .insert(http::header::SET_COOKIE, header_value);
+            }
+            HttpResponse::Custom(resp)
+        }
+        other => other,
     }
 }
 

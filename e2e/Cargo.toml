@@ -152,3 +152,7 @@ path = "tests/log_rotation.rs"
 [[test]]
 name = "lscache"
 path = "tests/lscache.rs"
+
+[[test]]
+name = "affinity"
+path = "tests/affinity.rs"

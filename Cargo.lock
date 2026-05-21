@@ -1524,6 +1524,7 @@ dependencies = [
 name = "ferron-http-proxy"
 version = "3.0.0-beta.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "bytes",
  "criterion",

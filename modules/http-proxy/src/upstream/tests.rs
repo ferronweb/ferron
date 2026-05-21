@@ -26,7 +26,7 @@ fn test_select_backend_index_random() {
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     for _ in 0..100 {
-        let idx = select_backend_index(&algorithm, &backends, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         assert!(idx < backends.len());
     }
 }
@@ -41,10 +41,10 @@ fn test_select_backend_index_round_robin() {
     let counter = Arc::new(AtomicUsize::new(0));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(counter);
 
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn test_select_backend_index_least_connections() {
     let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert!(idx < backends.len());
 
     let tracker1 = Arc::new(());
@@ -66,7 +66,7 @@ fn test_select_backend_index_least_connections() {
     let _clone1 = tracker1.clone();
     let _clone2 = tracker1.clone();
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -81,7 +81,7 @@ fn test_select_backend_index_two_random_choices() {
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     for _ in 0..100 {
-        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
         assert!(idx < backends.len());
     }
 }
@@ -92,7 +92,7 @@ fn test_select_backend_single_backend() {
     let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -102,7 +102,17 @@ fn test_determine_proxy_to_no_upstreams() {
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
-    let result = determine_proxy_to(&[], &failed_backends, false, 3, &algorithm, None, None, &[]);
+    let result = determine_proxy_to(
+        &[],
+        &failed_backends,
+        false,
+        3,
+        &algorithm,
+        None,
+        None,
+        &[],
+        None,
+    );
     assert!(result.is_none());
 }
 
@@ -123,6 +133,7 @@ fn test_determine_proxy_to_single_backend() {
         Some(&conn_state),
         None,
         &[],
+        None,
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -154,6 +165,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         None,
         None,
         &[],
+        None,
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -185,6 +197,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         None,
         None,
         &[],
+        None,
     );
     assert!(result.is_none());
 }
@@ -214,6 +227,7 @@ fn test_determine_proxy_to_health_check_disabled() {
         None,
         None,
         &[],
+        None,
     );
     assert!(result.is_some());
 }
@@ -309,6 +323,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         None,
         Some(&health_check_state),
         &[],
+        None,
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -337,6 +352,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         None,
         Some(&health_check_state),
         &[],
+        None,
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -357,10 +373,10 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     // With equal weights, should cycle like round-robin
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -377,7 +393,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
     // backend2 and backend3 once each
     let mut counts = [0usize; 3];
     for _ in 0..7 {
-        let idx = select_backend_index(&algorithm, &backends, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         counts[idx] += 1;
     }
     assert_eq!(counts[0], 5);
@@ -397,7 +413,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
     // With weights 5:1, smooth WRR should distribute as:
     // A, A, B, A, A, A (not AAAAAA B)
     let selections: Vec<usize> = (0..6)
-        .map(|_| select_backend_index(&algorithm, &backends, None))
+        .map(|_| select_backend_index(&algorithm, &backends, None, None))
         .collect();
 
     // Backend1 (weight 5) should be selected 5 times
@@ -418,7 +434,7 @@ fn test_select_backend_index_weighted_round_robin_single_backend() {
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     for _ in 0..10 {
-        assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+        assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
     }
 }
 
@@ -447,4 +463,211 @@ fn test_load_balancer_algorithm_weighted_round_robin_from() {
         LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::WeightedRoundRobin),
         LoadBalancerAlgorithmInner::WeightedRoundRobin(_)
     ));
+}
+
+#[test]
+fn test_consistent_hash_ring_basic() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+        make_upstream("http://backend3"),
+    ];
+    let ring = ConsistentHashRing::new(&backends);
+
+    // Same key should always map to the same backend
+    let key1 = b"test-key-1";
+    let idx1 = ring.get(key1).unwrap();
+    let idx2 = ring.get(key1).unwrap();
+    assert_eq!(idx1, idx2);
+
+    // Different keys may map to different backends
+    let key2 = b"test-key-2";
+    let idx3 = ring.get(key2).unwrap();
+    assert!(idx3 < backends.len());
+}
+
+#[test]
+fn test_consistent_hash_ring_all_backends_reachable() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+        make_upstream("http://backend3"),
+    ];
+    let ring = ConsistentHashRing::new(&backends);
+
+    // Try many keys to ensure all backends are reachable
+    let mut seen = [false; 3];
+    for i in 0..1000 {
+        let key = format!("key-{i}");
+        if let Some(idx) = ring.get(key.as_bytes()) {
+            seen[idx] = true;
+        }
+    }
+
+    // All backends should be reachable with enough keys
+    assert!(seen.iter().all(|&s| s), "Not all backends were reachable");
+}
+
+#[test]
+fn test_consistent_hash_ring_empty() {
+    let backends: Vec<UpstreamInner> = vec![];
+    let ring = ConsistentHashRing::new(&backends);
+    assert!(ring.get(b"test").is_none());
+}
+
+#[test]
+fn test_consistent_hash_ring_rebuild() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let mut ring = ConsistentHashRing::new(&backends);
+
+    assert!(!ring.needs_rebuild(2));
+    assert!(ring.needs_rebuild(3));
+
+    let new_backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+        make_upstream("http://backend3"),
+    ];
+    ring.rebuild(&new_backends);
+    assert!(!ring.needs_rebuild(3));
+}
+
+#[test]
+fn test_select_backend_index_consistent_hash() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+        make_upstream("http://backend3"),
+    ];
+    let ring = Arc::new(RwLock::new(ConsistentHashRing::new(&backends)));
+    let algorithm = LoadBalancerAlgorithmInner::ConsistentHash(ring);
+
+    // Same key should always select the same backend
+    let key = b"consistent-key";
+    let idx1 = select_backend_index(&algorithm, &backends, None, Some(key));
+    let idx2 = select_backend_index(&algorithm, &backends, None, Some(key));
+    assert_eq!(idx1, idx2);
+    assert!(idx1 < backends.len());
+}
+
+#[test]
+fn test_backend_affinity_id() {
+    let backend = make_upstream("http://backend1");
+    let id = backend_affinity_id(&backend);
+
+    // Should be a 16-character hex string
+    assert_eq!(id.len(), 16);
+    assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
+
+    // Same backend should always produce the same ID
+    let id2 = backend_affinity_id(&backend);
+    assert_eq!(id, id2);
+
+    // Different backends should produce different IDs
+    let backend2 = make_upstream("http://backend2");
+    let id3 = backend_affinity_id(&backend2);
+    assert_ne!(id, id3);
+}
+
+#[test]
+fn test_resolve_affinity_index_cookie_match() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let affinity_type = AffinityType::Cookie(CookieAffinityConfig::default());
+
+    // Use the affinity ID of backend1
+    let key = backend_affinity_id(&backends[0]);
+    let idx = resolve_affinity_index(
+        &affinity_type,
+        key.as_bytes(),
+        &backends,
+        &LoadBalancerAlgorithmInner::Random,
+    );
+    assert_eq!(idx, Some(0));
+}
+
+#[test]
+fn test_resolve_affinity_index_ip_affinity() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+        make_upstream("http://backend3"),
+    ];
+    let affinity_type = AffinityType::Ip;
+
+    // IP affinity uses consistent hash ring or modulus
+    let key = b"192.168.1.1";
+    let idx = resolve_affinity_index(
+        &affinity_type,
+        key,
+        &backends,
+        &LoadBalancerAlgorithmInner::Random,
+    );
+    assert!(idx.is_some());
+    assert!(idx.unwrap() < backends.len());
+
+    // Same IP should always map to the same backend
+    let idx2 = resolve_affinity_index(
+        &affinity_type,
+        key,
+        &backends,
+        &LoadBalancerAlgorithmInner::Random,
+    );
+    assert_eq!(idx, idx2);
+}
+
+#[test]
+fn test_determine_proxy_to_with_affinity() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+    let algorithm = LoadBalancerAlgorithmInner::Random;
+
+    // With affinity index 1, should select backend2
+    let result = determine_proxy_to(
+        &upstreams,
+        &failed_backends,
+        false,
+        3,
+        &algorithm,
+        None,
+        None,
+        &[],
+        Some(1),
+    );
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
+}
+
+#[test]
+fn test_determine_proxy_to_affinity_out_of_range() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+    let algorithm = LoadBalancerAlgorithmInner::Random;
+
+    // With affinity index out of range, should fall back to algorithm
+    let result = determine_proxy_to(
+        &upstreams,
+        &failed_backends,
+        false,
+        3,
+        &algorithm,
+        None,
+        None,
+        &[],
+        Some(10),
+    );
+    assert!(result.is_some());
 }

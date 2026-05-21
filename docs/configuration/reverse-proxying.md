@@ -227,6 +227,110 @@ example.com {
 | `least_conn` | Selects the backend with the fewest active tracked connections. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
 | `weighted_round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
+| `consistent_hash` | Uses a consistent hash ring to map request keys to backends, ensuring the same key always routes to the same backend. |
+
+## Session affinity
+
+Session affinity (sticky sessions) ensures that requests from the same client are consistently routed to the same backend server. This is useful for stateful applications, WebSocket-heavy workloads, and improving cache locality.
+
+The `affinity` directive configures session affinity inside a `proxy` block. Four affinity types are supported:
+
+### Cookie affinity
+
+Reads and sets a cookie to track which backend a client should be routed to. If no cookie is present, a backend is selected and a cookie is set on the response.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080
+        upstream http://localhost:8081
+
+        affinity cookie {
+            name "ferron_sticky"
+            ttl "24h"
+            path "/"
+            httponly
+            samesite lax
+        }
+    }
+}
+```
+
+#### Cookie nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `name` | `<string>` | Cookie name. | `ferron_sticky` |
+| `ttl` | `<duration>` | Cookie time-to-live. | Session (browser closes) |
+| `path` | `<string>` | Cookie path. | `/` |
+| `domain` | `<string>` | Cookie domain. | Current domain |
+| `secure` | `[bool]` | Only send cookie over HTTPS. | `false` |
+| `httponly` | `[bool]` | Prevent JavaScript access to cookie. | `true` |
+| `samesite` | `<mode>` | SameSite attribute: `strict`, `lax`, or `none`. | `lax` |
+
+### Header affinity
+
+Routes based on a specific request header value. The header value is matched against backend identifiers.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080
+        upstream http://localhost:8081
+
+        affinity header {
+            name "X-Backend-Id"
+        }
+    }
+}
+```
+
+### IP affinity
+
+Routes based on the client's IP address using consistent hashing. The same IP always routes to the same backend (while it remains healthy).
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080
+        upstream http://localhost:8081
+
+        affinity ip
+    }
+}
+```
+
+### Hash affinity
+
+Routes based on a hashed variable value. Supports any built-in variable or request header.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080
+        upstream http://localhost:8081
+
+        affinity hash {
+            variable "request.header.x-tenant-id"
+            method consistent
+        }
+    }
+}
+```
+
+#### Hash nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `variable` | `<string>` | Variable to hash. Supports `request.uri`, `request.uri.path`, `request.host`, `request.method`, `remote.ip`, and `request.header.<name>`. | Required |
+| `method` | `<method>` | Hashing method: `consistent` (hash ring) or `modulus` (simple hash modulo). | `consistent` |
+
+### Affinity behavior
+
+- Affinity is respected only when the target backend is healthy. If the affinity target is unhealthy, the configured load balancing algorithm is used as a fallback.
+- When `retry_connection` is enabled and the affinity-targeted backend fails, Ferron retries with another backend.
+- Cookie affinity automatically sets the cookie on the first request if no valid cookie is present.
+- For `consistent_hash` algorithm, the affinity key is used directly with the hash ring for deterministic routing.
 
 ## Forwarding headers
 

@@ -15,6 +15,9 @@ use http::header::HeaderName;
 
 #[cfg(feature = "srv-lookup")]
 use crate::upstream::SrvUpstreamData;
+pub use crate::upstream::{
+    AffinityConfig, AffinityType, CookieAffinityConfig, HashMethod, SameSiteMode,
+};
 use crate::upstream::{
     ExpectedStatusCodes, HealthCheckMethod, LoadBalancerAlgorithm, ProxyHeader, Upstream,
     UpstreamConfig, UpstreamHealthCheckConfig,
@@ -72,6 +75,8 @@ pub struct ProxyConfig {
     pub concurrent_conns: Option<usize>,
     /// Pre-built map from upstream URL to idle timeout for O(1) lookup.
     pub idle_timeout_map: HashMap<String, Duration>,
+    /// Session affinity configuration.
+    pub affinity: Option<AffinityConfig>,
 }
 
 impl Default for ProxyConfig {
@@ -92,6 +97,7 @@ impl Default for ProxyConfig {
             headers_to_remove: Vec::new(),
             concurrent_conns: None,
             idle_timeout_map: HashMap::new(),
+            affinity: None,
         }
     }
 }
@@ -230,6 +236,7 @@ fn parse_proxy_block(
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
                         "two_random" => LoadBalancerAlgorithm::TwoRandomChoices,
                         "weighted_round_robin" => LoadBalancerAlgorithm::WeightedRoundRobin,
+                        "consistent_hash" => LoadBalancerAlgorithm::ConsistentHash,
                         _ => {
                             return Err(
                                 format!("Unsupported load balancing algorithm: {val}").into()
@@ -303,6 +310,13 @@ fn parse_proxy_block(
                     .and_then(|v: &ServerConfigurationValue| v.as_number())
                 {
                     cfg.concurrent_conns = Some(val as usize);
+                }
+            }
+            "affinity" => {
+                if let Some(entry) = entries.first() {
+                    if let Some(type_val) = entry.args.first().and_then(|v| v.as_str()) {
+                        cfg.affinity = Some(parse_affinity_entry(type_val, entry, ctx)?);
+                    }
                 }
             }
             _ => {}
@@ -697,4 +711,150 @@ fn parse_request_header_entry(
     }
 
     Ok(())
+}
+
+fn parse_affinity_entry(
+    type_val: &str,
+    entry: &ServerConfigurationDirectiveEntry,
+    _ctx: &ferron_http::HttpContext,
+) -> Result<AffinityConfig, Box<dyn Error + Send + Sync>> {
+    let affinity_type = match type_val {
+        "cookie" => {
+            let mut cookie_cfg = CookieAffinityConfig::default();
+            if let Some(block) = &entry.children {
+                for (name, entries) in block.directives.iter() {
+                    match name.as_str() {
+                        "name" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                cookie_cfg.name = val.to_string();
+                            }
+                        }
+                        "ttl" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                cookie_cfg.ttl = Some(
+                                    parse_duration(val)
+                                        .map_err(|e| format!("Invalid affinity ttl: {e}"))?,
+                                );
+                            }
+                        }
+                        "path" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                cookie_cfg.path = val.to_string();
+                            }
+                        }
+                        "domain" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                cookie_cfg.domain = Some(val.to_string());
+                            }
+                        }
+                        "secure" => {
+                            cookie_cfg.secure =
+                                entries.first().map(|e| e.get_flag()).unwrap_or(true);
+                        }
+                        "httponly" => {
+                            cookie_cfg.httponly =
+                                entries.first().map(|e| e.get_flag()).unwrap_or(true);
+                        }
+                        "samesite" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                cookie_cfg.samesite = match val.to_lowercase().as_str() {
+                                    "strict" => SameSiteMode::Strict,
+                                    "lax" => SameSiteMode::Lax,
+                                    "none" => SameSiteMode::None,
+                                    _ => {
+                                        return Err(format!(
+                                            "Invalid samesite mode: {val}, must be strict, lax, or none"
+                                        )
+                                        .into())
+                                    }
+                                };
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            AffinityType::Cookie(cookie_cfg)
+        }
+        "header" => {
+            let header_name = entry
+                .children
+                .as_ref()
+                .and_then(|block| block.directives.get("name"))
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.args.first())
+                .and_then(|v| v.as_str())
+                .ok_or("header affinity requires a 'name' subdirective")?;
+            let header_name = HeaderName::from_str(header_name)
+                .map_err(|e| format!("Invalid header name '{header_name}': {e}"))?;
+            AffinityType::Header(header_name)
+        }
+        "ip" => AffinityType::Ip,
+        "hash" => {
+            let mut variable: Option<String> = None;
+            let mut method = HashMethod::Consistent;
+            if let Some(block) = &entry.children {
+                for (name, entries) in block.directives.iter() {
+                    match name.as_str() {
+                        "variable" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                variable = Some(val.to_string());
+                            }
+                        }
+                        "method" => {
+                            if let Some(val) = entries
+                                .first()
+                                .and_then(|e| e.args.first())
+                                .and_then(|v| v.as_str())
+                            {
+                                method = match val.to_lowercase().as_str() {
+                                    "consistent" => HashMethod::Consistent,
+                                    "modulus" => HashMethod::Modulus,
+                                    _ => return Err(format!(
+                                        "Invalid hash method: {val}, must be consistent or modulus"
+                                    )
+                                    .into()),
+                                };
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let variable = variable.ok_or("hash affinity requires a 'variable' subdirective")?;
+            AffinityType::Hash { variable, method }
+        }
+        _ => {
+            return Err(format!(
+                "Invalid affinity type: {type_val}, must be cookie, header, ip, or hash"
+            )
+            .into())
+        }
+    };
+
+    Ok(AffinityConfig { affinity_type })
 }

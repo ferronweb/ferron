@@ -1,10 +1,12 @@
 //! Upstream resolution and load balancing logic.
 
 use std::collections::HashMap;
+use std::hash::{BuildHasher, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use http::header::HeaderName;
 use parking_lot::{Mutex, RwLock};
 
 use crate::util::TtlCache;
@@ -49,6 +51,8 @@ pub enum LoadBalancerAlgorithm {
     TwoRandomChoices,
     /// Smooth weighted round-robin.
     WeightedRoundRobin,
+    /// Consistent hashing based on request key.
+    ConsistentHash,
 }
 
 /// State for smooth weighted round-robin load balancing.
@@ -124,6 +128,145 @@ pub enum LoadBalancerAlgorithmInner {
     LeastConnections,
     TwoRandomChoices,
     WeightedRoundRobin(Arc<Mutex<WeightedRoundRobinState>>),
+    ConsistentHash(Arc<RwLock<ConsistentHashRing>>),
+}
+
+/// SameSite cookie attribute mode.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum SameSiteMode {
+    Strict,
+    #[default]
+    Lax,
+    None,
+}
+
+impl SameSiteMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SameSiteMode::Strict => "Strict",
+            SameSiteMode::Lax => "Lax",
+            SameSiteMode::None => "None",
+        }
+    }
+}
+
+/// Cookie-based session affinity configuration.
+#[derive(Clone, Debug)]
+pub struct CookieAffinityConfig {
+    pub name: String,
+    pub ttl: Option<Duration>,
+    pub path: String,
+    pub domain: Option<String>,
+    pub secure: bool,
+    pub httponly: bool,
+    pub samesite: SameSiteMode,
+}
+
+impl Default for CookieAffinityConfig {
+    fn default() -> Self {
+        Self {
+            name: "ferron_sticky".to_string(),
+            ttl: None,
+            path: "/".to_string(),
+            domain: None,
+            secure: false,
+            httponly: true,
+            samesite: SameSiteMode::Lax,
+        }
+    }
+}
+
+/// Hash method for hash-based affinity.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum HashMethod {
+    #[default]
+    Consistent,
+    Modulus,
+}
+
+/// Session affinity type configuration.
+#[derive(Clone, Debug)]
+pub enum AffinityType {
+    Cookie(CookieAffinityConfig),
+    Header(HeaderName),
+    Ip,
+    Hash {
+        variable: String,
+        #[allow(dead_code)]
+        method: HashMethod,
+    },
+}
+
+/// Session affinity configuration.
+#[derive(Clone, Debug)]
+pub struct AffinityConfig {
+    pub affinity_type: AffinityType,
+}
+
+/// Ketama-style consistent hash ring for backend selection.
+#[derive(Clone, Debug)]
+pub struct ConsistentHashRing {
+    nodes: Vec<(u64, usize)>,
+    backend_count: usize,
+}
+
+impl ConsistentHashRing {
+    const VNODES_PER_BACKEND: usize = 160;
+
+    pub fn new(backends: &[UpstreamInner]) -> Self {
+        let nodes = Self::build_nodes(backends);
+        Self {
+            nodes,
+            backend_count: backends.len(),
+        }
+    }
+
+    fn build_nodes(backends: &[UpstreamInner]) -> Vec<(u64, usize)> {
+        let mut nodes = Vec::with_capacity(backends.len() * Self::VNODES_PER_BACKEND);
+
+        for (idx, backend) in backends.iter().enumerate() {
+            for vnode in 0..Self::VNODES_PER_BACKEND {
+                let key = format!("{}#{}", backend.proxy_to, vnode);
+                let mut h = get_ahasher();
+                h.write(key.as_bytes());
+                let hash = h.finish();
+                nodes.push((hash, idx));
+            }
+        }
+
+        nodes.sort_by_key(|&(hash, _)| hash);
+        nodes
+    }
+
+    pub fn get(&self, key: &[u8]) -> Option<usize> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+
+        let mut h = get_ahasher();
+        h.write(key);
+        let hash = h.finish();
+
+        match self.nodes.binary_search_by_key(&hash, |(h, _)| *h) {
+            Ok(idx) => Some(self.nodes[idx].1),
+            Err(idx) => {
+                if idx < self.nodes.len() {
+                    Some(self.nodes[idx].1)
+                } else {
+                    Some(self.nodes[0].1)
+                }
+            }
+        }
+    }
+
+    pub fn needs_rebuild(&self, backend_count: usize) -> bool {
+        self.backend_count != backend_count
+    }
+
+    pub fn rebuild(&mut self, backends: &[UpstreamInner]) {
+        self.nodes = Self::build_nodes(backends);
+        self.backend_count = backends.len();
+    }
 }
 
 impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
@@ -135,6 +278,9 @@ impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
             LoadBalancerAlgorithm::TwoRandomChoices => Self::TwoRandomChoices,
             LoadBalancerAlgorithm::WeightedRoundRobin => {
                 Self::WeightedRoundRobin(Arc::new(Mutex::new(WeightedRoundRobinState::new())))
+            }
+            LoadBalancerAlgorithm::ConsistentHash => {
+                Self::ConsistentHash(Arc::new(RwLock::new(ConsistentHashRing::new(&[]))))
             }
         }
     }
@@ -507,10 +653,13 @@ pub async fn resolve_upstreams(
 /// For LeastConnections and TwoRandomChoices, also initializes the connection
 /// tracker `Arc<()>` in the map if missing, so that the caller can simply
 /// clone the existing entry without a second lock acquisition.
+///
+/// For ConsistentHash, `hash_key` must be provided.
 fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
     backends: &[UpstreamInner],
     conn_state: Option<&ConnectionsTrackState>,
+    hash_key: Option<&[u8]>,
 ) -> usize {
     match load_balancer_algorithm {
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
@@ -603,6 +752,14 @@ fn select_backend_index(
             let mut guard = state.lock();
             guard.next(&weights)
         }
+        LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
+            let key = hash_key.unwrap_or(b"");
+            let mut guard = ring.write();
+            if guard.needs_rebuild(backends.len()) {
+                guard.rebuild(backends);
+            }
+            guard.get(key).unwrap_or(0)
+        }
     }
 }
 
@@ -620,6 +777,10 @@ pub struct SelectedBackend {
 /// Returns the selected upstream and its connection tracker (if applicable).
 /// Filters out unhealthy backends when health checking is enabled, consulting
 /// both the passive failure cache and active health check state.
+///
+/// If `affinity_index` is provided, that backend is tried first. If it is
+/// healthy, it is selected regardless of the load balancing algorithm.
+/// Otherwise, the algorithm is used to select from the remaining backends.
 #[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
     upstreams: &[UpstreamInner],
@@ -630,6 +791,7 @@ pub fn determine_proxy_to(
     conn_state: Option<&ConnectionsTrackState>,
     health_check_state: Option<&HealthCheckStateMap>,
     selected_backends: &[UpstreamInner],
+    affinity_index: Option<usize>,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -672,6 +834,18 @@ pub fn determine_proxy_to(
         return None;
     }
 
+    // Try affinity target first if provided
+    if let Some(idx) = affinity_index {
+        if idx < healthy.len() {
+            let affinity_backend = healthy.remove(idx);
+            let tracker = initialize_tracker(conn_state, &affinity_backend);
+            return Some(SelectedBackend {
+                upstream: affinity_backend,
+                tracker,
+            });
+        }
+    }
+
     if healthy.len() == 1 {
         // Single backend — initialize tracker if needed
         let tracker = initialize_tracker(conn_state, &healthy[0]);
@@ -686,7 +860,7 @@ pub fn determine_proxy_to(
         if healthy.is_empty() {
             return None;
         }
-        let index = select_backend_index(algorithm, &healthy, conn_state);
+        let index = select_backend_index(algorithm, &healthy, conn_state, None);
         let upstream = healthy.remove(index);
 
         if health_check_enabled {
@@ -744,6 +918,73 @@ pub fn mark_backend_failure(
     failed.insert(upstream.clone(), current + 1);
 }
 
-#[cfg(test)]
+/// Resolve an affinity key to a backend index.
+///
+/// For cookie and header affinity, the key is a backend identifier
+/// (hash of the upstream URL). For IP and hash affinity, the key
+/// is used directly with the consistent hash ring.
+pub fn resolve_affinity_index(
+    affinity_type: &AffinityType,
+    affinity_key: &[u8],
+    backends: &[UpstreamInner],
+    algorithm: &LoadBalancerAlgorithmInner,
+) -> Option<usize> {
+    if backends.is_empty() {
+        return None;
+    }
+
+    match affinity_type {
+        AffinityType::Cookie(_) | AffinityType::Header(_) => {
+            // For cookie/header affinity, the key is a backend identifier.
+            // We try to match it against each backend's identifier.
+            let key_str = std::str::from_utf8(affinity_key).ok()?;
+            backends
+                .iter()
+                .position(|b| backend_affinity_id(b) == key_str)
+        }
+        AffinityType::Ip | AffinityType::Hash { .. } => {
+            // For IP and hash affinity, use consistent hashing.
+            let ring = match algorithm {
+                LoadBalancerAlgorithmInner::ConsistentHash(ring) => ring,
+                _ => {
+                    // Fall back to simple modulus hashing
+                    let mut h = get_ahasher();
+                    h.write(affinity_key);
+                    let hash = h.finish();
+                    return Some((hash as usize) % backends.len());
+                }
+            };
+            let guard = ring.read();
+            guard.get(affinity_key)
+        }
+    }
+}
+
+/// Generate a short affinity identifier for a backend.
+///
+/// Uses the first 8 hex characters of the upstream URL's ahash.
+pub fn backend_affinity_id(backend: &UpstreamInner) -> String {
+    let mut h = get_ahasher();
+    h.write(backend.proxy_to.as_bytes());
+    let hash = h.finish();
+    format!("{hash:016x}")
+}
+
+/// Returns an [`ahash::AHasher`] with a consistent seed.
+///
+/// This is used for deterministic hashing of affinity keys,
+/// so that the same key always maps to the same backend.
+#[inline]
+fn get_ahasher() -> ahash::AHasher {
+    // Hard-coded seed values to ensure consistent hashing across deployments.
+    ahash::RandomState::with_seeds(
+        0x0f1fdc6efcc97fd9,
+        0x942bd4a9d2ec6246,
+        0xcf8d27c1af157eb4,
+        0xda2d3937288cc846,
+    )
+    .build_hasher()
+}
+
 #[cfg(test)]
 mod tests;
