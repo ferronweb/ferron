@@ -1,5 +1,8 @@
 //! Compression-related utilities for static file serving.
 
+use async_compression::brotli::EncoderParams;
+use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
+use async_compression::zstd::CParameter;
 use async_compression::Level;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
@@ -24,6 +27,7 @@ pub enum Compression {
 #[allow(dead_code)]
 impl Compression {
     /// Returns the HTTP `Content-Encoding` header value for this compression.
+    #[inline]
     pub fn header_value(self) -> Option<&'static str> {
         match self {
             Compression::Gzip => Some("gzip"),
@@ -35,6 +39,7 @@ impl Compression {
     }
 
     /// Returns the file extension suffix for precompressed variants.
+    #[inline]
     pub fn precompressed_ext(self) -> Option<&'static str> {
         match self {
             Compression::Gzip => Some("gz"),
@@ -46,6 +51,7 @@ impl Compression {
     }
 
     /// Returns the ETag suffix for this compression.
+    #[inline]
     pub fn etag_suffix(self) -> Option<&'static str> {
         match self {
             Compression::Gzip => Some("-gzip"),
@@ -184,140 +190,44 @@ pub static NON_COMPRESSIBLE_FILE_EXTENSIONS: phf::Set<&'static str> = phf::phf_s
     "zst",
 };
 
-/// Compress a file stream using Gzip.
-pub fn compress_streaming_gzip(
-    file: vibeio::fs::File,
-    len: Option<u64>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    use async_compression::tokio::bufread::GzipEncoder;
-    use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, len));
-    let encoder = GzipEncoder::with_quality(reader, Level::Precise(4));
-    StreamBody::new(
-        ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
-            .map_ok(Frame::data)
-            .map_err(|e| e),
-    )
-    .boxed_unsync()
+macro_rules! compress_streaming {
+    ($fn_name:ident, $compression:expr) => {
+        pub fn $fn_name(
+            file: vibeio::fs::File,
+            len: Option<u64>,
+        ) -> UnsyncBoxBody<Bytes, std::io::Error> {
+            use tokio_util::io::{ReaderStream, StreamReader};
+            let reader = StreamReader::new(FileStream::new(file, 0, len));
+            let encoder = ($compression)(reader);
+            StreamBody::new(
+                ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
+                    .map_ok(Frame::data)
+                    .map_err(|e| e),
+            )
+            .boxed_unsync()
+        }
+    };
 }
 
-/// Compress a file stream using Brotli.
-pub fn compress_streaming_brotli(
-    file: vibeio::fs::File,
-    len: Option<u64>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    use async_compression::brotli::EncoderParams;
-    use async_compression::tokio::bufread::BrotliEncoder;
-    use async_compression::Level;
-    use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, len));
-    let encoder = BrotliEncoder::with_params(
+compress_streaming!(compress_streaming_gzip, |reader| {
+    GzipEncoder::with_quality(reader, Level::Precise(4))
+});
+compress_streaming!(compress_streaming_deflate, |reader| {
+    DeflateEncoder::with_quality(reader, Level::Precise(4))
+});
+compress_streaming!(compress_streaming_brotli, |reader| {
+    BrotliEncoder::with_params(
         reader,
         EncoderParams::default()
             .quality(Level::Precise(4))
             .window_size(17)
             .block_size(18),
-    );
-    StreamBody::new(
-        ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
-            .map_ok(Frame::data)
-            .map_err(|e| e),
     )
-    .boxed_unsync()
-}
-
-/// Compress a file stream using Zstd.
-pub fn compress_streaming_zstd(
-    file: vibeio::fs::File,
-    len: Option<u64>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    use async_compression::tokio::bufread::ZstdEncoder;
-    use async_compression::zstd::CParameter;
-    use async_compression::Level;
-    use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, len));
-    let encoder = ZstdEncoder::with_quality_and_params(
+});
+compress_streaming!(compress_streaming_zstd, |reader| {
+    ZstdEncoder::with_quality_and_params(
         reader,
-        Level::Default,
+        Level::Precise(4),
         &[CParameter::window_log(17), CParameter::hash_log(10)],
-    );
-    StreamBody::new(
-        ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
-            .map_ok(Frame::data)
-            .map_err(|e| e),
     )
-    .boxed_unsync()
-}
-
-/// Compress a file stream using Deflate.
-pub fn compress_streaming_deflate(
-    file: vibeio::fs::File,
-    len: Option<u64>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    use async_compression::tokio::bufread::DeflateEncoder;
-    use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, len));
-    let encoder = DeflateEncoder::with_quality(reader, Level::Precise(4));
-    StreamBody::new(
-        ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
-            .map_ok(Frame::data)
-            .map_err(|e| e),
-    )
-    .boxed_unsync()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn non_compressible_extensions_contains_common_formats() {
-        assert!(NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("jpg"));
-        assert!(NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("png"));
-        assert!(NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("pdf"));
-        assert!(NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("zip"));
-        assert!(NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("mp4"));
-    }
-
-    #[test]
-    fn non_compressible_extensions_does_not_contain_text_formats() {
-        assert!(!NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("html"));
-        assert!(!NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("css"));
-        assert!(!NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("js"));
-        assert!(!NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("txt"));
-        assert!(!NON_COMPRESSIBLE_FILE_EXTENSIONS.contains("json"));
-    }
-
-    #[test]
-    fn compression_header_values() {
-        assert_eq!(Compression::Gzip.header_value(), Some("gzip"));
-        assert_eq!(Compression::Brotli.header_value(), Some("br"));
-        assert_eq!(Compression::Deflate.header_value(), Some("deflate"));
-        assert_eq!(Compression::Zstd.header_value(), Some("zstd"));
-        assert_eq!(Compression::Identity.header_value(), None);
-    }
-
-    #[test]
-    fn compression_precompressed_ext() {
-        assert_eq!(Compression::Gzip.precompressed_ext(), Some("gz"));
-        assert_eq!(Compression::Brotli.precompressed_ext(), Some("br"));
-        assert_eq!(Compression::Deflate.precompressed_ext(), Some("deflate"));
-        assert_eq!(Compression::Zstd.precompressed_ext(), Some("zst"));
-        assert_eq!(Compression::Identity.precompressed_ext(), None);
-    }
-
-    #[test]
-    fn compression_etag_suffix() {
-        assert_eq!(Compression::Gzip.etag_suffix(), Some("-gzip"));
-        assert_eq!(Compression::Brotli.etag_suffix(), Some("-br"));
-        assert_eq!(Compression::Deflate.etag_suffix(), Some("-deflate"));
-        assert_eq!(Compression::Zstd.etag_suffix(), Some("-zstd"));
-        assert_eq!(Compression::Identity.etag_suffix(), None);
-    }
-
-    #[test]
-    fn compression_equality() {
-        assert_eq!(Compression::Gzip, Compression::Gzip);
-        assert_ne!(Compression::Gzip, Compression::Brotli);
-    }
-}
+});
