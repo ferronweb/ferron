@@ -305,8 +305,7 @@ fn process_probe_result(
     state_map: &HealthCheckStateMap,
     on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
 ) {
-    let mut states = state_map.write();
-    let state = states.entry(upstream_url.to_string()).or_default();
+    let mut state = state_map.entry(upstream_url.to_string()).or_default();
 
     let probe_success = if let Some(status) = result.status_code {
         let status_ok = config.expect_status.matches(status);
@@ -396,8 +395,7 @@ fn process_probe_result(
 /// Returns true if health checks are disabled for this upstream or if it's currently healthy.
 /// Returns false if health checks are enabled and the upstream is marked unhealthy.
 pub fn is_upstream_healthy(state_map: &HealthCheckStateMap, upstream_url: &str) -> bool {
-    let states = state_map.read();
-    states
+    state_map
         .get(upstream_url)
         .map(|state| state.is_healthy)
         .unwrap_or(true)
@@ -495,7 +493,7 @@ pub fn spawn_health_check_task(
 mod tests {
     use super::*;
     use crate::upstream::{ExpectedStatusCodes, HealthCheckMethod, HealthCheckState};
-    use parking_lot::RwLock;
+    use dashmap::DashMap;
 
     #[test]
     fn test_status_code_matching() {
@@ -519,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_health_state_transition_to_unhealthy() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
             ..Default::default()
@@ -535,15 +533,14 @@ mod tests {
         process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
         process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
 
-        let states = state_map.read();
-        let state = &states["http://localhost:8080"];
+        let state = state_map.get("http://localhost:8080").unwrap();
         assert!(!state.is_healthy);
         assert_eq!(state.consecutive_fail_count, 2);
     }
 
     #[test]
     fn test_health_state_recovery() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
             consecutive_passes: 2,
@@ -593,8 +590,7 @@ mod tests {
             None,
         );
 
-        let states = state_map.read();
-        let state = &states["http://localhost:8080"];
+        let state = state_map.get("http://localhost:8080").unwrap();
         assert!(state.is_healthy);
         assert_eq!(state.consecutive_pass_count, 0);
         assert_eq!(state.consecutive_fail_count, 0);
@@ -602,7 +598,7 @@ mod tests {
 
     #[test]
     fn test_response_time_threshold() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             response_time_threshold: Some(Duration::from_millis(50)),
             consecutive_fails: 1,
@@ -624,8 +620,7 @@ mod tests {
         );
 
         {
-            let states = state_map.read();
-            let state = &states["http://localhost:8080"];
+            let state = state_map.get("http://localhost:8080").unwrap();
             assert!(state.is_healthy);
         }
 
@@ -643,15 +638,14 @@ mod tests {
             None,
         );
 
-        let states = state_map.read();
-        let state = &states["http://localhost:8080"];
+        let state = state_map.get("http://localhost:8080").unwrap();
         assert!(!state.is_healthy);
         assert_eq!(state.consecutive_fail_count, 1);
     }
 
     #[test]
     fn test_body_match_success() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
             method: HealthCheckMethod::Get,
@@ -667,14 +661,13 @@ mod tests {
         };
         process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
 
-        let states = state_map.read();
-        let state = &states["http://localhost:8080"];
+        let state = state_map.get("http://localhost:8080").unwrap();
         assert!(state.is_healthy);
     }
 
     #[test]
     fn test_body_match_failure() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
             method: HealthCheckMethod::Get,
@@ -690,27 +683,23 @@ mod tests {
         };
         process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
 
-        let states = state_map.read();
-        let state = &states["http://localhost:8080"];
+        let state = state_map.get("http://localhost:8080").unwrap();
         assert!(!state.is_healthy);
     }
 
     #[test]
     fn test_is_upstream_healthy() {
-        let state_map: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
 
         assert!(is_upstream_healthy(&state_map, "http://localhost:8080"));
 
-        {
-            let mut states = state_map.write();
-            states.insert(
-                "http://localhost:8080".to_string(),
-                HealthCheckState {
-                    is_healthy: false,
-                    ..Default::default()
-                },
-            );
-        }
+        state_map.insert(
+            "http://localhost:8080".to_string(),
+            HealthCheckState {
+                is_healthy: false,
+                ..Default::default()
+            },
+        );
 
         assert!(!is_upstream_healthy(&state_map, "http://localhost:8080"));
     }

@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use dashmap::DashMap;
 use parking_lot::RwLock;
 
 use crate::upstream::LoadBalancerAlgorithmInner;
@@ -178,15 +179,15 @@ struct ProxyState {
     conn_state: upstream::ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
-    algorithms: RwLock<HashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>>,
+    algorithms: DashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: upstream::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
     /// Used to clean up tasks on reload.
-    health_check_tasks: RwLock<HashMap<Vec<usize>, tokio::task::JoinHandle<()>>>,
+    health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>>,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
     #[allow(clippy::type_complexity)]
-    active_unhealthy_counters: RwLock<HashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>>>,
+    active_unhealthy_counters: DashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>>,
 }
 
 impl ProxyState {
@@ -196,12 +197,12 @@ impl ProxyState {
             failed_backends: Arc::new(RwLock::new(crate::util::TtlCache::new(
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             ))),
-            circuit_breaker_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            algorithms: RwLock::new(HashMap::new()),
-            active_health_check_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            health_check_tasks: RwLock::new(HashMap::new()),
-            active_unhealthy_counters: RwLock::new(HashMap::new()),
+            circuit_breaker_state: Arc::new(DashMap::new()),
+            conn_state: Arc::new(DashMap::new()),
+            algorithms: DashMap::new(),
+            active_health_check_state: Arc::new(DashMap::new()),
+            health_check_tasks: DashMap::new(),
+            active_unhealthy_counters: DashMap::new(),
         }
     }
 
@@ -231,11 +232,8 @@ impl ProxyState {
     /// If a task is already running for this config, does nothing.
     fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[upstream::Upstream]) {
         // Check if task already exists
-        {
-            let guard = self.health_check_tasks.read();
-            if guard.contains_key(config_keys) {
-                return;
-            }
+        if self.health_check_tasks.contains_key(config_keys) {
+            return;
         }
 
         // Check if any upstream has health checks enabled
@@ -261,27 +259,29 @@ impl ProxyState {
         };
 
         // Spawn the health check task with a callback to update the shared counter
-        let counter: Arc<ActiveUnhealthyCounters> =
-            Arc::new(ActiveUnhealthyCounters::new(HashMap::new()));
-        let counter_clone = Arc::clone(&counter);
-        let task = health_check::spawn_health_check_task(
-            upstreams.to_vec(),
-            Arc::clone(&self.active_health_check_state),
-            Some(Arc::new(move |url: &str, _is_active: bool| {
-                let mut guard = counter_clone.lock();
-                *guard.entry(url.to_string()).or_insert(0) += 1;
-            })),
-            &runtime_handle,
-        );
+        if let dashmap::Entry::Vacant(e) = self.health_check_tasks.entry(config_keys.to_vec()) {
+            let counter: Arc<ActiveUnhealthyCounters> =
+                match self.active_unhealthy_counters.entry(config_keys.to_vec()) {
+                    dashmap::Entry::Occupied(e) => e.get().clone(),
+                    dashmap::Entry::Vacant(e) => {
+                        let counter = Arc::new(ActiveUnhealthyCounters::new(HashMap::new()));
+                        e.insert(counter.clone());
+                        counter
+                    }
+                };
+            let counter_clone = Arc::clone(&counter);
+            let task = health_check::spawn_health_check_task(
+                upstreams.to_vec(),
+                Arc::clone(&self.active_health_check_state),
+                Some(Arc::new(move |url: &str, _is_active: bool| {
+                    let mut guard = counter_clone.lock();
+                    *guard.entry(url.to_string()).or_insert(0) += 1;
+                })),
+                &runtime_handle,
+            );
 
-        // Store the counter so we can read it during request processing
-        {
-            let mut guard = self.active_unhealthy_counters.write();
-            guard.insert(config_keys.to_vec(), counter);
+            e.insert(task);
         }
-
-        let mut guard = self.health_check_tasks.write();
-        guard.insert(config_keys.to_vec(), task);
     }
 }
 
@@ -467,27 +467,19 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        let algorithm = {
-            let guard = self.state.algorithms.read();
-            if let Some(alg) = guard.get(&config_key) {
-                Arc::clone(alg)
-            } else {
-                drop(guard);
-                let mut guard = self.state.algorithms.write();
-                if let Some(alg) = guard.get(&config_key) {
-                    Arc::clone(alg)
-                } else {
-                    let alg = Arc::new(config.algorithm.into());
-                    guard.insert(config_key.clone(), Arc::clone(&alg));
-                    alg
-                }
-            }
-        };
+        let algorithm = self
+            .state
+            .algorithms
+            .entry(config_key.clone())
+            .or_insert_with(|| Arc::new(config.algorithm.into()));
 
         // Get the active unhealthy counter for this config
         let active_unhealthy_counter = {
-            let guard = self.state.active_unhealthy_counters.read();
-            guard.get(&config_key).cloned()
+            self.state
+                .active_unhealthy_counters
+                .get(&config_key)
+                .as_deref()
+                .cloned()
         };
 
         let result = proxy::execute_proxy(

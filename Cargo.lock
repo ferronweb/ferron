@@ -1528,6 +1528,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "criterion",
+ "dashmap",
  "ferron-core",
  "ferron-http",
  "ferron-observability",

@@ -1,11 +1,12 @@
 //! Upstream resolution and load balancing logic.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use dashmap::DashMap;
 use http::header::HeaderName;
 use parking_lot::{Mutex, RwLock};
 
@@ -16,10 +17,10 @@ use crate::util::TtlCache;
 ///
 /// Keyed by the proxy_to URL; stores the current health status,
 /// consecutive counters, and last probe results.
-pub type HealthCheckStateMap = Arc<RwLock<HashMap<String, HealthCheckState>>>;
+pub type HealthCheckStateMap = Arc<DashMap<String, HealthCheckState>>;
 
 /// Tracks circuit breaker state per upstream URL/config combination.
-pub(crate) type CircuitBreakerStateMap = Arc<RwLock<HashMap<UpstreamInner, CircuitBreakerState>>>;
+pub(crate) type CircuitBreakerStateMap = Arc<DashMap<UpstreamInner, CircuitBreakerState>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CircuitBreakerStatus {
@@ -319,7 +320,7 @@ impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
 }
 
 /// Shared connection tracking state for least-conn and two-random algorithms.
-pub type ConnectionsTrackState = Arc<RwLock<HashMap<UpstreamInner, Arc<()>>>>;
+pub type ConnectionsTrackState = Arc<DashMap<UpstreamInner, Arc<()>>>;
 
 /// HTTP method for active health checks.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -705,13 +706,12 @@ fn select_backend_index(
             let mut min_indexes = Vec::new();
             let mut min_connections = None;
             for (index, upstream) in backends.iter().enumerate() {
-                let connection_track_read = conn_state.read();
-                let connection_count = if let Some(tracker) = connection_track_read.get(upstream) {
-                    Arc::strong_count(tracker) - 1
-                } else {
-                    drop(connection_track_read);
-                    conn_state.write().insert(upstream.clone(), Arc::new(()));
-                    0
+                let connection_count = match conn_state.entry(upstream.clone()) {
+                    dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
+                    dashmap::Entry::Vacant(e) => {
+                        e.insert(Arc::new(()));
+                        0
+                    }
                 };
                 if min_connections.is_none_or(|min| connection_count < min) {
                     min_indexes = vec![index];
@@ -732,10 +732,8 @@ fn select_backend_index(
             };
             if backends.len() < 2 {
                 // Initialize tracker for single backend
-                let read = conn_state.read();
-                if read.get(&backends[0]).is_none() {
-                    drop(read);
-                    conn_state.write().insert(backends[0].clone(), Arc::new(()));
+                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].clone()) {
+                    e.insert(Arc::new(()));
                 }
                 return 0;
             }
@@ -747,29 +745,23 @@ fn select_backend_index(
 
             // Get count for first backend
             let (count1, _read_dropped) = {
-                let read = conn_state.read();
-                if let Some(t) = read.get(&backends[idx1]) {
-                    (Arc::strong_count(t) - 1, false)
-                } else {
-                    drop(read);
-                    conn_state
-                        .write()
-                        .insert(backends[idx1].clone(), Arc::new(()));
-                    (0, true)
+                match conn_state.entry(backends[idx1].clone()) {
+                    dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
+                    dashmap::Entry::Vacant(e) => {
+                        e.insert(Arc::new(()));
+                        (0, true)
+                    }
                 }
             };
 
             // Get count for second backend
             let count2 = {
-                let read = conn_state.read();
-                if let Some(t) = read.get(&backends[idx2]) {
-                    Arc::strong_count(t) - 1
-                } else {
-                    drop(read);
-                    conn_state
-                        .write()
-                        .insert(backends[idx2].clone(), Arc::new(()));
-                    0
+                match conn_state.entry(backends[idx2].clone()) {
+                    dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
+                    dashmap::Entry::Vacant(e) => {
+                        e.insert(Arc::new(()));
+                        0
+                    }
                 }
             };
 
@@ -910,18 +902,12 @@ pub fn determine_proxy_to(
 }
 
 /// Get or create the connection tracker for an upstream.
-fn initialize_tracker(
-    conn_state: Option<&ConnectionsTrackState>,
-    upstream: &UpstreamInner,
-) -> Option<Arc<()>> {
-    let conn_state = conn_state?;
-    let read = conn_state.read();
-    if read.get(upstream).is_some() {
-        return None; // Tracker already exists, caller will clone it
+fn initialize_tracker(conn_state: Option<&ConnectionsTrackState>, upstream: &UpstreamInner) {
+    if let Some(conn_state) = conn_state {
+        if let dashmap::Entry::Vacant(e) = conn_state.entry(upstream.clone()) {
+            e.insert(Arc::new(()));
+        }
     }
-    drop(read);
-    conn_state.write().insert(upstream.clone(), Arc::new(()));
-    None
 }
 
 /// Clone an existing connection tracker for an upstream.
@@ -930,7 +916,7 @@ fn get_tracker(
     upstream: &UpstreamInner,
 ) -> Option<Arc<()>> {
     let conn_state = conn_state?;
-    conn_state.read().get(upstream).map(Arc::clone)
+    conn_state.get(upstream).as_deref().map(Arc::clone)
 }
 
 /// Record a transport-level backend failure.
@@ -992,8 +978,7 @@ pub fn is_circuit_breaker_available(
         return true;
     };
 
-    let states = circuit_breaker_state.read();
-    let Some(state) = states.get(upstream) else {
+    let Some(state) = circuit_breaker_state.get(upstream) else {
         return true;
     };
 
@@ -1019,8 +1004,7 @@ fn try_acquire_circuit_breaker_slot(
         return true;
     };
 
-    let mut states = circuit_breaker_state.write();
-    let state = states.entry(upstream.clone()).or_default();
+    let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
 
     match state.status {
         CircuitBreakerStatus::Closed => true,
@@ -1068,8 +1052,7 @@ fn record_circuit_breaker_failure(
     };
 
     let now = Instant::now();
-    let mut states = circuit_breaker_state.write();
-    let state = states.entry(upstream.clone()).or_default();
+    let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
 
     match state.status {
         CircuitBreakerStatus::HalfOpen => {
@@ -1089,7 +1072,7 @@ fn record_circuit_breaker_failure(
             false
         }
         CircuitBreakerStatus::Closed => {
-            prune_circuit_breaker_failures(state, circuit_breaker.window, now);
+            prune_circuit_breaker_failures(&mut *state, circuit_breaker.window, now);
             state.recent_failures.push_back(now);
 
             if state.recent_failures.len() as u64 >= circuit_breaker.max_fails {
@@ -1125,8 +1108,7 @@ fn record_circuit_breaker_success(
         return;
     };
 
-    let mut states = circuit_breaker_state.write();
-    let Some(state) = states.get_mut(upstream) else {
+    let Some(mut state) = circuit_breaker_state.get_mut(upstream) else {
         return;
     };
 

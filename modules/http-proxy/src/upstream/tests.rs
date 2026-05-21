@@ -53,16 +53,14 @@ fn test_select_backend_index_least_connections() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert!(idx < backends.len());
 
     let tracker1 = Arc::new(());
-    conn_state
-        .write()
-        .insert(backends[0].clone(), tracker1.clone());
+    conn_state.insert(backends[0].clone(), tracker1.clone());
     let _clone1 = tracker1.clone();
     let _clone2 = tracker1.clone();
 
@@ -77,7 +75,7 @@ fn test_select_backend_index_two_random_choices() {
         make_upstream("http://backend2"),
         make_upstream("http://backend3"),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     for _ in 0..100 {
@@ -89,7 +87,7 @@ fn test_select_backend_index_two_random_choices() {
 #[test]
 fn test_select_backend_single_backend() {
     let backends = vec![make_upstream("http://backend1")];
-    let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
@@ -124,7 +122,7 @@ fn test_determine_proxy_to_single_backend() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let algorithm = LoadBalancerAlgorithmInner::Random;
-    let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
 
     let result = determine_proxy_to(
         &upstreams,
@@ -322,8 +320,6 @@ fn test_load_balancer_algorithm_from() {
 
 #[test]
 fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
-    use std::collections::HashMap;
-
     let upstreams = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
@@ -331,17 +327,14 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
-    let health_check_state: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
-    {
-        let mut states = health_check_state.write();
-        states.insert(
-            "http://backend1".to_string(),
-            HealthCheckState {
-                is_healthy: false,
-                ..Default::default()
-            },
-        );
-    }
+    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());
+    health_check_state.insert(
+        "http://backend1".to_string(),
+        HealthCheckState {
+            is_healthy: false,
+            ..Default::default()
+        },
+    );
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -364,8 +357,6 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
 
 #[test]
 fn test_determine_proxy_to_active_health_check_all_healthy() {
-    use std::collections::HashMap;
-
     let upstreams = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
@@ -373,7 +364,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
-    let health_check_state: HealthCheckStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
@@ -715,7 +706,7 @@ fn test_determine_proxy_to_affinity_out_of_range() {
 fn test_circuit_breaker_opens_after_transport_failures() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
-    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
     let circuit_breaker = crate::config::CircuitBreakerConfig {
@@ -765,7 +756,7 @@ fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
     ];
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
-    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
     let circuit_breaker = crate::config::CircuitBreakerConfig {
         enabled: true,
         max_fails: 1,
@@ -774,17 +765,14 @@ fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
         consecutive_passes: 1,
     };
 
-    {
-        let mut states = circuit_breaker_state.write();
-        states.insert(
-            upstreams[0].clone(),
-            CircuitBreakerState {
-                status: CircuitBreakerStatus::Open,
-                opened_at: Some(Instant::now()),
-                ..Default::default()
-            },
-        );
-    }
+    circuit_breaker_state.insert(
+        upstreams[0].clone(),
+        CircuitBreakerState {
+            status: CircuitBreakerStatus::Open,
+            opened_at: Some(Instant::now()),
+            ..Default::default()
+        },
+    );
 
     let result = determine_proxy_to(
         &upstreams,
@@ -806,7 +794,7 @@ fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
 
 #[test]
 fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
-    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
     let upstream = make_upstream("http://backend1");
     let circuit_breaker = crate::config::CircuitBreakerConfig {
         enabled: true,
@@ -816,17 +804,14 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
         consecutive_passes: 1,
     };
 
-    {
-        let mut states = circuit_breaker_state.write();
-        states.insert(
-            upstream.clone(),
-            CircuitBreakerState {
-                status: CircuitBreakerStatus::Open,
-                opened_at: Some(Instant::now() - Duration::from_secs(2)),
-                ..Default::default()
-            },
-        );
-    }
+    circuit_breaker_state.insert(
+        upstream.clone(),
+        CircuitBreakerState {
+            status: CircuitBreakerStatus::Open,
+            opened_at: Some(Instant::now() - Duration::from_secs(2)),
+            ..Default::default()
+        },
+    );
 
     assert!(try_acquire_circuit_breaker_slot(
         Some(&circuit_breaker_state),
@@ -856,7 +841,7 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
 
 #[test]
 fn test_circuit_breaker_reopens_after_half_open_failure() {
-    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
     let upstream = make_upstream("http://backend1");
     let circuit_breaker = crate::config::CircuitBreakerConfig {
         enabled: true,
@@ -866,17 +851,14 @@ fn test_circuit_breaker_reopens_after_half_open_failure() {
         consecutive_passes: 1,
     };
 
-    {
-        let mut states = circuit_breaker_state.write();
-        states.insert(
-            upstream.clone(),
-            CircuitBreakerState {
-                status: CircuitBreakerStatus::HalfOpen,
-                half_open_in_flight: true,
-                ..Default::default()
-            },
-        );
-    }
+    circuit_breaker_state.insert(
+        upstream.clone(),
+        CircuitBreakerState {
+            status: CircuitBreakerStatus::HalfOpen,
+            half_open_in_flight: true,
+            ..Default::default()
+        },
+    );
 
     let mut metrics = crate::ProxyMetrics::new();
     record_backend_transport_failure(
