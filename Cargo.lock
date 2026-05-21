@@ -1501,7 +1501,6 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
- "typemap_rev",
 ]
 
 [[package]]
@@ -1999,7 +1998,6 @@ dependencies = [
  "ferron-tls",
  "rustls",
  "rustls-pki-types",
- "tempfile",
  "x509-parser",
 ]
 

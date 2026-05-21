@@ -13,6 +13,3 @@ ferron-tls = { path = "../../types/tls" }
 rustls-pki-types = "1.14.0"
 x509-parser = "0.18"
 der-parser = "10"
-
-[dev-dependencies]
-tempfile = "3"
