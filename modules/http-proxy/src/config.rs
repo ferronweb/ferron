@@ -241,7 +241,7 @@ fn parse_proxy_block(
                     cfg.passive_check.enabled = val;
                     if val {
                         if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
-                            parse_passive_health_check(&children, &mut cfg.passive_check)?;
+                            parse_passive_health_check(children, &mut cfg.passive_check)?;
                         }
                     }
                 }
@@ -515,7 +515,7 @@ fn parse_upstream_entry(
                             if let Some(children) =
                                 entries.first().and_then(|e| e.children.as_ref())
                             {
-                                parse_active_health_check(&children, &mut health_check_config)?;
+                                parse_active_health_check(children, &mut health_check_config)?;
                             }
                         }
                     }
