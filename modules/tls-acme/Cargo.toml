@@ -48,8 +48,8 @@ x509-parser = "0.18"
 
 # HTTP (for ACME client and HTTP-01 challenge)
 hyper = { version = "1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client", "tokio", "server", "http1"] }
-hyper-rustls = "0.27.7"
+hyper-util = { version = "0.1", features = ["client", "tokio", "http1", "http2"] }
+hyper-rustls = { version = "0.27.7", features = ["http1", "http2"] }
 http = "1"
 http-body-util = "0.1"
 bytes = "1"

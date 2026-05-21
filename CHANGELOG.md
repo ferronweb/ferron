@@ -14,6 +14,7 @@
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
 - `circuit_breaker` reverse proxy directive with rolling failure windows, temporary backend ejection, and half-open recovery.
 - `weighted_round_robin` load balancing algorithm with per-upstream `weight` directive for proportional traffic distribution.
+- `tls-http` module for obtaining TLS certificates from a remote HTTP endpoint, with automatic refresh and observability metrics.
 - 58 newly-supported DNS providers for the ACME DNS-01 challenge: Alibaba Cloud DNS, ArvanCloud, AutoDNS, Azure DNS, Baidu Cloud DNS, BlueCat Address Manager v2, ClouDNS, Constellix, cPanel, DDNSS.de, DNS Made Easy, Domeneshop, DreamHost, DuckDNS, Dynu, EasyDNS, Akamai Edge DNS, Exoscale, FreeMyIP, Gandi v5, Gcore, GleSYS, GoDaddy, Hetzner DNS, hosting.de, Hostinger, Huawei Cloud DNS, Hurricane Electric, IBM Cloud, Infoblox NIOS, Infomaniak, INWX, IONOS, IPv64, Joker, AWS Lightsail, Linode, LuaDNS, Mythic Beasts, Namecheap, Name.com, NameSilo, netcup, Netlify, Nifcloud, NS1, Oracle Cloud DNS, Plesk, ANS SafeDNS, Scaleway, Tencent Cloud DNSPod, TransIP, UltraDNS, Vercel, Vultr, Websupport, Volcano Engine, and Yandex Cloud DNS.
 
 ### Changed

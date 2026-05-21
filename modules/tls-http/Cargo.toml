@@ -1,0 +1,31 @@
+[package]
+name = "ferron-tls-http"
+version = "3.0.0-beta.1"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+
+ferron-core = { path = "../../core" }
+ferron-observability = { path = "../../types/observability" }
+ferron-ocsp = { path = "../../types/ocsp" }
+ferron-tls = { path = "../../types/tls" }
+x509-parser = "0.18"
+
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "tokio", "http1", "http2"] }
+hyper-rustls = { version = "0.27.7", features = ["http1", "http2"] }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
+rustls-pki-types = "1.14.0"
+rustls-native-certs = "0.8"
+webpki-roots = "1"
+anyhow = "1.0.102"
+parking_lot = "0.12.5"
+tokio-util = "0.7.18"
+tokio = { version = "1.52.3", features = ["time"] }
+serde_json = "1.0.149"
+serde = { version = "1.0.228", features = ["derive"] }
+async-channel = "2.5.0"

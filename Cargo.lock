@@ -1973,6 +1973,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferron-tls-http"
+version = "3.0.0-beta.1"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-observability",
+ "ferron-ocsp",
+ "ferron-tls",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "parking_lot",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "webpki-roots",
+ "x509-parser",
+]
+
+[[package]]
 name = "ferron-tls-local"
 version = "3.0.0-beta.1"
 dependencies = [

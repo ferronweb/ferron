@@ -305,6 +305,12 @@ export default [
     label: "Local development TLS",
   },
   {
+    href: "/docs/v3/configuration/tls-http",
+    target: "_self",
+    sub: true,
+    label: "HTTP TLS provider",
+  },
+  {
     href: "/docs/v3/configuration/tls-session-tickets",
     target: "_self",
     sub: true,
