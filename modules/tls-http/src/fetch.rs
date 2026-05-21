@@ -266,7 +266,7 @@ pub async fn fetch_tls_cert_loop(
                     emit_metric(
                         &event_sink,
                         "ferron.tls_http.cert_days_remaining",
-                        MetricValue::I64(days_remaining as i64),
+                        MetricValue::I64(days_remaining),
                         MetricType::Gauge,
                         Some("{day}"),
                         Some("Days until certificate expiration"),

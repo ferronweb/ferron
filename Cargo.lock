@@ -1984,7 +1984,6 @@ dependencies = [
  "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
- "http",
  "http-body-util",
  "hyper",
  "hyper-rustls",
