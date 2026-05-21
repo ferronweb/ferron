@@ -1072,7 +1072,7 @@ fn record_circuit_breaker_failure(
             false
         }
         CircuitBreakerStatus::Closed => {
-            prune_circuit_breaker_failures(&mut *state, circuit_breaker.window, now);
+            prune_circuit_breaker_failures(&mut state, circuit_breaker.window, now);
             state.recent_failures.push_back(now);
 
             if state.recent_failures.len() as u64 >= circuit_breaker.max_fails {
