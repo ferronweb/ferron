@@ -7,8 +7,28 @@ const fs = require("fs");
 
 app.enable("trust proxy");
 
+const backendName = process.env.BACKEND_NAME || "backend";
+let unstableFailuresRemaining = Number.parseInt(
+  process.env.UNSTABLE_FAILS || "0",
+  10,
+);
+
 app.get("/", (_req, res, _next) => {
   res.send("Hello, World!");
+});
+
+app.get("/whoami", (_req, res, _next) => {
+  res.send(backendName);
+});
+
+app.get("/unstable", (_req, res, _next) => {
+  if (unstableFailuresRemaining > 0) {
+    unstableFailuresRemaining -= 1;
+    res.status(503).send(`unstable:${backendName}`);
+    return;
+  }
+
+  res.send(backendName);
 });
 
 app.get("/ip", (req, res, _next) => {

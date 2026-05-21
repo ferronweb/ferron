@@ -53,12 +53,35 @@ impl Default for HealthCheckConfig {
     }
 }
 
+/// Circuit breaker configuration for the reverse proxy.
+#[derive(Clone)]
+pub struct CircuitBreakerConfig {
+    pub enabled: bool,
+    pub max_fails: u64,
+    pub window: Duration,
+    pub open_duration: Duration,
+    pub consecutive_passes: u64,
+}
+
+impl Default for CircuitBreakerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_fails: 5,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+        }
+    }
+}
+
 /// Parsed reverse proxy configuration.
 #[derive(Clone)]
 pub struct ProxyConfig {
     pub upstreams: Vec<Upstream>,
     pub algorithm: LoadBalancerAlgorithm,
     pub passive_check: HealthCheckConfig,
+    pub circuit_breaker: CircuitBreakerConfig,
     pub retry_connection: bool,
     pub keepalive: bool,
     pub http2: bool,
@@ -85,6 +108,7 @@ impl Default for ProxyConfig {
             upstreams: Vec::new(),
             algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
             passive_check: HealthCheckConfig::default(),
+            circuit_breaker: CircuitBreakerConfig::default(),
             retry_connection: true,
             keepalive: true,
             http2: false,
@@ -251,6 +275,16 @@ fn parse_proxy_block(
                     if val {
                         if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
                             parse_passive_health_check(children, &mut cfg.passive_check)?;
+                        }
+                    }
+                }
+            }
+            "circuit_breaker" => {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                    cfg.circuit_breaker.enabled = val;
+                    if val {
+                        if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
+                            parse_circuit_breaker(children, &mut cfg.circuit_breaker)?;
                         }
                     }
                 }
@@ -464,6 +498,61 @@ fn parse_active_health_check(
             "no_verification" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     health_check_config.no_verification = val;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_circuit_breaker(
+    entries: &ServerConfigurationBlock,
+    circuit_breaker_config: &mut CircuitBreakerConfig,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    for (name, entries) in entries.directives.iter() {
+        match name.as_str() {
+            "max_fails" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        circuit_breaker_config.max_fails = val as u64;
+                    }
+                }
+            }
+            "window" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    circuit_breaker_config.window = parse_duration(val)
+                        .map_err(|e| format!("Invalid circuit_breaker window: {e}"))?;
+                }
+            }
+            "open_duration" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_str())
+                {
+                    circuit_breaker_config.open_duration = parse_duration(val)
+                        .map_err(|e| format!("Invalid circuit_breaker open_duration: {e}"))?;
+                }
+            }
+            "consecutive_passes" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        circuit_breaker_config.consecutive_passes = val as u64;
+                    }
                 }
             }
             _ => {}

@@ -110,6 +110,8 @@ fn test_determine_proxy_to_no_upstreams() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -131,6 +133,8 @@ fn test_determine_proxy_to_single_backend() {
         3,
         &algorithm,
         Some(&conn_state),
+        None,
+        &crate::config::CircuitBreakerConfig::default(),
         None,
         &[],
         None,
@@ -164,6 +168,8 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -196,6 +202,8 @@ fn test_determine_proxy_to_all_unhealthy() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -226,6 +234,8 @@ fn test_determine_proxy_to_health_check_disabled() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -233,30 +243,51 @@ fn test_determine_proxy_to_health_check_disabled() {
 }
 
 #[test]
-fn test_mark_backend_failure() {
+fn test_record_backend_transport_failure() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
-    mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics);
+    record_backend_transport_failure(
+        Arc::clone(&failed_backends),
+        true,
+        None,
+        &crate::config::CircuitBreakerConfig::default(),
+        &upstream,
+        &mut metrics,
+    );
 
     assert_eq!(metrics.unhealthy_backends.len(), 1);
     assert_eq!(failed_backends.read().get(&upstream), Some(1));
 
-    mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics);
+    record_backend_transport_failure(
+        Arc::clone(&failed_backends),
+        true,
+        None,
+        &crate::config::CircuitBreakerConfig::default(),
+        &upstream,
+        &mut metrics,
+    );
 
     assert_eq!(failed_backends.read().get(&upstream), Some(2));
 }
 
 #[test]
-fn test_mark_backend_failure_health_check_disabled() {
+fn test_record_backend_transport_failure_passive_check_disabled() {
     let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
-    mark_backend_failure(Arc::clone(&failed_backends), false, &upstream, &mut metrics);
+    record_backend_transport_failure(
+        Arc::clone(&failed_backends),
+        false,
+        None,
+        &crate::config::CircuitBreakerConfig::default(),
+        &upstream,
+        &mut metrics,
+    );
 
     assert_eq!(metrics.unhealthy_backends.len(), 0);
     assert_eq!(failed_backends.read().get(&upstream), None);
@@ -322,6 +353,8 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         &algorithm,
         None,
         Some(&health_check_state),
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -351,6 +384,8 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         &algorithm,
         None,
         Some(&health_check_state),
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         None,
     );
@@ -640,6 +675,8 @@ fn test_determine_proxy_to_with_affinity() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         Some(1),
     );
@@ -666,8 +703,195 @@ fn test_determine_proxy_to_affinity_out_of_range() {
         &algorithm,
         None,
         None,
+        &crate::config::CircuitBreakerConfig::default(),
+        None,
         &[],
         Some(10),
     );
     assert!(result.is_some());
+}
+
+#[test]
+fn test_circuit_breaker_opens_after_transport_failures() {
+    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let upstream = make_upstream("http://backend1");
+    let mut metrics = crate::ProxyMetrics::new();
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        max_fails: 2,
+        window: Duration::from_secs(30),
+        open_duration: Duration::from_secs(30),
+        consecutive_passes: 1,
+    };
+
+    record_backend_transport_failure(
+        Arc::clone(&failed_backends),
+        false,
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+        &mut metrics,
+    );
+    assert!(is_circuit_breaker_available(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+
+    record_backend_transport_failure(
+        Arc::clone(&failed_backends),
+        false,
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+        &mut metrics,
+    );
+
+    assert!(!is_circuit_breaker_available(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+}
+
+#[test]
+fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        max_fails: 1,
+        window: Duration::from_secs(30),
+        open_duration: Duration::from_secs(30),
+        consecutive_passes: 1,
+    };
+
+    {
+        let mut states = circuit_breaker_state.write();
+        states.insert(
+            upstreams[0].clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::Open,
+                opened_at: Some(Instant::now()),
+                ..Default::default()
+            },
+        );
+    }
+
+    let result = determine_proxy_to(
+        &upstreams,
+        &failed_backends,
+        false,
+        3,
+        &LoadBalancerAlgorithmInner::RoundRobin(Arc::new(AtomicUsize::new(0))),
+        None,
+        None,
+        &circuit_breaker,
+        Some(&circuit_breaker_state),
+        &[],
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(result.upstream.proxy_to, "http://backend2");
+}
+
+#[test]
+fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let upstream = make_upstream("http://backend1");
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        max_fails: 1,
+        window: Duration::from_secs(30),
+        open_duration: Duration::from_secs(1),
+        consecutive_passes: 1,
+    };
+
+    {
+        let mut states = circuit_breaker_state.write();
+        states.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::Open,
+                opened_at: Some(Instant::now() - Duration::from_secs(2)),
+                ..Default::default()
+            },
+        );
+    }
+
+    assert!(try_acquire_circuit_breaker_slot(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+    assert!(!is_circuit_breaker_available(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+
+    record_backend_response(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+        200,
+        &mut crate::ProxyMetrics::new(),
+    );
+
+    assert!(is_circuit_breaker_available(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+}
+
+#[test]
+fn test_circuit_breaker_reopens_after_half_open_failure() {
+    let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(RwLock::new(HashMap::new()));
+    let upstream = make_upstream("http://backend1");
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        max_fails: 1,
+        window: Duration::from_secs(30),
+        open_duration: Duration::from_secs(30),
+        consecutive_passes: 1,
+    };
+
+    {
+        let mut states = circuit_breaker_state.write();
+        states.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::HalfOpen,
+                half_open_in_flight: true,
+                ..Default::default()
+            },
+        );
+    }
+
+    let mut metrics = crate::ProxyMetrics::new();
+    record_backend_transport_failure(
+        Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60)))),
+        false,
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+        &mut metrics,
+    );
+
+    assert!(!is_circuit_breaker_available(
+        Some(&circuit_breaker_state),
+        &circuit_breaker,
+        &upstream,
+    ));
+    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
 }

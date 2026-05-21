@@ -27,8 +27,9 @@ use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, 
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::upstream::{
-    determine_proxy_to, mark_backend_failure, resolve_affinity_index, resolve_upstreams,
-    AffinityType, ConnectionsTrackState, HealthCheckStateMap, LoadBalancerAlgorithmInner,
+    determine_proxy_to, is_circuit_breaker_available, record_backend_response,
+    record_backend_transport_failure, resolve_affinity_index, resolve_upstreams, AffinityType,
+    CircuitBreakerStateMap, ConnectionsTrackState, HealthCheckStateMap, LoadBalancerAlgorithmInner,
     UpstreamInner,
 };
 use crate::util::TtlCache;
@@ -56,6 +57,7 @@ pub async fn execute_proxy(
     config: &ProxyConfig,
     cm: &ConnectionManager,
     failed_backends: Arc<parking_lot::RwLock<TtlCache<UpstreamInner, u64>>>,
+    circuit_breaker_state: CircuitBreakerStateMap,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
     health_check_state: Option<&HealthCheckStateMap>,
@@ -101,6 +103,8 @@ pub async fn execute_proxy(
             algorithm,
             conn_state,
             health_check_state,
+            &config.circuit_breaker,
+            Some(&circuit_breaker_state),
             &metrics.selected_backends,
             affinity_index,
         ) else {
@@ -147,6 +151,16 @@ pub async fn execute_proxy(
         .await
         {
             Ok(resp) => {
+                if let Some(status) = metrics.status_code {
+                    record_backend_response(
+                        Some(&circuit_breaker_state),
+                        &config.circuit_breaker,
+                        &selected.upstream,
+                        status,
+                        &mut metrics,
+                    );
+                }
+
                 // Collect active health check unhealthy metrics
                 if let Some(counter) = active_unhealthy_counter {
                     let guard = counter.lock();
@@ -166,9 +180,11 @@ pub async fn execute_proxy(
                 return Ok((resp, metrics));
             }
             Err(e) => {
-                mark_backend_failure(
+                record_backend_transport_failure(
                     Arc::clone(&failed_backends),
                     config.passive_check.enabled,
+                    Some(&circuit_breaker_state),
+                    &config.circuit_breaker,
                     &selected.upstream,
                     &mut metrics,
                 );
@@ -176,10 +192,14 @@ pub async fn execute_proxy(
                 // Check if we should retry with another backend
                 if config.retry_connection {
                     // Count how many healthy backends remain
-                    let healthy_count = count_healthy_backends(
+                    let healthy_count = count_available_backends(
                         &upstreams,
                         &failed_backends,
                         config.passive_check.max_fails,
+                        health_check_state,
+                        Some(&circuit_breaker_state),
+                        &config.circuit_breaker,
+                        &metrics.selected_backends,
                     );
 
                     if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {
@@ -365,19 +385,31 @@ fn maybe_set_affinity_cookie(
     }
 }
 
-/// Count how many backends are currently healthy (not exceeding failure threshold).
-fn count_healthy_backends(
+/// Count how many backends are currently available for selection.
+fn count_available_backends(
     upstreams: &[UpstreamInner],
     failed_backends: &parking_lot::RwLock<TtlCache<UpstreamInner, u64>>,
     health_check_max_fails: u64,
+    health_check_state: Option<&HealthCheckStateMap>,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &crate::config::CircuitBreakerConfig,
+    selected_backends: &[UpstreamInner],
 ) -> usize {
     let failed = failed_backends.read();
     upstreams
         .iter()
         .filter(|u| {
-            failed
+            let passive_healthy = failed
                 .get(*u)
-                .is_none_or(|fails| fails <= health_check_max_fails)
+                .is_none_or(|fails| fails <= health_check_max_fails);
+            let active_healthy = health_check_state.is_none_or(|state_map| {
+                crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)
+            });
+            let circuit_healthy =
+                is_circuit_breaker_available(circuit_breaker_state, circuit_breaker, u);
+            let not_selected = !selected_backends.contains(u);
+
+            passive_healthy && active_healthy && circuit_healthy && not_selected
         })
         .count()
 }
@@ -1229,7 +1261,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_count_healthy_backends_all_healthy() {
+    fn test_count_available_backends_all_healthy() {
         use crate::upstream::UpstreamInner;
         use crate::util::TtlCache;
         use std::time::Duration;
@@ -1248,12 +1280,20 @@ mod tests {
         ];
 
         let failed_backends = parking_lot::RwLock::new(TtlCache::new(Duration::from_secs(60)));
-        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        let count = count_available_backends(
+            &upstreams,
+            &failed_backends,
+            3,
+            None,
+            None,
+            &crate::config::CircuitBreakerConfig::default(),
+            &[],
+        );
         assert_eq!(count, 2);
     }
 
     #[test]
-    fn test_count_healthy_backends_some_unhealthy() {
+    fn test_count_available_backends_some_unhealthy() {
         use crate::upstream::UpstreamInner;
         use crate::util::TtlCache;
         use std::time::Duration;
@@ -1277,12 +1317,20 @@ mod tests {
             failed.insert(upstreams[0].clone(), 5); // Exceeds max_fails of 3
         }
 
-        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        let count = count_available_backends(
+            &upstreams,
+            &failed_backends,
+            3,
+            None,
+            None,
+            &crate::config::CircuitBreakerConfig::default(),
+            &[],
+        );
         assert_eq!(count, 1);
     }
 
     #[test]
-    fn test_count_healthy_backends_all_unhealthy() {
+    fn test_count_available_backends_all_unhealthy() {
         use crate::upstream::UpstreamInner;
         use crate::util::TtlCache;
         use std::time::Duration;
@@ -1307,7 +1355,15 @@ mod tests {
             failed.insert(upstreams[1].clone(), 10);
         }
 
-        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        let count = count_available_backends(
+            &upstreams,
+            &failed_backends,
+            3,
+            None,
+            None,
+            &crate::config::CircuitBreakerConfig::default(),
+            &[],
+        );
         assert_eq!(count, 0);
     }
 

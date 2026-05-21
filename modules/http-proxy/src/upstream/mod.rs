@@ -1,14 +1,15 @@
 //! Upstream resolution and load balancing logic.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{BuildHasher, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use http::header::HeaderName;
 use parking_lot::{Mutex, RwLock};
 
+use crate::config::CircuitBreakerConfig;
 use crate::util::TtlCache;
 
 /// Tracks health state per upstream URL/config combination.
@@ -16,6 +17,37 @@ use crate::util::TtlCache;
 /// Keyed by the proxy_to URL; stores the current health status,
 /// consecutive counters, and last probe results.
 pub type HealthCheckStateMap = Arc<RwLock<HashMap<String, HealthCheckState>>>;
+
+/// Tracks circuit breaker state per upstream URL/config combination.
+pub(crate) type CircuitBreakerStateMap = Arc<RwLock<HashMap<UpstreamInner, CircuitBreakerState>>>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CircuitBreakerStatus {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CircuitBreakerState {
+    pub recent_failures: VecDeque<Instant>,
+    pub status: CircuitBreakerStatus,
+    pub opened_at: Option<Instant>,
+    pub half_open_in_flight: bool,
+    pub half_open_pass_count: u64,
+}
+
+impl Default for CircuitBreakerState {
+    fn default() -> Self {
+        Self {
+            recent_failures: VecDeque::new(),
+            status: CircuitBreakerStatus::Closed,
+            opened_at: None,
+            half_open_in_flight: false,
+            half_open_pass_count: 0,
+        }
+    }
+}
 
 /// Upstream connection key.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -790,6 +822,8 @@ pub fn determine_proxy_to(
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
     health_check_state: Option<&HealthCheckStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     selected_backends: &[UpstreamInner],
     affinity_index: Option<usize>,
 ) -> Option<SelectedBackend> {
@@ -834,34 +868,30 @@ pub fn determine_proxy_to(
         return None;
     }
 
-    // Try affinity target first if provided
-    if let Some(idx) = affinity_index {
-        if idx < healthy.len() {
-            let affinity_backend = healthy.remove(idx);
-            let tracker = initialize_tracker(conn_state, &affinity_backend);
-            return Some(SelectedBackend {
-                upstream: affinity_backend,
-                tracker,
-            });
-        }
-    }
-
-    if healthy.len() == 1 {
-        // Single backend — initialize tracker if needed
-        let tracker = initialize_tracker(conn_state, &healthy[0]);
-        return Some(SelectedBackend {
-            upstream: healthy.remove(0),
-            tracker,
-        });
-    }
-
-    // Selection loop: skip unhealthy backends
+    let mut affinity_index = affinity_index;
     loop {
         if healthy.is_empty() {
             return None;
         }
-        let index = select_backend_index(algorithm, &healthy, conn_state, None);
+
+        let index = if let Some(idx) = affinity_index.take() {
+            if idx < healthy.len() {
+                idx
+            } else if healthy.len() == 1 {
+                0
+            } else {
+                select_backend_index(algorithm, &healthy, conn_state, None)
+            }
+        } else if healthy.len() == 1 {
+            0
+        } else {
+            select_backend_index(algorithm, &healthy, conn_state, None)
+        };
         let upstream = healthy.remove(index);
+
+        if !try_acquire_circuit_breaker_slot(circuit_breaker_state, circuit_breaker, &upstream) {
+            continue;
+        }
 
         if health_check_enabled {
             let failed = failed_backends.read();
@@ -873,6 +903,7 @@ pub fn determine_proxy_to(
         }
 
         // Get the tracker (already initialized by select_backend_index)
+        initialize_tracker(conn_state, &upstream);
         let tracker = get_tracker(conn_state, &upstream);
         return Some(SelectedBackend { upstream, tracker });
     }
@@ -902,20 +933,235 @@ fn get_tracker(
     conn_state.read().get(upstream).map(Arc::clone)
 }
 
-/// Mark a backend as failed.
-pub fn mark_backend_failure(
+/// Record a transport-level backend failure.
+pub fn record_backend_transport_failure(
     failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
-    health_check_enabled: bool,
+    passive_check_enabled: bool,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
     upstream: &UpstreamInner,
     metrics: &mut crate::ProxyMetrics,
 ) {
-    if !health_check_enabled {
+    if passive_check_enabled {
+        metrics.unhealthy_backends.push(upstream.clone());
+        let mut failed = failed_backends.write();
+        let current = failed.get(upstream).unwrap_or(0);
+        failed.insert(upstream.clone(), current + 1);
+    }
+
+    if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream) {
+        metrics
+            .circuit_breaker_unhealthy_backends
+            .push(upstream.clone());
+    }
+}
+
+/// Record an upstream response for the circuit breaker state machine.
+pub fn record_backend_response(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    upstream: &UpstreamInner,
+    status: u16,
+    metrics: &mut crate::ProxyMetrics,
+) {
+    let should_open = if is_circuit_breaker_failure_status(status) {
+        record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream)
+    } else {
+        record_circuit_breaker_success(circuit_breaker_state, circuit_breaker, upstream);
+        false
+    };
+
+    if should_open {
+        metrics
+            .circuit_breaker_unhealthy_backends
+            .push(upstream.clone());
+    }
+}
+
+/// Returns whether a backend is currently available for new circuit-breaker traffic.
+pub fn is_circuit_breaker_available(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    upstream: &UpstreamInner,
+) -> bool {
+    if !circuit_breaker.enabled {
+        return true;
+    }
+
+    let Some(circuit_breaker_state) = circuit_breaker_state else {
+        return true;
+    };
+
+    let states = circuit_breaker_state.read();
+    let Some(state) = states.get(upstream) else {
+        return true;
+    };
+
+    match state.status {
+        CircuitBreakerStatus::Closed => true,
+        CircuitBreakerStatus::Open => state
+            .opened_at
+            .is_some_and(|opened_at| opened_at.elapsed() >= circuit_breaker.open_duration),
+        CircuitBreakerStatus::HalfOpen => !state.half_open_in_flight,
+    }
+}
+
+fn try_acquire_circuit_breaker_slot(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    upstream: &UpstreamInner,
+) -> bool {
+    if !circuit_breaker.enabled {
+        return true;
+    }
+
+    let Some(circuit_breaker_state) = circuit_breaker_state else {
+        return true;
+    };
+
+    let mut states = circuit_breaker_state.write();
+    let state = states.entry(upstream.clone()).or_default();
+
+    match state.status {
+        CircuitBreakerStatus::Closed => true,
+        CircuitBreakerStatus::Open => {
+            let Some(opened_at) = state.opened_at else {
+                return false;
+            };
+
+            if opened_at.elapsed() < circuit_breaker.open_duration {
+                return false;
+            }
+
+            state.status = CircuitBreakerStatus::HalfOpen;
+            state.opened_at = None;
+            state.half_open_in_flight = true;
+            state.half_open_pass_count = 0;
+            ferron_core::log_info!(
+                "Upstream {} circuit transitioned to half-open",
+                upstream.proxy_to
+            );
+            true
+        }
+        CircuitBreakerStatus::HalfOpen => {
+            if state.half_open_in_flight {
+                false
+            } else {
+                state.half_open_in_flight = true;
+                true
+            }
+        }
+    }
+}
+
+fn record_circuit_breaker_failure(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    upstream: &UpstreamInner,
+) -> bool {
+    if !circuit_breaker.enabled {
+        return false;
+    }
+
+    let Some(circuit_breaker_state) = circuit_breaker_state else {
+        return false;
+    };
+
+    let now = Instant::now();
+    let mut states = circuit_breaker_state.write();
+    let state = states.entry(upstream.clone()).or_default();
+
+    match state.status {
+        CircuitBreakerStatus::HalfOpen => {
+            state.half_open_in_flight = false;
+            state.half_open_pass_count = 0;
+            state.recent_failures.clear();
+            state.status = CircuitBreakerStatus::Open;
+            state.opened_at = Some(now);
+            ferron_core::log_warn!(
+                "Upstream {} circuit reopened after a half-open trial failure",
+                upstream.proxy_to
+            );
+            true
+        }
+        CircuitBreakerStatus::Open => {
+            state.opened_at = Some(now);
+            false
+        }
+        CircuitBreakerStatus::Closed => {
+            prune_circuit_breaker_failures(state, circuit_breaker.window, now);
+            state.recent_failures.push_back(now);
+
+            if state.recent_failures.len() as u64 >= circuit_breaker.max_fails {
+                state.recent_failures.clear();
+                state.status = CircuitBreakerStatus::Open;
+                state.opened_at = Some(now);
+                state.half_open_pass_count = 0;
+                state.half_open_in_flight = false;
+                ferron_core::log_warn!(
+                    "Upstream {} circuit opened after {} failures within {:?}",
+                    upstream.proxy_to,
+                    circuit_breaker.max_fails,
+                    circuit_breaker.window
+                );
+                true
+            } else {
+                false
+            }
+        }
+    }
+}
+
+fn record_circuit_breaker_success(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    upstream: &UpstreamInner,
+) {
+    if !circuit_breaker.enabled {
         return;
     }
-    metrics.unhealthy_backends.push(upstream.clone());
-    let mut failed = failed_backends.write();
-    let current = failed.get(upstream).unwrap_or(0);
-    failed.insert(upstream.clone(), current + 1);
+
+    let Some(circuit_breaker_state) = circuit_breaker_state else {
+        return;
+    };
+
+    let mut states = circuit_breaker_state.write();
+    let Some(state) = states.get_mut(upstream) else {
+        return;
+    };
+
+    if state.status != CircuitBreakerStatus::HalfOpen {
+        return;
+    }
+
+    state.half_open_in_flight = false;
+    state.half_open_pass_count += 1;
+
+    if state.half_open_pass_count >= circuit_breaker.consecutive_passes {
+        state.status = CircuitBreakerStatus::Closed;
+        state.opened_at = None;
+        state.half_open_pass_count = 0;
+        state.recent_failures.clear();
+        ferron_core::log_info!(
+            "Upstream {} circuit closed after {} successful half-open request(s)",
+            upstream.proxy_to,
+            circuit_breaker.consecutive_passes
+        );
+    }
+}
+
+fn prune_circuit_breaker_failures(state: &mut CircuitBreakerState, window: Duration, now: Instant) {
+    while state
+        .recent_failures
+        .front()
+        .is_some_and(|timestamp| now.duration_since(*timestamp) >= window)
+    {
+        state.recent_failures.pop_front();
+    }
+}
+
+fn is_circuit_breaker_failure_status(status: u16) -> bool {
+    (500..600).contains(&status)
 }
 
 /// Resolve an affinity key to a backend index.

@@ -97,6 +97,31 @@ example.com {
 }
 ```
 
+## Circuit breaking
+
+Ferron supports request-time circuit breaking for unstable backends. This is useful when you want Ferron to temporarily eject a backend after repeated transport failures or upstream `5xx` responses, then probe recovery with a single half-open trial request.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        algorithm round_robin
+        retry_connection false
+
+        circuit_breaker {
+            max_fails 5
+            window "30s"
+            open_duration "10s"
+            consecutive_passes 1
+        }
+    }
+}
+```
+
+For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/reverse-proxying#circuit-breaking).
+
 ## Active health checks
 
 Ferron also supports active health checks. To enable active health checking:
@@ -242,7 +267,8 @@ example.com {
 
 ## Notes and troubleshooting
 
-- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `lb_health_check_max_fails` settings.
+- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `passive_check` or `circuit_breaker` settings.
+- Circuit breaking counts transport failures and upstream `5xx` responses. It does not automatically retry upstream `5xx` responses.
 - If only some paths fail, review `location` matching order — more specific locations win over less specific ones.
 - For mixed static + API setups, keep API routes in a dedicated prefix like `/api` and use a catch-all `/` location for static files or SPA fallback.
 - For gRPC upstreams, enable `http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.

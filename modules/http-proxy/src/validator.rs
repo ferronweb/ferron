@@ -67,6 +67,7 @@ fn validate_proxy_entries(
 fn validate_proxy_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     validate_str(block, "algorithm")?;
     validate_passive_check_directives(block)?;
+    validate_circuit_breaker_directives(block)?;
     validate_bool(block, "retry_connection")?;
     validate_bool(block, "keepalive")?;
     validate_bool(block, "http2")?;
@@ -298,6 +299,24 @@ fn validate_active_check_directives(
         validate_number(block, "consecutive_fails", 1)?;
         validate_number(block, "consecutive_passes", 1)?;
         validate_bool(block, "no_verification")?;
+    }
+
+    Ok(())
+}
+
+fn validate_circuit_breaker_directives(
+    block: &ServerConfigurationBlock,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(block) = block
+        .directives
+        .get("circuit_breaker")
+        .and_then(|d| d.first())
+        .and_then(|d| d.children.as_ref())
+    {
+        validate_number(block, "max_fails", 1)?;
+        validate_duration(block, "window")?;
+        validate_duration(block, "open_duration")?;
+        validate_number(block, "consecutive_passes", 1)?;
     }
 
     Ok(())

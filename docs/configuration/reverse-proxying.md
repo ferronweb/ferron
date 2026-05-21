@@ -3,7 +3,7 @@ title: "Configuration: reverse proxying"
 description: "Reverse proxy, load balancing, upstream backends, header manipulation, and connection pooling directives."
 ---
 
-This page documents directives for forwarding incoming HTTP requests to one or more upstream backend servers. It supports load balancing, connection pooling with keep-alive reuse, health checking, and TLS upstream connections.
+This page documents directives for forwarding incoming HTTP requests to one or more upstream backend servers. It supports load balancing, connection pooling with keep-alive reuse, health checking, circuit breaking, and TLS upstream connections.
 
 ## Directives
 
@@ -19,6 +19,8 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `weighted_round_robin`. Default: `algorithm two_random`
 - `passive_check [bool: boolean]` (`http-proxy`)
   - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
+- `circuit_breaker [bool: boolean]` (`http-proxy`)
+  - This directive enables request-time circuit breaking for backends. Transport failures and upstream `5xx` responses count toward tripping the circuit. Supports nested `max_fails`, `window`, `open_duration`, and `consecutive_passes` directives. Default: `circuit_breaker false`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
@@ -70,6 +72,15 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | --- | --- | --- | --- |
 | `max_fails` | `<count: integer>` | Maximum consecutive failures before marking backend unhealthy. | 3 |
 | `window` | `<duration: string>` | Time window for the failure counter. After this duration, the counter resets. | `5s` |
+
+#### Circuit breaker nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `max_fails` | `<count: integer>` | Number of transport failures or upstream `5xx` responses within the rolling `window` required to open the circuit. | 5 |
+| `window` | `<duration: string>` | Rolling time window used for counting breaker failures. | `30s` |
+| `open_duration` | `<duration: string>` | How long the circuit stays open before a half-open trial request is allowed. | `30s` |
+| `consecutive_passes` | `<count: integer>` | Number of successful half-open trial requests required to close the circuit again. | 1 |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -362,6 +373,39 @@ Passive health checking tracks connection failures per backend:
 3. After the window expires, the counter resets and the backend becomes eligible again.
 4. When `retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
 
+### Circuit breaking
+
+Circuit breaking tracks request-time backend failures and temporarily ejects unstable backends:
+
+1. Transport failures and upstream `5xx` responses are counted per backend in a rolling window.
+2. When the backend reaches `max_fails` failures within `window`, Ferron opens the circuit and stops selecting that backend.
+3. After `open_duration`, Ferron allows a single half-open trial request to the backend.
+4. If the trial request succeeds, Ferron closes the circuit after `consecutive_passes` successful half-open requests.
+5. If the half-open trial request fails, Ferron reopens the circuit immediately.
+
+Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
+
+**Configuration example:**
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        algorithm round_robin
+        retry_connection false
+
+        circuit_breaker {
+            max_fails 5
+            window "30s"
+            open_duration "10s"
+            consecutive_passes 1
+        }
+    }
+}
+```
+
 ### Active health checking
 
 Active health checks proactively probe backend health on a schedule, independent of incoming traffic. This allows quick detection of backend failures before they affect client requests.
@@ -420,7 +464,7 @@ The proxy module emits the following metrics:
 - `ferron.proxy.backends.selected` (Counter) — backends selected during load balancing.
   - Attributes: backend URL or unix socket path
 - `ferron.proxy.backends.unhealthy` (Counter) — backends marked as unhealthy.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures)
+  - Attributes: backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits)
 - `ferron.proxy.requests` (Counter) — upstream proxy requests completed.
   - Attributes: `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code`
 - `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
@@ -430,6 +474,8 @@ The proxy module emits the following metrics:
 ## Notes and troubleshooting
 
 - If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).
+- If a backend is flapping, circuit breaking can protect the rest of the pool by temporarily ejecting it after repeated transport failures or upstream `5xx` responses.
+- Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
 - For active health checks:
   - Ensure the probe endpoint is configured and reachable on all backends (e.g., `/health` must return 2xx by default).
   - If upstreams are incorrectly marked unhealthy, check logs for "marked unhealthy" messages and verify the `expect_status` and response times.
@@ -437,6 +483,6 @@ The proxy module emits the following metrics:
   - Use HEAD requests when the response body is not needed for faster probes.
   - Optional: Use `body_match` to ensure critical responses contain expected content (e.g., `"ok"` or `"healthy"`).
   - For HTTPS probes with self-signed certificates, use `no_verification true` to skip TLS certificate validation.
-  - Both passive and active health checks work together: either can mark a backend as unhealthy.
+  - Passive health checks, circuit breaking, and active health checks work together: any of them can make a backend temporarily ineligible.
 - For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).

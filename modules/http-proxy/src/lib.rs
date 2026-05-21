@@ -47,6 +47,8 @@ pub struct ProxyMetrics {
     pub selected_backends: Vec<upstream::UpstreamInner>,
     /// Backends marked as unhealthy due to passive failures (request-time).
     pub unhealthy_backends: Vec<upstream::UpstreamInner>,
+    /// Backends whose circuit breaker was opened by request-time failures or 5xx responses.
+    pub circuit_breaker_unhealthy_backends: Vec<upstream::UpstreamInner>,
     /// Backends marked as unhealthy due to active health check probes, with counts.
     pub active_unhealthy_backends: Vec<(String, u64)>,
     /// Whether a pooled connection was reused.
@@ -76,6 +78,7 @@ impl ProxyMetrics {
         Self {
             selected_backends: Vec::new(),
             unhealthy_backends: Vec::new(),
+            circuit_breaker_unhealthy_backends: Vec::new(),
             active_unhealthy_backends: Vec::new(),
             connection_reused: false,
             tls_handshake_failures: 0,
@@ -169,6 +172,8 @@ struct ProxyState {
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
     /// Failed backend tracking cache (shared across all requests).
     failed_backends: Arc<RwLock<crate::util::TtlCache<upstream::UpstreamInner, u64>>>,
+    /// Circuit breaker state tracking per upstream.
+    circuit_breaker_state: upstream::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
     conn_state: upstream::ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
@@ -191,6 +196,7 @@ impl ProxyState {
             failed_backends: Arc::new(RwLock::new(crate::util::TtlCache::new(
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             ))),
+            circuit_breaker_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             algorithms: RwLock::new(HashMap::new()),
             active_health_check_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
@@ -489,6 +495,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             &config,
             &conn_manager,
             Arc::clone(&self.state.failed_backends),
+            Arc::clone(&self.state.circuit_breaker_state),
             &algorithm,
             Some(&self.state.conn_state),
             Some(&self.state.active_health_check_state),
@@ -556,6 +563,34 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             attrs.push((
                 "ferron.proxy.health_check_type",
                 MetricAttributeValue::String("passive".to_string()),
+            ));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.backends.unhealthy",
+                    attributes: attrs,
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{backend}"),
+                    description: Some("Number of health check failures for a backend server."),
+                }));
+        }
+
+        // Emit per-backend circuit breaker unhealthy metrics
+        for backend in &metrics.circuit_breaker_unhealthy_backends {
+            let mut attrs = Vec::with_capacity(3);
+            attrs.push((
+                "ferron.proxy.backend_url",
+                MetricAttributeValue::String(backend.proxy_to.clone()),
+            ));
+            if let Some(ref unix_path) = backend.proxy_unix {
+                attrs.push((
+                    "ferron.proxy.backend_unix_path",
+                    MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            attrs.push((
+                "ferron.proxy.health_check_type",
+                MetricAttributeValue::String("circuit_breaker".to_string()),
             ));
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
