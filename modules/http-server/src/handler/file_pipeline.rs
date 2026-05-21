@@ -398,6 +398,12 @@ async fn resolve_http_file_target(
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return Err(FilePipelineExecutionError::WebrootNotFound)
         }
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+            return Err(FilePipelineExecutionError::Forbidden)
+        }
+        Err(e) if e.kind() == io::ErrorKind::InvalidFilename => {
+            return Err(FilePipelineExecutionError::BadRequest)
+        }
         Err(e) => return Err(FilePipelineExecutionError::Io(e)),
     };
 
@@ -448,6 +454,12 @@ async fn resolve_http_file_target(
                 return Ok(Some(resolved));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                return Err(FilePipelineExecutionError::Forbidden)
+            }
+            Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
+                return Err(FilePipelineExecutionError::BadRequest)
+            }
             Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
                 candidate_depth -= 1;
             }
