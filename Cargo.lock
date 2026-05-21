@@ -1371,6 +1371,7 @@ version = "3.0.0-beta.1"
 dependencies = [
  "async-trait",
  "bytes",
+ "dashmap",
  "ferron-core",
  "ferron-http",
  "ferron-observability",
@@ -1379,7 +1380,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "httpdate",
- "parking_lot",
  "quick_cache",
  "rustc-hash",
  "tokio",

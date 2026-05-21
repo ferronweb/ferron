@@ -2,11 +2,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use dashmap::DashMap;
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
-use parking_lot::RwLock;
 use quick_cache::{sync::Cache, DefaultHashBuilder, Lifecycle, UnitWeighter};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 
 use crate::lscache::{PurgeOperation, PurgeSelector, ScopedTag};
 use crate::policy::CacheScope;
@@ -60,7 +60,7 @@ pub struct StoreStats {
 
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
-    variants_by_base: RwLock<FxHashMap<String, Vec<StoredVariant>>>,
+    variants_by_base: DashMap<String, Vec<StoredVariant>, FxBuildHasher>,
     max_entries: AtomicUsize,
 }
 
@@ -94,7 +94,7 @@ impl CacheStore {
                 DefaultHashBuilder::default(),
                 StoreLifecycle,
             ),
-            variants_by_base: RwLock::new(FxHashMap::default()),
+            variants_by_base: DashMap::with_hasher(FxBuildHasher::default()),
             max_entries: AtomicUsize::new(max_entries),
         }
     }
@@ -122,9 +122,8 @@ impl CacheStore {
 
         let variants = self
             .variants_by_base
-            .read()
             .get(base_key)
-            .cloned()
+            .map(|v| v.value().clone())
             .unwrap_or_default();
 
         let mut candidate_keys = Vec::with_capacity(variants.len());
@@ -214,8 +213,10 @@ impl CacheStore {
                 scope: entry.scope,
                 vary: entry.vary.clone(),
             };
-            let mut variants_by_base = self.variants_by_base.write();
-            let variants = variants_by_base.entry(entry.base_key.clone()).or_default();
+            let mut variants = self
+                .variants_by_base
+                .entry(entry.base_key.clone())
+                .or_default();
             if !variants.contains(&variant) {
                 variants.push(variant);
             }
