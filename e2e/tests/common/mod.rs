@@ -41,9 +41,8 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     if let Some(image) = ferron_image.as_ref() {
         return Ok(image.clone());
     }
-    let mut builder =
-        GenericBuildableImage::new("e2e-test-ferron", "latest")
-            .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/Dockerfile.test"));
+    let mut builder = GenericBuildableImage::new("e2e-test-ferron", "latest")
+        .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/Dockerfile.test"));
     for entry in glob::glob(concat!(env!("CARGO_MANIFEST_DIR"), "/../*")).unwrap() {
         let entry = entry.unwrap();
         let dest = entry.file_name().unwrap().to_str().unwrap().to_string();
@@ -56,7 +55,9 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
             builder = builder.with_file(entry, format!("./{dest}"));
         }
     }
-    let ferron_image_built = builder.build_image_with(BuildImageOptions::new()).await?;
+    let ferron_image_built = builder
+        .build_image_with(BuildImageOptions::new().with_skip_if_exists(true))
+        .await?;
     ferron_image.replace(ferron_image_built.clone());
     Ok(ferron_image_built)
 }
