@@ -164,3 +164,19 @@ path = "tests/proxy_protocol.rs"
 [[test]]
 name = "response_headers"
 path = "tests/response_headers.rs"
+
+[[test]]
+name = "abort"
+path = "tests/abort.rs"
+
+[[test]]
+name = "config_include"
+path = "tests/config_include.rs"
+
+[[test]]
+name = "error_handle"
+path = "tests/error_handle.rs"
+
+[[test]]
+name = "error_page"
+path = "tests/error_page.rs"
