@@ -7,7 +7,6 @@ edition = "2021"
 async-trait = "0.1"
 dashmap = "6"
 http = "1"
-parking_lot = "0.12"
 cidr = "0.3"
 
 ferron-core = { path = "../../core" }

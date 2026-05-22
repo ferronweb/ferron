@@ -147,8 +147,7 @@ fn parse_threshold_block(
         .get_value("window")
         .and_then(|v| v.as_duration())
         .map(|d| d.as_secs())
-        .ok_or_else(|| "threshold: 'window' must be a duration".to_string())?
-        as u64;
+        .ok_or_else(|| "threshold: 'window' must be a duration".to_string())?;
 
     Ok(Some(EventThreshold::new(
         event_type,
