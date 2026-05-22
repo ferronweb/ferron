@@ -47,6 +47,11 @@ async fn create_ferron_container(
     let ferron_image = self::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/%")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
         .with_network(network)
         .with_hostname("ferron")
         .with_mount(Mount::bind_mount(
@@ -69,7 +74,10 @@ async fn wait_for_ferron_tcp_ready(port: u16) {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    panic!("Ferron test container did not become reachable on port {}", port);
+    panic!(
+        "Ferron test container did not become reachable on port {}",
+        port
+    );
 }
 
 async fn wait_for_ferron_ready_route(port: u16, ferron: &ContainerAsync<GenericImage>) {
@@ -86,10 +94,10 @@ async fn wait_for_ferron_ready_route(port: u16, ferron: &ContainerAsync<GenericI
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    let stdout = String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default())
-        .unwrap_or_default();
-    let stderr = String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default())
-        .unwrap_or_default();
+    let stdout =
+        String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default();
+    let stderr =
+        String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default()).unwrap_or_default();
 
     panic!(
         "Ferron test container did not become ready at {}\nstdout:\n{}\n\nstderr:\n{}",
@@ -529,7 +537,10 @@ async fn test_circuit_breaker_half_open_recovery() {
   }
 }
 "#,
-        &[("backend-flaky", "backend-flaky", 1), ("backend-ok", "backend-ok", 0)],
+        &[
+            ("backend-flaky", "backend-flaky", 1),
+            ("backend-ok", "backend-ok", 0),
+        ],
     )
     .await;
 
