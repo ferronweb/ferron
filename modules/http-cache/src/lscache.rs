@@ -41,6 +41,7 @@ pub enum PurgeSelector {
     All,
     Tag(String),
     Url(String),
+    UrlPath(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -348,6 +348,14 @@ fn entry_matches_purge(
     operation.selectors.iter().any(|selector| match selector {
         PurgeSelector::All => true,
         PurgeSelector::Url(url) => entry.purge_url == *url,
+        PurgeSelector::UrlPath(path) => {
+            // Normalize the pathname (before "?" and "#")
+            let normalized_purge_url = entry
+                .purge_url
+                .split_once(['?', '#'])
+                .map_or(entry.purge_url.as_str(), |(url, _)| url);
+            normalized_purge_url == *path
+        }
         PurgeSelector::Tag(tag) => entry
             .tags
             .iter()

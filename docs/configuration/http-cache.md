@@ -59,6 +59,8 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `max_response_size` | `<int>` | This directive specifies the maximum response body size, in bytes, that can be buffered and stored in the cache. Responses larger than this limit are still served, but they are not stored. | `2097152` |
 | `litespeed_override_cache_control` | `[<bool>]` | This directive specifies whether `X-LiteSpeed-Cache-Control` overrides standard response caching headers such as `Cache-Control` and `Expires` when Ferron decides whether to store a response and what TTL to use. This mode is intentionally non-standard and is intended only for applications that expect LiteSpeed-style cache semantics. | `false` |
 | `emit_litespeed_headers` | `[<bool>]` | This directive specifies whether the `X-LiteSpeed-Cache-Control` response header should be emitted when serving a cached response. | `false` |
+| `purge_method` | `[<bool>]` | This directive specifies whether the `PURGE` HTTP method is accepted for cache invalidation. When enabled, requests with method `PURGE` to a given URL will remove all cached entries matching that URL. This directive requires either HTTP basic authentication or the `purge_allowed_ips` directive; unauthenticated requests from non-allowed IPs are rejected with a 403 Forbidden response. | `false` |
+| `purge_allowed_ips` | `<string> [<string> ...]` | This directive specifies one or more IP addresses or CIDR ranges that are allowed to send `PURGE` requests. When non-empty, only requests from these IPs are allowed (unless the request is already authenticated via HTTP basic authentication). This directive can be specified multiple times. | none |
 | `vary` | `<string> [<string> ...]` | This directive specifies additional request headers that are added to the cache key, alongside any standard `Vary` response headers returned by the origin. This directive can be specified multiple times. | none |
 | `ignore` | `<string> [<string> ...]` | This directive specifies response headers that are removed from the stored cache representation while leaving the live response unchanged. This directive can be specified multiple times. | none |
 
@@ -93,6 +95,49 @@ example.com {
 - Non-`GET` responses are not stored, but they may still trigger LSCache-compatible purge headers.
 - Responses with `Vary: *` are never stored.
 - Built-in error responses generated after the main HTTP pipeline are not currently stored.
+
+### PURGE method cache invalidation
+
+When the `purge_method` subdirective is enabled, Ferron accepts the `PURGE` HTTP method for cache invalidation. A `PURGE` request to a specific URL removes all cached entries (both public and private) matching that URL, causing subsequent requests to fetch fresh content.
+
+**Security:**
+
+PURGE requests must be either:
+- Authenticated via HTTP basic authentication (the `basic_auth` directive), or
+- Originating from an IP address matching the `purge_allowed_ips` list.
+
+If neither condition is met, Ferron returns a **403 Forbidden** response. This ensures that cache purging is never accidentally left unsecured.
+
+**Example using IP allowlist:**
+
+```ferron
+example.com {
+    cache {
+        purge_method true
+        purge_allowed_ips 127.0.0.1 "10.0.0.0/8"
+    }
+}
+```
+
+**Example using basic authentication:**
+
+```ferron
+example.com {
+    cache {
+        purge_method true
+    }
+    basic_auth {
+        user $2a$12$...
+    }
+}
+```
+
+**Example request:**
+
+```http
+PURGE /blog/post-123 HTTP/1.1
+Host: example.com
+```
 
 ### Public and private cache behavior
 

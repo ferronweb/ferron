@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
@@ -11,6 +12,8 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "max_response_size",
     "litespeed_override_cache_control",
     "emit_litespeed_headers",
+    "purge_method",
+    "purge_allowed_ips",
     "vary",
     "ignore",
 ];
@@ -155,6 +158,16 @@ fn validate_cache_block(
         }
     }
 
+    if let Some(entries) = block.directives.get("purge_method") {
+        for entry in entries {
+            validate_boolean_entry(entry, "purge_method")?;
+        }
+    }
+
+    if let Some(entries) = block.directives.get("purge_allowed_ips") {
+        validate_cidr_list(entries, "purge_allowed_ips")?;
+    }
+
     if let Some(entries) = block.directives.get("vary") {
         validate_header_name_list(entries, "vary")?;
     }
@@ -195,6 +208,26 @@ fn validate_single_non_negative_integer(
         .ok_or_else(|| format!("Invalid `{name}` - expected an integer value"))?;
     if value < 0 {
         return Err(format!("Invalid `{name}` - expected a non-negative integer").into());
+    }
+    Ok(())
+}
+
+fn validate_cidr_list(
+    entries: &[ServerConfigurationDirectiveEntry],
+    name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in entries {
+        if entry.args.is_empty() {
+            return Err(format!("Invalid `{name}` - expected at least one IP or CIDR").into());
+        }
+        for arg in &entry.args {
+            let value = arg
+                .as_str()
+                .ok_or_else(|| format!("Invalid `{name}` - expected string IP/CIDR values"))?;
+            value
+                .parse::<IpCidr>()
+                .map_err(|_| format!("Invalid `{name}` - invalid IP or CIDR `{value}`"))?;
+        }
     }
     Ok(())
 }

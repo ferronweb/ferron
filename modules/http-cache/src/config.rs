@@ -1,3 +1,4 @@
+use cidr::IpCidr;
 use http::header::HeaderName;
 
 use ferron_core::config::layer::LayeredConfiguration;
@@ -15,6 +16,8 @@ pub struct CacheConfig {
     pub emit_litespeed_headers: bool,
     pub vary_headers: Vec<HeaderName>,
     pub ignored_store_headers: Vec<HeaderName>,
+    pub purge_method: bool,
+    pub purge_allowed_ips: Vec<IpCidr>,
 }
 
 impl Default for CacheConfig {
@@ -26,6 +29,8 @@ impl Default for CacheConfig {
             emit_litespeed_headers: false,
             vary_headers: Vec::new(),
             ignored_store_headers: Vec::new(),
+            purge_method: false,
+            purge_allowed_ips: Vec::new(),
         }
     }
 }
@@ -43,6 +48,8 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
 
     let vary_headers = collect_header_names(configuration, "vary");
     let ignored_store_headers = collect_header_names(configuration, "ignore");
+    let purge_method = get_nested_bool(configuration, "purge_method", false);
+    let purge_allowed_ips = collect_purge_allowed_ips(configuration);
 
     CacheConfig {
         enabled,
@@ -51,6 +58,8 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         emit_litespeed_headers,
         vary_headers,
         ignored_store_headers,
+        purge_method,
+        purge_allowed_ips,
     }
 }
 
@@ -131,6 +140,24 @@ fn collect_header_names(configuration: &LayeredConfiguration, directive: &str) -
         }
     }
     names
+}
+
+fn collect_purge_allowed_ips(configuration: &LayeredConfiguration) -> Vec<IpCidr> {
+    let mut ips = Vec::new();
+    for block in cache_blocks(configuration) {
+        if let Some(entries) = block.directives.get("purge_allowed_ips") {
+            for entry in entries {
+                for arg in &entry.args {
+                    if let Some(value) = arg.as_str() {
+                        if let Ok(cidr) = value.parse::<IpCidr>() {
+                            ips.push(cidr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ips
 }
 
 fn cache_blocks(configuration: &LayeredConfiguration) -> Vec<&ServerConfigurationBlock> {

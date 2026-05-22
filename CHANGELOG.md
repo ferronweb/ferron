@@ -8,6 +8,7 @@
 
 - A dropped-events admin metric for non-blocking observability sinks.
 - `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
+- `PURGE` HTTP method support for cache invalidation via `purge_method` and `purge_allowed_ips` subdirectives in the `cache` block.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - Session affinity (sticky sessions) support for reverse proxy with `cookie`, `header`, `ip`, and `hash` affinity types.
 - `consistent_hash` load balancing algorithm using a Ketama-style hash ring for deterministic backend selection.

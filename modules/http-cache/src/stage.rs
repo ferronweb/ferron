@@ -23,8 +23,8 @@ use typemap_rev::TypeMapKey;
 use crate::config::{parse_cache_config, parse_max_entries, CacheConfig};
 use crate::lscache::{
     collect_lsc_cookies, parse_litespeed_cache_control, parse_litespeed_purge,
-    parse_litespeed_tags, parse_litespeed_vary, LS_CACHE, LS_CACHE_CONTROL, LS_COOKIE, LS_PURGE,
-    LS_TAG, LS_VARY,
+    parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector, LS_CACHE,
+    LS_CACHE_CONTROL, LS_COOKIE, LS_PURGE, LS_TAG, LS_VARY,
 };
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
@@ -254,6 +254,66 @@ impl Stage<HttpContext> for HttpCacheStage {
         let head_only = request.method() == Method::HEAD;
 
         let method_cacheable = matches!(request.method(), &Method::GET | &Method::HEAD);
+        let method_purge = request.method() == "PURGE";
+
+        // Handle PURGE method — cache invalidation
+        if method_purge {
+            if !config.purge_method {
+                // PURGE not enabled — fall through to 405 from downstream stages
+            } else {
+                // Security check: must be authenticated or from an allowed IP
+                let ip_allowed = if !config.purge_allowed_ips.is_empty() {
+                    config
+                        .purge_allowed_ips
+                        .iter()
+                        .any(|cidr| cidr.contains(&ctx.remote_address.ip().to_canonical()))
+                } else {
+                    false
+                };
+                let purge_allowed = ctx.auth_user.is_some() || ip_allowed;
+
+                if !purge_allowed {
+                    ctx.res = Some(HttpResponse::BuiltinError(403, None));
+                    return Ok(false);
+                }
+
+                // Purge both public and private scopes matching the URL
+                let mut purged = 0;
+                for scope in [CacheScope::Public, CacheScope::Private] {
+                    let purge_ops = vec![PurgeOperation {
+                        scope,
+                        selectors: vec![PurgeSelector::UrlPath(request.uri().path().to_string())],
+                        stale: false,
+                    }];
+                    let (stats, items) = self.store.purge(&purge_ops, None);
+                    if stats.purged > 0 {
+                        self.emit_purge_metric(ctx, scope, stats.purged, items);
+                    }
+                    purged += stats.purged;
+                }
+
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Debug,
+                    target: LOG_TARGET,
+                    message: format!("Purged {} cache entries via PURGE method", purged),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
+
+                let response = Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "text/plain")
+                    .body(
+                        Full::new(Bytes::from_static(b"Purged"))
+                            .map_err(|_: std::convert::Infallible| unreachable!())
+                            .boxed_unsync(),
+                    )
+                    .map_err(|e| PipelineError::custom(e.to_string()))?;
+                ctx.res = Some(HttpResponse::Custom(response));
+                // Don't insert RequestState — run_inverse will skip
+                return Ok(false);
+            }
+        }
+
         let request_is_lookup_eligible = method_cacheable
             && !request_headers.contains_key(header::RANGE)
             && !request_headers.contains_key(header::UPGRADE)

@@ -2,6 +2,8 @@ use std::io::Write;
 #[cfg(unix)]
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
+use reqwest::Method;
+
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
@@ -121,6 +123,18 @@ impl LSCacheTestContext {
             req = req.header(*name, *value);
         }
         req.send().await.unwrap()
+    }
+
+    async fn purge(&self, path: &str) -> reqwest::Response {
+        let method = Method::from_bytes(b"PURGE").unwrap();
+        self.client
+            .request(
+                method,
+                format!("{}/{}", self.base_url, path.trim_start_matches('/')),
+            )
+            .send()
+            .await
+            .unwrap()
     }
 }
 
@@ -720,4 +734,78 @@ async fn test_lscache_combined_vary_cookie_and_value() {
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "region-us-hit");
+}
+
+const BASE_CONFIG_PURGE_METHOD: &str = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    purge_method true
+    purge_allowed_ips "0.0.0.0/0"
+  }
+}
+"#;
+
+const BASE_CONFIG_PURGE_METHOD_NO_ALLOW: &str = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    purge_method true
+  }
+}
+"#;
+
+#[tokio::test]
+async fn test_lscache_purge_method() {
+    let ctx = LSCacheTestContext::new("purge-method", BASE_CONFIG_PURGE_METHOD).await;
+
+    // Cache a page
+    let resp = ctx
+        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=before-purge")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "before-purge");
+
+    // Verify it's cached
+    let resp = ctx
+        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=should-not-appear")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "before-purge");
+
+    // Send PURGE request
+    let resp = ctx.purge("/purge-method-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    // Verify cache was invalidated
+    let resp = ctx
+        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=after-purge")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "after-purge");
+}
+
+#[tokio::test]
+async fn test_lscache_purge_method_security() {
+    let ctx = LSCacheTestContext::new("purge-method-sec", BASE_CONFIG_PURGE_METHOD_NO_ALLOW).await;
+
+    // PURGE without allowed IPs or auth should be rejected
+    let resp = ctx.purge("/any-path").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
 }
