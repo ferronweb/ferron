@@ -143,7 +143,7 @@ pub async fn execute_pipeline_stages(
                     ctx.res = Some(HttpResponse::BuiltinError(400, None));
                 }
                 Err(FilePipelineExecutionError::Timeout) => {
-                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
+                    ctx.res = Some(HttpResponse::BuiltinError(408, None));
                 }
                 Err(FilePipelineExecutionError::Io(error)) => {
                     emit_error_with_trace(
