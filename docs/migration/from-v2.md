@@ -646,7 +646,7 @@ Ferron 2 used `duration 30000` syntax. Ferron 3 accepts bare duration strings:
 
 ```ferron
 {
-    timeout 1       # Plain number = hours (backward compatible)
+    timeout 30           # Plain number = seconds
     keepalive "30m"      # Duration with suffix
 }
 ```

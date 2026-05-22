@@ -126,7 +126,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
 
-  > **Warning:** A bare number without a suffix is interpreted as **hours** by the duration parser (e.g. `timeout 5` means 5 hours, not 5ms). Always use an explicit suffix like `300s` or `5m` for timeouts.
+  > **Warning:** A bare number without a suffix is interpreted as **seconds** by the duration parser (e.g. `timeout 5` means 5 seconds, not 5ms). Always use an explicit suffix like `300s` or `5m` for timeouts.
 
 - `h1_enable_early_hints <bool>`
   - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
