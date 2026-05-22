@@ -52,7 +52,6 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use ferron_core::config::ServerConfigurationBlock;
-use ferron_core::util::parse_duration;
 
 /// Configuration for automatic ticket key rotation.
 #[derive(Debug, Clone)]
@@ -97,13 +96,7 @@ impl TicketKeyRotationConfig {
         // Extract rotation_interval (optional, default: 12h)
         let rotation_interval = ticket_keys_block
             .get_value("rotation_interval")
-            .and_then(|v| {
-                if let Some(si) = v.as_string_with_interpolations(&HashMap::new()) {
-                    Some(parse_duration(&si).unwrap_or(Duration::from_secs(12 * 3600)))
-                } else {
-                    v.as_number().map(|n| Duration::from_secs(n as u64))
-                }
-            })
+            .and_then(|v| v.as_duration())
             .unwrap_or(Duration::from_secs(12 * 3600));
 
         // Extract max_keys (optional, default: 3, range: 2-5)

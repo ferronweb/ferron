@@ -380,6 +380,12 @@ export default [
     label: "Rate limiting",
   },
   {
+    href: "/docs/v3/configuration/http-abuseban",
+    target: "_self",
+    sub: true,
+    label: "Abuse protection",
+  },
+  {
     label: "Observability",
   },
   {

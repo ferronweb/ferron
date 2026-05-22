@@ -1,9 +1,7 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::time::Duration;
 
 use ferron_core::pipeline::Pipeline;
-use ferron_core::util::parse_duration;
 use ferron_http::trace_context;
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, Parent, TraceAttributeValue, TraceEvent};
@@ -73,14 +71,8 @@ pub async fn execute_pipeline_stages(
         |value| {
             if !value.as_boolean().unwrap_or(true) {
                 None
-            } else if let Some(s) = value.as_string_with_interpolations(&HashMap::new()) {
-                match parse_duration(&s) {
-                    Ok(d) => Some(d),
-                    Err(e) => {
-                        ferron_core::log_warn!("Invalid timeout duration '{}': {}", s, e);
-                        Some(Duration::from_secs(300))
-                    }
-                }
+            } else if let Some(d) = value.as_duration() {
+                Some(d)
             } else {
                 value
                     .as_number()

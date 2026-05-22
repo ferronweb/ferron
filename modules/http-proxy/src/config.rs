@@ -10,7 +10,6 @@ use std::time::Duration;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
-use ferron_core::util::parse_duration;
 use http::header::HeaderName;
 
 #[cfg(feature = "srv-lookup")]
@@ -378,10 +377,9 @@ fn parse_passive_health_check(
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    health_check_config.window = parse_duration(val)
-                        .map_err(|e| format!("Invalid lb_health_check_window: {e}"))?;
+                    health_check_config.window = val;
                 }
             }
             _ => {}
@@ -427,20 +425,18 @@ fn parse_active_health_check(
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    health_check_config.interval = parse_duration(val)
-                        .map_err(|e| format!("Invalid health_check_interval: {e}"))?;
+                    health_check_config.interval = val;
                 }
             }
             "timeout" => {
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    health_check_config.timeout = parse_duration(val)
-                        .map_err(|e| format!("Invalid health_check_timeout: {e}"))?;
+                    health_check_config.timeout = val;
                 }
             }
             "expect_status" => {
@@ -456,12 +452,9 @@ fn parse_active_health_check(
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    health_check_config.response_time_threshold =
-                        Some(parse_duration(val).map_err(|e| {
-                            format!("Invalid health_check_response_time_threshold: {e}")
-                        })?);
+                    health_check_config.response_time_threshold = Some(val);
                 }
             }
             "body_match" => {
@@ -528,20 +521,18 @@ fn parse_circuit_breaker(
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    circuit_breaker_config.window = parse_duration(val)
-                        .map_err(|e| format!("Invalid circuit_breaker window: {e}"))?;
+                    circuit_breaker_config.window = val;
                 }
             }
             "open_duration" => {
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.as_duration())
                 {
-                    circuit_breaker_config.open_duration = parse_duration(val)
-                        .map_err(|e| format!("Invalid circuit_breaker open_duration: {e}"))?;
+                    circuit_breaker_config.open_duration = val;
                 }
             }
             "consecutive_passes" => {
@@ -597,12 +588,9 @@ fn parse_upstream_entry(
                     if let Some(val) = entries
                         .first()
                         .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
+                        .and_then(|v| v.as_duration())
                     {
-                        idle_timeout = Some(
-                            parse_duration(val)
-                                .map_err(|e| format!("Invalid idle_timeout: {e}"))?,
-                        );
+                        idle_timeout = Some(val);
                     }
                 }
                 "unix" => {
@@ -700,12 +688,9 @@ fn parse_srv_entry(
                     if let Some(val) = entries
                         .first()
                         .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
+                        .and_then(|v| v.as_duration())
                     {
-                        idle_timeout = Some(
-                            parse_duration(val)
-                                .map_err(|e| format!("Invalid idle_timeout: {e}"))?,
-                        );
+                        idle_timeout = Some(val);
                     }
                 }
                 "dns_servers" => {
@@ -826,12 +811,9 @@ fn parse_affinity_entry(
                             if let Some(val) = entries
                                 .first()
                                 .and_then(|e| e.args.first())
-                                .and_then(|v| v.as_str())
+                                .and_then(|v| v.as_duration())
                             {
-                                cookie_cfg.ttl = Some(
-                                    parse_duration(val)
-                                        .map_err(|e| format!("Invalid affinity ttl: {e}"))?,
-                                );
+                                cookie_cfg.ttl = Some(val);
                             }
                         }
                         "path" => {

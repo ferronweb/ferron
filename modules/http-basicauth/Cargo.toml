@@ -15,7 +15,7 @@ password-auth = { version = "1.0", features = ["pbkdf2", "scrypt"] }
 tokio = { version = "1", features = ["sync"] }
 
 ferron-core = { path = "../../core" }
-ferron-http = { path = "../../types/http" }
+ferron-http = { path = "../../types/http", features = ["abuse"] }
 ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]

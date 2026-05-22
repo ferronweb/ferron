@@ -7,6 +7,7 @@
 ### Added
 
 - A dropped-events admin metric for non-blocking observability sinks.
+- `abuse_protection` module for lightweight Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
 - `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 - `PURGE` HTTP method support for cache invalidation via `purge_method` and `purge_allowed_ips` subdirectives in the `cache` block.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
@@ -26,12 +27,14 @@
 - Forwarded authentication now supports interpolated string values for the backend URL.
 - HTTP Basic Auth now return a 429 Too Many Requests status code when the user has exceeded the maximum number of failed attempts.
 - HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
+- Improved consistency for duration values across the configuration.
 - Improved error reporting for some TLS handshake failures.
 - Improved error reporting for local automatic TLS failures.
 - OCSP responses are now verified before being cached and stapled.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
 - Some file serving errors are now handled more gracefully, returning a 403 Forbidden (for permission denied) or 400 Bad Request (for invalid filename or too long one) status code instead of a generic 500 Internal Server Error.
+- Syntax for rate limit window has been updated to use duration strings (**potentially breaking**).
 - Syntax for passive and active health checks, load balancing algorithm, and connection retries has been updated to use a more consistent and readable format (**potentially breaking**).
 - The web server now warns when local automatic TLS is configured but the cache directory isn't writable, instead of straight-up failing to start.
 - The web server process now performs graceful shutdown when SIGTERM is sent to the process on Unix.

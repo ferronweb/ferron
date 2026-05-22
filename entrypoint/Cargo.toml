@@ -24,6 +24,7 @@ ferron-http-basicauth = { path = "../modules/http-basicauth", optional = true }
 ferron-http-cache = { path = "../modules/http-cache", optional = true }
 ferron-http-headers = { path = "../modules/http-headers", optional = true }
 ferron-http-ratelimit = { path = "../modules/http-ratelimit", optional = true }
+ferron-http-abuseban = { path = "../modules/http-abuseban", optional = true }
 ferron-http-response = { path = "../modules/http-response", optional = true }
 ferron-http-rewrite = { path = "../modules/http-rewrite", optional = true }
 ferron-http-map = { path = "../modules/http-map", optional = true }
@@ -73,6 +74,7 @@ profile-default = [
     "ferron-http-cache",
     "ferron-http-headers",
     "ferron-http-ratelimit",
+    "ferron-http-abuseban",
     "ferron-http-response",
     "ferron-http-rewrite",
     "ferron-http-map",

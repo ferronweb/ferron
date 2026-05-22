@@ -35,7 +35,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     net::IpAddr,
     sync::Arc,
+    time::Duration,
 };
+
+use crate::util::parse_duration;
 
 /// Source location information for configuration elements.
 ///
@@ -297,6 +300,17 @@ impl ServerConfigurationValue {
             Some(*b)
         } else {
             None
+        }
+    }
+
+    /// Get this value as a duration, if it is a duration.
+    #[inline]
+    pub fn as_duration(&self) -> Option<Duration> {
+        match self {
+            ServerConfigurationValue::Number(n, _) => Some(Duration::from_secs(*n as u64)),
+            ServerConfigurationValue::Float(f, _) => Some(Duration::from_secs_f64(*f)),
+            ServerConfigurationValue::String(s, _) => parse_duration(s).ok(),
+            _ => None,
         }
     }
 }

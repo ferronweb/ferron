@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_core::util::parse_duration;
 
 use crate::key_extractor::KeyExtractor;
 
@@ -98,7 +99,7 @@ impl RateLimitValidator {
         // Validate `window` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("window") {
             for entry in entries {
-                self.validate_number_entry(entry, "window", 1)?;
+                self.validate_duration(entry, "window")?;
             }
         }
 
@@ -152,6 +153,22 @@ impl RateLimitValidator {
             .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
         if n < min {
             return Err(format!("Invalid `{name}` — must be >= {min}").into());
+        }
+        Ok(())
+    }
+
+    fn validate_duration(
+        &self,
+        entry: &ServerConfigurationDirectiveEntry,
+        name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if entry.args.first().is_some_and(|v| v.as_number().is_some()) {
+            return Ok(());
+        }
+        if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
+            parse_duration(val).map_err(|e| format!("Invalid `{name}` duration: {e}"))?;
+        } else {
+            return Err(format!("Invalid `{name}` — expected a duration string").into());
         }
         Ok(())
     }

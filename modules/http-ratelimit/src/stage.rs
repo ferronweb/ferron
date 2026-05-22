@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
@@ -131,6 +132,19 @@ impl RateLimitEngine {
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to exhausted rate limit buckets."),
                 }));
+
+                // Emit abuse event so the abuse protection module can track
+                // repeated rate limit violations and potentially ban the IP.
+                if let Some(recorder) = get_global_abuse_recorder() {
+                    let abuse_event = AbuseEvent::new(
+                        AbuseEventType::RateLimitExceeded,
+                        ctx.remote_address.ip(),
+                        format!("Rate limit {} req/s exceeded", config.rate),
+                        50,
+                    );
+                    recorder.record_event(&abuse_event, ctx);
+                }
+
                 return Some(Self::make_response(config.deny_status, retry_after));
             }
 

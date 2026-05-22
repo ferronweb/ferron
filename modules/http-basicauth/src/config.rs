@@ -114,65 +114,24 @@ fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForc
     }
 
     // Parse `lockout_duration` — optional, accepts duration string or seconds
-    if let Some(ld_val) = block.get_value("lockout_duration") {
-        if let Some(secs) = parse_duration_value(ld_val) {
-            if secs > 0 {
-                bfc.lockout_duration_secs = secs;
-            }
+    if let Some(secs) = block
+        .get_value("lockout_duration")
+        .and_then(|d| d.as_duration())
+        .map(|d| d.as_secs())
+    {
+        if secs > 0 {
+            bfc.lockout_duration_secs = secs;
         }
     }
 
     // Parse `window` — optional, accepts duration string or seconds
-    if let Some(w_val) = block.get_value("window") {
-        if let Some(secs) = parse_duration_value(w_val) {
-            if secs > 0 {
-                bfc.window_secs = secs;
-            }
-        }
-    }
-}
-
-/// Parse a duration value that can be either a number (seconds) or a duration string
-/// like "15m", "1h", "5m".
-fn parse_duration_value(val: &ferron_core::config::ServerConfigurationValue) -> Option<u64> {
-    // Try as a number first (seconds)
-    if let Some(n) = val.as_number() {
-        return Some(n as u64);
-    }
-
-    // Try as a string with duration suffix
-    if let Some(s) = val.as_str() {
-        return parse_duration_string(s);
-    }
-
-    None
-}
-
-/// Parse a duration string like "15m", "1h", "30s", "1d".
-fn parse_duration_string(s: &str) -> Option<u64> {
-    let s = s.trim();
-    if s.is_empty() {
-        return None;
-    }
-
-    let last_char = s.chars().last()?;
-    match last_char {
-        's' | 'S' => s[..s.len() - 1].parse::<u64>().ok(),
-        'm' | 'M' => {
-            let minutes = s[..s.len() - 1].parse::<u64>().ok()?;
-            Some(minutes * 60)
-        }
-        'h' | 'H' => {
-            let hours = s[..s.len() - 1].parse::<u64>().ok()?;
-            Some(hours * 3600)
-        }
-        'd' | 'D' => {
-            let days = s[..s.len() - 1].parse::<u64>().ok()?;
-            Some(days * 86400)
-        }
-        _ => {
-            // Plain number — treat as seconds
-            s.parse::<u64>().ok()
+    if let Some(secs) = block
+        .get_value("window")
+        .and_then(|d| d.as_duration())
+        .map(|d| d.as_secs())
+    {
+        if secs > 0 {
+            bfc.window_secs = secs;
         }
     }
 }

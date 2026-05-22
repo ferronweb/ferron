@@ -10,7 +10,7 @@ use std::time::Duration;
 /// - `s` or `S`: seconds
 /// - `d` or `D`: days
 ///
-/// Plain numbers (without suffix) are treated as hours for backward compatibility.
+/// Plain numbers (without suffix) are treated as seconds.
 ///
 /// # Examples
 ///
@@ -22,41 +22,41 @@ use std::time::Duration;
 /// assert_eq!(parse_duration("30m").unwrap(), Duration::from_secs(1800));
 /// assert_eq!(parse_duration("90s").unwrap(), Duration::from_secs(90));
 /// assert_eq!(parse_duration("1d").unwrap(), Duration::from_secs(86400));
-/// assert_eq!(parse_duration("12").unwrap(), Duration::from_secs(12 * 3600));
+/// assert_eq!(parse_duration("12").unwrap(), Duration::from_secs(12));
 /// ```
 pub fn parse_duration(s: &str) -> Result<Duration, String> {
     let s = s.trim();
 
     if let Some(num_str) = s.strip_suffix(['h', 'H']) {
-        let hours: u64 = num_str
+        let hours: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid hours '{}': {}", s, e))?;
-        Ok(Duration::from_secs(hours * 3600))
+        Ok(Duration::from_secs_f64(hours * 3600.0))
     } else if let Some(num_str) = s.strip_suffix(['m', 'M']) {
-        let minutes: u64 = num_str
+        let minutes: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid minutes '{}': {}", s, e))?;
-        Ok(Duration::from_secs(minutes * 60))
+        Ok(Duration::from_secs_f64(minutes * 60.0))
     } else if let Some(num_str) = s.strip_suffix(['s', 'S']) {
-        let seconds: u64 = num_str
+        let seconds: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid seconds '{}': {}", s, e))?;
-        Ok(Duration::from_secs(seconds))
+        Ok(Duration::from_secs_f64(seconds))
     } else if let Some(num_str) = s.strip_suffix(['d', 'D']) {
-        let days: u64 = num_str
+        let days: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid days '{}': {}", s, e))?;
-        Ok(Duration::from_secs(days * 86400))
+        Ok(Duration::from_secs_f64(days * 86400.0))
     } else {
-        // Try plain number (assume hours)
-        let hours: u64 = s
+        // Try plain number (assume seconds)
+        let seconds: f64 = s
             .parse()
             .map_err(|e| format!("Invalid duration '{}': {}", s, e))?;
-        Ok(Duration::from_secs(hours * 3600))
+        Ok(Duration::from_secs_f64(seconds))
     }
 }
 
@@ -99,11 +99,8 @@ mod tests {
 
     #[test]
     fn test_parse_duration_plain_number() {
-        // Plain numbers are treated as hours
-        assert_eq!(
-            parse_duration("12").unwrap(),
-            Duration::from_secs(12 * 3600)
-        );
+        // Plain numbers are treated as seconds
+        assert_eq!(parse_duration("12").unwrap(), Duration::from_secs(12));
     }
 
     #[test]

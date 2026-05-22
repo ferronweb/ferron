@@ -1271,6 +1271,7 @@ dependencies = [
  "ferron-config-json",
  "ferron-core",
  "ferron-dns-stalwart",
+ "ferron-http-abuseban",
  "ferron-http-basicauth",
  "ferron-http-buffer",
  "ferron-http-cache",
@@ -1325,6 +1326,25 @@ dependencies = [
  "rustc-hash",
  "typemap_rev",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-http-abuseban"
+version = "3.0.0-beta.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "cidr",
+ "dashmap",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "parking_lot",
+ "rustc-hash",
+ "tokio",
+ "typemap_rev",
 ]
 
 [[package]]

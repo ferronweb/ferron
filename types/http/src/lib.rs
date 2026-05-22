@@ -1,5 +1,7 @@
 //! HTTP context types
 
+#[cfg(feature = "abuse")]
+pub mod abuse;
 pub mod client_ip;
 pub mod trace_context;
 #[cfg(feature = "util")]

@@ -88,9 +88,8 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
 
     let window_secs = block
         .get_value("window")
-        .and_then(|v| v.as_number())
-        .filter(|&n| n > 0)
-        .unwrap_or(RateLimitConfig::DEFAULT_WINDOW_SECS as i64) as u64;
+        .and_then(|v| v.as_duration())
+        .map_or(RateLimitConfig::DEFAULT_WINDOW_SECS, |d| d.as_secs());
 
     let deny_status = block
         .get_value("deny_status")
@@ -100,10 +99,8 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
 
     let bucket_ttl_secs = block
         .get_value("bucket_ttl")
-        .and_then(|v| v.as_number())
-        .filter(|&n| n > 0)
-        .unwrap_or(RateLimitConfig::DEFAULT_BUCKET_TTL_SECS as i64)
-        as u64;
+        .and_then(|v| v.as_duration())
+        .map_or(RateLimitConfig::DEFAULT_BUCKET_TTL_SECS, |d| d.as_secs());
 
     let max_buckets = block
         .get_value("max_buckets")

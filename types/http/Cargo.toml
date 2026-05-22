@@ -18,3 +18,4 @@ ferron-core = { path = "../../core" }
 
 [features]
 util = []
+abuse = []

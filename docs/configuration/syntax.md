@@ -91,9 +91,9 @@ Several directives accept duration values. The following formats are supported:
 | `m` or `M` | Minutes | `30m`, `30M` | 30 minutes |
 | `s` or `S` | Seconds | `90s`, `90S` | 90 seconds |
 | `d` or `D` | Days | `1d`, `1D` | 1 day |
-| (none) | Hours (default) | `12` | 12 hours |
+| (none) | Seconds (default) | `12` | 12 seconds |
 
-Plain numbers without a suffix are treated as hours.
+Plain numbers without a suffix are treated as seconds.
 
 ## Comments
 
@@ -167,7 +167,7 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 ## Notes and troubleshooting
 
 - Where validation and runtime behavior differ, the directive pages call that out explicitly.
-- Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Plain numbers without a suffix are treated as hours.
+- Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Plain numbers without a suffix are treated as seconds.
 - Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
 
 ### See also

@@ -9,6 +9,7 @@ use std::sync::{Arc, LazyLock};
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Method};
@@ -208,6 +209,15 @@ impl Stage<HttpContext> for BasicAuthStage {
 
                 // Unknown user — record failure for brute-force tracking
                 engine.record_failure(ip);
+                if let Some(recorder) = get_global_abuse_recorder() {
+                    let abuse_event = AbuseEvent::new(
+                        AbuseEventType::BruteForceFailure,
+                        ip,
+                        format!("Brute-force failure for unknown user '{}'", username),
+                        60,
+                    );
+                    recorder.record_event(&abuse_event, ctx);
+                }
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     message: format!(
@@ -235,6 +245,15 @@ impl Stage<HttpContext> for BasicAuthStage {
         } else {
             // Authentication failed — record failure
             let locked = engine.record_failure(ctx.remote_address.ip());
+            if let Some(recorder) = get_global_abuse_recorder() {
+                let abuse_event = AbuseEvent::new(
+                    AbuseEventType::BruteForceFailure,
+                    ctx.remote_address.ip(),
+                    format!("Brute-force failure for user '{}'", username),
+                    60,
+                );
+                recorder.record_event(&abuse_event, ctx);
+            }
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!(

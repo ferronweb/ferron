@@ -133,16 +133,6 @@ T=36h:  [Key_F, Key_E, Key_D]     ← Key_A removed (expired)
 
 Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
-### Rotation duration format
-
-The `rotation_interval` parameter accepts:
-
-- `"12h"` or `"12H"` — hours
-- `"30m"` or `"30M"` — minutes
-- `"90s"` or `"90S"` — seconds
-- `"1d"` or `"1D"` — days
-- `"12"` — plain number (treated as hours)
-
 ## Security considerations
 
 ### Do's

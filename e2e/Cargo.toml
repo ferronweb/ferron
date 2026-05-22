@@ -154,5 +154,9 @@ name = "lscache"
 path = "tests/lscache.rs"
 
 [[test]]
+name = "abuseban"
+path = "tests/abuseban.rs"
+
+[[test]]
 name = "affinity"
 path = "tests/affinity.rs"

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
-use ferron_core::{config::ServerConfigurationBlock, util::parse_duration};
+use ferron_core::config::ServerConfigurationBlock;
 
 pub struct TlsHttpConfig {
     pub url: hyper::Uri,
@@ -19,8 +19,7 @@ impl TlsHttpConfig {
             ))?;
         let refresh_interval = config
             .get_value("refresh_interval")
-            .and_then(|v| v.as_str())
-            .and_then(|i| parse_duration(i).ok())
+            .and_then(|v| v.as_duration())
             .unwrap_or(Duration::from_hours(1));
         let no_verification = config.get_flag("no_verification");
         Ok(Self {
