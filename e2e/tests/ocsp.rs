@@ -451,7 +451,7 @@ async fn test_ocsp_stapling_tcp() {
     );
 
     let mut saw_staple = false;
-    for _ in 0..20 {
+    for _ in 0..25 {
         let client_cfg = client_config.clone();
         let port_copy = port;
         // Perform blocking TCP+TLS handshake in a spawn_blocking to avoid blocking the async runtime
