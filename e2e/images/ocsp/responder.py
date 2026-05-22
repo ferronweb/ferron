@@ -146,7 +146,14 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
         revocation_reason=None,
     ).responder_id(OCSPResponderEncoding.HASH, issuer)
 
-    ocsp_resp = builder.sign(ca_key, hashes.SHA256())
+    # "Forge" the signature if an environment variable is set to 1
+    if os.environ.get("FERRON_E2E_OCSP_FORGE_SIGNATURE") == "1":
+        # Generate a random RSA private key to simulate forged OCSP responses
+        forged_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        ocsp_resp = builder.sign(forged_key, hashes.SHA256())
+    else:
+        ocsp_resp = builder.sign(ca_key, hashes.SHA256())
+
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
 
 

@@ -27,8 +27,6 @@ static OTLP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static OCSP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
-static OCSP_FORGED_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
-    LazyLock::new(|| Mutex::new(None));
 static BIND9_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static AUTH_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
@@ -164,26 +162,6 @@ pub async fn build_ocsp_image() -> Result<GenericImage, TestcontainersError> {
         .build_image()
         .await?;
     ocsp_image.replace(image.clone());
-    Ok(image)
-}
-
-pub async fn build_ocsp_forged_image() -> Result<GenericImage, TestcontainersError> {
-    let mut ocsp_forged_image = OCSP_FORGED_IMAGE.lock().await;
-    if let Some(image) = ocsp_forged_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let image = GenericBuildableImage::new("e2e-test-ocsp-forged", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/ocsp-forged/Dockerfile"
-        ))
-        .with_file(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/images/ocsp-forged"),
-            ".",
-        )
-        .build_image()
-        .await?;
-    ocsp_forged_image.replace(image.clone());
     Ok(image)
 }
 
