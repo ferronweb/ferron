@@ -4,6 +4,7 @@ use std::path::Path;
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, sync::Arc};
 
+use http::StatusCode;
 use rustls::DigitallySignedStruct;
 use rustls::SignatureScheme::{self, *};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -102,7 +103,7 @@ async fn create_ocsp_container(
         .with_wait_for(WaitFor::Http(Box::new(
             HttpWaitStrategy::new("/ready")
                 .with_port(ContainerPort::Tcp(5000))
-                .with_expected_status_code(200),
+                .with_expected_status_code(StatusCode::OK),
         )))
         .with_network(network)
         .with_hostname("ocsp")
