@@ -333,4 +333,13 @@ mod tests {
         // Other IPs in the allow list should pass
         assert!(!ip_access.is_blocked("192.168.1.50".parse().unwrap()));
     }
+
+    #[test]
+    fn ip_access_block_works_with_ipv6_mapped_ipv4() {
+        let mut ip_access = IpAccessConfig::new();
+        ip_access.block_list.push("10.0.0.0/10".parse().unwrap());
+
+        assert!(ip_access.is_blocked("::ffff:10.0.0.1".parse().unwrap()));
+        assert!(!ip_access.is_blocked("::ffff:192.168.1.1".parse().unwrap()));
+    }
 }
