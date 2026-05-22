@@ -103,6 +103,7 @@ When the `purge_method` subdirective is enabled, Ferron accepts the `PURGE` HTTP
 **Security:**
 
 PURGE requests must be either:
+
 - Authenticated via HTTP basic authentication (the `basic_auth` directive), or
 - Originating from an IP address matching the `purge_allowed_ips` list.
 
