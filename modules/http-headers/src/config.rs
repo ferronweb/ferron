@@ -128,11 +128,7 @@ fn parse_cors_block(
                 }
             }
             "credentials" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_boolean())
-                {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cors.credentials = val;
                 }
             }
