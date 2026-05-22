@@ -180,3 +180,11 @@ path = "tests/error_handle.rs"
 [[test]]
 name = "error_page"
 path = "tests/error_page.rs"
+
+[[test]]
+name = "buffer"
+path = "tests/buffer.rs"
+
+[[test]]
+name = "health_check"
+path = "tests/health_check.rs"
