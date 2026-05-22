@@ -5,7 +5,7 @@ use std::error::Error;
 use std::str::FromStr;
 
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 use http::header::HeaderName;
 
 /// Configuration validator for the HTTP headers module.
@@ -53,7 +53,7 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
             used_directives.insert("cors".to_string());
             for e in entries {
                 if let Some(block) = &e.children {
-                    validate_cors_block(block, used_directives)?;
+                    validate_cors_block(block)?;
                 }
             }
         }
@@ -62,72 +62,13 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
     }
 }
 
-fn validate_cors_block(
-    block: &ServerConfigurationBlock,
-    used: &mut HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(entries) = block.directives.get("origins") {
-        used.insert("origins".to_string());
-        for e in entries {
-            for arg in &e.args {
-                if arg.as_str().is_none() {
-                    return Err("Invalid `origins` — expected a string".into());
-                }
-            }
-        }
-    }
-    if let Some(entries) = block.directives.get("methods") {
-        used.insert("methods".to_string());
-        for e in entries {
-            for arg in &e.args {
-                if arg.as_str().is_none() {
-                    return Err("Invalid `methods` — expected a string".into());
-                }
-            }
-        }
-    }
-    if let Some(entries) = block.directives.get("headers") {
-        used.insert("headers".to_string());
-        for e in entries {
-            for arg in &e.args {
-                if arg.as_str().is_none() {
-                    return Err("Invalid `headers` — expected a string".into());
-                }
-            }
-        }
-    }
-    if let Some(entries) = block.directives.get("credentials") {
-        used.insert("credentials".to_string());
-        for e in entries {
-            if e.args.is_empty() {
-                continue; // allow no-arg form as a shorthand for "true"
-            }
-            if e.args.first().and_then(|v| v.as_boolean()).is_none() {
-                return Err("Invalid `credentials` — expected a boolean".into());
-            }
-        }
-    }
-    if let Some(entries) = block.directives.get("max_age") {
-        used.insert("max_age".to_string());
-        for e in entries {
-            if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
-                if val < 0 {
-                    return Err("Invalid `max_age` — must be non-negative".into());
-                }
-            } else {
-                return Err("Invalid `max_age` — expected a number".into());
-            }
-        }
-    }
-    if let Some(entries) = block.directives.get("expose_headers") {
-        used.insert("expose_headers".to_string());
-        for e in entries {
-            for arg in &e.args {
-                if arg.as_str().is_none() {
-                    return Err("Invalid `expose_headers` — expected a string".into());
-                }
-            }
-        }
-    }
+fn validate_cors_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+    ferron_core::validate_nested!(block, origins, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, methods, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, headers, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, max_age, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, expose_headers, args(*) => [ServerConfigurationValue::String(_, _)]);
+
     Ok(())
 }

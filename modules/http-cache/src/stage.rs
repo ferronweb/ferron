@@ -721,6 +721,7 @@ fn build_private_cache_key(
     let mut matched_private_cookie = false;
     for (name, value) in cookies {
         let lower = name.to_ascii_lowercase();
+        // Check if the cookie is a private cookie based on its name
         let is_private = PRIVATE_COOKIE_NAMES.contains(&lower.as_str())
             || lower.starts_with("wp_woocommerce_session_");
         if is_private && value.len() >= 16 {
@@ -822,6 +823,7 @@ fn response_from_parts(
     Ok(Response::from_parts(parts, body))
 }
 
+#[inline]
 fn response_from_streaming_parts(
     parts: http::response::Parts,
     prefix: Bytes,
@@ -888,6 +890,7 @@ fn annotate_response_headers(
     }
 }
 
+#[inline]
 fn strip_internal_headers(headers: &mut HeaderMap) {
     headers.remove(&LS_CACHE_CONTROL);
     headers.remove(&LS_TAG);
@@ -898,6 +901,7 @@ fn strip_internal_headers(headers: &mut HeaderMap) {
     headers.remove(CACHE_STATUS_HEADER);
 }
 
+#[inline]
 fn append_lsc_cookies_as_set_cookie(headers: &mut HeaderMap, lsc_cookies: &[HeaderValue]) {
     headers.remove(&LS_COOKIE);
     for cookie in lsc_cookies {

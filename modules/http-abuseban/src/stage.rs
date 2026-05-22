@@ -81,7 +81,7 @@ impl Stage<HttpContext> for AbuseProtectionStage {
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Debug,
                     message: format!("Ban rejection: IP {} - {}", client_ip, reason),
-                    target: "ferron_http_abuseban",
+                    target: "ferron-http-abuseban",
                     trace_context: ferron_http::trace_context::current_event_trace_context(context),
                 },
             ));

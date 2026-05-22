@@ -445,6 +445,5 @@ mod tests {
         assert!(BasicAuthStage::parse_basic_auth_header("InvalidFormat").is_none());
         assert!(BasicAuthStage::parse_basic_auth_header("Basic not-base64!!!").is_none());
         assert!(BasicAuthStage::parse_basic_auth_header("Basic bm9jb2xvbg==").is_none());
-        // "nocolon"
     }
 }

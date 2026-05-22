@@ -394,67 +394,47 @@ fn compress_body(
     }
 }
 
-fn compress_brotli(
-    body: UnsyncBoxBody<Bytes, std::io::Error>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    let stream = BodyStream::new(body);
-    let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
-        frame.into_data().unwrap_or_default()
-    });
-    let reader = StreamReader::new(data_stream);
-    let encoder = BrotliEncoder::with_params(
+macro_rules! compress {
+    ($fn_name:ident, $compression:expr) => {
+        pub fn $fn_name(
+            body: UnsyncBoxBody<Bytes, std::io::Error>,
+        ) -> UnsyncBoxBody<Bytes, std::io::Error> {
+            let stream = BodyStream::new(body);
+            let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
+                frame.into_data().unwrap_or_default()
+            });
+            let reader = StreamReader::new(data_stream);
+            let encoder = ($compression)(reader);
+            let reader_stream =
+                ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE);
+            StreamBody::new(reader_stream.map(|result| result.map(http_body::Frame::data)))
+                .boxed_unsync()
+        }
+    };
+}
+
+compress!(compress_gzip, |reader| {
+    GzipEncoder::with_quality(reader, Level::Precise(4))
+});
+compress!(compress_deflate, |reader| {
+    DeflateEncoder::with_quality(reader, Level::Precise(4))
+});
+compress!(compress_brotli, |reader| {
+    BrotliEncoder::with_params(
         reader,
         EncoderParams::default()
             .quality(Level::Precise(4))
             .window_size(17)
             .block_size(18),
-    );
-    let reader_stream = ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE);
-    StreamBody::new(reader_stream.map(|result| result.map(http_body::Frame::data))).boxed_unsync()
-}
-
-fn compress_zstd(
-    body: UnsyncBoxBody<Bytes, std::io::Error>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    let stream = BodyStream::new(body);
-    let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
-        frame.into_data().unwrap_or_default()
-    });
-    let reader = StreamReader::new(data_stream);
-    let encoder = ZstdEncoder::with_quality_and_params(
+    )
+});
+compress!(compress_zstd, |reader| {
+    ZstdEncoder::with_quality_and_params(
         reader,
-        Level::Default,
+        Level::Precise(4),
         &[CParameter::window_log(17), CParameter::hash_log(10)],
-    );
-    let reader_stream = ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE);
-    StreamBody::new(reader_stream.map(|result| result.map(http_body::Frame::data))).boxed_unsync()
-}
-
-fn compress_deflate(
-    body: UnsyncBoxBody<Bytes, std::io::Error>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    let stream = BodyStream::new(body);
-    let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
-        frame.into_data().unwrap_or_default()
-    });
-    let reader = StreamReader::new(data_stream);
-    let encoder = DeflateEncoder::with_quality(reader, Level::Precise(4));
-    let reader_stream = ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE);
-    StreamBody::new(reader_stream.map(|result| result.map(http_body::Frame::data))).boxed_unsync()
-}
-
-fn compress_gzip(
-    body: UnsyncBoxBody<Bytes, std::io::Error>,
-) -> UnsyncBoxBody<Bytes, std::io::Error> {
-    let stream = BodyStream::new(body);
-    let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
-        frame.into_data().unwrap_or_default()
-    });
-    let reader = StreamReader::new(data_stream);
-    let encoder = GzipEncoder::with_quality(reader, Level::Precise(4));
-    let reader_stream = ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE);
-    StreamBody::new(reader_stream.map(|result| result.map(http_body::Frame::data))).boxed_unsync()
-}
+    )
+});
 
 #[cfg(test)]
 mod tests {

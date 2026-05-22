@@ -1,8 +1,8 @@
 //! Connection pool using thread-local storage.
 //!
-//! This replaces the concurrent `connpool` with a simple, single-threaded pool
-//! stored in thread-local storage. Each thread owns its own pool exclusively,
-//! eliminating synchronization overhead entirely.
+//! This isa simple, single-threaded pool stored in thread-local storage.
+//! Each thread owns its own pool exclusively, eliminating synchronization
+//! overhead entirely.
 
 use std::cell::RefCell;
 use std::net::IpAddr;
@@ -220,9 +220,8 @@ pub fn return_connection_to_pool(
 ) {
     TLS_POOLS.with(|tls| {
         let guard = tls.borrow();
-        let pools = match guard.as_ref() {
-            Some(p) => p,
-            None => return, // Pool not initialized, discard connection
+        let Some(pools) = guard.as_ref() else {
+            return; // Pool not initialized, discard connection
         };
 
         if is_unix {

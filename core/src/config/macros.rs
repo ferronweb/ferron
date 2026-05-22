@@ -104,7 +104,6 @@ macro_rules! validate_directive {
                     }
                 }
                 let __empty = Default::default();
-                let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }

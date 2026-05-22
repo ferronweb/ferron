@@ -1,5 +1,8 @@
 use std::{sync::Arc, time::Instant};
 
+use ferron_observability::{
+    LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use http_body_util::{BodyExt, Empty};
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
@@ -14,13 +17,6 @@ use x509_parser::prelude::FromDer;
 use crate::config::TlsHttpConfig;
 
 pub type CertifiedKeyLock = Arc<RwLock<Option<Arc<rustls::sign::CertifiedKey>>>>;
-
-type LogEvent = ferron_observability::LogEvent;
-type LogLevel = ferron_observability::LogLevel;
-type MetricEvent = ferron_observability::MetricEvent;
-type MetricValue = ferron_observability::MetricValue;
-type MetricType = ferron_observability::MetricType;
-type MetricAttributeValue = ferron_observability::MetricAttributeValue;
 
 /// Emit a log event through the observability sink.
 pub fn emit_log(
@@ -38,6 +34,7 @@ pub fn emit_log(
 }
 
 /// Emit a metric event through the observability sink.
+#[inline]
 fn emit_metric(
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
     name: &'static str,

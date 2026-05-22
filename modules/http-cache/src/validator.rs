@@ -19,65 +19,54 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
 ];
 
 #[derive(Default)]
-pub struct HttpCacheGlobalConfigurationValidator;
-
-#[derive(Default)]
 pub struct HttpCacheConfigurationValidator;
-
-impl ConfigurationValidator for HttpCacheGlobalConfigurationValidator {
-    fn validate_block(
-        &self,
-        config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(entries) = config.directives.get("cache") {
-            used_directives.insert("cache".to_string());
-            for entry in entries {
-                if !entry.args.is_empty() {
-                    return Err(
-                        "Invalid `cache` - global cache configuration only supports block form"
-                            .into(),
-                    );
-                }
-
-                let Some(children) = &entry.children else {
-                    return Err(
-                        "Invalid `cache` - global cache configuration requires a block".into(),
-                    );
-                };
-
-                validate_cache_block(
-                    children,
-                    &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
-                    "global `cache`",
-                )?;
-                if !children.directives.contains_key("max_entries") {
-                    return Err(
-                        "Invalid `cache` - global cache configuration requires `max_entries`"
-                            .into(),
-                    );
-                }
-
-                if let Some(nested_entries) = children.directives.get("max_entries") {
-                    for nested_entry in nested_entries {
-                        validate_single_non_negative_integer(nested_entry, "max_entries")?;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
 
 impl ConfigurationValidator for HttpCacheConfigurationValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
         used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if is_global {
+            if let Some(entries) = config.directives.get("cache") {
+                used_directives.insert("cache".to_string());
+                for entry in entries {
+                    if !entry.args.is_empty() {
+                        return Err(
+                            "Invalid `cache` - global cache configuration only supports block form"
+                                .into(),
+                        );
+                    }
+
+                    let Some(children) = &entry.children else {
+                        return Err(
+                            "Invalid `cache` - global cache configuration requires a block".into(),
+                        );
+                    };
+
+                    validate_cache_block(
+                        children,
+                        &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
+                        "global `cache`",
+                    )?;
+                    if !children.directives.contains_key("max_entries") {
+                        return Err(
+                            "Invalid `cache` - global cache configuration requires `max_entries`"
+                                .into(),
+                        );
+                    }
+
+                    if let Some(nested_entries) = children.directives.get("max_entries") {
+                        for nested_entry in nested_entries {
+                            validate_single_non_negative_integer(nested_entry, "max_entries")?;
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+
         if let Some(entries) = config.directives.get("cache") {
             used_directives.insert("cache".to_string());
             for entry in entries {

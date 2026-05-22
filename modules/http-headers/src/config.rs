@@ -140,11 +140,10 @@ fn parse_cors_block(
                 if let Some(val) = entries
                     .first()
                     .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_number())
+                    .and_then(|v| v.as_duration())
+                    .map(|d| d.as_secs())
                 {
-                    if val >= 0 {
-                        cors.max_age = Some(val as u32);
-                    }
+                    cors.max_age = Some(val as u32);
                 }
             }
             "expose_headers" => {

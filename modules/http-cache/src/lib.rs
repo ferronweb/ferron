@@ -15,7 +15,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpContext;
 
 pub use stage::HttpCacheStage;
-pub use validator::{HttpCacheConfigurationValidator, HttpCacheGlobalConfigurationValidator};
+pub use validator::HttpCacheConfigurationValidator;
 
 /// Module loader for the HTTP cache module.
 #[derive(Default)]
@@ -26,7 +26,7 @@ impl ModuleLoader for HttpCacheModuleLoader {
         &mut self,
         registry: &mut Vec<Box<dyn ConfigurationValidator>>,
     ) {
-        registry.push(Box::new(HttpCacheGlobalConfigurationValidator));
+        registry.push(Box::new(HttpCacheConfigurationValidator));
     }
 
     fn register_per_protocol_configuration_validators(

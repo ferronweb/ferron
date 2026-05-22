@@ -6,6 +6,7 @@ use std::error::Error;
 use std::str::FromStr;
 
 use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::ServerConfigurationValue;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 use ferron_core::util::parse_duration;
 use http::header::HeaderName;
@@ -65,66 +66,21 @@ fn validate_proxy_entries(
 }
 
 fn validate_proxy_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
-    validate_str(block, "algorithm")?;
+    ferron_core::validate_nested!(block, algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
     validate_passive_check_directives(block)?;
     validate_circuit_breaker_directives(block)?;
-    validate_bool(block, "retry_connection")?;
-    validate_bool(block, "keepalive")?;
-    validate_bool(block, "http2")?;
-    validate_bool(block, "http2_only")?;
-    validate_bool(block, "intercept_errors")?;
-    validate_bool(block, "no_verification")?;
-    validate_enum(block, "proxy_header", &["v1", "v2"])?;
+    ferron_core::validate_nested!(block, retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, proxy_header, optional args(1) => [ServerConfigurationValue::String(_, _)]);
     validate_request_header(block)?;
     validate_number(block, "proxy_concurrent_conns", 0)?;
     validate_upstream_directives(block)?;
     #[cfg(feature = "srv-lookup")]
     validate_srv_directives(block)?;
-    Ok(())
-}
-
-fn validate_str(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
-    if let Some(entries) = block.directives.get(name) {
-        for e in entries {
-            if e.args.first().and_then(|v| v.as_str()).is_none() {
-                return Err(format!("Invalid `{name}` — expected a string").into());
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_interpolated_str(
-    block: &ServerConfigurationBlock,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(entries) = block.directives.get(name) {
-        for e in entries {
-            if e.args
-                .first()
-                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                .is_none()
-            {
-                return Err(
-                    format!("Invalid `{name}` — expected a string (can be interpolated)").into(),
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_bool(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
-    if let Some(entries) = block.directives.get(name) {
-        for e in entries {
-            if e.args.is_empty() {
-                continue;
-            }
-            if e.args.first().and_then(|v| v.as_boolean()).is_none() {
-                return Err(format!("Invalid `{name}` — expected a boolean").into());
-            }
-        }
-    }
     Ok(())
 }
 
@@ -154,29 +110,6 @@ fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(),
                 parse_duration(val).map_err(|e| format!("Invalid `{name}` duration: {e}"))?;
             } else {
                 return Err(format!("Invalid `{name}` — expected a duration string").into());
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_enum(
-    block: &ServerConfigurationBlock,
-    name: &str,
-    variants: &[&str],
-) -> Result<(), Box<dyn Error>> {
-    if let Some(entries) = block.directives.get(name) {
-        for e in entries {
-            if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
-                if !variants.contains(&val) {
-                    return Err(format!(
-                        "Invalid `{name}` — expected one of: {}",
-                        variants.join(", ")
-                    )
-                    .into());
-                }
-            } else {
-                return Err(format!("Invalid `{name}` — expected a string").into());
             }
         }
     }
@@ -231,9 +164,9 @@ fn validate_upstream_directives(block: &ServerConfigurationBlock) -> Result<(), 
 
 fn validate_upstream_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     validate_active_check_directives(block)?;
-    validate_number(block, "limit", 1)?;
+    ferron_core::validate_nested!(block, limit, args(1) => [ServerConfigurationValue::Number(_, _)]);
     validate_duration(block, "idle_timeout")?;
-    validate_interpolated_str(block, "unix")?;
+    ferron_core::validate_nested!(block, unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());
@@ -261,7 +194,7 @@ fn validate_srv_directives(block: &ServerConfigurationBlock) -> Result<(), Box<d
 fn validate_srv_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     validate_number(block, "limit", 1)?;
     validate_duration(block, "idle_timeout")?;
-    validate_str(block, "dns_servers")?;
+    ferron_core::validate_nested!(block, dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
     Ok(())
 }
 
@@ -289,16 +222,16 @@ fn validate_active_check_directives(
         .and_then(|d| d.first())
         .and_then(|d| d.children.as_ref())
     {
-        validate_str(block, "uri")?;
-        validate_str(block, "method")?;
+        ferron_core::validate_nested!(block, uri, args(1) => [ServerConfigurationValue::String(_, _)]);
+        ferron_core::validate_nested!(block, method, args(1) => [ServerConfigurationValue::String(_, _)]);
         validate_duration(block, "interval")?;
         validate_duration(block, "timeout")?;
-        validate_str(block, "expect_status")?;
+        ferron_core::validate_nested!(block, expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
         validate_duration(block, "response_time_threshold")?;
-        validate_str(block, "body_match")?;
+        ferron_core::validate_nested!(block, body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
         validate_number(block, "consecutive_fails", 1)?;
         validate_number(block, "consecutive_passes", 1)?;
-        validate_bool(block, "no_verification")?;
+        ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
     }
 
     Ok(())
