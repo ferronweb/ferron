@@ -74,13 +74,8 @@ async fn test_pipeline_timeout() {
         .write_all(
             br#"
 *:80 {
-  http {
-    timeout "1s"
-  }
-  location /timeout {
-    proxy "http://backend:3000/unstable?sleep=5000"
-  }
-  root "/var/www/ferron"
+  timeout "1s"
+  proxy http://backend:3000
 }
 "#,
         )
@@ -101,7 +96,7 @@ async fn test_pipeline_timeout() {
         .unwrap();
 
     let response = client
-        .get(format!("http://localhost:{}/timeout", port))
+        .get(format!("http://localhost:{}/unstable?sleep=5000", port))
         .send()
         .await
         .unwrap();
