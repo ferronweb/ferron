@@ -96,6 +96,7 @@ fn parse_forward_proxy_block(
     cfg: &mut ForwardProxyConfig,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut has_allow_ports = false;
+    let mut has_deny_ips = false;
 
     for (name, entries) in block.directives.iter() {
         match name.as_str() {
@@ -122,6 +123,10 @@ fn parse_forward_proxy_block(
                 }
             }
             "deny_ips" => {
+                if !has_deny_ips {
+                    cfg.deny_ips.clear();
+                    has_deny_ips = true;
+                }
                 for entry in entries {
                     for arg in &entry.args {
                         if let Some(cidr) = arg.as_str() {

@@ -45,7 +45,9 @@
 
 - Admin API-initiated reload would trigger configuration reload loops.
 - Cached responses which are replaced by non-cached default error pages might have been returned as stale.
+- CONNECT requests with authority-form URIs were rejected by the URL canonicalizer.
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included).
+- Forward-proxy denied IP addresses were additive (meaning that RFC 1918 private IP ranges were always included).
 - Forward-proxy DNS validation could be bypassed by performing a DNS rebinding attack (along with exploiting a race condition) against the configured allowed hostnames.
 - Forwarded authentication would fail with 500 Internal Server Error when using `auth_to { ... }` syntax.
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.

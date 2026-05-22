@@ -138,6 +138,10 @@ name = "security"
 path = "tests/security/mod.rs"
 
 [[test]]
+name = "fproxy"
+path = "tests/fproxy.rs"
+
+[[test]]
 name = "log_rotation"
 path = "tests/log_rotation.rs"
 

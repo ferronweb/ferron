@@ -813,14 +813,83 @@ async fn request_handler_inner(
         );
     }
 
-    // Decode location for configuration resolution (routing-only, compute forwarding lazily)
-    let (routing_str, _original_str) = match canonicalize_path_routing_cached(request.uri().path())
-    {
-        Ok((routing, original)) => (routing, original),
-        Err(e) => {
+    // CONNECT requests use authority-form URI (RFC 7231 §4.3.6).
+    // Skip path-based canonicalization — the forward proxy stage will handle CONNECT.
+    let is_connect = request.method() == http::Method::CONNECT;
+
+    // Deny CONNECT requests with path (CONNECT requests are authority-form only)
+    if is_connect && !request.uri().path().is_empty() {
+        emit_error_with_trace(
+            &events,
+            "CONNECT requests must use authority-form URI",
+            request_log_trace_context.clone(),
+        );
+        return (
+            Ok(builtin_error_response(
+                400,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
+            None,
+            None,
+        );
+    }
+
+    // Decode location for configuration resolution (routing-only, compute forwarding lazily).
+    // For CONNECT requests, skip canonicalization and set the routing path to "/"
+    // so the config resolver can find the applicable configuration.
+    let (routing_str, _original_str) = if is_connect {
+        (String::from("/"), String::new())
+    } else {
+        match canonicalize_path_routing_cached(request.uri().path()) {
+            Ok((routing, original)) => (routing, original),
+            Err(e) => {
+                emit_error_with_trace(
+                    &events,
+                    format!("Invalid request URL pathname: {}", e),
+                    request_log_trace_context.clone(),
+                );
+                if let Some(response) = execute_error_pipeline(
+                    error_pipeline.as_ref(),
+                    400,
+                    None,
+                    LayeredConfiguration::default(),
+                    &events,
+                    request_span_key.as_deref(),
+                )
+                .await
+                {
+                    return (Ok(response), None, None);
+                }
+                return (
+                    Ok(builtin_error_response(
+                        400,
+                        None,
+                        config_resolver.global().and_then(|g| {
+                            g.get_value("admin_email")
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        }),
+                    )),
+                    None,
+                    None,
+                );
+            }
+        }
+    };
+
+    // Reject backslashes in URL (unless disabled by configuration)
+    if !is_connect {
+        let reject_backslash = config_resolver
+            .global()
+            .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
+            .unwrap_or(true);
+        if let Err(e) = check_backslash_in_path(request.uri().path(), reject_backslash) {
             emit_error_with_trace(
                 &events,
-                format!("Invalid request URL pathname: {}", e),
+                format!("Invalid request URL: {}", e),
                 request_log_trace_context.clone(),
             );
             if let Some(response) = execute_error_pipeline(
@@ -848,43 +917,6 @@ async fn request_handler_inner(
                 None,
             );
         }
-    };
-
-    // Reject backslashes in URL (unless disabled by configuration)
-    let reject_backslash = config_resolver
-        .global()
-        .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
-        .unwrap_or(true);
-    if let Err(e) = check_backslash_in_path(request.uri().path(), reject_backslash) {
-        emit_error_with_trace(
-            &events,
-            format!("Invalid request URL: {}", e),
-            request_log_trace_context.clone(),
-        );
-        if let Some(response) = execute_error_pipeline(
-            error_pipeline.as_ref(),
-            400,
-            None,
-            LayeredConfiguration::default(),
-            &events,
-            request_span_key.as_deref(),
-        )
-        .await
-        {
-            return (Ok(response), None, None);
-        }
-        return (
-            Ok(builtin_error_response(
-                400,
-                None,
-                config_resolver.global().and_then(|g| {
-                    g.get_value("admin_email")
-                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                }),
-            )),
-            None,
-            None,
-        );
     }
 
     // Sanitize URL (unless disabled by configuration)
@@ -892,7 +924,7 @@ async fn request_handler_inner(
         .global()
         .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
         .unwrap_or(true);
-    if url_sanitize_enabled {
+    if !is_connect && url_sanitize_enabled {
         // Compute full canonicalized path (forwarding) only when sanitization is enabled.
         match canonicalize_path(request.uri().path()) {
             Ok(full_path) => {
