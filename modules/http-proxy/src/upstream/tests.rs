@@ -1,3 +1,28 @@
+use std::{
+    sync::{atomic::AtomicUsize, Arc},
+    time::{Duration, Instant},
+};
+
+use dashmap::DashMap;
+use parking_lot::{Mutex, RwLock};
+
+use crate::{
+    upstream::{
+        affinity::resolve_affinity_index,
+        circuit::try_acquire_circuit_breaker_slot,
+        lb::{
+            selector::select_backend_index, ConsistentHashRing, LoadBalancerAlgorithmInner,
+            WeightedRoundRobinState,
+        },
+        types::{
+            affinity::CookieAffinityConfig,
+            circuit::{CircuitBreakerState, CircuitBreakerStatus},
+            ConnectionsTrackState,
+        },
+    },
+    util::TtlCache,
+};
+
 use super::*;
 
 fn make_upstream(url: &str) -> UpstreamInner {

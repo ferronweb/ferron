@@ -1,0 +1,35 @@
+//! Backend health checking and availability counting.
+
+use crate::upstream::{CircuitBreakerStateMap, HealthCheckStateMap, UpstreamInner};
+
+/// Count how many backends are currently available for selection.
+pub fn count_available_backends(
+    upstreams: &[UpstreamInner],
+    failed_backends: &parking_lot::RwLock<crate::util::TtlCache<UpstreamInner, u64>>,
+    health_check_max_fails: u64,
+    health_check_state: Option<&HealthCheckStateMap>,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    circuit_breaker: &crate::config::CircuitBreakerConfig,
+    selected_backends: &[UpstreamInner],
+) -> usize {
+    let failed = failed_backends.read();
+    upstreams
+        .iter()
+        .filter(|u| {
+            let passive_healthy = failed
+                .get(*u)
+                .is_none_or(|fails| fails <= health_check_max_fails);
+            let active_healthy = health_check_state.is_none_or(|state_map| {
+                crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)
+            });
+            let circuit_healthy = crate::upstream::is_circuit_breaker_available(
+                circuit_breaker_state,
+                circuit_breaker,
+                u,
+            );
+            let not_selected = !selected_backends.contains(u);
+
+            passive_healthy && active_healthy && circuit_healthy && not_selected
+        })
+        .count()
+}

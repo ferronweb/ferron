@@ -22,10 +22,9 @@ use std::time::Duration;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use crate::upstream::LoadBalancerAlgorithmInner;
-pub use connections::ConnectionManager;
-pub use upstream::UpstreamInner;
-pub use validator::ProxyConfigurationValidator;
+use crate::upstream::lb::LoadBalancerAlgorithmInner;
+use crate::upstream::ConnectionsTrackState;
+use crate::validator::ProxyConfigurationValidator;
 
 // Re-export low-level send_net_io types for benchmarking and external tools
 use ferron_core::config::validator::ConfigurationValidator;
@@ -176,7 +175,7 @@ struct ProxyState {
     /// Circuit breaker state tracking per upstream.
     circuit_breaker_state: upstream::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
-    conn_state: upstream::ConnectionsTrackState,
+    conn_state: ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
     algorithms: DashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>,
@@ -186,7 +185,6 @@ struct ProxyState {
     /// Used to clean up tasks on reload.
     health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>>,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
-    #[allow(clippy::type_complexity)]
     active_unhealthy_counters: DashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>>,
 }
 

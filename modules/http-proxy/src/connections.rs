@@ -128,6 +128,7 @@ impl ConnectionManager {
     }
 
     /// Updates the local limit for a specific upstream.
+    #[allow(dead_code)]
     #[inline]
     pub fn update_local_limit_for_upstream(&self, upstream: &UpstreamInner, new_limit: usize) {
         let mut limits = self

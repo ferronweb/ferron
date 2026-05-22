@@ -133,6 +133,7 @@ where
     }
 
     /// Returns the number of idle connections for a given key.
+    #[allow(dead_code)]
     #[inline]
     pub fn idle_count(&self, key: &K) -> usize {
         (unsafe { &mut *self.inner.get() })
@@ -142,18 +143,21 @@ where
     }
 
     /// Returns the total number of idle connections.
+    #[allow(dead_code)]
     #[inline]
     pub fn total_idle_count(&self) -> usize {
         (unsafe { &mut *self.inner.get() }).idle_total
     }
 
     /// Returns the number of outstanding connections.
+    #[allow(dead_code)]
     #[inline]
     pub fn outstanding_count(&self) -> usize {
         (unsafe { &mut *self.inner.get() }).outstanding
     }
 
     /// Returns the maximum pool size (if bounded).
+    #[allow(dead_code)]
     #[inline]
     pub fn max_size(&self) -> Option<usize> {
         let state = unsafe { &mut *self.inner.get() };
@@ -320,6 +324,7 @@ pub struct PoolItem<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> {
 
 impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     /// Takes the inner value from the item, preventing it from being returned to the pool.
+    #[allow(dead_code)]
     pub fn take(mut self) -> Option<I> {
         self.inner.take()
     }
@@ -335,6 +340,7 @@ impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     }
 
     /// Returns a mutable reference to the inner value, with a shorter name for ergonomics.
+    #[allow(dead_code)]
     pub fn get_mut(&mut self) -> &mut Option<I> {
         &mut self.inner
     }
@@ -350,6 +356,7 @@ impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     }
 
     /// Returns the pool reference.
+    #[allow(dead_code)]
     pub fn pool(&self) -> &SingleThreadPool<K, L, I> {
         &self.pool
     }
