@@ -114,8 +114,8 @@ If neither condition is met, Ferron returns a **403 Forbidden** response. This e
 ```ferron
 example.com {
     cache {
-        purge_method true
-        purge_allowed_ips 127.0.0.1 "10.0.0.0/8"
+        purge_method
+        purge_allowed_ips "127.0.0.1" "10.0.0.0/8"
     }
 }
 ```
@@ -125,10 +125,12 @@ example.com {
 ```ferron
 example.com {
     cache {
-        purge_method true
+        purge_method
     }
     basic_auth {
-        user $2a$12$...
+        users {
+            user "$argon2id$..."
+        }
     }
 }
 ```
