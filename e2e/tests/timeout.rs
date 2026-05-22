@@ -1,7 +1,7 @@
 use std::io::Write;
+use std::time::Duration;
 #[cfg(unix)]
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::time::Duration;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -107,9 +107,14 @@ async fn test_pipeline_timeout() {
         .unwrap();
 
     if response.status() != reqwest::StatusCode::REQUEST_TIMEOUT {
-        let stdout = String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default();
-        let stderr = String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default()).unwrap_or_default();
-        println!("--- Ferron stdout ---\n{}\n--- Ferron stderr ---\n{}\n---", stdout, stderr);
+        let stdout =
+            String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default();
+        let stderr =
+            String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default()).unwrap_or_default();
+        println!(
+            "--- Ferron stdout ---\n{}\n--- Ferron stderr ---\n{}\n---",
+            stdout, stderr
+        );
     }
 
     assert_eq!(response.status(), reqwest::StatusCode::REQUEST_TIMEOUT);

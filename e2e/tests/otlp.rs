@@ -114,8 +114,8 @@ async fn test_otlp_traces_exported() {
 
     let network = "e2e-test-otlp";
 
-    let otlp = create_otlp_container(&network).await.unwrap();
-    let ferron = create_ferron_container(&network, webroot_dir.path(), config_file.path())
+    let otlp = create_otlp_container(network).await.unwrap();
+    let ferron = create_ferron_container(network, webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -141,15 +141,13 @@ async fn test_otlp_traces_exported() {
     let received_url = format!("http://localhost:{}/received", otlp_port);
     let mut found = false;
     for _ in 0..60 {
-        if let Ok(resp) = client.get(&received_url).send().await {
-            if resp.status().is_success() {
-                if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    if json.get("count").and_then(|v| v.as_u64()).unwrap_or(0) > 0 {
-                        found = true;
-                        break;
-                    }
-                }
-            }
+        if let Ok(resp) = client.get(&received_url).send().await
+            && resp.status().is_success()
+            && let Ok(json) = resp.json::<serde_json::Value>().await
+            && json.get("count").and_then(|v| v.as_u64()).unwrap_or(0) > 0
+        {
+            found = true;
+            break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }

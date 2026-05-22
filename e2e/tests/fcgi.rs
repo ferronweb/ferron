@@ -124,12 +124,12 @@ echo "Hello, World!";
     let network = "e2e-test-fcgi";
 
     // Start PHP-FPM container
-    let _php_fpm = create_php_fpm_container(&network, wwwroot_dir.path())
+    let _php_fpm = create_php_fpm_container(network, wwwroot_dir.path())
         .await
         .unwrap();
 
     // Start Ferron container
-    let ferron = create_ferron_container(&network, wwwroot_dir.path(), config_file.path())
+    let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -219,12 +219,12 @@ echo "Hello, World!"
     let network = "e2e-test-fcgiwrap";
 
     // Start fcgiwrap container
-    let _fcgiwrap = create_fcgiwrap_container(&network, wwwroot_dir.path())
+    let _fcgiwrap = create_fcgiwrap_container(network, wwwroot_dir.path())
         .await
         .unwrap();
 
     // Start Ferron container
-    let ferron = create_ferron_container(&network, wwwroot_dir.path(), config_file.path())
+    let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -306,7 +306,7 @@ echo "Hello after sleep";
         .unwrap();
 
     // Start Ferron container
-    let ferron = create_ferron_container(&network, wwwroot_dir.path(), config_file.path())
+    let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
 

@@ -99,10 +99,10 @@ async fn wait_for_ferron_ready_route(port: u16, ferron: &ContainerAsync<GenericI
     let url = format!("http://localhost:{port}/__ready");
 
     for _ in 0..100 {
-        if let Ok(response) = client.get(&url).send().await {
-            if response.status() == reqwest::StatusCode::NO_CONTENT {
-                return;
-            }
+        if let Ok(response) = client.get(&url).send().await
+            && response.status() == reqwest::StatusCode::NO_CONTENT
+        {
+            return;
         }
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -704,7 +704,7 @@ async fn test_proxy_http2_only() {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(&format!("http://localhost:{}/version", port))
+        .get(format!("http://localhost:{}/version", port))
         .send()
         .await
         .unwrap();
@@ -801,18 +801,17 @@ async fn test_proxy_keepalive_metrics() {
     let mut found_reused = false;
     let mut last_body = String::new();
     for _ in 0..60 {
-        if let Ok(resp) = client.get(&metrics_url).send().await {
-            if resp.status().is_success() {
-                if let Ok(body) = resp.text().await {
-                    last_body = body.clone();
-                    // Check for connection_reused
-                    if body.contains("ferron_proxy_requests")
-                        && body.contains("ferron_proxy_connection_reused=\"1\"")
-                    {
-                        found_reused = true;
-                        break;
-                    }
-                }
+        if let Ok(resp) = client.get(&metrics_url).send().await
+            && resp.status().is_success()
+            && let Ok(body) = resp.text().await
+        {
+            last_body = body.clone();
+            // Check for connection_reused
+            if body.contains("ferron_proxy_requests")
+                && body.contains("ferron_proxy_connection_reused=\"1\"")
+            {
+                found_reused = true;
+                break;
             }
         }
         tokio::time::sleep(Duration::from_millis(500)).await;

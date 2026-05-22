@@ -97,7 +97,7 @@ async fn test_handle_error_redirect_on_404() {
 
     // Request a non-existent file — should redirect to /basic.txt
     let response = client
-        .get(&format!("{}/nonexistent.html", ferron_addr))
+        .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -177,12 +177,16 @@ async fn test_handle_error_catch_all() {
 
     // Request a non-existent file — should redirect to /basic.txt
     let response = client
-        .get(&format!("{}/nonexistent.html", ferron_addr))
+        .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
 
-    assert_eq!(response.status(), 302, "Expected 302 redirect from catch-all");
+    assert_eq!(
+        response.status(),
+        302,
+        "Expected 302 redirect from catch-all"
+    );
     let location = response
         .headers()
         .get("location")
@@ -253,12 +257,15 @@ async fn test_handle_error_normal_requests_unaffected() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
 
     assert_eq!(response.status(), 200, "Expected 200 OK");
     let body = response.text().await.expect("Failed to read body");
-    assert_eq!(body, "hello world", "Normal requests should return the file");
+    assert_eq!(
+        body, "hello world",
+        "Normal requests should return the file"
+    );
 }

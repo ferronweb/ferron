@@ -118,12 +118,16 @@ async fn test_include_extra_config() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
 
-    assert_eq!(response.status(), 200, "Expected 200 OK from included config");
+    assert_eq!(
+        response.status(),
+        200,
+        "Expected 200 OK from included config"
+    );
     let body = response.text().await.expect("Failed to read body");
     assert_eq!(body, "hello", "Response body should be correct");
 }
@@ -204,7 +208,7 @@ async fn test_include_glob_pattern() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -328,7 +332,7 @@ include "/etc/extra_b.conf"
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("http://127.0.0.1:{port}/index.html"))
+        .get(format!("http://127.0.0.1:{port}/index.html"))
         .send()
         .await
         .expect("Failed to send request");

@@ -201,7 +201,7 @@ pub fn generate_tsig_key(key_name: &str) -> (String, String) {
     // Create a 32-byte key from the hash (repeat if necessary)
     let mut key_bytes = Vec::with_capacity(32);
     for i in 0..4 {
-        key_bytes.extend_from_slice(&((hash.wrapping_mul(i + 1)) as u64).to_le_bytes());
+        key_bytes.extend_from_slice(&(hash.wrapping_mul(i + 1)).to_le_bytes());
     }
 
     // Convert to base64
@@ -374,12 +374,12 @@ pub fn generate_custom_resolv_conf(
     conf.push_str(&format!("nameserver {}\n", bind9_container_ip));
 
     // Add search domains if provided
-    if let Some(domains) = search_domains {
-        if !domains.is_empty() {
-            conf.push_str("search ");
-            conf.push_str(&domains.join(" "));
-            conf.push('\n');
-        }
+    if let Some(domains) = search_domains
+        && !domains.is_empty()
+    {
+        conf.push_str("search ");
+        conf.push_str(&domains.join(" "));
+        conf.push('\n');
     }
 
     // Add standard options for DNS resolution
@@ -658,11 +658,10 @@ async fn test_acme_common(
             .get(format!("https://{}:{}/", hostname, port))
             .send()
             .await
+            && response.status().is_success()
         {
-            if response.status().is_success() {
-                success = true;
-                break;
-            }
+            success = true;
+            break;
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }

@@ -115,7 +115,7 @@ async fn test_forward_proxy_connect_port_80() {
         .await
         .unwrap();
 
-    let connect_request = format!("CONNECT backend:3000 HTTP/1.1\r\nHost: backend:3000\r\n\r\n");
+    let connect_request = "CONNECT backend:3000 HTTP/1.1\r\nHost: backend:3000\r\n\r\n".to_string();
     stream.write_all(connect_request.as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
@@ -179,9 +179,9 @@ async fn test_forward_proxy_http_forwarding() {
     let ctx = ForwardProxyTestContext::new("http-fwd", config).await;
 
     // Send absolute URI request to Ferron's forward proxy
-    let request = format!(
+    let request =
         "GET http://backend:3000/ HTTP/1.1\r\nHost: backend:3000\r\nConnection: close\r\n\r\n"
-    );
+            .to_string();
 
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", ctx.ferron_port))
         .await

@@ -235,13 +235,12 @@ backend.backend.test. IN A {backend_ip}
             .get(format!("http://localhost:{port}/whoami"))
             .send()
             .await
+            && resp.status().is_success()
         {
-            if resp.status().is_success() {
-                let body = resp.text().await.unwrap();
-                if body.trim() == "srv-backend" {
-                    success = true;
-                    break;
-                }
+            let body = resp.text().await.unwrap();
+            if body.trim() == "srv-backend" {
+                success = true;
+                break;
             }
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;

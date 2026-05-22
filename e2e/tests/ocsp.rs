@@ -238,7 +238,7 @@ async fn test_ocsp_stapling_quic() {
             .with_no_client_auth();
 
         tls_config.enable_early_data = true;
-        tls_config.alpn_protocols = vec![b"h3".to_vec().into()];
+        tls_config.alpn_protocols = vec![b"h3".to_vec()];
 
         let mut client_endpoint =
             h3_quinn::quinn::Endpoint::client("0.0.0.0:0".parse().unwrap()).unwrap();
@@ -268,11 +268,11 @@ async fn test_ocsp_stapling_quic() {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         // Check recorder
-        if let Some(bytes) = recorder.lock().unwrap().clone() {
-            if !bytes.is_empty() {
-                saw_staple = true;
-                break;
-            }
+        if let Some(bytes) = recorder.lock().unwrap().clone()
+            && !bytes.is_empty()
+        {
+            saw_staple = true;
+            break;
         }
 
         // No staple yet; wait a bit to allow OCSP fetch to complete and retry
@@ -474,9 +474,8 @@ async fn test_ocsp_stapling_tcp() {
             tcp.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
             tcp.set_write_timeout(Some(std::time::Duration::from_secs(5)))?;
 
-            let conn = ClientConnection::new(client_cfg, server_name).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("tls conn error: {}", e))
-            })?;
+            let conn = ClientConnection::new(client_cfg, server_name)
+                .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
             let mut stream = StreamOwned::new(conn, tcp);
 
             // Send a simple HTTP/1.0 request to trigger handshake and receive response
@@ -493,11 +492,11 @@ async fn test_ocsp_stapling_tcp() {
         .expect("spawn_blocking failed");
 
         // Check if verifier recorded OCSP bytes
-        if let Some(bytes) = recorder.lock().unwrap().clone() {
-            if !bytes.is_empty() {
-                saw_staple = true;
-                break;
-            }
+        if let Some(bytes) = recorder.lock().unwrap().clone()
+            && !bytes.is_empty()
+        {
+            saw_staple = true;
+            break;
         }
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -626,9 +625,8 @@ async fn test_ocsp_stapling_down() {
         tcp.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
         tcp.set_write_timeout(Some(std::time::Duration::from_secs(5)))?;
 
-        let conn = ClientConnection::new(client_cfg, server_name).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("tls conn error: {}", e))
-        })?;
+        let conn = ClientConnection::new(client_cfg, server_name)
+            .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
         let mut stream = StreamOwned::new(conn, tcp);
 
         // Send a simple HTTP/1.0 request to trigger handshake and receive response
@@ -757,9 +755,8 @@ async fn test_ocsp_stapling_signature_forgery() {
             tcp.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
             tcp.set_write_timeout(Some(std::time::Duration::from_secs(5)))?;
 
-            let conn = ClientConnection::new(client_cfg, server_name).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("tls conn error: {}", e))
-            })?;
+            let conn = ClientConnection::new(client_cfg, server_name)
+                .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
             let mut stream = StreamOwned::new(conn, tcp);
 
             // Send a simple HTTP/1.0 request to trigger handshake and receive response
@@ -776,11 +773,11 @@ async fn test_ocsp_stapling_signature_forgery() {
         .expect("spawn_blocking failed");
 
         // Check if verifier recorded OCSP bytes
-        if let Some(bytes) = recorder.lock().unwrap().clone() {
-            if !bytes.is_empty() {
-                saw_staple = true;
-                break;
-            }
+        if let Some(bytes) = recorder.lock().unwrap().clone()
+            && !bytes.is_empty()
+        {
+            saw_staple = true;
+            break;
         }
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;

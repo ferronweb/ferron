@@ -1,7 +1,7 @@
 use std::io::Write;
+use std::time::Duration;
 #[cfg(unix)]
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::time::Duration;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -100,10 +100,10 @@ impl HealthCheckTestContext {
 
         let base_url = format!("http://localhost:{port}");
         for _ in 0..60 {
-            if let Ok(resp) = client.get(&format!("{base_url}/")).send().await {
-                if resp.status().is_success() {
-                    break;
-                }
+            if let Ok(resp) = client.get(format!("{base_url}/")).send().await
+                && resp.status().is_success()
+            {
+                break;
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -139,7 +139,7 @@ async fn test_passive_check_config_accepted() {
     // If the configuration was accepted, Ferron should start and respond
     let resp = ctx
         .client
-        .get(&format!("{}/", ctx.base_url))
+        .get(format!("{}/", ctx.base_url))
         .send()
         .await
         .expect("Request failed");
@@ -171,7 +171,7 @@ async fn test_passive_check_disabled() {
     // Normal request should succeed
     let resp = ctx
         .client
-        .get(&format!("{}/whoami", ctx.base_url))
+        .get(format!("{}/whoami", ctx.base_url))
         .send()
         .await
         .expect("Request failed");

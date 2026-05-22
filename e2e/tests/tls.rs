@@ -401,9 +401,9 @@ async fn test_tls_http_3() {
     let (mut driver, mut send_request) = h3::client::new(quinn_conn).await.unwrap();
 
     let drive = async move {
-        return Err::<(), h3::error::ConnectionError>(
+        Err::<(), h3::error::ConnectionError>(
             std::future::poll_fn(|cx| driver.poll_close(cx)).await,
-        );
+        )
     };
 
     let request = async move {
@@ -423,10 +423,10 @@ async fn test_tls_http_3() {
 
     let (req_res, drive_res) = tokio::join!(request, drive);
     req_res.unwrap();
-    if let Err(e) = &drive_res {
-        if !e.is_h3_no_error() {
-            drive_res.unwrap();
-        }
+    if let Err(e) = &drive_res
+        && !e.is_h3_no_error()
+    {
+        drive_res.unwrap();
     }
 
     client_endpoint.wait_idle().await;
@@ -713,7 +713,7 @@ async fn test_tls_session_tickets_multiple_keys() {
             .get(format!("https://localhost:{}/", port))
             .send()
             .await
-            .expect(&format!("Request {} failed", i));
+            .unwrap_or_else(|_| panic!("Request {} failed", i));
 
         assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
@@ -809,7 +809,7 @@ async fn test_tls_session_tickets_auto_rotate_enabled() {
             .get(format!("https://localhost:{}/", port))
             .send()
             .await
-            .expect(&format!("Request {} failed", i));
+            .unwrap_or_else(|_| panic!("Request {} failed", i));
 
         assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
@@ -823,7 +823,7 @@ async fn test_tls_session_tickets_auto_rotate_enabled() {
             .get(format!("https://localhost:{}/", port))
             .send()
             .await
-            .expect(&format!("Post-rotation request {} failed", i));
+            .unwrap_or_else(|_| panic!("Post-rotation request {} failed", i));
 
         assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
@@ -921,7 +921,7 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     // Generate a known ticket key
     let mut ticket_key_record = [0u8; 80];
     getrandom::fill(&mut ticket_key_record).unwrap();
-    std::fs::write(ticket_key_file.path(), &ticket_key_record).unwrap();
+    std::fs::write(ticket_key_file.path(), ticket_key_record).unwrap();
 
     let aes_key: [u8; 32] = ticket_key_record[16..48].try_into().unwrap();
     let hmac_key: [u8; 32] = ticket_key_record[48..80].try_into().unwrap();
@@ -932,25 +932,23 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
 
     std::fs::write(
         config_file.path(),
-        format!(
-            r#"
-*:80 {{
+        r#"
+*:80 {
   root "/var/www/ferron"
-}}
+}
 
-*:443 {{
-  tls {{
+*:443 {
+  tls {
     provider manual
     cert "/etc/cert.pem"
     key "/etc/key.pem"
-    ticket_keys {{
+    ticket_keys {
       file "/etc/session_tickets.keys"
-    }}
-  }}
+    }
+  }
   root "/var/www/ferron"
-}}
-"#
-        ),
+}
+"#,
     )
     .unwrap();
 
@@ -1025,11 +1023,10 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
                     .step_by(2)
                     .map(|i| u8::from_str_radix(&ticket_hex[i..i + 2], 16).ok())
                     .collect::<Option<Vec<u8>>>()
+                    && let Some(_decrypted) = decrypt_ticket(&ticket_bytes, &aes_key, &hmac_key)
                 {
-                    if let Some(_decrypted) = decrypt_ticket(&ticket_bytes, &aes_key, &hmac_key) {
-                        decrypted_successfully = true;
-                        break;
-                    }
+                    decrypted_successfully = true;
+                    break;
                 }
             }
         }

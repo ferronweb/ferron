@@ -106,10 +106,10 @@ impl InterceptTestContext {
         // Wait for Ferron to be ready via the backend proxy
         let base_url = format!("http://localhost:{port}");
         for _ in 0..60 {
-            if let Ok(resp) = client.get(&format!("{base_url}/")).send().await {
-                if resp.status().is_success() {
-                    break;
-                }
+            if let Ok(resp) = client.get(format!("{base_url}/")).send().await
+                && resp.status().is_success()
+            {
+                break;
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -142,7 +142,7 @@ async fn test_intercept_errors_true() {
     // Request /unstable — backend returns 503 (with UNSTABLE_FAILS=1)
     let resp = ctx
         .client
-        .get(&format!("{}/unstable", ctx.base_url))
+        .get(format!("{}/unstable", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -162,7 +162,7 @@ async fn test_intercept_errors_true() {
     // Request a non-existent path — backend returns its own 404
     let resp = ctx
         .client
-        .get(&format!("{}/nonexistent", ctx.base_url))
+        .get(format!("{}/nonexistent", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -189,7 +189,7 @@ async fn test_intercept_errors_default_passthrough() {
     // Request /unstable — backend returns 503
     let resp = ctx
         .client
-        .get(&format!("{}/unstable", ctx.base_url))
+        .get(format!("{}/unstable", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -204,7 +204,7 @@ async fn test_intercept_errors_default_passthrough() {
     // Request a non-existent path — backend returns its own 404
     let resp = ctx
         .client
-        .get(&format!("{}/nonexistent", ctx.base_url))
+        .get(format!("{}/nonexistent", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -231,7 +231,7 @@ async fn test_intercept_errors_false_explicit() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/unstable", ctx.base_url))
+        .get(format!("{}/unstable", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -259,7 +259,7 @@ async fn test_intercept_errors_successful_requests_unaffected() {
     // Successful requests should pass through unchanged
     let resp = ctx
         .client
-        .get(&format!("{}/", ctx.base_url))
+        .get(format!("{}/", ctx.base_url))
         .send()
         .await
         .expect("request failed");
@@ -274,7 +274,7 @@ async fn test_intercept_errors_successful_requests_unaffected() {
     // /whoami should return the backend name
     let resp = ctx
         .client
-        .get(&format!("{}/whoami", ctx.base_url))
+        .get(format!("{}/whoami", ctx.base_url))
         .send()
         .await
         .expect("request failed");

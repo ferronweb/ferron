@@ -106,7 +106,7 @@ async fn test_cors_preflight_wildcard_origin() {
         .client
         .request(
             reqwest::Method::OPTIONS,
-            &format!("{}/index.html", ctx.base_url),
+            format!("{}/index.html", ctx.base_url),
         )
         .header("Origin", "https://example.com")
         .header("Access-Control-Request-Method", "GET")
@@ -162,7 +162,7 @@ async fn test_cors_simple_request() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/index.html", ctx.base_url))
+        .get(format!("{}/index.html", ctx.base_url))
         .header("Origin", "https://example.com")
         .send()
         .await
@@ -195,7 +195,7 @@ async fn test_cors_disallowed_origin() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/index.html", ctx.base_url))
+        .get(format!("{}/index.html", ctx.base_url))
         .header("Origin", "https://evil.example.com")
         .send()
         .await
@@ -226,7 +226,7 @@ async fn test_cors_with_credentials() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/index.html", ctx.base_url))
+        .get(format!("{}/index.html", ctx.base_url))
         .header("Origin", "https://example.com")
         .send()
         .await
@@ -267,7 +267,7 @@ async fn test_cors_expose_headers() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/index.html", ctx.base_url))
+        .get(format!("{}/index.html", ctx.base_url))
         .header("Origin", "https://example.com")
         .send()
         .await
@@ -306,7 +306,7 @@ async fn test_cors_vary_origin_header() {
 
     let resp = ctx
         .client
-        .get(&format!("{}/index.html", ctx.base_url))
+        .get(format!("{}/index.html", ctx.base_url))
         .header("Origin", "https://example.com")
         .send()
         .await

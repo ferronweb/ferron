@@ -42,9 +42,8 @@ async fn raw_http_get_with_header(
 ) -> u16 {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let mut request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {addr}:{port}\r\nConnection: close\r\n"
-    );
+    let mut request =
+        format!("GET {path} HTTP/1.1\r\nHost: {addr}:{port}\r\nConnection: close\r\n");
     for (name, value) in extra_headers {
         request.push_str(&format!("{name}: {value}\r\n"));
     }

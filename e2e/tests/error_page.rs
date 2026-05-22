@@ -94,7 +94,7 @@ async fn test_error_page_custom_404() {
 
     // Request a non-existent file — should return custom 404 page
     let response = client
-        .get(&format!("{}/nonexistent.html", ferron_addr))
+        .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -168,14 +168,17 @@ async fn test_error_page_normal_request_unaffected() {
 
     // Request an existing file — should return 200 with its content
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
 
     assert_eq!(response.status(), 200, "Expected 200 OK");
     let body = response.text().await.expect("Failed to read body");
-    assert_eq!(body, "hello world", "Response body should be the normal file");
+    assert_eq!(
+        body, "hello world",
+        "Response body should be the normal file"
+    );
 }
 
 /// error_page supports multiple status codes mapped to the same file.
@@ -239,7 +242,7 @@ async fn test_error_page_multiple_codes() {
     // Request a non-existent file — returns 404, not 50x, so the custom page
     // should NOT be served. This validates that codes are matched specifically.
     let response = client
-        .get(&format!("{}/nonexistent.html", ferron_addr))
+        .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");

@@ -71,13 +71,8 @@ pub async fn execute_pipeline_stages(
         |value| {
             if !value.as_boolean().unwrap_or(true) {
                 None
-            } else if let Some(d) = value.as_duration() {
-                Some(d)
             } else {
-                value
-                    .as_number()
-                    .map(|n| Duration::from_millis(n as u64))
-                    .or_else(|| Some(Duration::from_secs(300)))
+                Some(value.as_duration().unwrap_or(Duration::from_secs(300)))
             }
         },
     );

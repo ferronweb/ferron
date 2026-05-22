@@ -62,7 +62,7 @@ async fn test_forward_proxy_dns_rebinding_protection() {
     let response = client
         .request(
             reqwest::Method::CONNECT,
-            &format!("http://example.com:443/"),
+            "http://example.com:443/".to_string(),
         )
         .send()
         .await;
@@ -75,7 +75,7 @@ async fn test_forward_proxy_dns_rebinding_protection() {
     let response = client
         .request(
             reqwest::Method::CONNECT,
-            &format!("http://attacker.com:443/"),
+            "http://attacker.com:443/".to_string(),
         )
         .send()
         .await;

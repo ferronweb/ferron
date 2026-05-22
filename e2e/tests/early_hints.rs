@@ -78,7 +78,9 @@ async fn test_early_hints_h1() {
         )
         .unwrap();
 
-    let ferron = create_ferron_container(webroot_dir.path(), config_file.path()).await.unwrap();
+    let ferron = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
 
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Tcp(80))
@@ -87,7 +89,9 @@ async fn test_early_hints_h1() {
 
     // Use raw TCP to see the 103 response
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
     let request = b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     stream.write_all(request).await.unwrap();
     stream.flush().await.unwrap();
@@ -102,13 +106,31 @@ async fn test_early_hints_h1() {
         }
     }
     let response = String::from_utf8_lossy(&response_bytes);
-    println!("--- RAW RESPONSE ---\n{}\n--- END RAW RESPONSE ---", response);
+    println!(
+        "--- RAW RESPONSE ---\n{}\n--- END RAW RESPONSE ---",
+        response
+    );
 
     // Should see both 103 and 200
-    assert!(response.contains("HTTP/1.1 103 Early Hints"), "Should contain 103 Early Hints, got: {}", response);
-    assert!(response.to_lowercase().contains("link: </style.css>; rel=preload; as=style"), "Should contain Link header in 103 response");
-    assert!(response.contains("HTTP/1.1 200 OK"), "Should contain 200 OK after 103");
-    assert!(response.contains("Main Response"), "Should contain main response body");
+    assert!(
+        response.contains("HTTP/1.1 103 Early Hints"),
+        "Should contain 103 Early Hints, got: {}",
+        response
+    );
+    assert!(
+        response
+            .to_lowercase()
+            .contains("link: </style.css>; rel=preload; as=style"),
+        "Should contain Link header in 103 response"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "Should contain 200 OK after 103"
+    );
+    assert!(
+        response.contains("Main Response"),
+        "Should contain main response body"
+    );
 
     ferron.stop().await.unwrap();
 }

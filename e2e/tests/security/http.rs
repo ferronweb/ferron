@@ -135,7 +135,7 @@ async fn test_url_canonicalization_rejects_null_bytes() {
 
     // Test with %00 (URL-encoded null byte)
     let response = client
-        .get(&format!("{}/path%00/file", ferron_addr))
+        .get(format!("{}/path%00/file", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -148,7 +148,7 @@ async fn test_url_canonicalization_rejects_null_bytes() {
 
     // Test with %2500 (double-encoded null byte should be rejected)
     let response = client
-        .get(&format!("{}/path%2500/file", ferron_addr))
+        .get(format!("{}/path%2500/file", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -318,7 +318,7 @@ async fn test_url_canonicalization_rejects_triple_encoding() {
     // %25252F: triply-encoded "/" (%25 -> %, %25 -> %, %2F -> /)
     // Ferron should reject this as excessive encoding
     let response = client
-        .get(&format!("{}/path%25252Ftest", ferron_addr))
+        .get(format!("{}/path%25252Ftest", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -331,7 +331,7 @@ async fn test_url_canonicalization_rejects_triple_encoding() {
 
     // Also test that %252F (doubly-encoded /) is rejected
     let response = client
-        .get(&format!("{}/path%252Ftest", ferron_addr))
+        .get(format!("{}/path%252Ftest", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -554,9 +554,9 @@ async fn test_multiple_host_headers_rejected() {
         .expect("Failed to get host port");
 
     // Send raw HTTP with TWO Host headers (reqwest doesn't allow this)
-    let request = format!(
+    let request =
         "GET / HTTP/1.1\r\nHost: example.com\r\nHost: attacker.com\r\nConnection: close\r\n\r\n"
-    );
+            .to_string();
     let response = raw_http_send("127.0.0.1", port, request.as_bytes()).await;
 
     let status = response

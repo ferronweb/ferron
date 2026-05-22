@@ -87,7 +87,7 @@ async fn test_header_add_custom() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -160,7 +160,7 @@ async fn test_header_add_then_remove() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");
@@ -227,7 +227,7 @@ async fn test_header_replace() {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/index.html", ferron_addr))
+        .get(format!("{}/index.html", ferron_addr))
         .send()
         .await
         .expect("Failed to send request");

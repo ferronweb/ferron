@@ -37,9 +37,8 @@ async fn create_ferron_container(
 async fn raw_http_get(addr: &str, port: u16, path: &str) -> u16 {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {addr}:{port}\r\nConnection: close\r\n\r\n"
-    );
+    let request =
+        format!("GET {path} HTTP/1.1\r\nHost: {addr}:{port}\r\nConnection: close\r\n\r\n");
 
     let mut stream = tokio::net::TcpStream::connect((addr, port))
         .await

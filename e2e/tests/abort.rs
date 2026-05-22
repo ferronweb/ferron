@@ -113,7 +113,10 @@ abort.example.com:80 {
     );
 
     let aborted = raw_http_expect_empty("127.0.0.1", port, request.as_bytes()).await;
-    assert!(aborted, "Connection should be aborted (no response) for abort.example.com");
+    assert!(
+        aborted,
+        "Connection should be aborted (no response) for abort.example.com"
+    );
 }
 
 /// abort false allows requests through normally.
@@ -170,7 +173,7 @@ normal.example.com:80 {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("http://127.0.0.1:{port}/index.html"))
+        .get(format!("http://127.0.0.1:{port}/index.html"))
         .header("Host", "normal.example.com")
         .send()
         .await
@@ -238,5 +241,8 @@ abort.example.com:80 {
     );
 
     let aborted = raw_http_expect_empty("127.0.0.1", port, request.as_bytes()).await;
-    assert!(aborted, "Bare abort directive should also close the connection");
+    assert!(
+        aborted,
+        "Bare abort directive should also close the connection"
+    );
 }

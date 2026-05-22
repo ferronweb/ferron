@@ -69,8 +69,12 @@ async fn test_affinity_header() {
 
     let network = "e2e-test-affinity-header";
 
-    let _backend1 = create_backend_container(network, "backend-1", "A").await.unwrap();
-    let _backend2 = create_backend_container(network, "backend-2", "B").await.unwrap();
+    let _backend1 = create_backend_container(network, "backend-1", "A")
+        .await
+        .unwrap();
+    let _backend2 = create_backend_container(network, "backend-2", "B")
+        .await
+        .unwrap();
 
     config_file
         .as_file_mut()
@@ -105,7 +109,12 @@ async fn test_affinity_header() {
     // Test sticky routing for user-1
     let mut responses_user1 = Vec::new();
     for _ in 0..5 {
-        let resp = client.get(&url).header("X-Sticky", "user-1").send().await.unwrap();
+        let resp = client
+            .get(&url)
+            .header("X-Sticky", "user-1")
+            .send()
+            .await
+            .unwrap();
         responses_user1.push(resp.text().await.unwrap());
     }
     let first1 = &responses_user1[0];
@@ -116,7 +125,12 @@ async fn test_affinity_header() {
     // Test sticky routing for user-2 (should be consistent, hopefully different from user-1)
     let mut responses_user2 = Vec::new();
     for _ in 0..5 {
-        let resp = client.get(&url).header("X-Sticky", "user-2").send().await.unwrap();
+        let resp = client
+            .get(&url)
+            .header("X-Sticky", "user-2")
+            .send()
+            .await
+            .unwrap();
         responses_user2.push(resp.text().await.unwrap());
     }
     let first2 = &responses_user2[0];

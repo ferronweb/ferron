@@ -174,7 +174,7 @@ async fn test_basic_serving() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -187,7 +187,7 @@ async fn test_unicode_serving() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/unicode.txt", ctx.base_url))
+        .get(format!("{}/unicode.txt", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -200,7 +200,7 @@ async fn test_compression_gzip() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "gzip")
         .send()
         .await
@@ -222,7 +222,7 @@ async fn test_compression_deflate() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "deflate")
         .send()
         .await
@@ -244,7 +244,7 @@ async fn test_compression_brotli() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "br")
         .send()
         .await
@@ -266,7 +266,7 @@ async fn test_compression_zstd() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "zstd")
         .send()
         .await
@@ -292,7 +292,7 @@ async fn test_precompression() {
 
     let response = ctx
         .client
-        .get(&format!("{}/precompressed/basic.txt", ctx.base_url))
+        .get(format!("{}/precompressed/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "gzip")
         .send()
         .await
@@ -313,7 +313,7 @@ async fn test_partial_content() {
     // Bytes=0-11
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::RANGE, "bytes=0-11")
         .send()
         .await
@@ -324,7 +324,7 @@ async fn test_partial_content() {
     // Bytes=-999 (Suffix)
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::RANGE, "bytes=-999")
         .send()
         .await
@@ -335,7 +335,7 @@ async fn test_partial_content() {
     // Bytes=999- (Out of range)
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::RANGE, "bytes=999-")
         .send()
         .await
@@ -348,7 +348,7 @@ async fn test_partial_content() {
     // Malformed
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::RANGE, "malformed")
         .send()
         .await
@@ -366,7 +366,7 @@ async fn test_etags() {
     // Get ETag
     let response = ctx
         .client
-        .head(&format!("{}/basic.txt", ctx.base_url))
+        .head(format!("{}/basic.txt", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -381,7 +381,7 @@ async fn test_etags() {
     // If-None-Match (Not Modified)
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::IF_NONE_MATCH, &etag)
         .send()
         .await
@@ -391,7 +391,7 @@ async fn test_etags() {
     // If-None-Match with gzip
     let response = ctx
         .client
-        .head(&format!("{}/basic.txt", ctx.base_url))
+        .head(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "gzip")
         .send()
         .await
@@ -404,7 +404,7 @@ async fn test_etags() {
         .unwrap();
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::ACCEPT_ENCODING, "gzip")
         .header(header::IF_NONE_MATCH, etag_gzip)
         .send()
@@ -415,7 +415,7 @@ async fn test_etags() {
     // Multiple ETags
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::IF_NONE_MATCH, format!("{}, \"something\"", etag))
         .send()
         .await
@@ -425,7 +425,7 @@ async fn test_etags() {
     // If-Match (Precondition Failed)
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::IF_MATCH, &etag)
         .send()
         .await
@@ -435,7 +435,7 @@ async fn test_etags() {
     // If-Match *
     let response = ctx
         .client
-        .get(&format!("{}/basic.txt", ctx.base_url))
+        .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::IF_MATCH, "*")
         .send()
         .await
@@ -450,7 +450,7 @@ async fn test_path_traversal() {
     let traversal_path = "/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd";
     let response = ctx
         .client
-        .get(&format!("{}{}", ctx.base_url, traversal_path))
+        .get(format!("{}{}", ctx.base_url, traversal_path))
         .send()
         .await
         .unwrap();
@@ -462,7 +462,7 @@ async fn test_head_request() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .head(&format!("{}/basic.txt", ctx.base_url))
+        .head(format!("{}/basic.txt", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -475,7 +475,7 @@ async fn test_404_not_found() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/doesntexist.txt", ctx.base_url))
+        .get(format!("{}/doesntexist.txt", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -489,7 +489,7 @@ async fn test_directory_listing() {
     // Enabled
     let response = ctx
         .client
-        .get(&format!("{}/dirlisting", ctx.base_url))
+        .get(format!("{}/dirlisting", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -500,7 +500,7 @@ async fn test_directory_listing() {
     // Disabled
     let response = ctx
         .client
-        .get(&format!("{}/dirnolisting", ctx.base_url))
+        .get(format!("{}/dirnolisting", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -509,7 +509,7 @@ async fn test_directory_listing() {
     // Trailing slash
     let response = ctx
         .client
-        .get(&format!("{}/dirlisting/", ctx.base_url))
+        .get(format!("{}/dirlisting/", ctx.base_url))
         .send()
         .await
         .unwrap();
@@ -521,7 +521,7 @@ async fn test_custom_index() {
     let ctx = StaticTestContext::new().await;
     let response = ctx
         .client
-        .get(&format!("{}/", ctx.base_url))
+        .get(format!("{}/", ctx.base_url))
         .send()
         .await
         .unwrap();
