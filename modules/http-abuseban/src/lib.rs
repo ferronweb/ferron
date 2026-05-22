@@ -22,7 +22,7 @@
 //! );
 //!
 //! if let Some(recorder) = get_global_abuse_recorder() {
-//!     match recorder.record_event(&event) {
+//!     match recorder.record_event(&event, &ctx) {
 //!         EventResult::BanTriggered => {
 //!             // IP is now banned for the configured duration
 //!         }
