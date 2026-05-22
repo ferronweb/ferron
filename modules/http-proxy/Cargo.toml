@@ -35,11 +35,3 @@ dashmap = "6.2.1"
 [features]
 default = ["srv-lookup"]
 srv-lookup = ["hickory-resolver", "hickory-proto"]
-
-[dev-dependencies]
-criterion = "0.8"
-
-[[bench]]
-name = "sendnetio_bench"
-harness = false
-required-features = ["bench"]

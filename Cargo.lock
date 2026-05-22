@@ -1547,7 +1547,6 @@ dependencies = [
  "ahash",
  "async-trait",
  "bytes",
- "criterion",
  "dashmap",
  "ferron-core",
  "ferron-http",
