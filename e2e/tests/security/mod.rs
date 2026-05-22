@@ -10,8 +10,10 @@ use testcontainers::{
 mod common;
 
 // Add more modules as needed
+mod client_ip;
 mod fproxy;
 mod http;
+mod ip_access;
 mod limit;
 
 pub(crate) async fn create_ferron_container(

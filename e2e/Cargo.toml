@@ -156,3 +156,11 @@ path = "tests/abuseban.rs"
 [[test]]
 name = "affinity"
 path = "tests/affinity.rs"
+
+[[test]]
+name = "proxy_protocol"
+path = "tests/proxy_protocol.rs"
+
+[[test]]
+name = "response_headers"
+path = "tests/response_headers.rs"
