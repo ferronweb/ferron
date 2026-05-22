@@ -146,6 +146,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/abuse-protection",
+    target: "_self",
+    label: "Abuse protection",
+    sub: true,
+  },
+  {
     href: "/docs/v3/use-cases/security-headers",
     target: "_self",
     label: "Security headers",
