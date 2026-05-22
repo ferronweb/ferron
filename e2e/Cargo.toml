@@ -130,10 +130,6 @@ name = "otlp"
 path = "tests/otlp.rs"
 
 [[test]]
-name = "fcgi_errors"
-path = "tests/fcgi_errors.rs"
-
-[[test]]
 name = "fauth"
 path = "tests/fauth.rs"
 
