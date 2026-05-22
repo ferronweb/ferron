@@ -69,12 +69,12 @@ fn validate_proxy_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn 
     ferron_core::validate_nested!(block, algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
     validate_passive_check_directives(block)?;
     validate_circuit_breaker_directives(block)?;
-    ferron_core::validate_nested!(block, retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, proxy_header, optional args(1) => [ServerConfigurationValue::String(_, _)]);
     validate_request_header(block)?;
     validate_number(block, "proxy_concurrent_conns", 0)?;
@@ -231,7 +231,7 @@ fn validate_active_check_directives(
         ferron_core::validate_nested!(block, body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
         validate_number(block, "consecutive_fails", 1)?;
         validate_number(block, "consecutive_passes", 1)?;
-        ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+        ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     }
 
     Ok(())

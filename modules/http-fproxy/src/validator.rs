@@ -53,7 +53,7 @@ fn validate_forward_proxy_block(
 ) -> Result<(), Box<dyn Error>> {
     ferron_core::validate_nested!(block, allow_domains, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, deny_ips, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, connect_method, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, connect_method, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
     // -- manual validation ---------------
     // allow_ports — accepts numeric arguments

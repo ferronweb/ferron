@@ -66,7 +66,7 @@ fn validate_cors_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn E
     ferron_core::validate_nested!(block, origins, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, methods, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, headers, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, max_age, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, expose_headers, args(*) => [ServerConfigurationValue::String(_, _)]);
 
