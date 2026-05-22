@@ -1,6 +1,6 @@
 #[cfg(unix)]
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::{io::Write, path::Path};
+use std::{io::Write, path::Path, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
 use testcontainers::{
@@ -11,6 +11,19 @@ use testcontainers::{
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 mod common;
+
+async fn create_otlp_container(
+    network: &str,
+) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
+    let otlp_image = self::common::build_otlp_image().await?;
+    otlp_image
+        .with_exposed_port(ContainerPort::Tcp(4318))
+        .with_wait_for(WaitFor::seconds(2))
+        .with_network(network)
+        .with_hostname("otlp")
+        .start()
+        .await
+}
 
 async fn create_backend_container(
     network: &str,
@@ -47,6 +60,7 @@ async fn create_ferron_container(
     let ferron_image = self::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
+        .with_exposed_port(ContainerPort::Tcp(8889)) // Prometheus endpoint
         .with_wait_for(WaitFor::Http(Box::new(
             HttpWaitStrategy::new("/%")
                 .with_port(ContainerPort::Tcp(80))
@@ -625,4 +639,191 @@ async fn test_circuit_breaker_half_open_recovery() {
         "Ferron logs:\n{}",
         ctx.ferron_logs().await
     );
+}
+
+#[tokio::test]
+async fn test_proxy_http2_only() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let cert_dir = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o777))
+        .tempdir()
+        .unwrap();
+    #[cfg(unix)]
+    let mut config_file = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o666))
+        .tempfile()
+        .unwrap();
+
+    #[cfg(not(unix))]
+    let cert_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
+    std::fs::write(
+        cert_dir.path().join("server.key"),
+        cert.signing_key.serialize_pem(),
+    )
+    .unwrap();
+
+    let network = "e2e-test-proxy-h2only";
+
+    let _backend = create_backend_container(network, cert_dir.path(), "backend", "backend", 0)
+        .await
+        .unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            br#"
+*:80 {
+  proxy "https://backend:3001" {
+    no_verification
+    http2_only true
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    let ferron = create_ferron_container(network, config_file.path())
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(&format!("http://localhost:{}/version", port))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+    assert_eq!(response.text().await.unwrap(), "2.0");
+}
+
+#[tokio::test]
+async fn test_proxy_keepalive_metrics() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let cert_dir = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o777))
+        .tempdir()
+        .unwrap();
+    #[cfg(unix)]
+    let mut config_file = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o666))
+        .tempfile()
+        .unwrap();
+
+    #[cfg(not(unix))]
+    let cert_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
+    std::fs::write(
+        cert_dir.path().join("server.key"),
+        cert.signing_key.serialize_pem(),
+    )
+    .unwrap();
+
+    let network = "e2e-test-proxy-keepalive";
+
+    let _backend = create_backend_container(network, cert_dir.path(), "backend", "backend", 0)
+        .await
+        .unwrap();
+    let otlp = create_otlp_container(network).await.unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            br#"
+*:80 {
+  observability {
+    provider prometheus
+    endpoint_listen "0.0.0.0:8889"
+  }
+  proxy "http://backend:3000" {
+    keepalive true
+  }
+  root "/var/www/ferron"
+}
+"#,
+        )
+        .unwrap();
+
+    let ferron = create_ferron_container(network, config_file.path())
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let metrics_port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(8889))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    // Send requests
+    let _ = client
+        .get(format!("http://localhost:{}/", port))
+        .send()
+        .await
+        .unwrap();
+    let _ = client
+        .get(format!("http://localhost:{}/", port))
+        .send()
+        .await
+        .unwrap();
+
+    // Poll the Prometheus endpoint for metrics
+    let metrics_url = format!("http://localhost:{}/metrics", metrics_port);
+    let mut found_reused = false;
+    let mut last_body = String::new();
+    for _ in 0..60 {
+        if let Ok(resp) = client.get(&metrics_url).send().await {
+            if resp.status().is_success() {
+                if let Ok(body) = resp.text().await {
+                    last_body = body.clone();
+                    // Check for connection_reused
+                    if body.contains("ferron_proxy_requests")
+                        && body.contains("ferron_proxy_connection_reused=\"1\"")
+                    {
+                        found_reused = true;
+                        break;
+                    }
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    assert!(
+        found_reused,
+        "Connection was not reused according to metrics. Metrics body: {}",
+        last_body
+    );
+
+    ferron.stop().await.unwrap();
+    otlp.stop().await.unwrap();
 }

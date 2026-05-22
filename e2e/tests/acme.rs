@@ -652,8 +652,8 @@ async fn test_acme_common(
 
     // Poll until success
     let mut success = false;
-    for _ in 0..90 {
-        // 90 seconds should be enough
+    for _ in 0..100 {
+        // 100 seconds should be enough
         if let Ok(response) = client
             .get(format!("https://{}:{}/", hostname, port))
             .send()

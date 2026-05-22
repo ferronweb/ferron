@@ -173,3 +173,65 @@ ferron-weighted-round-robin:80 {
     test_algo("ferron-two-random").await;
     test_algo("ferron-weighted-round-robin").await;
 }
+
+#[tokio::test]
+async fn test_lb_retry_connection() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let mut config_file = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o666))
+        .tempfile()
+        .unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    let network = "e2e-test-lb-retry";
+
+    // One healthy backend, one closed port
+    let _backend = create_backend_container(network, "backend-ok")
+        .await
+        .unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            br#"
+    *:80 {
+      proxy {
+        upstream "http://backend-ok:3999" # Connection refused
+        upstream "http://backend-ok:3000"
+
+        algorithm round_robin
+        retry_connection true
+      }
+    }
+    "#,
+        )
+        .unwrap();
+
+    let ferron = create_ferron_container(network, config_file.path())
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+    let url = format!("http://localhost:{port}/whoami");
+
+    // Send multiple requests. They should all succeed because of retries,
+    // even though half of the initial choices will hit the failing backend.
+    for _ in 0..10 {
+        let resp = client.get(&url).send().await.unwrap();
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        assert_eq!(resp.text().await.unwrap(), "backend");
+    }
+
+    ferron.stop().await.unwrap();
+}

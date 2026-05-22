@@ -188,3 +188,23 @@ path = "tests/buffer.rs"
 [[test]]
 name = "health_check"
 path = "tests/health_check.rs"
+
+[[test]]
+name = "timeout"
+path = "tests/timeout.rs"
+
+[[test]]
+name = "rproxy_srv"
+path = "tests/rproxy_srv.rs"
+
+[[test]]
+name = "rproxy_proxy"
+path = "tests/rproxy_proxy.rs"
+
+[[test]]
+name = "early_hints"
+path = "tests/early_hints.rs"
+
+[[test]]
+name = "affinity_header"
+path = "tests/affinity_header.rs"

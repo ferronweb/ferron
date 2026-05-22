@@ -12,7 +12,7 @@ def ready():
 
 @app.route('/received', methods=['GET'])
 def received():
-    return jsonify({"count": len(_received)}), 200
+    return jsonify({"count": len(_received), "items": _received}), 200
 
 @app.route('/v1/traces', methods=['POST'])
 @app.route('/v1/metrics', methods=['POST'])
@@ -21,7 +21,11 @@ def receive():
     try:
         data = request.get_data()
         # store minimal metadata to keep memory usage small
-        _received.append({"len": len(data), "headers": dict(request.headers)})
+        _received.append({
+            "len": len(data),
+            "headers": dict(request.headers),
+            "path": request.path,
+        })
         return "", 200
     except Exception as e:
         print("error receiving OTLP payload:", e)

@@ -65,7 +65,7 @@ pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> 
     if let Some(image) = backend_image.as_ref() {
         return Ok(image.clone());
     }
-    let backend_image_built = GenericBuildableImage::new("e2e-test-backend", "latest")
+    let backend_image_built = GenericBuildableImage::new("e2e-test-backend-v2", "latest")
         .with_dockerfile(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/images/backend/Dockerfile"
