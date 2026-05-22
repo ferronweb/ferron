@@ -100,7 +100,9 @@ async fn create_ocsp_container(
     let mut builder = ocsp_image
         .with_exposed_port(ContainerPort::Tcp(5000))
         .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/ready").with_port(ContainerPort::Tcp(5000)),
+            HttpWaitStrategy::new("/ready")
+                .with_port(ContainerPort::Tcp(5000))
+                .with_expected_status_code(200),
         )))
         .with_network(network)
         .with_hostname("ocsp")
