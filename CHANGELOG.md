@@ -57,6 +57,7 @@
 - `io_uring` (on Linux) couldn't be disabled via the web server configuration.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 - Misconfigured forwarded authentication could lead to completely bypassing the authentication.
+- OCSP stapling might not have fetched the OCSP response immediately after new certificates were added.
 - Rate limiting had a race condition when first creating a new bucket for a key, which could lead to allowing more requests than the configured capacity.
 - Reverse proxy boolean subdirectives with empty values (implying `true`) weren't effective.
 - Reverse proxy didn't remove headers as indicated by the "Connection" header, per RFC 7230.

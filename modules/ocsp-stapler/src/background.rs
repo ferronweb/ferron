@@ -341,8 +341,8 @@ pub async fn background_ocsp_task(
                         "ferron_ocsp",
                     );
                     known_certs.insert(key.clone(), certified_key);
-                    // Trigger immediate fetch
-                    next_updates.insert(key, SystemTime::now());
+                    // Trigger immediate fetch (use time in the past to ensure it is fetched immediately)
+                    next_updates.insert(key, SystemTime::now() - std::time::Duration::from_secs(1));
                 }
             }
         }
