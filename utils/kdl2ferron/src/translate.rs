@@ -1515,7 +1515,7 @@ pub fn process_block(
             "otlp_service_name" | "otlp_no_verification" => {
                 let name = match node.name() {
                     "otlp_service_name" => "service_name",
-                    "otlp_no_verification" => "no_verify",
+                    "otlp_no_verification" => "no_verification",
                     _ => unreachable!(),
                 };
                 let val = node.entries.first().map(|e| match &e.value {

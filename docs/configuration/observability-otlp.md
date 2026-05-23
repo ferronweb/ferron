@@ -53,7 +53,7 @@ Each signal sub-block supports these nested directives:
 | Directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
-| `no_verify` | `<bool>` | Disable TLS certificate verification. Use with caution. | `false` |
+| `no_verification` | `<bool>` | Disable TLS certificate verification. Use with caution. | `false` |
 
 ## Configuration examples
 
@@ -130,7 +130,7 @@ example.com {
     observability {
         provider otlp
         service_name "ferron-dev"
-        no_verify
+        no_verification
 
         traces "https://localhost:4317/v1/traces" {
             protocol "grpc"
@@ -230,7 +230,7 @@ Most commercial APM solutions support OTLP:
 
 ## Notes and troubleshooting
 
-- **TLS certificate verification** - disabling with `no_verify` should only be used for development or testing with self-signed certificates.
+- **TLS certificate verification** - disabling with `no_verification` should only be used for development or testing with self-signed certificates.
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.

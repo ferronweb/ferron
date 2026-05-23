@@ -252,7 +252,7 @@ example.com {
 ## Notes and troubleshooting
 
 - Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability.
-- Keep `no_verify false` unless you are in a controlled test environment.
+- Keep `no_verification false` unless you are in a controlled test environment.
 - If logs are missing, verify the formatter modules are loaded in your Ferron build and check endpoint/protocol pairing.
 - All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
 - If Ferron is behind a reverse proxy, configure `client_ip_from_header` so Ferron can see real client IPs. See [HTTP host directives](/docs/v3/configuration/http-host).

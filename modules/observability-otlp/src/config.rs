@@ -26,10 +26,7 @@ impl OtlpBackendConfig {
             .unwrap_or("ferron")
             .to_string();
 
-        let no_verify = config
-            .get_value("no_verify")
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(false);
+        let no_verify = config.get_flag("no_verification");
 
         let logs = SignalConfig::parse_config(config, "logs");
         let metrics = SignalConfig::parse_config(config, "metrics");
