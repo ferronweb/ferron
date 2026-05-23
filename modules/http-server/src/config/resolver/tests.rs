@@ -1,14 +1,9 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, HashMap},
-    net::IpAddr,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use ferron_core::config::{
-    layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
-    ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
-    ServerConfigurationMatcherOperator, ServerConfigurationValue,
+    layer::LayeredConfiguration, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
+    ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
+    ServerConfigurationValue,
 };
 use ferron_http::{HttpContext, HttpRequest};
 use ferron_observability::CompositeEventSink;
