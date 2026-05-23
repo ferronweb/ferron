@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::DnsUpdater;
@@ -6,6 +5,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::required_string;
 
 pub struct DnsimpleDnsProvider;
 
@@ -15,21 +15,8 @@ impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = ctx
-            .config
-            .get_value("oauth_token")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid oauth_token for 'dnsimple' DNS provider"
-            ))?;
-
-        let account_id = ctx
-            .config
-            .get_value("account_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid account_id for 'dnsimple' DNS provider"
-            ))?;
+        let oauth_token = required_string(ctx, "oauth_token", "dnsimple", "OAuth token")?;
+        let account_id = required_string(ctx, "account_id", "dnsimple", "account ID")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::providers::joker::JokerAuth;
@@ -7,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::opt_string;
 
 pub struct JokerDnsProvider;
 
@@ -16,18 +16,9 @@ impl Provider<DnsContext<'static>> for JokerDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = ctx
-            .config
-            .get_value("api_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let username = ctx
-            .config
-            .get_value("username")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let password = ctx
-            .config
-            .get_value("password")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
+        let api_key = opt_string(ctx, "api_key");
+        let username = opt_string(ctx, "username");
+        let password = opt_string(ctx, "password");
 
         let auth = if let (Some(username), Some(password)) = (username, password) {
             JokerAuth::UsernamePassword { username, password }

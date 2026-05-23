@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::providers::azuredns::{AzureDnsConfig, AzureEnvironment};
@@ -7,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::required_string;
 
 pub struct AzureDnsProvider;
 
@@ -16,53 +16,13 @@ impl Provider<DnsContext<'static>> for AzureDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let tenant_id = ctx
-            .config
-            .get_value("tenant_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid tenant ID for 'azuredns' DNS provider"
-            ))?;
+        let tenant_id = required_string(ctx, "tenant_id", "azuredns", "tenant ID")?;
+        let client_id = required_string(ctx, "client_id", "azuredns", "client ID")?;
+        let client_secret = required_string(ctx, "client_secret", "azuredns", "client secret")?;
+        let subscription_id = required_string(ctx, "subscription_id", "azuredns", "subscription ID")?;
+        let resource_group = required_string(ctx, "resource_group", "azuredns", "resource group")?;
 
-        let client_id = ctx
-            .config
-            .get_value("client_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid client ID for 'azuredns' DNS provider"
-            ))?;
-
-        let client_secret = ctx
-            .config
-            .get_value("client_secret")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid client secret for 'azuredns' DNS provider"
-            ))?;
-
-        let subscription_id = ctx
-            .config
-            .get_value("subscription_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid subscription ID for 'azuredns' DNS provider"
-            ))?;
-
-        let resource_group = ctx
-            .config
-            .get_value("resource_group")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid resource group for 'azuredns' DNS provider"
-            ))?;
-
-        let environment_name = ctx
-            .config
-            .get_value("endpoint")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid Azure environment name for 'azuredns' DNS provider"
-            ))?;
+        let environment_name = required_string(ctx, "endpoint", "azuredns", "Azure environment name")?;
         let environment = match environment_name.as_str() {
             "AzurePublicCloud" => AzureEnvironment::Public,
             "AzureChinaCloud" => AzureEnvironment::China,
@@ -77,8 +37,8 @@ impl Provider<DnsContext<'static>> for AzureDnsProvider {
             client_id,
             client_secret,
             subscription_id,
-            environment,
             resource_group,
+            environment,
             request_timeout: None,
         };
 

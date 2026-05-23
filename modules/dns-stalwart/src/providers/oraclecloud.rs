@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::providers::oraclecloud::OracleCloudConfig;
@@ -7,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::{required_string, opt_string};
 
 pub struct OracleCloudDnsProvider;
 
@@ -16,67 +16,14 @@ impl Provider<DnsContext<'static>> for OracleCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let tenancy_ocid = ctx
-            .config
-            .get_value("tenancy_ocid")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid tenancy OCID for 'oraclecloud' DNS provider"
-            ))?;
-
-        let user_ocid = ctx
-            .config
-            .get_value("user_ocid")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid user OCID for 'oraclecloud' DNS provider"
-            ))?;
-
-        let compartment_ocid = ctx
-            .config
-            .get_value("compartment_ocid")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid compartment OCID for 'oraclecloud' DNS provider"
-            ))?;
-
-        let region = ctx
-            .config
-            .get_value("region")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid region for 'oraclecloud' DNS provider"
-            ))?;
-
-        let fingerprint = ctx
-            .config
-            .get_value("fingerprint")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid fingerprint for 'oraclecloud' DNS provider"
-            ))?;
-
-        let private_key_pem = ctx
-            .config
-            .get_value("private_key_pem")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid private key PEM for 'oraclecloud' DNS provider"
-            ))?;
-
-        let private_key_password = ctx
-            .config
-            .get_value("private_key_password")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-
         let config = OracleCloudConfig {
-            tenancy_ocid,
-            user_ocid,
-            fingerprint,
-            private_key_pem,
-            private_key_password,
-            compartment_ocid,
-            region,
+            tenancy_ocid: required_string(ctx, "tenancy_ocid", "oraclecloud", "tenancy OCID")?,
+            user_ocid: required_string(ctx, "user_ocid", "oraclecloud", "user OCID")?,
+            fingerprint: required_string(ctx, "fingerprint", "oraclecloud", "fingerprint")?,
+            private_key_pem: required_string(ctx, "private_key_pem", "oraclecloud", "private key PEM")?,
+            private_key_password: opt_string(ctx, "private_key_password"),
+            region: required_string(ctx, "region", "oraclecloud", "region")?,
+            compartment_ocid: required_string(ctx, "compartment_ocid", "oraclecloud", "compartment OCID")?,
             request_timeout: None,
         };
 

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::providers::volcengine::VolcengineConfig;
@@ -7,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::{required_string, opt_string};
 
 pub struct VolcengineDnsProvider;
 
@@ -16,41 +16,12 @@ impl Provider<DnsContext<'static>> for VolcengineDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key = ctx
-            .config
-            .get_value("access_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid access_key for 'volcengine' DNS provider"
-            ))?;
-
-        let secret_key = ctx
-            .config
-            .get_value("secret_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid secret_key for 'volcengine' DNS provider"
-            ))?;
-
-        let region = ctx
-            .config
-            .get_value("region")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let host = ctx
-            .config
-            .get_value("host")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let scheme = ctx
-            .config
-            .get_value("scheme")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-
         let config = VolcengineConfig {
-            access_key,
-            secret_key,
-            region,
-            host,
-            scheme,
+            access_key: required_string(ctx, "access_key", "volcengine", "access key")?,
+            secret_key: required_string(ctx, "secret_key", "volcengine", "secret key")?,
+            region: opt_string(ctx, "region"),
+            host: opt_string(ctx, "host"),
+            scheme: opt_string(ctx, "scheme"),
             request_timeout: None,
         };
 

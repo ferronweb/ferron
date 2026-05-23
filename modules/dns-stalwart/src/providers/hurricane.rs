@@ -6,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::required_string;
 
 pub struct HurricaneProvider;
 
@@ -15,14 +16,8 @@ impl Provider<DnsContext<'static>> for HurricaneProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let credentials = ctx
-            .config
-            .get_value("credentials")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .and_then(|v| parse_credentials(&v).ok())
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid credentials for 'hurricane' DNS provider"
-            ))?;
+        let credentials = required_string(ctx, "credentials", "hurricane", "credentials")?;
+        let credentials = parse_credentials(&credentials)?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_hurricane(credentials, None)?,

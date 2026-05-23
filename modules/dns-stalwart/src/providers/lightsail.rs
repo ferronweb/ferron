@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::providers::lightsail::LightsailConfig;
@@ -7,6 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::{required_string, opt_string};
 
 pub struct LightsailDnsProvider;
 
@@ -16,40 +16,12 @@ impl Provider<DnsContext<'static>> for LightsailDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key_id = ctx
-            .config
-            .get_value("access_key_id")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid access key ID for 'lightsail' DNS provider"
-            ))?;
-        let secret_access_key = ctx
-            .config
-            .get_value("secret_access_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid secret access key for 'lightsail' DNS provider"
-            ))?;
-
-        let region = ctx
-            .config
-            .get_value("region")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let session_token = ctx
-            .config
-            .get_value("session_token")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-        let domain = ctx
-            .config
-            .get_value("domain")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
-
         let config = LightsailConfig {
-            access_key_id,
-            secret_access_key,
-            region,
-            session_token,
-            domain,
+            access_key_id: required_string(ctx, "access_key_id", "lightsail", "access key ID")?,
+            secret_access_key: required_string(ctx, "secret_access_key", "lightsail", "secret access key")?,
+            region: opt_string(ctx, "region"),
+            session_token: opt_string(ctx, "session_token"),
+            domain: opt_string(ctx, "domain"),
             request_timeout: None,
         };
 

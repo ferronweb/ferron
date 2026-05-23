@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use dns_update::{providers::ovh::OvhEndpoint, DnsUpdater};
@@ -6,6 +5,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
+use crate::providers::util::required_string;
 
 pub struct OvhDnsProvider;
 
@@ -15,37 +15,12 @@ impl Provider<DnsContext<'static>> for OvhDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let application_key = ctx
-            .config
-            .get_value("application_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid application key for 'ovh' DNS provider"
-            ))?;
+        let application_key = required_string(ctx, "application_key", "ovh", "application key")?;
+        let application_secret =
+            required_string(ctx, "application_secret", "ovh", "application secret")?;
+        let consumer_key = required_string(ctx, "consumer_key", "ovh", "consumer key")?;
 
-        let application_secret = ctx
-            .config
-            .get_value("application_secret")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid application secret for 'ovh' DNS provider"
-            ))?;
-
-        let consumer_key = ctx
-            .config
-            .get_value("consumer_key")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid consumer key for 'ovh' DNS provider"
-            ))?;
-
-        let endpoint_name = ctx
-            .config
-            .get_value("endpoint")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .ok_or(anyhow::anyhow!(
-                "Missing or invalid endpoint for 'ovh' DNS provider"
-            ))?;
+        let endpoint_name = required_string(ctx, "endpoint", "ovh", "endpoint")?;
         let endpoint = match endpoint_name.as_str() {
             "ovh-eu" => OvhEndpoint::OvhEu,
             "ovh-ca" => OvhEndpoint::OvhCa,
