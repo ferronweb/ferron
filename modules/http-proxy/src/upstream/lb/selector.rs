@@ -39,7 +39,7 @@ pub fn select_backend_index(
                         0
                     }
                 };
-                let effective_connection_count = connection_count * upstream.weight as usize;
+                let effective_connection_count = connection_count as f64 / upstream.weight as f64;
                 if min_connections.is_none_or(|min| effective_connection_count < min) {
                     min_indexes = vec![index];
                     min_connections = Some(effective_connection_count);
