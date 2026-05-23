@@ -15,6 +15,7 @@
 - Session affinity (sticky sessions) support for reverse proxy with `cookie`, `header`, `ip`, and `hash` affinity types.
 - `consistent_hash` load balancing algorithm using a Ketama-style hash ring for deterministic backend selection.
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
+- Support for active health checks for SRV upstream URLs.
 - `circuit_breaker` reverse proxy directive with rolling failure windows, temporary backend ejection, and half-open recovery.
 - `weighted_round_robin` load balancing algorithm with per-upstream `weight` directive for proportional traffic distribution.
 - `tls-http` module for obtaining TLS certificates from a remote HTTP endpoint, with automatic refresh and observability metrics.

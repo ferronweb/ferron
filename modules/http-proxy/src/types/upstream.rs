@@ -60,6 +60,8 @@ pub struct SrvUpstreamData {
     /// Idle keep-alive timeout.
     #[allow(dead_code)]
     pub idle_timeout: Option<Duration>,
+    /// Active health check configuration for this upstream.
+    pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
 }

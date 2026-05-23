@@ -9,7 +9,7 @@ use tokio::time::sleep;
 use crate::types::health::{
     ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
 };
-use crate::types::upstream::Upstream;
+use crate::types::upstream::{SrvUpstreamData, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -135,6 +135,13 @@ static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<
 /// Callback invoked when a backend is marked unhealthy by active health check.
 /// Arguments: (backend_url, is_active_health_check=true)
 pub type UnhealthyCallback = Arc<dyn Fn(&str, bool) + Send + Sync>;
+
+/// Type of upstream health check to perform.
+#[derive(Hash, Eq, PartialEq)]
+enum UpstreamHealthCheckType {
+    Static(String),
+    Srv((String, Vec<std::net::IpAddr>, u32)),
+}
 
 /// Health check probe result.
 #[derive(Clone, Debug)]
@@ -416,18 +423,31 @@ pub fn spawn_health_check_task(
     runtime_handle: &tokio::runtime::Handle,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
-        let mut probe_configs: Vec<(String, UpstreamHealthCheckConfig)> = Vec::new();
+        let mut probe_configs: Vec<(UpstreamHealthCheckType, UpstreamHealthCheckConfig)> =
+            Vec::new();
 
         for upstream in &upstreams {
             match upstream {
                 Upstream::Static(cfg) => {
                     if cfg.health_check_config.enabled {
-                        probe_configs.push((cfg.url.clone(), cfg.health_check_config.clone()));
+                        probe_configs.push((
+                            UpstreamHealthCheckType::Static(cfg.url.clone()),
+                            cfg.health_check_config.clone(),
+                        ));
                     }
                 }
                 #[cfg(feature = "srv-lookup")]
-                Upstream::Srv(_) => {
-                    // SRV upstreams: health checks not yet supported
+                Upstream::Srv(cfg) => {
+                    if cfg.health_check_config.enabled {
+                        probe_configs.push((
+                            UpstreamHealthCheckType::Srv((
+                                cfg.srv_name.clone(),
+                                cfg.dns_servers.clone(),
+                                cfg.weight,
+                            )),
+                            cfg.health_check_config.clone(),
+                        ));
+                    }
                 }
             }
         }
@@ -446,16 +466,48 @@ pub fn spawn_health_check_task(
             let mut probes_due = Vec::new();
 
             for (upstream_url, config) in &probe_configs {
-                let last_probe = last_probe_times.get(upstream_url);
-                let elapsed = last_probe.map_or(Duration::MAX, |t| t.elapsed());
+                let upstreams = match upstream_url {
+                    UpstreamHealthCheckType::Static(url) => vec![url.clone()],
+                    UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
+                        let timeout_result = tokio::time::timeout(
+                            Duration::from_secs(5),
+                            crate::types::srv::resolve_srv_inner(&SrvUpstreamData {
+                                srv_name: srv_name.clone(),
+                                dns_servers: dns_servers.clone(),
+                                weight: *weight,
+                                limit: None,
+                                idle_timeout: None,
+                                // Use default health check config (SrvUpstreamData is only used for resolving SRV records)
+                                health_check_config: UpstreamHealthCheckConfig::default(),
+                            }),
+                        )
+                        .await;
+                        if timeout_result.is_err() {
+                            ferron_core::log_warn!(
+                                "Timeout (5s) while resolving SRV record for upstream {}",
+                                srv_name
+                            );
+                        }
+                        timeout_result
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|upstream| upstream.0.proxy_to)
+                            .collect()
+                    }
+                };
 
-                if elapsed >= config.interval {
-                    probes_due.push((upstream_url.clone(), config.clone()));
-                    next_wake = now;
-                } else {
-                    let time_until_due = config.interval - elapsed;
-                    if time_until_due < next_wake - now {
-                        next_wake = now + time_until_due;
+                for upstream_url in upstreams {
+                    let last_probe = last_probe_times.get(&upstream_url);
+                    let elapsed = last_probe.map_or(Duration::MAX, |t| t.elapsed());
+
+                    if elapsed >= config.interval {
+                        probes_due.push((upstream_url.clone(), config.clone()));
+                        next_wake = now;
+                    } else {
+                        let time_until_due = config.interval - elapsed;
+                        if time_until_due < next_wake - now {
+                            next_wake = now + time_until_due;
+                        }
                     }
                 }
             }

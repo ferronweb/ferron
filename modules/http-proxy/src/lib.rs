@@ -241,7 +241,7 @@ impl ProxyState {
         let has_health_checks = upstreams.iter().any(|u| match u {
             Upstream::Static(cfg) => cfg.health_check_config.enabled,
             #[cfg(feature = "srv-lookup")]
-            Upstream::Srv(_) => false, // SRV health checks not yet supported
+            Upstream::Srv(cfg) => cfg.health_check_config.enabled,
         });
 
         if !has_health_checks {

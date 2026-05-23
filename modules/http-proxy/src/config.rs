@@ -667,6 +667,7 @@ fn parse_srv_entry(
     let mut idle_timeout: Option<Duration> = None;
     let mut dns_servers: Vec<IpAddr> = Vec::new();
     let mut weight: u32 = 1;
+    let mut health_check_config = UpstreamHealthCheckConfig::default();
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
@@ -714,6 +715,18 @@ fn parse_srv_entry(
                         }
                     }
                 }
+                "active_check" => {
+                    if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                        health_check_config.enabled = val;
+                        if val {
+                            if let Some(children) =
+                                entries.first().and_then(|e| e.children.as_ref())
+                            {
+                                parse_active_health_check(children, &mut health_check_config)?;
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -729,6 +742,7 @@ fn parse_srv_entry(
         limit,
         idle_timeout,
         weight,
+        health_check_config,
     }));
 
     Ok(())

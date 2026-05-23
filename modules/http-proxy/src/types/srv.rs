@@ -14,6 +14,62 @@ pub async fn resolve_srv(
     >,
     health_check_max_fails: u64,
 ) -> Vec<super::upstream::UpstreamInner> {
+    let candidates = resolve_srv_inner(srv_data).await;
+
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    // Filter out unhealthy backends
+    let failed = failed_backends.read();
+    let healthy: Vec<(super::upstream::UpstreamInner, u16, u16)> = candidates
+        .into_iter()
+        .filter(|(upstream, _, _)| {
+            failed
+                .get(upstream)
+                .is_none_or(|fails| fails <= health_check_max_fails)
+        })
+        .collect();
+    drop(failed);
+
+    if healthy.is_empty() {
+        return Vec::new();
+    }
+
+    // Select the highest-priority group (lowest numeric value)
+    let highest_priority = healthy
+        .iter()
+        .map(|(_, _, priority)| *priority)
+        .min()
+        .unwrap_or(0);
+
+    let filtered: Vec<(super::upstream::UpstreamInner, u16)> = healthy
+        .into_iter()
+        .filter(|(_, _, priority)| *priority == highest_priority)
+        .map(|(upstream, weight, _)| (upstream, weight))
+        .collect();
+
+    // Weighted random selection
+    let cumulative_weight: u32 = filtered.iter().map(|(_, w)| *w as u32).sum();
+    if cumulative_weight == 0 {
+        return filtered.into_iter().map(|(u, _)| u).collect();
+    }
+
+    let mut random_weight = rand::random_range(0..cumulative_weight);
+    for (upstream, weight) in filtered {
+        if random_weight < weight as u32 {
+            return vec![upstream];
+        }
+        random_weight -= weight as u32;
+    }
+
+    Vec::new()
+}
+
+#[cfg(feature = "srv-lookup")]
+pub async fn resolve_srv_inner(
+    srv_data: &super::upstream::SrvUpstreamData,
+) -> Vec<(super::upstream::UpstreamInner, u16, u16)> {
     use hickory_resolver::config::{NameServerConfig, ResolverConfig};
     use hickory_resolver::TokioResolver;
 
@@ -95,54 +151,7 @@ pub async fn resolve_srv(
                 })
                 .collect();
 
-            if candidates.is_empty() {
-                return Vec::new();
-            }
-
-            // Filter out unhealthy backends
-            let failed = failed_backends.read();
-            let healthy: Vec<(super::upstream::UpstreamInner, u16, u16)> = candidates
-                .into_iter()
-                .filter(|(upstream, _, _)| {
-                    failed
-                        .get(upstream)
-                        .is_none_or(|fails| fails <= health_check_max_fails)
-                })
-                .collect();
-            drop(failed);
-
-            if healthy.is_empty() {
-                return Vec::new();
-            }
-
-            // Select the highest-priority group (lowest numeric value)
-            let highest_priority = healthy
-                .iter()
-                .map(|(_, _, priority)| *priority)
-                .min()
-                .unwrap_or(0);
-
-            let filtered: Vec<(super::upstream::UpstreamInner, u16)> = healthy
-                .into_iter()
-                .filter(|(_, _, priority)| *priority == highest_priority)
-                .map(|(upstream, weight, _)| (upstream, weight))
-                .collect();
-
-            // Weighted random selection
-            let cumulative_weight: u32 = filtered.iter().map(|(_, w)| *w as u32).sum();
-            if cumulative_weight == 0 {
-                return filtered.into_iter().map(|(u, _)| u).collect();
-            }
-
-            let mut random_weight = rand::random_range(0..cumulative_weight);
-            for (upstream, weight) in filtered {
-                if random_weight < weight as u32 {
-                    return vec![upstream];
-                }
-                random_weight -= weight as u32;
-            }
-
-            Vec::new()
+            candidates
         })
         .await;
 
