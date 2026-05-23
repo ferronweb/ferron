@@ -97,7 +97,7 @@ impl ProxyMetrics {
 
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
-const LOG_TARGET: &'static str = "ferron-http-proxy";
+const LOG_TARGET: &str = "ferron-http-proxy";
 
 /// Global concurrent connections limit, read from config during `register_modules`.
 /// Uses `AtomicUsize` to allow updates during config reload.

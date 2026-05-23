@@ -124,7 +124,7 @@ pub fn determine_proxy_to(
             circuit_breaker_state,
             circuit_breaker,
             &upstream,
-            &event_sink,
+            event_sink,
         ) {
             continue;
         }

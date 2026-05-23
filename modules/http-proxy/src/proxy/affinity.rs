@@ -31,7 +31,7 @@ pub fn extract_affinity_index(
         AffinityType::Hash { variable, .. } => {
             // For hash affinity, use the variable value as the key
             // Variables are resolved from the request context
-            resolve_variable(&variable, ctx)?.into_bytes()
+            resolve_variable(variable, ctx)?.into_bytes()
         }
     };
 
