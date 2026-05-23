@@ -180,7 +180,7 @@ fn verify_ocsp_signature(
             .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?,
         signature,
     )
-    .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?;
+    .map_err(|_| anyhow::anyhow!("OCSP response signature verification failed"))?;
 
     Ok(())
 }
@@ -210,7 +210,7 @@ fn verify_ocsp_signature_with_certs_field(
                 .verify_signature(Some(issuer_cert.public_key()))
                 .is_ok()
             {
-                let Err(new_last_error) = verify_ocsp_signature(basic_response, issuer_cert) else {
+                let Err(new_last_error) = verify_ocsp_signature(basic_response, &cert) else {
                     return Ok(());
                 };
                 last_error = new_last_error;
