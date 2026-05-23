@@ -6,7 +6,7 @@ use ferron_http::trace_context;
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, Parent, TraceAttributeValue, TraceEvent};
 
-use crate::handler::PerStageSpanHooks;
+use super::observability::PerStageSpanHooks;
 
 use super::file_pipeline::{
     execute_http_file_pipeline, strip_matched_path_prefix, FilePipelineExecutionError,
@@ -23,7 +23,8 @@ pub async fn execute_pipeline_stages(
     request_span_key: Option<&str>,
 ) {
     let has_traces = events.has_trace_sinks();
-    let pipeline_span_key = request_span_key.map(|_| super::next_span_key("pipeline"));
+    let pipeline_span_key =
+        request_span_key.map(|_| super::observability::next_span_key("pipeline"));
     let log_trace_context = ctx
         .get::<trace_context::TraceContextKey>()
         .map(trace_context::to_event_trace_context);

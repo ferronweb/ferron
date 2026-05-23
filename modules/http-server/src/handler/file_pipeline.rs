@@ -9,7 +9,7 @@ use http_body_util::BodyExt;
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
-use super::PerStageSpanHooks;
+use super::observability::PerStageSpanHooks;
 
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
