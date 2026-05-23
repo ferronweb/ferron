@@ -23,6 +23,12 @@ SERVER_KEY = os.path.join(CERT_DIR, "server.key")
 SERVER_NOCHAIN_CRT = os.path.join(CERT_DIR, "server_nochain.crt")
 CA_CRT = os.path.join(CERT_DIR, "ca.crt")
 CA_KEY = os.path.join(CERT_DIR, "ca.key")
+if os.environ.get("FERRON_E2E_OCSP_SEPARATE_SIGNER") == "1":
+    OCSP_CRT = os.path.join(CERT_DIR, "ocsp.crt")
+    OCSP_KEY = os.path.join(CERT_DIR, "ocsp.key")
+else:
+    OCSP_CRT = CA_CRT
+    OCSP_KEY = CA_KEY
 
 
 def write_pem(path, data):
@@ -108,15 +114,48 @@ def generate():
         + ca_cert.public_bytes(serialization.Encoding.PEM),
     )
 
+    if OCSP_CRT != CA_CRT:
+        # Generate OCSP responder key and certificate
+        ocsp_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        eku = x509.ExtendedKeyUsage([x509.OID_OCSP_SIGNING])
+
+        ocsp_cert_name = x509.Name(
+            [x509.NameAttribute(NameOID.COMMON_NAME, "Test CA OCSP Signer")]
+        )
+        ocsp_cert = (
+            x509.CertificateBuilder()
+            .subject_name(ocsp_cert_name)
+            .issuer_name(ca_cert.subject)
+            .public_key(ocsp_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=365))
+            .add_extension(eku, critical=False)
+            .sign(ca_key, hashes.SHA256())
+        )
+
+        write_pem(
+            OCSP_CRT,
+            ocsp_cert.public_bytes(serialization.Encoding.PEM),
+        )
+        write_pem(
+            OCSP_KEY,
+            ocsp_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ),
+        )
+
 
 def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
-    # ca_cert = issuer
-    ca_key = serialization.load_pem_private_key(
-        open(CA_KEY, "rb").read(), password=None
+    ocsp_cert = x509.load_pem_x509_certificate(open(OCSP_CRT, "rb").read())
+    ocsp_key = serialization.load_pem_private_key(
+        open(OCSP_KEY, "rb").read(), password=None
     )
 
     if not isinstance(
-        ca_key,
+        ocsp_key,
         (
             ed25519.Ed25519PrivateKey,
             ed448.Ed448PrivateKey,
@@ -125,7 +164,7 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
             ec.EllipticCurvePrivateKey,
         ),
     ):
-        raise ValueError("ca_key must be a supported private key type")
+        raise ValueError("OCSP responder key must be a supported private key type")
 
     builder = OCSPResponseBuilder()
     this_update = datetime.now(timezone.utc)
@@ -160,9 +199,16 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
             forged_key, hashes.SHA256()
         )
     else:
-        ocsp_resp = builder.responder_id(OCSPResponderEncoding.HASH, issuer).sign(
-            ca_key, hashes.SHA256()
-        )
+        if CA_CRT != OCSP_CRT:
+            ocsp_resp = (
+                builder.certificates([ocsp_cert])
+                .responder_id(OCSPResponderEncoding.HASH, ocsp_cert)
+                .sign(ocsp_key, hashes.SHA256())
+            )
+        else:
+            ocsp_resp = builder.responder_id(
+                OCSPResponderEncoding.HASH, ocsp_cert
+            ).sign(ocsp_key, hashes.SHA256())
 
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
 
