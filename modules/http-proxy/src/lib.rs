@@ -21,6 +21,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use dashmap::DashMap;
+use ferron_observability::build_composite_sink;
 use parking_lot::RwLock;
 
 #[cfg(feature = "srv-lookup")]
@@ -96,6 +97,7 @@ impl ProxyMetrics {
 
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
+const LOG_TARGET: &'static str = "ferron-http-proxy";
 
 /// Global concurrent connections limit, read from config during `register_modules`.
 /// Uses `AtomicUsize` to allow updates during config reload.
@@ -107,7 +109,10 @@ static GLOBAL_CONCURRENT_CONNECTIONS: AtomicUsize =
 /// Populated during `ReverseProxyModule::start()` by spawning a task
 /// that captures `tokio::runtime::Handle::current()`.
 /// Used for SRV record resolution via `hickory_resolver`.
-static SECONDARY_RUNTIME_HANDLE: OnceLock<tokio::runtime::Handle> = OnceLock::new();
+static SECONDARY_RUNTIME_HANDLE: OnceLock<(
+    tokio::runtime::Handle,
+    parking_lot::RwLock<Arc<ferron_observability::CompositeEventSink>>,
+)> = OnceLock::new();
 
 fn emit_proxy_failure_metric(
     ctx: &HttpContext,
@@ -145,25 +150,40 @@ fn emit_proxy_failure_metric(
 /// Returns the secondary runtime handle if it has been captured.
 ///
 /// Returns `None` if `Module::start()` has not been called yet.
-pub fn try_get_secondary_runtime_handle() -> Option<tokio::runtime::Handle> {
-    SECONDARY_RUNTIME_HANDLE.get().cloned()
+pub fn try_get_secondary_runtime_handle() -> Option<(
+    tokio::runtime::Handle,
+    Arc<ferron_observability::CompositeEventSink>,
+)> {
+    SECONDARY_RUNTIME_HANDLE
+        .get()
+        .map(|(h, s)| (h.clone(), s.read().clone()))
 }
 
 /// Returns the secondary runtime handle, initializing it if necessary.
 ///
 /// The handle is captured during `Module::start()` by spawning a task
 /// on the secondary runtime that calls `tokio::runtime::Handle::current()`.
-pub fn get_secondary_runtime_handle(runtime: &Runtime) -> tokio::runtime::Handle {
-    SECONDARY_RUNTIME_HANDLE
-        .get_or_init(|| {
-            let (tx, rx) = std::sync::mpsc::channel();
-            runtime.spawn_secondary_task(async move {
-                let _ = tx.send(tokio::runtime::Handle::current());
-            });
+pub fn get_secondary_runtime_handle(
+    runtime: &Runtime,
+    sink: Arc<ferron_observability::CompositeEventSink>,
+) -> (
+    tokio::runtime::Handle,
+    Arc<ferron_observability::CompositeEventSink>,
+) {
+    let sink2 = sink.clone();
+    let (h, s) = SECONDARY_RUNTIME_HANDLE.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        runtime.spawn_secondary_task(async move {
+            let _ = tx.send(tokio::runtime::Handle::current());
+        });
+        (
             rx.recv()
-                .expect("failed to capture secondary runtime handle")
-        })
-        .clone()
+                .expect("failed to capture secondary runtime handle"),
+            parking_lot::RwLock::new(sink2),
+        )
+    });
+    *s.write() = sink.clone();
+    (h.clone(), sink)
 }
 
 /// Shared state for the reverse proxy stage, constructed once and reused
@@ -249,7 +269,7 @@ impl ProxyState {
         }
 
         // Get the secondary runtime handle for spawning the health check task
-        let runtime_handle = match try_get_secondary_runtime_handle() {
+        let (runtime_handle, event_sink) = match try_get_secondary_runtime_handle() {
             Some(h) => h,
             None => {
                 ferron_core::log_warn!(
@@ -279,6 +299,7 @@ impl ProxyState {
                     *guard.entry(url.to_string()).or_insert(0) += 1;
                 })),
                 &runtime_handle,
+                event_sink,
             );
 
             e.insert(task);
@@ -326,7 +347,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 
     fn register_modules(
         &mut self,
-        _registry: Arc<ferron_core::registry::Registry>,
+        registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -358,7 +379,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             }
         }
 
-        modules.push(Arc::new(ReverseProxyModule));
+        modules.push(Arc::new(ReverseProxyModule {
+            sink: build_composite_sink(&registry, &config.global_config)?,
+        }));
         Ok(())
     }
 }
@@ -367,7 +390,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 ///
 /// Responsible for:
 /// - Capturing the secondary Tokio runtime handle (for SRV resolution)
-struct ReverseProxyModule;
+struct ReverseProxyModule {
+    sink: Arc<ferron_observability::CompositeEventSink>,
+}
 
 impl Module for ReverseProxyModule {
     fn name(&self) -> &str {
@@ -380,8 +405,15 @@ impl Module for ReverseProxyModule {
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         // Capture the secondary Tokio runtime handle for SRV lookups
-        let _handle = get_secondary_runtime_handle(runtime);
-        ferron_core::log_debug!("Reverse proxy module initialized");
+        let _handle = get_secondary_runtime_handle(runtime, self.sink.clone());
+        self.sink.emit(ferron_observability::Event::Log(
+            ferron_observability::LogEvent {
+                level: ferron_observability::LogLevel::Info,
+                message: "Reverse proxy module initialized".to_string(),
+                target: LOG_TARGET,
+                trace_context: None,
+            },
+        ));
         Ok(())
     }
 }

@@ -43,6 +43,7 @@ pub fn record_backend_transport_failure(
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &UpstreamInner,
     metrics: &mut crate::ProxyMetrics,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) {
     if passive_check_enabled {
         metrics.unhealthy_backends.push(upstream.clone());
@@ -51,7 +52,8 @@ pub fn record_backend_transport_failure(
         failed.insert(upstream.clone(), current + 1);
     }
 
-    if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream) {
+    if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
+    {
         metrics
             .circuit_breaker_unhealthy_backends
             .push(upstream.clone());
@@ -65,11 +67,17 @@ pub fn record_backend_response(
     upstream: &UpstreamInner,
     status: u16,
     metrics: &mut crate::ProxyMetrics,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) {
     let should_open = if is_circuit_breaker_failure_status(status) {
-        record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream)
+        record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
     } else {
-        record_circuit_breaker_success(circuit_breaker_state, circuit_breaker, upstream);
+        record_circuit_breaker_success(
+            circuit_breaker_state,
+            circuit_breaker,
+            upstream,
+            event_sink,
+        );
         false
     };
 
@@ -85,6 +93,7 @@ pub fn try_acquire_circuit_breaker_slot(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &UpstreamInner,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) -> bool {
     if !circuit_breaker.enabled {
         return true;
@@ -111,10 +120,17 @@ pub fn try_acquire_circuit_breaker_slot(
             state.opened_at = None;
             state.half_open_in_flight = true;
             state.half_open_pass_count = 0;
-            ferron_core::log_info!(
-                "Upstream {} circuit transitioned to half-open",
-                upstream.proxy_to
-            );
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Info,
+                    message: format!(
+                        "Upstream {} circuit transitioned to half-open",
+                        upstream.proxy_to
+                    ),
+                    target: crate::LOG_TARGET,
+                    trace_context: None,
+                },
+            ));
             true
         }
         CircuitBreakerStatus::HalfOpen => {
@@ -132,6 +148,7 @@ fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &UpstreamInner,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) -> bool {
     if !circuit_breaker.enabled {
         return false;
@@ -151,10 +168,17 @@ fn record_circuit_breaker_failure(
             state.recent_failures.clear();
             state.status = CircuitBreakerStatus::Open;
             state.opened_at = Some(now);
-            ferron_core::log_warn!(
-                "Upstream {} circuit reopened after a half-open trial failure",
-                upstream.proxy_to
-            );
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Upstream {} circuit reopened after a half-open trial failure",
+                        upstream.proxy_to
+                    ),
+                    target: crate::LOG_TARGET,
+                    trace_context: None,
+                },
+            ));
             true
         }
         CircuitBreakerStatus::Open => {
@@ -189,6 +213,7 @@ fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &UpstreamInner,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) {
     if !circuit_breaker.enabled {
         return;
@@ -214,11 +239,17 @@ fn record_circuit_breaker_success(
         state.opened_at = None;
         state.half_open_pass_count = 0;
         state.recent_failures.clear();
-        ferron_core::log_info!(
-            "Upstream {} circuit closed after {} successful half-open request(s)",
-            upstream.proxy_to,
-            circuit_breaker.consecutive_passes
-        );
+        event_sink.emit(ferron_observability::Event::Log(
+            ferron_observability::LogEvent {
+                level: ferron_observability::LogLevel::Info,
+                message: format!(
+                    "Upstream {} circuit closed after {} successful half-open request(s)",
+                    upstream.proxy_to, circuit_breaker.consecutive_passes
+                ),
+                target: crate::LOG_TARGET,
+                trace_context: None,
+            },
+        ));
     }
 }
 

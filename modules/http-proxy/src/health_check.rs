@@ -314,6 +314,7 @@ fn process_probe_result(
     result: &ProbeResult,
     state_map: &HealthCheckStateMap,
     on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) {
     let mut state = state_map.entry(upstream_url.to_string()).or_default();
 
@@ -356,11 +357,17 @@ fn process_probe_result(
                 state.is_healthy = true;
                 state.consecutive_pass_count = 0;
                 state.consecutive_fail_count = 0;
-                ferron_core::log_info!(
-                    "Upstream {} recovered after {} consecutive successes",
-                    upstream_url,
-                    config.consecutive_passes
-                );
+                event_sink.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Info,
+                        message: format!(
+                            "Upstream {} recovered after {} consecutive successes",
+                            upstream_url, config.consecutive_passes
+                        ),
+                        target: super::LOG_TARGET,
+                        trace_context: None,
+                    },
+                ));
             }
         }
         state.last_success_time = Some(now);
@@ -383,13 +390,20 @@ fn process_probe_result(
                     }
                 )
             });
-            ferron_core::log_warn!(
-                "Upstream {} marked unhealthy: {} ({}/{})",
-                upstream_url,
-                error_msg,
-                state.consecutive_fail_count,
-                config.consecutive_fails
-            );
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Upstream {} marked unhealthy: {} ({}/{})",
+                        upstream_url,
+                        error_msg,
+                        state.consecutive_fail_count,
+                        config.consecutive_fails
+                    ),
+                    target: super::LOG_TARGET,
+                    trace_context: None,
+                },
+            ));
             if let Some(callback) = on_unhealthy {
                 callback(upstream_url, true);
             }
@@ -421,6 +435,7 @@ pub fn spawn_health_check_task(
     state_map: HealthCheckStateMap,
     on_unhealthy: Option<UnhealthyCallback>,
     runtime_handle: &tokio::runtime::Handle,
+    event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
         let mut probe_configs: Vec<(UpstreamHealthCheckType, UpstreamHealthCheckConfig)> =
@@ -483,10 +498,17 @@ pub fn spawn_health_check_task(
                         )
                         .await;
                         if timeout_result.is_err() {
-                            ferron_core::log_warn!(
-                                "Timeout (5s) while resolving SRV record for upstream {}",
-                                srv_name
-                            );
+                            event_sink.emit(ferron_observability::Event::Log(
+                                ferron_observability::LogEvent {
+                                    level: ferron_observability::LogLevel::Warn,
+                                    message: format!(
+                                        "Timeout (5s) while resolving SRV record for upstream {}",
+                                        srv_name
+                                    ),
+                                    target: super::LOG_TARGET,
+                                    trace_context: None,
+                                },
+                            ));
                         }
                         timeout_result
                             .unwrap_or_default()
@@ -522,6 +544,7 @@ pub fn spawn_health_check_task(
 
                     last_probe_times.insert(upstream_url, now);
 
+                    let event_sink = event_sink.clone();
                     probe_tasks.push(tokio::spawn(async move {
                         let result = probe_upstream(&probe_url, &config).await;
                         process_probe_result(
@@ -530,6 +553,7 @@ pub fn spawn_health_check_task(
                             &result,
                             &state_map,
                             on_unhealthy_clone.as_deref(),
+                            &event_sink,
                         );
                     }));
                 }
@@ -572,6 +596,7 @@ mod tests {
 
     #[test]
     fn test_health_state_transition_to_unhealthy() {
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
@@ -585,8 +610,22 @@ mod tests {
             error: None,
         };
 
-        process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
-        process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
+        process_probe_result(
+            "http://localhost:8080",
+            &config,
+            &result,
+            &state_map,
+            None,
+            &event_sink,
+        );
+        process_probe_result(
+            "http://localhost:8080",
+            &config,
+            &result,
+            &state_map,
+            None,
+            &event_sink,
+        );
 
         let state = state_map.get("http://localhost:8080").unwrap();
         assert!(!state.is_healthy);
@@ -595,6 +634,7 @@ mod tests {
 
     #[test]
     fn test_health_state_recovery() {
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
@@ -614,6 +654,7 @@ mod tests {
             &fail_result,
             &state_map,
             None,
+            &event_sink,
         );
         process_probe_result(
             "http://localhost:8080",
@@ -621,6 +662,7 @@ mod tests {
             &fail_result,
             &state_map,
             None,
+            &event_sink,
         );
 
         let success_result = ProbeResult {
@@ -636,6 +678,7 @@ mod tests {
             &success_result,
             &state_map,
             None,
+            &event_sink,
         );
         process_probe_result(
             "http://localhost:8080",
@@ -643,6 +686,7 @@ mod tests {
             &success_result,
             &state_map,
             None,
+            &event_sink,
         );
 
         let state = state_map.get("http://localhost:8080").unwrap();
@@ -653,6 +697,7 @@ mod tests {
 
     #[test]
     fn test_response_time_threshold() {
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             response_time_threshold: Some(Duration::from_millis(50)),
@@ -672,6 +717,7 @@ mod tests {
             &result_fast,
             &state_map,
             None,
+            &event_sink,
         );
 
         {
@@ -691,6 +737,7 @@ mod tests {
             &result_slow,
             &state_map,
             None,
+            &event_sink,
         );
 
         let state = state_map.get("http://localhost:8080").unwrap();
@@ -700,6 +747,7 @@ mod tests {
 
     #[test]
     fn test_body_match_success() {
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
@@ -714,7 +762,14 @@ mod tests {
             body: Some(b"status: ok".to_vec()),
             error: None,
         };
-        process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
+        process_probe_result(
+            "http://localhost:8080",
+            &config,
+            &result,
+            &state_map,
+            None,
+            &event_sink,
+        );
 
         let state = state_map.get("http://localhost:8080").unwrap();
         assert!(state.is_healthy);
@@ -722,6 +777,7 @@ mod tests {
 
     #[test]
     fn test_body_match_failure() {
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
@@ -736,7 +792,14 @@ mod tests {
             body: Some(b"status: fail".to_vec()),
             error: None,
         };
-        process_probe_result("http://localhost:8080", &config, &result, &state_map, None);
+        process_probe_result(
+            "http://localhost:8080",
+            &config,
+            &result,
+            &state_map,
+            None,
+            &event_sink,
+        );
 
         let state = state_map.get("http://localhost:8080").unwrap();
         assert!(!state.is_healthy);

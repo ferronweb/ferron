@@ -140,6 +140,7 @@ fn test_determine_proxy_to_no_upstreams() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_none());
 }
@@ -164,6 +165,7 @@ fn test_determine_proxy_to_single_backend() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -198,6 +200,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -232,6 +235,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_none());
 }
@@ -264,6 +268,7 @@ fn test_determine_proxy_to_health_check_disabled() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
 }
@@ -282,6 +287,7 @@ fn test_record_backend_transport_failure() {
         &crate::config::CircuitBreakerConfig::default(),
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 1);
@@ -294,6 +300,7 @@ fn test_record_backend_transport_failure() {
         &crate::config::CircuitBreakerConfig::default(),
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert_eq!(failed_backends.read().get(&upstream), Some(2));
@@ -313,6 +320,7 @@ fn test_record_backend_transport_failure_passive_check_disabled() {
         &crate::config::CircuitBreakerConfig::default(),
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 0);
@@ -378,6 +386,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -407,6 +416,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         None,
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -698,6 +708,7 @@ fn test_determine_proxy_to_with_affinity() {
         None,
         &[],
         Some(1),
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -726,6 +737,7 @@ fn test_determine_proxy_to_affinity_out_of_range() {
         None,
         &[],
         Some(10),
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(result.is_some());
 }
@@ -752,6 +764,7 @@ fn test_circuit_breaker_opens_after_transport_failures() {
         &circuit_breaker,
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
     assert!(is_circuit_breaker_available(
         Some(&circuit_breaker_state),
@@ -766,6 +779,7 @@ fn test_circuit_breaker_opens_after_transport_failures() {
         &circuit_breaker,
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert!(!is_circuit_breaker_available(
@@ -814,6 +828,7 @@ fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
         Some(&circuit_breaker_state),
         &[],
         None,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     )
     .unwrap();
 
@@ -845,6 +860,7 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
         Some(&circuit_breaker_state),
         &circuit_breaker,
         &upstream,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     ));
     assert!(!is_circuit_breaker_available(
         Some(&circuit_breaker_state),
@@ -858,6 +874,7 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
         &upstream,
         200,
         &mut crate::ProxyMetrics::new(),
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert!(is_circuit_breaker_available(
@@ -896,6 +913,7 @@ fn test_circuit_breaker_reopens_after_half_open_failure() {
         &circuit_breaker,
         &upstream,
         &mut metrics,
+        &ferron_observability::CompositeEventSink::new(vec![]),
     );
 
     assert!(!is_circuit_breaker_available(

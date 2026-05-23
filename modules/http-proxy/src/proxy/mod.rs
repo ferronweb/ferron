@@ -104,6 +104,7 @@ pub async fn execute_proxy(
             Some(&circuit_breaker_state),
             &metrics.selected_backends,
             affinity_index,
+            &ctx.events,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
@@ -155,6 +156,7 @@ pub async fn execute_proxy(
                         &selected.upstream,
                         status,
                         &mut metrics,
+                        &ctx.events,
                     );
                 }
 
@@ -184,6 +186,7 @@ pub async fn execute_proxy(
                     &config.circuit_breaker,
                     &selected.upstream,
                     &mut metrics,
+                    &ctx.events,
                 );
 
                 // Check if we should retry with another backend

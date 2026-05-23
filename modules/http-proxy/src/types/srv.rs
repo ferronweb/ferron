@@ -78,7 +78,7 @@ pub async fn resolve_srv_inner(
     let weight = srv_data.weight;
 
     // Get the secondary runtime handle (captured globally during Module::start)
-    let handle = match crate::try_get_secondary_runtime_handle() {
+    let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
         Some(h) => h,
         None => {
             ferron_core::log_warn!("SRV resolution skipped — secondary runtime not yet available");
@@ -112,7 +112,14 @@ pub async fn resolve_srv_inner(
             let resolver = match resolver_result {
                 Ok(resolver) => resolver,
                 Err(e) => {
-                    ferron_core::log_warn!("Failed to create resolver: {}", e);
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: format!("Failed to create resolver: {}", e),
+                            target: crate::LOG_TARGET,
+                            trace_context: None,
+                        },
+                    ));
                     return Vec::new();
                 }
             };
@@ -121,7 +128,14 @@ pub async fn resolve_srv_inner(
             let srv_records = match resolver.srv_lookup(&srv_name).await {
                 Ok(records) => records,
                 Err(e) => {
-                    ferron_core::log_warn!("SRV lookup failed for {}: {}", srv_name, e);
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: format!("SRV lookup failed for {}: {}", srv_name, e),
+                            target: crate::LOG_TARGET,
+                            trace_context: None,
+                        },
+                    ));
                     return Vec::new();
                 }
             };

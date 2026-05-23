@@ -51,6 +51,7 @@ pub fn determine_proxy_to(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     selected_backends: &[UpstreamInner],
     affinity_index: Option<usize>,
+    event_sink: &ferron_observability::CompositeEventSink,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -114,7 +115,12 @@ pub fn determine_proxy_to(
         };
         let upstream = healthy.remove(index);
 
-        if !try_acquire_circuit_breaker_slot(circuit_breaker_state, circuit_breaker, &upstream) {
+        if !try_acquire_circuit_breaker_slot(
+            circuit_breaker_state,
+            circuit_breaker,
+            &upstream,
+            &event_sink,
+        ) {
             continue;
         }
 
