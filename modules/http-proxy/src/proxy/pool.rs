@@ -11,7 +11,7 @@ use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
 use crate::config::ProxyConfig;
-use crate::connpool_single::PoolItem;
+use crate::connections::{ConnectionManager, PooledConnection};
 use crate::proxy::cached_tls_config;
 use crate::proxy::connect::build_proxy_protocol_header;
 use crate::send_net_io::SendTcpStreamPoll;
@@ -35,7 +35,7 @@ use ferron_http::HttpContext;
 pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    cm: &crate::connections::ConnectionManager,
+    cm: &ConnectionManager,
     upstream: &UpstreamInner,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
@@ -47,14 +47,10 @@ pub async fn try_send_with_pool(
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     // Collect non-ready-but-alive connections for racing
-    let mut pending_items: Vec<
-        PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
-    > = Vec::new();
+    let mut pending_items: Vec<PooledConnection> = Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
     // (avoids double-pull when the connection is dead and can't be raced).
-    let mut reusable_item: Option<
-        PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
-    > = None;
+    let mut reusable_item: Option<PooledConnection> = None;
 
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
@@ -176,11 +172,9 @@ pub async fn try_send_with_pool(
 ///
 /// Returns the item if one becomes ready, or `None` if all fail.
 async fn wait_for_any_ready(
-    pending_items: &mut Vec<
-        PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
-    >,
+    pending_items: &mut Vec<PooledConnection>,
     idle_timeout: Duration,
-) -> Option<PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> {
+) -> Option<PooledConnection> {
     if pending_items.is_empty() {
         return None;
     }
@@ -217,7 +211,7 @@ async fn wait_for_any_ready(
 pub async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    cm: &crate::connections::ConnectionManager,
+    cm: &ConnectionManager,
     upstream: &UpstreamInner,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
@@ -225,14 +219,10 @@ pub async fn establish_and_send(
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
-    existing_item: Option<
-        PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
-    >,
+    existing_item: Option<PooledConnection>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let item: Option<
-        PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
-    > = if let Some(it) = existing_item {
+    let item: Option<PooledConnection> = if let Some(it) = existing_item {
         Some(it)
     } else if let Some(limit) = local_limit {
         cm.pull_with_local_limit(upstream, client_ip, Some(limit))
@@ -671,7 +661,7 @@ pub async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     mut wrapper: SendRequestWrapper,
-    item: PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
+    item: PooledConnection,
     proxy_url: &http::Uri,
     tracked_connection: Option<Arc<()>>,
     enable_keepalive: bool,
@@ -754,7 +744,7 @@ pub async fn handle_upgrade(
     resp_for_upgrade: http::Response<()>,
     req_extensions: http::Extensions,
     ctx: &mut HttpContext,
-    mut item: PoolItem<crate::connections::PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
+    mut item: PooledConnection,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut upgrade_request = http::Request::new(http_body_util::Empty::<bytes::Bytes>::new());
     *upgrade_request.extensions_mut() = req_extensions;

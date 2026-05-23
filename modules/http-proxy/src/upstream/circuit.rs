@@ -2,11 +2,10 @@
 
 use std::sync::Arc;
 
-use parking_lot::RwLock;
-
 use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::{CircuitBreakerState, CircuitBreakerStateMap, CircuitBreakerStatus};
 use crate::types::upstream::UpstreamInner;
+use crate::util::FailureCache;
 
 /// Returns whether a backend is currently available for new circuit-breaker traffic.
 pub fn is_circuit_breaker_available(
@@ -37,7 +36,7 @@ pub fn is_circuit_breaker_available(
 
 /// Record a transport-level backend failure.
 pub fn record_backend_transport_failure(
-    failed_backends: Arc<RwLock<crate::util::TtlCache<UpstreamInner, u64>>>,
+    failed_backends: Arc<FailureCache>,
     passive_check_enabled: bool,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,

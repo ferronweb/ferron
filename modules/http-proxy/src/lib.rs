@@ -194,7 +194,7 @@ struct ProxyState {
     /// read the global `concurrent_conns` limit from config first.
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
     /// Failed backend tracking cache (shared across all requests).
-    failed_backends: Arc<RwLock<crate::util::TtlCache<types::upstream::UpstreamInner, u64>>>,
+    failed_backends: Arc<crate::util::FailureCache>,
     /// Circuit breaker state tracking per upstream.
     circuit_breaker_state: types::circuit::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.

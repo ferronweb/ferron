@@ -12,12 +12,16 @@ use std::sync::{Arc, RwLock};
 
 use rustc_hash::FxHashMap;
 
-use crate::connpool_single::{PoolItem, SingleThreadPool};
+use crate::connpool_single::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
 use crate::types::upstream::UpstreamInner;
 
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
 pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
+
+/// Concrete pool item type used throughout the proxy.
+pub(crate) type PooledConnection =
+    crate::connpool_single::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///
@@ -148,7 +152,7 @@ impl ConnectionManager {
         &self,
         upstream: &UpstreamInner,
         client_ip: Option<IpAddr>,
-    ) -> Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> {
+    ) -> Option<PooledConnection> {
         self.ensure_tls_pools();
 
         let key = (Arc::new(upstream.clone()), client_ip);
@@ -182,7 +186,7 @@ impl ConnectionManager {
         upstream: &UpstreamInner,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
-    ) -> Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> {
+    ) -> Option<PooledConnection> {
         self.ensure_tls_pools();
 
         let upstream_key = Arc::new(upstream.clone());

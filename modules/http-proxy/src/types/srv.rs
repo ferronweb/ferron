@@ -9,9 +9,7 @@
 #[cfg(feature = "srv-lookup")]
 pub async fn resolve_srv(
     srv_data: &super::upstream::SrvUpstreamData,
-    failed_backends: std::sync::Arc<
-        parking_lot::RwLock<crate::util::TtlCache<super::upstream::UpstreamInner, u64>>,
-    >,
+    failed_backends: std::sync::Arc<crate::util::FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<super::health::HealthCheckStateMap>,
 ) -> Vec<super::upstream::UpstreamInner> {

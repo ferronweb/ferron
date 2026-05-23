@@ -15,7 +15,7 @@ use std::time::Duration;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::StatusCode;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
@@ -28,7 +28,7 @@ use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
     resolve_upstreams,
 };
-use crate::util::TtlCache;
+use crate::util::FailureCache;
 use crate::ProxyMetrics;
 
 use self::affinity::{extract_affinity_index, maybe_set_affinity_cookie};
@@ -53,7 +53,7 @@ pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
+    failed_backends: Arc<FailureCache>,
     circuit_breaker_state: CircuitBreakerStateMap,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,

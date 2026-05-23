@@ -2,8 +2,6 @@
 
 use std::sync::Arc;
 
-use parking_lot::RwLock;
-
 use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
@@ -12,7 +10,7 @@ use crate::types::upstream::{Upstream, UpstreamInner};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
-use crate::util::TtlCache;
+use crate::util::FailureCache;
 
 /// Resolve all upstreams to a flat list of `UpstreamInner` entries.
 ///
@@ -20,7 +18,7 @@ use crate::util::TtlCache;
 /// it returns them as-is.
 pub async fn resolve_upstreams(
     upstreams: &[Upstream],
-    failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
+    failed_backends: Arc<FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
 ) -> Vec<UpstreamInner> {
@@ -46,7 +44,7 @@ pub async fn resolve_upstreams(
 #[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
     upstreams: &[UpstreamInner],
-    failed_backends: &parking_lot::RwLock<TtlCache<UpstreamInner, u64>>,
+    failed_backends: &FailureCache,
     health_check_enabled: bool,
     health_check_max_fails: u64,
     algorithm: &LoadBalancerAlgorithmInner,

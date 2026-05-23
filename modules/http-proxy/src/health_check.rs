@@ -16,11 +16,13 @@ use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, Server
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use std::sync::LazyLock;
 
+/// Concrete HTTPS connector type used for health check probes.
+type HttpsConnector =
+    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
+
 /// Cached HTTPS connectors for health check probes.
 /// Built once at first use, cloned for each request.
-static DEFAULT_HTTPS_CONNECTOR: LazyLock<
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-> = LazyLock::new(|| {
+static DEFAULT_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
 
@@ -71,9 +73,7 @@ static DEFAULT_HTTPS_CONNECTOR: LazyLock<
         .build()
 });
 
-static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-> = LazyLock::new(|| {
+static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
     #[derive(Debug)]
     struct NoServerVerifier;
     impl ServerCertVerifier for NoServerVerifier {
@@ -270,34 +270,24 @@ async fn execute_probe_request(
 /// The underlying `HttpsConnector` supports both HTTP and HTTPS schemes.
 fn health_check_client(
     no_verification: bool,
-) -> &'static hyper_util::client::legacy::Client<
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-    http_body_util::Full<bytes::Bytes>,
-> {
+) -> &'static hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>>
+{
     use http_body_util::Full;
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
     use std::sync::LazyLock;
 
-    static DEFAULT_CLIENT: LazyLock<
-        Client<
-            hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-            Full<bytes::Bytes>,
-        >,
-    > = LazyLock::new(|| {
-        let connector = DEFAULT_HTTPS_CONNECTOR.clone();
-        Client::builder(TokioExecutor::new()).build(connector)
-    });
+    static DEFAULT_CLIENT: LazyLock<Client<HttpsConnector, Full<bytes::Bytes>>> =
+        LazyLock::new(|| {
+            let connector = DEFAULT_HTTPS_CONNECTOR.clone();
+            Client::builder(TokioExecutor::new()).build(connector)
+        });
 
-    static NO_VERIFY_CLIENT: LazyLock<
-        Client<
-            hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-            Full<bytes::Bytes>,
-        >,
-    > = LazyLock::new(|| {
-        let connector = NO_VERIFY_HTTPS_CONNECTOR.clone();
-        Client::builder(TokioExecutor::new()).build(connector)
-    });
+    static NO_VERIFY_CLIENT: LazyLock<Client<HttpsConnector, Full<bytes::Bytes>>> =
+        LazyLock::new(|| {
+            let connector = NO_VERIFY_HTTPS_CONNECTOR.clone();
+            Client::builder(TokioExecutor::new()).build(connector)
+        });
 
     if no_verification {
         &NO_VERIFY_CLIENT

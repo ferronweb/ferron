@@ -13,6 +13,7 @@ use hyper::Response;
 use tokio::io::{AsyncRead, AsyncWrite};
 use vibeio_hyper::VibeioIo;
 
+use crate::connections::{PoolKey, PooledConnection};
 use crate::types::upstream::UpstreamInner;
 
 /// Body type used for proxied requests.
@@ -241,7 +242,7 @@ where
 /// Information needed to return a connection back to the thread-local pool.
 pub struct PoolReturnInfo {
     /// The upstream and client IP key.
-    key: Option<crate::connections::PoolKey>,
+    key: Option<PoolKey>,
     /// The connection wrapper to return.
     wrapper: Option<SendRequestWrapper>,
     /// Local limit key, if one was applied.
@@ -255,15 +256,7 @@ impl PoolReturnInfo {
     ///
     /// This consumes the item without running its Drop impl (via `ManuallyDrop`),
     /// allowing the wrapper to be stored separately and returned later.
-    pub fn from_item(
-        item: crate::connpool_single::PoolItem<
-            crate::connections::PoolKey,
-            Arc<UpstreamInner>,
-            SendRequestWrapper,
-        >,
-        wrapper: SendRequestWrapper,
-        is_unix: bool,
-    ) -> Self {
+    pub fn from_item(item: PooledConnection, wrapper: SendRequestWrapper, is_unix: bool) -> Self {
         // Prevent item's Drop from running (we'll handle return manually)
         let item = std::mem::ManuallyDrop::new(item);
 

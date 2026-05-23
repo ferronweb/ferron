@@ -3,6 +3,10 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use parking_lot::RwLock;
+
+use crate::types::upstream::UpstreamInner;
+
 /// A TTL (time-to-live) cache.
 pub struct TtlCache<K, V> {
     cache: HashMap<K, (V, Instant)>,
@@ -51,6 +55,9 @@ where
             .retain(|_, (_, timestamp)| timestamp.elapsed() < self.ttl);
     }
 }
+
+/// Cache for tracking failed backends, shared across all proxy requests.
+pub(crate) type FailureCache = RwLock<TtlCache<UpstreamInner, u64>>;
 
 #[cfg(test)]
 mod tests {

@@ -1,17 +1,19 @@
 //! Backend health checking and availability counting.
 
+use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
+use crate::util::FailureCache;
 
 /// Count how many backends are currently available for selection.
 pub fn count_available_backends(
     upstreams: &[UpstreamInner],
-    failed_backends: &parking_lot::RwLock<crate::util::TtlCache<UpstreamInner, u64>>,
+    failed_backends: &FailureCache,
     health_check_max_fails: u64,
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    circuit_breaker: &crate::config::CircuitBreakerConfig,
+    circuit_breaker: &CircuitBreakerConfig,
     selected_backends: &[UpstreamInner],
 ) -> usize {
     let failed = failed_backends.read();
