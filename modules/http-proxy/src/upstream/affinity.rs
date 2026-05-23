@@ -2,7 +2,7 @@
 
 use std::hash::Hasher;
 
-use super::UpstreamInner;
+use crate::types::upstream::UpstreamInner;
 
 /// Resolve an affinity key to a backend index.
 ///
@@ -10,7 +10,7 @@ use super::UpstreamInner;
 /// (hash of the upstream URL). For IP and hash affinity, the key
 /// is used directly with the consistent hash ring.
 pub fn resolve_affinity_index(
-    affinity_type: &super::types::affinity::AffinityType,
+    affinity_type: &crate::types::affinity::AffinityType,
     affinity_key: &[u8],
     backends: &[UpstreamInner],
     algorithm: &super::lb::LoadBalancerAlgorithmInner,
@@ -20,8 +20,8 @@ pub fn resolve_affinity_index(
     }
 
     match affinity_type {
-        super::types::affinity::AffinityType::Cookie(_)
-        | super::types::affinity::AffinityType::Header(_) => {
+        crate::types::affinity::AffinityType::Cookie(_)
+        | crate::types::affinity::AffinityType::Header(_) => {
             // For cookie/header affinity, the key is a backend identifier.
             // We try to match it against each backend's identifier.
             let key_str = std::str::from_utf8(affinity_key).ok()?;
@@ -29,8 +29,8 @@ pub fn resolve_affinity_index(
                 .iter()
                 .position(|b| super::backend_affinity_id(b) == key_str)
         }
-        super::types::affinity::AffinityType::Ip
-        | super::types::affinity::AffinityType::Hash { .. } => {
+        crate::types::affinity::AffinityType::Ip
+        | crate::types::affinity::AffinityType::Hash { .. } => {
             // For IP and hash affinity, use consistent hashing.
             let ring = match algorithm {
                 super::lb::LoadBalancerAlgorithmInner::ConsistentHash(ring) => ring,

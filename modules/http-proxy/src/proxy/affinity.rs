@@ -1,12 +1,13 @@
 //! Session affinity (sticky session) implementation for the proxy.
 
-use crate::upstream::{backend_affinity_id, AffinityType};
+use crate::types::affinity::AffinityType;
+use crate::upstream::backend_affinity_id;
 
 /// Extract the affinity key from the request and resolve it to a backend index.
 pub fn extract_affinity_index(
     affinity: &Option<crate::config::AffinityConfig>,
     ctx: &ferron_http::HttpContext,
-    upstreams: &[crate::upstream::UpstreamInner],
+    upstreams: &[crate::types::upstream::UpstreamInner],
     algorithm: &crate::upstream::lb::LoadBalancerAlgorithmInner,
 ) -> Option<usize> {
     let affinity = affinity.as_ref()?;
@@ -30,7 +31,7 @@ pub fn extract_affinity_index(
         AffinityType::Hash { variable, .. } => {
             // For hash affinity, use the variable value as the key
             // Variables are resolved from the request context
-            resolve_variable(variable, ctx)?.into_bytes()
+            resolve_variable(&variable, ctx)?.into_bytes()
         }
     };
 
@@ -90,8 +91,8 @@ pub fn maybe_set_affinity_cookie(
     resp: ferron_http::HttpResponse,
     affinity: &Option<crate::config::AffinityConfig>,
     _affinity_index: Option<usize>,
-    selected_upstream: &crate::upstream::UpstreamInner,
-    _upstreams: &[crate::upstream::UpstreamInner],
+    selected_upstream: &crate::types::upstream::UpstreamInner,
+    _upstreams: &[crate::types::upstream::UpstreamInner],
 ) -> ferron_http::HttpResponse {
     let affinity = match affinity {
         Some(a) => a,

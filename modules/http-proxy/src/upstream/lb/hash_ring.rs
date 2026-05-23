@@ -2,7 +2,7 @@
 
 use std::hash::Hasher;
 
-use crate::upstream::UpstreamInner;
+use crate::types::upstream::UpstreamInner;
 
 /// Ketama-style consistent hash ring for backend selection.
 #[derive(Clone, Debug)]

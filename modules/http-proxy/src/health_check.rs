@@ -6,7 +6,10 @@ use std::time::{Duration, SystemTime};
 
 use tokio::time::sleep;
 
-use crate::upstream::{HealthCheckStateMap, Upstream, UpstreamHealthCheckConfig};
+use crate::types::health::{
+    ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
+};
+use crate::types::upstream::Upstream;
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -315,7 +318,7 @@ fn process_probe_result(
             .map(|threshold| result.response_time <= threshold)
             .unwrap_or(true);
 
-        let body_ok = if config.method == crate::upstream::HealthCheckMethod::Get {
+        let body_ok = if config.method == HealthCheckMethod::Get {
             if let Some(ref body_match) = config.body_match {
                 if let Some(ref body) = result.body {
                     String::from_utf8_lossy(body).contains(body_match)
@@ -367,8 +370,8 @@ fn process_probe_result(
                     "Status {} (expected {})",
                     result.status_code.unwrap_or(0),
                     match &config.expect_status {
-                        crate::upstream::ExpectedStatusCodes::Successful => "2xx",
-                        crate::upstream::ExpectedStatusCodes::SuccessfulOrRedirect => "2xx/3xx",
+                        ExpectedStatusCodes::Successful => "2xx",
+                        ExpectedStatusCodes::SuccessfulOrRedirect => "2xx/3xx",
                         _ => "custom",
                     }
                 )
@@ -492,7 +495,7 @@ pub fn spawn_health_check_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::upstream::{ExpectedStatusCodes, HealthCheckMethod, HealthCheckState};
+    use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, HealthCheckState};
     use dashmap::DashMap;
 
     #[test]

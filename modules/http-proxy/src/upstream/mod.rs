@@ -1,32 +1,25 @@
 //! Upstream resolution and load balancing logic.
+//!
+//! This module re-exports types from `crate::types` for backward compatibility,
+//! and provides upstream-specific functions (affinity, circuit breaker, resolution).
 
 pub mod affinity;
 pub mod circuit;
 pub mod lb;
 pub mod resolution;
-pub mod types;
 
 #[cfg(test)]
 pub mod tests;
 
 use std::hash::BuildHasher;
 
-// Re-export key types for convenience
-pub use types::affinity::{AffinityConfig, AffinityType, HashMethod};
-pub use types::circuit::CircuitBreakerStateMap;
-pub use types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealthCheckConfig};
-pub use types::lb::LoadBalancerAlgorithm;
-pub use types::upstream::ProxyHeader;
-pub use types::*;
-
-// Re-export functions
+// Re-export upstream-specific functions
 pub use affinity::backend_affinity_id;
 pub use circuit::{
     is_circuit_breaker_available, record_backend_response, record_backend_transport_failure,
 };
 pub use resolution::determine_proxy_to;
 pub use resolution::resolve_upstreams;
-pub use types::upstream::SrvUpstreamData;
 
 /// Returns an [`ahash::AHasher`] with a consistent seed.
 ///

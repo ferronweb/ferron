@@ -12,14 +12,13 @@ use ferron_core::config::{
 };
 use http::header::HeaderName;
 
+pub use crate::types::affinity::{AffinityConfig, AffinityType, HashMethod};
+use crate::types::affinity::{CookieAffinityConfig, SameSiteMode};
+use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealthCheckConfig};
+use crate::types::lb::LoadBalancerAlgorithm;
 #[cfg(feature = "srv-lookup")]
-use crate::upstream::SrvUpstreamData;
-use crate::upstream::{
-    types::affinity::{CookieAffinityConfig, SameSiteMode},
-    ExpectedStatusCodes, HealthCheckMethod, LoadBalancerAlgorithm, ProxyHeader, Upstream,
-    UpstreamConfig, UpstreamHealthCheckConfig,
-};
-pub use crate::upstream::{AffinityConfig, AffinityType, HashMethod};
+use crate::types::upstream::SrvUpstreamData;
+use crate::types::upstream::{ProxyHeader, Upstream, UpstreamConfig};
 
 /// Default keep-alive idle timeout in milliseconds.
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;

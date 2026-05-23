@@ -13,6 +13,8 @@ use hyper::Response;
 use tokio::io::{AsyncRead, AsyncWrite};
 use vibeio_hyper::VibeioIo;
 
+use crate::types::upstream::UpstreamInner;
+
 /// Body type used for proxied requests.
 pub type ProxyBody = UnsyncBoxBody<Bytes, std::io::Error>;
 
@@ -243,7 +245,7 @@ pub struct PoolReturnInfo {
     /// The connection wrapper to return.
     wrapper: Option<SendRequestWrapper>,
     /// Local limit key, if one was applied.
-    local_limit_key: Option<Arc<crate::upstream::UpstreamInner>>,
+    local_limit_key: Option<Arc<UpstreamInner>>,
     /// Whether this is a Unix pool connection.
     is_unix: bool,
 }
@@ -256,7 +258,7 @@ impl PoolReturnInfo {
     pub fn from_item(
         item: crate::connpool_single::PoolItem<
             crate::connections::PoolKey,
-            Arc<crate::upstream::UpstreamInner>,
+            Arc<UpstreamInner>,
             SendRequestWrapper,
         >,
         wrapper: SendRequestWrapper,

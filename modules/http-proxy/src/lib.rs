@@ -10,6 +10,7 @@ mod health_check;
 mod proxy;
 mod send_net_io;
 mod send_request;
+mod types;
 mod upstream;
 mod util;
 mod validator;
@@ -22,8 +23,10 @@ use std::time::Duration;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
+#[cfg(feature = "srv-lookup")]
+use crate::types::upstream::Upstream;
+use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
-use crate::upstream::ConnectionsTrackState;
 use crate::validator::ProxyConfigurationValidator;
 
 // Re-export low-level send_net_io types for benchmarking and external tools
@@ -44,11 +47,11 @@ type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<Stri
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
     /// Backends selected during load balancing.
-    pub selected_backends: Vec<upstream::UpstreamInner>,
+    pub selected_backends: Vec<types::upstream::UpstreamInner>,
     /// Backends marked as unhealthy due to passive failures (request-time).
-    pub unhealthy_backends: Vec<upstream::UpstreamInner>,
+    pub unhealthy_backends: Vec<types::upstream::UpstreamInner>,
     /// Backends whose circuit breaker was opened by request-time failures or 5xx responses.
-    pub circuit_breaker_unhealthy_backends: Vec<upstream::UpstreamInner>,
+    pub circuit_breaker_unhealthy_backends: Vec<types::upstream::UpstreamInner>,
     /// Backends marked as unhealthy due to active health check probes, with counts.
     pub active_unhealthy_backends: Vec<(String, u64)>,
     /// Whether a pooled connection was reused.
@@ -171,16 +174,16 @@ struct ProxyState {
     /// read the global `concurrent_conns` limit from config first.
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
     /// Failed backend tracking cache (shared across all requests).
-    failed_backends: Arc<RwLock<crate::util::TtlCache<upstream::UpstreamInner, u64>>>,
+    failed_backends: Arc<RwLock<crate::util::TtlCache<types::upstream::UpstreamInner, u64>>>,
     /// Circuit breaker state tracking per upstream.
-    circuit_breaker_state: upstream::CircuitBreakerStateMap,
+    circuit_breaker_state: types::circuit::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
     conn_state: ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
     algorithms: DashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>,
     /// Active health check state tracking per upstream URL.
-    active_health_check_state: upstream::HealthCheckStateMap,
+    active_health_check_state: types::health::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
     /// Used to clean up tasks on reload.
     health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>>,
@@ -228,7 +231,7 @@ impl ProxyState {
     /// Spawn health check task for the given config (idempotent).
     ///
     /// If a task is already running for this config, does nothing.
-    fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[upstream::Upstream]) {
+    fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[Upstream]) {
         // Check if task already exists
         if self.health_check_tasks.contains_key(config_keys) {
             return;
@@ -236,9 +239,9 @@ impl ProxyState {
 
         // Check if any upstream has health checks enabled
         let has_health_checks = upstreams.iter().any(|u| match u {
-            upstream::Upstream::Static(cfg) => cfg.health_check_config.enabled,
+            Upstream::Static(cfg) => cfg.health_check_config.enabled,
             #[cfg(feature = "srv-lookup")]
-            upstream::Upstream::Srv(_) => false, // SRV health checks not yet supported
+            Upstream::Srv(_) => false, // SRV health checks not yet supported
         });
 
         if !has_health_checks {
@@ -448,9 +451,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         let conn_manager = self.state.get_conn_manager();
         for uc in &config.upstreams {
             let limit = match uc {
-                upstream::Upstream::Static(s) => s.limit,
+                Upstream::Static(s) => s.limit,
                 #[cfg(feature = "srv-lookup")]
-                upstream::Upstream::Srv(s) => s.limit,
+                Upstream::Srv(s) => s.limit,
             };
             if let Some(limit) = limit {
                 let resolved = uc

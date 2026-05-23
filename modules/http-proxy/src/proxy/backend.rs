@@ -1,6 +1,8 @@
 //! Backend health checking and availability counting.
 
-use crate::upstream::{CircuitBreakerStateMap, HealthCheckStateMap, UpstreamInner};
+use crate::types::circuit::CircuitBreakerStateMap;
+use crate::types::health::HealthCheckStateMap;
+use crate::types::upstream::UpstreamInner;
 
 /// Count how many backends are currently available for selection.
 pub fn count_available_backends(

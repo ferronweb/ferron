@@ -1,10 +1,13 @@
-//! Load balancer types and runtime state.
+//! Load balancer runtime state.
+//!
+//! The configuration types (`LoadBalancerAlgorithm`, `SelectedBackend`)
+//! are defined in `crate::types` to avoid circular dependencies.
 
 pub mod hash_ring;
 pub mod round_robin;
 pub mod selector;
 
-pub use crate::upstream::types::lb::{LoadBalancerAlgorithm, SelectedBackend};
+pub use crate::types::lb::LoadBalancerAlgorithm;
 pub use hash_ring::ConsistentHashRing;
 pub use round_robin::WeightedRoundRobinState;
 

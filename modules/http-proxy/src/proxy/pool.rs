@@ -20,7 +20,8 @@ use crate::send_net_io::SendUnixStreamPoll;
 use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, TrackedBody};
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
-use crate::upstream::{ConnectionsTrackState, UpstreamInner};
+use crate::types::upstream::UpstreamInner;
+use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
 use ferron_http::HttpContext;
 

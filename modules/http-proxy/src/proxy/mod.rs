@@ -19,11 +19,14 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
+use crate::types::circuit::CircuitBreakerStateMap;
+use crate::types::health::HealthCheckStateMap;
+use crate::types::upstream::UpstreamInner;
+use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
 use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
-    resolve_upstreams, CircuitBreakerStateMap, ConnectionsTrackState, HealthCheckStateMap,
-    UpstreamInner,
+    resolve_upstreams,
 };
 use crate::util::TtlCache;
 use crate::ProxyMetrics;

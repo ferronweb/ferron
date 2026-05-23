@@ -133,3 +133,6 @@ impl Default for HealthCheckState {
         }
     }
 }
+
+/// Health check state map keyed by upstream URL string.
+pub type HealthCheckStateMap = std::sync::Arc<dashmap::DashMap<String, HealthCheckState>>;

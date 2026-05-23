@@ -39,7 +39,7 @@ pub struct UpstreamConfig {
     #[allow(dead_code)]
     pub idle_timeout: Option<Duration>,
     /// Active health check configuration for this upstream.
-    pub health_check_config: crate::upstream::types::health::UpstreamHealthCheckConfig,
+    pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
 }
@@ -83,24 +83,19 @@ impl Upstream {
     pub async fn resolve(
         &self,
         _failed_backends: std::sync::Arc<
-            parking_lot::RwLock<crate::util::TtlCache<crate::upstream::UpstreamInner, u64>>,
+            parking_lot::RwLock<crate::util::TtlCache<UpstreamInner, u64>>,
         >,
         _health_check_max_fails: u64,
-    ) -> Vec<crate::upstream::UpstreamInner> {
+    ) -> Vec<UpstreamInner> {
         match self {
-            Upstream::Static(cfg) => vec![crate::upstream::UpstreamInner {
+            Upstream::Static(cfg) => vec![UpstreamInner {
                 proxy_to: cfg.url.clone(),
                 proxy_unix: cfg.unix_socket.clone(),
                 weight: cfg.weight,
             }],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
-                crate::upstream::resolution::resolve_srv(
-                    srv_data,
-                    _failed_backends,
-                    _health_check_max_fails,
-                )
-                .await
+                super::srv::resolve_srv(srv_data, _failed_backends, _health_check_max_fails).await
             }
         }
     }

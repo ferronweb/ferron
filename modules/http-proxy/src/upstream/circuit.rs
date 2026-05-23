@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use super::types::circuit::{CircuitBreakerState, CircuitBreakerStatus};
-use super::{CircuitBreakerStateMap, UpstreamInner};
 use crate::config::CircuitBreakerConfig;
+use crate::types::circuit::{CircuitBreakerState, CircuitBreakerStateMap, CircuitBreakerStatus};
+use crate::types::upstream::UpstreamInner;
 
 /// Returns whether a backend is currently available for new circuit-breaker traffic.
 pub fn is_circuit_breaker_available(

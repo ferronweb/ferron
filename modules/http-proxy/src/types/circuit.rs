@@ -40,4 +40,4 @@ impl Default for CircuitBreakerState {
 }
 
 pub type CircuitBreakerStateMap =
-    Arc<dashmap::DashMap<crate::upstream::UpstreamInner, CircuitBreakerState>>;
+    Arc<dashmap::DashMap<super::upstream::UpstreamInner, CircuitBreakerState>>;

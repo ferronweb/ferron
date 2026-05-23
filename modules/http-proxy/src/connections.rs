@@ -14,7 +14,7 @@ use rustc_hash::FxHashMap;
 
 use crate::connpool_single::{PoolItem, SingleThreadPool};
 use crate::send_request::SendRequestWrapper;
-use crate::upstream::UpstreamInner;
+use crate::types::upstream::UpstreamInner;
 
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
 pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);

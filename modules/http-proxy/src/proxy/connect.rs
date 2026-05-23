@@ -2,18 +2,18 @@
 
 use std::net::IpAddr;
 
-
+use crate::types::upstream::ProxyHeader;
 
 /// Build a PROXY protocol header for the given version and connection details.
 pub fn build_proxy_protocol_header(
-    version: crate::upstream::ProxyHeader,
+    version: ProxyHeader,
     client_ip: IpAddr,
     local_ip: IpAddr,
     client_port: u16,
     local_port: u16,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     match version {
-        crate::upstream::ProxyHeader::V1 => {
+        ProxyHeader::V1 => {
             let is_ipv4 = client_ip.is_ipv4() && local_ip.is_ipv4();
             let proto = if is_ipv4 { "TCP4" } else { "TCP6" };
             let client_str = client_ip.to_string();
@@ -23,7 +23,7 @@ pub fn build_proxy_protocol_header(
                     .into_bytes(),
             )
         }
-        crate::upstream::ProxyHeader::V2 => {
+        ProxyHeader::V2 => {
             let is_ipv4 = client_ip.is_ipv4() && local_ip.is_ipv4();
             let addresses = if is_ipv4 {
                 let client_v4 = match client_ip {
