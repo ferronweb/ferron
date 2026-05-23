@@ -1,5 +1,4 @@
 #[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, path::Path};
 
 use testcontainers::{
@@ -65,19 +64,13 @@ async fn test_cgi_hello_world() {
 
     // Prepare directories
     #[cfg(unix)]
-    let cgi_bin_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let cgi_bin_dir = common::create_temp_dir();
     #[cfg(not(unix))]
     let cgi_bin_dir = tempfile::tempdir().unwrap();
 
     // Prepare config file
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

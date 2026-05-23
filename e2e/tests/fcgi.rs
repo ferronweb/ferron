@@ -1,6 +1,5 @@
 use std::path::Path;
 #[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, time::Duration};
 
 use testcontainers::{
@@ -82,19 +81,13 @@ async fn test_fcgi_php_hello_world() {
 
     // Prepare directories
     #[cfg(unix)]
-    let wwwroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let wwwroot_dir = common::create_temp_dir();
     #[cfg(not(unix))]
     let wwwroot_dir = tempfile::tempdir().unwrap();
 
     // Prepare config file
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
@@ -159,19 +152,13 @@ async fn test_fcgiwrap_cgi_hello_world() {
 
     // Prepare directories
     #[cfg(unix)]
-    let wwwroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let wwwroot_dir = common::create_temp_dir();
     #[cfg(not(unix))]
     let wwwroot_dir = tempfile::tempdir().unwrap();
 
     // Prepare config file
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
@@ -252,18 +239,12 @@ async fn test_fcgi_backend_reset_midrequest() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let wwwroot_dir = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let wwwroot_dir = common::create_temp_dir();
     #[cfg(not(unix))]
     let wwwroot_dir = tempfile::tempdir().unwrap();
 
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

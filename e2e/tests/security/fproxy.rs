@@ -1,8 +1,6 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
-use crate::create_ferron_container;
+use crate::{common, create_ferron_container};
 
 /// Test for forward-proxy DNS rebinding attack bypass (CVE/regression).
 /// Ensures forward-proxy correctly validates DNS and doesn't allow rebinding attacks.
@@ -10,23 +8,8 @@ use crate::create_ferron_container;
 async fn test_forward_proxy_dns_rebinding_protection() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     // Configure forward proxy with specific allowed hostname
     config_file
@@ -94,23 +77,8 @@ async fn test_forward_proxy_dns_rebinding_protection() {
 async fn test_forward_proxy_allowed_ports_not_additive() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     // Configure forward proxy with specific allowed port only
     config_file

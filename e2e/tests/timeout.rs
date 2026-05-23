@@ -1,7 +1,5 @@
 use std::io::Write;
 use std::time::Duration;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -58,10 +56,7 @@ async fn test_pipeline_timeout() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

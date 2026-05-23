@@ -1,68 +1,19 @@
 use std::io::Write;
 use std::time::Duration;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
 
 mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &std::path::Path,
-    config_file: &std::path::Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_network("bridge")
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
 
 #[tokio::test]
 async fn test_early_hints_h1() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
+    let config_file = common::create_temp_file();
+    let webroot_dir = common::create_temp_dir();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"Main Response").unwrap();
 
-    config_file
-        .as_file_mut()
+    let mut config = std::fs::File::create(config_file.path()).unwrap();
+    config
         .write_all(
             br#"
 *:80 {
@@ -77,13 +28,14 @@ async fn test_early_hints_h1() {
 "#,
         )
         .unwrap();
+    drop(config);
 
-    let ferron = create_ferron_container(webroot_dir.path(), config_file.path())
+    let ferron = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
     let port = ferron
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .get_host_port_ipv4(testcontainers::core::ContainerPort::Tcp(80))
         .await
         .unwrap();
 

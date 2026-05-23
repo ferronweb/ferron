@@ -1,5 +1,4 @@
 #[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, path::Path};
 
 use testcontainers::{
@@ -57,20 +56,11 @@ fn setup_test_dirs() -> (
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let webroot_dir = common::create_temp_dir();
     #[cfg(unix)]
-    let config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let config_file = common::create_temp_file();
     #[cfg(unix)]
-    let log_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let log_dir = common::create_temp_dir();
 
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();

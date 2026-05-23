@@ -1,8 +1,6 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
-use crate::create_ferron_container;
+use crate::{common, create_ferron_container};
 
 /// Test for rate limiting race condition fix.
 /// Ensures rate limiting bucket creation doesn't allow bypassing capacity.
@@ -10,23 +8,8 @@ use crate::create_ferron_container;
 async fn test_rate_limiting_race_condition_fixed() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     // Simple rate limiting test with low limit to trigger quickly
     config_file

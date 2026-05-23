@@ -1,6 +1,4 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -86,25 +84,13 @@ async fn test_proxy_srv_resolution() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let zones_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let zones_dir = common::create_temp_dir();
     #[cfg(unix)]
-    let mut bind9_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut bind9_config = common::create_temp_file();
     #[cfg(unix)]
-    let mut ferron_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut ferron_config = common::create_temp_file();
     #[cfg(unix)]
-    let mut resolv_conf = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut resolv_conf = common::create_temp_file();
 
     #[cfg(not(unix))]
     let zones_dir = tempfile::tempdir().unwrap();

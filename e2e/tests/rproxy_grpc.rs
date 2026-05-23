@@ -1,5 +1,4 @@
 #[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, path::Path};
 
 use testcontainers::{
@@ -84,15 +83,9 @@ impl GRpcRProxyTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o777))
-            .tempdir()
-            .unwrap();
+        let cert_dir = common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();

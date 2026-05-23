@@ -3,15 +3,19 @@
 #[cfg(unix)]
 use std::{
     io::Write,
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
+    path::{Path, PathBuf},
+    sync::LazyLock,
 };
-use std::{path::PathBuf, sync::LazyLock};
 
 use testcontainers::{
-    GenericBuildableImage, GenericImage, TestcontainersError, core::BuildImageOptions,
-    runners::AsyncBuilder,
+    ContainerAsync, GenericBuildableImage, GenericImage, ImageExt, TestcontainersError,
+    core::{BuildImageOptions, ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    runners::{AsyncBuilder, AsyncRunner},
 };
 use tokio::sync::Mutex;
+
+#[cfg(unix)]
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 
 static FERRON_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
@@ -33,6 +37,59 @@ static AUTH_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static LSCACHE_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+
+pub async fn create_ferron_container(
+    webroot_dir: &Path,
+    config_file: &Path,
+) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
+    let ferron_image = build_ferron_image().await?;
+    ferron_image
+        .with_exposed_port(ContainerPort::Tcp(80))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network("bridge")
+        .with_mount(Mount::bind_mount(
+            webroot_dir.to_string_lossy(),
+            "/var/www/ferron",
+        ))
+        .with_mount(Mount::bind_mount(
+            config_file.to_string_lossy(),
+            "/etc/ferron.conf",
+        ))
+        .start()
+        .await
+}
+
+#[cfg(unix)]
+pub fn create_temp_dir() -> tempfile::TempDir {
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    tempfile::Builder::new()
+        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777))
+        .tempdir()
+        .unwrap()
+}
+
+#[cfg(not(unix))]
+pub fn create_temp_dir() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+#[cfg(unix)]
+pub fn create_temp_file() -> tempfile::NamedTempFile {
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    tempfile::Builder::new()
+        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666))
+        .tempfile()
+        .unwrap()
+}
+
+#[cfg(not(unix))]
+pub fn create_temp_file() -> tempfile::NamedTempFile {
+    tempfile::NamedTempFile::new().unwrap()
+}
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     let mut ferron_image = FERRON_IMAGE.lock().await;

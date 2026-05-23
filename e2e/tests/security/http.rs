@@ -1,6 +1,4 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use crate::common;
 use crate::create_ferron_container;
@@ -35,36 +33,6 @@ async fn raw_http_get(addr: &str, port: u16, raw_path: &str) -> u16 {
         .unwrap_or(0)
 }
 
-// TODO: check if "%2F" and "%00" tests would be applicable.
-
-// /// Send a raw HTTP request and return the full response body.
-// async fn raw_http_get_full(addr: &str, port: u16, raw_path: &str) -> String {
-//     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-//     let request = format!(
-//         "GET {raw_path} HTTP/1.1\r\nHost: {addr}:{port}\r\nConnection: close\r\nAccept: */*\r\n\r\n"
-//     );
-
-//     let mut stream = tokio::net::TcpStream::connect((addr, port))
-//         .await
-//         .expect("Failed to connect");
-
-//     stream.write_all(request.as_bytes()).await.unwrap();
-//     stream.flush().await.unwrap();
-
-//     let mut buf = vec![0u8; 8192];
-//     let mut response = Vec::new();
-//     loop {
-//         match stream.read(&mut buf).await {
-//             Ok(0) => break,
-//             Ok(n) => response.extend_from_slice(&buf[..n]),
-//             Err(_) => break,
-//         }
-//     }
-
-//     String::from_utf8_lossy(&response).to_string()
-// }
-
 /// Send a raw HTTP request and return the status code line.
 async fn raw_http_send(host: &str, port: u16, raw_request: &[u8]) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -89,23 +57,8 @@ async fn raw_http_send(host: &str, port: u16, raw_request: &[u8]) -> String {
 async fn test_url_canonicalization_rejects_null_bytes() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -159,135 +112,14 @@ async fn test_url_canonicalization_rejects_null_bytes() {
     );
 }
 
-/*
-/// Test that %2F is NOT treated as a path separator by Ferron's URL
-/// canonicalizer. A request with /api%2Fv2/file should access the literal
-/// directory "api%2Fv2" rather than being decoded to /api/v2/file.
-///
-/// This uses raw TCP to bypass client-side URL normalization that libraries
-/// like reqwest would apply (they decode %2F to / before sending).
-#[tokio::test]
-async fn test_url_canonicalization_preserves_percent_2f() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    // Create webroot with two directories:
-    //   api/v2/          (real nested subdirectory)
-    //   api%2Fv2/        (literal percent-encoded name)
-    common::create_dir(webroot_dir.path().join("api")).unwrap();
-    common::create_dir(webroot_dir.path().join("api/v2")).unwrap();
-    common::create_dir(webroot_dir.path().join("api%2Fv2")).unwrap();
-    common::write_file(
-        webroot_dir.path().join("api/v2/hello.txt"),
-        b"hello from real subdirectory",
-    )
-    .unwrap();
-    common::write_file(
-        webroot_dir.path().join("api%2Fv2/hello.txt"),
-        b"hello from encoded-path directory",
-    )
-    .unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-    root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-    config_file.flush().unwrap();
-
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
-        .await
-        .expect("Failed to create container");
-
-    let port = container
-        .get_host_port_ipv4(80)
-        .await
-        .expect("Failed to get host port");
-
-    // Sanity: request with real slash serves from api/v2
-    let status = raw_http_get("127.0.0.1", port, "/api/v2/hello.txt").await;
-    assert_eq!(status, 200, "Real-slash path should return 200");
-
-    // Request with %2F — Ferron's canonicalizer should NOT decode %2F to /.
-    // It should treat /api%2Fv2/hello.txt as a path with literal %2F in it.
-    let response = raw_http_get_full("127.0.0.1", port, "/api%2Fv2/hello.txt").await;
-
-    // FINDING: Ferron serves from api/v2/hello.txt (not api%2Fv2/hello.txt),
-    // meaning %2F IS decoded to / at the filesystem resolution layer.
-    // This is because the routing canonicalizer preserves %2F (reserved char),
-    // but the file pipeline percent-decodes the path before filesystem access.
-    //
-    // Impact: routing/location matching sees %2F as literal characters,
-    // but file serving treats %2F as a path separator. In this specific
-    // test the result is "correct" (serving from api/v2/hello.txt) because
-    // that file exists. But if api/v2 were a restricted location and only
-    // api%2Fv2/hello.txt existed, routing to the restricted location would
-    // be bypassed via %2F encoding.
-    let status_code = response
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(0);
-
-    assert_eq!(
-        status_code, 200,
-        "%2F request should still work (file pipeline decodes it), got: {}",
-        status_code
-    );
-    assert!(
-        response.contains("real subdirectory"),
-        "Expected response from api/v2/hello.txt (since %2F is decoded), got: {}",
-        response
-    );
-}
-*/
-
 /// Test that triple-encoded sequences (%25252F -> %2F -> /) are rejected
 /// as excessive nested encoding, preventing double-decode attacks.
 #[tokio::test]
 async fn test_url_canonicalization_rejects_triple_encoding() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -343,97 +175,14 @@ async fn test_url_canonicalization_rejects_triple_encoding() {
     );
 }
 
-/*
-/// Test that percent-encoded control characters (%00) are rejected even
-/// when they appear in the query string portion of the URL.
-/// Uses raw TCP to bypass client-side URL normalization.
-#[tokio::test]
-async fn test_url_canonicalization_rejects_control_chars_in_query() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    common::write_file(webroot_dir.path().join("test.txt"), b"test content").unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-    root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-    config_file.flush().unwrap();
-
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
-        .await
-        .expect("Failed to create container");
-
-    let port = container
-        .get_host_port_ipv4(80)
-        .await
-        .expect("Failed to get host port");
-
-    // FINDING: Ferron accepts %00 in query strings (status 200).
-    // The canonicalizer is called with `request.uri().path()` which excludes
-    // the query string, so %00 in the query is NOT validated.
-    //
-    // Impact: query string values can contain null bytes. This is not a direct
-    // security issue for static file serving (query strings are ignored), but
-    // null bytes in query strings could be forwarded to upstream/proxy handlers
-    // that may treat them differently.
-    let status = raw_http_get("127.0.0.1", port, "/test.txt?key=val%00ue").await;
-
-    assert_eq!(
-        status, 200,
-        "Expected 200 (query %00 is not validated), got: {}",
-        status
-    );
-}
-*/
-
 /// Test that the server rejects control characters (0x00-0x1F, 0x7F)
 /// in the URL path via raw TCP (bypasses reqwest which would encode them).
 #[tokio::test]
 async fn test_url_canonicalization_rejects_literal_control_chars() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     common::write_file(webroot_dir.path().join("test.txt"), b"test content").unwrap();
 
@@ -513,23 +262,8 @@ async fn test_url_canonicalization_rejects_literal_control_chars() {
 async fn test_multiple_host_headers_rejected() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -579,23 +313,8 @@ async fn test_multiple_host_headers_rejected() {
 async fn test_multiple_content_length_headers_rejected() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -647,23 +366,8 @@ async fn test_multiple_content_length_headers_rejected() {
 async fn test_host_header_trailing_dot_normalized() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     common::write_file(webroot_dir.path().join("hello.txt"), b"Hello, World!").unwrap();
 
@@ -714,29 +418,14 @@ async fn test_host_header_trailing_dot_normalized() {
 async fn test_url_backslash_rejection_disabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
+    let webroot_dir = common::create_temp_dir();
 
     // Create a file at the path corresponding to backslash-normalized path
     // When backslash is converted to forward slash, `some\path` becomes `some/path`
     std::fs::create_dir_all(webroot_dir.path().join("some")).unwrap();
     std::fs::write(webroot_dir.path().join("some").join("path"), b"hello").unwrap();
 
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()

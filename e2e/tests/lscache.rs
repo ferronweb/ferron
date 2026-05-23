@@ -1,9 +1,6 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use reqwest::Method;
-
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
@@ -66,10 +63,7 @@ impl LSCacheTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
         #[cfg(not(unix))]
         let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

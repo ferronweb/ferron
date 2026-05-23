@@ -1,6 +1,5 @@
 use reqwest::StatusCode;
 use std::io::Write;
-use std::path::Path;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -11,10 +10,10 @@ use testcontainers::{
 mod common;
 
 async fn create_ferron_container(
-    webroot_dir: &Path,
-    config_file: &Path,
+    webroot_dir: &std::path::Path,
+    config_file: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_exposed_port(ContainerPort::Tcp(8081))
@@ -40,24 +39,8 @@ async fn create_ferron_container(
 async fn test_admin_status_and_config() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     config_file
         .as_file_mut()

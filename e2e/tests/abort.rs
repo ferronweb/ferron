@@ -1,38 +1,4 @@
-use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
-
 mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &std::path::Path,
-    config_file: &std::path::Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
 
 /// Send a raw HTTP request and return whether we received any response.
 async fn raw_http_expect_empty(host: &str, port: u16, request: &[u8]) -> bool {
@@ -60,31 +26,15 @@ async fn raw_http_expect_empty(host: &str, port: u16, request: &[u8]) -> bool {
 async fn test_abort_true() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = common::create_temp_dir();
 
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
+    common::write_file(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
+    let config_file = common::create_temp_file();
 
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            br#"
+    common::write_file(
+        config_file.path().to_path_buf(),
+        br#"
 *:80 {
     root "/var/www/ferron"
 }
@@ -94,11 +44,10 @@ abort.example.com:80 {
     root "/var/www/ferron"
 }
 "#,
-        )
-        .unwrap();
-    config_file.flush().unwrap();
+    )
+    .unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 
@@ -124,31 +73,15 @@ abort.example.com:80 {
 async fn test_abort_false_allows_requests() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = common::create_temp_dir();
 
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
+    common::write_file(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
+    let config_file = common::create_temp_file();
 
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            br#"
+    common::write_file(
+        config_file.path().to_path_buf(),
+        br#"
 *:80 {
     root "/var/www/ferron"
 }
@@ -158,11 +91,10 @@ normal.example.com:80 {
     root "/var/www/ferron"
 }
 "#,
-        )
-        .unwrap();
-    config_file.flush().unwrap();
+    )
+    .unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 
@@ -189,31 +121,15 @@ normal.example.com:80 {
 async fn test_abort_bare_directive() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = common::create_temp_dir();
 
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
+    common::write_file(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
+    let config_file = common::create_temp_file();
 
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            br#"
+    common::write_file(
+        config_file.path().to_path_buf(),
+        br#"
 *:80 {
     root "/var/www/ferron"
 }
@@ -223,11 +139,10 @@ abort.example.com:80 {
     root "/var/www/ferron"
 }
 "#,
-        )
-        .unwrap();
-    config_file.flush().unwrap();
+    )
+    .unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 

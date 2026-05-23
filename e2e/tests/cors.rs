@@ -1,6 +1,4 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
@@ -26,20 +24,14 @@ impl CorsTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let webroot_dir = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o777))
-            .tempdir()
-            .unwrap();
+        let webroot_dir = common::create_temp_dir();
         #[cfg(not(unix))]
         let webroot_dir = tempfile::tempdir().unwrap();
 
         std::fs::write(webroot_dir.path().join("index.html"), b"cors test").unwrap();
 
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
         #[cfg(not(unix))]
         let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

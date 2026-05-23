@@ -43,15 +43,9 @@ async fn test_prometheus_metrics_exposed() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let webroot_dir = common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
 
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();

@@ -1,43 +1,9 @@
 use reqwest::header;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::{
-    io::{Read, Write},
-    path::Path,
-};
+use std::io::{Read, Write};
 
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
+use testcontainers::{ContainerAsync, GenericImage, core::ContainerPort};
 
 mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &Path,
-    config_file: &Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_network("bridge")
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
 
 struct StaticTestContext {
     _container: ContainerAsync<GenericImage>,
@@ -45,9 +11,6 @@ struct StaticTestContext {
     client: reqwest::Client,
     // We need to keep these alive
     _webroot_dir: tempfile::TempDir,
-    #[cfg(unix)]
-    _config_file: tempfile::NamedTempFile,
-    #[cfg(not(unix))]
     _config_file: tempfile::NamedTempFile,
 }
 
@@ -55,24 +18,8 @@ impl StaticTestContext {
     async fn new() -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
-        let webroot_dir = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o777))
-            .tempdir()
-            .unwrap();
-        #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
-
-        #[cfg(not(unix))]
-        let webroot_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
+        let webroot_dir = common::create_temp_dir();
+        let mut config_file = common::create_temp_file();
 
         config_file
             .as_file_mut()
@@ -140,7 +87,7 @@ impl StaticTestContext {
         )
         .unwrap();
 
-        let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
             .await
             .unwrap();
 

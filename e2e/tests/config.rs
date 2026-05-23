@@ -1,5 +1,3 @@
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, path::Path};
 
 use testcontainers::{
@@ -40,24 +38,8 @@ async fn create_ferron_container(
 async fn test_config() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
 
     let basic_content = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id dignissim leo, ac imperdiet tellus. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Maecenas id erat finibus, auctor odio eu, efficitur libero. Aenean aliquet vehicula nisi ac tincidunt. Donec non vulputate dolor. Sed faucibus pulvinar augue eget viverra. Donec ornare lacus non mi mollis lacinia. Nulla suscipit vestibulum maximus. Nulla sit amet ex quis purus imperdiet vestibulum eget quis ex. Nullam accumsan nibh massa, vitae rhoncus sapien ultricies vel.\n";
 

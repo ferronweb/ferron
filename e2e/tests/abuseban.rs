@@ -1,68 +1,16 @@
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::{io::Write, path::Path};
-
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
+use testcontainers::core::ContainerPort;
 
 mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &Path,
-    config_file: &Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_network("bridge")
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
-
-fn write_config(config_file: &mut impl Write, config: &str) {
-    config_file.write_all(config.as_bytes()).unwrap();
-}
 
 #[tokio::test]
 async fn test_abuse_protection_does_not_block_normal_traffic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = common::create_temp_dir();
+    let config_file = common::create_temp_file();
 
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    write_config(
-        &mut config_file,
+    common::write_file(
+        config_file.path().to_path_buf(),
         r#"
 *:80 {
   root "/var/www/ferron"
@@ -74,12 +22,18 @@ async fn test_abuse_protection_does_not_block_normal_traffic() {
     }
   }
 }
-"#,
-    );
+"#
+        .as_bytes(),
+    )
+    .unwrap();
 
-    self::common::write_file(webroot_dir.path().join("test.txt"), b"test content").unwrap();
+    common::write_file(
+        webroot_dir.path().join("test.txt").to_path_buf(),
+        b"test content",
+    )
+    .unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -123,23 +77,8 @@ async fn test_abuse_protection_does_not_block_normal_traffic() {
 async fn test_abuse_protection_blocks_rate_limit_abusers() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let config_file = common::create_temp_file();
 
     // Configure rate_limit to allow only 1 request, and abuse_protection
     // to ban after 2 rate limit events. Sending 3 fast requests should:
@@ -147,8 +86,8 @@ async fn test_abuse_protection_blocks_rate_limit_abusers() {
     //   2nd → 429 (rate limited, emits abuse event #1)
     //   3rd → 429 (rate limited, emits abuse event #2 → ban triggered)
     //   4th → 403 (banned by abuse protection)
-    write_config(
-        &mut config_file,
+    common::write_file(
+        config_file.path().to_path_buf(),
         r#"
 *:80 {
   root "/var/www/ferron"
@@ -168,12 +107,14 @@ async fn test_abuse_protection_blocks_rate_limit_abusers() {
     }
   }
 }
-"#,
-    );
+"#
+        .as_bytes(),
+    )
+    .unwrap();
 
-    self::common::write_file(webroot_dir.path().join("data.txt"), b"data").unwrap();
+    common::write_file(webroot_dir.path().join("data.txt").to_path_buf(), b"data").unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -218,28 +159,13 @@ async fn test_abuse_protection_blocks_rate_limit_abusers() {
 async fn test_abuse_protection_without_rate_limit_does_not_block() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let webroot_dir = common::create_temp_dir();
+    let config_file = common::create_temp_file();
 
     // Abuse protection without rate_limit — no events are emitted so
     // no bans should be triggered regardless of request volume.
-    write_config(
-        &mut config_file,
+    common::write_file(
+        config_file.path().to_path_buf(),
         r#"
 *:80 {
   root "/var/www/ferron"
@@ -252,12 +178,14 @@ async fn test_abuse_protection_without_rate_limit_does_not_block() {
     }
   }
 }
-"#,
-    );
+"#
+        .as_bytes(),
+    )
+    .unwrap();
 
-    self::common::write_file(webroot_dir.path().join("page.html"), b"page").unwrap();
+    common::write_file(webroot_dir.path().join("page.html").to_path_buf(), b"page").unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 

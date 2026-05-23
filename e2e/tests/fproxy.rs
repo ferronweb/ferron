@@ -1,6 +1,4 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
@@ -45,10 +43,7 @@ impl ForwardProxyTestContext {
 
         // Create config file for Ferron
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
         #[cfg(not(unix))]
         let mut config_file = tempfile::NamedTempFile::new().unwrap();
         config_file.as_file_mut().write_all(ferron_config).unwrap();

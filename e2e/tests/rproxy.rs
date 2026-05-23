@@ -1,5 +1,4 @@
 #[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, path::Path, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
@@ -138,15 +137,9 @@ impl RProxyTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o777))
-            .tempdir()
-            .unwrap();
+        let cert_dir = common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();
@@ -245,15 +238,9 @@ impl CircuitBreakerTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o777))
-            .tempdir()
-            .unwrap();
+        let cert_dir = common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
-            .tempfile()
-            .unwrap();
+        let mut config_file = common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();
@@ -649,15 +636,9 @@ async fn test_proxy_http2_only() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let cert_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let cert_dir = common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
 
     #[cfg(not(unix))]
     let cert_dir = tempfile::tempdir().unwrap();
@@ -721,15 +702,9 @@ async fn test_proxy_keepalive_metrics() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let cert_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
+    let cert_dir = common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
+    let mut config_file = common::create_temp_file();
 
     #[cfg(not(unix))]
     let cert_dir = tempfile::tempdir().unwrap();

@@ -1,6 +1,4 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{
     io::Write,
     path::Path,
@@ -128,30 +126,9 @@ async fn create_ferron_container(
 async fn test_tls_http_1() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
@@ -215,30 +192,9 @@ async fn test_tls_http_1() {
 async fn test_tls_http_2() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
@@ -302,30 +258,9 @@ async fn test_tls_http_2() {
 async fn test_tls_http_3() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
@@ -513,34 +448,12 @@ fn build_session_resumption_client() -> reqwest::Client {
 async fn test_tls_session_tickets_static() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
-    // Create temporary files with relaxed permissions
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Write certificate and key
     cert_file
@@ -624,34 +537,12 @@ async fn test_tls_session_tickets_static() {
 async fn test_tls_session_tickets_multiple_keys() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
-    // Create temporary files with relaxed permissions
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Write certificate and key
     cert_file
@@ -725,34 +616,12 @@ async fn test_tls_session_tickets_multiple_keys() {
 async fn test_tls_session_tickets_auto_rotate_enabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
-    // Create temporary files with relaxed permissions
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut key_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
 
     // Write certificate and key
     cert_file
@@ -881,42 +750,13 @@ fn decrypt_ticket(ticket: &[u8], aes_key: &[u8; 32], hmac_key: &[u8; 32]) -> Opt
 async fn test_tls_session_ticket_decryption_and_resumption() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
-    // Create temporary files with relaxed permissions
-    #[cfg(unix)]
-    let cert_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let ticket_key_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-
-    #[cfg(not(unix))]
-    let cert_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let key_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let ticket_key_file = tempfile::NamedTempFile::new().unwrap();
+    let cert_file = common::create_temp_file();
+    let key_file = common::create_temp_file();
+    let config_file = common::create_temp_file();
+    let ticket_key_file = common::create_temp_file();
 
     // Generate a known ticket key
     let mut ticket_key_record = [0u8; 80];

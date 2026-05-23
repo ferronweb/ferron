@@ -1,6 +1,5 @@
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::{io::Write, path::Path};
+use std::io::Write;
+use std::path::Path;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -14,7 +13,7 @@ async fn create_backend_container(
     network: &str,
     alias: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_image = self::common::build_backend_image().await?;
+    let backend_image = common::build_backend_image().await?;
     backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -32,7 +31,7 @@ async fn create_ferron_container(
     network: &str,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -54,16 +53,7 @@ async fn create_ferron_container(
 async fn test_affinity_cookie() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
 
     let network = "e2e-test-affinity-cookie";
 
@@ -137,16 +127,7 @@ ferron-affinity-cookie:80 {
 async fn test_affinity_ip() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
 
     let network = "e2e-test-affinity-ip";
 
@@ -210,16 +191,7 @@ ferron-affinity-ip:80 {
 async fn test_consistent_hash_algorithm() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+    let mut config_file = common::create_temp_file();
 
     let network = "e2e-test-consistent-hash";
 

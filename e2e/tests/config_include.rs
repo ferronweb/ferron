@@ -1,21 +1,19 @@
 use std::io::Write;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-
 use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    GenericImage, ImageExt,
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
     runners::AsyncRunner,
 };
 
 mod common;
+use common::{create_temp_dir, create_temp_file};
 
 async fn create_ferron_container(
     webroot_dir: &std::path::Path,
     config_file: &std::path::Path,
     extra_file: Option<&std::path::Path>,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+) -> Result<testcontainers::ContainerAsync<GenericImage>, testcontainers::TestcontainersError> {
+    let ferron_image = common::build_ferron_image().await?;
     let mut image = ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -48,28 +46,10 @@ async fn create_ferron_container(
 async fn test_include_extra_config() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
+    let webroot_dir = create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    // Included file defines the host block
-    #[cfg(unix)]
-    let mut extra_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut extra_file = tempfile::NamedTempFile::new().unwrap();
-
+    let mut extra_file = create_temp_file();
     extra_file
         .as_file_mut()
         .write_all(
@@ -82,15 +62,7 @@ async fn test_include_extra_config() {
         .unwrap();
     extra_file.flush().unwrap();
 
-    // Main config includes the extra file
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
+    let mut config_file = create_temp_file();
     config_file
         .as_file_mut()
         .write_all(
@@ -137,28 +109,10 @@ async fn test_include_extra_config() {
 async fn test_include_glob_pattern() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
+    let webroot_dir = create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    // Included file with a.conf name
-    #[cfg(unix)]
-    let mut extra_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut extra_file = tempfile::NamedTempFile::new().unwrap();
-
+    let mut extra_file = create_temp_file();
     extra_file
         .as_file_mut()
         .write_all(
@@ -171,16 +125,7 @@ async fn test_include_glob_pattern() {
         .unwrap();
     extra_file.flush().unwrap();
 
-    // Use a config directory with glob — mount the extra file directory
-    // and use include with a pattern
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
+    let mut config_file = create_temp_file();
     config_file
         .as_file_mut()
         .write_all(
@@ -223,28 +168,10 @@ async fn test_include_glob_pattern() {
 async fn test_include_multiple_files() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
+    let webroot_dir = create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    // Included file A: defines the root
-    #[cfg(unix)]
-    let mut extra_a = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut extra_a = tempfile::NamedTempFile::new().unwrap();
-
+    let mut extra_a = create_temp_file();
     extra_a
         .as_file_mut()
         .write_all(
@@ -257,15 +184,7 @@ async fn test_include_multiple_files() {
         .unwrap();
     extra_a.flush().unwrap();
 
-    // Included file B: adds a custom header
-    #[cfg(unix)]
-    let mut extra_b = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut extra_b = tempfile::NamedTempFile::new().unwrap();
-
+    let mut extra_b = create_temp_file();
     extra_b
         .as_file_mut()
         .write_all(
@@ -278,15 +197,7 @@ async fn test_include_multiple_files() {
         .unwrap();
     extra_b.flush().unwrap();
 
-    // Main config includes both
-    #[cfg(unix)]
-    let mut config_file = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
+    let mut config_file = create_temp_file();
     config_file
         .as_file_mut()
         .write_all(
@@ -297,7 +208,7 @@ include "/etc/extra_b.conf"
         .unwrap();
     config_file.flush().unwrap();
 
-    let ferron_image = self::common::build_ferron_image().await.unwrap();
+    let ferron_image = common::build_ferron_image().await.unwrap();
     let container = ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
