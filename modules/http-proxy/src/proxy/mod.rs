@@ -67,6 +67,7 @@ pub async fn execute_proxy(
         &config.upstreams,
         Arc::clone(&failed_backends),
         config.passive_check.max_fails,
+        health_check_state.cloned(),
     )
     .await;
 

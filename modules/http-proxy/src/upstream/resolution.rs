@@ -22,12 +22,17 @@ pub async fn resolve_upstreams(
     upstreams: &[Upstream],
     failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
     health_check_max_fails: u64,
+    active_health_check_state: Option<HealthCheckStateMap>,
 ) -> Vec<UpstreamInner> {
     let mut resolved = Vec::new();
     for upstream in upstreams {
         resolved.extend(
             upstream
-                .resolve(Arc::clone(&failed_backends), health_check_max_fails)
+                .resolve(
+                    Arc::clone(&failed_backends),
+                    health_check_max_fails,
+                    active_health_check_state.clone(),
+                )
                 .await,
         );
     }

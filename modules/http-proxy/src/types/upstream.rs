@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use crate::types::health::HealthCheckStateMap;
+
 /// Upstream connection key.
 ///
 /// This uniquely identifies a backend server for connection pooling and health tracking.
@@ -88,6 +90,7 @@ impl Upstream {
             parking_lot::RwLock<crate::util::TtlCache<UpstreamInner, u64>>,
         >,
         _health_check_max_fails: u64,
+        _active_health_check_state: Option<HealthCheckStateMap>,
     ) -> Vec<UpstreamInner> {
         match self {
             Upstream::Static(cfg) => vec![UpstreamInner {
@@ -97,7 +100,13 @@ impl Upstream {
             }],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
-                super::srv::resolve_srv(srv_data, _failed_backends, _health_check_max_fails).await
+                super::srv::resolve_srv(
+                    srv_data,
+                    _failed_backends,
+                    _health_check_max_fails,
+                    _active_health_check_state,
+                )
+                .await
             }
         }
     }

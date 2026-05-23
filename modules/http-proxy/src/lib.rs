@@ -492,6 +492,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     .resolve(
                         Arc::clone(&self.state.failed_backends),
                         config.passive_check.max_fails,
+                        Some(Arc::clone(&self.state.active_health_check_state)),
                     )
                     .await;
                 for resolved_upstream in resolved {

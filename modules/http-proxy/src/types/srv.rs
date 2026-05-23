@@ -13,6 +13,7 @@ pub async fn resolve_srv(
         parking_lot::RwLock<crate::util::TtlCache<super::upstream::UpstreamInner, u64>>,
     >,
     health_check_max_fails: u64,
+    active_health_check_state: Option<super::health::HealthCheckStateMap>,
 ) -> Vec<super::upstream::UpstreamInner> {
     let candidates = resolve_srv_inner(srv_data).await;
 
@@ -24,13 +25,16 @@ pub async fn resolve_srv(
     let failed = failed_backends.read();
     let healthy: Vec<(super::upstream::UpstreamInner, u16, u16)> = candidates
         .into_iter()
-        .filter(|(upstream, _, _)| {
+        .filter(move |(upstream, _, _)| {
             failed
                 .get(upstream)
                 .is_none_or(|fails| fails <= health_check_max_fails)
+                && active_health_check_state.as_ref().is_none_or(|s| {
+                    s.get(upstream.proxy_to.as_str())
+                        .is_none_or(|s| s.is_healthy)
+                })
         })
         .collect();
-    drop(failed);
 
     if healthy.is_empty() {
         return Vec::new();
