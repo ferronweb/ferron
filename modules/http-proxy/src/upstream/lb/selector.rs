@@ -39,10 +39,11 @@ pub fn select_backend_index(
                         0
                     }
                 };
-                if min_connections.is_none_or(|min| connection_count < min) {
+                let effective_connection_count = connection_count * upstream.weight as usize;
+                if min_connections.is_none_or(|min| effective_connection_count < min) {
                     min_indexes = vec![index];
-                    min_connections = Some(connection_count);
-                } else if min_connections == Some(connection_count) {
+                    min_connections = Some(effective_connection_count);
+                } else if min_connections == Some(effective_connection_count) {
                     min_indexes.push(index);
                 }
             }

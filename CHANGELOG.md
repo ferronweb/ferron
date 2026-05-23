@@ -32,6 +32,7 @@
 - Improved consistency for duration values across the configuration.
 - Improved error reporting for some TLS handshake failures.
 - Improved error reporting for local automatic TLS failures.
+- `least_conn` load balancing algorithm now supports per-upstream `weight` directive for proportional traffic distribution.
 - Multiple HTTP reverse proxy metrics now include backend URL or unix socket path as an attribute.
 - OCSP responses are now verified before being cached and stapled.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
