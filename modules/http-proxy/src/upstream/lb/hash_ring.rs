@@ -89,3 +89,123 @@ impl ConsistentHashRing {
         self.weights_hash = weights_hash;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_upstream(url: &str) -> UpstreamInner {
+        UpstreamInner {
+            proxy_to: url.to_string(),
+            proxy_unix: None,
+            weight: 1,
+        }
+    }
+
+    fn make_upstream_with_weight(url: &str, weight: u32) -> UpstreamInner {
+        UpstreamInner {
+            proxy_to: url.to_string(),
+            proxy_unix: None,
+            weight,
+        }
+    }
+
+    #[test]
+    fn test_consistent_hash_ring_basic() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let ring = ConsistentHashRing::new(&backends);
+
+        // Same key should always map to the same backend
+        let key1 = b"test-key-1";
+        let idx1 = ring.get(key1).unwrap();
+        let idx2 = ring.get(key1).unwrap();
+        assert_eq!(idx1, idx2);
+
+        // Different keys may map to different backends
+        let key2 = b"test-key-2";
+        let idx3 = ring.get(key2).unwrap();
+        assert!(idx3 < backends.len());
+    }
+
+    #[test]
+    fn test_consistent_hash_ring_all_backends_reachable() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let ring = ConsistentHashRing::new(&backends);
+
+        // Try many keys to ensure all backends are reachable
+        let mut seen = [false; 3];
+        for i in 0..1000 {
+            let key = format!("key-{i}");
+            if let Some(idx) = ring.get(key.as_bytes()) {
+                seen[idx] = true;
+            }
+        }
+
+        // All backends should be reachable with enough keys
+        assert!(seen.iter().all(|&s| s), "Not all backends were reachable");
+    }
+
+    #[test]
+    fn test_consistent_hash_ring_empty() {
+        let backends: Vec<UpstreamInner> = vec![];
+        let ring = ConsistentHashRing::new(&backends);
+        assert!(ring.get(b"test").is_none());
+    }
+
+    #[test]
+    fn test_consistent_hash_ring_rebuild() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let mut ring = ConsistentHashRing::new(&backends);
+
+        assert!(!ring.needs_rebuild(&backends));
+
+        let three_backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        assert!(ring.needs_rebuild(&three_backends));
+
+        ring.rebuild(&three_backends);
+        assert!(!ring.needs_rebuild(&three_backends));
+    }
+
+    #[test]
+    fn test_consistent_hash_ring_weighted_distribution() {
+        let backends = vec![
+            make_upstream_with_weight("http://heavy", 3),
+            make_upstream_with_weight("http://light", 1),
+        ];
+        let ring = ConsistentHashRing::new(&backends);
+
+        // With weights 3:1, the heavy backend should get ~75% of keys
+        let total = 10_000;
+        let mut heavy_count = 0;
+        for i in 0..total {
+            let key = format!("key-{i}");
+            if let Some(idx) = ring.get(key.as_bytes()) {
+                if idx == 0 {
+                    heavy_count += 1;
+                }
+            }
+        }
+
+        let ratio = heavy_count as f64 / total as f64;
+        assert!(
+            (0.70..0.80).contains(&ratio),
+            "Expected ~75% for weight-3 backend, got {:.2}%",
+            ratio * 100.0
+        );
+    }
+}

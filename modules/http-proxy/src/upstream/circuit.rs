@@ -269,3 +269,211 @@ fn prune_circuit_breaker_failures(
 fn is_circuit_breaker_failure_status(status: u16) -> bool {
     (500..600).contains(&status)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use dashmap::DashMap;
+    use parking_lot::RwLock;
+
+    use crate::{
+        upstream::{
+            determine_proxy_to,
+            lb::{LoadBalancerAlgorithmInner, WeightedRoundRobinState},
+        },
+        util::TtlCache,
+    };
+
+    use super::*;
+
+    fn make_upstream(url: &str) -> UpstreamInner {
+        UpstreamInner {
+            proxy_to: url.to_string(),
+            proxy_unix: None,
+            weight: 1,
+        }
+    }
+
+    #[test]
+    fn test_circuit_breaker_opens_after_transport_failures() {
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let upstream = make_upstream("http://backend1");
+        let mut metrics = crate::ProxyMetrics::new();
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 2,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+        };
+
+        record_backend_transport_failure(
+            Arc::clone(&failed_backends),
+            false,
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            &mut metrics,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        );
+        assert!(is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+
+        record_backend_transport_failure(
+            Arc::clone(&failed_backends),
+            false,
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            &mut metrics,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        );
+
+        assert!(!is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+        assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+    }
+
+    #[test]
+    fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
+        let upstreams = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+        };
+
+        circuit_breaker_state.insert(
+            upstreams[0].clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::Open,
+                opened_at: Some(Instant::now()),
+                ..Default::default()
+            },
+        );
+
+        let result = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            false,
+            3,
+            &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
+            None,
+            None,
+            &circuit_breaker,
+            Some(&circuit_breaker_state),
+            &[],
+            None,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        )
+        .unwrap();
+
+        assert_eq!(result.upstream.proxy_to, "http://backend2");
+    }
+
+    #[test]
+    fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
+        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(1),
+            consecutive_passes: 1,
+        };
+
+        circuit_breaker_state.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::Open,
+                opened_at: Some(Instant::now() - Duration::from_secs(2)),
+                ..Default::default()
+            },
+        );
+
+        assert!(try_acquire_circuit_breaker_slot(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        ));
+        assert!(!is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            200,
+            &mut crate::ProxyMetrics::new(),
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        );
+
+        assert!(is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+    }
+
+    #[test]
+    fn test_circuit_breaker_reopens_after_half_open_failure() {
+        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+        };
+
+        circuit_breaker_state.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: CircuitBreakerStatus::HalfOpen,
+                half_open_in_flight: true,
+                ..Default::default()
+            },
+        );
+
+        let mut metrics = crate::ProxyMetrics::new();
+        record_backend_transport_failure(
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60)))),
+            false,
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            &mut metrics,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+        );
+
+        assert!(!is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+        assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+    }
+}
