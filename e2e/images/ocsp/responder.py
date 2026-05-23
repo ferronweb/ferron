@@ -4,15 +4,11 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from asn1crypto import core as asn1core
-from asn1crypto import ocsp as asn1ocsp
-from asn1crypto import pem as asn1pem
-from asn1crypto import x509 as asn1x509
-
 # Cryptography imports
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+from cryptography.x509 import ocsp as x509_ocsp
 from cryptography.x509.ocsp import (
     OCSPCertStatus,
     OCSPResponderEncoding,
@@ -159,25 +155,13 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
 
 def parse_ocsp_request(data):
     # data is raw DER
-    try:
-        req = asn1ocsp.OCSPRequest.load(data)
-    except Exception:
-        # Maybe PEM-wrapped
-        if asn1pem.detect(data):
-            _, _, der = asn1pem.unarmor(data)
-            req = asn1ocsp.OCSPRequest.load(der)
-        else:
-            raise
+    req = x509_ocsp.load_der_ocsp_request(data)
 
-    req_list = req["tbs_request"]["request_list"]
-    if len(req_list) == 0:
-        raise ValueError("OCSP request contains no Request entries")
-    req_cert = req_list[0]["req_cert"]
-    hash_oid = req_cert["hash_algorithm"]["algorithm"].dotted
-    issuer_name_hash = bytes(req_cert["issuer_name_hash"])
-    issuer_key_hash = bytes(req_cert["issuer_key_hash"])
-    serial_number = int(req_cert["serial_number"].native)
-    return hash_oid, issuer_name_hash, issuer_key_hash, serial_number
+    hash = req.hash_algorithm.name
+    issuer_name_hash = req.issuer_name_hash
+    issuer_key_hash = req.issuer_key_hash
+    serial_number = req.serial_number
+    return hash, issuer_name_hash, issuer_key_hash, serial_number
 
 
 app = Flask(__name__)
@@ -194,7 +178,7 @@ def ocsp():
         req_der = request.get_data()
         # Parse OCSP request and validate CertID
         try:
-            hash_oid, issuer_name_hash, issuer_key_hash, serial = parse_ocsp_request(
+            hash, issuer_name_hash, issuer_key_hash, serial = parse_ocsp_request(
                 req_der
             )
         except Exception as e:
@@ -203,31 +187,20 @@ def ocsp():
 
         # Load CA cert to compute expected hashes
         ca_pem = open(CA_CRT, "rb").read()
-        if asn1pem.detect(ca_pem):
-            _, _, ca_der = asn1pem.unarmor(ca_pem)
-        else:
-            ca_der = ca_pem
-        ca_asn = asn1x509.Certificate.load(ca_der)
-        issuer_name_der = ca_asn["tbs_certificate"]["subject"].dump()
+        ca_asn = x509.load_pem_x509_certificate(ca_pem)
+        issuer_name_der = ca_asn.subject.public_bytes()
         # subject_public_key_info.public_key is a BitString
-        pubkey_bitstring = (
-            ca_asn["tbs_certificate"]["subject_public_key_info"]["public_key"]
-            .cast(asn1core.OctetBitString)
-            .native
+        pubkey_bitstring = ca_asn.public_key().public_bytes(
+            encoding=serialization.Encoding.DER, format=serialization.PublicFormat.PKCS1
         )
 
-        # Reject request if public key is not a valid bitstring
-        if not isinstance(pubkey_bitstring, bytes):
-            print("Invalid public key bit string")
-            return ("", 500)
-
         # Determine hash algorithm
-        if hash_oid in ("2.16.840.1.101.3.4.2.1",):
+        if hash == "sha256":
             # sha256
             name_hash = hashlib.sha256(issuer_name_der).digest()
             key_hash = hashlib.sha256(pubkey_bitstring).digest()
             algo = hashes.SHA256()
-        elif hash_oid in ("1.3.14.3.2.26",):
+        elif hash == "sha1":
             # sha1
             name_hash = hashlib.sha1(issuer_name_der).digest()
             key_hash = hashlib.sha1(pubkey_bitstring).digest()
