@@ -16,7 +16,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
-  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `weighted_round_robin`. Default: `algorithm two_random`
+  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `consistent_hash`. Default: `algorithm two_random`
 - `passive_check [bool: boolean]` (`http-proxy`)
   - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
@@ -59,7 +59,7 @@ example.com {
             weight 1
         }
 
-        algorithm weighted_round_robin
+        algorithm round_robin
     }
 }
 ```
@@ -206,7 +206,7 @@ example.com {
 | `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
-| `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Only used with `weighted_round_robin` algorithm. | 1 |
+| `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Only used with `round_robin` algorithm. | 1 |
 
 ### `srv` (feature-gated)
 
@@ -234,10 +234,9 @@ example.com {
 | Algorithm | Description |
 | --- | --- |
 | `random` | Selects a backend randomly for each request. |
-| `round_robin` | Cycles through backends in order. |
+| `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 | `least_conn` | Selects the backend with the fewest active tracked connections. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
-| `weighted_round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 | `consistent_hash` | Uses a consistent hash ring to map request keys to backends, ensuring the same key always routes to the same backend. |
 
 ## Session affinity

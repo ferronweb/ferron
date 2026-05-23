@@ -256,7 +256,6 @@ fn parse_proxy_block(
                         "round_robin" => LoadBalancerAlgorithm::RoundRobin,
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
                         "two_random" => LoadBalancerAlgorithm::TwoRandomChoices,
-                        "weighted_round_robin" => LoadBalancerAlgorithm::WeightedRoundRobin,
                         "consistent_hash" => LoadBalancerAlgorithm::ConsistentHash,
                         _ => {
                             return Err(

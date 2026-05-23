@@ -17,7 +17,6 @@
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
 - Support for active health checks for SRV upstream URLs.
 - `circuit_breaker` reverse proxy directive with rolling failure windows, temporary backend ejection, and half-open recovery.
-- `weighted_round_robin` load balancing algorithm with per-upstream `weight` directive for proportional traffic distribution.
 - `tls-http` module for obtaining TLS certificates from a remote HTTP endpoint, with automatic refresh and observability metrics.
 - 58 newly-supported DNS providers for the ACME DNS-01 challenge: Alibaba Cloud DNS, ArvanCloud, AutoDNS, Azure DNS, Baidu Cloud DNS, BlueCat Address Manager v2, ClouDNS, Constellix, cPanel, DDNSS.de, DNS Made Easy, Domeneshop, DreamHost, DuckDNS, Dynu, EasyDNS, Akamai Edge DNS, Exoscale, FreeMyIP, Gandi v5, Gcore, GleSYS, GoDaddy, Hetzner DNS, hosting.de, Hostinger, Huawei Cloud DNS, Hurricane Electric, IBM Cloud, Infoblox NIOS, Infomaniak, INWX, IONOS, IPv64, Joker, AWS Lightsail, Linode, LuaDNS, Mythic Beasts, Namecheap, Name.com, NameSilo, netcup, Netlify, Nifcloud, NS1, Oracle Cloud DNS, Plesk, ANS SafeDNS, Scaleway, Tencent Cloud DNSPod, TransIP, UltraDNS, Vercel, Vultr, Websupport, Volcano Engine, and Yandex Cloud DNS.
 
@@ -37,6 +36,7 @@
 - OCSP responses are now verified before being cached and stapled.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.
+- `round_robin` load balancing algorithm now supports per-upstream `weight` directive for proportional traffic distribution.
 - Some file serving errors are now handled more gracefully, returning a 403 Forbidden (for permission denied) or 400 Bad Request (for invalid filename or too long one) status code instead of a generic 500 Internal Server Error.
 - Syntax for OTLP `no_verify` has been updated to be `no_verification` and use a flag (**potentially breaking**).
 - Syntax for rate limit window has been updated to use duration strings (**potentially breaking**).

@@ -126,7 +126,7 @@ ferron-weighted-round-robin:80 {
     upstream "http://backend-3:3000" {
       weight 1
     }
-    algorithm "weighted_round_robin"
+    algorithm "round_robin"
   }
 }
 "#,

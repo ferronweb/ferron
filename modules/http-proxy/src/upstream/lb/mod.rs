@@ -21,11 +21,10 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub enum LoadBalancerAlgorithmInner {
     Random,
-    RoundRobin(Arc<std::sync::atomic::AtomicUsize>),
+    RoundRobin(WeightedRoundRobinState),
     #[default]
     LeastConnections,
     TwoRandomChoices,
-    WeightedRoundRobin(WeightedRoundRobinState),
     ConsistentHash(Arc<RwLock<ConsistentHashRing>>),
 }
 
@@ -33,14 +32,11 @@ impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
     fn from(alg: LoadBalancerAlgorithm) -> Self {
         match alg {
             LoadBalancerAlgorithm::Random => LoadBalancerAlgorithmInner::Random,
-            LoadBalancerAlgorithm::RoundRobin => LoadBalancerAlgorithmInner::RoundRobin(Arc::new(
-                std::sync::atomic::AtomicUsize::new(0),
-            )),
+            LoadBalancerAlgorithm::RoundRobin => {
+                LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new())
+            }
             LoadBalancerAlgorithm::LeastConnections => LoadBalancerAlgorithmInner::LeastConnections,
             LoadBalancerAlgorithm::TwoRandomChoices => LoadBalancerAlgorithmInner::TwoRandomChoices,
-            LoadBalancerAlgorithm::WeightedRoundRobin => {
-                LoadBalancerAlgorithmInner::WeightedRoundRobin(WeightedRoundRobinState::new())
-            }
             LoadBalancerAlgorithm::ConsistentHash => LoadBalancerAlgorithmInner::ConsistentHash(
                 Arc::new(RwLock::new(ConsistentHashRing::new(&[]))),
             ),

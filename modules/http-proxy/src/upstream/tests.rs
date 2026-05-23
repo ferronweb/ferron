@@ -1,5 +1,5 @@
 use std::{
-    sync::{atomic::AtomicUsize, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -66,8 +66,8 @@ fn test_select_backend_index_round_robin() {
         make_upstream("http://backend2"),
         make_upstream("http://backend3"),
     ];
-    let counter = Arc::new(AtomicUsize::new(0));
-    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(counter);
+    let state = WeightedRoundRobinState::new();
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
     assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
@@ -434,7 +434,7 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
         make_upstream_with_weight("http://backend3", 1),
     ];
     let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With equal weights, should cycle like round-robin
     assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
@@ -451,7 +451,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
         make_upstream_with_weight("http://backend3", 1),
     ];
     let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // Over 7 selections (total weight), backend1 should be selected 5 times,
     // backend2 and backend3 once each
@@ -472,7 +472,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
         make_upstream_with_weight("http://backend2", 1),
     ];
     let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With weights 5:1, smooth WRR should distribute as:
     // A, A, B, A, A, A (not AAAAAA B)
@@ -495,7 +495,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
 fn test_select_backend_index_weighted_round_robin_single_backend() {
     let backends = vec![make_upstream_with_weight("http://backend1", 10)];
     let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     for _ in 0..10 {
         assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
@@ -519,14 +519,6 @@ fn test_weighted_round_robin_state_resize() {
     // Resize back to 2 backends
     let idx3 = state.next(&weights1);
     assert!(idx3 < 2);
-}
-
-#[test]
-fn test_load_balancer_algorithm_weighted_round_robin_from() {
-    assert!(matches!(
-        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::WeightedRoundRobin),
-        LoadBalancerAlgorithmInner::WeightedRoundRobin(_)
-    ));
 }
 
 #[test]
@@ -821,7 +813,7 @@ fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
         &failed_backends,
         false,
         3,
-        &LoadBalancerAlgorithmInner::RoundRobin(Arc::new(AtomicUsize::new(0))),
+        &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
         None,
         None,
         &circuit_breaker,

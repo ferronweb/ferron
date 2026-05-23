@@ -21,8 +21,9 @@ pub fn select_backend_index(
 ) -> usize {
     match load_balancer_algorithm {
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
-        LoadBalancerAlgorithmInner::RoundRobin(counter) => {
-            counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % backends.len()
+        LoadBalancerAlgorithmInner::RoundRobin(state) => {
+            let weights: Vec<u32> = backends.iter().map(|b| b.weight).collect();
+            state.next(&weights)
         }
         LoadBalancerAlgorithmInner::LeastConnections => {
             let Some(conn_state) = conn_state else {
@@ -95,10 +96,6 @@ pub fn select_backend_index(
             } else {
                 idx2
             }
-        }
-        LoadBalancerAlgorithmInner::WeightedRoundRobin(state) => {
-            let weights: Vec<u32> = backends.iter().map(|b| b.weight).collect();
-            state.next(&weights)
         }
         LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
             let key = hash_key.unwrap_or(b"");

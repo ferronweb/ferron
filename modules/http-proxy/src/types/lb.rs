@@ -12,15 +12,13 @@ use std::sync::Arc;
 pub enum LoadBalancerAlgorithm {
     /// Random selection.
     Random,
-    /// Round-robin cycling.
+    /// Smooth weighted round-robin load balancing.
     RoundRobin,
     /// Least active connections.
     LeastConnections,
     /// Pick two random, select less loaded.
     #[default]
     TwoRandomChoices,
-    /// Smooth weighted round-robin load balancing.
-    WeightedRoundRobin,
     /// Consistent hashing based on request key.
     ConsistentHash,
 }
