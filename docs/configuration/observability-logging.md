@@ -120,14 +120,14 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 - **Static file metrics** — files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/static-content#metrics).
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/http-rewrite#metrics).
 - **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/reverse-proxying#metrics).
-- **Process metrics** — CPU time, CPU utilization, and memory usage from `/proc/self/stat`. See [Process metrics](#process-metrics) below.
+- **Process metrics** — CPU time, CPU utilization, and memory usage from the operating system. See [Process metrics](#process-metrics) below.
 - **Admin API metrics** — uptime, active connections, request count, configuration reloads, and observability event backpressure. See [Admin API metrics](#admin-api-metrics) below.
 
 #### Process metrics
 
-The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. It reads `/proc/self/stat` every 1 second.
+The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
 
-**Platform support:** Linux only. On other platforms, the module is a no-op.
+**Platform support:** Linux and Windows. On other platforms, the module is a no-op.
 
 - `process.cpu.time` (Counter) — total CPU seconds broken down by different states.
   - Attributes: `cpu.mode` (`"user"` or `"system"`)

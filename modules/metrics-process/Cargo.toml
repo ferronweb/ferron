@@ -13,3 +13,10 @@ ferron-observability = { path = "../../types/observability" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+] }

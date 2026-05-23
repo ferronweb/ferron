@@ -6,6 +6,7 @@
 
 ### Added
 
+- Windows support for process metrics in the `metrics-process` module.
 - A dropped-events admin metric for non-blocking observability sinks.
 - `abuse_protection` module for lightweight Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
 - `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.

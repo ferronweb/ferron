@@ -5,6 +5,8 @@ use ferron_observability::build_composite_sink;
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(windows)]
+mod windows;
 
 /// Module loader for the process metrics collector.
 ///
@@ -89,7 +91,9 @@ async fn run_metrics_collection(
 ) {
     #[cfg(target_os = "linux")]
     linux::collect_process_metrics(event_sink, cancel_token).await;
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    windows::collect_process_metrics(event_sink, cancel_token).await;
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = event_sink; // Suppress unused variable warning
         cancel_token.cancelled().await;
