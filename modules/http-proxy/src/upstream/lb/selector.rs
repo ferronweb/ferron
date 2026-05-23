@@ -98,8 +98,7 @@ pub fn select_backend_index(
         }
         LoadBalancerAlgorithmInner::WeightedRoundRobin(state) => {
             let weights: Vec<u32> = backends.iter().map(|b| b.weight).collect();
-            let mut guard = state.lock();
-            guard.next(&weights)
+            state.next(&weights)
         }
         LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
             let key = hash_key.unwrap_or(b"");

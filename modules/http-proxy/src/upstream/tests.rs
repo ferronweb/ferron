@@ -4,7 +4,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 
 use crate::{
     types::{
@@ -433,7 +433,7 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
         make_upstream_with_weight("http://backend2", 1),
         make_upstream_with_weight("http://backend3", 1),
     ];
-    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     // With equal weights, should cycle like round-robin
@@ -450,7 +450,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
         make_upstream_with_weight("http://backend2", 1),
         make_upstream_with_weight("http://backend3", 1),
     ];
-    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     // Over 7 selections (total weight), backend1 should be selected 5 times,
@@ -471,7 +471,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
         make_upstream_with_weight("http://backend1", 5),
         make_upstream_with_weight("http://backend2", 1),
     ];
-    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     // With weights 5:1, smooth WRR should distribute as:
@@ -494,7 +494,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
 #[test]
 fn test_select_backend_index_weighted_round_robin_single_backend() {
     let backends = vec![make_upstream_with_weight("http://backend1", 10)];
-    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
+    let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::WeightedRoundRobin(state);
 
     for _ in 0..10 {
@@ -504,7 +504,7 @@ fn test_select_backend_index_weighted_round_robin_single_backend() {
 
 #[test]
 fn test_weighted_round_robin_state_resize() {
-    let mut state = WeightedRoundRobinState::new();
+    let state = WeightedRoundRobinState::new();
 
     // Start with 2 backends
     let weights1 = [3u32, 1];
