@@ -33,6 +33,7 @@
 - Improved consistency for duration values across the configuration.
 - Improved error reporting for some TLS handshake failures.
 - Improved error reporting for local automatic TLS failures.
+- Multiple HTTP reverse proxy metrics now include backend URL or unix socket path as an attribute.
 - OCSP responses are now verified before being cached and stapled.
 - OTLP request logs and access logs now include the active request span context for correlation with exported traces.
 - Prometheus label values are now sanitized to reduce high-cardinality labels.

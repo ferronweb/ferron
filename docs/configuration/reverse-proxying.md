@@ -468,8 +468,11 @@ The proxy module emits the following metrics:
 - `ferron.proxy.requests` (Counter) — upstream proxy requests completed.
   - Attributes: `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code`
 - `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
+  - Attributes: backend URL or unix socket path
 - `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
+  - Attributes: backend URL or unix socket path
 - `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
+  - Attributes: backend URL or unix socket path
 
 ## Notes and troubleshooting
 

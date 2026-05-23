@@ -678,12 +678,26 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 description: Some("Number of reverse proxy requests."),
             }));
 
+        let mut upstream_attrs = vec![];
+        if let Some(backend) = metrics.selected_backends.last() {
+            upstream_attrs.push((
+                "ferron.proxy.backend_url",
+                MetricAttributeValue::String(backend.proxy_to.clone()),
+            ));
+            if let Some(ref unix_path) = backend.proxy_unix {
+                upstream_attrs.push((
+                    "ferron.proxy.backend_unix_path",
+                    MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+        }
+
         // Emit TLS handshake failures counter
         if metrics.tls_handshake_failures > 0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.tls_handshake_failures",
-                    attributes: vec![],
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Counter,
                     value: MetricValue::U64(metrics.tls_handshake_failures),
                     unit: Some("{handshake}"),
@@ -696,7 +710,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.pool.waits",
-                    attributes: vec![],
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Counter,
                     value: MetricValue::U64(metrics.pool_waits),
                     unit: Some("{wait}"),
@@ -711,7 +725,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.pool.wait_time",
-                    attributes: vec![],
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Histogram(Some(vec![
                         0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
                     ])),
@@ -726,7 +740,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.upstream.duration",
-                    attributes: vec![],
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Histogram(Some(vec![
                         0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
                     ])),
@@ -741,7 +755,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.tls.handshake_time",
-                    attributes: vec![],
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Histogram(Some(vec![
                         0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0,
                     ])),
