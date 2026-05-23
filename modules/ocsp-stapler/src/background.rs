@@ -205,16 +205,29 @@ fn verify_ocsp_signature_with_certs_field(
                 continue;
             };
 
-            // Verify if the certificate is in fact signed by the issuer
             if cert
                 .verify_signature(Some(issuer_cert.public_key()))
-                .is_ok()
+                .is_err()
             {
-                let Err(new_last_error) = verify_ocsp_signature(basic_response, &cert) else {
-                    return Ok(());
-                };
-                last_error = new_last_error;
+                // The certificate is not signed by the issuer, skip verification
+                continue;
             }
+
+            if !cert.extensions().iter().any(|e| {
+                let parsed = e.parsed_extension();
+                match parsed {
+                    ParsedExtension::ExtendedKeyUsage(eku) => eku.ocsp_signing,
+                    _ => false,
+                }
+            }) {
+                // The certificate does not have OCSP Extended Key Usage, skip verification
+                continue;
+            }
+
+            let Err(new_last_error) = verify_ocsp_signature(basic_response, &cert) else {
+                return Ok(());
+            };
+            last_error = new_last_error;
         }
     }
 
