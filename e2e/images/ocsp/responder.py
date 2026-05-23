@@ -140,15 +140,29 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
         next_update=next_update,
         revocation_time=None,
         revocation_reason=None,
-    ).responder_id(OCSPResponderEncoding.HASH, issuer)
+    )
 
     # "Forge" the signature if an environment variable is set to 1
     if os.environ.get("FERRON_E2E_OCSP_FORGE_SIGNATURE") == "1":
-        # Generate a random RSA private key to simulate forged OCSP responses
+        # Simulate forged OCSP response
         forged_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        ocsp_resp = builder.sign(forged_key, hashes.SHA256())
+        forged_cert = (
+            x509.CertificateBuilder()
+            .subject_name(issuer.subject)
+            .issuer_name(issuer.subject)
+            .public_key(forged_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=365))
+            .sign(forged_key, hashes.SHA256())
+        )
+        ocsp_resp = builder.responder_id(OCSPResponderEncoding.HASH, forged_cert).sign(
+            forged_key, hashes.SHA256()
+        )
     else:
-        ocsp_resp = builder.sign(ca_key, hashes.SHA256())
+        ocsp_resp = builder.responder_id(OCSPResponderEncoding.HASH, issuer).sign(
+            ca_key, hashes.SHA256()
+        )
 
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
 
@@ -229,22 +243,18 @@ def ocsp():
 
         if serial != server_cert.serial_number:
             # Return a successful OCSP response but with UNKNOWN status for the requested serial
-            ca_cert_obj = x509.load_pem_x509_certificate(open(CA_CRT, "rb").read())
             resp = make_ocsp_response_for(
                 server_cert,
-                ca_cert_obj,
-                # pubkey_bitstring,
+                ca_asn,
                 algo,
                 status=OCSPCertStatus.UNKNOWN,
             )
             return Response(resp, content_type="application/ocsp-response")
 
         # Serial matches; return GOOD
-        ca_cert_obj = x509.load_pem_x509_certificate(open(CA_CRT, "rb").read())
         resp = make_ocsp_response_for(
             server_cert,
-            ca_cert_obj,
-            # pubkey_bitstring,
+            ca_asn,
             algo,
             status=OCSPCertStatus.GOOD,
         )
