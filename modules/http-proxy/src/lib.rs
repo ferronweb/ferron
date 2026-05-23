@@ -501,11 +501,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        let algorithm = self
-            .state
-            .algorithms
-            .entry(config_key.clone())
-            .or_insert_with(|| Arc::new(config.algorithm.into()));
+        let algorithm = if let Some(algo) = self.state.algorithms.get(&config_key) {
+            algo.clone()
+        } else {
+            self.state
+                .algorithms
+                .entry(config_key.clone())
+                .or_insert_with(|| Arc::new(config.algorithm.into()))
+                .clone()
+        };
 
         // Get the active unhealthy counter for this config
         let active_unhealthy_counter = {
