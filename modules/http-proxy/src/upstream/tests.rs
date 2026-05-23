@@ -579,16 +579,45 @@ fn test_consistent_hash_ring_rebuild() {
     ];
     let mut ring = ConsistentHashRing::new(&backends);
 
-    assert!(!ring.needs_rebuild(2));
-    assert!(ring.needs_rebuild(3));
+    assert!(!ring.needs_rebuild(&backends));
 
-    let new_backends = vec![
+    let three_backends = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
         make_upstream("http://backend3"),
     ];
-    ring.rebuild(&new_backends);
-    assert!(!ring.needs_rebuild(3));
+    assert!(ring.needs_rebuild(&three_backends));
+
+    ring.rebuild(&three_backends);
+    assert!(!ring.needs_rebuild(&three_backends));
+}
+
+#[test]
+fn test_consistent_hash_ring_weighted_distribution() {
+    let backends = vec![
+        make_upstream_with_weight("http://heavy", 3),
+        make_upstream_with_weight("http://light", 1),
+    ];
+    let ring = ConsistentHashRing::new(&backends);
+
+    // With weights 3:1, the heavy backend should get ~75% of keys
+    let total = 10_000;
+    let mut heavy_count = 0;
+    for i in 0..total {
+        let key = format!("key-{i}");
+        if let Some(idx) = ring.get(key.as_bytes()) {
+            if idx == 0 {
+                heavy_count += 1;
+            }
+        }
+    }
+
+    let ratio = heavy_count as f64 / total as f64;
+    assert!(
+        (0.70..0.80).contains(&ratio),
+        "Expected ~75% for weight-3 backend, got {:.2}%",
+        ratio * 100.0
+    );
 }
 
 #[test]

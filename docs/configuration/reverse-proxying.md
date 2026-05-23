@@ -206,7 +206,7 @@ example.com {
 | `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
-| `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Only used with `round_robin` algorithm. | 1 |
+| `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Used with `round_robin` and `consistent_hash` algorithms. | 1 |
 
 ### `srv` (feature-gated)
 
@@ -227,7 +227,7 @@ example.com {
 | `dns_servers` | `<string>` | Comma-separated DNS server IPs. Uses system resolver if empty. | system |
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
-| `weight` | `<number>` | Weight for weighted load balancing algorithms. Applied to all backends resolved from this SRV record. | 1 |
+| `weight` | `<number>` | Weight for weighted load balancing algorithms. Applied to all backends resolved from this SRV record. Used with `round_robin` and `consistent_hash` algorithms. | 1 |
 
 ## Load balancing algorithms
 
@@ -237,7 +237,7 @@ example.com {
 | `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 | `least_conn` | Selects the backend with the fewest active tracked connections. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
-| `consistent_hash` | Uses a consistent hash ring to map request keys to backends, ensuring the same key always routes to the same backend. |
+| `consistent_hash` | Uses a consistent hash ring to map request keys to backends, ensuring the same key always routes to the same backend. Backends with higher weights receive proportionally more virtual nodes on the hash ring for a larger share of requests. |
 
 ## Session affinity
 

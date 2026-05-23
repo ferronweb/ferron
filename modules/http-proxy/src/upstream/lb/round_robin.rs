@@ -75,7 +75,7 @@ impl WeightedRoundRobinState {
             #[cfg(not(target_has_atomic = "64"))]
             let current_weight = old_weight + *weight as i32;
             #[cfg(target_has_atomic = "64")]
-            let current_weight = old_weight as i64 + *weight as i64;
+            let current_weight = old_weight + *weight as i64;
             if current_weight > best_weight {
                 best_weight = current_weight;
                 best_index = i;

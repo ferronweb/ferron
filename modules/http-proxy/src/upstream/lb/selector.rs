@@ -100,7 +100,7 @@ pub fn select_backend_index(
         LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
             let key = hash_key.unwrap_or(b"");
             let mut guard = ring.write();
-            if guard.needs_rebuild(backends.len()) {
+            if guard.needs_rebuild(backends) {
                 guard.rebuild(backends);
             }
             guard.get(key).unwrap_or(0)
