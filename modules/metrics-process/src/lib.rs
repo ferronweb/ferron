@@ -83,20 +83,15 @@ impl Drop for ProcessMetricsModule {
     }
 }
 
-#[cfg(target_os = "linux")]
 async fn run_metrics_collection(
     event_sink: Arc<ferron_observability::CompositeEventSink>,
     cancel_token: tokio_util::sync::CancellationToken,
 ) {
+    #[cfg(target_os = "linux")]
     linux::collect_process_metrics(event_sink, cancel_token).await;
-}
-
-#[cfg(not(target_os = "linux"))]
-async fn run_metrics_collection(
-    _event_sink: Arc<ferron_observability::CompositeEventSink>,
-    mut cancel_token: tokio_util::sync::CancellationToken,
-) {
-    // Process metrics are only supported on Linux.
-    // Wait for cancellation without doing anything.
-    cancel_token.cancelled().await;
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = event_sink; // Suppress unused variable warning
+        cancel_token.cancelled().await;
+    }
 }
