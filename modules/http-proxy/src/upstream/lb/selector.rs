@@ -39,12 +39,25 @@ pub fn select_backend_index(
                         0
                     }
                 };
-                let effective_connection_count = connection_count as f64 / upstream.weight as f64;
-                if min_connections.is_none_or(|min| effective_connection_count < min) {
+                if let Some((previous_connection_count, previous_weight)) = min_connections
+                    .as_ref()
+                    .map(|(count, weight)| (*count, *weight))
+                {
+                    match (connection_count * previous_weight as usize)
+                        .cmp(&(previous_connection_count * upstream.weight as usize))
+                    {
+                        std::cmp::Ordering::Less => {
+                            min_indexes = vec![index];
+                            min_connections = Some((connection_count, upstream.weight));
+                        }
+                        std::cmp::Ordering::Equal => {
+                            min_indexes.push(index);
+                        }
+                        _ => (),
+                    }
+                } else {
                     min_indexes = vec![index];
-                    min_connections = Some(effective_connection_count);
-                } else if min_connections == Some(effective_connection_count) {
-                    min_indexes.push(index);
+                    min_connections = Some((connection_count, upstream.weight));
                 }
             }
             match min_indexes.len() {
