@@ -1,7 +1,6 @@
 const express = require("express");
 const http2 = require("http2");
 const http2Express = require("http2-express");
-const http = require("http");
 const fs = require("fs");
 
 const app = http2Express(express);
