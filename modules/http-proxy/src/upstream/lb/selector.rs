@@ -39,15 +39,18 @@ pub fn select_backend_index(
                         0
                     }
                 };
-                if let Some((previous_connection_count, previous_weight)) = min_connections
-                    .as_ref()
-                    .map(|(count, weight)| (*count, *weight))
-                {
-                    match (connection_count * previous_weight as usize)
-                        .cmp(&(previous_connection_count * upstream.weight as usize))
-                    {
+                if upstream.weight == 0 {
+                    // Zero-weight edge case
+                    continue;
+                }
+                if let Some((prev_count, prev_weight)) = min_connections {
+                    let current_score = (connection_count as u64) * (prev_weight as u64);
+                    let prev_score = (prev_count as u64) * (upstream.weight as u64);
+
+                    match current_score.cmp(&prev_score) {
                         std::cmp::Ordering::Less => {
-                            min_indexes = vec![index];
+                            min_indexes.clear();
+                            min_indexes.push(index);
                             min_connections = Some((connection_count, upstream.weight));
                         }
                         std::cmp::Ordering::Equal => {
@@ -56,7 +59,8 @@ pub fn select_backend_index(
                         _ => (),
                     }
                 } else {
-                    min_indexes = vec![index];
+                    min_indexes.clear();
+                    min_indexes.push(index);
                     min_connections = Some((connection_count, upstream.weight));
                 }
             }
