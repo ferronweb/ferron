@@ -95,7 +95,7 @@ pub fn register_providers(
         websupport => WebSupportDnsProvider,
         yandexcloud => YandexCloudDnsProvider,
     );
-    let registry = crate::register_simple_providers!(
+    crate::register_simple_providers!(
         registry,
         ArvanCloudDnsProvider,
         BunnyDnsProvider,
@@ -122,6 +122,5 @@ pub fn register_providers(
         SafeDNSProvider,
         ScalewayDnsProvider,
         VultrDnsProvider
-    );
-    registry
+    )
 }

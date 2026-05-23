@@ -15,8 +15,7 @@ impl Provider<DnsContext<'static>> for BaiduCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key_id =
-            required_string(ctx, "access_key_id", "baiducloud", "access key ID")?;
+        let access_key_id = required_string(ctx, "access_key_id", "baiducloud", "access key ID")?;
         let access_key_secret =
             required_string(ctx, "access_key_secret", "baiducloud", "access key secret")?;
 

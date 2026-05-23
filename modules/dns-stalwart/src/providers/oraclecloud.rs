@@ -6,7 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
-use crate::providers::util::{required_string, opt_string};
+use crate::providers::util::{opt_string, required_string};
 
 pub struct OracleCloudDnsProvider;
 
@@ -20,10 +20,20 @@ impl Provider<DnsContext<'static>> for OracleCloudDnsProvider {
             tenancy_ocid: required_string(ctx, "tenancy_ocid", "oraclecloud", "tenancy OCID")?,
             user_ocid: required_string(ctx, "user_ocid", "oraclecloud", "user OCID")?,
             fingerprint: required_string(ctx, "fingerprint", "oraclecloud", "fingerprint")?,
-            private_key_pem: required_string(ctx, "private_key_pem", "oraclecloud", "private key PEM")?,
+            private_key_pem: required_string(
+                ctx,
+                "private_key_pem",
+                "oraclecloud",
+                "private key PEM",
+            )?,
             private_key_password: opt_string(ctx, "private_key_password"),
             region: required_string(ctx, "region", "oraclecloud", "region")?,
-            compartment_ocid: required_string(ctx, "compartment_ocid", "oraclecloud", "compartment OCID")?,
+            compartment_ocid: required_string(
+                ctx,
+                "compartment_ocid",
+                "oraclecloud",
+                "compartment OCID",
+            )?,
             request_timeout: None,
         };
 

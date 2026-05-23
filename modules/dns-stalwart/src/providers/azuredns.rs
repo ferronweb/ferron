@@ -19,10 +19,12 @@ impl Provider<DnsContext<'static>> for AzureDnsProvider {
         let tenant_id = required_string(ctx, "tenant_id", "azuredns", "tenant ID")?;
         let client_id = required_string(ctx, "client_id", "azuredns", "client ID")?;
         let client_secret = required_string(ctx, "client_secret", "azuredns", "client secret")?;
-        let subscription_id = required_string(ctx, "subscription_id", "azuredns", "subscription ID")?;
+        let subscription_id =
+            required_string(ctx, "subscription_id", "azuredns", "subscription ID")?;
         let resource_group = required_string(ctx, "resource_group", "azuredns", "resource group")?;
 
-        let environment_name = required_string(ctx, "endpoint", "azuredns", "Azure environment name")?;
+        let environment_name =
+            required_string(ctx, "endpoint", "azuredns", "Azure environment name")?;
         let environment = match environment_name.as_str() {
             "AzurePublicCloud" => AzureEnvironment::Public,
             "AzureChinaCloud" => AzureEnvironment::China,

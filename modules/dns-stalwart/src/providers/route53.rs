@@ -6,7 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
-use crate::providers::util::{required_string, opt_string, opt_bool};
+use crate::providers::util::{opt_bool, opt_string, required_string};
 
 pub struct Route53DnsProvider;
 
@@ -18,7 +18,12 @@ impl Provider<DnsContext<'static>> for Route53DnsProvider {
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = Route53Config {
             access_key_id: required_string(ctx, "access_key_id", "route53", "access key ID")?,
-            secret_access_key: required_string(ctx, "secret_access_key", "route53", "secret access key")?,
+            secret_access_key: required_string(
+                ctx,
+                "secret_access_key",
+                "route53",
+                "secret access key",
+            )?,
             region: opt_string(ctx, "region"),
             session_token: opt_string(ctx, "session_token"),
             hosted_zone_id: opt_string(ctx, "hosted_zone_id"),

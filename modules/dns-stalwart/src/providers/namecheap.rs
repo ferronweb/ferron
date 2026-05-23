@@ -5,7 +5,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
-use crate::providers::util::{required_string, opt_string};
+use crate::providers::util::{opt_string, required_string};
 
 pub struct NamecheapDnsProvider;
 

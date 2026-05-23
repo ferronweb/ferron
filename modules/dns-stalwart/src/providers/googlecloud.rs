@@ -6,7 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
-use crate::providers::util::{required_string, opt_string, opt_bool};
+use crate::providers::util::{opt_bool, opt_string, required_string};
 
 pub struct GoogleCloudDnsProvider;
 
@@ -17,7 +17,12 @@ impl Provider<DnsContext<'static>> for GoogleCloudDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = GoogleCloudDnsConfig {
-            service_account_json: required_string(ctx, "service_account_json", "googlecloud", "service account JSON")?,
+            service_account_json: required_string(
+                ctx,
+                "service_account_json",
+                "googlecloud",
+                "service account JSON",
+            )?,
             project_id: required_string(ctx, "project_id", "googlecloud", "project ID")?,
             managed_zone: opt_string(ctx, "managed_zone"),
             private_zone: opt_bool(ctx, "private_zone").unwrap_or(false),

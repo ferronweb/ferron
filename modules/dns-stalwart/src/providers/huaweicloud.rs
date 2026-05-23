@@ -15,8 +15,7 @@ impl Provider<DnsContext<'static>> for HuaweiCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key_id =
-            required_string(ctx, "access_key_id", "huaweicloud", "access key ID")?;
+        let access_key_id = required_string(ctx, "access_key_id", "huaweicloud", "access key ID")?;
         let access_key_secret =
             required_string(ctx, "access_key_secret", "huaweicloud", "access key secret")?;
         let region = required_string(ctx, "region", "huaweicloud", "region")?;

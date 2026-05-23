@@ -6,7 +6,7 @@ use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
-use crate::providers::util::{required_string, opt_bool};
+use crate::providers::util::{opt_bool, required_string};
 
 pub struct BlueCatV2DnsProvider;
 
