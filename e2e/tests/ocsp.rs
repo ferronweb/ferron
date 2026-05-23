@@ -671,7 +671,7 @@ async fn test_ocsp_stapling_signature_forgery() {
         )
         .unwrap();
 
-    let network = "e2e-test-ocsp-tcp".to_string();
+    let network = "e2e-test-ocsp-forgery".to_string();
 
     // Start OCSP responder container
     let _ocsp = create_ocsp_container(&network, cert_dir.path(), true, false)
