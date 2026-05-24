@@ -1,54 +1,80 @@
-# Repository Guidelines
+# Repository guidelines
 
-## Project structure & module organization
-Ferron 3 is a Rust workspace. Core runtime code lives in `core/`, CLI and service entrypoints are in `bin/`, feature crates are under `modules/*`, and shared domain types are in `types/*`. End-to-end fixtures and images live in `e2e/`. User-facing documentation is in `docs/`, with sidebar structure defined in `docs/docLinks.ts`. Keep static assets near the crate that serves them, such as `modules/http-static/assets/`.
+## Project structure
 
-The repository root also contains several important directories:
+Ferron 3 is a Rust workspace (resolver "2"). Key directories:
 
-- `configs/` — example configuration files (e.g., `ferron.conf.example`).
-- `entrypoint/` — entrypoint scripts and related resources.
-- `installer/` — sources for building platform-specific installers.
-- `packaging/` — packaging scripts for archives, DEB, RPM, and Windows installers.
-- `utils/` — utility scripts and tools.
-- `wwwroot/` — default web root assets.
+- `core/` — runtime foundation: `Module`/`ModuleLoader` traits, config system, `Registry` (typed stages with DAG ordering via `StageConstraint::Before/After`, typed providers), `Pipeline` (ordered stages + inverse ops), dual `Runtime` (vibeio primary + tokio secondary)
+- `bin/` — thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
+- `entrypoint/` — wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
+- `modules/*` — feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, etc.
+- `types/*` — shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
+- `e2e/` — end-to-end tests via testcontainers (requires Docker + protoc in PATH)
+- `docs/` — user-facing docs; sidebar in `docs/docLinks.ts`; synced to separate website repo on push to `3.x`
+- `soak/` — soak/chaos tests via Docker Compose
+- `doctest/` — standalone harness that runs doc examples against the built binary
 
-## Build, test, and development commands
-Run commands from the repository root. The [`Justfile`](Justfile) provides convenient shortcuts for common tasks.
+## Essential commands
+
+Run from repository root unless noted.
+
+### Build and test
+
+| Command | Purpose |
+|---------|---------|
+| `cargo build --workspace` | Build all crates |
+| `cargo test --workspace` | Unit + inline tests |
+| `cargo test -p ferron-http-server` | Single crate |
+| `cargo fmt --all --check` | Formatting (no `.rustfmt.toml` — uses defaults) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lint |
+| `cargo shear` | Check unused dependencies (used in CI) |
+| `cargo run --manifest-path doctest/Cargo.toml` | Test doc examples |
+| `cd e2e && cargo test` | E2E tests (needs Docker + protoc) |
+| `rumdl fmt docs && rumdl check --fix docs` | Lint docs Markdown |
+
+### Run server
+
+```
+cargo run -p ferron -- run -c ferron.conf          # start
+cargo run -p ferron -- validate -c ferron.conf      # validate config
+cargo run -p ferron -- adapt -c ferron.conf         # config as JSON
+cargo run -p ferron -- daemon -c ferron.conf --pid-file /path  # daemon
+```
 
 ### Justfile shortcuts
-- `just build` — builds the project in release mode.
-- `just run` — runs the project for testing.
-- `just prepare-config` — copies the example configuration to `ferron.conf`.
-- `just package` — packages release binaries (accepts optional target).
-- `just package-deb` — packages as a Debian package.
-- `just package-rpm` — packages as an RPM package.
-- `just installer` — builds the Linux installer.
-- `just soak` — runs the soak test suite.
-- `just chaos` — runs the chaos harness for soak testing.
 
-### Cargo commands
+```
+just build            # cargo build -r
+just run              # cargo run --bin ferron
+just prepare-config   # cp configs/ferron.conf.example ferron.conf
+just package [target]  # release archive
+just package-deb / just package-rpm
+just soak / just chaos  # Docker Compose based, configurable duration/concurrency
+```
 
-- `cargo build --workspace` builds every crate.
-- `cargo test --workspace` runs the full test suite.
-- `cargo test -p ferron-http-server` runs one crate's tests.
-- `cargo run -p ferron -- --help` lists CLI commands.
-- `cargo run -p ferron -- run -c ferron.conf` starts a local server.
-- `cargo fmt --all --check` verifies formatting.
-- `cargo clippy --workspace --all-targets -- -D warnings` enforces lint cleanliness.
-- `cargo install cargo-fuzz` installs the fuzzing tool (one-time).
-- `cd modules/http-server && cargo +nightly fuzz run canonicalize_path` runs the URL canonicalizer fuzzer.
-- `cd modules/http-server && cargo +nightly fuzz run canonicalize_path_routing` runs the routing canonicalizer fuzzer.
+### Fuzzing examples (requires nightly)
 
-## Coding style & naming conventions
-Use Rust 2021 idioms, `rustfmt` formatting, and 4-space indentation. Prefer `snake_case` for files, modules, and functions, and `PascalCase` for types and traits. Follow existing extension-point names such as `*ModuleLoader`, `*Configuration*`, and `*Provider*`. Keep modules focused and aligned with the workspace layout.
+```
+cargo +nightly fuzz run canonicalize_path           # modules/http-server/fuzz
+cargo +nightly fuzz run canonicalize_path_routing   # modules/http-server/fuzz
+cargo +nightly fuzz run proxy_protocol              # modules/http-server/fuzz
+cargo +nightly fuzz run rate_limit_concurrent       # modules/http-ratelimit/fuzz
+```
 
-## Testing guidelines
-Place tests close to the code, usually in inline `#[cfg(test)]` modules. Add tests for parser, registry, runtime, TLS, and configuration changes. Avoid trivial delegation tests, standard library behavior tests, duplicated internal coverage, and sleep-based concurrency tests.
+## Testing structure
 
-## Commit & pull request guidelines
-Use Conventional Commits such as `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, and `chore:`. Keep subjects short and imperative. Pull requests should explain the change, list validation performed, and link related issues when relevant. Include screenshots only for UI or documentation work that needs visual confirmation.
+Three tiers:
+1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files.
+2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH.
+3. **Fuzz**: `modules/*/fuzz/` — nightly `cargo-fuzz`.
 
-All notable changes (except documentation updates) should also be documented in [`CHANGELOG.md`](CHANGELOG.md) under the appropriate unreleased section. Use `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security` categories when applicable.
+Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]`).
 
-## Security, configuration, and docs
-If you change configuration directives or syntax, read and update the matching pages under `docs/configuration/`. Validate config changes with `cargo run -p ferron -- validate -c ferron.conf`. Documentation should use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
+## Conventions
+
+- **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
+- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
+- **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
+- **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
+- **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
+- **Docker**: three variants — `Dockerfile` (distroless + musl), `Dockerfile.alpine` (musl), `Dockerfile.debian` (glibc).
