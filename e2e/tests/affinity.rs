@@ -60,10 +60,10 @@ async fn test_affinity_cookie() {
 
     let network = "e2e-test-affinity-cookie";
 
-    let _backend1 = create_backend_container(network, "backend-1", None)
+    let _backend1 = create_backend_container(network, "backend-1", Some("A"))
         .await
         .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2", None)
+    let _backend2 = create_backend_container(network, "backend-2", Some("B"))
         .await
         .unwrap();
 
@@ -98,31 +98,33 @@ ferron-affinity-cookie:80 {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
 
     // First request should set the cookie in Set-Cookie header
     let resp1 = client
-        .get(format!("http://localhost:{}/", port))
+        .get(format!("http://localhost:{}/whoami", port))
         .header("Host", "ferron-affinity-cookie")
         .send()
         .await
         .unwrap();
     assert_eq!(resp1.status(), reqwest::StatusCode::OK);
     let body1 = resp1.text().await.unwrap();
-    assert_eq!(body1, "Hello, World!");
 
     // The cookie should be set on the response (we can't easily verify without cookie parsing)
     // Subsequent requests should work correctly
     for _ in 0..5 {
         let resp = client
-            .get(format!("http://localhost:{}/", port))
+            .get(format!("http://localhost:{}/whoami", port))
             .header("Host", "ferron-affinity-cookie")
             .send()
             .await
             .unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
         let body = resp.text().await.unwrap();
-        assert_eq!(body, "Hello, World!");
+        assert_eq!(body, body1);
     }
 }
 
@@ -134,10 +136,10 @@ async fn test_affinity_ip() {
 
     let network = "e2e-test-affinity-ip";
 
-    let _backend1 = create_backend_container(network, "backend-1", None)
+    let _backend1 = create_backend_container(network, "backend-1", Some("A"))
         .await
         .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2", None)
+    let _backend2 = create_backend_container(network, "backend-2", Some("B"))
         .await
         .unwrap();
 

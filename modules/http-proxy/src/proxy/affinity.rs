@@ -13,9 +13,19 @@ pub fn extract_affinity_key(
         AffinityType::Cookie(cfg) => {
             // Read cookie from request headers
             let req = ctx.req.as_ref()?;
-            let cookie_header = req.headers().get(http::header::COOKIE)?;
-            let cookie_str = cookie_header.to_str().ok()?;
-            parse_cookie_value(cookie_str, &cfg.name)?
+            req.headers()
+                .get(http::header::COOKIE)
+                .and_then(|h| h.to_str().ok())
+                .and_then(|v| parse_cookie_value(v, &cfg.name))
+                .unwrap_or_else(|| {
+                    // Randomly generate a string...
+                    let random_bytes: [u8; 8] = rand::random();
+                    let mut result = String::new();
+                    for byte in &random_bytes {
+                        result.push_str(&format!("{:02x}", byte));
+                    }
+                    result
+                })
                 .as_bytes()
                 .to_vec()
         }
@@ -45,7 +55,7 @@ fn parse_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
         let pair = pair.trim();
         if let Some(eq_pos) = pair.find('=') {
             let cookie_name = &pair[..eq_pos];
-            if cookie_name == name {
+            if pair.len() > eq_pos + 1 && cookie_name == name {
                 return Some(pair[eq_pos + 1..].to_string());
             }
         }
