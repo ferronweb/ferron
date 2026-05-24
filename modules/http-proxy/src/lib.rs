@@ -202,6 +202,7 @@ struct ProxyState {
     /// Load balancing algorithms cached per resolved configuration,
     /// along with consistent hash ring state.
     /// Round-robin counters must remain shared for a given config key.
+    #[allow(clippy::type_complexity)]
     algorithms: DashMap<
         Vec<usize>,
         (

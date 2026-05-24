@@ -896,17 +896,14 @@ fn parse_affinity_entry(
             let mut variable: Option<String> = None;
             if let Some(block) = &entry.children {
                 for (name, entries) in block.directives.iter() {
-                    match name.as_str() {
-                        "variable" => {
-                            if let Some(val) = entries
-                                .first()
-                                .and_then(|e| e.args.first())
-                                .and_then(|v| v.as_str())
-                            {
-                                variable = Some(val.to_string());
-                            }
+                    if name.as_str() == "variable" {
+                        if let Some(val) = entries
+                            .first()
+                            .and_then(|e| e.args.first())
+                            .and_then(|v| v.as_str())
+                        {
+                            variable = Some(val.to_string());
                         }
-                        _ => {}
                     }
                 }
             }
