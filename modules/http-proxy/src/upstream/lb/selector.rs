@@ -116,6 +116,10 @@ pub fn select_backend_index(
             }
         }
         LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
+            // If hash key is not provided (for example when affinity is disabled)
+            // an empty key would be used as a fallback.
+            // But consistent hash algorithm with unset affinity would be invalid
+            // configuration anyway (see `config.rs`)!
             let key = hash_key.unwrap_or(b"");
             let mut guard = ring.write();
             if guard.needs_rebuild(backends) {

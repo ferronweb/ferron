@@ -352,6 +352,11 @@ fn parse_proxy_block(
             _ => {}
         }
     }
+
+    if matches!(cfg.algorithm, LoadBalancerAlgorithm::ConsistentHash) && cfg.affinity.is_none() {
+        return Err("Consistent hash load balancing algorithm requires affinity to be set".into());
+    }
+
     Ok(())
 }
 
