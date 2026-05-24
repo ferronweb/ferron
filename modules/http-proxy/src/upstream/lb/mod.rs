@@ -11,7 +11,7 @@ pub use crate::types::lb::LoadBalancerAlgorithm;
 pub use hash_ring::ConsistentHashRing;
 pub use round_robin::WeightedRoundRobinState;
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Runtime load balancer state.
@@ -21,7 +21,7 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub enum LoadBalancerAlgorithmInner {
     Random,
-    RoundRobin(Arc<Mutex<WeightedRoundRobinState>>),
+    RoundRobin(WeightedRoundRobinState),
     #[default]
     LeastConnections,
     TwoRandomChoices,
@@ -32,9 +32,9 @@ impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
     fn from(alg: LoadBalancerAlgorithm) -> Self {
         match alg {
             LoadBalancerAlgorithm::Random => LoadBalancerAlgorithmInner::Random,
-            LoadBalancerAlgorithm::RoundRobin => LoadBalancerAlgorithmInner::RoundRobin(Arc::new(
-                Mutex::new(WeightedRoundRobinState::new()),
-            )),
+            LoadBalancerAlgorithm::RoundRobin => {
+                LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new())
+            }
             LoadBalancerAlgorithm::LeastConnections => LoadBalancerAlgorithmInner::LeastConnections,
             LoadBalancerAlgorithm::TwoRandomChoices => LoadBalancerAlgorithmInner::TwoRandomChoices,
             LoadBalancerAlgorithm::ConsistentHash => LoadBalancerAlgorithmInner::ConsistentHash(
