@@ -652,3 +652,170 @@ fn test_determine_proxy_to_affinity_out_of_range() {
     );
     assert!(result.is_some());
 }
+
+// ============================================================================
+// Weighted Least Connections Tests
+// ============================================================================
+
+#[test]
+fn test_select_backend_index_least_connections_fewer_connections() {
+    let backends = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    // Simulate 3 connections on backend1, 0 on backend2
+    let tracker1 = Arc::new(());
+    let _conn2 = tracker1.clone();
+    let _conn3 = tracker1.clone();
+    let tracker2 = Arc::new(());
+    conn_state.insert(backends[0].clone(), tracker1);
+    conn_state.insert(backends[1].clone(), tracker2);
+
+    // Should pick backend2 (fewer connections)
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 1);
+}
+
+#[test]
+fn test_select_backend_index_least_connections_weighted_higher_weight_favored() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 1),
+        make_upstream_with_weight("http://backend2", 3),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    // Simulate 3 connections on backend1 (weight 1) and 6 connections on backend2 (weight 3)
+    // Score for backend1: 3 * 3 = 9 (using backend2's weight)
+    // Score for backend2: 6 * 1 = 6 (using backend1's weight)
+    // Backend2 has lower score, so it should be selected
+    let mut trackers = vec![];
+    let tracker1 = Arc::new(());
+    let tracker2 = Arc::new(());
+    for _ in 1..3 {
+        trackers.push(tracker1.clone());
+    }
+    for _ in 1..6 {
+        trackers.push(tracker2.clone());
+    }
+    conn_state.insert(backends[0].clone(), tracker1);
+    conn_state.insert(backends[1].clone(), tracker2);
+
+    // Should pick backend2 (higher weight compensates for more connections)
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 1);
+}
+
+#[test]
+fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 3),
+        make_upstream_with_weight("http://backend2", 1),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    // Simulate 6 connections on backend1 (weight 3) and 3 connections on backend2 (weight 1)
+    // Score for backend1: 6 * 1 = 6 (using backend2's weight)
+    // Score for backend2: 3 * 3 = 9 (using backend1's weight)
+    // Backend1 has lower score, so it should be selected
+    let tracker1 = Arc::new(());
+    let tracker2 = Arc::new(());
+    let mut trackers = vec![];
+    for _ in 1..6 {
+        trackers.push(tracker1.clone());
+    }
+    for _ in 1..3 {
+        trackers.push(tracker2.clone());
+    }
+    conn_state.insert(backends[0].clone(), tracker1);
+    conn_state.insert(backends[1].clone(), tracker2);
+
+    // Should pick backend1 (higher weight compensates for more connections)
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 0);
+}
+
+#[test]
+fn test_select_backend_index_least_connections_weighted_equal_score() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 2),
+        make_upstream_with_weight("http://backend2", 1),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    // Simulate 2 connections on backend1 (weight 2) and 4 connections on backend2 (weight 1)
+    // Score for backend1: 2 * 1 = 2 (using backend2's weight)
+    // Score for backend2: 4 * 2 = 8 (using backend1's weight)
+    // Backend1 has lower score, so it should be selected
+    let mut trackers = vec![];
+    let tracker1 = Arc::new(());
+    let tracker2 = Arc::new(());
+    for _ in 1..2 {
+        trackers.push(tracker1.clone());
+    }
+    for _ in 1..4 {
+        trackers.push(tracker2.clone());
+    }
+    conn_state.insert(backends[0].clone(), tracker1);
+    conn_state.insert(backends[1].clone(), tracker2);
+
+    // Should pick backend1 (lower weighted score)
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 0);
+}
+
+#[test]
+fn test_select_backend_index_least_connections_all_zero_weight() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 0),
+        make_upstream_with_weight("http://backend2", 0),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    // All backends have weight 0, should fall back to index 0
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 0);
+}
+
+#[test]
+fn test_select_backend_index_least_connections_weighted_uneven_distribution() {
+    let backends = vec![
+        make_upstream_with_weight("http://backend1", 1),
+        make_upstream_with_weight("http://backend2", 2),
+        make_upstream_with_weight("http://backend3", 3),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+    let mut trackers = vec![];
+    let tracker1 = Arc::new(());
+    let tracker2 = Arc::new(());
+    let tracker3 = Arc::new(());
+
+    // Simulate a heavy load on backend1
+    for _ in 1..100 {
+        trackers.push(tracker1.clone());
+    }
+    // Moderate load on backend2
+    for _ in 1..20 {
+        trackers.push(tracker2.clone());
+    }
+    // Light load on backend3
+    for _ in 1..5 {
+        trackers.push(tracker3.clone());
+    }
+
+    conn_state.insert(backends[0].clone(), tracker1);
+    conn_state.insert(backends[1].clone(), tracker2);
+    conn_state.insert(backends[2].clone(), tracker3);
+
+    // Backend3 should be selected (fewest connections and highest weight)
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    assert_eq!(idx, 2);
+}
