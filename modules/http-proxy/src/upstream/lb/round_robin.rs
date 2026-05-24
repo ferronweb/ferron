@@ -48,15 +48,17 @@ impl WeightedRoundRobinState {
             return 0;
         }
 
-        let mut current_weights = self.current_weights.read();
+        let mut current_weights = self.current_weights.upgradable_read();
 
         // Resize current_weights if backend count changed
         if current_weights.len() != n {
-            drop(current_weights);
-            self.current_weights
-                .write()
-                .resize_with(n, || AtomicEffectiveWeight::new(0));
-            current_weights = self.current_weights.read();
+            current_weights.with_upgraded(|wu| {
+                if wu.len() == n {
+                    // Check again, just in case
+                    return;
+                }
+                wu.resize_with(n, || AtomicEffectiveWeight::new(0));
+            });
         }
 
         // Calculate total weight
@@ -70,6 +72,10 @@ impl WeightedRoundRobinState {
         // Step 1: Add each backend's weight to its current effective weight
         // Step 2: Find the backend with the highest effective weight
         for (i, weight) in weights.iter().enumerate() {
+            if i > current_weights.len() {
+                // Edge cases...
+                break;
+            }
             let old_weight =
                 current_weights[i].fetch_add(*weight as _, std::sync::atomic::Ordering::Relaxed);
             #[cfg(not(target_has_atomic = "64"))]
