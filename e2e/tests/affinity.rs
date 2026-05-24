@@ -12,9 +12,10 @@ mod common;
 async fn create_backend_container(
     network: &str,
     alias: &str,
+    name: Option<&str>,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
     let backend_image = common::build_backend_image().await?;
-    backend_image
+    let mut builder = backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_wait_for(WaitFor::Http(Box::new(
             HttpWaitStrategy::new("/")
@@ -22,9 +23,11 @@ async fn create_backend_container(
                 .with_response_matcher(|_| true),
         )))
         .with_network(network)
-        .with_hostname(alias)
-        .start()
-        .await
+        .with_hostname(alias);
+    if let Some(backend_name) = name {
+        builder = builder.with_env_var("BACKEND_NAME", backend_name)
+    }
+    builder.start().await
 }
 
 async fn create_ferron_container(
@@ -57,10 +60,10 @@ async fn test_affinity_cookie() {
 
     let network = "e2e-test-affinity-cookie";
 
-    let _backend1 = create_backend_container(network, "backend-1")
+    let _backend1 = create_backend_container(network, "backend-1", None)
         .await
         .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2")
+    let _backend2 = create_backend_container(network, "backend-2", None)
         .await
         .unwrap();
 
@@ -131,10 +134,10 @@ async fn test_affinity_ip() {
 
     let network = "e2e-test-affinity-ip";
 
-    let _backend1 = create_backend_container(network, "backend-1")
+    let _backend1 = create_backend_container(network, "backend-1", None)
         .await
         .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2")
+    let _backend2 = create_backend_container(network, "backend-2", None)
         .await
         .unwrap();
 
@@ -188,20 +191,23 @@ ferron-affinity-ip:80 {
 }
 
 #[tokio::test]
-async fn test_consistent_hash_algorithm() {
+async fn test_affinity_header() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    let network = "e2e-test-consistent-hash";
+    let network = "e2e-test-affinity-header";
 
-    let _backend1 = create_backend_container(network, "backend-1")
+    let _backend1 = create_backend_container(network, "backend-1", Some("A"))
         .await
         .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2")
-        .await
-        .unwrap();
-    let _backend3 = create_backend_container(network, "backend-3")
+    let _backend2 = create_backend_container(network, "backend-2", Some("B"))
         .await
         .unwrap();
 
@@ -209,13 +215,13 @@ async fn test_consistent_hash_algorithm() {
         .as_file_mut()
         .write_all(
             br#"
-ferron-consistent-hash:80 {
+*:80 {
   proxy {
     upstream "http://backend-1:3000"
     upstream "http://backend-2:3000"
-    upstream "http://backend-3:3000"
-    algorithm "consistent_hash"
-    affinity ip
+    affinity header {
+      name "X-Sticky"
+    }
   }
 }
 "#,
@@ -231,30 +237,40 @@ ferron-consistent-hash:80 {
         .await
         .unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
     let client = reqwest::Client::new();
+    let url = format!("http://localhost:{port}/whoami");
 
-    // Same IP should always route to the same backend with consistent_hash
-    let mut responses = Vec::new();
-    for _ in 0..10 {
+    // Test sticky routing for user-1
+    let mut responses_user1 = Vec::new();
+    for _ in 0..5 {
         let resp = client
-            .get(format!("http://localhost:{}/", port))
-            .header("Host", "ferron-consistent-hash")
+            .get(&url)
+            .header("X-Sticky", "user-1")
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.status(), reqwest::StatusCode::OK);
-        let body = resp.text().await.unwrap();
-        responses.push(body);
+        responses_user1.push(resp.text().await.unwrap());
+    }
+    let first1 = &responses_user1[0];
+    for r in &responses_user1 {
+        assert_eq!(r, first1, "User-1 should always route to the same backend");
     }
 
-    // All responses should be identical
-    let first = &responses[0];
-    for resp in &responses[1..] {
-        assert_eq!(
-            resp, first,
-            "Consistent hash should route same IP to same backend"
-        );
+    // Test sticky routing for user-2 (should be consistent, hopefully different from user-1)
+    let mut responses_user2 = Vec::new();
+    for _ in 0..5 {
+        let resp = client
+            .get(&url)
+            .header("X-Sticky", "user-2")
+            .send()
+            .await
+            .unwrap();
+        responses_user2.push(resp.text().await.unwrap());
     }
+    let first2 = &responses_user2[0];
+    for r in &responses_user2 {
+        assert_eq!(r, first2, "User-2 should always route to the same backend");
+    }
+
+    ferron.stop().await.unwrap();
 }

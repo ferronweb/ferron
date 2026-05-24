@@ -56,14 +56,6 @@ impl Default for CookieAffinityConfig {
     }
 }
 
-/// Hash method for hash-based affinity.
-#[derive(Clone, Copy, Debug, Default)]
-pub enum HashMethod {
-    #[default]
-    Consistent,
-    Modulus,
-}
-
 /// Session affinity type configuration.
 #[derive(Clone, Debug)]
 pub enum AffinityType {
@@ -77,9 +69,6 @@ pub enum AffinityType {
     Hash {
         /// Variable to hash (e.g. `"request.header.x-session-id"`).
         variable: String,
-        /// Hash method to use.
-        #[allow(dead_code)]
-        method: HashMethod,
     },
 }
 

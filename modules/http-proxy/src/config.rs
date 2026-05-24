@@ -12,7 +12,7 @@ use ferron_core::config::{
 };
 use http::header::HeaderName;
 
-pub use crate::types::affinity::{AffinityConfig, AffinityType, HashMethod};
+pub use crate::types::affinity::{AffinityConfig, AffinityType};
 use crate::types::affinity::{CookieAffinityConfig, SameSiteMode};
 use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealthCheckConfig};
 use crate::types::lb::LoadBalancerAlgorithm;
@@ -256,7 +256,6 @@ fn parse_proxy_block(
                         "round_robin" => LoadBalancerAlgorithm::RoundRobin,
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
                         "two_random" => LoadBalancerAlgorithm::TwoRandomChoices,
-                        "consistent_hash" => LoadBalancerAlgorithm::ConsistentHash,
                         _ => {
                             return Err(
                                 format!("Unsupported load balancing algorithm: {val}").into()
@@ -351,10 +350,6 @@ fn parse_proxy_block(
             }
             _ => {}
         }
-    }
-
-    if matches!(cfg.algorithm, LoadBalancerAlgorithm::ConsistentHash) && cfg.affinity.is_none() {
-        return Err("Consistent hash load balancing algorithm requires affinity to be set".into());
     }
 
     Ok(())
@@ -899,7 +894,6 @@ fn parse_affinity_entry(
         "ip" => AffinityType::Ip,
         "hash" => {
             let mut variable: Option<String> = None;
-            let mut method = HashMethod::Consistent;
             if let Some(block) = &entry.children {
                 for (name, entries) in block.directives.iter() {
                     match name.as_str() {
@@ -912,31 +906,12 @@ fn parse_affinity_entry(
                                 variable = Some(val.to_string());
                             }
                         }
-                        "method" => {
-                            if let Some(val) = entries
-                                .first()
-                                .and_then(|e| e.args.first())
-                                .and_then(|v| v.as_str())
-                            {
-                                method = match val.to_lowercase().as_str() {
-                                    "consistent" => HashMethod::Consistent,
-                                    "modulus" => HashMethod::Modulus,
-                                    _ => {
-                                        return Err(format!(
-                                            "Invalid hash method: {val}, \
-                                             must be consistent or modulus"
-                                        )
-                                        .into())
-                                    }
-                                };
-                            }
-                        }
                         _ => {}
                     }
                 }
             }
             let variable = variable.ok_or("hash affinity requires a 'variable' subdirective")?;
-            AffinityType::Hash { variable, method }
+            AffinityType::Hash { variable }
         }
         _ => {
             return Err(format!(

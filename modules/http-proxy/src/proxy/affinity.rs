@@ -1,15 +1,12 @@
 //! Session affinity (sticky session) implementation for the proxy.
 
 use crate::types::affinity::AffinityType;
-use crate::upstream::backend_affinity_id;
 
-/// Extract the affinity key from the request and resolve it to a backend index.
-pub fn extract_affinity_index(
+/// Extract the affinity key from the request.
+pub fn extract_affinity_key(
     affinity: &Option<crate::config::AffinityConfig>,
     ctx: &ferron_http::HttpContext,
-    upstreams: &[crate::types::upstream::UpstreamInner],
-    algorithm: &crate::upstream::lb::LoadBalancerAlgorithmInner,
-) -> Option<usize> {
+) -> Option<Vec<u8>> {
     let affinity = affinity.as_ref()?;
 
     let key = match &affinity.affinity_type {
@@ -39,12 +36,7 @@ pub fn extract_affinity_index(
         return None;
     }
 
-    crate::upstream::affinity::resolve_affinity_index(
-        &affinity.affinity_type,
-        &key,
-        upstreams,
-        algorithm,
-    )
+    Some(key)
 }
 
 /// Parse a specific cookie value from a Cookie header string.
@@ -90,9 +82,7 @@ fn resolve_variable(variable: &str, ctx: &ferron_http::HttpContext) -> Option<St
 pub fn maybe_set_affinity_cookie(
     resp: ferron_http::HttpResponse,
     affinity: &Option<crate::config::AffinityConfig>,
-    _affinity_index: Option<usize>,
-    selected_upstream: &crate::types::upstream::UpstreamInner,
-    _upstreams: &[crate::types::upstream::UpstreamInner],
+    backend_id: Option<String>,
 ) -> ferron_http::HttpResponse {
     let affinity = match affinity {
         Some(a) => a,
@@ -104,9 +94,10 @@ pub fn maybe_set_affinity_cookie(
         _ => return resp,
     };
 
-    // Only set cookie if we have a valid affinity index (meaning we used affinity routing)
-    // or if this is the first request (no cookie was present)
-    let backend_id = backend_affinity_id(selected_upstream);
+    // Only set cookie if we have a valid affinity key
+    let Some(backend_id) = backend_id else {
+        return resp;
+    };
 
     // Build Set-Cookie header value
     let mut cookie_value = format!(

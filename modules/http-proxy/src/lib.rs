@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
 use crate::types::ConnectionsTrackState;
-use crate::upstream::lb::LoadBalancerAlgorithmInner;
+use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::validator::ProxyConfigurationValidator;
 
 // Re-export low-level send_net_io types for benchmarking and external tools
@@ -199,9 +199,16 @@ struct ProxyState {
     circuit_breaker_state: types::circuit::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
     conn_state: ConnectionsTrackState,
-    /// Load balancing algorithms cached per resolved configuration.
+    /// Load balancing algorithms cached per resolved configuration,
+    /// along with consistent hash ring state.
     /// Round-robin counters must remain shared for a given config key.
-    algorithms: DashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>,
+    algorithms: DashMap<
+        Vec<usize>,
+        (
+            Arc<LoadBalancerAlgorithmInner>,
+            Arc<RwLock<ConsistentHashRing>>,
+        ),
+    >,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: types::health::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
@@ -501,13 +508,19 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        let algorithm = if let Some(algo) = self.state.algorithms.get(&config_key) {
+        let (algorithm, ring) = if let Some(algo) = self.state.algorithms.get(&config_key) {
             algo.clone()
         } else {
             self.state
                 .algorithms
                 .entry(config_key.clone())
-                .or_insert_with(|| Arc::new(config.algorithm.into()))
+                .or_insert_with(|| {
+                    (
+                        Arc::new(config.algorithm.into()),
+                        // Blank upstream list for now
+                        Arc::new(RwLock::new(ConsistentHashRing::new(&[]))),
+                    )
+                })
                 .clone()
         };
 
@@ -527,6 +540,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Arc::clone(&self.state.failed_backends),
             Arc::clone(&self.state.circuit_breaker_state),
             &algorithm,
+            &ring,
             Some(&self.state.conn_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),

@@ -14,7 +14,6 @@ pub mod tests;
 use std::hash::BuildHasher;
 
 // Re-export upstream-specific functions
-pub use affinity::backend_affinity_id;
 pub use circuit::{
     is_circuit_breaker_available, record_backend_response, record_backend_transport_failure,
 };

@@ -15,14 +15,13 @@ use crate::upstream::lb::LoadBalancerAlgorithmInner;
 /// For ConsistentHash, `hash_key` must be provided.
 pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
-    backends: &[UpstreamInner],
+    backends: &[(usize, UpstreamInner)],
     conn_state: Option<&ConnectionsTrackState>,
-    hash_key: Option<&[u8]>,
 ) -> usize {
     match load_balancer_algorithm {
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
-            let weights: Vec<u32> = backends.iter().map(|b| b.weight).collect();
+            let weights: Vec<u32> = backends.iter().map(|(_, b)| b.weight).collect();
             state.next(&weights)
         }
         LoadBalancerAlgorithmInner::LeastConnections => {
@@ -31,7 +30,7 @@ pub fn select_backend_index(
             };
             let mut min_indexes = Vec::new();
             let mut min_connections = None;
-            for (index, upstream) in backends.iter().enumerate() {
+            for (index, upstream) in backends.iter() {
                 let connection_count = match conn_state.entry(upstream.clone()) {
                     dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
                     dashmap::Entry::Vacant(e) => {
@@ -50,17 +49,17 @@ pub fn select_backend_index(
                     match current_score.cmp(&prev_score) {
                         std::cmp::Ordering::Less => {
                             min_indexes.clear();
-                            min_indexes.push(index);
+                            min_indexes.push(*index);
                             min_connections = Some((connection_count, upstream.weight));
                         }
                         std::cmp::Ordering::Equal => {
-                            min_indexes.push(index);
+                            min_indexes.push(*index);
                         }
                         _ => (),
                     }
                 } else {
                     min_indexes.clear();
-                    min_indexes.push(index);
+                    min_indexes.push(*index);
                     min_connections = Some((connection_count, upstream.weight));
                 }
             }
@@ -76,7 +75,7 @@ pub fn select_backend_index(
             };
             if backends.len() < 2 {
                 // Initialize tracker for single backend
-                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].clone()) {
+                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].1.clone()) {
                     e.insert(Arc::new(()));
                 }
                 return 0;
@@ -89,7 +88,7 @@ pub fn select_backend_index(
 
             // Get count for first backend
             let (count1, _read_dropped) = {
-                match conn_state.entry(backends[idx1].clone()) {
+                match conn_state.entry(backends[idx1].1.clone()) {
                     dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
                     dashmap::Entry::Vacant(e) => {
                         e.insert(Arc::new(()));
@@ -100,7 +99,7 @@ pub fn select_backend_index(
 
             // Get count for second backend
             let (count2, _) = {
-                match conn_state.entry(backends[idx2].clone()) {
+                match conn_state.entry(backends[idx2].1.clone()) {
                     dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
                     dashmap::Entry::Vacant(e) => {
                         e.insert(Arc::new(()));
@@ -114,18 +113,6 @@ pub fn select_backend_index(
             } else {
                 idx2
             }
-        }
-        LoadBalancerAlgorithmInner::ConsistentHash(ring) => {
-            // If hash key is not provided (for example when affinity is disabled)
-            // an empty key would be used as a fallback.
-            // But consistent hash algorithm with unset affinity would be invalid
-            // configuration anyway (see `config.rs`)!
-            let key = hash_key.unwrap_or(b"");
-            let mut guard = ring.write();
-            if guard.needs_rebuild(backends) {
-                guard.rebuild(backends);
-            }
-            guard.get(key).unwrap_or(0)
         }
     }
 }

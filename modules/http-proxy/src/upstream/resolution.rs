@@ -2,14 +2,14 @@
 
 use std::sync::Arc;
 
-use crate::config::CircuitBreakerConfig;
+use crate::config::{AffinityType, CircuitBreakerConfig};
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::lb::SelectedBackend;
 use crate::types::upstream::{Upstream, UpstreamInner};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
-use crate::upstream::lb::LoadBalancerAlgorithmInner;
+use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::util::FailureCache;
 
 /// Resolve all upstreams to a flat list of `UpstreamInner` entries.
@@ -53,15 +53,17 @@ pub fn determine_proxy_to(
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     selected_backends: &[UpstreamInner],
-    affinity_index: Option<usize>,
+    affinity_type: Option<&AffinityType>,
+    affinity_key: Option<&[u8]>,
+    ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
     }
 
-    // Build a mutable copy of healthy backends for the selection loop
-    let mut healthy: Vec<UpstreamInner> = {
+    // Build healthy list with original indices preserved
+    let mut healthy: Vec<(usize, UpstreamInner)> = {
         let failed = if health_check_enabled {
             Some(failed_backends.read())
         } else {
@@ -69,11 +71,13 @@ pub fn determine_proxy_to(
         };
         upstreams
             .iter()
-            .filter(|u| {
+            .cloned()
+            .enumerate()
+            .filter(|(_, u)| {
                 // Check passive failure cache
                 let not_failed = failed.as_ref().is_none_or(|failed| {
                     failed
-                        .get(*u)
+                        .get(u)
                         .is_none_or(|fails| fails <= health_check_max_fails)
                 });
 
@@ -89,34 +93,50 @@ pub fn determine_proxy_to(
 
                 not_failed && active_healthy && not_selected
             })
-            .cloned()
             .collect()
     };
 
-    if healthy.is_empty() {
-        return None;
-    }
+    let mut affinity_index = None;
 
-    let mut affinity_index = affinity_index;
     loop {
         if healthy.is_empty() {
             return None;
         }
 
-        let index = if let Some(idx) = affinity_index.take() {
-            if idx < healthy.len() {
-                idx
-            } else if healthy.len() == 1 {
-                0
-            } else {
-                super::lb::selector::select_backend_index(algorithm, &healthy, conn_state, None)
+        // Resolve affinity: find position in `healthy` whose original index matches affinity_index
+        if affinity_index.is_none() {
+            if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
+                affinity_index =
+                    super::affinity::resolve_affinity_index(affinity_type, key, upstreams, ring);
+            };
+        }
+        let start_pos = affinity_index.and_then(|aff_idx| {
+            // Fast path: if affine backend is still at same position in filtered list
+            if aff_idx < healthy.len() {
+                if let Some((orig_idx, _)) = healthy.get(aff_idx) {
+                    if *orig_idx == aff_idx {
+                        return Some(aff_idx);
+                    }
+                }
             }
+            // Fallback: search by original index identity
+            healthy
+                .iter()
+                .position(|(orig_idx, _)| *orig_idx == aff_idx)
+        });
+
+        let index = if let Some(pos) = start_pos {
+            pos
         } else if healthy.len() == 1 {
             0
         } else {
-            super::lb::selector::select_backend_index(algorithm, &healthy, conn_state, None)
+            super::lb::selector::select_backend_index(algorithm, &healthy, conn_state)
         };
-        let upstream = healthy.remove(index);
+        let (_, upstream) = healthy.remove(index);
+        if start_pos == Some(index) {
+            // Affine backend is no longer healthy; reset affinity index
+            affinity_index = None;
+        }
 
         if !try_acquire_circuit_breaker_slot(
             circuit_breaker_state,

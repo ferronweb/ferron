@@ -75,9 +75,132 @@ example.com {
 | Algorithm | Description |
 | --- | --- |
 | `random` | Selects a backend randomly for each request. |
-| `round_robin` | Cycles through backends in order. |
-| `least_conn` | Selects the backend with the fewest active tracked connections. |
+| `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
+| `least_conn` | Selects the backend with the fewest active tracked connections multiplied by its weight. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
+
+## A/B testing with backends
+
+Ferron supports A/B testing (traffic splitting) between multiple backends using weighted load balancing and session affinity. This is especially useful when migrating between different tech stacks, where application-level routing logic would be difficult or impossible to implement.
+
+### Weighted traffic splitting
+
+You can split traffic between backends using the `weight` directive with the `round_robin` or `least_conn` algorithm. This is useful for gradual rollouts or A/B tests where you want precise control over traffic distribution.
+
+```ferron
+example.com {
+    proxy {
+        # Legacy backend — receives 90% of traffic
+        upstream http://legacy.example.com:3000 {
+            weight 90
+        }
+
+        # New tech stack — receives 10% of traffic
+        upstream http://nextjs.example.com:3001 {
+            weight 10
+        }
+
+        algorithm round_robin
+    }
+}
+```
+
+In this example, approximately 90% of requests go to the legacy backend and 10% to the new tech stack. Adjust the weights to increase the new backend's traffic share as you gain confidence.
+
+### Sticky session A/B testing
+
+For A/B tests where you want each visitor to consistently see the same variant, use cookie affinity. This ensures users always reach the same backend throughout their session.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://variant-a.example.com:3000
+        upstream http://variant-b.example.com:3001
+
+        algorithm round_robin
+        affinity cookie {
+            name "ab_test_variant"
+            ttl "7d"
+            path "/"
+            httponly
+            samesite lax
+        }
+    }
+}
+```
+
+With cookie affinity, the first request assigns a backend and sets a `ab_test_variant` cookie. Subsequent requests from the same browser are routed to the same backend for the duration of the cookie TTL.
+
+### Header-based variant selection
+
+For controlled testing or developer previews, you can route based on a request header. This is useful for internal testing or when you want to force a specific variant.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://variant-a.example.com:3000
+        upstream http://variant-b.example.com:3001
+
+        affinity header {
+            name "X-AB-Variant"
+        }
+
+        # Fallback to round-robin when header is absent
+        algorithm round_robin
+    }
+}
+```
+
+With this configuration, requests containing `X-AB-Variant: b` are routed to the second backend. All other requests fall back to the configured `round_robin` algorithm.
+
+### Migrating tech stacks at the proxy layer
+
+When rewriting a legacy application in a new technology, proxy-level A/B testing lets you gradually shift traffic without modifying either codebase. The proxy intercepts incoming requests and routes them to the appropriate backend.
+
+```ferron
+example.com {
+    proxy {
+        # Legacy PHP/Ruby on Rails backend
+        upstream http://legacy-backend:8080 {
+            weight 80
+        }
+
+        # New Go/Next.js backend
+        upstream http://new-backend:3000 {
+            weight 20
+        }
+
+        algorithm round_robin
+        affinity cookie {
+            name "_ferron_migration"
+            ttl "24h"
+            path "/"
+            httponly
+        }
+
+        # Forward the original host to the backend
+        request_header Host "{{request.host}}"
+
+        # Enable passive health checks to auto-remove unhealthy backends
+        passive_check {
+            max_fails 3
+            window "10s"
+        }
+    }
+}
+```
+
+This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. Passive health checks automatically remove any backend that fails three consecutive checks within a 10-second window.
+
+### Observing A/B test results
+
+Ferron's proxy metrics make it easy to compare backend performance in Prometheus and Grafana:
+
+- `ferron.proxy.backends.selected` — track which backends receive traffic and at what rate.
+- `ferron.proxy.backends.unhealthy` — monitor when backends are marked unhealthy by health checks.
+- `ferron.proxy.requests` — compare request counts, status codes, and latency across backends.
+
+You can create Grafana panels to visualize the ratio of requests between backends, compare p99 latency per backend, and alert on increased error rates in the new backend.
 
 ## Passive health checks
 

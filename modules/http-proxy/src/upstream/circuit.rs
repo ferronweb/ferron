@@ -280,7 +280,7 @@ mod tests {
     use crate::{
         upstream::{
             determine_proxy_to,
-            lb::{LoadBalancerAlgorithmInner, WeightedRoundRobinState},
+            lb::{ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState},
         },
         util::TtlCache,
     };
@@ -381,6 +381,8 @@ mod tests {
             Some(&circuit_breaker_state),
             &[],
             None,
+            None,
+            &RwLock::new(ConsistentHashRing::new(&[])),
             &ferron_observability::CompositeEventSink::new(vec![]),
         )
         .unwrap();

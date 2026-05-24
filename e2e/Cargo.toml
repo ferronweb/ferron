@@ -170,10 +170,6 @@ path = "tests/rproxy_proxy.rs"
 name = "early_hints"
 path = "tests/early_hints.rs"
 
-[[test]]
-name = "affinity_header"
-path = "tests/affinity_header.rs"
-
 [dev-dependencies]
 aes = "0.9"
 brotli = "8.0.2"

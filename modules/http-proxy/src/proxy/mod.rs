@@ -15,15 +15,16 @@ use std::time::Duration;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::StatusCode;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
+use crate::proxy::affinity::extract_affinity_key;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
-use crate::upstream::lb::LoadBalancerAlgorithmInner;
+use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
     resolve_upstreams,
@@ -31,7 +32,7 @@ use crate::upstream::{
 use crate::util::FailureCache;
 use crate::ProxyMetrics;
 
-use self::affinity::{extract_affinity_index, maybe_set_affinity_cookie};
+use self::affinity::maybe_set_affinity_cookie;
 use self::backend::count_available_backends;
 use self::tls::{cached_tls_config, io_error_status};
 
@@ -56,6 +57,7 @@ pub async fn execute_proxy(
     failed_backends: Arc<FailureCache>,
     circuit_breaker_state: CircuitBreakerStateMap,
     algorithm: &LoadBalancerAlgorithmInner,
+    ring: &RwLock<ConsistentHashRing>,
     conn_state: Option<&ConnectionsTrackState>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&Mutex<HashMap<String, u64>>>,
@@ -88,7 +90,7 @@ pub async fn execute_proxy(
     }
 
     // Extract affinity key and resolve affinity index
-    let affinity_index = extract_affinity_index(&config.affinity, ctx, &upstreams, algorithm);
+    let affinity_key = extract_affinity_key(&config.affinity, ctx);
 
     // Backend selection loop — retries on connection failure when retry_connection is enabled
     loop {
@@ -104,7 +106,9 @@ pub async fn execute_proxy(
             &config.circuit_breaker,
             Some(&circuit_breaker_state),
             &metrics.selected_backends,
-            affinity_index,
+            config.affinity.as_ref().map(|t| &t.affinity_type),
+            affinity_key.as_deref(),
+            ring,
             &ctx.events,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
@@ -172,9 +176,7 @@ pub async fn execute_proxy(
                 let resp = maybe_set_affinity_cookie(
                     resp,
                     &config.affinity,
-                    affinity_index,
-                    &selected.upstream,
-                    &upstreams,
+                    affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
                 );
 
                 return Ok((resp, metrics));

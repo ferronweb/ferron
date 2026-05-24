@@ -19,8 +19,6 @@ pub enum LoadBalancerAlgorithm {
     /// Pick two random, select less loaded.
     #[default]
     TwoRandomChoices,
-    /// Consistent hashing based on request key.
-    ConsistentHash,
 }
 
 /// Result of backend selection: the upstream and its connection tracker.
