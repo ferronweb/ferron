@@ -23,7 +23,7 @@ pub fn select_backend_index(
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
             let weights: Vec<u32> = backends.iter().map(|b| b.weight).collect();
-            state.next(&weights)
+            state.lock().next(&weights)
         }
         LoadBalancerAlgorithmInner::LeastConnections => {
             let Some(conn_state) = conn_state else {

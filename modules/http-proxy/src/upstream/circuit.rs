@@ -374,7 +374,9 @@ mod tests {
             &failed_backends,
             false,
             3,
-            &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
+            &LoadBalancerAlgorithmInner::RoundRobin(Arc::new(parking_lot::Mutex::new(
+                WeightedRoundRobinState::new(),
+            ))),
             None,
             None,
             &circuit_breaker,

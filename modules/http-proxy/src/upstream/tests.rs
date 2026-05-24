@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use dashmap::DashMap;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use crate::types::affinity::{AffinityType, CookieAffinityConfig};
 use crate::types::health::{HealthCheckState, HealthCheckStateMap};
@@ -55,7 +55,7 @@ fn test_select_backend_index_round_robin() {
         make_upstream("http://backend2"),
         make_upstream("http://backend3"),
     ];
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
@@ -422,7 +422,7 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
         make_upstream_with_weight("http://backend2", 1),
         make_upstream_with_weight("http://backend3", 1),
     ];
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With equal weights, should cycle like round-robin
@@ -439,7 +439,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
         make_upstream_with_weight("http://backend2", 1),
         make_upstream_with_weight("http://backend3", 1),
     ];
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // Over 7 selections (total weight), backend1 should be selected 5 times,
@@ -460,7 +460,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
         make_upstream_with_weight("http://backend1", 5),
         make_upstream_with_weight("http://backend2", 1),
     ];
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With weights 5:1, smooth WRR should distribute as:
@@ -483,7 +483,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
 #[test]
 fn test_select_backend_index_weighted_round_robin_single_backend() {
     let backends = vec![make_upstream_with_weight("http://backend1", 10)];
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     for _ in 0..10 {
@@ -493,20 +493,20 @@ fn test_select_backend_index_weighted_round_robin_single_backend() {
 
 #[test]
 fn test_weighted_round_robin_state_resize() {
-    let state = WeightedRoundRobinState::new();
+    let state = Arc::new(Mutex::new(WeightedRoundRobinState::new()));
 
     // Start with 2 backends
     let weights1 = [3u32, 1];
-    let idx1 = state.next(&weights1);
+    let idx1 = state.lock().next(&weights1);
     assert!(idx1 < 2);
 
     // Resize to 3 backends
     let weights2 = [3u32, 1, 2];
-    let idx2 = state.next(&weights2);
+    let idx2 = state.lock().next(&weights2);
     assert!(idx2 < 3);
 
     // Resize back to 2 backends
-    let idx3 = state.next(&weights1);
+    let idx3 = state.lock().next(&weights1);
     assert!(idx3 < 2);
 }
 
