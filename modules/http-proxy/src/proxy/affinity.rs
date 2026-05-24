@@ -1,5 +1,7 @@
 //! Session affinity (sticky session) implementation for the proxy.
 
+use std::hash::Hasher;
+
 use crate::types::affinity::AffinityType;
 
 /// Extract the affinity key from the request.
@@ -82,7 +84,7 @@ fn resolve_variable(variable: &str, ctx: &ferron_http::HttpContext) -> Option<St
 pub fn maybe_set_affinity_cookie(
     resp: ferron_http::HttpResponse,
     affinity: &Option<crate::config::AffinityConfig>,
-    backend_id: Option<String>,
+    selected_upstream: &crate::types::upstream::UpstreamInner,
 ) -> ferron_http::HttpResponse {
     let affinity = match affinity {
         Some(a) => a,
@@ -95,9 +97,7 @@ pub fn maybe_set_affinity_cookie(
     };
 
     // Only set cookie if we have a valid affinity key
-    let Some(backend_id) = backend_id else {
-        return resp;
-    };
+    let backend_id = backend_affinity_id(selected_upstream);
 
     // Build Set-Cookie header value
     let mut cookie_value = format!(
@@ -135,4 +135,14 @@ pub fn maybe_set_affinity_cookie(
         }
         other => other,
     }
+}
+
+/// Generate a short affinity identifier for a backend.
+///
+/// Uses the first 8 hex characters of the upstream URL's ahash.
+fn backend_affinity_id(backend: &crate::types::upstream::UpstreamInner) -> String {
+    let mut h = crate::upstream::get_ahasher();
+    h.write(backend.proxy_to.as_bytes());
+    let hash = h.finish();
+    format!("{hash:016x}")
 }

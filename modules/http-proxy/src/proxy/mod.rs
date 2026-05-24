@@ -173,11 +173,11 @@ pub async fn execute_proxy(
                 }
 
                 // Set affinity cookie if needed
-                let resp = maybe_set_affinity_cookie(
-                    resp,
-                    &config.affinity,
-                    affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
-                );
+                let resp = if affinity_key.is_none() {
+                    maybe_set_affinity_cookie(resp, &config.affinity, &selected.upstream)
+                } else {
+                    resp
+                };
 
                 return Ok((resp, metrics));
             }
