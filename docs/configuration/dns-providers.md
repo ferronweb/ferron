@@ -1307,7 +1307,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 |-----------|-----------|-------------|---------|
 | `api_key` | `<string>` | Namecheap API key. | — (required) |
 | `api_secret` | `<string>` | Namecheap API secret. | — (required) |
-| `client_ip` | `<string>` | Client IP address (for API whitelisting). | — (required) |
+| `client_ip` | `<string>` | Client IP address (for API allowlisting). | — (required) |
 | `username` | `<string>` | Namecheap username. | — (optional) |
 
 **Configuration example:**

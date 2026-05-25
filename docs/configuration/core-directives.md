@@ -328,7 +328,7 @@ The admin API is a **privileged control plane** that provides full server config
 |---------|--------|-------|
 | TLS / HTTPS | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
 | Authentication | Not supported | No username/password, API key, or token mechanism. Any client that can reach the listener has full administrative access. |
-| ACL / allowlists | Not supported | No IP-based access control. No whitelist or blacklist mechanism. |
+| ACL / allowlists | Not supported | No IP-based access control. No allowlist or blocklist mechanism. |
 
 #### Risks of binding to `0.0.0.0`
 
