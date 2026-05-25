@@ -18,7 +18,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **`abuse_protection`** - a new module for lightweight, native Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
 - **`tls-http`** - support for obtaining TLS certificates from a remote HTTP endpoint, featuring automatic refresh cycles and dedicated observability metrics.
-- **OS Metrics** - added Windows support for native process metrics in the `metrics-process` module.
+- **OS metrics** - added Windows support for native process metrics in the `metrics-process` module.
 
 #### Reverse proxy & load balancing
 
