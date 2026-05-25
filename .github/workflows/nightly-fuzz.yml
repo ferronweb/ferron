@@ -48,6 +48,21 @@ jobs:
           cargo +nightly fuzz run canonicalize_path_routing -- -max_total_time=3600 -workers=2
           cargo +nightly fuzz run proxy_protocol -- -max_total_time=3600 -workers=2
 
+      - name: Run http-cache fuzz
+        working-directory: modules/http-cache/fuzz
+        run: |
+          cargo +nightly fuzz run cache_key_roundtrip -- -max_total_time=3600 -workers=2
+          cargo +nightly fuzz run lscache_parsers -- -max_total_time=3600 -workers=2
+          cargo +nightly fuzz run policy_evaluation -- -max_total_time=3600 -workers=2
+
+      - name: Run http-proxy fuzz
+        working-directory: modules/http-proxy/fuzz
+        run: |
+          cargo +nightly fuzz run consistent_hash_ring -- -max_total_time=3600 -workers=2
+          cargo +nightly fuzz run p2c_ewma -- -max_total_time=3600 -workers=2
+          cargo +nightly fuzz run selector -- -max_total_time=3600 -workers=2
+          cargo +nightly fuzz run weighted_round_robin -- -max_total_time=3600 -workers=2
+
       - name: Upload fuzz artifacts
         uses: actions/upload-artifact@v7
         with:
