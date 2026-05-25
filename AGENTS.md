@@ -73,6 +73,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 ## Conventions
 
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
+- **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (e.g., `Modules`, `Reverse proxy & load balancing`, `DNS & ACME`, `HTTP server core`, `Observability & metrics`, `Core runtime`). Use bold inline headers for each bullet to aid scanning.
 - **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
 - **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.

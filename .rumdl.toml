@@ -42,8 +42,8 @@ respect-gitignore = true
 # [MD003]
 # style = "atx"  # Heading style (atx, atx_closed, setext)
 
-# [MD004]
-# style = "asterisk"  # Unordered list style (asterisk, plus, dash, consistent)
+[MD004]
+style = "dash"  # Unordered list style (asterisk, plus, dash, consistent)
 
 # [MD007]
 # indent = 4  # Unordered list indentation

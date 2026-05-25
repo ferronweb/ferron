@@ -4,73 +4,122 @@
 
 **Not released yet**
 
+### Breaking changes
+
+If you are upgrading to this beta version, you must update your configuration files to accommodate the following syntax refactors:
+
+- **Rate limit windows** - syntax updated to enforce standard duration strings (e.g., `10s`, `5m`, `1h`).
+- **OTLP verification** - `no_verify` has been renamed to `no_verification` and now operates strictly as a configuration flag.
+- **Proxy configuration** - syntax for passive/active health checks, load balancing algorithms, and connection retries has been unified into a cleaner, more consistent format.
+
 ### Added
 
-- Windows support for process metrics in the `metrics-process` module.
-- A dropped-events admin metric for non-blocking observability sinks.
-- `abuse_protection` module for lightweight Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
-- `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
-- `PURGE` HTTP method support for cache invalidation via `purge_method` and `purge_allowed_ips` subdirectives in the `cache` block.
-- HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
-- `p2c_ewma` adaptive load balancing algorithm for reverse proxy that combines Power of Two Choices with EWMA (Exponentially Weighted Moving Average) latency scoring for automatic, latency-aware traffic distribution.
-- Session affinity (sticky sessions) support for reverse proxy with `cookie`, `header`, `ip`, and `hash` affinity types (using a Ketama-style hash ring for deterministic backend selection).
-- Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
-- Support for active health checks for SRV upstream URLs.
-- `circuit_breaker` reverse proxy directive with rolling failure windows, temporary backend ejection, and half-open recovery.
-- `tls-http` module for obtaining TLS certificates from a remote HTTP endpoint, with automatic refresh and observability metrics.
-- 58 newly-supported DNS providers for the ACME DNS-01 challenge: Alibaba Cloud DNS, ArvanCloud, AutoDNS, Azure DNS, Baidu Cloud DNS, BlueCat Address Manager v2, ClouDNS, Constellix, cPanel, DDNSS.de, DNS Made Easy, Domeneshop, DreamHost, DuckDNS, Dynu, EasyDNS, Akamai Edge DNS, Exoscale, FreeMyIP, Gandi v5, Gcore, GleSYS, GoDaddy, Hetzner DNS, hosting.de, Hostinger, Huawei Cloud DNS, Hurricane Electric, IBM Cloud, Infoblox NIOS, Infomaniak, INWX, IONOS, IPv64, Joker, AWS Lightsail, Linode, LuaDNS, Mythic Beasts, Namecheap, Name.com, NameSilo, netcup, Netlify, Nifcloud, NS1, Oracle Cloud DNS, Plesk, ANS SafeDNS, Scaleway, Tencent Cloud DNSPod, TransIP, UltraDNS, Vercel, Vultr, Websupport, Volcano Engine, and Yandex Cloud DNS.
+#### Modules
+
+- **`abuse_protection`** - a new module for lightweight, native Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
+- **`tls-http`** - support for obtaining TLS certificates from a remote HTTP endpoint, featuring automatic refresh cycles and dedicated observability metrics.
+- **OS Metrics** - added Windows support for native process metrics in the `metrics-process` module.
+
+#### Reverse proxy & load balancing
+
+- **`circuit_breaker`** - new directive with rolling failure windows, temporary backend ejection, and half-open recovery states.
+- **`p2c_ewma`** - a new adaptive, latency-aware load balancing algorithm combining Power of Two Choices with Exponentially Weighted Moving Average (EWMA) latency scoring.
+- **Session affinity (sticky sessions)** - native support for `cookie`, `header`, `ip`, and `hash` types utilizing a Ketama-style hash ring for deterministic backend routing.
+- **String interpolation** - upstream URLs and Unix socket paths now support interpolated strings.
+- **SRV routing** - added active health check support for SRV upstream URLs.
+
+#### DNS & ACME
+
+- **58 new DNS providers** - native ACME DNS-01 challenge support expanded to include Alibaba Cloud DNS, Azure DNS, ClouDNS, Hetzner DNS, Oracle Cloud DNS, Vercel, Vultr, Yandex Cloud DNS, and 50+ others.
+
+#### HTTP server core
+
+- **`basic_auth_concurrency`** - global directive to limit concurrent, resource-heavy password verification tasks across all `basic_auth` blocks.
+- **Cache purging** - native `PURGE` HTTP method support for targeted cache invalidation via the `purge_method` and `purge_allowed_ips` subdirectives.
+
+#### Observability & metrics
+
+- **Edge-case visibility** - granular HTTP observability metrics for pre-handler failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
+- **Admin sinks** - added a dropped-events admin metric for non-blocking observability sinks.
 
 ### Changed
 
-- Admin API metrics are now also emitted to observability backends, not just the admin status endpoint.
-- Brute-force protection now uses IP-based locking instead of username-based locking, preventing locking out users.
-- Configuration failures when reloading the server no longer cause the server to stop; instead, they are logged and the server continues to run.
-- File pipeline now returns a 408 Request Timeout status code when the request takes too long, instead of a 404 Not Found status code.
-- Forwarded authentication now supports interpolated string values for the backend URL.
-- HTTP Basic Auth now return a 429 Too Many Requests status code when the user has exceeded the maximum number of failed attempts.
-- HTTP tracing now uses a single `ferron.request` root span with nested pipeline, stage, file-serving, and error-pipeline spans.
-- Improved consistency for duration values across the configuration.
-- Improved error reporting for some TLS handshake failures.
-- Improved error reporting for local automatic TLS failures.
-- `least_conn` load balancing algorithm now supports per-upstream `weight` directive for proportional traffic distribution.
-- Multiple HTTP reverse proxy metrics now include backend URL or unix socket path as an attribute.
-- OCSP responses are now verified before being cached and stapled.
-- OTLP request logs and access logs now include the active request span context for correlation with exported traces.
-- Prometheus label values are now sanitized to reduce high-cardinality labels.
-- `round_robin` load balancing algorithm now supports per-upstream `weight` directive for proportional traffic distribution.
-- Some file serving errors are now handled more gracefully, returning a 403 Forbidden (for permission denied) or 400 Bad Request (for invalid filename or too long one) status code instead of a generic 500 Internal Server Error.
-- Syntax for OTLP `no_verify` has been updated to be `no_verification` and use a flag (**potentially breaking**).
-- Syntax for rate limit window has been updated to use duration strings (**potentially breaking**).
-- Syntax for passive and active health checks, load balancing algorithm, and connection retries has been updated to use a more consistent and readable format (**potentially breaking**).
-- The web server now warns when local automatic TLS is configured but the cache directory isn't writable, instead of straight-up failing to start.
-- The web server process now performs graceful shutdown when SIGTERM is sent to the process on Unix.
-- URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
-- `X-LiteSpeed-Cache` headers aren't emitted by default anymore; this can be still enabled using `emit_litespeed_headers` subdirective in `cache` directive.
+#### Reverse proxy
+
+- **Weighted load balancing** - both `least_conn` and `round_robin` algorithms now support per-upstream `weight` directives for proportional traffic distribution.
+- **Metric attributes** - multiple HTTP reverse proxy metrics now embed the specific backend URL or Unix socket path as a context attribute.
+
+#### DNS & TLS
+
+- **Early OCSP verification** - OCSP responses are now strictly verified before being cached and stapled.
+- **Verbose errors** - significantly improved error reporting layouts for local automatic TLS and specific TLS handshake failures.
+
+#### HTTP server core
+
+- **Safe configuration reloads** - configuration failures during a live reload no longer crash or stop the server; errors are logged, and execution safely continues using the previous valid configuration.
+- **Smarter brute-force locking** - protection now locks by **IP address** instead of username, preventing malicious actors from intentionally locking out legitimate users.
+- **Accurate status codes** - refactored error handling to return context-aware status codes over generic `500` or `404` errors:
+  - File pipeline returns `408 Request Timeout` if a request takes too long (instead of `404`).
+  - Basic Auth returns `429 Too Many Requests` when max failed attempts are reached.
+  - File serving errors return `403 Forbidden` (permissions) or `400 Bad Request` (invalid filenames) instead of `500`.
+- **String interpolation** - forwarded authentication now supports interpolated string values for backend URLs.
+- **Security tightening** - URL canonicalization now strictly rejects paths containing null bytes (`\0` or `%00`).
+- **Cache cleanliness** - `X-LiteSpeed-Cache` headers are no longer emitted by default; can be re-enabled via the `emit_litespeed_headers` subdirective.
+
+#### Observability & tracing
+
+- **Unified request tracing** - HTTP tracing now rolls up into a single `ferron.request` root span with nested child spans for pipelines, stages, file-serving, and error pipelines.
+- **Log correlation** - OTLP request and access logs now include the active request span context out of the box.
+- **Backend exporting** - admin API metrics are now also pushed directly to configured observability backends, not just the local admin endpoint.
+- **Cardinality control** - Prometheus label values are now sanitized to heavily reduce high-cardinality label inflation.
+
+#### Core runtime
+
+- **Unified durations** - improved configuration-wide consistency for duration formatting values.
+- **Graceful shutdown** - the server process now handles standard Unix `SIGTERM` signals for seamless graceful shutdowns.
+- **Frictionless local TLS** - the server now issues a clean warning if local automatic TLS is configured but the cache directory isn't writable, instead of refusing to boot.
 
 ### Fixed
 
-- Admin API-initiated reload would trigger configuration reload loops.
-- Cached responses which are replaced by non-cached default error pages might have been returned as stale.
-- CONNECT requests with authority-form URIs were rejected by the URL canonicalizer.
-- Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included).
-- Forward-proxy denied IP addresses were additive (meaning that RFC 1918 private IP ranges were always included).
-- Forward-proxy DNS validation could be bypassed by performing a DNS rebinding attack (along with exploiting a race condition) against the configured allowed hostnames.
-- Forwarded authentication would fail with 500 Internal Server Error when using `auth_to { ... }` syntax.
-- HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
-- Manual TLS session ticket key rotation didn't use the session ticket key files, instead using in-memory key generation.
-- Malformed and timed-out requests rejected before normal handler completion are now counted by Ferron's observability pipeline.
-- `io_uring` (on Linux) couldn't be disabled via the web server configuration.
-- Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
-- Misconfigured forwarded authentication could lead to completely bypassing the authentication.
-- OCSP stapling might not have fetched the OCSP response immediately after new certificates were added.
-- Rate limiting had a race condition when first creating a new bucket for a key, which could lead to allowing more requests than the configured capacity.
-- Reverse proxy boolean subdirectives with empty values (implying `true`) weren't effective.
-- Reverse proxy didn't remove headers as indicated by the "Connection" header, per RFC 7230.
-- RFC 2136 dynamic DNS updates for ACME DNS-01 challenge didn't work due to "invalid socket address" errors even when configured correctly.
+#### Reverse proxy
+
+- Fixed a bug where reverse proxy boolean subdirectives with empty values (implying `true`) were being ignored.
+- Resolved an issue where the reverse proxy would occasionally route traffic to the wrong backend server.
+- Fixed an issue where the proxy failed to strip headers specified by the `Connection` header per RFC 7230.
+
+#### DNS & ACME
+
+- Fixed an "invalid socket address" error that broke RFC 2136 dynamic DNS updates for the ACME DNS-01 challenge.
+- Resolved an edge case where OCSP stapling failed to immediately fetch the response after new certificates were registered.
+
+#### HTTP server core
+
+- **Auth bypass closed** - fixed a critical flaw where a misconfigured forwarded authentication block could result in bypassing authentication entirely.
+- Fixed a `500 Internal Server Error` when using the `auth_to { ... }` syntax inside forwarded authentication blocks.
+- Fixed a bug where CONNECT requests with authority-form URIs were erroneously blocked by the URL canonicalizer.
+- Fixed HTTP-to-HTTPS redirects to correctly target the original requested URL rather than internal rewritten URLs.
+
+#### Observability
+
+- Fixed a data blind spot where malformed and timed-out requests rejected before normal handler completion went uncounted by the observability pipeline.
+- Corrected inaccurate memory metrics that were calculating values relative to initial memory usage instead of absolute usage.
+
+#### Security
+
+- **DNS rebinding fixed** - closed a vulnerability where forward-proxy DNS validation could be bypassed via a race condition combined with a DNS rebinding attack.
+- Fixed an issue where forward-proxy allowed ports and denied IP addresses were being treated as additive rather than strictly respecting user configuration overrides.
+
+#### Runtime operations
+
+- Fixed an Admin API-initiated reload loop that caused infinite configuration reload loops.
+- Eliminated a rate limiting race condition when initializing a brand new key bucket, which previously allowed traffic to briefly exceed configured capacities.
+- Fixed manual TLS session ticket key rotation to properly read from configured key files instead of silently falling back to in-memory generation.
+- Fixed a bug on Linux where `io_uring` could not be explicitly disabled through the server configuration file.
+- Fixed an edge case where cached responses replaced by non-cached default error pages could be returned stale.
 
 ## Ferron 3.0.0-beta.1
 
-**Released in May 5, 2026**
+## Released in May 5, 2026
 
 ### Added
 
