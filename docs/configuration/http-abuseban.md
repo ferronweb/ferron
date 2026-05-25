@@ -96,7 +96,7 @@ Ban after:
 - 10 rate limit events in 10 minutes (5-min ban), OR
 - 10 brute force failures in 10 minutes (5-min ban)
 
-**Configuration example — IP allowlist:**
+**Configuration example — trusted IP list:**
 
 ```ferron
 example.com {
@@ -106,7 +106,7 @@ example.com {
 }
 ```
 
-IPs in the allowlist are never banned, even if they exceed thresholds. This is useful for protecting internal services or known-trusted IPs.
+IPs added to the `allowlist` are never banned, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
 
 ## Behavior
 
@@ -139,7 +139,7 @@ Events are stored in a sliding time window. When the number of events within the
 
 ### Allowlist behavior
 
-IPs in the allowlist are checked before any ban lookup. If an IP matches any CIDR range in the allowlist, it is never banned regardless of event count. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
+Any IP that matches an entry in the `allowlist` is skipped before ban checks are performed. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
 
 ## Examples
 

@@ -1,6 +1,6 @@
 ---
 title: "Configuration: forward proxy"
-description: "Forward proxy, CONNECT tunneling, access control, and domain allowlisting directives."
+description: "Forward proxy, CONNECT tunneling, IP and domain access control directives."
 ---
 
 This page documents directives for configuring Ferron to act as an HTTP forward proxy, accepting requests from clients and forwarding them to external destinations. It supports both HTTP CONNECT tunneling (for HTTPS/WebSocket) and HTTP/1.x absolute URI forwarding.
@@ -47,11 +47,11 @@ When no `deny_ips` is specified, the following ranges are denied by default:
 
 ### Security model
 
-The forward proxy operates on a **deny-by-default** model:
+The forward proxy uses a **deny-by-default** model:
 
-1. **Domain allowlisting**: If `allow_domains` is not configured, all destination domains are denied.
-2. **Port allowlisting**: Only explicitly listed ports are allowed. Defaults to `80` and `443`.
-3. **IP denylisting**: After DNS resolution, the resolved IP is checked against the deny list (including defaults). This prevents SSRF attacks.
+1. **Domain control**: If `allow_domains` is not set, all destination domains are denied.
+2. **Port control**: Only explicitly allowed ports are permitted (defaults to 80 and 443).
+3. **IP blocking**: After DNS resolution, the final IP is checked against the deny list.
 
 ## Request handling
 

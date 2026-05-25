@@ -91,7 +91,7 @@ This bans an IP for **5 minutes** only after:
 - 10 rate limit breaches within 10 minutes, OR
 - 10 brute force failures within 10 minutes
 
-## IP allowlisting for trusted infrastructure
+## Exempting trusted IPs from abuse protection
 
 Exclude internal networks, monitoring systems, or known-trusted IPs from bans:
 

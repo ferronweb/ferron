@@ -109,7 +109,7 @@ PURGE requests must be either:
 
 If neither condition is met, Ferron returns a **403 Forbidden** response. This ensures that cache purging is never accidentally left unsecured.
 
-**Example using IP allowlist:**
+**Example using trusted IP list:**
 
 ```ferron
 example.com {

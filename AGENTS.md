@@ -79,3 +79,12 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
 - **Docker**: three variants — `Dockerfile` (distroless + musl), `Dockerfile.alpine` (musl), `Dockerfile.debian` (glibc).
+
+## Documentation principles
+
+- **Describe behavior, not labels**: When documenting features, limitations, or configurations, explain what the system actually does. Prefer explicit, functional descriptions over terminology.
+  - **Do:** "No built-in IP address filtering or access restrictions."
+  - **Don't:** Use vague mechanism-focused phrasing (e.g. referring only to allow/block lists).
+- **Consistency > novelty**: If a term is required by an upstream API, legacy config, or widely adopted standard, keep it. Do not auto-replace terminology across the codebase unless explicitly instructed.
+- **Clarity hierarchy**: Functional precision → internal consistency → audience familiarity → terminology trends.
+- **Linters as guidance**: Treat terminology linters (e.g., `woke`) as soft suggestions. Do not let them override clarity, break consistency, or trigger unnecessary diffs.
