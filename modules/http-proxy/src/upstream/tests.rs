@@ -771,8 +771,12 @@ fn test_select_backend_index_p2c_ewma_prefers_lower_latency() {
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     // Initialise trackers so both backends have 0 active connections
-    conn_state.entry(backends[0].1.clone()).or_insert(Arc::new(()));
-    conn_state.entry(backends[1].1.clone()).or_insert(Arc::new(()));
+    conn_state
+        .entry(backends[0].1.clone())
+        .or_insert(Arc::new(()));
+    conn_state
+        .entry(backends[1].1.clone())
+        .or_insert(Arc::new(()));
 
     // Backend1 starts with a low latency record, Backend2 with a high one
     let params = super::lb::p2c_ewma::P2cEwmaParams::default();
