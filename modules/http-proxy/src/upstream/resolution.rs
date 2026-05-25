@@ -9,7 +9,7 @@ use crate::types::lb::SelectedBackend;
 use crate::types::upstream::{Upstream, UpstreamInner};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
-use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
+use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::util::FailureCache;
 
 /// Resolve all upstreams to a flat list of `UpstreamInner` entries.
@@ -49,6 +49,7 @@ pub fn determine_proxy_to(
     health_check_max_fails: u64,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
+    ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
@@ -130,7 +131,7 @@ pub fn determine_proxy_to(
         } else if healthy.len() == 1 {
             0
         } else {
-            super::lb::selector::select_backend_index(algorithm, &healthy, conn_state)
+            super::lb::selector::select_backend_index(algorithm, &healthy, conn_state, ewma_state)
         };
         let (_, upstream) = healthy.remove(index);
         if start_pos == Some(index) {

@@ -78,6 +78,7 @@ example.com {
 | `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 | `least_conn` | Selects the backend with the fewest active tracked connections multiplied by its weight. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
+| `p2c_ewma` | Selects the backend based on a P2C+EWMA adaptive load balancing algorithm. |
 
 ## A/B testing with backends
 

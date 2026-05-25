@@ -10,7 +10,7 @@ use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::affinity::resolve_affinity_index;
 use crate::upstream::lb::{
-    selector::select_backend_index, ConsistentHashRing, LoadBalancerAlgorithmInner,
+    selector::select_backend_index, ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner,
     WeightedRoundRobinState,
 };
 use crate::util::TtlCache;
@@ -43,7 +43,7 @@ fn test_select_backend_index_random() {
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     for _ in 0..100 {
-        let idx = select_backend_index(&algorithm, &backends, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         assert!(idx < backends.len());
     }
 }
@@ -58,10 +58,10 @@ fn test_select_backend_index_round_robin() {
     let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_select_backend_index_least_connections() {
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert!(idx < backends.len());
 
     let tracker1 = Arc::new(());
@@ -81,7 +81,7 @@ fn test_select_backend_index_least_connections() {
     let _clone1 = tracker1.clone();
     let _clone2 = tracker1.clone();
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -96,7 +96,7 @@ fn test_select_backend_index_two_random_choices() {
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     for _ in 0..100 {
-        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
         assert!(idx < backends.len());
     }
 }
@@ -107,7 +107,7 @@ fn test_select_backend_single_backend() {
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -123,6 +123,7 @@ fn test_determine_proxy_to_no_upstreams() {
         false,
         3,
         &algorithm,
+        None,
         None,
         None,
         &crate::config::CircuitBreakerConfig::default(),
@@ -151,6 +152,7 @@ fn test_determine_proxy_to_single_backend() {
         3,
         &algorithm,
         Some(&conn_state),
+        None,
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
@@ -187,6 +189,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         true,
         3,
         &algorithm,
+        None,
         None,
         None,
         &crate::config::CircuitBreakerConfig::default(),
@@ -226,6 +229,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         &algorithm,
         None,
         None,
+        None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
         &[],
@@ -259,6 +263,7 @@ fn test_determine_proxy_to_health_check_disabled() {
         false,
         3,
         &algorithm,
+        None,
         None,
         None,
         &crate::config::CircuitBreakerConfig::default(),
@@ -380,6 +385,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         3,
         &algorithm,
         None,
+        None,
         Some(&health_check_state),
         &crate::config::CircuitBreakerConfig::default(),
         None,
@@ -412,6 +418,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         3,
         &algorithm,
         None,
+        None,
         Some(&health_check_state),
         &crate::config::CircuitBreakerConfig::default(),
         None,
@@ -440,10 +447,10 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With equal weights, should cycle like round-robin
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
-    assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -460,7 +467,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
     // backend2 and backend3 once each
     let mut counts = [0usize; 3];
     for _ in 0..7 {
-        let idx = select_backend_index(&algorithm, &backends, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         counts[idx] += 1;
     }
     assert_eq!(counts[0], 5);
@@ -480,7 +487,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
     // With weights 5:1, smooth WRR should distribute as:
     // A, A, B, A, A, A (not AAAAAA B)
     let selections: Vec<usize> = (0..6)
-        .map(|_| select_backend_index(&algorithm, &backends, None))
+        .map(|_| select_backend_index(&algorithm, &backends, None, None))
         .collect();
 
     // Backend1 (weight 5) should be selected 5 times
@@ -501,7 +508,7 @@ fn test_select_backend_index_weighted_round_robin_single_backend() {
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     for _ in 0..10 {
-        assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+        assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
     }
 }
 
@@ -576,7 +583,7 @@ fn test_select_backend_index_least_connections_fewer_connections() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend2 (fewer connections)
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -606,7 +613,7 @@ fn test_select_backend_index_least_connections_weighted_higher_weight_favored() 
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend2 (higher weight compensates for more connections)
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -636,7 +643,7 @@ fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend1 (higher weight compensates for more connections)
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -666,7 +673,7 @@ fn test_select_backend_index_least_connections_weighted_equal_score() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend1 (lower weighted score)
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -680,7 +687,7 @@ fn test_select_backend_index_least_connections_all_zero_weight() {
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // All backends have weight 0, should fall back to index 0
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -717,6 +724,182 @@ fn test_select_backend_index_least_connections_weighted_uneven_distribution() {
     conn_state.insert(backends[2].1.clone(), tracker3);
 
     // Backend3 should be selected (fewest connections and highest weight)
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 2);
+}
+
+// ---------------------------------------------------------------------------
+// P2C+EWMA tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_select_backend_index_p2c_ewma_basic() {
+    let backends = vec![
+        (0, make_upstream("http://backend1")),
+        (1, make_upstream("http://backend2")),
+        (2, make_upstream("http://backend3")),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
+
+    for _ in 0..100 {
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        assert!(idx < backends.len());
+    }
+}
+
+#[test]
+fn test_select_backend_index_p2c_ewma_single_backend() {
+    let backends = vec![(0, make_upstream("http://backend1"))];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
+
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+    assert_eq!(idx, 0);
+}
+
+#[test]
+fn test_select_backend_index_p2c_ewma_prefers_lower_latency() {
+    let backends = vec![
+        (0, make_upstream("http://backend1")),
+        (1, make_upstream("http://backend2")),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
+
+    // Initialise trackers so both backends have 0 active connections
+    conn_state.entry(backends[0].1.clone()).or_insert(Arc::new(()));
+    conn_state.entry(backends[1].1.clone()).or_insert(Arc::new(()));
+
+    // Backend1 starts with a low latency record, Backend2 with a high one
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &backends[0].1, 0.01, &params);
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &backends[1].1, 2.0, &params);
+
+    // With equal connection counts, the lower-latency backend should win
+    let mut backend1_wins = 0;
+    let mut backend2_wins = 0;
+    for _ in 0..200 {
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        if idx == 0 {
+            backend1_wins += 1;
+        } else {
+            backend2_wins += 1;
+        }
+    }
+    // Backend1 (lower latency) should win significantly more often
+    assert!(
+        backend1_wins > backend2_wins,
+        "expected backend1 (low latency) to be preferred, got {backend1_wins} vs {backend2_wins}"
+    );
+}
+
+#[test]
+fn test_select_backend_index_p2c_ewma_prefers_fewer_connections() {
+    let backends = vec![
+        (0, make_upstream("http://backend1")),
+        (1, make_upstream("http://backend2")),
+    ];
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
+
+    // Equal EWMA latencies
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &backends[0].1, 0.1, &params);
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &backends[1].1, 0.1, &params);
+
+    // Backend1 has many active connections
+    let tracker1 = Arc::new(());
+    conn_state.insert(backends[0].1.clone(), tracker1.clone());
+    // Simulate 10 active connections via strong_count
+    let mut conns = Vec::new();
+    for _ in 0..10 {
+        conns.push(tracker1.clone());
+    }
+
+    // Backend2 has few active connections (just the entry tracker)
+    let tracker2 = Arc::new(());
+    conn_state.insert(backends[1].1.clone(), tracker2.clone());
+
+    let mut backend1_wins = 0;
+    let mut backend2_wins = 0;
+    for _ in 0..200 {
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        if idx == 0 {
+            backend1_wins += 1;
+        } else {
+            backend2_wins += 1;
+        }
+    }
+    // Backend2 (fewer connections) should win significantly more often
+    assert!(
+        backend2_wins > backend1_wins,
+        "expected backend2 (fewer active connections) to be preferred, got {backend2_wins} vs {backend1_wins}"
+    );
+}
+
+#[test]
+fn test_p2c_ewma_update() {
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let upstream = make_upstream("http://backend1");
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &upstream, 0.5, &params);
+    let data = ewma_state.get(&upstream).unwrap();
+    assert!((data.ewma - 0.5).abs() < 1e-9);
+    assert_eq!(data.sample_count, 1);
+    drop(data);
+
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &upstream, 0.3, &params);
+    let data = ewma_state.get(&upstream).unwrap();
+    assert!((data.ewma - 0.4).abs() < 1e-9);
+    assert_eq!(data.sample_count, 2);
+    drop(data);
+}
+
+#[test]
+fn test_p2c_ewma_warmup_transitions_to_ewma() {
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let upstream = make_upstream("http://backend1");
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+
+    for _ in 0..10 {
+        crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &upstream, 0.1, &params);
+    }
+    {
+        let data = ewma_state.get(&upstream).unwrap();
+        assert_eq!(data.sample_count, 10);
+        assert!((data.ewma - 0.1).abs() < 1e-9);
+    }
+
+    crate::upstream::lb::p2c_ewma::update_ewma(&ewma_state, &upstream, 1.0, &params);
+    {
+        let data = ewma_state.get(&upstream).unwrap();
+        assert_eq!(data.sample_count, 11);
+        let expected = params.alpha * 1.0 + (1.0 - params.alpha) * 0.1;
+        assert!((data.ewma - expected).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn test_p2c_ewma_default_ewma_for_unknown_backend() {
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let upstream = make_upstream("http://unknown");
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+
+    let ewma = crate::upstream::lb::p2c_ewma::get_decayed_ewma(&ewma_state, &upstream, &params);
+    assert!((ewma - params.default_ewma).abs() < 1e-9);
+}
+
+#[test]
+fn test_p2c_ewma_compute_score() {
+    let params = super::lb::p2c_ewma::P2cEwmaParams::default();
+    let score = crate::upstream::lb::p2c_ewma::compute_score(0.5, 4, &params);
+    // Expected: 0.5 + 4 * 0.5 = 0.5 + 2.0 = 2.5
+    let expected = 0.5 + 4.0 * params.connection_penalty;
+    assert!((score - expected).abs() < 1e-9);
 }

@@ -19,6 +19,10 @@ pub enum LoadBalancerAlgorithm {
     /// Pick two random, select less loaded.
     #[default]
     TwoRandomChoices,
+    /// Power of Two Choices with EWMA latency scoring.
+    /// Picks two random backends and selects the one with the lower combined
+    /// score of EWMA response latency + active connection penalty.
+    P2cEwma,
 }
 
 /// Result of backend selection: the upstream and its connection tracker.

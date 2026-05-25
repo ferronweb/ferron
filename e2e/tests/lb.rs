@@ -115,6 +115,15 @@ ferron-two-random:80 {
   }
 }
 
+ferron-p2c-ewma:80 {
+  proxy {
+    upstream "http://backend-1:3000"
+    upstream "http://backend-2:3000"
+    upstream "http://backend-3:3000"
+    algorithm "p2c_ewma"
+  }
+}
+
 ferron-weighted-round-robin:80 {
   proxy {
     upstream "http://backend-1:3000" {
@@ -147,10 +156,10 @@ ferron-weighted-round-robin:80 {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Helper to test an algorithm
-    let test_algo = |host: &'static str| {
+    let test_algo = |host: &'static str, count: usize| {
         let client = client.clone();
         async move {
-            for _ in 0..3 {
+            for _ in 0..count {
                 let response = client
                     .get(format!("http://localhost:{}/", port))
                     .header("Host", host)
@@ -163,11 +172,12 @@ ferron-weighted-round-robin:80 {
         }
     };
 
-    test_algo("ferron-random").await;
-    test_algo("ferron-round-robin").await;
-    test_algo("ferron-least-conn").await;
-    test_algo("ferron-two-random").await;
-    test_algo("ferron-weighted-round-robin").await;
+    test_algo("ferron-random", 3).await;
+    test_algo("ferron-round-robin", 3).await;
+    test_algo("ferron-least-conn", 3).await;
+    test_algo("ferron-two-random", 3).await;
+    test_algo("ferron-p2c-ewma", 33).await; // 10 samples per backend would be warmup...
+    test_algo("ferron-weighted-round-robin", 3).await;
 }
 
 #[tokio::test]

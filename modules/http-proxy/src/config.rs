@@ -256,6 +256,7 @@ fn parse_proxy_block(
                         "round_robin" => LoadBalancerAlgorithm::RoundRobin,
                         "least_conn" => LoadBalancerAlgorithm::LeastConnections,
                         "two_random" => LoadBalancerAlgorithm::TwoRandomChoices,
+                        "p2c_ewma" => LoadBalancerAlgorithm::P2cEwma,
                         _ => {
                             return Err(
                                 format!("Unsupported load balancing algorithm: {val}").into()

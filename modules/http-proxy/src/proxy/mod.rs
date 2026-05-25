@@ -24,7 +24,7 @@ use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
-use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
+use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
     resolve_upstreams,
@@ -59,6 +59,7 @@ pub async fn execute_proxy(
     algorithm: &LoadBalancerAlgorithmInner,
     ring: &RwLock<ConsistentHashRing>,
     conn_state: Option<&ConnectionsTrackState>,
+    ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&Mutex<HashMap<String, u64>>>,
 ) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
@@ -102,6 +103,7 @@ pub async fn execute_proxy(
             config.passive_check.max_fails,
             algorithm,
             conn_state,
+            ewma_state,
             health_check_state,
             &config.circuit_breaker,
             Some(&circuit_breaker_state),
@@ -163,6 +165,20 @@ pub async fn execute_proxy(
                         &mut metrics,
                         &ctx.events,
                     );
+                }
+
+                // Update EWMA latency for P2C+EWMA algorithm
+                if metrics.upstream_time_secs > 0.0
+                    && matches!(algorithm, LoadBalancerAlgorithmInner::P2cEwma)
+                {
+                    if let Some(ewma_state) = ewma_state {
+                        crate::upstream::lb::p2c_ewma::update_ewma(
+                            ewma_state,
+                            &selected.upstream,
+                            metrics.upstream_time_secs,
+                            &Default::default(),
+                        );
+                    }
                 }
 
                 // Collect active health check unhealthy metrics

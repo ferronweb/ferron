@@ -12,6 +12,7 @@
 - `basic_auth_concurrency` global directive to limit concurrent password verification tasks across all `basic_auth` blocks.
 - `PURGE` HTTP method support for cache invalidation via `purge_method` and `purge_allowed_ips` subdirectives in the `cache` block.
 - HTTP observability metrics for pre-handler request failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
+- `p2c_ewma` adaptive load balancing algorithm for reverse proxy that combines Power of Two Choices with EWMA (Exponentially Weighted Moving Average) latency scoring for automatic, latency-aware traffic distribution.
 - Session affinity (sticky sessions) support for reverse proxy with `cookie`, `header`, `ip`, and `hash` affinity types (using a Ketama-style hash ring for deterministic backend selection).
 - Support for interpolated strings in reverse proxy upstream URLs and Unix socket paths.
 - Support for active health checks for SRV upstream URLs.

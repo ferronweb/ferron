@@ -16,7 +16,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
-  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`. Default: `algorithm two_random`
+  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `passive_check [bool: boolean]` (`http-proxy`)
   - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
@@ -237,6 +237,7 @@ example.com {
 | `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
 | `least_conn` | Selects the backend with the fewest active tracked connections multiplied by its weight. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
+| `p2c_ewma` | Power of Two Choices with EWMA (Exponentially Weighted Moving Average) latency scoring. Picks two random backends and selects the one with the lower combined score of EWMA response latency + active connection penalty. Automatically adapts to backend performance changes. |
 
 ## Session affinity
 
@@ -463,6 +464,14 @@ The proxy module emits the following metrics:
   - Attributes: backend URL or unix socket path
 - `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
   - Attributes: backend URL or unix socket path
+- `ferron.proxy.lb.ewma_latency` (Gauge) — current EWMA response latency for the selected backend (`p2c_ewma` algorithm).
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.lb.active_connections` (Gauge) — active tracked connections for the selected backend (`p2c_ewma` algorithm).
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.lb.warmup_state` (Gauge) — whether the selected backend is in EWMA warm-up phase (1) or settled (0).
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.lb.selections` (Counter) — P2C+EWMA backend selection with combined score.
+  - Attributes: backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score)
 
 ## Notes and troubleshooting
 

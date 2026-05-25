@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
+use crate::upstream::lb::p2c_ewma::{self, EwmaStateMap, P2cEwmaParams};
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
 
 /// Selects a backend index based on the load balancing algorithm.
@@ -17,6 +18,7 @@ pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
     backends: &[(usize, UpstreamInner)],
     conn_state: Option<&ConnectionsTrackState>,
+    ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
     match load_balancer_algorithm {
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
@@ -112,6 +114,53 @@ pub fn select_backend_index(
                 idx1
             } else {
                 idx2
+            }
+        }
+        LoadBalancerAlgorithmInner::P2cEwma => {
+            let params = P2cEwmaParams::default();
+
+            // Without connection tracking, fall back to random.
+            let Some(conn_state) = conn_state else {
+                return rand::random_range(0..backends.len());
+            };
+
+            if backends.len() < 2 {
+                // Initialise tracker for single backend
+                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].1.clone()) {
+                    e.insert(Arc::new(()));
+                }
+                return 0;
+            }
+
+            let idx1 = rand::random_range(0..backends.len());
+            let mut idx2 = rand::random_range(0..backends.len() - 1);
+            if idx2 >= idx1 {
+                idx2 += 1;
+            }
+
+            // Get connection count and EWMA for each candidate
+            let score_for = |idx: usize| -> f64 {
+                let (_, ref upstream) = backends[idx];
+                let active_conns = match conn_state.entry(upstream.clone()) {
+                    dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
+                    dashmap::Entry::Vacant(e) => {
+                        e.insert(Arc::new(()));
+                        0
+                    }
+                };
+                let ewma = ewma_state
+                    .map(|s| p2c_ewma::get_decayed_ewma(s, upstream, &params))
+                    .unwrap_or(params.default_ewma);
+                p2c_ewma::compute_score(ewma, active_conns, &params)
+            };
+
+            let s1 = score_for(idx1);
+            let s2 = score_for(idx2);
+
+            if s2 < s1 {
+                idx2
+            } else {
+                idx1
             }
         }
     }

@@ -377,6 +377,7 @@ mod tests {
             &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
             None,
             None,
+            None,
             &circuit_breaker,
             Some(&circuit_breaker_state),
             &[],
