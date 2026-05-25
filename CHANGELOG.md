@@ -84,7 +84,6 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Reverse proxy
 
 - Fixed a bug where reverse proxy boolean subdirectives with empty values (implying `true`) were being ignored.
-- Resolved an issue where the reverse proxy would occasionally route traffic to the wrong backend server.
 - Fixed an issue where the proxy failed to strip headers specified by the `Connection` header per RFC 7230.
 
 #### DNS & ACME
