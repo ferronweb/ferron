@@ -3,6 +3,9 @@ name = "ferron-http-cache"
 version = "3.0.0-beta.1"
 edition = "2021"
 
+[features]
+fuzz = []
+
 [dependencies]
 async-trait = "0.1"
 bytes = "1"

@@ -1,9 +1,20 @@
 //! HTTP response cache with LSCache-compatible response header controls.
 
+#![cfg_attr(feature = "fuzz", allow(private_interfaces))]
+
 mod config;
+#[cfg(feature = "fuzz")]
+pub mod lscache;
+#[cfg(not(feature = "fuzz"))]
 mod lscache;
+#[cfg(feature = "fuzz")]
+pub mod policy;
+#[cfg(not(feature = "fuzz"))]
 mod policy;
 mod stage;
+#[cfg(feature = "fuzz")]
+pub mod store;
+#[cfg(not(feature = "fuzz"))]
 mod store;
 mod validator;
 

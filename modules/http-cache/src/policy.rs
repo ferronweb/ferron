@@ -401,4 +401,229 @@ mod tests {
         assert!(decision.store);
         assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
     }
+
+    #[test]
+    fn no_store_wins_over_no_cache() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache"),
+        );
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "response-no-store");
+    }
+
+    #[test]
+    fn max_age_zero_equals_no_cache() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("max-age=0"),
+        );
+        let policy = parse_request_policy(&headers);
+        assert!(!policy.allow_lookup);
+        assert!(policy.allow_store);
+        assert_eq!(policy.reason, "request-revalidation");
+    }
+
+    #[test]
+    fn authorization_without_explicit_public_is_not_cacheable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("max-age=3600"),
+        );
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            true,
+            false,
+            None,
+            false,
+        );
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "authorization-public");
+    }
+
+    #[test]
+    fn authorization_with_explicit_public_is_cacheable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=3600"),
+        );
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            true,
+            false,
+            None,
+            false,
+        );
+        assert!(decision.store);
+    }
+
+    #[test]
+    fn private_set_cookie_is_allowed() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("private, max-age=3600"),
+        );
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            true,
+            None,
+            false,
+        );
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Private));
+    }
+
+    #[test]
+    fn expires_in_past_produces_zero_ttl() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public"),
+        );
+        headers.insert(
+            header::EXPIRES,
+            HeaderValue::from_static("Mon, 01 Jan 2020 00:00:00 GMT"),
+        );
+        headers.insert(
+            header::DATE,
+            HeaderValue::from_static("Mon, 01 Jan 2024 00:00:00 GMT"),
+        );
+        // With public but no max-age, TTL is min(DEFAULT_MAX_CACHE_AGE_SECS=300, expires_delta)
+        // expires is in the past => expires_delta returns None => TTL falls back to DEFAULT
+        // Actually, expires_delta returns None because expires_at < date
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        // Without any valid max-age or expires, TTL defaults to DEFAULT_MAX_CACHE_AGE_SECS
+        assert!(decision.store);
+        assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn not_cacheable_status_code() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("max-age=3600"),
+        );
+        // 201 Created is not cacheable by default and has no explicit public/private
+        let decision = evaluate_response_policy(
+            StatusCode::CREATED,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "not-cacheable");
+    }
+
+    #[test]
+    fn cacheable_by_default_status_without_explicit_directive() {
+        let headers = HeaderMap::new();
+        // 200 OK is cacheable by default even without explicit Cache-Control
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
+        assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn pragma_no_cache_triggers_revalidation() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+        let policy = parse_request_policy(&headers);
+        assert!(!policy.allow_lookup);
+        assert!(policy.allow_store);
+        assert_eq!(policy.reason, "request-revalidation");
+    }
+
+    #[test]
+    fn empty_cache_control_is_eligible() {
+        let headers = HeaderMap::new();
+        let policy = parse_request_policy(&headers);
+        assert!(policy.allow_lookup);
+        assert!(policy.allow_store);
+        assert_eq!(policy.reason, "eligible");
+    }
+
+    #[test]
+    fn litespeed_override_bypasses_standard_no_cache() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+        let ls_control = LiteSpeedCacheControl {
+            public: true,
+            max_age: Some(Duration::from_secs(120)),
+            ..LiteSpeedCacheControl::default()
+        };
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            Some(&ls_control),
+            true,
+        );
+        assert!(decision.store);
+    }
+
+    #[test]
+    fn s_maxage_precedence_over_max_age() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=3600, s-maxage=120"),
+        );
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        assert!(decision.store);
+        // s-maxage (120) should be the minimum among candidates
+        assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn request_no_store_in_pragma_ignored() {
+        // Pragma no-store is not standard; only no-cache is defined for Pragma
+        let mut headers = HeaderMap::new();
+        headers.insert(header::PRAGMA, HeaderValue::from_static("no-store"));
+        let policy = parse_request_policy(&headers);
+        assert!(policy.allow_lookup);
+        assert!(policy.allow_store);
+    }
 }

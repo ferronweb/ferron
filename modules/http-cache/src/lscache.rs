@@ -238,4 +238,176 @@ mod tests {
         assert_eq!(purge[0].scope, CacheScope::Public);
         assert_eq!(purge[1].scope, CacheScope::Private);
     }
+
+    #[test]
+    fn empty_header_values_produce_defaults() {
+        let headers = HeaderMap::new();
+        assert!(parse_litespeed_cache_control(&headers).is_none());
+        assert_eq!(parse_litespeed_vary(&headers).cookies.len(), 0);
+        assert_eq!(parse_litespeed_tags(&headers, CacheScope::Public).len(), 0);
+        assert_eq!(parse_litespeed_purge(&headers).len(), 0);
+    }
+
+    #[test]
+    fn purge_empty_tokens_between_delimiters() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_PURGE, HeaderValue::from_static("url=/path,,tag=foo"));
+        let purge = parse_litespeed_purge(&headers);
+        assert_eq!(purge.len(), 1);
+        assert_eq!(purge[0].selectors.len(), 2);
+    }
+
+    #[test]
+    fn purge_double_semicolon() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_PURGE, HeaderValue::from_static("tag=a;;tag=b"));
+        let purge = parse_litespeed_purge(&headers);
+        // Empty segment between ;; produces no operation
+        assert_eq!(purge.len(), 2);
+    }
+
+    #[test]
+    fn purge_empty_tag_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_PURGE, HeaderValue::from_static("tag="));
+        let purge = parse_litespeed_purge(&headers);
+        assert_eq!(purge.len(), 1);
+        assert_eq!(purge[0].selectors.len(), 1);
+        match &purge[0].selectors[0] {
+            PurgeSelector::Tag(t) => assert_eq!(t, ""),
+            _ => panic!("expected Tag selector"),
+        }
+    }
+
+    #[test]
+    fn purge_mixed_scope_on_same_segment() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_PURGE,
+            HeaderValue::from_static("private,public,tag=foo"),
+        );
+        let purge = parse_litespeed_purge(&headers);
+        // Last scope wins for the segment: public
+        assert_eq!(purge.len(), 1);
+        assert_eq!(purge[0].scope, CacheScope::Public);
+    }
+
+    #[test]
+    fn purge_bare_token_falls_back_to_tag() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_PURGE, HeaderValue::from_static("some-unknown-token"));
+        let purge = parse_litespeed_purge(&headers);
+        assert_eq!(purge.len(), 1);
+        assert_eq!(purge[0].selectors.len(), 1);
+        match &purge[0].selectors[0] {
+            PurgeSelector::Tag(t) => assert_eq!(t, "some-unknown-token"),
+            _ => panic!("expected Tag selector for bare token"),
+        }
+    }
+
+    #[test]
+    fn tags_dedup_by_scope_and_name() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_TAG,
+            HeaderValue::from_static("tag-a, tag-a, tag-b"),
+        );
+        let tags = parse_litespeed_tags(&headers, CacheScope::Public);
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].name, "tag-a");
+        assert_eq!(tags[1].name, "tag-b");
+    }
+
+    #[test]
+    fn tags_public_prefix_overrides_scope() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_TAG,
+            HeaderValue::from_static("public:shared-tag, private-tag"),
+        );
+        let tags = parse_litespeed_tags(&headers, CacheScope::Private);
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].scope, CacheScope::Public);
+        assert_eq!(tags[0].name, "shared-tag");
+        assert_eq!(tags[1].scope, CacheScope::Private);
+        assert_eq!(tags[1].name, "private-tag");
+    }
+
+    #[test]
+    fn tags_empty_token_skipped() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_TAG, HeaderValue::from_static("tag-a,,tag-b"));
+        let tags = parse_litespeed_tags(&headers, CacheScope::Public);
+        assert_eq!(tags.len(), 2);
+    }
+
+    #[test]
+    fn vary_cookies_dedup_and_sorted() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_VARY,
+            HeaderValue::from_static("cookie=z, cookie=a, cookie=a"),
+        );
+        let vary = parse_litespeed_vary(&headers);
+        assert_eq!(vary.cookies, vec!["a", "z"]);
+    }
+
+    #[test]
+    fn vary_empty_cookie_value_skipped() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_VARY, HeaderValue::from_static("cookie="));
+        let vary = parse_litespeed_vary(&headers);
+        assert!(vary.cookies.is_empty());
+    }
+
+    #[test]
+    fn vary_value_no_trim_issue() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_VARY,
+            HeaderValue::from_static("value= desktop"),
+        );
+        let vary = parse_litespeed_vary(&headers);
+        // value= is stripped and remaining content is trimmed then stored
+        assert_eq!(vary.value.as_deref(), Some("desktop"));
+    }
+
+    #[test]
+    fn lscache_control_parses_multiple_headers() {
+        let mut headers = HeaderMap::new();
+        headers.append(
+            &LS_CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120"),
+        );
+        headers.append(
+            &LS_CACHE_CONTROL,
+            HeaderValue::from_static("no-vary"),
+        );
+        let cc = parse_litespeed_cache_control(&headers).expect("should parse");
+        assert!(cc.public);
+        assert!(cc.no_vary);
+        assert_eq!(cc.max_age, Some(Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn purge_with_stale_flag() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            &LS_PURGE,
+            HeaderValue::from_static("public,stale,tag=listing"),
+        );
+        let purge = parse_litespeed_purge(&headers);
+        assert_eq!(purge.len(), 1);
+        assert!(purge[0].stale);
+        assert_eq!(purge[0].scope, CacheScope::Public);
+    }
+
+    #[test]
+    fn purge_all_selector_with_tag() {
+        let mut headers = HeaderMap::new();
+        headers.insert(&LS_PURGE, HeaderValue::from_static("*,tag=foo"));
+        let purge = parse_litespeed_purge(&headers);
+        assert_eq!(purge.len(), 1);
+        assert_eq!(purge[0].selectors.len(), 2);
+    }
 }
