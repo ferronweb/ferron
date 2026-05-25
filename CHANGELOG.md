@@ -95,6 +95,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Auth bypass closed** - fixed a critical flaw where a misconfigured forwarded authentication block could result in bypassing authentication entirely.
 - Fixed a `500 Internal Server Error` when using the `auth_to { ... }` syntax inside forwarded authentication blocks.
+- Fixed a bug where case-insensitive HTTP cache control directives were not recognized correctly.
 - Fixed a bug where CONNECT requests with authority-form URIs were erroneously blocked by the URL canonicalizer.
 - Fixed HTTP-to-HTTPS redirects to correctly target the original requested URL rather than internal rewritten URLs.
 

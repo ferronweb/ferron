@@ -188,14 +188,14 @@ fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
             if directive.is_empty() {
                 continue;
             }
-            match directive {
+            match directive.to_ascii_lowercase().as_str() {
                 "public" => parsed.public = true,
                 "private" => parsed.private = true,
                 "no-cache" => parsed.no_cache = true,
                 "no-store" => parsed.no_store = true,
                 _ => {
                     if let Some((name, value)) = directive.split_once('=') {
-                        match name.trim() {
+                        match name.trim().to_ascii_lowercase().as_str() {
                             "max-age" => {
                                 if let Ok(seconds) = value.trim().parse::<u64>() {
                                     parsed.max_age = Some(Duration::from_secs(seconds));
@@ -409,14 +409,8 @@ mod tests {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store, no-cache"),
         );
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            false,
-            None,
-            false,
-        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         assert!(!decision.store);
         assert_eq!(decision.reason, "response-no-store");
     }
@@ -424,10 +418,7 @@ mod tests {
     #[test]
     fn max_age_zero_equals_no_cache() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("max-age=0"),
-        );
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=0"));
         let policy = parse_request_policy(&headers);
         assert!(!policy.allow_lookup);
         assert!(policy.allow_store);
@@ -441,14 +432,7 @@ mod tests {
             header::CACHE_CONTROL,
             HeaderValue::from_static("max-age=3600"),
         );
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            true,
-            false,
-            None,
-            false,
-        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
         assert!(!decision.store);
         assert_eq!(decision.reason, "authorization-public");
     }
@@ -460,14 +444,7 @@ mod tests {
             header::CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=3600"),
         );
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            true,
-            false,
-            None,
-            false,
-        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
         assert!(decision.store);
     }
 
@@ -478,14 +455,7 @@ mod tests {
             header::CACHE_CONTROL,
             HeaderValue::from_static("private, max-age=3600"),
         );
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            true,
-            None,
-            false,
-        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, false, true, None, false);
         assert!(decision.store);
         assert_eq!(decision.scope, Some(CacheScope::Private));
     }
@@ -493,10 +463,7 @@ mod tests {
     #[test]
     fn expires_in_past_produces_zero_ttl() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("public"),
-        );
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public"));
         headers.insert(
             header::EXPIRES,
             HeaderValue::from_static("Mon, 01 Jan 2020 00:00:00 GMT"),
@@ -508,14 +475,8 @@ mod tests {
         // With public but no max-age, TTL is min(DEFAULT_MAX_CACHE_AGE_SECS=300, expires_delta)
         // expires is in the past => expires_delta returns None => TTL falls back to DEFAULT
         // Actually, expires_delta returns None because expires_at < date
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            false,
-            None,
-            false,
-        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         // Without any valid max-age or expires, TTL defaults to DEFAULT_MAX_CACHE_AGE_SECS
         assert!(decision.store);
         assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
@@ -529,14 +490,8 @@ mod tests {
             HeaderValue::from_static("max-age=3600"),
         );
         // 201 Created is not cacheable by default and has no explicit public/private
-        let decision = evaluate_response_policy(
-            StatusCode::CREATED,
-            &headers,
-            false,
-            false,
-            None,
-            false,
-        );
+        let decision =
+            evaluate_response_policy(StatusCode::CREATED, &headers, false, false, None, false);
         assert!(!decision.store);
         assert_eq!(decision.reason, "not-cacheable");
     }
@@ -545,14 +500,8 @@ mod tests {
     fn cacheable_by_default_status_without_explicit_directive() {
         let headers = HeaderMap::new();
         // 200 OK is cacheable by default even without explicit Cache-Control
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            false,
-            None,
-            false,
-        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         assert!(decision.store);
         assert_eq!(decision.scope, Some(CacheScope::Public));
         assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
@@ -604,14 +553,8 @@ mod tests {
             header::CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=3600, s-maxage=120"),
         );
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            false,
-            None,
-            false,
-        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         assert!(decision.store);
         // s-maxage (120) should be the minimum among candidates
         assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
