@@ -8,7 +8,6 @@ use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use vibeio::net::PollUnixStream;
-use vibeio::net::UnixStream;
 
 /// A wrapper around vibeio's `PollUnixStream` that implements
 /// `tokio::io::AsyncRead + AsyncWrite + Send` for use with hyper's client API.
@@ -23,13 +22,12 @@ pub struct SendUnixStreamPoll {
 }
 
 impl SendUnixStreamPoll {
-    /// Creates a new wrapper from a vibeio `UnixStream` by converting it to poll mode.
+    /// Creates a new wrapper from a vibeio `PollUnixStream`.
     #[inline]
-    pub fn new_comp_io(inner: UnixStream) -> Result<Self, std::io::Error> {
+    pub fn new(inner: PollUnixStream) -> Self {
         let inner_fd = inner.as_raw_fd();
-        let inner = inner.into_poll()?;
         let is_write_vectored = inner.is_write_vectored();
-        Ok(SendUnixStreamPoll {
+        SendUnixStreamPoll {
             thread_id: std::thread::current().id(),
             inner: Some(inner),
             prev_inner: None,
@@ -37,7 +35,7 @@ impl SendUnixStreamPoll {
             inner_fd,
             obtained_dropped: false,
             marked_dropped: Arc::new(AtomicBool::new(false)),
-        })
+        }
     }
 
     /// Obtains a drop guard for the inner `PollUnixStream`.
@@ -55,7 +53,7 @@ impl SendUnixStreamPoll {
         let inner = if let Some(inner) = self.inner.as_ref() {
             // Copy the inner UnixStreamPoll
             let mut inner_data = std::mem::MaybeUninit::uninit();
-            std::ptr::copy(inner as *const _, inner_data.as_mut_ptr(), 1);
+            std::ptr::copy_nonoverlapping(inner as *const _, inner_data.as_mut_ptr(), 1);
             Some(ManuallyDrop::new(inner_data.assume_init()))
         } else {
             None
@@ -84,10 +82,8 @@ impl SendUnixStreamPoll {
             let std_unix_stream =
                 unsafe { std::os::unix::net::UnixStream::from_raw_fd(self.inner_fd) };
             let _ = std_unix_stream.set_nonblocking(true);
-            let unix_stream_poll = UnixStream::from_std(std_unix_stream)
-                .expect("failed to create UnixStream")
-                .into_poll()
-                .expect("failed to create UnixStreamPoll");
+            let unix_stream_poll =
+                PollUnixStream::from_std(std_unix_stream).expect("failed to create PollUnixStream");
             self.is_write_vectored = unix_stream_poll.is_write_vectored();
             self.prev_inner = self.inner.take().map(ManuallyDrop::new);
             self.inner = Some(unix_stream_poll);
@@ -193,9 +189,7 @@ impl Drop for SendUnixStreamPollDropGuard {
         if let Some(inner) = self.inner.take() {
             if !self.marked_dropped.swap(true, Ordering::Relaxed) {
                 // Drop if not marked as dropped
-                let _ = ManuallyDrop::into_inner(inner)
-                    .into_completion()
-                    .map(|c| c.into_raw_fd());
+                let _ = ManuallyDrop::into_inner(inner).into_raw_fd();
             }
         }
     }

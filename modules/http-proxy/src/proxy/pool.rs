@@ -264,11 +264,10 @@ pub async fn establish_and_send(
                 .proxy_unix
                 .as_ref()
                 .ok_or("Unix socket path not set")?;
-            let unix = vibeio::net::UnixStream::connect(unix_path)
+            let unix = vibeio::net::PollUnixStream::connect(unix_path)
                 .await
                 .map_err(|e| std::io::Error::other(format!("Unix connect failed: {e}")))?;
-            let mut stream = SendUnixStreamPoll::new_comp_io(unix)
-                .map_err(|e| std::io::Error::other(format!("Unix wrap failed: {e}")))?;
+            let mut stream = SendUnixStreamPoll::new(unix);
 
             let drop_guard = unsafe { stream.get_drop_guard() };
 
@@ -347,19 +346,20 @@ pub async fn establish_and_send(
             .unwrap_or(if is_https { 443 } else { 80 });
         let addr = format!("{host}:{port}");
 
-        let tcp = vibeio::net::TcpStream::connect(&addr).await.map_err(|e| {
-            ctx.events.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Warn,
-                    message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
-                    target: "ferron-http-proxy",
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                },
-            ));
-            std::io::Error::other(format!("Connect failed: {e}"))
-        })?;
-        let mut stream = SendTcpStreamPoll::new_comp_io(tcp)
-            .map_err(|e| std::io::Error::other(format!("Wrap failed: {e}")))?;
+        let tcp = vibeio::net::PollTcpStream::connect(&addr)
+            .await
+            .map_err(|e| {
+                ctx.events.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Warn,
+                        message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
+                        target: "ferron-http-proxy",
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    },
+                ));
+                std::io::Error::other(format!("Connect failed: {e}"))
+            })?;
+        let mut stream = SendTcpStreamPoll::new(tcp);
 
         let drop_guard = unsafe { stream.get_drop_guard() };
 
@@ -473,11 +473,10 @@ pub async fn establish_connection_without_pool(
                 .proxy_unix
                 .as_ref()
                 .ok_or("Unix socket path not set")?;
-            let unix = vibeio::net::UnixStream::connect(unix_path)
+            let unix = vibeio::net::PollUnixStream::connect(unix_path)
                 .await
                 .map_err(|e| std::io::Error::other(format!("Unix connect failed: {e}")))?;
-            let mut stream = SendUnixStreamPoll::new_comp_io(unix)
-                .map_err(|e| std::io::Error::other(format!("Unix wrap failed: {e}")))?;
+            let mut stream = SendUnixStreamPoll::new(unix);
 
             let drop_guard = unsafe { stream.get_drop_guard() };
 
@@ -514,19 +513,20 @@ pub async fn establish_connection_without_pool(
             .unwrap_or(if is_https { 443 } else { 80 });
         let addr = format!("{host}:{port}");
 
-        let tcp = vibeio::net::TcpStream::connect(&addr).await.map_err(|e| {
-            ctx.events.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Warn,
-                    message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
-                    target: "ferron-http-proxy",
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                },
-            ));
-            std::io::Error::other(format!("Connect failed: {e}"))
-        })?;
-        let mut stream = SendTcpStreamPoll::new_comp_io(tcp)
-            .map_err(|e| std::io::Error::other(format!("Wrap failed: {e}")))?;
+        let tcp = vibeio::net::PollTcpStream::connect(&addr)
+            .await
+            .map_err(|e| {
+                ctx.events.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Warn,
+                        message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
+                        target: "ferron-http-proxy",
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    },
+                ));
+                std::io::Error::other(format!("Connect failed: {e}"))
+            })?;
+        let mut stream = SendTcpStreamPoll::new(tcp);
 
         let drop_guard = unsafe { stream.get_drop_guard() };
 

@@ -13,7 +13,6 @@ use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use vibeio::net::PollTcpStream;
-use vibeio::net::TcpStream;
 
 /// A wrapper around vibeio's `PollTcpStream` that implements
 /// `tokio::io::AsyncRead + AsyncWrite + Send` for use with hyper's client API.
@@ -34,16 +33,15 @@ pub struct SendTcpStreamPoll {
 }
 
 impl SendTcpStreamPoll {
-    /// Creates a new wrapper from a vibeio `TcpStream` by converting it to poll mode.
+    /// Creates a new wrapper from a vibeio `PollTcpStream`.
     #[inline]
-    pub fn new_comp_io(inner: TcpStream) -> Result<Self, std::io::Error> {
+    pub fn new(inner: PollTcpStream) -> Self {
         #[cfg(unix)]
         let inner_fd = inner.as_raw_fd();
         #[cfg(not(unix))]
         let inner_fd = inner.as_raw_socket();
-        let inner = inner.into_poll()?;
         let is_write_vectored = inner.is_write_vectored();
-        Ok(SendTcpStreamPoll {
+        SendTcpStreamPoll {
             thread_id: std::thread::current().id(),
             inner: Some(inner),
             prev_inner: None,
@@ -51,7 +49,7 @@ impl SendTcpStreamPoll {
             inner_fd,
             obtained_dropped: false,
             marked_dropped: Arc::new(AtomicBool::new(false)),
-        })
+        }
     }
 
     /// Obtains a drop guard for the inner `PollTcpStream`.
@@ -70,7 +68,7 @@ impl SendTcpStreamPoll {
         let inner = if let Some(inner) = self.inner.as_ref() {
             // Copy the inner TcpStreamPoll
             let mut inner_data = std::mem::MaybeUninit::uninit();
-            std::ptr::copy(inner as *const _, inner_data.as_mut_ptr(), 1);
+            std::ptr::copy_nonoverlapping(inner as *const _, inner_data.as_mut_ptr(), 1);
             Some(ManuallyDrop::new(inner_data.assume_init()))
         } else {
             None
@@ -113,10 +111,8 @@ impl SendTcpStreamPoll {
             let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_socket(self.inner_fd) };
             let _ = std_tcp_stream.set_nonblocking(true);
 
-            let tcp_stream_poll = TcpStream::from_std(std_tcp_stream)
-                .expect("failed to create TcpStream")
-                .into_poll()
-                .expect("failed to create TcpStreamPoll");
+            let tcp_stream_poll =
+                PollTcpStream::from_std(std_tcp_stream).expect("failed to create PollTcpStream");
             self.is_write_vectored = tcp_stream_poll.is_write_vectored();
             self.prev_inner = self.inner.take().map(ManuallyDrop::new);
             self.inner = Some(tcp_stream_poll);
@@ -245,11 +241,9 @@ impl Drop for SendTcpStreamPollDropGuard {
             if !self.marked_dropped.swap(true, Ordering::Relaxed) {
                 // Drop if not marked as dropped
                 #[cfg(unix)]
-                let _ = ManuallyDrop::into_inner(inner)
-                    .into_completion()
-                    .map(|c| c.into_raw_fd());
+                let _ = ManuallyDrop::into_inner(inner).into_raw_fd();
                 #[cfg(not(unix))]
-                let _ = ManuallyDrop::into_inner(inner).into_completion();
+                let _ = ManuallyDrop::into_inner(inner).into_raw_socket();
             }
         }
     }
