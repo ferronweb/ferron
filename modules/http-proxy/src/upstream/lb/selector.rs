@@ -20,6 +20,11 @@ pub fn select_backend_index(
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
+    if backends.is_empty() {
+        // Edge case: no backends...
+        return 0;
+    }
+
     match load_balancer_algorithm {
         LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
