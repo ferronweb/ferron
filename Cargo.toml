@@ -13,7 +13,8 @@ exclude = [
     "e2e",
     # Fuzzing targets
     "modules/http-server/fuzz",
-    "modules/http-ratelimit/fuzz"
+    "modules/http-ratelimit/fuzz",
+    "modules/http-proxy/fuzz"
 ]
 
 [profile.release]

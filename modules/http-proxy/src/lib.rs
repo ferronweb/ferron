@@ -3,6 +3,8 @@
 //! Provides pipeline stages for:
 //! - `ReverseProxyStage` — reverse proxying with load balancing, health checks, and connection pooling
 
+#![cfg_attr(feature = "fuzz", allow(private_interfaces))]
+
 mod config;
 mod connections;
 mod connpool_single;
@@ -10,7 +12,13 @@ mod health_check;
 mod proxy;
 mod send_net_io;
 mod send_request;
+#[cfg(feature = "fuzz")]
+pub mod types;
+#[cfg(not(feature = "fuzz"))]
 mod types;
+#[cfg(feature = "fuzz")]
+pub mod upstream;
+#[cfg(not(feature = "fuzz"))]
 mod upstream;
 mod util;
 mod validator;

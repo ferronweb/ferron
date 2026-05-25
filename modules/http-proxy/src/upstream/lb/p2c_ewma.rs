@@ -73,12 +73,18 @@ impl Default for P2cEwmaParams {
 /// During the warm-up period (first `WARMUP_SAMPLES` observations) the
 /// value is a simple running average. After that, exponential smoothing
 /// is used.
+///
+/// Non-finite latency values (NaN, Inf) are silently ignored to prevent
+/// EWMA corruption and biased P2C selection.
 pub fn update_ewma(
     state_map: &EwmaStateMap,
     upstream: &UpstreamInner,
     latency_secs: f64,
     params: &P2cEwmaParams,
 ) {
+    if !latency_secs.is_finite() {
+        return;
+    }
     state_map
         .entry(upstream.clone())
         .and_modify(|d| {

@@ -1,0 +1,12 @@
+# Fuzz build artifacts
+target
+artifacts
+
+# Fuzz input corpus
+corpus
+
+# Fuzz coverage reports
+coverage
+
+# Lock file (optional)
+Cargo.lock

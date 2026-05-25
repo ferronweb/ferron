@@ -13,6 +13,12 @@ pub struct ConsistentHashRing {
 }
 
 impl ConsistentHashRing {
+    /// Maximum effective weight per backend to prevent memory exhaustion
+    /// from `weight * VNODES_PER_BACKEND` allocations.
+    /// 100 × 160 = 16,000 vnodes per backend (~256 KiB) is more than
+    /// sufficient for good distribution.
+    const MAX_EFFECTIVE_WEIGHT: u32 = 100;
+
     const VNODES_PER_BACKEND: usize = 160;
 
     pub fn new(backends: &[UpstreamInner]) -> Self {
@@ -24,10 +30,14 @@ impl ConsistentHashRing {
         }
     }
 
+    fn effective_weight(weight: u32) -> usize {
+        (weight.min(Self::MAX_EFFECTIVE_WEIGHT) as usize).saturating_mul(Self::VNODES_PER_BACKEND)
+    }
+
     fn build_nodes(backends: &[UpstreamInner]) -> (Vec<(u64, usize)>, u64) {
         let total_vnodes: usize = backends
             .iter()
-            .map(|b| Self::VNODES_PER_BACKEND * b.weight as usize)
+            .map(|b| Self::effective_weight(b.weight))
             .sum();
         let mut nodes = Vec::with_capacity(total_vnodes);
         let mut weights_hash = 0u64;
@@ -37,7 +47,7 @@ impl ConsistentHashRing {
                 .wrapping_mul(31)
                 .wrapping_add(backend.weight as u64);
 
-            let vnode_count = Self::VNODES_PER_BACKEND * backend.weight as usize;
+            let vnode_count = Self::effective_weight(backend.weight);
             for vnode in 0..vnode_count {
                 let key = format!("{}#{}", backend.proxy_to, vnode);
                 let mut h = crate::upstream::get_ahasher();
@@ -49,6 +59,18 @@ impl ConsistentHashRing {
 
         nodes.sort_by_key(|&(hash, _)| hash);
         (nodes, weights_hash)
+    }
+
+    /// Returns the number of virtual nodes in the ring.
+    #[allow(dead_code)]
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns true if the ring has no virtual nodes.
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 
     pub fn get(&self, key: &[u8]) -> Option<usize> {

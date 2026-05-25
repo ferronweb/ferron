@@ -35,3 +35,4 @@ dashmap = "6.2.1"
 [features]
 default = ["srv-lookup"]
 srv-lookup = ["hickory-resolver", "hickory-proto"]
+fuzz = []

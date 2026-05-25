@@ -28,6 +28,10 @@ pub struct WeightedRoundRobinState {
 }
 
 impl WeightedRoundRobinState {
+    /// Maximum effective weight per backend to prevent integer overflow
+    /// on 32-bit platforms and to bound internal state.
+    const MAX_EFFECTIVE_WEIGHT: u32 = 100;
+
     /// Create a new empty state.
     pub fn new() -> Self {
         Self {
@@ -61,8 +65,11 @@ impl WeightedRoundRobinState {
             });
         }
 
-        // Calculate total weight
-        let total_weight: i64 = weights.iter().map(|w| *w as i64).sum();
+        // Calculate total weight (capped to prevent overflow on 32-bit)
+        let total_weight: i64 = weights
+            .iter()
+            .map(|w| *w.min(&Self::MAX_EFFECTIVE_WEIGHT) as i64)
+            .sum();
         let mut best_index = 0;
         #[cfg(not(target_has_atomic = "64"))]
         let mut best_weight = i32::MIN;
@@ -76,12 +83,13 @@ impl WeightedRoundRobinState {
                 // Edge cases...
                 break;
             }
-            let old_weight =
-                current_weights[i].fetch_add(*weight as _, std::sync::atomic::Ordering::Relaxed);
+            let effective_weight = weight.min(&Self::MAX_EFFECTIVE_WEIGHT);
+            let old_weight = current_weights[i]
+                .fetch_add(*effective_weight as _, std::sync::atomic::Ordering::Relaxed);
             #[cfg(not(target_has_atomic = "64"))]
-            let current_weight = old_weight + *weight as i32;
+            let current_weight = old_weight + *effective_weight as i32;
             #[cfg(target_has_atomic = "64")]
-            let current_weight = old_weight + *weight as i64;
+            let current_weight = old_weight + *effective_weight as i64;
             if current_weight > best_weight {
                 best_weight = current_weight;
                 best_index = i;
