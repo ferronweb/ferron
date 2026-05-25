@@ -308,10 +308,7 @@ mod tests {
     #[test]
     fn tags_dedup_by_scope_and_name() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            &LS_TAG,
-            HeaderValue::from_static("tag-a, tag-a, tag-b"),
-        );
+        headers.insert(&LS_TAG, HeaderValue::from_static("tag-a, tag-a, tag-b"));
         let tags = parse_litespeed_tags(&headers, CacheScope::Public);
         assert_eq!(tags.len(), 2);
         assert_eq!(tags[0].name, "tag-a");
@@ -363,10 +360,7 @@ mod tests {
     #[test]
     fn vary_value_no_trim_issue() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            &LS_VARY,
-            HeaderValue::from_static("value= desktop"),
-        );
+        headers.insert(&LS_VARY, HeaderValue::from_static("value= desktop"));
         let vary = parse_litespeed_vary(&headers);
         // value= is stripped and remaining content is trimmed then stored
         assert_eq!(vary.value.as_deref(), Some("desktop"));
@@ -379,10 +373,7 @@ mod tests {
             &LS_CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=120"),
         );
-        headers.append(
-            &LS_CACHE_CONTROL,
-            HeaderValue::from_static("no-vary"),
-        );
+        headers.append(&LS_CACHE_CONTROL, HeaderValue::from_static("no-vary"));
         let cc = parse_litespeed_cache_control(&headers).expect("should parse");
         assert!(cc.public);
         assert!(cc.no_vary);
