@@ -82,7 +82,7 @@ pub fn update_ewma(
     latency_secs: f64,
     params: &P2cEwmaParams,
 ) {
-    if !latency_secs.is_finite() {
+    if !latency_secs.is_finite() || latency_secs < 0.0 {
         return;
     }
     state_map
@@ -117,7 +117,7 @@ pub fn get_decayed_ewma(
 ) -> f64 {
     state_map.get(upstream).map_or(params.default_ewma, |d| {
         let elapsed = d.last_update.elapsed().as_secs_f64();
-        d.ewma * (-elapsed / params.decay_half_life_secs).exp()
+        d.ewma * (-elapsed / params.decay_half_life_secs.max(0.001)).exp()
     })
 }
 
@@ -125,7 +125,14 @@ pub fn get_decayed_ewma(
 ///
 /// Lower score = more preferred.
 pub fn compute_score(ewma: f64, active_connections: usize, params: &P2cEwmaParams) -> f64 {
-    ewma + (active_connections as f64) * params.connection_penalty
+    let score = ewma + (active_connections as f64) * params.connection_penalty;
+
+    if !score.is_finite() || score < 0.0 {
+        // The EWMA state is possibly corrupted; return a high score to avoid selecting it.
+        return f64::MAX;
+    }
+
+    score
 }
 
 /// Returns `true` while the backend is still in the linear warm-up phase.
