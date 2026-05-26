@@ -44,6 +44,7 @@ thread_local! {
     static TLS_POOLS: UnsafeCell<Option<ThreadLocalPools>> = const { UnsafeCell::new(None) };
 }
 
+#[allow(clippy::type_complexity)]
 static PENDING_PULLS: LazyLock<
     parking_lot::RwLock<FxHashMap<(Option<Arc<UpstreamInner>>, bool), SegQueue<CancellationToken>>>,
 > = LazyLock::new(|| parking_lot::RwLock::new(FxHashMap::default()));

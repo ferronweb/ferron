@@ -13,6 +13,7 @@ use super::file_pipeline::{
 };
 use super::request_utils::{emit_error_with_trace, emit_warn_with_trace};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_pipeline_stages(
     ctx: &mut HttpContext,
     pipeline: &Pipeline<HttpContext>,
