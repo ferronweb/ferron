@@ -33,19 +33,6 @@ fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
     })
 }
 
-/// Compatibility wrapper: accepts the old `&[(usize, Arc<UpstreamInner>)]`
-/// format and converts to the new indices + upstreams signature.
-fn old_select_backend_index(
-    algorithm: &LoadBalancerAlgorithmInner,
-    backends: &[(usize, Arc<UpstreamInner>)],
-    conn_state: Option<&ConnectionsTrackState>,
-    ewma_state: Option<&EwmaStateMap>,
-) -> usize {
-    let healthy: Vec<usize> = backends.iter().map(|(i, _)| *i).collect();
-    let upstreams: Vec<Arc<UpstreamInner>> = backends.iter().map(|(_, u)| Arc::clone(u)).collect();
-    select_backend_index(algorithm, &healthy, &upstreams, conn_state, ewma_state)
-}
-
 #[test]
 fn test_select_backend_index_random() {
     let backends = vec![
@@ -56,7 +43,7 @@ fn test_select_backend_index_random() {
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     for _ in 0..100 {
-        let idx = old_select_backend_index(&algorithm, &backends, None, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         assert!(idx < backends.len());
     }
 }
@@ -71,22 +58,10 @@ fn test_select_backend_index_round_robin() {
     let state = WeightedRoundRobinState::new();
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        1
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        2
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -98,7 +73,7 @@ fn test_select_backend_index_least_connections() {
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert!(idx < backends.len());
 
     let tracker1 = Arc::new(());
@@ -106,7 +81,7 @@ fn test_select_backend_index_least_connections() {
     let _clone1 = tracker1.clone();
     let _clone2 = tracker1.clone();
 
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -121,7 +96,7 @@ fn test_select_backend_index_two_random_choices() {
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     for _ in 0..100 {
-        let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
         assert!(idx < backends.len());
     }
 }
@@ -132,7 +107,7 @@ fn test_select_backend_single_backend() {
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -472,22 +447,10 @@ fn test_select_backend_index_weighted_round_robin_equal_weights() {
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     // With equal weights, should cycle like round-robin
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        1
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        2
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 1);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 2);
+    assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
 }
 
 #[test]
@@ -504,7 +467,7 @@ fn test_select_backend_index_weighted_round_robin_unequal_weights() {
     // backend2 and backend3 once each
     let mut counts = [0usize; 3];
     for _ in 0..7 {
-        let idx = old_select_backend_index(&algorithm, &backends, None, None);
+        let idx = select_backend_index(&algorithm, &backends, None, None);
         counts[idx] += 1;
     }
     assert_eq!(counts[0], 5);
@@ -524,7 +487,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
     // With weights 5:1, smooth WRR should distribute as:
     // A, A, B, A, A, A (not AAAAAA B)
     let selections: Vec<usize> = (0..6)
-        .map(|_| old_select_backend_index(&algorithm, &backends, None, None))
+        .map(|_| select_backend_index(&algorithm, &backends, None, None))
         .collect();
 
     // Backend1 (weight 5) should be selected 5 times
@@ -545,10 +508,7 @@ fn test_select_backend_index_weighted_round_robin_single_backend() {
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
 
     for _ in 0..10 {
-        assert_eq!(
-            old_select_backend_index(&algorithm, &backends, None, None),
-            0
-        );
+        assert_eq!(select_backend_index(&algorithm, &backends, None, None), 0);
     }
 }
 
@@ -623,7 +583,7 @@ fn test_select_backend_index_least_connections_fewer_connections() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend2 (fewer connections)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -653,7 +613,7 @@ fn test_select_backend_index_least_connections_weighted_higher_weight_favored() 
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend2 (higher weight compensates for more connections)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
 }
 
@@ -683,7 +643,7 @@ fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend1 (higher weight compensates for more connections)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -713,7 +673,7 @@ fn test_select_backend_index_least_connections_weighted_equal_score() {
     conn_state.insert(backends[1].1.clone(), tracker2);
 
     // Should pick backend1 (lower weighted score)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -727,7 +687,7 @@ fn test_select_backend_index_least_connections_all_zero_weight() {
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // All backends have weight 0, should fall back to index 0
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 0);
 }
 
@@ -764,7 +724,7 @@ fn test_select_backend_index_least_connections_weighted_uneven_distribution() {
     conn_state.insert(backends[2].1.clone(), tracker3);
 
     // Backend3 should be selected (fewest connections and highest weight)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 2);
 }
 
@@ -784,8 +744,7 @@ fn test_select_backend_index_p2c_ewma_basic() {
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     for _ in 0..100 {
-        let idx =
-            old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
         assert!(idx < backends.len());
     }
 }
@@ -797,7 +756,7 @@ fn test_select_backend_index_p2c_ewma_single_backend() {
     let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
     assert_eq!(idx, 0);
 }
 
@@ -828,8 +787,7 @@ fn test_select_backend_index_p2c_ewma_prefers_lower_latency() {
     let mut backend1_wins = 0;
     let mut backend2_wins = 0;
     for _ in 0..200 {
-        let idx =
-            old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
         if idx == 0 {
             backend1_wins += 1;
         } else {
@@ -874,8 +832,7 @@ fn test_select_backend_index_p2c_ewma_prefers_fewer_connections() {
     let mut backend1_wins = 0;
     let mut backend2_wins = 0;
     for _ in 0..200 {
-        let idx =
-            old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
         if idx == 0 {
             backend1_wins += 1;
         } else {

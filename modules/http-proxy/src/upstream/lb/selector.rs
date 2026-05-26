@@ -9,45 +9,35 @@ use crate::upstream::lb::LoadBalancerAlgorithmInner;
 
 /// Selects a backend index based on the load balancing algorithm.
 ///
-/// `healthy_indices` is a slice of indices into the `upstreams` slice,
-/// built by filtering out unhealthy or already-selected backends.
-/// Returns the position within `healthy_indices` of the selected backend.
-///
 /// For LeastConnections and TwoRandomChoices, also initializes the connection
 /// tracker `Arc<()>` in the map if missing, so that the caller can simply
 /// clone the existing entry without a second lock acquisition.
+///
+/// For ConsistentHash, `hash_key` must be provided.
 pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
-    healthy_indices: &[usize],
-    upstreams: &[Arc<UpstreamInner>],
+    backends: &[(usize, Arc<UpstreamInner>)],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
-    if healthy_indices.is_empty() {
+    if backends.is_empty() {
+        // Edge case: no backends...
         return 0;
     }
 
     match load_balancer_algorithm {
-        LoadBalancerAlgorithmInner::Random => rand::random_range(0..healthy_indices.len()),
+        LoadBalancerAlgorithmInner::Random => rand::random_range(0..backends.len()),
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
-            let weights: Vec<u32> = healthy_indices
-                .iter()
-                .map(|i| upstreams[*i].weight)
-                .collect();
+            let weights: Vec<u32> = backends.iter().map(|(_, b)| b.weight).collect();
             state.next(&weights)
         }
         LoadBalancerAlgorithmInner::LeastConnections => {
             let Some(conn_state) = conn_state else {
                 return 0;
             };
-            // Reservoir sampling among ties — avoids allocating a Vec for
-            // equal-scoring minima.
-            let mut best_pos = 0;
-            let mut min_connections: Option<(usize, u32)> = None;
-            let mut tie_count = 1;
-
-            for (pos, idx) in healthy_indices.iter().enumerate() {
-                let upstream = &upstreams[*idx];
+            let mut min_indexes = Vec::new();
+            let mut min_connections = None;
+            for (index, upstream) in backends.iter() {
                 let connection_count = match conn_state.entry(upstream.clone()) {
                     dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
                     dashmap::Entry::Vacant(e) => {
@@ -56,6 +46,7 @@ pub fn select_backend_index(
                     }
                 };
                 if upstream.weight == 0 {
+                    // Zero-weight edge case
                     continue;
                 }
                 if let Some((prev_count, prev_weight)) = min_connections {
@@ -64,48 +55,47 @@ pub fn select_backend_index(
 
                     match current_score.cmp(&prev_score) {
                         std::cmp::Ordering::Less => {
-                            best_pos = pos;
+                            min_indexes.clear();
+                            min_indexes.push(*index);
                             min_connections = Some((connection_count, upstream.weight));
-                            tie_count = 1;
                         }
                         std::cmp::Ordering::Equal => {
-                            tie_count += 1;
-                            // Reservoir sampling: each equal-scoring backend
-                            // has 1/n chance of replacing the current pick.
-                            if rand::random_range(0..tie_count) == 0 {
-                                best_pos = pos;
-                            }
+                            min_indexes.push(*index);
                         }
                         _ => (),
                     }
                 } else {
-                    best_pos = pos;
+                    min_indexes.clear();
+                    min_indexes.push(*index);
                     min_connections = Some((connection_count, upstream.weight));
-                    tie_count = 1;
                 }
             }
-            best_pos
+            match min_indexes.len() {
+                0 => 0,
+                1 => min_indexes[0],
+                _ => min_indexes[rand::random_range(0..min_indexes.len())],
+            }
         }
         LoadBalancerAlgorithmInner::TwoRandomChoices => {
             let Some(conn_state) = conn_state else {
-                return rand::random_range(0..healthy_indices.len());
+                return rand::random_range(0..backends.len());
             };
-            if healthy_indices.len() < 2 {
-                if let dashmap::Entry::Vacant(e) =
-                    conn_state.entry(upstreams[healthy_indices[0]].clone())
-                {
+            if backends.len() < 2 {
+                // Initialize tracker for single backend
+                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].1.clone()) {
                     e.insert(Arc::new(()));
                 }
                 return 0;
             }
-            let idx1 = rand::random_range(0..healthy_indices.len());
-            let mut idx2 = rand::random_range(0..healthy_indices.len() - 1);
+            let idx1 = rand::random_range(0..backends.len());
+            let mut idx2 = rand::random_range(0..backends.len() - 1);
             if idx2 >= idx1 {
                 idx2 += 1;
             }
 
-            let (count1, _) = {
-                match conn_state.entry(upstreams[healthy_indices[idx1]].clone()) {
+            // Get count for first backend
+            let (count1, _read_dropped) = {
+                match conn_state.entry(backends[idx1].1.clone()) {
                     dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
                     dashmap::Entry::Vacant(e) => {
                         e.insert(Arc::new(()));
@@ -114,8 +104,9 @@ pub fn select_backend_index(
                 }
             };
 
+            // Get count for second backend
             let (count2, _) = {
-                match conn_state.entry(upstreams[healthy_indices[idx2]].clone()) {
+                match conn_state.entry(backends[idx2].1.clone()) {
                     dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
                     dashmap::Entry::Vacant(e) => {
                         e.insert(Arc::new(()));
@@ -133,27 +124,28 @@ pub fn select_backend_index(
         LoadBalancerAlgorithmInner::P2cEwma => {
             let params = P2cEwmaParams::default();
 
+            // Without connection tracking, fall back to random.
             let Some(conn_state) = conn_state else {
-                return rand::random_range(0..healthy_indices.len());
+                return rand::random_range(0..backends.len());
             };
 
-            if healthy_indices.len() < 2 {
-                if let dashmap::Entry::Vacant(e) =
-                    conn_state.entry(upstreams[healthy_indices[0]].clone())
-                {
+            if backends.len() < 2 {
+                // Initialise tracker for single backend
+                if let dashmap::Entry::Vacant(e) = conn_state.entry(backends[0].1.clone()) {
                     e.insert(Arc::new(()));
                 }
                 return 0;
             }
 
-            let idx1 = rand::random_range(0..healthy_indices.len());
-            let mut idx2 = rand::random_range(0..healthy_indices.len() - 1);
+            let idx1 = rand::random_range(0..backends.len());
+            let mut idx2 = rand::random_range(0..backends.len() - 1);
             if idx2 >= idx1 {
                 idx2 += 1;
             }
 
-            let score_for = |pos: usize| -> f64 {
-                let upstream = &upstreams[healthy_indices[pos]];
+            // Get connection count and EWMA for each candidate
+            let score_for = |idx: usize| -> f64 {
+                let (_, ref upstream) = backends[idx];
                 let active_conns = match conn_state.entry(upstream.clone()) {
                     dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
                     dashmap::Entry::Vacant(e) => {
