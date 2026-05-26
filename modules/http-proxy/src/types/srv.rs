@@ -12,7 +12,7 @@ pub async fn resolve_srv(
     failed_backends: std::sync::Arc<crate::util::FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<super::health::HealthCheckStateMap>,
-) -> Vec<super::upstream::UpstreamInner> {
+) -> Vec<std::sync::Arc<super::upstream::UpstreamInner>> {
     let candidates = resolve_srv_inner(srv_data).await;
 
     if candidates.is_empty() {
@@ -21,7 +21,7 @@ pub async fn resolve_srv(
 
     // Filter out unhealthy backends
     let failed = failed_backends.read();
-    let healthy: Vec<(super::upstream::UpstreamInner, u16, u16)> = candidates
+    let healthy: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> = candidates
         .into_iter()
         .filter(move |(upstream, _, _)| {
             failed
@@ -45,7 +45,7 @@ pub async fn resolve_srv(
         .min()
         .unwrap_or(0);
 
-    let filtered: Vec<(super::upstream::UpstreamInner, u16)> = healthy
+    let filtered: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16)> = healthy
         .into_iter()
         .filter(|(_, _, priority)| *priority == highest_priority)
         .map(|(upstream, weight, _)| (upstream, weight))
@@ -71,7 +71,7 @@ pub async fn resolve_srv(
 #[cfg(feature = "srv-lookup")]
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,
-) -> Vec<(super::upstream::UpstreamInner, u16, u16)> {
+) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {
     use hickory_resolver::config::{NameServerConfig, ResolverConfig};
     use hickory_resolver::TokioResolver;
 
@@ -143,29 +143,30 @@ pub async fn resolve_srv_inner(
             };
 
             // Parse the SRV records into upstream candidates
-            let candidates: Vec<(super::upstream::UpstreamInner, u16, u16)> = srv_records
-                .answers()
-                .iter()
-                .filter_map(|record| {
-                    let srv = match &record.data {
-                        hickory_proto::rr::RData::SRV(srv) => srv,
-                        _ => return None,
-                    };
+            let candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
+                srv_records
+                    .answers()
+                    .iter()
+                    .filter_map(|record| {
+                        let srv = match &record.data {
+                            hickory_proto::rr::RData::SRV(srv) => srv,
+                            _ => return None,
+                        };
 
-                    let target = srv.target.to_string();
-                    let port = srv.port;
+                        let target = srv.target.to_string();
+                        let port = srv.port;
 
-                    let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
-                    let upstream = super::upstream::UpstreamInner {
-                        proxy_to,
-                        proxy_unix: None,
-                        weight,
-                    };
-                    let priority = srv.priority;
+                        let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
+                        let upstream = std::sync::Arc::new(super::upstream::UpstreamInner {
+                            proxy_to,
+                            proxy_unix: None,
+                            weight,
+                        });
+                        let priority = srv.priority;
 
-                    Some((upstream, priority, srv.weight))
-                })
-                .collect();
+                        Some((upstream, priority, srv.weight))
+                    })
+                    .collect();
 
             candidates
         })

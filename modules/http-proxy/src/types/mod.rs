@@ -15,5 +15,6 @@ pub mod upstream;
 ///
 /// Maps upstream keys to `Arc<()>` trackers that are cloned to count
 /// active connections per backend.
-pub type ConnectionsTrackState =
-    std::sync::Arc<dashmap::DashMap<self::upstream::UpstreamInner, std::sync::Arc<()>>>;
+pub type ConnectionsTrackState = std::sync::Arc<
+    dashmap::DashMap<std::sync::Arc<self::upstream::UpstreamInner>, std::sync::Arc<()>>,
+>;

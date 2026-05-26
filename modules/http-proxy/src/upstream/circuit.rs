@@ -11,7 +11,7 @@ use crate::util::FailureCache;
 pub fn is_circuit_breaker_available(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
 ) -> bool {
     if !circuit_breaker.enabled {
         return true;
@@ -40,7 +40,7 @@ pub fn record_backend_transport_failure(
     passive_check_enabled: bool,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
 ) {
@@ -63,7 +63,7 @@ pub fn record_backend_transport_failure(
 pub fn record_backend_response(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     status: u16,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
@@ -91,7 +91,7 @@ pub fn record_backend_response(
 pub fn try_acquire_circuit_breaker_slot(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
 ) -> bool {
     if !circuit_breaker.enabled {
@@ -146,7 +146,7 @@ pub fn try_acquire_circuit_breaker_slot(
 fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
 ) -> bool {
     if !circuit_breaker.enabled {
@@ -211,7 +211,7 @@ fn record_circuit_breaker_failure(
 fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
 ) {
     if !circuit_breaker.enabled {
@@ -272,12 +272,14 @@ fn is_circuit_breaker_failure_status(status: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use dashmap::DashMap;
     use parking_lot::RwLock;
 
     use crate::{
+        types::upstream::UpstreamInner,
         upstream::{
             determine_proxy_to,
             lb::{ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState},
@@ -287,17 +289,17 @@ mod tests {
 
     use super::*;
 
-    fn make_upstream(url: &str) -> UpstreamInner {
-        UpstreamInner {
+    fn make_upstream(url: &str) -> Arc<UpstreamInner> {
+        Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
             proxy_unix: None,
             weight: 1,
-        }
+        })
     }
 
     #[test]
     fn test_circuit_breaker_opens_after_transport_failures() {
-        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
             Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
         let upstream = make_upstream("http://backend1");
@@ -349,7 +351,7 @@ mod tests {
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+        let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
             Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
         let circuit_breaker = crate::config::CircuitBreakerConfig {

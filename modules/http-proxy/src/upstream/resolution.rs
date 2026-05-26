@@ -12,7 +12,7 @@ use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::util::FailureCache;
 
-/// Resolve all upstreams to a flat list of `UpstreamInner` entries.
+/// Resolve all upstreams to a flat list of `Arc<UpstreamInner>` entries.
 ///
 /// For SRV upstreams, this performs DNS resolution. For static upstreams,
 /// it returns them as-is.
@@ -21,7 +21,7 @@ pub async fn resolve_upstreams(
     failed_backends: Arc<FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
-) -> Vec<UpstreamInner> {
+) -> Vec<Arc<UpstreamInner>> {
     let mut resolved = Vec::new();
     for upstream in upstreams {
         resolved.extend(
@@ -43,7 +43,7 @@ pub async fn resolve_upstreams(
 /// Filters out unhealthy backends when health checking is enabled.
 #[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
-    upstreams: &[UpstreamInner],
+    upstreams: &[Arc<UpstreamInner>],
     failed_backends: &FailureCache,
     health_check_enabled: bool,
     health_check_max_fails: u64,
@@ -53,7 +53,7 @@ pub fn determine_proxy_to(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    selected_backends: &[UpstreamInner],
+    selected_backends: &[Arc<UpstreamInner>],
     affinity_type: Option<&AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
@@ -64,7 +64,7 @@ pub fn determine_proxy_to(
     }
 
     // Build healthy list with original indices preserved
-    let mut healthy: Vec<(usize, UpstreamInner)> = {
+    let mut healthy: Vec<(usize, Arc<UpstreamInner>)> = {
         let failed = if health_check_enabled {
             Some(failed_backends.read())
         } else {
@@ -133,7 +133,7 @@ pub fn determine_proxy_to(
         } else {
             super::lb::selector::select_backend_index(algorithm, &healthy, conn_state, ewma_state)
         };
-        let (_, upstream) = healthy.remove(index);
+        let (_, upstream) = healthy.swap_remove(index);
         if start_pos == Some(index) {
             // Affine backend is no longer healthy; reset affinity index
             affinity_index = None;
@@ -146,15 +146,6 @@ pub fn determine_proxy_to(
             event_sink,
         ) {
             continue;
-        }
-
-        if health_check_enabled {
-            let failed = failed_backends.read();
-            if let Some(fails) = failed.get(&upstream) {
-                if fails > health_check_max_fails {
-                    continue; // Skip unhealthy, try next
-                }
-            }
         }
 
         // Get the tracker (already initialized by select_backend_index)

@@ -34,7 +34,7 @@ pub struct EwmaData {
 }
 
 /// Shared map from upstream to its EWMA data.
-pub type EwmaStateMap = Arc<DashMap<UpstreamInner, EwmaData>>;
+pub type EwmaStateMap = Arc<DashMap<Arc<UpstreamInner>, EwmaData>>;
 
 /// Tunable parameters for the P2C+EWMA algorithm.
 ///
@@ -78,7 +78,7 @@ impl Default for P2cEwmaParams {
 /// EWMA corruption and biased P2C selection.
 pub fn update_ewma(
     state_map: &EwmaStateMap,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
     latency_secs: f64,
     params: &P2cEwmaParams,
 ) {
@@ -136,7 +136,7 @@ pub fn compute_score(ewma: f64, active_connections: usize, params: &P2cEwmaParam
 }
 
 /// Returns `true` while the backend is still in the linear warm-up phase.
-pub fn is_warming_up(state_map: &EwmaStateMap, upstream: &UpstreamInner) -> bool {
+pub fn is_warming_up(state_map: &EwmaStateMap, upstream: &Arc<UpstreamInner>) -> bool {
     state_map
         .get(upstream)
         .is_none_or(|d| d.sample_count < WARMUP_SAMPLES)

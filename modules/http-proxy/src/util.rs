@@ -1,6 +1,7 @@
 //! Utility types for the reverse proxy module.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
@@ -57,7 +58,7 @@ where
 }
 
 /// Cache for tracking failed backends, shared across all proxy requests.
-pub(crate) type FailureCache = RwLock<TtlCache<UpstreamInner, u64>>;
+pub(crate) type FailureCache = RwLock<TtlCache<Arc<UpstreamInner>, u64>>;
 
 #[cfg(test)]
 mod tests {

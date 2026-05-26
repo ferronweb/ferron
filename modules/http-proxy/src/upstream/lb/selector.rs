@@ -16,7 +16,7 @@ use crate::upstream::lb::LoadBalancerAlgorithmInner;
 /// For ConsistentHash, `hash_key` must be provided.
 pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
-    backends: &[(usize, UpstreamInner)],
+    backends: &[(usize, Arc<UpstreamInner>)],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
@@ -172,7 +172,10 @@ pub fn select_backend_index(
 }
 
 /// Get or create the connection tracker for an upstream.
-pub fn initialize_tracker(conn_state: Option<&ConnectionsTrackState>, upstream: &UpstreamInner) {
+pub fn initialize_tracker(
+    conn_state: Option<&ConnectionsTrackState>,
+    upstream: &Arc<UpstreamInner>,
+) {
     if let Some(conn_state) = conn_state {
         if let dashmap::Entry::Vacant(e) = conn_state.entry(upstream.clone()) {
             e.insert(Arc::new(()));
@@ -183,7 +186,7 @@ pub fn initialize_tracker(conn_state: Option<&ConnectionsTrackState>, upstream: 
 /// Clone an existing connection tracker for an upstream.
 pub fn get_tracker(
     conn_state: Option<&ConnectionsTrackState>,
-    upstream: &UpstreamInner,
+    upstream: &Arc<UpstreamInner>,
 ) -> Option<Arc<()>> {
     let conn_state = conn_state?;
     conn_state.get(upstream).as_deref().map(Arc::clone)

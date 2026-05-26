@@ -32,7 +32,7 @@ pub enum LoadBalancerAlgorithm {
 /// For algorithms like Random and RoundRobin, this is `None`.
 pub struct SelectedBackend {
     /// The selected upstream.
-    pub upstream: super::upstream::UpstreamInner,
+    pub upstream: Arc<super::upstream::UpstreamInner>,
     /// Connection tracker for LeastConnections/TwoRandomChoices.
     /// `None` for Random/RoundRobin algorithms.
     pub tracker: Option<Arc<()>>,

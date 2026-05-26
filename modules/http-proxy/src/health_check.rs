@@ -503,7 +503,7 @@ pub fn spawn_health_check_task(
                         timeout_result
                             .unwrap_or_default()
                             .into_iter()
-                            .map(|upstream| upstream.0.proxy_to)
+                            .map(|upstream| upstream.0.proxy_to.clone())
                             .collect()
                     }
                 };

@@ -17,20 +17,20 @@ use crate::util::TtlCache;
 
 use super::*;
 
-fn make_upstream(url: &str) -> UpstreamInner {
-    UpstreamInner {
+fn make_upstream(url: &str) -> Arc<UpstreamInner> {
+    Arc::new(UpstreamInner {
         proxy_to: url.to_string(),
         proxy_unix: None,
         weight: 1,
-    }
+    })
 }
 
-fn make_upstream_with_weight(url: &str, weight: u32) -> UpstreamInner {
-    UpstreamInner {
+fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
+    Arc::new(UpstreamInner {
         proxy_to: url.to_string(),
         proxy_unix: None,
         weight,
-    }
+    })
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn test_select_backend_single_backend() {
 
 #[test]
 fn test_determine_proxy_to_no_upstreams() {
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -140,7 +140,7 @@ fn test_determine_proxy_to_no_upstreams() {
 #[test]
 fn test_determine_proxy_to_single_backend() {
     let upstreams = vec![make_upstream("http://backend1")];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let algorithm = LoadBalancerAlgorithmInner::Random;
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
@@ -173,7 +173,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
     {
@@ -210,7 +210,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
     {
@@ -247,7 +247,7 @@ fn test_determine_proxy_to_health_check_disabled() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
     {
@@ -279,7 +279,7 @@ fn test_determine_proxy_to_health_check_disabled() {
 
 #[test]
 fn test_record_backend_transport_failure() {
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
@@ -312,7 +312,7 @@ fn test_record_backend_transport_failure() {
 
 #[test]
 fn test_record_backend_transport_failure_passive_check_disabled() {
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
@@ -364,7 +364,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());
@@ -405,7 +405,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+    let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
         Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());

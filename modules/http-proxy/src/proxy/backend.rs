@@ -1,5 +1,7 @@
 //! Backend health checking and availability counting.
 
+use std::sync::Arc;
+
 use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
@@ -8,20 +10,20 @@ use crate::util::FailureCache;
 
 /// Count how many backends are currently available for selection.
 pub fn count_available_backends(
-    upstreams: &[UpstreamInner],
+    upstreams: &[Arc<UpstreamInner>],
     failed_backends: &FailureCache,
     health_check_max_fails: u64,
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    selected_backends: &[UpstreamInner],
+    selected_backends: &[Arc<UpstreamInner>],
 ) -> usize {
     let failed = failed_backends.read();
     upstreams
         .iter()
         .filter(|u| {
             let passive_healthy = failed
-                .get(*u)
+                .get(u)
                 .is_none_or(|fails| fails <= health_check_max_fails);
             let active_healthy = health_check_state.is_none_or(|state_map| {
                 crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)

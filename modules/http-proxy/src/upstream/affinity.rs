@@ -1,5 +1,7 @@
 //! Session affinity (sticky session) implementation.
 
+use std::sync::Arc;
+
 use parking_lot::RwLock;
 
 use crate::{types::upstream::UpstreamInner, upstream::lb::ConsistentHashRing};
@@ -12,7 +14,7 @@ use crate::{types::upstream::UpstreamInner, upstream::lb::ConsistentHashRing};
 pub fn resolve_affinity_index(
     affinity_type: &crate::types::affinity::AffinityType,
     affinity_key: &[u8],
-    backends: &[UpstreamInner],
+    backends: &[Arc<UpstreamInner>],
     ring: &RwLock<ConsistentHashRing>,
 ) -> Option<usize> {
     if backends.is_empty() {

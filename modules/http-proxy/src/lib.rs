@@ -57,11 +57,11 @@ type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<Stri
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
     /// Backends selected during load balancing.
-    pub selected_backends: Vec<types::upstream::UpstreamInner>,
+    pub selected_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends marked as unhealthy due to passive failures (request-time).
-    pub unhealthy_backends: Vec<types::upstream::UpstreamInner>,
+    pub unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends whose circuit breaker was opened by request-time failures or 5xx responses.
-    pub circuit_breaker_unhealthy_backends: Vec<types::upstream::UpstreamInner>,
+    pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends marked as unhealthy due to active health check probes, with counts.
     pub active_unhealthy_backends: Vec<(String, u64)>,
     /// Whether a pooled connection was reused.

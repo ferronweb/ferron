@@ -1,5 +1,6 @@
 //! Core upstream types: connection keys, proxy protocol, and health check configuration.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::types::health::HealthCheckStateMap;
@@ -87,17 +88,17 @@ impl Upstream {
     pub async fn resolve(
         &self,
         _failed_backends: std::sync::Arc<
-            parking_lot::RwLock<crate::util::TtlCache<UpstreamInner, u64>>,
+            parking_lot::RwLock<crate::util::TtlCache<Arc<UpstreamInner>, u64>>,
         >,
         _health_check_max_fails: u64,
         _active_health_check_state: Option<HealthCheckStateMap>,
-    ) -> Vec<UpstreamInner> {
+    ) -> Vec<Arc<UpstreamInner>> {
         match self {
-            Upstream::Static(cfg) => vec![UpstreamInner {
+            Upstream::Static(cfg) => vec![Arc::new(UpstreamInner {
                 proxy_to: cfg.url.clone(),
                 proxy_unix: cfg.unix_socket.clone(),
                 weight: cfg.weight,
-            }],
+            })],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
                 super::srv::resolve_srv(

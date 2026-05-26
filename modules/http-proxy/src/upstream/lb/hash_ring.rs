@@ -1,6 +1,7 @@
 //! Ketama-style consistent hash ring for backend selection.
 
 use std::hash::Hasher;
+use std::sync::Arc;
 
 use crate::types::upstream::UpstreamInner;
 
@@ -21,7 +22,7 @@ impl ConsistentHashRing {
 
     const VNODES_PER_BACKEND: usize = 160;
 
-    pub fn new(backends: &[UpstreamInner]) -> Self {
+    pub fn new(backends: &[Arc<UpstreamInner>]) -> Self {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         Self {
             nodes,
@@ -34,7 +35,7 @@ impl ConsistentHashRing {
         (weight.min(Self::MAX_EFFECTIVE_WEIGHT) as usize).saturating_mul(Self::VNODES_PER_BACKEND)
     }
 
-    fn build_nodes(backends: &[UpstreamInner]) -> (Vec<(u64, usize)>, u64) {
+    fn build_nodes(backends: &[Arc<UpstreamInner>]) -> (Vec<(u64, usize)>, u64) {
         let total_vnodes: usize = backends
             .iter()
             .map(|b| Self::effective_weight(b.weight))
@@ -94,7 +95,7 @@ impl ConsistentHashRing {
         }
     }
 
-    pub fn needs_rebuild(&self, backends: &[UpstreamInner]) -> bool {
+    pub fn needs_rebuild(&self, backends: &[Arc<UpstreamInner>]) -> bool {
         if self.backend_count != backends.len() {
             return true;
         }
@@ -104,7 +105,7 @@ impl ConsistentHashRing {
         self.weights_hash != hash
     }
 
-    pub fn rebuild(&mut self, backends: &[UpstreamInner]) {
+    pub fn rebuild(&mut self, backends: &[Arc<UpstreamInner>]) {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         self.nodes = nodes;
         self.backend_count = backends.len();
@@ -114,22 +115,24 @@ impl ConsistentHashRing {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
-    fn make_upstream(url: &str) -> UpstreamInner {
-        UpstreamInner {
+    fn make_upstream(url: &str) -> Arc<UpstreamInner> {
+        Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
             proxy_unix: None,
             weight: 1,
-        }
+        })
     }
 
-    fn make_upstream_with_weight(url: &str, weight: u32) -> UpstreamInner {
-        UpstreamInner {
+    fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
+        Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
             proxy_unix: None,
             weight,
-        }
+        })
     }
 
     #[test]
@@ -177,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_consistent_hash_ring_empty() {
-        let backends: Vec<UpstreamInner> = vec![];
+        let backends: Vec<Arc<UpstreamInner>> = vec![];
         let ring = ConsistentHashRing::new(&backends);
         assert!(ring.get(b"test").is_none());
     }
