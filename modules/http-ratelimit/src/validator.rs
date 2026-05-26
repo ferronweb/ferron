@@ -7,7 +7,6 @@ use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
-use ferron_core::util::parse_duration;
 
 use crate::key_extractor::KeyExtractor;
 
