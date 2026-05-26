@@ -99,9 +99,19 @@ impl TypeMapKey for TraceContextKey {
 pub fn to_event_trace_context(
     trace_context: &TraceContext,
 ) -> ferron_observability::EventTraceContext {
+    let trace_id: [u8; 32] = trace_context
+        .trace_id
+        .as_bytes()
+        .try_into()
+        .expect("trace_id must be 32 hex chars");
+    let span_id: [u8; 16] = trace_context
+        .span_id
+        .as_bytes()
+        .try_into()
+        .expect("span_id must be 16 hex chars");
     ferron_observability::EventTraceContext {
-        trace_id: trace_context.trace_id.clone(),
-        span_id: trace_context.span_id.clone(),
+        trace_id,
+        span_id,
         sampled: Some(trace_context.sampled),
     }
 }

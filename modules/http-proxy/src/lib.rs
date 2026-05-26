@@ -23,6 +23,7 @@ mod upstream;
 mod util;
 mod validator;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
@@ -53,6 +54,9 @@ pub use send_net_io::SendUnixStreamPoll;
 
 /// Shared counter type for tracking active health check unhealthy events.
 type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<String, u64>>;
+
+static PROXY_POOL_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0];
+static PROXY_TLS_BUCKETS: &[f64] = &[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0];
 
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
@@ -765,9 +769,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.pool.wait_time",
                     attributes: upstream_attrs.clone(),
-                    ty: MetricType::Histogram(Some(vec![
-                        0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
-                    ])),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
                     value: MetricValue::F64(metrics.pool_wait_time_secs),
                     unit: Some("s"),
                     description: Some("Duration spent waiting for a pooled connection."),
@@ -780,9 +782,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.upstream.duration",
                     attributes: upstream_attrs.clone(),
-                    ty: MetricType::Histogram(Some(vec![
-                        0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
-                    ])),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
                     value: MetricValue::F64(metrics.upstream_time_secs),
                     unit: Some("s"),
                     description: Some("Duration of upstream request-response."),
@@ -795,9 +795,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.tls.handshake_time",
                     attributes: upstream_attrs.clone(),
-                    ty: MetricType::Histogram(Some(vec![
-                        0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0,
-                    ])),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_TLS_BUCKETS))),
                     value: MetricValue::F64(metrics.tls_handshake_time_secs),
                     unit: Some("s"),
                     description: Some("TLS handshake duration for upstream connection."),

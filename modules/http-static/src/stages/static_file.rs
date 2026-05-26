@@ -1,5 +1,6 @@
 //! Static file serving stage with streaming I/O and optional zerocopy.
 
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::io;
 
@@ -16,6 +17,15 @@ use http::{Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, StreamBody};
+
+static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
+    1024.0,
+    10240.0,
+    102400.0,
+    1048576.0,
+    10485760.0,
+    104857600.0,
+];
 
 use crate::util::compression::{
     compress_streaming_brotli, compress_streaming_deflate, compress_streaming_gzip,
@@ -651,14 +661,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 ),
                 ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
             ],
-            ty: MetricType::Histogram(Some(vec![
-                1024.0,
-                10240.0,
-                102400.0,
-                1048576.0,
-                10485760.0,
-                104857600.0,
-            ])),
+            ty: MetricType::Histogram(Some(Cow::Borrowed(STATIC_FILE_BYTES_BUCKETS))),
             value: MetricValue::F64(file_size as f64),
             unit: Some("By"),
             description: Some("Bytes sent for static file responses."),

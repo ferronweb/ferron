@@ -68,9 +68,10 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
         if !self.has_traces {
             return;
         }
+        let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            key: Cow::Owned(self.stage_key(stage.name(), false)),
-            name: Cow::Owned(format!("ferron.stage.{}", stage.name())),
+            key: Cow::Owned(self.stage_key(stage_name, false)),
+            name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));
@@ -103,9 +104,10 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
         if !self.has_traces {
             return;
         }
+        let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            key: Cow::Owned(self.stage_key(stage.name(), true)),
-            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage.name())),
+            key: Cow::Owned(self.stage_key(stage_name, true)),
+            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));
@@ -179,8 +181,13 @@ impl AccessEvent for HttpAccessLog {
         }
         // Optionally include trace identifiers when available
         if let Some(trace_context) = &self.trace_context {
-            visitor.field_string("trace_id", &trace_context.trace_id);
-            visitor.field_string("span_id", &trace_context.span_id);
+            if let (Ok(trace_id_str), Ok(span_id_str)) = (
+                std::str::from_utf8(&trace_context.trace_id),
+                std::str::from_utf8(&trace_context.span_id),
+            ) {
+                visitor.field_string("trace_id", trace_id_str);
+                visitor.field_string("span_id", span_id_str);
+            }
         }
     }
 }
@@ -196,8 +203,16 @@ pub(super) fn to_event_trace_context(
     trace_context: &trace_context::TraceContext,
 ) -> EventTraceContext {
     EventTraceContext {
-        trace_id: trace_context.trace_id.clone(),
-        span_id: trace_context.span_id.clone(),
+        trace_id: trace_context
+            .trace_id
+            .as_bytes()
+            .try_into()
+            .expect("trace_id must be 32 hex chars"),
+        span_id: trace_context
+            .span_id
+            .as_bytes()
+            .try_into()
+            .expect("span_id must be 16 hex chars"),
         sampled: Some(trace_context.sampled),
     }
 }

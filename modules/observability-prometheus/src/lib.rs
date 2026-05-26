@@ -532,7 +532,7 @@ fn emit_metric(
                                 .collect(),
                             variable_labels: Vec::new(),
                         },
-                        buckets: buckets.clone().unwrap_or_else(|| {
+                        buckets: buckets.as_deref().map(<[_]>::to_vec).unwrap_or_else(|| {
                             vec![
                                 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
                             ]
@@ -575,7 +575,7 @@ fn emit_metric(
                                 .collect(),
                             variable_labels: Vec::new(),
                         },
-                        buckets: buckets.clone().unwrap_or_else(|| {
+                        buckets: buckets.as_deref().map(<[_]>::to_vec).unwrap_or_else(|| {
                             vec![
                                 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
                             ]

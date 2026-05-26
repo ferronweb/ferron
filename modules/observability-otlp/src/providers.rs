@@ -375,13 +375,19 @@ pub fn emit_access_log(
         record.set_body(AnyValue::String("<unknown access log>".into()));
     }
     if let Some(trace_context) = event.trace_context() {
-        if let (Ok(trace_id), Ok(span_id)) = (
-            opentelemetry::TraceId::from_hex(&trace_context.trace_id),
-            opentelemetry::SpanId::from_hex(&trace_context.span_id),
+        if let (Ok(trace_id_str), Ok(span_id_str)) = (
+            std::str::from_utf8(&trace_context.trace_id),
+            std::str::from_utf8(&trace_context.span_id),
         ) {
-            record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+            if let (Ok(trace_id), Ok(span_id)) = (
+                opentelemetry::TraceId::from_hex(trace_id_str),
+                opentelemetry::SpanId::from_hex(span_id_str),
+            ) {
+                record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+            }
         }
     }
+
     logger.emit(record);
 }
 
@@ -523,7 +529,7 @@ pub fn emit_metric(
                     b = b.with_unit(u);
                 }
                 if let Some(ref bkt) = buckets {
-                    b = b.with_boundaries(bkt.clone());
+                    b = b.with_boundaries(bkt.to_vec());
                 }
                 if let Some(d) = event.description {
                     b = b.with_description(d);
@@ -541,7 +547,7 @@ pub fn emit_metric(
                     b = b.with_unit(u);
                 }
                 if let Some(ref bkt) = buckets {
-                    b = b.with_boundaries(bkt.clone());
+                    b = b.with_boundaries(bkt.to_vec());
                 }
                 if let Some(d) = event.description {
                     b = b.with_description(d);
@@ -640,11 +646,16 @@ pub fn emit_log(provider: &opentelemetry_sdk::logs::SdkLoggerProvider, event: &L
     });
     record.add_attribute("log.target", event.target);
     if let Some(trace_context) = &event.trace_context {
-        if let (Ok(trace_id), Ok(span_id)) = (
-            opentelemetry::TraceId::from_hex(&trace_context.trace_id),
-            opentelemetry::SpanId::from_hex(&trace_context.span_id),
+        if let (Ok(trace_id_str), Ok(span_id_str)) = (
+            std::str::from_utf8(&trace_context.trace_id),
+            std::str::from_utf8(&trace_context.span_id),
         ) {
-            record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+            if let (Ok(trace_id), Ok(span_id)) = (
+                opentelemetry::TraceId::from_hex(trace_id_str),
+                opentelemetry::SpanId::from_hex(span_id_str),
+            ) {
+                record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
+            }
         }
     }
 
@@ -696,9 +707,11 @@ fn trace_flags(sampled: Option<bool>) -> Option<opentelemetry::TraceFlags> {
 fn parse_requested_ids(
     trace_context: &ferron_observability::EventTraceContext,
 ) -> Option<RequestedIds> {
+    let trace_id_str = std::str::from_utf8(&trace_context.trace_id).ok()?;
+    let span_id_str = std::str::from_utf8(&trace_context.span_id).ok()?;
     Some(RequestedIds {
-        trace_id: opentelemetry::TraceId::from_hex(&trace_context.trace_id).ok(),
-        span_id: opentelemetry::SpanId::from_hex(&trace_context.span_id).ok(),
+        trace_id: opentelemetry::TraceId::from_hex(trace_id_str).ok(),
+        span_id: opentelemetry::SpanId::from_hex(span_id_str).ok(),
     })
 }
 

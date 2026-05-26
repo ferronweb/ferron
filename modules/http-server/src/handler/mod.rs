@@ -39,6 +39,10 @@ use self::request_utils::*;
 
 const LOG_TARGET: &str = "ferron-http-server";
 
+static REQUEST_DURATION_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+];
+
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
 pub async fn bad_request_handler(
@@ -318,36 +322,39 @@ pub async fn request_handler(
             Err(_) => (500, None),
         };
 
+        let status_code_attr = (
+            "http.response.status_code",
+            MetricAttributeValue::I64(status_code as i64),
+        );
+        let error_type_attr = (status_code >= 400).then(|| {
+            (
+                "error.type",
+                MetricAttributeValue::String(status_code.to_string()),
+            )
+        });
+
         // Build request_count-specific attributes
-        let mut request_count_attrs = metric_attrs.clone();
-        request_count_attrs.push((
-            "http.response.status_code",
-            MetricAttributeValue::I64(status_code as i64),
-        ));
-        if status_code >= 400 {
-            request_count_attrs.push((
-                "error.type",
-                MetricAttributeValue::String(status_code.to_string()),
-            ));
+        let extra_capacity = if error_type_attr.is_some() { 2 } else { 1 };
+        let base_len = metric_attrs.len();
+        let mut request_count_attrs = Vec::with_capacity(base_len + extra_capacity);
+        request_count_attrs.extend(metric_attrs.iter().cloned());
+        request_count_attrs.push(status_code_attr.clone());
+        if let Some(ref attr) = error_type_attr {
+            request_count_attrs.push(attr.clone());
         }
 
-        // Build duration-specific attributes (includes status_code for OTel compliance)
-        let mut duration_attrs = metric_attrs.clone();
-        duration_attrs.push((
-            "http.response.status_code",
-            MetricAttributeValue::I64(status_code as i64),
-        ));
-        if status_code >= 400 {
-            duration_attrs.push((
-                "error.type",
-                MetricAttributeValue::String(status_code.to_string()),
-            ));
+        // Build duration-specific attributes
+        let mut duration_attrs = Vec::with_capacity(base_len + extra_capacity);
+        duration_attrs.extend(metric_attrs.iter().cloned());
+        duration_attrs.push(status_code_attr.clone());
+        if let Some(ref attr) = error_type_attr {
+            duration_attrs.push(attr.clone());
         }
 
-        // Decrement active requests
+        // Decrement active requests (moves metric_attrs, no clone)
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.active_requests",
-            attributes: metric_attrs.clone(),
+            attributes: metric_attrs,
             ty: MetricType::UpDownCounter,
             value: MetricValue::I64(-1),
             unit: Some("{request}"),
@@ -358,9 +365,7 @@ pub async fn request_handler(
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.request.duration",
             attributes: duration_attrs,
-            ty: MetricType::Histogram(Some(vec![
-                0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
-            ])),
+            ty: MetricType::Histogram(Some(Cow::Borrowed(REQUEST_DURATION_BUCKETS))),
             value: MetricValue::F64(duration_secs),
             unit: Some("s"),
             description: Some("Duration of HTTP server requests."),

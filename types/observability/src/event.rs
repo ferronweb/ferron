@@ -1,6 +1,11 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+/// Size of a W3C traceparent trace ID (32 hex chars).
+const TRACE_ID_LEN: usize = 32;
+/// Size of a W3C traceparent span ID (16 hex chars).
+const SPAN_ID_LEN: usize = 16;
+
 pub use super::access::*;
 
 #[derive(Clone)]
@@ -57,7 +62,7 @@ pub enum MetricType {
     UpDownCounter,
 
     /// Histogram with optional buckets
-    Histogram(Option<Vec<f64>>),
+    Histogram(Option<Cow<'static, [f64]>>),
 }
 
 /// Represents a value for a metric.
@@ -110,8 +115,8 @@ pub enum TraceAttributeValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventTraceContext {
-    pub trace_id: String,
-    pub span_id: String,
+    pub trace_id: [u8; TRACE_ID_LEN],
+    pub span_id: [u8; SPAN_ID_LEN],
     pub sampled: Option<bool>,
 }
 
