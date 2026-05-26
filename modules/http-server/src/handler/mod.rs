@@ -825,7 +825,9 @@ async fn request_handler_inner(
         let status = *status;
         if status >= 400 {
             ctx.previous_error = Some(status);
-            ctx.req = Some(cloned_request);
+            if ctx.req.is_none() {
+                ctx.req = Some(cloned_request);
+            }
             // Rebuild the resolver request from the current request in context
             if let Some(req) = ctx.req.take() {
                 // Preserve the request for error resolution
