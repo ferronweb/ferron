@@ -83,6 +83,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 #### Reverse proxy
 
+- Fixed a bug where pool limits weren't being respected when pulling connections from the pool, leading to possible handle exhaustion.
 - Fixed a bug where reverse proxy boolean subdirectives with empty values (implying `true`) were being ignored.
 - Fixed an issue where the proxy failed to strip headers specified by the `Connection` header per RFC 7230.
 

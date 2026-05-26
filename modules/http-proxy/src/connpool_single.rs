@@ -188,7 +188,7 @@ where
 
     /// Checks if a local limit is reached for a given limit key.
     #[inline]
-    fn is_at_local_limit(&self, limit_key: &L, local_limit: usize) -> bool {
+    pub fn is_at_local_limit(&self, limit_key: &L, local_limit: usize) -> bool {
         (unsafe { &mut *self.inner.get() })
             .local_outstanding
             .get(limit_key)

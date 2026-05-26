@@ -31,6 +31,8 @@ parking_lot = "0.12"
 ppp = "2.2"
 rustc-hash = "2.1.2"
 dashmap = "6.2.1"
+tokio-util = "0.7.18"
+crossbeam-queue = "0.3.12"
 
 [features]
 default = ["srv-lookup"]

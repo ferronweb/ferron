@@ -8,9 +8,11 @@ use std::cell::UnsafeCell;
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
+use crossbeam_queue::SegQueue;
 use rustc_hash::FxHashMap;
+use tokio_util::sync::CancellationToken;
 
 use crate::connpool_single::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
@@ -41,6 +43,10 @@ struct ThreadLocalPools {
 thread_local! {
     static TLS_POOLS: UnsafeCell<Option<ThreadLocalPools>> = const { UnsafeCell::new(None) };
 }
+
+static PENDING_PULLS: LazyLock<
+    parking_lot::RwLock<FxHashMap<(Option<Arc<UpstreamInner>>, bool), SegQueue<CancellationToken>>>,
+> = LazyLock::new(|| parking_lot::RwLock::new(FxHashMap::default()));
 
 /// Connection pool manager for the reverse proxy.
 ///
@@ -126,13 +132,112 @@ impl ConnectionManager {
         limits.insert(upstream.clone(), new_limit);
     }
 
+    /// Pulls a connection from the pool, waiting if necessary for one to become available.
+    #[inline]
+    pub async fn pull(
+        &self,
+        upstream: Arc<UpstreamInner>,
+        client_ip: Option<IpAddr>,
+    ) -> PooledConnection {
+        loop {
+            if let Some(conn) = self.try_pull(upstream.clone(), client_ip) {
+                // Pool not under capacity.
+                return conn;
+            }
+
+            // Pool likely under capacity, wait for a connection to become available
+            let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
+            let pending_pulls_key = (None, upstream.proxy_unix.is_some());
+            let pending_pulls =
+                if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pulls_key) {
+                    pending_pulls
+                } else {
+                    pending_pulls_lock.with_upgraded(|pp| {
+                        pp.insert(pending_pulls_key.clone(), SegQueue::new());
+                    });
+                    pending_pulls_lock
+                        .get(&pending_pulls_key)
+                        .expect("pending pulls should have been initialized at this point")
+                };
+            let cancel_token = CancellationToken::new();
+            pending_pulls.push(cancel_token.clone());
+
+            // Wait for the connection to be available.
+            cancel_token.cancelled().await;
+        }
+    }
+
     /// Pull a connection from the pool, returning immediately.
     ///
-    /// Unlike the old connpool-based version, this is **synchronous** and returns
-    /// `None` if the pool is at capacity (caller should establish a new connection).
+    /// Returns `None` if the pool is at capacity (caller should establish a new connection).
+    #[inline]
+    pub async fn pull_with_local_limit(
+        &self,
+        upstream: Arc<UpstreamInner>,
+        client_ip: Option<IpAddr>,
+        local_limit: Option<usize>,
+    ) -> PooledConnection {
+        loop {
+            if let Some(conn) =
+                self.try_pull_with_local_limit(upstream.clone(), client_ip, local_limit)
+            {
+                // Pool not under capacity.
+                return conn;
+            }
+
+            // Check if local limit is exceeded
+            let at_local_limit = if let Some(ll) = local_limit {
+                TLS_POOLS.with(|c| {
+                    let ptr = c.get();
+                    let opt = unsafe { &mut *ptr };
+                    opt.as_ref().is_some_and(|p| {
+                        if upstream.proxy_unix.is_some() {
+                            #[cfg(unix)]
+                            let r = p.unix_pool.is_at_local_limit(&upstream, ll);
+                            #[cfg(not(unix))]
+                            let r = false;
+
+                            r
+                        } else {
+                            p.tcp_pool.is_at_local_limit(&upstream, ll)
+                        }
+                    })
+                })
+            } else {
+                false
+            };
+
+            // Pool likely under capacity, wait for a connection to become available
+            let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
+            let pending_pull_key = (
+                at_local_limit.then_some(upstream.clone()),
+                upstream.proxy_unix.is_some(),
+            );
+            let pending_pulls =
+                if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pull_key) {
+                    pending_pulls
+                } else {
+                    pending_pulls_lock.with_upgraded(|pp| {
+                        pp.insert(pending_pull_key.clone(), SegQueue::new());
+                    });
+                    pending_pulls_lock
+                        .get(&pending_pull_key)
+                        .expect("pending pulls should have been initialized at this point")
+                };
+            let cancel_token = CancellationToken::new();
+            pending_pulls.push(cancel_token.clone());
+
+            // Wait for the connection to be available.
+            cancel_token.cancelled().await;
+        }
+    }
+
+    /// Pull a connection from the pool, returning immediately.
+    ///
+    /// Returns `None` if the pool is at capacity (caller should establish a new connection).
     #[allow(dead_code)]
     #[inline]
-    pub fn pull(
+    pub fn try_pull(
         &self,
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
@@ -180,11 +285,10 @@ impl ConnectionManager {
 
     /// Pull a connection with a local limit applied, returning immediately.
     ///
-    /// Unlike the old connpool-based version, this is **synchronous** and returns
-    /// `None` if the local or global limit is reached.
+    /// Returns `None` if the local or global limit is reached.
     #[allow(dead_code)]
     #[inline]
-    pub fn pull_with_local_limit(
+    pub fn try_pull_with_local_limit(
         &self,
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
@@ -258,14 +362,32 @@ pub fn return_connection_to_pool(
             pools.unix_pool.return_connection_with_local_limit(
                 key.clone(),
                 wrapper,
-                local_limit_key,
+                local_limit_key.clone(),
             );
         } else {
             pools.tcp_pool.return_connection_with_local_limit(
                 key.clone(),
                 wrapper,
-                local_limit_key,
+                local_limit_key.clone(),
             );
+        }
+
+        if let Some(pending_pull) = PENDING_PULLS
+            .read()
+            .get(&(local_limit_key.clone(), is_unix))
+            .and_then(|q| q.pop())
+        {
+            // Cancel any pending pull for this local limit key, if one exists.
+            pending_pull.cancel();
+        } else if local_limit_key.is_some() {
+            if let Some(pending_pull) = PENDING_PULLS
+                .read()
+                .get(&(None, is_unix))
+                .and_then(|q| q.pop())
+            {
+                // Cancel any pending pull for the global key, if one exists.
+                pending_pull.cancel();
+            }
         }
     });
 }
