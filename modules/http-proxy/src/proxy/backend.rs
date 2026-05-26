@@ -9,6 +9,7 @@ use crate::types::upstream::UpstreamInner;
 use crate::util::FailureCache;
 
 /// Count how many backends are currently available for selection.
+#[inline]
 pub fn count_available_backends(
     upstreams: &[Arc<UpstreamInner>],
     failed_backends: &FailureCache,

@@ -2,6 +2,7 @@
 
 /// Remove headers from the response as indicated by the "Connection" header,
 /// per RFC 7230.
+#[inline]
 pub fn remove_headers_rfc7230(parts: &mut http::response::Parts) {
     // Clone the HeaderValue to break the borrow on parts.headers,
     // allowing the mutable remove calls inside the loop.

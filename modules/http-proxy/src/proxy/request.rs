@@ -102,6 +102,7 @@ fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
 }
 
 /// Construct proxy request with header transformations.
+#[inline]
 pub(super) fn construct_proxy_request(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -209,12 +210,14 @@ pub(super) fn construct_proxy_request(
     Ok(Request::from_parts(parts, body))
 }
 
+#[inline]
 pub(super) fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
     if let Ok(hv) = HeaderValue::from_str(client_ip_str) {
         headers.insert("x-forwarded-for", hv);
     }
 }
 
+#[inline]
 pub(super) fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
     if let Some(existing) = headers.get("x-forwarded-for") {
         if let Ok(existing_str) = existing.to_str() {
@@ -230,6 +233,7 @@ pub(super) fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_st
     }
 }
 
+#[inline]
 pub(super) fn set_forwarded(
     headers: &mut http::HeaderMap,
     client_ip_str: &str,
@@ -242,6 +246,7 @@ pub(super) fn set_forwarded(
     }
 }
 
+#[inline]
 pub(super) fn append_forwarded(
     headers: &mut http::HeaderMap,
     client_ip_str: &str,
