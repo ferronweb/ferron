@@ -3,6 +3,7 @@
 use crate::types::affinity::AffinityType;
 
 /// Extract the affinity key from the request.
+#[inline]
 pub fn extract_affinity_key(
     affinity: &Option<crate::config::AffinityConfig>,
     ctx: &ferron_http::HttpContext,

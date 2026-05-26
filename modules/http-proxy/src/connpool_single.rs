@@ -4,6 +4,7 @@
 //! designed for thread-per-core runtimes where each thread owns its pool exclusively.
 
 use std::cell::UnsafeCell;
+use std::collections::VecDeque;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -11,8 +12,7 @@ use rustc_hash::FxHashMap;
 
 /// The inner state of the single-threaded connection pool.
 struct SingleThreadPoolInner<K, L, I> {
-    /// Idle connections stored per key (LIFO order for cache locality).
-    idle: FxHashMap<K, Vec<I>>,
+    // Hot fields (Accessed on every pull/return - fits in one cache line)
     /// Number of connections currently outstanding (pulled but not returned).
     outstanding: usize,
     /// Total number of idle connections across all keys.
@@ -21,6 +21,10 @@ struct SingleThreadPoolInner<K, L, I> {
     max_size: usize,
     /// Whether the pool is unbounded (no max_size limit).
     unbounded: bool,
+
+    // Cold fields (Large HashMaps)
+    /// Idle connections stored per key (with FIFO order).
+    idle: FxHashMap<K, VecDeque<I>>,
     /// Per-limit-key outstanding counts.
     local_outstanding: FxHashMap<L, usize>,
 }
@@ -120,8 +124,7 @@ where
                 continue;
             }
 
-            let keep = conns.len() - evict_from_this;
-            conns.truncate(keep);
+            conns.drain(..evict_from_this);
             evicted += evict_from_this;
             to_evict -= evict_from_this;
         }
@@ -139,7 +142,7 @@ where
         (unsafe { &mut *self.inner.get() })
             .idle
             .get(key)
-            .map_or(0, Vec::len)
+            .map_or(0, VecDeque::len)
     }
 
     /// Returns the total number of idle connections.
@@ -243,7 +246,7 @@ where
         }
 
         // Try to get an idle connection.
-        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop());
+        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop_front());
 
         if inner.is_some() {
             state.idle_total = state.idle_total.saturating_sub(1);
@@ -286,7 +289,7 @@ where
         };
 
         if can_store {
-            state.idle.entry(key).or_default().push(inner);
+            state.idle.entry(key).or_default().push_front(inner);
             state.idle_total += 1;
         }
         // else: drop the connection (it will be dropped when this function ends)

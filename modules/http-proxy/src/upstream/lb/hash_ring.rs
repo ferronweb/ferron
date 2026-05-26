@@ -22,6 +22,7 @@ impl ConsistentHashRing {
 
     const VNODES_PER_BACKEND: usize = 160;
 
+    #[inline]
     pub fn new(backends: &[Arc<UpstreamInner>]) -> Self {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         Self {
@@ -31,6 +32,7 @@ impl ConsistentHashRing {
         }
     }
 
+    #[inline]
     fn effective_weight(weight: u32) -> usize {
         (weight.min(Self::MAX_EFFECTIVE_WEIGHT) as usize).saturating_mul(Self::VNODES_PER_BACKEND)
     }
@@ -64,16 +66,19 @@ impl ConsistentHashRing {
 
     /// Returns the number of virtual nodes in the ring.
     #[allow(dead_code)]
+    #[inline]
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
 
     /// Returns true if the ring has no virtual nodes.
     #[allow(dead_code)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
 
+    #[inline]
     pub fn get(&self, key: &[u8]) -> Option<usize> {
         if self.nodes.is_empty() {
             return None;
@@ -95,6 +100,7 @@ impl ConsistentHashRing {
         }
     }
 
+    #[inline]
     pub fn needs_rebuild(&self, backends: &[Arc<UpstreamInner>]) -> bool {
         if self.backend_count != backends.len() {
             return true;
@@ -105,6 +111,7 @@ impl ConsistentHashRing {
         self.weights_hash != hash
     }
 
+    #[inline]
     pub fn rebuild(&mut self, backends: &[Arc<UpstreamInner>]) {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         self.nodes = nodes;

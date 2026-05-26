@@ -4,7 +4,7 @@
 //! Each thread owns its own pool exclusively, eliminating synchronization
 //! overhead entirely.
 
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,30 +16,50 @@ use crate::connpool_single::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
 use crate::types::upstream::UpstreamInner;
 
+/// A unique key for an upstream, used for connection pooling.
+#[derive(Clone)]
+pub struct UpstreamKey(pub Arc<UpstreamInner>);
+
+impl PartialEq for UpstreamKey {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for UpstreamKey {}
+
+impl std::hash::Hash for UpstreamKey {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // O(1) hashing of the memory address instead of the struct contents
+        std::sync::Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
-pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
+pub type PoolKey = (UpstreamKey, Option<IpAddr>);
 
 /// Concrete pool item type used throughout the proxy.
 pub(crate) type PooledConnection =
-    crate::connpool_single::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
+    crate::connpool_single::PoolItem<PoolKey, UpstreamKey, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///
 /// Since we use a thread-per-core runtime, each thread gets its own pool.
-/// The pools are stored in `RefCell` for interior mutability within the thread.
+/// The pools are stored in `UnsafeCell` for interior mutability within the thread.
 struct ThreadLocalPools {
     /// TCP connection pool.
-    tcp_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    tcp_pool: Rc<SingleThreadPool<PoolKey, UpstreamKey, SendRequestWrapper>>,
     /// Unix socket pool (unbounded, separate from TCP pools).
     #[cfg(unix)]
-    unix_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    unix_pool: Rc<SingleThreadPool<PoolKey, UpstreamKey, SendRequestWrapper>>,
     /// Last per-thread TCP capacity that was synced into this TLS pool.
     last_global_limit: usize,
 }
 
 // Thread-local storage for connection pools.
 thread_local! {
-    static TLS_POOLS: RefCell<Option<ThreadLocalPools>> = const { RefCell::new(None) };
+    static TLS_POOLS: UnsafeCell<Option<ThreadLocalPools>> = const { UnsafeCell::new(None) };
 }
 
 /// Connection pool manager for the reverse proxy.
@@ -47,10 +67,10 @@ thread_local! {
 /// This manager coordinates thread-local pools with a global concurrent limit.
 /// Each thread owns its own pool instance, eliminating cross-thread contention.
 pub struct ConnectionManager {
-    /// Global limit shared across all threads. Uses `AtomicUsize` for thread-safe interior mutability.
-    global_limit: AtomicUsize,
+    /// Pre-thread global limit. Uses `AtomicUsize` for thread-safe interior mutability.
+    global_limit_per_thread: AtomicUsize,
     /// Per-upstream local limits, already scaled to the per-thread capacity.
-    local_limits: RwLock<FxHashMap<UpstreamInner, usize>>,
+    local_limits: RwLock<FxHashMap<Arc<UpstreamInner>, usize>>,
     /// Available parallelism for thread-local pool sizing.
     available_parallelism: usize,
 }
@@ -60,65 +80,41 @@ impl ConnectionManager {
     #[inline]
     pub fn with_global_limit(global_limit: usize) -> Self {
         // Initialize thread-local pools lazily on first access
-        Self {
-            global_limit: AtomicUsize::new(global_limit),
-            local_limits: RwLock::new(FxHashMap::default()),
-            available_parallelism: std::thread::available_parallelism()
-                .ok()
-                .map(|p| p.get())
-                .unwrap_or(1),
-        }
-    }
-
-    /// Ensures thread-local pools are initialized for the current thread.
-    #[inline]
-    fn ensure_tls_pools(&self) {
-        let limit = self.global_limit.load(Ordering::Relaxed);
-        let available_parallelism = self.available_parallelism;
+        let available_parallelism = std::thread::available_parallelism()
+            .ok()
+            .map(|p| p.get())
+            .unwrap_or(1);
         let per_thread = if available_parallelism > 0 {
-            limit.div_ceil(available_parallelism)
+            global_limit.div_ceil(available_parallelism)
         } else {
-            limit
+            global_limit
         };
-
-        TLS_POOLS.with(|tls| {
-            let mut guard = tls.borrow_mut();
-            if let Some(pools) = guard.as_mut() {
-                if pools.last_global_limit != per_thread {
-                    pools.tcp_pool.update_capacity(per_thread);
-                    pools.last_global_limit = per_thread;
-                }
-                return;
-            }
-
-            *guard = Some(ThreadLocalPools {
-                tcp_pool: Rc::new(SingleThreadPool::new(per_thread)),
-                #[cfg(unix)]
-                unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
-                last_global_limit: per_thread,
-            });
-        });
+        Self {
+            global_limit_per_thread: AtomicUsize::new(per_thread),
+            local_limits: RwLock::new(FxHashMap::default()),
+            available_parallelism,
+        }
     }
 
     /// Set or update a per-upstream local connection limit.
     #[inline]
-    pub fn set_local_limit(&self, upstream: &UpstreamInner, limit: usize) -> usize {
+    pub fn set_local_limit(&self, upstream: Arc<UpstreamInner>, limit: usize) -> usize {
         let mut limits = self
             .local_limits
             .write()
             .expect("local_limits lock poisoned");
 
-        limits.insert(upstream.clone(), limit);
+        limits.insert(upstream, limit);
         limit
     }
 
     /// Get the local limit value for an upstream.
     #[inline]
-    pub fn get_local_limit(&self, upstream: &UpstreamInner) -> Option<usize> {
+    pub fn get_local_limit(&self, upstream: Arc<UpstreamInner>) -> Option<usize> {
         self.local_limits
             .read()
             .expect("local_limits lock poisoned")
-            .get(upstream)
+            .get(&upstream)
             .copied()
     }
 
@@ -127,14 +123,22 @@ impl ConnectionManager {
     /// Existing thread-local pools observe the new capacity on their next access.
     #[inline]
     pub fn update_global_limit(&self, new_limit: usize) {
+        let available_parallelism = self.available_parallelism;
+        let per_thread = if available_parallelism > 0 {
+            new_limit.div_ceil(available_parallelism)
+        } else {
+            new_limit
+        };
+
         // Update the stored global limit
-        self.global_limit.store(new_limit, Ordering::Relaxed);
+        self.global_limit_per_thread
+            .store(per_thread, Ordering::Relaxed);
     }
 
     /// Updates the local limit for a specific upstream.
     #[allow(dead_code)]
     #[inline]
-    pub fn update_local_limit_for_upstream(&self, upstream: &UpstreamInner, new_limit: usize) {
+    pub fn update_local_limit_for_upstream(&self, upstream: Arc<UpstreamInner>, new_limit: usize) {
         let mut limits = self
             .local_limits
             .write()
@@ -150,27 +154,46 @@ impl ConnectionManager {
     #[inline]
     pub fn pull(
         &self,
-        upstream: &UpstreamInner,
+        upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
     ) -> Option<PooledConnection> {
-        self.ensure_tls_pools();
+        let key = (UpstreamKey(upstream), client_ip);
+        let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
 
-        let key = (Arc::new(upstream.clone()), client_ip);
+        TLS_POOLS.with(|c| {
+            let ptr = c.get();
+            let opt = unsafe { &mut *ptr };
 
-        #[cfg(unix)]
-        if upstream.proxy_unix.is_some() {
-            return TLS_POOLS.with(|tls| {
-                let guard = tls.borrow();
-                let pools = guard.as_ref().unwrap();
+            // Fast path: already initialized and limit matches
+            if let Some(pools) = opt.as_ref() {
+                if pools.last_global_limit == per_thread {
+                    #[cfg(unix)]
+                    if key.0 .0.proxy_unix.is_some() {
+                        return pools.unix_pool.pull(key);
+                    }
+                    return pools.tcp_pool.pull(key);
+                }
+            }
 
-                pools.unix_pool.pull(key)
-            });
-        }
+            // Slow path: initialize or update capacity
+            if opt.is_none() {
+                *opt = Some(ThreadLocalPools {
+                    tcp_pool: Rc::new(SingleThreadPool::new(per_thread)),
+                    #[cfg(unix)]
+                    unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
+                    last_global_limit: per_thread,
+                });
+            }
+            let pools = opt.as_mut().unwrap();
+            if pools.last_global_limit != per_thread {
+                pools.tcp_pool.update_capacity(per_thread);
+                pools.last_global_limit = per_thread;
+            }
 
-        TLS_POOLS.with(|tls| {
-            let guard = tls.borrow();
-            let pools = guard.as_ref().unwrap();
-
+            #[cfg(unix)]
+            if key.0 .0.proxy_unix.is_some() {
+                return pools.unix_pool.pull(key);
+            }
             pools.tcp_pool.pull(key)
         })
     }
@@ -183,30 +206,49 @@ impl ConnectionManager {
     #[inline]
     pub fn pull_with_local_limit(
         &self,
-        upstream: &UpstreamInner,
+        upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
     ) -> Option<PooledConnection> {
-        self.ensure_tls_pools();
-
-        let upstream_key = Arc::new(upstream.clone());
-        let key = (Arc::clone(&upstream_key), client_ip);
+        let upstream_key = UpstreamKey(upstream);
+        let key = (upstream_key.clone(), client_ip);
         let limit = local_limit.map(|limit| (upstream_key, limit));
+        let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
 
-        #[cfg(unix)]
-        if upstream.proxy_unix.is_some() {
-            return TLS_POOLS.with(|tls| {
-                let guard = tls.borrow();
-                let pools = guard.as_ref().unwrap();
+        TLS_POOLS.with(|c| {
+            let ptr = c.get();
+            let opt = unsafe { &mut *ptr };
 
-                pools.unix_pool.pull_with_local_limit(key, limit)
-            });
-        }
+            // Fast path: already initialized and limit matches
+            if let Some(pools) = opt.as_ref() {
+                if pools.last_global_limit == per_thread {
+                    #[cfg(unix)]
+                    if key.0 .0.proxy_unix.is_some() {
+                        return pools.unix_pool.pull_with_local_limit(key, limit);
+                    }
+                    return pools.tcp_pool.pull_with_local_limit(key, limit);
+                }
+            }
 
-        TLS_POOLS.with(|tls| {
-            let guard = tls.borrow();
-            let pools = guard.as_ref().unwrap();
+            // Slow path: initialize or update capacity
+            if opt.is_none() {
+                *opt = Some(ThreadLocalPools {
+                    tcp_pool: Rc::new(SingleThreadPool::new(per_thread)),
+                    #[cfg(unix)]
+                    unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
+                    last_global_limit: per_thread,
+                });
+            }
+            let pools = opt.as_mut().unwrap();
+            if pools.last_global_limit != per_thread {
+                pools.tcp_pool.update_capacity(per_thread);
+                pools.last_global_limit = per_thread;
+            }
 
+            #[cfg(unix)]
+            if key.0 .0.proxy_unix.is_some() {
+                return pools.unix_pool.pull_with_local_limit(key, limit);
+            }
             pools.tcp_pool.pull_with_local_limit(key, limit)
         })
     }
@@ -223,8 +265,11 @@ pub fn return_connection_to_pool(
     local_limit_key: Option<Arc<UpstreamInner>>,
     is_unix: bool,
 ) {
+    let local_limit_key = local_limit_key.map(UpstreamKey);
     TLS_POOLS.with(|tls| {
-        let guard = tls.borrow();
+        // SAFETY: We are strictly single-threaded per core, and no re-entrant
+        // mutable borrows occur during connection pulls.
+        let guard = unsafe { &*tls.get() };
         let Some(pools) = guard.as_ref() else {
             return; // Pool not initialized, discard connection
         };

@@ -38,6 +38,7 @@ use self::tls::{cached_tls_config, io_error_status};
 
 const LOG_TARGET: &str = "ferron-http-proxy";
 
+#[inline]
 fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
     config
         .idle_timeout_map
@@ -136,14 +137,14 @@ pub async fn execute_proxy(
             })?;
         let is_https = proxy_request_url.scheme_str() == Some("https");
         let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
-        let local_limit = cm.get_local_limit(&selected.upstream);
+        let local_limit = cm.get_local_limit(selected.upstream.clone());
         let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
 
         match pool::try_send_with_pool(
             ctx,
             config,
             cm,
-            &selected.upstream,
+            selected.upstream.clone(),
             &proxy_request_url,
             client_ip,
             local_limit,

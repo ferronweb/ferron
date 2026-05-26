@@ -60,6 +60,7 @@ pub fn record_backend_transport_failure(
 }
 
 /// Record an upstream response for the circuit breaker state machine.
+#[inline]
 pub fn record_backend_response(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,

@@ -11,6 +11,7 @@ use crate::{types::upstream::UpstreamInner, upstream::lb::ConsistentHashRing};
 /// For cookie and header affinity, the key is a backend identifier
 /// (hash of the upstream URL). For IP and hash affinity, the key
 /// is used directly with the consistent hash ring.
+#[inline]
 pub fn resolve_affinity_index(
     affinity_type: &crate::types::affinity::AffinityType,
     affinity_key: &[u8],

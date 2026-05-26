@@ -33,6 +33,7 @@ impl WeightedRoundRobinState {
     const MAX_EFFECTIVE_WEIGHT: u32 = 100;
 
     /// Create a new empty state.
+    #[inline]
     pub fn new() -> Self {
         Self {
             current_weights: Arc::new(RwLock::new(Vec::new())),

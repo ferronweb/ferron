@@ -516,7 +516,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     )
                     .await;
                 for resolved_upstream in resolved {
-                    conn_manager.set_local_limit(&resolved_upstream, limit);
+                    conn_manager.set_local_limit(resolved_upstream, limit);
                 }
             }
         }

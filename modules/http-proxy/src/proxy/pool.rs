@@ -36,7 +36,7 @@ pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    upstream: &UpstreamInner,
+    upstream: Arc<UpstreamInner>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
     local_limit: Option<usize>,
@@ -55,9 +55,9 @@ pub async fn try_send_with_pool(
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
     let item = if let Some(limit) = local_limit {
-        cm.pull_with_local_limit(upstream, client_ip, Some(limit))
+        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
     } else {
-        cm.pull(upstream, client_ip)
+        cm.pull(upstream.clone(), client_ip)
     };
 
     // If pool returned None (at capacity), we'll need to establish a new connection
@@ -212,7 +212,7 @@ pub async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    upstream: &UpstreamInner,
+    upstream: Arc<UpstreamInner>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
     local_limit: Option<usize>,
@@ -225,9 +225,9 @@ pub async fn establish_and_send(
     let item: Option<PooledConnection> = if let Some(it) = existing_item {
         Some(it)
     } else if let Some(limit) = local_limit {
-        cm.pull_with_local_limit(upstream, client_ip, Some(limit))
+        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
     } else {
-        cm.pull(upstream, client_ip)
+        cm.pull(upstream.clone(), client_ip)
     };
 
     // If pool returned None (at capacity), we need to proceed without a pooled item
@@ -451,7 +451,7 @@ pub async fn establish_and_send(
 pub async fn establish_connection_without_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    upstream: &UpstreamInner,
+    upstream: Arc<UpstreamInner>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
     is_https: bool,

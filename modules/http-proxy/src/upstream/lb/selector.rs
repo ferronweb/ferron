@@ -16,6 +16,7 @@ use crate::upstream::lb::LoadBalancerAlgorithmInner;
 /// For LeastConnections and TwoRandomChoices, also initializes the connection
 /// tracker `Arc<()>` in the map if missing, so that the caller can simply
 /// clone the existing entry without a second lock acquisition.
+#[inline]
 pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
     healthy_indices: &[usize],
@@ -23,7 +24,8 @@ pub fn select_backend_index(
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
-    if healthy_indices.is_empty() {
+    if healthy_indices.len() < 2 {
+        // Fast path: no load balancing needed
         return 0;
     }
 
