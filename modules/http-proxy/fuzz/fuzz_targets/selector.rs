@@ -84,44 +84,49 @@ fuzz_target!(|input: &[u8]| {
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
     let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
 
+    // Convert to indices + upstreams format consumed by select_backend_index
+    let healthy: Vec<usize> = (0..backends.len()).collect();
+    let upstreams: Vec<Arc<UpstreamInner>> =
+        backends.into_iter().map(|(_, u)| Arc::new(u)).collect();
+
     // Invariant 1: select_backend_index never panics
-    let idx = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+    let idx = select_backend_index(&algorithm, &healthy, &upstreams, Some(&conn_state), Some(&ewma_state));
 
     // Invariant 2: Returned index is always valid
-    if backends.is_empty() {
+    if upstreams.is_empty() {
         assert_eq!(
             idx, 0,
             "select_backend_index must return 0 for empty backends"
         );
     } else {
         assert!(
-            idx < backends.len(),
+            idx < upstreams.len(),
             "select_backend_index returned index {idx} >= {}",
-            backends.len()
+            upstreams.len()
         );
     }
 
     // Invariant 3: Works with None conn_state and ewma_state (fallthrough)
-    let idx2 = select_backend_index(&algorithm, &backends, None, None);
-    if backends.is_empty() {
+    let idx2 = select_backend_index(&algorithm, &healthy, &upstreams, None, None);
+    if upstreams.is_empty() {
         assert_eq!(idx2, 0);
     } else {
-        assert!(idx2 < backends.len());
+        assert!(idx2 < upstreams.len());
     }
 
     // Invariant 4: Works with Some(conn_state) without ewma_state
-    let idx3 = select_backend_index(&algorithm, &backends, Some(&conn_state), None);
-    if backends.is_empty() {
+    let idx3 = select_backend_index(&algorithm, &healthy, &upstreams, Some(&conn_state), None);
+    if upstreams.is_empty() {
         assert_eq!(idx3, 0);
     } else {
-        assert!(idx3 < backends.len());
+        assert!(idx3 < upstreams.len());
     }
 
     // Invariant 5: All algorithms are deterministic given same state
     for _ in 0..5 {
-        let i = select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
+        let i = select_backend_index(&algorithm, &healthy, &upstreams, Some(&conn_state), Some(&ewma_state));
         assert!(
-            backends.is_empty() || i < backends.len(),
+            upstreams.is_empty() || i < upstreams.len(),
             "repeat call returned invalid index {i}"
         );
     }

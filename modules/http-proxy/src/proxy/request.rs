@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
@@ -30,8 +29,8 @@ enum Segment {
     Var(String),
 }
 
-static TEMPLATE_CACHE: LazyLock<parking_lot::RwLock<HashMap<String, Arc<Vec<Segment>>>>> =
-    LazyLock::new(|| parking_lot::RwLock::new(HashMap::new()));
+static TEMPLATE_CACHE: LazyLock<dashmap::DashMap<String, Arc<Vec<Segment>>>> =
+    LazyLock::new(dashmap::DashMap::new);
 
 fn compile_template(value: &str) -> Vec<Segment> {
     let mut segs: Vec<Segment> = Vec::new();
@@ -72,20 +71,11 @@ fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
         return value.to_string();
     }
 
-    let segs_arc = {
-        let guard = TEMPLATE_CACHE.read();
-        if let Some(found) = guard.get(value) {
-            Arc::clone(found)
-        } else {
-            drop(guard);
-            let compiled = Arc::new(compile_template(value));
-            let mut guard = TEMPLATE_CACHE.write();
-            let entry = guard
-                .entry(value.to_string())
-                .or_insert_with(|| Arc::clone(&compiled));
-            Arc::clone(entry)
-        }
-    };
+    let segs_arc = TEMPLATE_CACHE
+        .entry(value.to_string())
+        .or_insert_with(|| Arc::new(compile_template(value)))
+        .value()
+        .clone();
 
     let mut result = String::with_capacity(value.len());
     for seg in segs_arc.iter() {

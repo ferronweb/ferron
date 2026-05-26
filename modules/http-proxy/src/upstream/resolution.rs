@@ -63,8 +63,9 @@ pub fn determine_proxy_to(
         return None;
     }
 
-    // Build healthy list with original indices preserved
-    let mut healthy: Vec<(usize, Arc<UpstreamInner>)> = {
+    // Build healthy list of indices into `upstreams` — avoids Arc clones
+    // until the final selection.
+    let mut healthy: Vec<usize> = {
         let failed = if health_check_enabled {
             Some(failed_backends.read())
         } else {
@@ -72,7 +73,6 @@ pub fn determine_proxy_to(
         };
         upstreams
             .iter()
-            .cloned()
             .enumerate()
             .filter(|(_, u)| {
                 // Check passive failure cache
@@ -94,6 +94,7 @@ pub fn determine_proxy_to(
 
                 not_failed && active_healthy && not_selected
             })
+            .map(|(i, _)| i)
             .collect()
     };
 
@@ -104,7 +105,8 @@ pub fn determine_proxy_to(
             return None;
         }
 
-        // Resolve affinity: find position in `healthy` whose original index matches affinity_index
+        // Resolve affinity: find position in `healthy` whose original index
+        // matches affinity_index
         if affinity_index.is_none() {
             if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
                 affinity_index =
@@ -112,18 +114,13 @@ pub fn determine_proxy_to(
             };
         }
         let start_pos = affinity_index.and_then(|aff_idx| {
-            // Fast path: if affine backend is still at same position in filtered list
-            if aff_idx < healthy.len() {
-                if let Some((orig_idx, _)) = healthy.get(aff_idx) {
-                    if *orig_idx == aff_idx {
-                        return Some(aff_idx);
-                    }
-                }
+            // Fast path: if affine backend is still at same position in
+            // filtered list
+            if aff_idx < healthy.len() && healthy[aff_idx] == aff_idx {
+                return Some(aff_idx);
             }
             // Fallback: search by original index identity
-            healthy
-                .iter()
-                .position(|(orig_idx, _)| *orig_idx == aff_idx)
+            healthy.iter().position(|orig_idx| *orig_idx == aff_idx)
         });
 
         let index = if let Some(pos) = start_pos {
@@ -131,9 +128,12 @@ pub fn determine_proxy_to(
         } else if healthy.len() == 1 {
             0
         } else {
-            super::lb::selector::select_backend_index(algorithm, &healthy, conn_state, ewma_state)
+            super::lb::selector::select_backend_index(
+                algorithm, &healthy, upstreams, conn_state, ewma_state,
+            )
         };
-        let (_, upstream) = healthy.swap_remove(index);
+        let upstream_idx = healthy.swap_remove(index);
+        let upstream = Arc::clone(&upstreams[upstream_idx]);
         if start_pos == Some(index) {
             // Affine backend is no longer healthy; reset affinity index
             affinity_index = None;
