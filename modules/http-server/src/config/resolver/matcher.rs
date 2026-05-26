@@ -25,6 +25,7 @@ impl CompiledMatcherExpr {
     /// Create a new compiled matcher expression, pre-compiling regex if needed
     ///
     /// Returns `Err` if regex compilation fails at insertion time.
+    #[inline]
     pub fn new(expr: ServerConfigurationMatcherExpr) -> Result<Self, String> {
         let compiled_regex = if matches!(
             expr.op,
@@ -62,6 +63,7 @@ impl CompiledMatcherExpr {
 }
 
 /// Evaluate a collection of conditional expressions with AND logic (all must match).
+#[inline]
 pub fn evaluate_matcher_conditions(exprs: &[CompiledMatcherExpr], ctx: &HttpContext) -> bool {
     exprs
         .iter()
@@ -69,6 +71,7 @@ pub fn evaluate_matcher_conditions(exprs: &[CompiledMatcherExpr], ctx: &HttpCont
 }
 
 /// Evaluate a single conditional matcher expression with given variables.
+#[inline]
 pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &HttpContext) -> bool {
     let expr = &compiled_expr.expr;
     let left_val = resolve_matcher_operand(&expr.left, ctx);
@@ -141,6 +144,7 @@ pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &Htt
 }
 
 /// Resolve the string value of a matcher operand from variables or literals.
+#[inline]
 pub fn resolve_matcher_operand(
     operand: &ServerConfigurationMatcherOperand,
     ctx: &HttpContext,

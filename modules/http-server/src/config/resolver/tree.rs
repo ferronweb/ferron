@@ -24,6 +24,7 @@ pub enum HostLookupKey {
 }
 
 impl HostLookupKey {
+    #[inline]
     fn is_predicate(&self) -> bool {
         matches!(self, Self::HostDomainLevelWildcard | Self::Conditional(_))
     }
@@ -34,6 +35,7 @@ pub struct HostLookupMultiKey(Vec<HostLookupKey>);
 
 #[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for HostLookupMultiKey {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         for index in 0..self.0.len().max(other.0.len()) {
             match (self.0.get(index), other.0.get(index)) {
@@ -52,6 +54,7 @@ impl PartialOrd for HostLookupMultiKey {
 }
 
 impl Ord for HostLookupMultiKey {
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }
@@ -64,6 +67,7 @@ pub struct ConditionalMatcher {
 }
 
 impl ConditionalMatcher {
+    #[inline]
     fn compile(key: &ConditionalLookupKey) -> Option<Self> {
         let compiled_exprs: Result<Vec<_>, _> = key
             .exprs
@@ -78,6 +82,7 @@ impl ConditionalMatcher {
         })
     }
 
+    #[inline]
     fn matches(&self, ctx: &HttpContext) -> bool {
         let matched = evaluate_matcher_conditions(&self.compiled_exprs, ctx);
         if self.negated {
@@ -95,6 +100,7 @@ pub enum PredicateMatcher {
 }
 
 impl PredicateMatcher {
+    #[inline]
     pub fn from_key(key: &HostLookupKey) -> Option<Self> {
         match key {
             HostLookupKey::HostDomainLevelWildcard => Some(Self::HostDomainWildcard),
@@ -105,6 +111,7 @@ impl PredicateMatcher {
         }
     }
 
+    #[inline]
     fn consumed_input_len(
         &self,
         input: &[HostLookupKey],
@@ -147,6 +154,7 @@ struct HostLookupNode<T> {
 }
 
 impl<T> Default for HostLookupNode<T> {
+    #[inline]
     fn default() -> Self {
         Self {
             value: None,
@@ -169,12 +177,14 @@ pub struct HostLookupMatch<'a, T> {
 }
 
 impl<T> HostLookupTree<T> {
+    #[inline]
     pub fn new() -> Self {
         Self {
             root: HostLookupNode::default(),
         }
     }
 
+    #[inline]
     pub fn insert_node(&mut self, key: Vec<HostLookupKey>) -> &mut Option<T> {
         let mut current_node = &mut self.root;
         let mut key_iter = key.into_iter();
@@ -267,6 +277,7 @@ impl<T> HostLookupTree<T> {
         &mut current_node.value
     }
 
+    #[inline]
     pub fn get<'a>(
         &'a self,
         key: &[HostLookupKey],
@@ -278,6 +289,7 @@ impl<T> HostLookupTree<T> {
         matches
     }
 
+    #[inline]
     fn collect_matches<'a>(
         node: &'a HostLookupNode<T>,
         input: &[HostLookupKey],
@@ -359,6 +371,7 @@ impl<T> HostLookupTree<T> {
         }
     }
 
+    #[inline]
     fn find_matching_fixed_child<'a>(
         node: &'a HostLookupNode<T>,
         input: &[HostLookupKey],

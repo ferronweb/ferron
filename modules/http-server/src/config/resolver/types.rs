@@ -18,12 +18,14 @@ pub struct ResolvedLocationPath {
 }
 
 impl ResolvedLocationPath {
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 }
 
 impl fmt::Display for ResolvedLocationPath {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
 
@@ -64,6 +66,7 @@ pub struct ResolutionResult {
 }
 
 impl ResolutionResult {
+    #[inline]
     pub fn new(configuration: LayeredConfiguration, location_path: ResolvedLocationPath) -> Self {
         Self {
             configuration,

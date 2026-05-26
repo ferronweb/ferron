@@ -23,6 +23,7 @@ use crate::util::proxy_protocol::read_proxy_header;
 
 use super::common::*;
 
+#[inline]
 fn emit_connection_error_metric(
     observability: &CompositeEventSink,
     transport: &'static str,
@@ -465,6 +466,7 @@ async fn handle_http1_connection_zerocopy<S>(
 
 #[cfg(target_os = "linux")]
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn handle_http1_connection_zerocopy<S>(
     socket: S,
     remote_address: SocketAddr,
@@ -535,6 +537,7 @@ async fn handle_http1_connection_zerocopy<S>(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn handle_http1_connection<S>(
     socket: S,
     remote_address: SocketAddr,
@@ -600,6 +603,7 @@ async fn handle_http1_connection<S>(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn handle_http2_connection<S>(
     socket: S,
     remote_address: SocketAddr,

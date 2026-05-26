@@ -19,11 +19,13 @@ pub struct HostConfigs {
 
 impl HostConfigs {
     #[cfg(test)]
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Insert a host configuration (None hostname = default)
+    #[inline]
     pub fn insert(
         &mut self,
         hostname: Option<String>,
@@ -42,6 +44,7 @@ impl HostConfigs {
     /// Look up a host configuration by hostname.
     /// Falls back to the default host if no named match is found.
     #[allow(dead_code)]
+    #[inline]
     pub fn get(&self, hostname: &str) -> Option<&Arc<PreparedHostConfigurationBlock>> {
         self.named_hosts
             .get(hostname)
@@ -50,6 +53,7 @@ impl HostConfigs {
 
     /// Get the default host configuration, if any
     #[allow(dead_code)]
+    #[inline]
     pub fn get_default(&self) -> Option<&Arc<PreparedHostConfigurationBlock>> {
         self.default_host.as_ref()
     }
@@ -67,6 +71,7 @@ pub struct PreparedHostConfigurationBlock {
 impl TryFrom<ServerConfigurationBlock> for PreparedHostConfigurationBlock {
     type Error = Box<dyn std::error::Error>;
 
+    #[inline]
     fn try_from(value: ServerConfigurationBlock) -> Result<Self, Self::Error> {
         prepare_host_block(value)
     }
@@ -91,6 +96,7 @@ pub struct PreparedHostConfigurationErrorConfig {
     pub config: PreparedHostConfigurationBlock,
 }
 
+#[inline]
 pub fn prepare_host_config(
     port: ferron_core::config::ServerConfigurationPort,
 ) -> Result<PreparedConfiguration, Box<dyn std::error::Error>> {
@@ -110,6 +116,7 @@ pub fn prepare_host_config(
     Ok(result)
 }
 
+#[inline]
 pub fn prepare_host_block(
     config: ferron_core::config::ServerConfigurationBlock,
 ) -> Result<PreparedHostConfigurationBlock, Box<dyn std::error::Error>> {

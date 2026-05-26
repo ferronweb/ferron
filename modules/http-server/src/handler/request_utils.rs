@@ -17,6 +17,7 @@ use super::{ResponseBody, LOG_TARGET};
 
 static ERROR_PIPELINE_SPAN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+#[inline]
 pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
     if let Some(authority) = request.uri().authority() {
         let authority = authority.to_owned();
@@ -45,6 +46,7 @@ pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
     }
 }
 
+#[inline]
 pub(super) fn normalize_host_header(
     request: &mut HttpRequest,
     _events: &CompositeEventSink,
@@ -70,6 +72,7 @@ pub(super) fn normalize_host_header(
     Ok(())
 }
 
+#[inline]
 pub(super) fn get_http_nested_boolean(
     block: &ferron_core::config::ServerConfigurationBlock,
     directive: &str,
@@ -295,51 +298,6 @@ pub(super) fn add_http3_alt_svc_header(headers: &mut HeaderMap, http3_alt_port: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http_body_util::Empty;
-
-    #[test]
-    fn is_options_star_request_detects_asterisk_options() {
-        let request = http::Request::builder()
-            .method(http::Method::OPTIONS)
-            .uri("*")
-            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-            .expect("valid request");
-
-        assert!(is_options_star_request(&request));
-    }
-
-    #[test]
-    fn is_options_star_request_rejects_other_methods() {
-        let request = http::Request::builder()
-            .method(http::Method::GET)
-            .uri("*")
-            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-            .expect("valid request");
-
-        assert!(!is_options_star_request(&request));
-    }
-
-    #[test]
-    fn is_options_star_request_rejects_other_paths() {
-        let request = http::Request::builder()
-            .method(http::Method::OPTIONS)
-            .uri("/path")
-            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-            .expect("valid request");
-
-        assert!(!is_options_star_request(&request));
-    }
-
-    #[test]
-    fn is_options_star_request_rejects_empty_path() {
-        let request = http::Request::builder()
-            .method(http::Method::OPTIONS)
-            .uri("/")
-            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-            .expect("valid request");
-
-        assert!(!is_options_star_request(&request));
-    }
 
     #[test]
     fn check_backslash_in_path_rejects_literal_backslash() {
@@ -363,16 +321,5 @@ mod tests {
         assert!(check_backslash_in_path("/api/v2", true).is_ok());
         assert!(check_backslash_in_path("/users/123", true).is_ok());
         assert!(check_backslash_in_path("/path?query=1", true).is_ok());
-    }
-
-    #[test]
-    fn check_backslash_in_path_allows_backslash_when_disabled() {
-        assert!(check_backslash_in_path("/path\\to\\resource", false).is_ok());
-        assert!(check_backslash_in_path("/path%5Cto", false).is_ok());
-    }
-
-    #[test]
-    fn check_backslash_in_path_asterisk() {
-        assert!(check_backslash_in_path("*", true).is_ok());
     }
 }

@@ -17,10 +17,12 @@ use super::observability::PerStageSpanHooks;
 static PATH_RESOLVE_CACHE_TTL_MILLIS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(100);
 
+#[inline]
 fn path_resolve_cache_ttl() -> Duration {
     Duration::from_millis(PATH_RESOLVE_CACHE_TTL_MILLIS.load(std::sync::atomic::Ordering::Relaxed))
 }
 
+#[inline]
 pub(crate) fn set_path_resolve_cache_ttl_millis(ms: u64) {
     PATH_RESOLVE_CACHE_TTL_MILLIS.store(ms, std::sync::atomic::Ordering::Relaxed);
 }
@@ -43,6 +45,7 @@ struct Timestamped<T> {
 }
 
 impl<T> Timestamped<T> {
+    #[inline]
     fn new(value: T) -> Self {
         Self {
             inserted_at: Instant::now(),
@@ -81,6 +84,7 @@ struct ResolvedHttpFile {
 }
 
 impl ResolvedHttpFile {
+    #[inline]
     fn compute_etag(&self) -> String {
         let mtime_secs = self
             .metadata

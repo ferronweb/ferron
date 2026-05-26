@@ -19,6 +19,7 @@ struct ErrorHandlerStatusLookup<T> {
 }
 
 impl<T> ErrorHandlerStatusLookup<T> {
+    #[inline]
     fn new() -> Self {
         Self {
             catchall_values: Vec::new(),
@@ -26,6 +27,7 @@ impl<T> ErrorHandlerStatusLookup<T> {
         }
     }
 
+    #[inline]
     fn get(&self, status_code: u16) -> Vec<&T> {
         let mut values = Vec::new();
 
@@ -42,6 +44,7 @@ impl<T> ErrorHandlerStatusLookup<T> {
         values
     }
 
+    #[inline]
     fn insert(&mut self, status_code: Option<u16>, value: T) {
         if let Some(code) = status_code {
             self.status_code_values.entry(code).or_default().push(value);
@@ -84,6 +87,7 @@ pub struct ThreeStageResolver {
 }
 
 impl ThreeStageResolver {
+    #[inline]
     pub fn new() -> Self {
         Self {
             global: None,
@@ -92,6 +96,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     pub fn from_prepared(prepared: PreparedConfiguration) -> Self {
         let mut resolver = Self::new();
 
@@ -110,6 +115,7 @@ impl ThreeStageResolver {
         resolver
     }
 
+    #[inline]
     pub fn from_prepared_with_global(
         prepared: PreparedConfiguration,
         global: Arc<ServerConfigurationBlock>,
@@ -119,6 +125,7 @@ impl ThreeStageResolver {
         resolver
     }
 
+    #[inline]
     pub fn resolve(
         &self,
         ip: IpAddr,
@@ -133,6 +140,7 @@ impl ThreeStageResolver {
         ))
     }
 
+    #[inline]
     pub fn resolve_error_scoped(
         &self,
         ip: IpAddr,
@@ -165,10 +173,12 @@ impl ThreeStageResolver {
         ))
     }
 
+    #[inline]
     pub fn global(&self) -> Option<Arc<ServerConfigurationBlock>> {
         self.global.clone()
     }
 
+    #[inline]
     fn insert_host(
         &mut self,
         ip: Option<IpAddr>,
@@ -187,6 +197,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     fn generic_host_lookup_key(hostname: Option<&str>) -> Vec<HostLookupKey> {
         let mut key = Vec::new();
 
@@ -197,6 +208,7 @@ impl ThreeStageResolver {
         key
     }
 
+    #[inline]
     fn scoped_host_lookup_key(ip: IpAddr, hostname: Option<&str>) -> Vec<HostLookupKey> {
         let mut key = Self::ip_lookup_keys(ip);
 
@@ -207,6 +219,7 @@ impl ThreeStageResolver {
         key
     }
 
+    #[inline]
     fn hostname_lookup_keys(hostname: &str) -> Vec<HostLookupKey> {
         let mut key = Vec::new();
 
@@ -229,10 +242,12 @@ impl ThreeStageResolver {
         key
     }
 
+    #[inline]
     fn request_hostname_lookup_key(hostname: &str) -> Vec<HostLookupKey> {
         Self::hostname_lookup_keys(hostname)
     }
 
+    #[inline]
     fn ip_lookup_keys(ip: IpAddr) -> Vec<HostLookupKey> {
         if ip.is_loopback() {
             return vec![HostLookupKey::IsLoopback];
@@ -252,6 +267,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     fn path_lookup_key(path: &str) -> Vec<HostLookupKey> {
         let mut key = Vec::new();
         let mut is_first = true;
@@ -270,12 +286,14 @@ impl ThreeStageResolver {
         key
     }
 
+    #[inline]
     fn path_lookup_key_from_segments(segments: &[String]) -> Vec<HostLookupKey> {
         let mut key = vec![HostLookupKey::LocationSegment(String::new())];
         key.extend(segments.iter().cloned().map(HostLookupKey::LocationSegment));
         key
     }
 
+    #[inline]
     fn split_path_segments(path: &str) -> Vec<String> {
         path.trim_start_matches('/')
             .split('/')
@@ -284,6 +302,7 @@ impl ThreeStageResolver {
             .collect()
     }
 
+    #[inline]
     fn compile_block(block: Arc<PreparedHostConfigurationBlock>) -> Arc<CompiledBlock> {
         let mut branches = HostLookupTree::new();
 
@@ -312,6 +331,7 @@ impl ThreeStageResolver {
         })
     }
 
+    #[inline]
     fn compile_match_branch(
         matcher: &PreparedHostConfigurationMatch,
     ) -> Option<(Vec<HostLookupKey>, Arc<CompiledBlock>)> {
@@ -340,12 +360,14 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     fn compile_error_block(
         error_config: &PreparedHostConfigurationErrorConfig,
     ) -> Arc<CompiledBlock> {
         Self::compile_block(Arc::new(error_config.config.clone()))
     }
 
+    #[inline]
     fn resolve_base(
         &self,
         ip: IpAddr,
@@ -408,6 +430,7 @@ impl ThreeStageResolver {
         })
     }
 
+    #[inline]
     fn resolve_host_matches(
         &self,
         ip: IpAddr,
@@ -461,6 +484,7 @@ impl ThreeStageResolver {
         matches
     }
 
+    #[inline]
     fn owned_lookup_match(
         match_result: HostLookupMatch<'_, Arc<CompiledBlock>>,
     ) -> ResolvedBlockMatch {
@@ -472,6 +496,7 @@ impl ThreeStageResolver {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[inline]
     fn resolve_block(
         block: &Arc<CompiledBlock>,
         request_path_keys: &[HostLookupKey],
@@ -526,6 +551,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     fn apply_nested_layers(
         block: &Arc<CompiledBlock>,
         request_path_keys: &[HostLookupKey],
@@ -559,6 +585,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[inline]
     fn matched_hostname_segments(keys: &[HostLookupKey]) -> Vec<String> {
         let mut hostname_segments = keys
             .iter()
@@ -573,6 +600,7 @@ impl ThreeStageResolver {
         hostname_segments
     }
 
+    #[inline]
     fn matched_location_segments(keys: &[HostLookupKey]) -> Vec<String> {
         keys.iter()
             .filter_map(|key| match key {
@@ -584,6 +612,7 @@ impl ThreeStageResolver {
             .collect()
     }
 
+    #[inline]
     fn matched_conditionals(keys: &[HostLookupKey]) -> Vec<ServerConfigurationMatcherExpr> {
         let mut conditionals = Vec::new();
 
@@ -596,6 +625,7 @@ impl ThreeStageResolver {
         conditionals
     }
 
+    #[inline]
     fn consumed_location_segments(keys: &[HostLookupKey]) -> usize {
         keys.iter()
             .filter(
@@ -604,6 +634,7 @@ impl ThreeStageResolver {
             .count()
     }
 
+    #[inline]
     fn has_hostname_keys(keys: &[HostLookupKey]) -> bool {
         keys.iter().any(|key| {
             matches!(
@@ -617,6 +648,7 @@ impl ThreeStageResolver {
 }
 
 impl Default for ThreeStageResolver {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }

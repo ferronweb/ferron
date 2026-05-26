@@ -137,14 +137,17 @@ pub(super) struct HttpAccessLog {
 }
 
 impl AccessEvent for HttpAccessLog {
+    #[inline]
     fn protocol(&self) -> &'static str {
         "http"
     }
 
+    #[inline]
     fn trace_context(&self) -> Option<&EventTraceContext> {
         self.trace_context.as_ref()
     }
 
+    #[inline]
     fn visit(&self, visitor: &mut dyn AccessVisitor) {
         visitor.field_string("path", &self.path);
         visitor.field_string("path_and_query", &self.path_and_query);
@@ -192,6 +195,7 @@ impl AccessEvent for HttpAccessLog {
     }
 }
 
+#[inline]
 pub(super) fn next_span_key(prefix: &str) -> String {
     format!(
         "{prefix}:{}",
@@ -199,6 +203,7 @@ pub(super) fn next_span_key(prefix: &str) -> String {
     )
 }
 
+#[inline]
 pub(super) fn to_event_trace_context(
     trace_context: &trace_context::TraceContext,
 ) -> EventTraceContext {
@@ -217,6 +222,7 @@ pub(super) fn to_event_trace_context(
     }
 }
 
+#[inline]
 pub fn resolve_request_trace_context(
     request: &HttpRequest,
     generate_enabled: bool,

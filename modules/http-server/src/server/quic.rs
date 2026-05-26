@@ -128,16 +128,19 @@ struct CustomAsyncTimer {
 }
 
 impl AsyncTimer for CustomAsyncTimer {
+    #[inline]
     fn reset(mut self: Pin<&mut Self>, t: Instant) {
         (*self.inner).as_mut().reset(t)
     }
 
+    #[inline]
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
         (*self.inner).as_mut().poll(cx)
     }
 }
 
 impl Debug for CustomAsyncTimer {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CustomAsyncTimer").finish()
     }
@@ -431,6 +434,7 @@ fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn handle_http3_connection(
     conn: quinn::Connection,
     remote_address: SocketAddr,
