@@ -129,7 +129,8 @@ pub async fn execute_proxy(
             return Ok((HttpResponse::BuiltinError(503, None), metrics));
         };
 
-        metrics.selected_backends.push(selected.upstream.clone());
+        metrics.selected_backends.insert(selected.upstream.clone());
+        metrics.final_selected_backend = Some(selected.upstream.clone());
 
         let proxy_request_url: http::Uri =
             selected.upstream.proxy_to.parse().map_err(|e| {

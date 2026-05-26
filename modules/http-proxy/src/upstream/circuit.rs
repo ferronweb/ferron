@@ -383,7 +383,7 @@ mod tests {
             None,
             &circuit_breaker,
             Some(&circuit_breaker_state),
-            &[],
+            &rustc_hash::FxHashSet::default(),
             None,
             None,
             &RwLock::new(ConsistentHashRing::new(&[])),

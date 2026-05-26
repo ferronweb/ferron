@@ -85,6 +85,7 @@ impl Upstream {
     /// Static upstreams return themselves. SRV upstreams perform a DNS lookup
     /// on the secondary Tokio runtime, filter unhealthy backends, and perform
     /// weighted random selection within the highest-priority group.
+    #[inline]
     pub async fn resolve(
         &self,
         _failed_backends: std::sync::Arc<

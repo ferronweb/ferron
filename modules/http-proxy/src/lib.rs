@@ -57,7 +57,9 @@ type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<Stri
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
     /// Backends selected during load balancing.
-    pub selected_backends: Vec<Arc<types::upstream::UpstreamInner>>,
+    pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::UpstreamInner>>,
+    /// The final backend selected for this request.
+    pub final_selected_backend: Option<Arc<types::upstream::UpstreamInner>>,
     /// Backends marked as unhealthy due to passive failures (request-time).
     pub unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends whose circuit breaker was opened by request-time failures or 5xx responses.
@@ -81,15 +83,18 @@ pub struct ProxyMetrics {
 }
 
 impl Default for ProxyMetrics {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl ProxyMetrics {
+    #[inline]
     pub fn new() -> Self {
         Self {
-            selected_backends: Vec::new(),
+            selected_backends: rustc_hash::FxHashSet::default(),
+            final_selected_backend: None,
             unhealthy_backends: Vec::new(),
             circuit_breaker_unhealthy_backends: Vec::new(),
             active_unhealthy_backends: Vec::new(),
@@ -248,6 +253,7 @@ impl ProxyState {
     }
 
     /// Get or create the connection manager using the globally configured limit.
+    #[inline]
     fn get_conn_manager(&self) -> Arc<crate::connections::ConnectionManager> {
         let guard = self.conn_manager.read();
         if let Some(cm) = &*guard {
@@ -271,6 +277,7 @@ impl ProxyState {
     /// Spawn health check task for the given config (idempotent).
     ///
     /// If a task is already running for this config, does nothing.
+    #[inline]
     fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[Upstream]) {
         // Check if task already exists
         if self.health_check_tasks.contains_key(config_keys) {
@@ -711,7 +718,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }));
 
         let mut upstream_attrs = vec![];
-        if let Some(backend) = metrics.selected_backends.last() {
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
             upstream_attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -799,7 +806,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
         if let (Some(backend), LoadBalancerAlgorithmInner::P2cEwma) =
-            (metrics.selected_backends.last(), &*algorithm)
+            (metrics.final_selected_backend.as_ref(), &*algorithm)
         {
             let params = P2cEwmaParams::default();
             let ewma_backend_attrs = vec![(

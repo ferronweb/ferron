@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use rustc_hash::FxHashSet;
+
 use crate::config::{AffinityType, CircuitBreakerConfig};
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
@@ -55,7 +57,7 @@ pub fn determine_proxy_to(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    selected_backends: &[Arc<UpstreamInner>],
+    selected_backends: &FxHashSet<Arc<UpstreamInner>>,
     affinity_type: Option<&AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
@@ -92,7 +94,7 @@ pub fn determine_proxy_to(
                 };
 
                 // Check if backend is already selected
-                let not_selected = !selected_backends.contains(u);
+                let not_selected = !selected_backends.contains(*u);
 
                 not_failed && active_healthy && not_selected
             })

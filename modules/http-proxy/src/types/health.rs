@@ -13,6 +13,7 @@ pub enum HealthCheckMethod {
 
 impl HealthCheckMethod {
     /// Return the string representation for the HTTP method.
+    #[inline]
     pub fn as_str(&self) -> &'static str {
         match self {
             HealthCheckMethod::Get => "GET",
@@ -38,6 +39,7 @@ pub enum ExpectedStatusCodes {
 
 impl ExpectedStatusCodes {
     /// Check if a given status code matches the expected set.
+    #[inline]
     pub fn matches(&self, status: u16) -> bool {
         match self {
             ExpectedStatusCodes::Successful => (200..300).contains(&status),
@@ -81,6 +83,7 @@ pub struct UpstreamHealthCheckConfig {
 }
 
 impl Default for UpstreamHealthCheckConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             enabled: false,
@@ -121,6 +124,7 @@ pub struct HealthCheckState {
 }
 
 impl Default for HealthCheckState {
+    #[inline]
     fn default() -> Self {
         Self {
             is_healthy: true,

@@ -17,7 +17,7 @@ pub fn count_available_backends(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    selected_backends: &[Arc<UpstreamInner>],
+    selected_backends: &rustc_hash::FxHashSet<Arc<UpstreamInner>>,
 ) -> usize {
     let failed = failed_backends.read();
     upstreams
@@ -34,7 +34,7 @@ pub fn count_available_backends(
                 circuit_breaker,
                 u,
             );
-            let not_selected = !selected_backends.contains(u);
+            let not_selected = !selected_backends.contains(*u);
 
             passive_healthy && active_healthy && circuit_healthy && not_selected
         })
