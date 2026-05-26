@@ -21,6 +21,7 @@ pub async fn execute_pipeline_stages(
     log_prefix: &str,
     path_segments: &[String],
     request_span_key: Option<&str>,
+    timeout_duration: Option<Duration>,
 ) {
     let has_traces = events.has_trace_sinks();
     let pipeline_span_key =
@@ -67,16 +68,6 @@ pub async fn execute_pipeline_stages(
         }
     }
 
-    let timeout_duration = ctx.configuration.get_value("timeout", false).map_or(
-        Some(Duration::from_secs(300)),
-        |value| {
-            if !value.as_boolean().unwrap_or(true) {
-                None
-            } else {
-                Some(value.as_duration().unwrap_or(Duration::from_secs(300)))
-            }
-        },
-    );
     let instant = std::time::Instant::now();
 
     // Per-stage span hooks — emit StartSpan/EndSpan around each stage

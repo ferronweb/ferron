@@ -22,9 +22,9 @@ use vibeio_http::{Http3, Http3Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
 use crate::server::common::{
-    build_request_handler, emit_error, normalize_host_for_lookup, resolve_observability_sink,
-    ConfigArcSwap, ConnectionCountGuard, NoCertResolver, ObservabilityProviderEntry,
-    RequestHandlerState,
+    build_request_handler, emit_error, normalize_host_for_lookup, resolve_http_connection_options,
+    resolve_observability_sink, ConfigArcSwap, ConnectionCountGuard, NoCertResolver,
+    ObservabilityProviderEntry, RequestHandlerState,
 };
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
@@ -351,6 +351,12 @@ impl QuicListenerHandle {
                             &ip_observability,
                         );
 
+                        let timeout_duration = resolve_http_connection_options(
+                            &server_config.http_connection_options_resolver,
+                            local_addr.ip(),
+                            hinted_hostname.as_deref(),
+                        )
+                        .timeout;
                         handle_http3_connection(
                             connection,
                             remote_addr,
@@ -366,6 +372,7 @@ impl QuicListenerHandle {
                             tls_observability,
                             (*connection_cancel_token).clone(),
                             server_config.reload_token.clone(),
+                            timeout_duration,
                         )
                         .await;
                     });
@@ -439,6 +446,7 @@ async fn handle_http3_connection(
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
+    timeout_duration: Option<std::time::Duration>,
 ) {
     let graceful_shutdown = CancellationToken::new();
     let handler_state = Arc::new(RequestHandlerState {
@@ -454,6 +462,7 @@ async fn handle_http3_connection(
         encrypted,
         https_port,
         http3_alt_svc: false,
+        timeout_duration,
     });
     let mut connection_future = Box::pin(
         Http3::new(h3_quinn::Connection::new(conn), Http3Options::default())

@@ -147,6 +147,7 @@ pub async fn request_handler(
     http3_alt_svc: bool,
     https_port: Option<u16>,
     events: CompositeEventSink,
+    timeout_duration: Option<std::time::Duration>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     let has_events = !events.is_empty();
     let has_traces = events.has_trace_sinks();
@@ -295,6 +296,7 @@ pub async fn request_handler(
         request_trace_context.clone(),
         request_span_key.clone(),
         events.clone(),
+        timeout_duration,
     )
     .await;
 
@@ -469,6 +471,7 @@ async fn request_handler_inner(
     request_trace_context: Option<trace_context::TraceContext>,
     request_span_key: Option<String>,
     events: CompositeEventSink,
+    timeout_duration: Option<std::time::Duration>,
 ) -> (
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
@@ -809,6 +812,7 @@ async fn request_handler_inner(
         "",
         &resolution.location_path.path_segments,
         request_span_key.as_deref(),
+        timeout_duration,
     )
     .await;
 
@@ -855,6 +859,7 @@ async fn request_handler_inner(
                             "Error ",
                             &resolution.location_path.path_segments,
                             request_span_key.as_deref(),
+                            timeout_duration,
                         )
                         .await;
                     }

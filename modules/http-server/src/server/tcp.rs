@@ -503,6 +503,7 @@ async fn handle_http1_connection_zerocopy<S>(
         encrypted,
         https_port,
         http3_alt_svc,
+        timeout_duration: connection_options.timeout,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -568,6 +569,7 @@ async fn handle_http1_connection<S>(
         encrypted,
         https_port,
         http3_alt_svc,
+        timeout_duration: connection_options.timeout,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -632,6 +634,7 @@ async fn handle_http2_connection<S>(
         encrypted,
         https_port,
         http3_alt_svc,
+        timeout_duration: connection_options.timeout,
     });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))

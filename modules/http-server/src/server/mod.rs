@@ -271,6 +271,19 @@ fn resolve_http_connection_options(
 ) -> anyhow::Result<common::HttpConnectionOptions> {
     let http_config = http_config(config).or_else(|| http_config(global_config));
     Ok(common::HttpConnectionOptions {
+        timeout: http_config
+            .and_then(|config| config.get_value("timeout"))
+            .map_or(Some(std::time::Duration::from_secs(300)), |value| {
+                if !value.as_boolean().unwrap_or(true) {
+                    None
+                } else {
+                    Some(
+                        value
+                            .as_duration()
+                            .unwrap_or(std::time::Duration::from_secs(300)),
+                    )
+                }
+            }),
         protocols: resolve_http_protocols(http_config)?,
         h1_enable_early_hints: http_config
             .and_then(|config| config.get_value("h1_enable_early_hints"))

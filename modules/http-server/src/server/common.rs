@@ -50,6 +50,7 @@ pub struct RequestHandlerState {
     pub encrypted: bool,
     pub http3_alt_svc: bool,
     pub https_port: Option<u16>,
+    pub timeout_duration: Option<std::time::Duration>,
 }
 
 // Type alias for the config ArcSwap
@@ -325,6 +326,7 @@ pub fn build_request_handler(
                 state.http3_alt_svc,
                 state.https_port,
                 request_observability,
+                state.timeout_duration,
             )
             .await
         })
@@ -342,6 +344,7 @@ pub struct Http2Settings {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HttpConnectionOptions {
+    pub timeout: Option<std::time::Duration>,
     pub protocols: HttpProtocols,
     pub h1_enable_early_hints: bool,
     pub h2: Http2Settings,
