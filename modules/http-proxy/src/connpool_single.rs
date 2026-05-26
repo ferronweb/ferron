@@ -44,6 +44,7 @@ pub struct SingleThreadPool<K, L, I> {
 
 impl<K, L, I> SingleThreadPool<K, L, I> {
     /// Creates a new connection pool with the given maximum capacity.
+    #[inline]
     pub fn new(capacity: usize) -> Self {
         Self {
             inner: UnsafeCell::new(SingleThreadPoolInner {
@@ -59,6 +60,7 @@ impl<K, L, I> SingleThreadPool<K, L, I> {
     }
 
     /// Creates a new connection pool with no maximum capacity.
+    #[inline]
     pub fn new_unbounded() -> Self {
         Self {
             inner: UnsafeCell::new(SingleThreadPoolInner {
@@ -84,6 +86,7 @@ where
     /// - If the capacity is increased, new connections can be established up to the new limit.
     /// - If the capacity is decreased, excess idle connections are evicted (dropped) to fit within the new limit.
     ///   Outstanding (in-flight) connections are not affected — they are allowed to complete normally.
+    #[inline]
     pub fn update_capacity(&self, new_capacity: usize) {
         let state = unsafe { &mut *self.inner.get() };
         let old_max = state.max_size;
@@ -99,6 +102,7 @@ where
     ///
     /// This removes idle connections to fit within the limit.
     /// Outstanding (in-flight) connections are not affected.
+    #[inline]
     fn evict_excess_idle(&self, max_capacity: usize) {
         let state = unsafe { &mut *self.inner.get() };
         let current_idle = state.idle_total;
@@ -230,6 +234,7 @@ where
     /// Pulls an item from the pool with a local limit applied.
     ///
     /// Returns `None` if either the global limit or local limit is reached.
+    #[inline]
     pub fn pull_with_local_limit(
         self: &Rc<Self>,
         key: K,
@@ -273,6 +278,7 @@ where
     /// Returns a connection to the pool.
     ///
     /// If the pool is at capacity, the connection is dropped instead.
+    #[inline]
     pub fn return_connection(&self, key: K, inner: I) {
         let state = unsafe { &mut *self.inner.get() };
         let outstanding_before = state.outstanding;
@@ -328,38 +334,45 @@ pub struct PoolItem<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> {
 impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     /// Takes the inner value from the item, preventing it from being returned to the pool.
     #[allow(dead_code)]
+    #[inline]
     pub fn take(mut self) -> Option<I> {
         self.inner.take()
     }
 
     /// Returns a reference to the inner value.
+    #[inline]
     pub fn inner(&self) -> &Option<I> {
         &self.inner
     }
 
     /// Returns a mutable reference to the inner value.
+    #[inline]
     pub fn inner_mut(&mut self) -> &mut Option<I> {
         &mut self.inner
     }
 
     /// Returns a mutable reference to the inner value, with a shorter name for ergonomics.
     #[allow(dead_code)]
+    #[inline]
     pub fn get_mut(&mut self) -> &mut Option<I> {
         &mut self.inner
     }
 
     /// Returns a reference to the pool key.
+    #[inline]
     pub fn key(&self) -> Option<&K> {
         self.key.as_ref()
     }
 
     /// Returns the local limit key, if one was applied.
+    #[inline]
     pub fn local_limit_key(&self) -> Option<&L> {
         self.local_limit_key.as_ref()
     }
 
     /// Returns the pool reference.
     #[allow(dead_code)]
+    #[inline]
     pub fn pool(&self) -> &SingleThreadPool<K, L, I> {
         &self.pool
     }
