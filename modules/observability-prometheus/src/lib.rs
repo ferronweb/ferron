@@ -27,7 +27,6 @@ type PrometheusInstrumentCache =
 static DROPPED_EVENT: Once = Once::new();
 
 /// Shared configuration for an Prometheus backend instance
-#[allow(dead_code)]
 #[derive(Clone)]
 struct PrometheusBackendConfig {
     listen: SocketAddr,

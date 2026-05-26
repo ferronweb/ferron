@@ -132,18 +132,15 @@ impl OtlpProviderCache {
         let correlation = Arc::new(CorrelationContext::new());
 
         let logs_provider = config.logs.as_ref().and_then(|sig| {
-            let _guard = set_otlp_headers_temporarily("LOGS", &sig.authorization);
-            build_logs_provider(sig, &config.no_verify, &resource)
+            build_logs_provider(sig, &config.no_verify, &resource, &sig.authorization)
         });
 
         let metrics_provider = config.metrics.as_ref().and_then(|sig| {
-            let _guard = set_otlp_headers_temporarily("METRICS", &sig.authorization);
-            build_metrics_provider(sig, &config.no_verify, &resource)
+            build_metrics_provider(sig, &config.no_verify, &resource, &sig.authorization)
         });
 
         let traces_provider = config.traces.as_ref().and_then(|sig| {
-            let _guard = set_otlp_headers_temporarily("TRACES", &sig.authorization);
-            build_traces_provider(sig, &config.no_verify, &resource)
+            build_traces_provider(sig, &config.no_verify, &resource, &sig.authorization)
         });
 
         OtlpProviderCache {
@@ -160,15 +157,37 @@ fn build_logs_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &Resource,
+    authorization: &Option<String>,
 ) -> Option<opentelemetry_sdk::logs::SdkLoggerProvider> {
     use opentelemetry_otlp::LogExporter;
     use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
+
+    let mut headers = http::HeaderMap::new();
+    if let Some(auth) = authorization {
+        headers.insert(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_str(auth).ok()?,
+        );
+    }
 
     let exporter: LogExporter = match sig.protocol.as_str() {
         "http/protobuf" => LogExporter::builder()
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
@@ -176,12 +195,26 @@ fn build_logs_provider(
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
         _ => LogExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
+            .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
             .build()
             .ok()?,
     };
@@ -200,15 +233,37 @@ fn build_metrics_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &Resource,
+    authorization: &Option<String>,
 ) -> Option<opentelemetry_sdk::metrics::SdkMeterProvider> {
     use opentelemetry_otlp::MetricExporter;
     use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
+
+    let mut headers = http::HeaderMap::new();
+    if let Some(auth) = authorization {
+        headers.insert(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_str(auth).ok()?,
+        );
+    }
 
     let exporter: MetricExporter = match sig.protocol.as_str() {
         "http/protobuf" => MetricExporter::builder()
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
@@ -216,12 +271,26 @@ fn build_metrics_provider(
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
         _ => MetricExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
+            .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
             .build()
             .ok()?,
     };
@@ -242,15 +311,37 @@ fn build_traces_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &Resource,
+    authorization: &Option<String>,
 ) -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
     use opentelemetry_otlp::SpanExporter;
     use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
+
+    let mut headers = http::HeaderMap::new();
+    if let Some(auth) = authorization {
+        headers.insert(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_str(auth).ok()?,
+        );
+    }
 
     let exporter: SpanExporter = match sig.protocol.as_str() {
         "http/protobuf" => SpanExporter::builder()
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
@@ -258,12 +349,26 @@ fn build_traces_provider(
             .with_http()
             .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
+            .with_headers(
+                headers
+                    .into_iter()
+                    .filter_map(|(n, v)| {
+                        n.map(|n| {
+                            (
+                                n.as_str().to_string(),
+                                String::from_utf8_lossy(v.as_bytes()).to_string(),
+                            )
+                        })
+                    })
+                    .collect(),
+            )
             .with_endpoint(&sig.endpoint)
             .build()
             .ok()?,
         _ => SpanExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
+            .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
             .build()
             .ok()?,
     };
@@ -289,45 +394,6 @@ pub enum CachedInstrument {
     U64Counter(opentelemetry::metrics::Counter<u64>),
     U64Gauge(opentelemetry::metrics::Gauge<u64>),
     U64Histogram(opentelemetry::metrics::Histogram<u64>),
-}
-
-/// Set OTEL env vars for the current signal's headers, build the exporter, then clear them.
-/// This is called during provider initialization in a single-threaded context.
-fn set_otlp_headers_temporarily(signal: &str, authorization: &Option<String>) -> TempHeaderGuard {
-    let var_name = format!("OTEL_EXPORTER_OTLP_{signal}_HEADERS");
-    let old_val = std::env::var(&var_name).ok();
-
-    if let Some(auth) = authorization {
-        std::env::set_var(&var_name, format!("Authorization={auth}"));
-    }
-
-    TempHeaderGuard {
-        var_name,
-        old_val,
-        had_auth: authorization.is_some(),
-    }
-}
-
-struct TempHeaderGuard {
-    #[allow(dead_code)]
-    var_name: String,
-    #[allow(dead_code)]
-    old_val: Option<String>,
-    #[allow(dead_code)]
-    had_auth: bool,
-}
-
-impl TempHeaderGuard {
-    #[allow(dead_code)]
-    fn cleanup(self) {
-        if self.had_auth {
-            if let Some(old) = self.old_val {
-                std::env::set_var(&self.var_name, old);
-            } else {
-                std::env::remove_var(&self.var_name);
-            }
-        }
-    }
 }
 
 fn format_access_event(

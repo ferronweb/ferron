@@ -70,14 +70,8 @@ impl typemap_rev::TypeMapKey for AbuseRegistryConfig {
 struct BanEntry {
     /// Reason for the ban.
     reason: String,
-    /// When the ban was issued.
-    #[allow(dead_code)]
-    banned_at: Instant,
     /// When the ban expires.
     expires_at: Instant,
-    /// Number of violations that triggered this ban.
-    #[allow(dead_code)]
-    violation_count: usize,
 }
 
 impl BanEntry {
@@ -259,9 +253,7 @@ impl AbuseRegistry {
             let ban_duration = Duration::from_secs(config.ban_duration_secs);
             let ban_entry = BanEntry {
                 reason: event.reason.clone(),
-                banned_at: Instant::now(),
                 expires_at: Instant::now() + ban_duration,
-                violation_count: tracker.count(),
             };
 
             self.bans.insert(event.ip, ban_entry);
@@ -275,12 +267,6 @@ impl AbuseRegistry {
         } else {
             EventResult::Recorded
         }
-    }
-
-    /// Manually unban an IP (for admin API, future feature).
-    #[allow(dead_code)]
-    pub fn unban(&self, ip: IpAddr) {
-        self.bans.remove(&ip);
     }
 
     /// Get the current number of active bans.
@@ -503,25 +489,6 @@ mod tests {
         registry.record_event(&event, &make_test_config());
 
         assert_eq!(registry.active_ban_count(), 1);
-    }
-
-    #[test]
-    fn unban_removes_ban() {
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(
-            AbuseEventType::RateLimitExceeded,
-            test_ip(),
-            "Too fast".into(),
-            50,
-        );
-
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-
-        assert!(registry.is_banned(test_ip(), &make_test_config()));
-        registry.unban(test_ip());
-        assert!(!registry.is_banned(test_ip(), &make_test_config()));
     }
 
     #[test]

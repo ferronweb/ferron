@@ -128,8 +128,6 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
     Some(OcspServiceHandle {
         sender: state.sender.clone(),
         cache: state.cache.clone(),
-        cancel_token: state.cancel_token.clone(),
-        event_sink: state.event_sink.lock().clone(),
     })
 }
 
@@ -142,10 +140,6 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
 pub struct OcspServiceHandle {
     sender: mpsc::UnboundedSender<CertifiedKey>,
     cache: OcspCache,
-    #[allow(dead_code)]
-    cancel_token: CancellationToken,
-    #[allow(dead_code)]
-    event_sink: Option<Arc<CompositeEventSink>>,
 }
 
 impl OcspServiceHandle {

@@ -1,65 +1,7 @@
 use crate::providers::CorrelationContext;
 
 use super::*;
-use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-};
 use ferron_observability::{TraceAttributeValue, TraceEvent};
-
-#[allow(dead_code)]
-fn make_block(
-    directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
-) -> ServerConfigurationBlock {
-    ServerConfigurationBlock {
-        directives: Arc::new(directives),
-        matchers: HashMap::new(),
-        span: None,
-    }
-}
-
-#[allow(dead_code)]
-fn directive_string(name: &str, value: &str) -> (String, Vec<ServerConfigurationDirectiveEntry>) {
-    (
-        name.to_string(),
-        vec![ServerConfigurationDirectiveEntry {
-            args: vec![ServerConfigurationValue::String(value.to_string(), None)],
-            children: None,
-            span: None,
-        }],
-    )
-}
-
-#[allow(dead_code)]
-fn directive_bool(name: &str, value: bool) -> (String, Vec<ServerConfigurationDirectiveEntry>) {
-    (
-        name.to_string(),
-        vec![ServerConfigurationDirectiveEntry {
-            args: vec![ServerConfigurationValue::Boolean(value, None)],
-            children: None,
-            span: None,
-        }],
-    )
-}
-
-#[allow(dead_code)]
-fn directive_with_children(
-    name: &str,
-    value: &str,
-    children: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
-) -> (String, Vec<ServerConfigurationDirectiveEntry>) {
-    (
-        name.to_string(),
-        vec![ServerConfigurationDirectiveEntry {
-            args: vec![ServerConfigurationValue::String(value.to_string(), None)],
-            children: Some(ServerConfigurationBlock {
-                directives: Arc::new(children),
-                matchers: HashMap::new(),
-                span: None,
-            }),
-            span: None,
-        }],
-    )
-}
 
 #[test]
 fn correlation_context_tracks_active_spans() {

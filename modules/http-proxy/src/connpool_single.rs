@@ -140,7 +140,7 @@ where
     }
 
     /// Returns the number of idle connections for a given key.
-    #[allow(dead_code)]
+    #[cfg(test)]
     #[inline]
     pub fn idle_count(&self, key: &K) -> usize {
         (unsafe { &mut *self.inner.get() })
@@ -150,21 +150,21 @@ where
     }
 
     /// Returns the total number of idle connections.
-    #[allow(dead_code)]
+    #[cfg(test)]
     #[inline]
     pub fn total_idle_count(&self) -> usize {
         (unsafe { &mut *self.inner.get() }).idle_total
     }
 
     /// Returns the number of outstanding connections.
-    #[allow(dead_code)]
+    #[cfg(test)]
     #[inline]
     pub fn outstanding_count(&self) -> usize {
         (unsafe { &mut *self.inner.get() }).outstanding
     }
 
     /// Returns the maximum pool size (if bounded).
-    #[allow(dead_code)]
+    #[cfg(test)]
     #[inline]
     pub fn max_size(&self) -> Option<usize> {
         let state = unsafe { &mut *self.inner.get() };

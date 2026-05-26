@@ -1,7 +1,6 @@
 //! Core upstream types: connection keys, proxy protocol, and health check configuration.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::types::health::HealthCheckStateMap;
 
@@ -37,10 +36,6 @@ pub struct UpstreamConfig {
     pub unix_socket: Option<String>,
     /// Per-upstream connection limit.
     pub limit: Option<usize>,
-    /// Idle keep-alive timeout. Populated into `ProxyConfig::idle_timeout_map`
-    /// during parsing for O(1) lookup at request time.
-    #[allow(dead_code)]
-    pub idle_timeout: Option<Duration>,
     /// Active health check configuration for this upstream.
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).
@@ -60,9 +55,6 @@ pub struct SrvUpstreamData {
     pub dns_servers: Vec<std::net::IpAddr>,
     /// Per-upstream connection limit.
     pub limit: Option<usize>,
-    /// Idle keep-alive timeout.
-    #[allow(dead_code)]
-    pub idle_timeout: Option<Duration>,
     /// Active health check configuration for this upstream.
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).

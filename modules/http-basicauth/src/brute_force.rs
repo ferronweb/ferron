@@ -175,28 +175,6 @@ impl BruteForceEngine {
         let lockout_duration = Duration::from_secs(self.config.lockout_duration_secs);
         tracker.record_failure(self.config.max_attempts, lockout_duration)
     }
-
-    /// Evict stale trackers that have no recent attempts and no active lockout.
-    ///
-    /// This should be called periodically to prevent unbounded memory growth.
-    /// In practice, the engine evicts lazily when trackers are accessed.
-    #[allow(dead_code)]
-    pub fn evict_stale(&self) {
-        let window = Duration::from_secs(self.config.window_secs);
-        let cutoff = Instant::now().checked_sub(window).unwrap_or(Instant::now());
-
-        self.trackers.retain(|_, tracker| {
-            // Keep if locked until a future time
-            if let Some(until) = tracker.locked_until {
-                if Instant::now() < until {
-                    return true;
-                }
-            }
-
-            // Keep if there are recent attempts
-            tracker.attempts.iter().any(|&t| t >= cutoff)
-        });
-    }
 }
 
 #[cfg(test)]

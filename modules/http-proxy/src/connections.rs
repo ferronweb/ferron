@@ -236,7 +236,6 @@ impl ConnectionManager {
     /// Pull a connection from the pool, returning immediately.
     ///
     /// Returns `None` if the pool is at capacity (caller should establish a new connection).
-    #[allow(dead_code)]
     #[inline]
     pub fn try_pull(
         &self,
@@ -287,7 +286,6 @@ impl ConnectionManager {
     /// Pull a connection with a local limit applied, returning immediately.
     ///
     /// Returns `None` if the local or global limit is reached.
-    #[allow(dead_code)]
     #[inline]
     pub fn try_pull_with_local_limit(
         &self,

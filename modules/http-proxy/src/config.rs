@@ -192,7 +192,6 @@ pub fn parse_proxy_config(
                 url: url.clone(),
                 unix_socket: None,
                 limit: None,
-                idle_timeout: Some(default_timeout),
                 health_check_config: UpstreamHealthCheckConfig::default(),
                 weight: 1,
             }));
@@ -636,7 +635,6 @@ fn parse_upstream_entry(
         url: url.clone(),
         unix_socket,
         limit,
-        idle_timeout,
         health_check_config,
         weight,
     }));
@@ -740,10 +738,15 @@ fn parse_srv_entry(
         srv_name: srv_name.to_string(),
         dns_servers,
         limit,
-        idle_timeout,
         weight,
         health_check_config,
     }));
+
+    // Populate the O(1) lookup map
+    cfg.idle_timeout_map.insert(
+        srv_name.clone(),
+        idle_timeout.unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
+    );
 
     Ok(())
 }

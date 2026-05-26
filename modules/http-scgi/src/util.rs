@@ -37,7 +37,6 @@ impl ConnectedSocket {
         })
     }
 
-    #[allow(dead_code)]
     #[cfg(unix)]
     pub async fn connect_unix(path: &str) -> Result<Self, std::io::Error> {
         Ok(Self::Unix {
@@ -45,7 +44,6 @@ impl ConnectedSocket {
         })
     }
 
-    #[allow(dead_code)]
     #[cfg(not(unix))]
     pub async fn connect_unix(_path: &str) -> Result<Self, std::io::Error> {
         Err(std::io::Error::new(

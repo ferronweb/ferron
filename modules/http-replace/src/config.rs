@@ -39,7 +39,7 @@ impl ReplaceConfig {
     }
 
     /// Parse all http-replace directives from the layered configuration.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn from_config(config: &LayeredConfiguration) -> Self {
         let rules = parse_replace_rules(config);
         let preserve_last_modified = parse_replace_last_modified(config);

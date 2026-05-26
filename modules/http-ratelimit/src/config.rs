@@ -16,9 +16,6 @@ pub struct RateLimitConfig {
     pub burst: u64,
     /// Strategy for extracting the rate limit key.
     pub key: KeyExtractor,
-    /// Time window for rate calculation (used for Retry-After header estimation).
-    #[allow(dead_code)]
-    pub window_secs: u64,
     /// HTTP status code to return when rate is exceeded.
     pub deny_status: u16,
     /// TTL for evicting stale buckets (seconds).
@@ -30,7 +27,6 @@ pub struct RateLimitConfig {
 impl RateLimitConfig {
     /// Default values for rate limit configuration.
     pub const DEFAULT_BURST: u64 = 0;
-    pub const DEFAULT_WINDOW_SECS: u64 = 60;
     pub const DEFAULT_DENY_STATUS: u16 = 429;
     pub const DEFAULT_BUCKET_TTL_SECS: u64 = 600; // 10 minutes
     pub const DEFAULT_MAX_BUCKETS: usize = 100_000;
@@ -86,11 +82,6 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
 
     let key = KeyExtractor::from_str(key_str).unwrap_or(KeyExtractor::RemoteAddress);
 
-    let window_secs = block
-        .get_value("window")
-        .and_then(|v| v.as_duration())
-        .map_or(RateLimitConfig::DEFAULT_WINDOW_SECS, |d| d.as_secs());
-
     let deny_status = block
         .get_value("deny_status")
         .and_then(|v| v.as_number())
@@ -112,7 +103,6 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
         rate,
         burst,
         key,
-        window_secs,
         deny_status,
         bucket_ttl_secs,
         max_buckets,

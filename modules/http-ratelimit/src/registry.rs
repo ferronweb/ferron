@@ -126,13 +126,13 @@ impl TokenBucketRegistry {
     }
 
     /// Get the current number of active buckets.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.buckets.len()
     }
 
     /// Check if the registry is empty.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.buckets.is_empty()
     }

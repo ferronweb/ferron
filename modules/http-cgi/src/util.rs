@@ -1,7 +1,6 @@
 use std::{error::Error, path::PathBuf};
 use vibeio::fs;
 
-#[allow(dead_code)]
 #[cfg(unix)]
 pub async fn get_executable(
     execute_pathbuf: &PathBuf,
@@ -20,7 +19,6 @@ pub async fn get_executable(
     Ok(executable_params_vector)
 }
 
-#[allow(dead_code)]
 #[cfg(not(unix))]
 pub async fn get_executable(
     execute_pathbuf: &PathBuf,

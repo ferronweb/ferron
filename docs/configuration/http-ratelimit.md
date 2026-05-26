@@ -13,7 +13,6 @@ example.com {
         rate 100
         burst 50
         key remote_address
-        window "60s"
         deny_status 429
         bucket_ttl 600
         max_buckets 100000
@@ -36,7 +35,6 @@ Multiple `rate_limit` blocks can be defined to apply different rules simultaneou
 | `rate` | `<int>` | Sustained requests per second (required). | — |
 | `burst` | `<int>` | Extra tokens above `rate` (bucket capacity = `rate + burst`). | `0` |
 | `key` | `<string>` | What to key buckets on. See key types below. | `remote_address` |
-| `window` | `<duration>` | Time window for rate calculation (used for `Retry-After`). | `"60s"` |
 | `deny_status` | `<int>` | HTTP status code when rate is exceeded. | `429` |
 | `bucket_ttl` | `<int>` | Seconds before an unused bucket is evicted. | `600` |
 | `max_buckets` | `<int>` | Maximum buckets per rule (prevents memory exhaustion). | `100000` |

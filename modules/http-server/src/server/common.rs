@@ -77,21 +77,8 @@ impl HttpProtocols {
         }
     }
 
-    pub const fn supports_http1(self) -> bool {
-        self.http1
-    }
-
-    #[allow(dead_code)]
-    pub const fn supports_http2(self) -> bool {
-        self.http2
-    }
-
-    #[allow(dead_code)]
-    pub const fn supports_http3(self) -> bool {
-        self.http3
-    }
-
-    pub fn alpn_protocols(self) -> Vec<Vec<u8>> {
+    #[inline]
+    pub fn alpn_protocols_tcp(self) -> Vec<Vec<u8>> {
         let mut protocols = Vec::new();
         if self.http2 {
             protocols.push(b"h2".to_vec());
@@ -105,6 +92,7 @@ impl HttpProtocols {
 }
 
 impl Default for HttpProtocols {
+    #[inline]
     fn default() -> Self {
         Self {
             http1: true,
@@ -353,7 +341,7 @@ pub struct HttpConnectionOptions {
 
 impl HttpConnectionOptions {
     pub fn alpn_protocols(&self) -> Vec<Vec<u8>> {
-        self.protocols.alpn_protocols()
+        self.protocols.alpn_protocols_tcp()
     }
 }
 

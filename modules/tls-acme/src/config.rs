@@ -169,22 +169,6 @@ impl AcmeOnDemandConfig {
     }
 }
 
-/// Helper to collect multi-values for a directive.
-#[allow(dead_code)]
-fn collect_multi_values(config: &ServerConfigurationBlock, name: &str) -> Vec<String> {
-    config
-        .directives
-        .get(name)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|e| e.args.first())
-                .filter_map(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 /// Get the first string value for a directive.
 fn first_value(config: &ServerConfigurationBlock, name: &str) -> Option<String> {
     config

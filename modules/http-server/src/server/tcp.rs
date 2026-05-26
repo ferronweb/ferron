@@ -291,7 +291,7 @@ impl TcpListenerHandle {
                                             http3_alt_svc
                                         )
                                         .await;
-                                    } else if connection_options.protocols.supports_http1() {
+                                    } else if connection_options.protocols.http1 {
                                         handle_http1_connection(
                                             tls_stream,
                                             remote_addr,
@@ -342,7 +342,7 @@ impl TcpListenerHandle {
                                 local_addr.ip(),
                                 None,
                             );
-                            if !connection_options.protocols.supports_http1() {
+                            if !connection_options.protocols.http1 {
                                 emit_error(
                                     &ip_observability,
                                     "Plain TCP listener requires HTTP/1.x support",

@@ -1,8 +1,7 @@
-#![allow(dead_code)]
-#![allow(clippy::module_inception)]
 //! Configuration Resolver
 
 mod matcher;
+#[allow(clippy::module_inception)]
 mod resolver;
 #[cfg(test)]
 mod tests;

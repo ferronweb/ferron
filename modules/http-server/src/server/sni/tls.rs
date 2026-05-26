@@ -4,7 +4,7 @@ use rustls::sign::CertifiedKey;
 use std::sync::Arc;
 
 /// The type for the SNI resolver lock, which is a vector of tuples containing the hostname and the corresponding certificate resolver.
-pub type SniResolverLock = Arc<tokio::sync::RwLock<HostnameRadixTree<Arc<dyn ResolvesServerCert>>>>;
+pub type SniResolverLock = HostnameRadixTree<Arc<dyn ResolvesServerCert>>;
 
 /// Custom SNI resolver, consisting of multiple resolvers
 #[derive(Debug)]
@@ -15,20 +15,10 @@ pub struct CustomSniResolver {
 
 impl CustomSniResolver {
     /// Creates a custom SNI resolver
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             fallback_resolver: None,
-            resolvers: Arc::new(tokio::sync::RwLock::new(HostnameRadixTree::new())),
-        }
-    }
-
-    /// Creates a custom SNI resolver with provided resolvers lock
-    #[allow(dead_code)]
-    pub fn with_resolvers(resolvers: SniResolverLock) -> Self {
-        Self {
-            fallback_resolver: None,
-            resolvers,
+            resolvers: HostnameRadixTree::new(),
         }
     }
 
@@ -39,9 +29,7 @@ impl CustomSniResolver {
 
     /// Loads a host certificate resolver for a specific host
     pub fn load_host_resolver(&mut self, host: &str, resolver: Arc<dyn ResolvesServerCert>) {
-        self.resolvers
-            .blocking_write()
-            .insert(host.to_string(), resolver);
+        self.resolvers.insert(host.to_string(), resolver);
     }
 }
 
@@ -51,11 +39,7 @@ impl ResolvesServerCert for CustomSniResolver {
             .server_name()
             .map(|hn| hn.strip_suffix('.').unwrap_or(hn));
         if let Some(hostname) = hostname {
-            // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
-            // In this case, `vibeio` is used as a primary runtime, so no issue.
-            let resolvers = self.resolvers.blocking_read();
-
-            if let Some(resolver) = resolvers.get(hostname).cloned() {
+            if let Some(resolver) = self.resolvers.get(hostname).cloned() {
                 return resolver.resolve(client_hello);
             }
         }

@@ -64,20 +64,6 @@ impl ConsistentHashRing {
         (nodes, weights_hash)
     }
 
-    /// Returns the number of virtual nodes in the ring.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-
-    /// Returns true if the ring has no virtual nodes.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-
     #[inline]
     pub fn get(&self, key: &[u8]) -> Option<usize> {
         if self.nodes.is_empty() {

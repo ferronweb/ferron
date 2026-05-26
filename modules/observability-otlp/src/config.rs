@@ -8,7 +8,6 @@ pub struct SignalConfig {
 }
 
 /// Shared configuration for an OTLP backend instance
-#[allow(dead_code)]
 pub struct OtlpBackendConfig {
     pub service_name: String,
     pub no_verify: bool,

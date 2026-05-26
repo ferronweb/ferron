@@ -24,7 +24,6 @@ pub enum Compression {
     Identity,
 }
 
-#[allow(dead_code)]
 impl Compression {
     /// Returns the HTTP `Content-Encoding` header value for this compression.
     #[inline]
@@ -38,6 +37,20 @@ impl Compression {
         }
     }
 
+    /// Returns the compression from a `Content-Encoding` header value.
+    #[inline]
+    pub fn from_header_value(value: &str) -> Option<Self> {
+        match value {
+            "gzip" => Some(Compression::Gzip),
+            "br" => Some(Compression::Brotli),
+            "deflate" => Some(Compression::Deflate),
+            "zstd" => Some(Compression::Zstd),
+            // "identity" is for explicitly no compression
+            "identity" => Some(Compression::Identity),
+            _ => None,
+        }
+    }
+
     /// Returns the file extension suffix for precompressed variants.
     #[inline]
     pub fn precompressed_ext(self) -> Option<&'static str> {
@@ -47,6 +60,18 @@ impl Compression {
             Compression::Deflate => Some("deflate"),
             Compression::Zstd => Some("zst"),
             Compression::Identity => None,
+        }
+    }
+
+    /// Returns the compression from a precompressed file extension.
+    #[inline]
+    pub fn from_precompressed_ext(ext: &str) -> Self {
+        match ext {
+            "gz" => Compression::Gzip,
+            "br" => Compression::Brotli,
+            "deflate" => Compression::Deflate,
+            "zst" => Compression::Zstd,
+            _ => Compression::Identity,
         }
     }
 

@@ -16,18 +16,6 @@ pub enum RadixKey {
 }
 
 impl RadixKey {
-    /// Returns the sort order for this key type (lower = closer to root).
-    #[inline]
-    #[allow(dead_code)]
-    fn order(&self) -> u8 {
-        match self {
-            RadixKey::IpV4Octet(_) => 0,
-            RadixKey::IpV6Octet(_) => 1,
-            RadixKey::HostSegment(_) => 2,
-            RadixKey::HostWildcard => 3,
-        }
-    }
-
     /// Converts the key to bytes for storage in the BTreeMap.
     fn to_bytes(&self) -> Vec<u8> {
         match self {
@@ -39,23 +27,6 @@ impl RadixKey {
                 bytes
             }
             RadixKey::HostWildcard => vec![0x03, b'*'],
-        }
-    }
-
-    /// Parses bytes back into a key.
-    #[allow(dead_code)]
-    fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.is_empty() {
-            return None;
-        }
-        match bytes[0] {
-            0x00 => bytes.get(1).copied().map(RadixKey::IpV4Octet),
-            0x01 => bytes.get(1).copied().map(RadixKey::IpV6Octet),
-            0x02 => String::from_utf8(bytes[1..].to_vec())
-                .ok()
-                .map(RadixKey::HostSegment),
-            0x03 => Some(RadixKey::HostWildcard),
-            _ => None,
         }
     }
 }
@@ -141,13 +112,6 @@ impl<T: Clone> RadixTree<T> {
     #[inline]
     pub fn root_data(&self) -> Option<T> {
         self.root.data.clone()
-    }
-
-    /// Clears the root (default) data.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn clear_root_data(&mut self) {
-        self.root.data = None;
     }
 
     /// Inserts data into the tree at the specified path.
@@ -370,24 +334,6 @@ impl<T: Clone> RadixTree<T> {
         self.insert(&path, data);
     }
 
-    /// Inserts data for a partial IPv4 address prefix.
-    ///
-    /// Useful for matching ranges like `127.x.x.x` or `192.168.x.x`.
-    #[allow(dead_code)]
-    pub fn insert_ipv4_prefix(&mut self, prefix: &[u8], data: T) {
-        let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV4Octet).collect();
-        self.insert(&path, data);
-    }
-
-    /// Inserts data for a partial IPv6 address prefix.
-    ///
-    /// Useful for matching ranges like `2001:db8::/32`.
-    #[allow(dead_code)]
-    pub fn insert_ipv6_prefix(&mut self, prefix: &[u8], data: T) {
-        let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV6Octet).collect();
-        self.insert(&path, data);
-    }
-
     /// Inserts data for a hostname (with optional wildcard).
     ///
     /// If `wildcard` is true, the data will match `*.hostname`.
@@ -416,20 +362,6 @@ impl<T: Clone> RadixTree<T> {
     /// Looks up data by IP address.
     pub fn lookup_ip(&self, ip: IpAddr) -> Option<T> {
         let path = Self::ip_to_path(ip);
-        self.lookup(&path)
-    }
-
-    /// Looks up data by IPv4 address prefix.
-    #[allow(dead_code)]
-    pub fn lookup_ipv4_prefix(&self, prefix: &[u8]) -> Option<T> {
-        let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV4Octet).collect();
-        self.lookup(&path)
-    }
-
-    /// Looks up data by IPv6 address prefix.
-    #[allow(dead_code)]
-    pub fn lookup_ipv6_prefix(&self, prefix: &[u8]) -> Option<T> {
-        let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV6Octet).collect();
         self.lookup(&path)
     }
 
@@ -520,44 +452,6 @@ mod tests {
 
         let not_found = tree.lookup_ip(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
         assert!(not_found.is_none());
-    }
-
-    #[test]
-    fn test_insert_ipv4_prefix() {
-        let mut tree = RadixTree::new();
-        tree.insert_ipv4_prefix(&[127], "127-prefix".to_string());
-
-        let found = tree.lookup_ipv4_prefix(&[127]);
-        assert!(found.is_some());
-        assert_eq!(found.unwrap(), "127-prefix");
-    }
-
-    #[test]
-    fn test_insert_ipv6_prefix() {
-        let mut tree = RadixTree::new();
-        tree.insert_ipv6_prefix(&[0x20, 0x01], "2001-prefix".to_string());
-
-        let found = tree.lookup_ipv6_prefix(&[0x20, 0x01]);
-        assert!(found.is_some());
-        assert_eq!(found.unwrap(), "2001-prefix");
-    }
-
-    #[test]
-    fn test_ipv4_ipv6_separation() {
-        let mut tree = RadixTree::new();
-
-        // Insert same octet value for both IPv4 and IPv6
-        tree.insert_ipv4_prefix(&[127], "ipv4-127".to_string());
-        tree.insert_ipv6_prefix(&[127], "ipv6-127".to_string());
-
-        // They should be stored separately
-        let ipv4_found = tree.lookup_ipv4_prefix(&[127]);
-        assert!(ipv4_found.is_some());
-        assert_eq!(ipv4_found.unwrap(), "ipv4-127");
-
-        let ipv6_found = tree.lookup_ipv6_prefix(&[127]);
-        assert!(ipv6_found.is_some());
-        assert_eq!(ipv6_found.unwrap(), "ipv6-127");
     }
 
     #[test]
@@ -680,54 +574,6 @@ mod tests {
     }
 
     #[test]
-    fn test_key_type_ordering() {
-        let ipv4_key = RadixKey::IpV4Octet(127);
-        let ipv6_key = RadixKey::IpV6Octet(127);
-        let host_key = RadixKey::HostSegment("com".to_string());
-        let wildcard_key = RadixKey::HostWildcard;
-
-        assert!(ipv4_key.order() < ipv6_key.order());
-        assert!(ipv6_key.order() < host_key.order());
-        assert!(host_key.order() < wildcard_key.order());
-        assert!(ipv4_key < ipv6_key);
-        assert!(ipv6_key < host_key);
-        assert!(host_key < wildcard_key);
-    }
-
-    #[test]
-    fn test_key_serialization() {
-        // Test IPv4 octet
-        let ipv4_key = RadixKey::IpV4Octet(127);
-        let bytes = ipv4_key.to_bytes();
-        assert_eq!(RadixKey::from_bytes(&bytes), Some(ipv4_key));
-
-        // Test IPv6 octet
-        let ipv6_key = RadixKey::IpV6Octet(0x20);
-        let bytes = ipv6_key.to_bytes();
-        assert_eq!(RadixKey::from_bytes(&bytes), Some(ipv6_key));
-
-        // Test host segment
-        let host_key = RadixKey::HostSegment("example".to_string());
-        let bytes = host_key.to_bytes();
-        assert_eq!(RadixKey::from_bytes(&bytes), Some(host_key));
-
-        // Test wildcard
-        let wildcard_key = RadixKey::HostWildcard;
-        let bytes = wildcard_key.to_bytes();
-        assert_eq!(RadixKey::from_bytes(&bytes), Some(wildcard_key));
-    }
-
-    #[test]
-    fn test_same_value_ipv4_ipv6_distinction() {
-        // Verify that same octet value is distinguished between IPv4 and IPv6
-        let ipv4_key = RadixKey::IpV4Octet(127);
-        let ipv6_key = RadixKey::IpV6Octet(127);
-
-        assert_ne!(ipv4_key.to_bytes(), ipv6_key.to_bytes());
-        assert_ne!(ipv4_key, ipv6_key);
-    }
-
-    #[test]
     fn test_ipv6_support() {
         let mut tree = RadixTree::new();
         let ip = IpAddr::V6("::1".parse().unwrap());
@@ -774,20 +620,6 @@ mod tests {
         let found = tree.lookup_ip(other_ip);
         assert!(found.is_some());
         assert_eq!(found.unwrap(), "root-resolver");
-    }
-
-    #[test]
-    fn test_clear_root_data() {
-        let mut tree = RadixTree::new();
-        tree.set_root_data("root-resolver".to_string());
-        assert!(tree.root_data().is_some());
-
-        tree.clear_root_data();
-        assert!(tree.root_data().is_none());
-
-        let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
-        let found = tree.lookup_ip(ip);
-        assert!(found.is_none());
     }
 
     #[test]

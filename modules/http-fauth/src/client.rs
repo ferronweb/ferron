@@ -31,15 +31,6 @@ impl SendRequestInner {
         }
     }
 
-    #[allow(dead_code)]
-    #[inline]
-    fn is_ready(&self) -> bool {
-        match self {
-            SendRequestInner::Http1(s) => s.is_ready(),
-            SendRequestInner::Http2(s) => s.is_ready(),
-        }
-    }
-
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
         match self {

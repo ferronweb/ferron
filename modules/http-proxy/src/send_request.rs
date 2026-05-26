@@ -24,22 +24,8 @@ enum SendRequestInner {
     Http2(hyper::client::conn::http2::SendRequest<ProxyBody>),
 }
 
-#[allow(dead_code)]
 impl SendRequestInner {
-    fn is_closed(&self) -> bool {
-        match self {
-            SendRequestInner::Http1(s) => s.is_closed(),
-            SendRequestInner::Http2(s) => s.is_closed(),
-        }
-    }
-
-    fn is_ready(&self) -> bool {
-        match self {
-            SendRequestInner::Http1(s) => s.is_ready(),
-            SendRequestInner::Http2(s) => s.is_ready(),
-        }
-    }
-
+    #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
         match self {
             SendRequestInner::Http1(s) => s.poll_ready(cx),

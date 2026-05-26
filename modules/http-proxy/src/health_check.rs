@@ -481,7 +481,6 @@ pub fn spawn_health_check_task(
                                 dns_servers: dns_servers.clone(),
                                 weight: *weight,
                                 limit: None,
-                                idle_timeout: None,
                                 // Use default health check config (SrvUpstreamData is only used for resolving SRV records)
                                 health_check_config: UpstreamHealthCheckConfig::default(),
                             }),

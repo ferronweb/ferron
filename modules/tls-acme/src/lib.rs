@@ -136,11 +136,6 @@ impl GlobalTaskState {
         }
         state
     }
-
-    #[allow(dead_code)]
-    fn get(&self) -> Option<Arc<AcmeTaskState>> {
-        self.inner.get().cloned()
-    }
 }
 
 /// Global ACME task state, lazily initialized.

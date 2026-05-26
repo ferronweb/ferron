@@ -301,47 +301,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     .and_then(|h| h.to_str().ok())
                 {
                     for enc in parse_q_value_header(accept_enc) {
-                        match enc.as_str() {
-                            "br" => {
-                                if precompressed {
-                                    precompressed_ext = Some("br");
-                                } else {
-                                    used_compression = Compression::Brotli;
-                                }
-                                break;
+                        let compression = Compression::from_header_value(enc.as_str());
+                        if let Some(compression) = compression {
+                            if precompressed {
+                                precompressed_ext =
+                                    Some(compression.precompressed_ext().unwrap_or(""));
+                            } else {
+                                used_compression = compression;
                             }
-                            "zstd" => {
-                                if precompressed {
-                                    precompressed_ext = Some("zst");
-                                } else {
-                                    used_compression = Compression::Zstd;
-                                }
-                                break;
-                            }
-                            "gzip" => {
-                                if precompressed {
-                                    precompressed_ext = Some("gz");
-                                } else {
-                                    used_compression = Compression::Gzip;
-                                }
-                                break;
-                            }
-                            "deflate" => {
-                                if precompressed {
-                                    precompressed_ext = Some("deflate");
-                                } else {
-                                    used_compression = Compression::Deflate;
-                                }
-                                break;
-                            }
-                            "identity" => {
-                                if precompressed {
-                                    precompressed_ext = Some("");
-                                }
-                                used_compression = Compression::Identity;
-                                break;
-                            }
-                            _ => {}
+                            break;
                         }
                     }
                 }
@@ -372,13 +340,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             file_path = precomp_path;
                             file_length = meta.len();
                             is_precompressed_file = true;
-                            used_compression = match ext {
-                                "br" => Compression::Brotli,
-                                "zst" => Compression::Zstd,
-                                "deflate" => Compression::Deflate,
-                                "gz" => Compression::Gzip,
-                                _ => Compression::Identity,
-                            };
+                            used_compression = Compression::from_precompressed_ext(ext);
                         }
                     }
                 } else {
@@ -495,18 +457,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         // ETag
         if let Some(ref etag) = etag_value {
-            let etag_suffix = match (is_precompressed_file, used_compression) {
-                (true, Compression::Brotli) => "-br",
-                (true, Compression::Zstd) => "-zstd",
-                (true, Compression::Deflate) => "-deflate",
-                (true, Compression::Gzip) => "-gzip",
-                (_, Compression::Brotli) => "-br",
-                (_, Compression::Zstd) => "-zstd",
-                (_, Compression::Deflate) => "-deflate",
-                (_, Compression::Gzip) => "-gzip",
-                _ => "",
+            let etag_suffix = used_compression.etag_suffix().unwrap_or("");
+            let precompressed_suffix = if is_precompressed_file {
+                "-precompress"
+            } else {
+                ""
             };
-            let full_etag = format!("W/\"{etag}{etag_suffix}\"");
+            let full_etag = format!("W/\"{etag}{precompressed_suffix}{etag_suffix}\"");
             builder = builder.header(header::ETAG, full_etag);
         }
 
@@ -533,25 +490,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         // Content-Encoding / Content-Length
         match used_compression {
-            Compression::Brotli => {
-                builder = builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
-            }
-            Compression::Zstd => {
-                builder =
-                    builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
-            }
-            Compression::Deflate => {
-                builder = builder.header(
-                    header::CONTENT_ENCODING,
-                    HeaderValue::from_static("deflate"),
-                );
-            }
-            Compression::Gzip => {
-                builder =
-                    builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-            }
             Compression::Identity => {
                 builder = builder.header(header::CONTENT_LENGTH, file_length);
+            }
+            c => {
+                if let Some(hv) = c.header_value() {
+                    builder =
+                        builder.header(header::CONTENT_ENCODING, HeaderValue::from_static(hv));
+                }
             }
         }
 

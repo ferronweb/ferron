@@ -17,13 +17,6 @@ pub struct ResolvedLocationPath {
     pub error_key: Option<u16>,
 }
 
-impl ResolvedLocationPath {
-    #[inline]
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl fmt::Display for ResolvedLocationPath {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
