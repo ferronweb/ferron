@@ -269,7 +269,7 @@ impl PoolReturnInfo {
         Self {
             key: item.key().cloned(),
             wrapper: Some(wrapper),
-            local_limit_key: item.local_limit_key().map(|k| k.0.clone()),
+            local_limit_key: item.local_limit_key().cloned(),
             is_unix,
         }
     }

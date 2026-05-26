@@ -16,32 +16,12 @@ use crate::connpool_single::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
 use crate::types::upstream::UpstreamInner;
 
-/// A unique key for an upstream, used for connection pooling.
-#[derive(Clone)]
-pub struct UpstreamKey(pub Arc<UpstreamInner>);
-
-impl PartialEq for UpstreamKey {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-impl Eq for UpstreamKey {}
-
-impl std::hash::Hash for UpstreamKey {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // O(1) hashing of the memory address instead of the struct contents
-        std::sync::Arc::as_ptr(&self.0).hash(state);
-    }
-}
-
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
-pub type PoolKey = (UpstreamKey, Option<IpAddr>);
+pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
 
 /// Concrete pool item type used throughout the proxy.
 pub(crate) type PooledConnection =
-    crate::connpool_single::PoolItem<PoolKey, UpstreamKey, SendRequestWrapper>;
+    crate::connpool_single::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///
@@ -49,10 +29,10 @@ pub(crate) type PooledConnection =
 /// The pools are stored in `UnsafeCell` for interior mutability within the thread.
 struct ThreadLocalPools {
     /// TCP connection pool.
-    tcp_pool: Rc<SingleThreadPool<PoolKey, UpstreamKey, SendRequestWrapper>>,
+    tcp_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     /// Unix socket pool (unbounded, separate from TCP pools).
     #[cfg(unix)]
-    unix_pool: Rc<SingleThreadPool<PoolKey, UpstreamKey, SendRequestWrapper>>,
+    unix_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     /// Last per-thread TCP capacity that was synced into this TLS pool.
     last_global_limit: usize,
 }
@@ -157,7 +137,7 @@ impl ConnectionManager {
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
     ) -> Option<PooledConnection> {
-        let key = (UpstreamKey(upstream), client_ip);
+        let key = (upstream, client_ip);
         let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
 
         TLS_POOLS.with(|c| {
@@ -168,7 +148,7 @@ impl ConnectionManager {
             if let Some(pools) = opt.as_ref() {
                 if pools.last_global_limit == per_thread {
                     #[cfg(unix)]
-                    if key.0 .0.proxy_unix.is_some() {
+                    if key.0.proxy_unix.is_some() {
                         return pools.unix_pool.pull(key);
                     }
                     return pools.tcp_pool.pull(key);
@@ -191,7 +171,7 @@ impl ConnectionManager {
             }
 
             #[cfg(unix)]
-            if key.0 .0.proxy_unix.is_some() {
+            if key.0.proxy_unix.is_some() {
                 return pools.unix_pool.pull(key);
             }
             pools.tcp_pool.pull(key)
@@ -210,7 +190,7 @@ impl ConnectionManager {
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
     ) -> Option<PooledConnection> {
-        let upstream_key = UpstreamKey(upstream);
+        let upstream_key = upstream;
         let key = (upstream_key.clone(), client_ip);
         let limit = local_limit.map(|limit| (upstream_key, limit));
         let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
@@ -223,7 +203,7 @@ impl ConnectionManager {
             if let Some(pools) = opt.as_ref() {
                 if pools.last_global_limit == per_thread {
                     #[cfg(unix)]
-                    if key.0 .0.proxy_unix.is_some() {
+                    if key.0.proxy_unix.is_some() {
                         return pools.unix_pool.pull_with_local_limit(key, limit);
                     }
                     return pools.tcp_pool.pull_with_local_limit(key, limit);
@@ -246,7 +226,7 @@ impl ConnectionManager {
             }
 
             #[cfg(unix)]
-            if key.0 .0.proxy_unix.is_some() {
+            if key.0.proxy_unix.is_some() {
                 return pools.unix_pool.pull_with_local_limit(key, limit);
             }
             pools.tcp_pool.pull_with_local_limit(key, limit)
@@ -265,7 +245,6 @@ pub fn return_connection_to_pool(
     local_limit_key: Option<Arc<UpstreamInner>>,
     is_unix: bool,
 ) {
-    let local_limit_key = local_limit_key.map(UpstreamKey);
     TLS_POOLS.with(|tls| {
         // SAFETY: We are strictly single-threaded per core, and no re-entrant
         // mutable borrows occur during connection pulls.
