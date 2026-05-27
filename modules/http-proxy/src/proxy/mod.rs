@@ -25,11 +25,11 @@ use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
+use crate::upstream::FailureCache;
 use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
     resolve_upstreams,
 };
-use crate::util::FailureCache;
 use crate::ProxyMetrics;
 
 use self::affinity::maybe_set_affinity_cookie;

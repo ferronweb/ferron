@@ -6,7 +6,7 @@ use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
-use crate::util::FailureCache;
+use crate::upstream::FailureCache;
 
 /// Count how many backends are currently available for selection.
 #[inline]
@@ -19,11 +19,10 @@ pub fn count_available_backends(
     circuit_breaker: &CircuitBreakerConfig,
     selected_backends: &rustc_hash::FxHashSet<Arc<UpstreamInner>>,
 ) -> usize {
-    let failed = failed_backends.read();
     upstreams
         .iter()
         .filter(|u| {
-            let passive_healthy = failed
+            let passive_healthy = failed_backends
                 .get(u)
                 .is_none_or(|fails| fails <= health_check_max_fails);
             let active_healthy = health_check_state.is_none_or(|state_map| {

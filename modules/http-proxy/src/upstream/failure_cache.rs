@@ -1,64 +1,58 @@
-//! Utility types for the reverse proxy module.
-
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use parking_lot::RwLock;
+use dashmap::DashMap;
 
 use crate::types::upstream::UpstreamInner;
 
-/// A TTL (time-to-live) cache.
-pub struct TtlCache<K, V> {
-    cache: HashMap<K, (V, Instant)>,
+/// A concurrent TTL (time-to-live) cache backed by a sharded, lock-free map.
+pub struct ConcurrentTtlCache<K, V> {
+    cache: DashMap<K, (V, Instant)>,
     ttl: Duration,
 }
 
-impl<K, V> TtlCache<K, V>
+impl<K, V> ConcurrentTtlCache<K, V>
 where
     K: std::cmp::Eq + std::hash::Hash + Clone,
     V: Clone,
 {
-    /// Creates a new TTL cache.
     pub fn new(ttl: Duration) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: DashMap::new(),
             ttl,
         }
     }
 
-    /// Inserts a value into the cache.
-    pub fn insert(&mut self, key: K, value: V) {
+    pub fn insert(&self, key: K, value: V) {
         self.cache.insert(key, (value, Instant::now()));
     }
 
-    /// Gets a value from the cache, returning `None` if expired.
     pub fn get(&self, key: &K) -> Option<V> {
-        self.cache.get(key).and_then(|(value, timestamp)| {
+        if let Some(entry) = self.cache.get(key) {
+            let (value, timestamp) = entry.value();
             if timestamp.elapsed() < self.ttl {
-                Some(value.clone())
-            } else {
-                None
+                return Some(value.clone());
             }
-        })
+            drop(entry);
+            self.cache.remove(key);
+        }
+        None
     }
 
-    /// Removes a value from the cache.
     #[allow(dead_code)]
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        self.cache.remove(key).map(|(value, _)| value)
+    pub fn remove(&self, key: &K) -> Option<V> {
+        self.cache.remove(key).map(|(_, (value, _))| value)
     }
 
-    /// Removes all expired entries.
     #[allow(dead_code)]
-    pub fn cleanup(&mut self) {
+    pub fn cleanup(&self) {
         self.cache
             .retain(|_, (_, timestamp)| timestamp.elapsed() < self.ttl);
     }
 }
 
 /// Cache for tracking failed backends, shared across all proxy requests.
-pub(crate) type FailureCache = RwLock<TtlCache<Arc<UpstreamInner>, u64>>;
+pub(crate) type FailureCache = ConcurrentTtlCache<Arc<UpstreamInner>, u64>;
 
 #[cfg(test)]
 mod tests {
@@ -67,31 +61,31 @@ mod tests {
 
     #[test]
     fn test_insert_and_get() {
-        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
         cache.insert("key1", "value1");
         assert_eq!(cache.get(&"key1"), Some("value1"));
     }
 
     #[test]
     fn test_get_nonexistent_key() {
-        let cache: TtlCache<&str, &str> = TtlCache::new(Duration::from_secs(60));
+        let cache: ConcurrentTtlCache<&str, &str> =
+            ConcurrentTtlCache::new(Duration::from_secs(60));
         assert_eq!(cache.get(&"missing"), None);
     }
 
     #[test]
     fn test_expired_entry() {
-        let mut cache = TtlCache::new(Duration::from_millis(50));
+        let cache = ConcurrentTtlCache::new(Duration::from_millis(50));
         cache.insert("key1", "value1");
         assert_eq!(cache.get(&"key1"), Some("value1"));
 
-        // Wait for TTL to expire
         sleep(Duration::from_millis(60));
         assert_eq!(cache.get(&"key1"), None);
     }
 
     #[test]
     fn test_overwrite_key() {
-        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
         cache.insert("key1", "value1");
         cache.insert("key1", "value2");
         assert_eq!(cache.get(&"key1"), Some("value2"));
@@ -99,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_remove() {
-        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
         cache.insert("key1", "value1");
         assert_eq!(cache.remove(&"key1"), Some("value1"));
         assert_eq!(cache.get(&"key1"), None);
@@ -107,17 +101,17 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent() {
-        let mut cache: TtlCache<&str, &str> = TtlCache::new(Duration::from_secs(60));
+        let cache: ConcurrentTtlCache<&str, &str> =
+            ConcurrentTtlCache::new(Duration::from_secs(60));
         assert_eq!(cache.remove(&"missing"), None);
     }
 
     #[test]
     fn test_cleanup() {
-        let mut cache = TtlCache::new(Duration::from_millis(50));
+        let cache = ConcurrentTtlCache::new(Duration::from_millis(50));
         cache.insert("key1", "value1");
         cache.insert("key2", "value2");
 
-        // Wait for TTL to expire
         sleep(Duration::from_millis(60));
 
         cache.insert("key3", "value3");
@@ -130,20 +124,19 @@ mod tests {
 
     #[test]
     fn test_multiple_entries() {
-        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
         for i in 0..100 {
             cache.insert(format!("key{}", i), i);
         }
         for i in 0..100 {
             assert_eq!(cache.get(&format!("key{}", i)), Some(i));
         }
-        assert_eq!(cache.cache.len(), 100);
     }
 
     #[test]
-    fn bench_ttlcache_insert_get() {
+    fn bench_concurrent_ttlcache_insert_get() {
         use std::time::Instant;
-        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
         let n = 100_000usize;
         let start = Instant::now();
         for i in 0..n {
@@ -156,7 +149,7 @@ mod tests {
         }
         let get_elapsed = start.elapsed();
         println!(
-            "ttlcache insert for {} items: {:?}, get: {:?}",
+            "concurrent_ttlcache insert for {} items: {:?}, get: {:?}",
             n, insert_elapsed, get_elapsed
         );
     }

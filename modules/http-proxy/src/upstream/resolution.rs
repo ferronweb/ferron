@@ -12,7 +12,7 @@ use crate::types::upstream::{Upstream, UpstreamInner};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
-use crate::util::FailureCache;
+use crate::upstream::FailureCache;
 
 /// Resolve all upstreams to a flat list of `Arc<UpstreamInner>` entries.
 ///
@@ -71,7 +71,7 @@ pub fn determine_proxy_to(
     // until the final selection.
     let mut healthy: Vec<usize> = {
         let failed = if health_check_enabled {
-            Some(failed_backends.read())
+            Some(failed_backends)
         } else {
             None
         };

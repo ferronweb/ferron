@@ -9,7 +9,7 @@
 #[cfg(feature = "srv-lookup")]
 pub async fn resolve_srv(
     srv_data: &super::upstream::SrvUpstreamData,
-    failed_backends: std::sync::Arc<crate::util::FailureCache>,
+    failed_backends: std::sync::Arc<crate::upstream::FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<super::health::HealthCheckStateMap>,
 ) -> Vec<std::sync::Arc<super::upstream::UpstreamInner>> {
@@ -20,7 +20,7 @@ pub async fn resolve_srv(
     }
 
     // Filter out unhealthy backends
-    let failed = failed_backends.read();
+    let failed = std::sync::Arc::clone(&failed_backends);
     let healthy: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> = candidates
         .into_iter()
         .filter(move |(upstream, _, _)| {

@@ -80,9 +80,7 @@ impl Upstream {
     #[inline]
     pub async fn resolve(
         &self,
-        _failed_backends: std::sync::Arc<
-            parking_lot::RwLock<crate::util::TtlCache<Arc<UpstreamInner>, u64>>,
-        >,
+        _failed_backends: std::sync::Arc<crate::upstream::FailureCache>,
         _health_check_max_fails: u64,
         _active_health_check_state: Option<HealthCheckStateMap>,
     ) -> Vec<Arc<UpstreamInner>> {

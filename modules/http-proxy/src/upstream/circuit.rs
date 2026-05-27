@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::{CircuitBreakerState, CircuitBreakerStateMap, CircuitBreakerStatus};
 use crate::types::upstream::UpstreamInner;
-use crate::util::FailureCache;
+use crate::upstream::FailureCache;
 
 /// Returns whether a backend is currently available for new circuit-breaker traffic.
 pub fn is_circuit_breaker_available(
@@ -46,9 +46,8 @@ pub fn record_backend_transport_failure(
 ) {
     if passive_check_enabled {
         metrics.unhealthy_backends.push(upstream.clone());
-        let mut failed = failed_backends.write();
-        let current = failed.get(upstream).unwrap_or(0);
-        failed.insert(upstream.clone(), current + 1);
+        let current = failed_backends.get(upstream).unwrap_or(0);
+        failed_backends.insert(upstream.clone(), current + 1);
     }
 
     if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
@@ -284,8 +283,8 @@ mod tests {
         upstream::{
             determine_proxy_to,
             lb::{ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState},
+            ConcurrentTtlCache,
         },
-        util::TtlCache,
     };
 
     use super::*;
@@ -300,8 +299,8 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_opens_after_transport_failures() {
-        let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
-            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+        let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
+            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
         let upstream = make_upstream("http://backend1");
         let mut metrics = crate::ProxyMetrics::new();
@@ -352,8 +351,8 @@ mod tests {
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<RwLock<TtlCache<Arc<UpstreamInner>, u64>>> =
-            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
+        let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
+            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
         let circuit_breaker = crate::config::CircuitBreakerConfig {
             enabled: true,
@@ -466,7 +465,7 @@ mod tests {
 
         let mut metrics = crate::ProxyMetrics::new();
         record_backend_transport_failure(
-            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60)))),
+            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60))),
             false,
             Some(&circuit_breaker_state),
             &circuit_breaker,

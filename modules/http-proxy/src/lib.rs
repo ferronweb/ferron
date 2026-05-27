@@ -20,7 +20,6 @@ mod types;
 pub mod upstream;
 #[cfg(not(feature = "fuzz"))]
 mod upstream;
-mod util;
 mod validator;
 
 use std::borrow::Cow;
@@ -212,7 +211,7 @@ struct ProxyState {
     /// read the global `concurrent_conns` limit from config first.
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
     /// Failed backend tracking cache (shared across all requests).
-    failed_backends: Arc<crate::util::FailureCache>,
+    failed_backends: Arc<crate::upstream::FailureCache>,
     /// Circuit breaker state tracking per upstream.
     circuit_breaker_state: types::circuit::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
@@ -243,9 +242,9 @@ impl ProxyState {
     fn new() -> Self {
         Self {
             conn_manager: RwLock::new(None),
-            failed_backends: Arc::new(RwLock::new(crate::util::TtlCache::new(
+            failed_backends: Arc::new(crate::upstream::ConcurrentTtlCache::new(
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
-            ))),
+            )),
             circuit_breaker_state: Arc::new(DashMap::new()),
             conn_state: Arc::new(DashMap::new()),
             ewma_state: Arc::new(DashMap::new()),
