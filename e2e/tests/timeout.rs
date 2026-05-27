@@ -69,7 +69,9 @@ async fn test_pipeline_timeout() {
         .write_all(
             br#"
 *:80 {
-  timeout "1s"
+  http {
+    timeout "1s"
+  }
   proxy http://backend:3000
 }
 "#,
