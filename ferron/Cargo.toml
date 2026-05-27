@@ -109,7 +109,7 @@ core_affinity = { version = "0.8.3", optional = true }
 # Data Handling & Serialization
 bytes = { version = "1.10.1" }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
+serde_json = "1.0.150"
 kdl = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
 regorus = { version = "0.10.0", default-features = false, features = [
