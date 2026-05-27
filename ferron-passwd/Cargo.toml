@@ -9,7 +9,7 @@ ProductName = "Ferron password utility"
 [dependencies]
 clap = { version = "4.5.28", features = ["derive"] }
 password-auth = { workspace = true }
-rpassword = "7.4.0"
+rpassword = "7.5.3"
 
 [target.'cfg(target_arch = "x86")'.dependencies]
 mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
