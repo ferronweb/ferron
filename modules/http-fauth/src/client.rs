@@ -403,6 +403,10 @@ impl ForwardedAuthClient {
 
     /// Set local connection limit for a specific upstream.
     pub async fn set_local_limit(&self, upstream_url: &str, limit: usize) {
+        if self.local_limits.read().await.contains_key(upstream_url) {
+            // Fast path: limit is already set, no need to update
+            return;
+        }
         let mut limits = self.local_limits.write().await;
         if let std::collections::hash_map::Entry::Vacant(e) = limits.entry(upstream_url.to_string())
         {

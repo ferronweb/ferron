@@ -27,7 +27,7 @@ example.com {
 | --- | --- | --- | --- |
 | `url` | `<string>` | Backend server URL (http:// or https://). Required if not provided as an argument. | — |
 | `unix` | `<path>` | Connect to the backend via Unix domain socket instead of TCP. | TCP |
-| `limit` | `<number>` | Maximum concurrent connections to this backend. | `1` (per upstream) |
+| `limit` | `<number>` | Maximum concurrent connections to this backend. | No limit (per upstream) |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout for connections. Connections idle longer than this are evicted. | `60s` |
 | `no_verification` | `<bool>` | Skip TLS certificate verification for HTTPS backends. | `false` |
 | `copy` | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers. | none |
