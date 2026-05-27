@@ -96,7 +96,6 @@ async fn test_abuse_protection_blocks_rate_limit_abusers() {
     rate 2
     burst 0
     key remote_address
-    window 60
   }
 
   abuse_protection {
