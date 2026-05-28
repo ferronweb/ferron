@@ -1,11 +1,9 @@
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock};
 
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Uri};
-use rustc_hash::FxBuildHasher;
 
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
@@ -15,91 +13,6 @@ use crate::send_request::ProxyBody;
 fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
     ClientIpFromHeaderConfig::resolve_from_context(ctx)
         .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()))
-}
-
-/// Interpolate header value with HTTP request variables.
-///
-/// Scans for `{{...}}` syntax and resolves variables using the context's
-/// `Variables` implementation. Plain strings without `{{` are returned as-is.
-///
-/// For performance, templates are compiled into segments and cached globally so
-/// repeated requests don't re-parse the same template string.
-#[derive(Clone, Debug)]
-enum Segment {
-    Literal(String),
-    Var(String),
-}
-
-static TEMPLATE_CACHE: LazyLock<dashmap::DashMap<String, Arc<Vec<Segment>>, FxBuildHasher>> =
-    LazyLock::new(|| dashmap::DashMap::with_hasher(FxBuildHasher));
-
-fn compile_template(value: &str) -> Vec<Segment> {
-    let mut segs: Vec<Segment> = Vec::new();
-    let mut chars = value.chars().peekable();
-    let mut literal = String::new();
-
-    while let Some(ch) = chars.next() {
-        if ch == '{' && chars.peek() == Some(&'{') {
-            chars.next();
-            if !literal.is_empty() {
-                segs.push(Segment::Literal(std::mem::take(&mut literal)));
-            }
-            let mut var_name = String::new();
-            loop {
-                match chars.next() {
-                    Some('}') if chars.peek() == Some(&'}') => {
-                        chars.next();
-                        break;
-                    }
-                    Some(c) => var_name.push(c),
-                    None => return vec![Segment::Literal(value.to_string())],
-                }
-            }
-            segs.push(Segment::Var(var_name));
-        } else {
-            literal.push(ch);
-        }
-    }
-
-    if !literal.is_empty() {
-        segs.push(Segment::Literal(literal));
-    }
-    segs
-}
-
-fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
-    if !value.contains("{{") {
-        return value.to_string();
-    }
-
-    let segs_arc = TEMPLATE_CACHE
-        .entry(value.to_string())
-        .or_insert_with(|| Arc::new(compile_template(value)))
-        .value()
-        .clone();
-
-    let mut result = String::with_capacity(value.len());
-    for seg in segs_arc.iter() {
-        match seg {
-            Segment::Literal(s) => result.push_str(s),
-            Segment::Var(var_name) => {
-                if let Some(env_var) = var_name.strip_prefix("env.") {
-                    if let Ok(env_value) = std::env::var(env_var) {
-                        result.push_str(&env_value);
-                    } else {
-                        result.push_str(&format!("{{{{{}}}}}", var_name));
-                    }
-                } else if let Some(resolved) =
-                    <dyn ferron_core::config::Variables>::resolve(ctx, var_name)
-                {
-                    result.push_str(&resolved);
-                } else {
-                    result.push_str(&format!("{{{{{}}}}}", var_name));
-                }
-            }
-        }
-    }
-    result
 }
 
 /// Construct proxy request with header transformations.
@@ -138,8 +51,7 @@ pub(super) fn construct_proxy_request(
     let mut replace_values: Vec<(HeaderName, HeaderValue)> =
         Vec::with_capacity(config.headers_to_replace.len());
     for (name, value) in &config.headers_to_replace {
-        let resolved = interpolate_header_value(value, ctx);
-        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
+        let hv = HeaderValue::from_str(value).map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("Invalid header value: {e}"),
@@ -152,8 +64,7 @@ pub(super) fn construct_proxy_request(
         Vec::with_capacity(config.headers_to_add.len());
     for action in &config.headers_to_add {
         let HeaderAction::Append(name, v) = action;
-        let resolved = interpolate_header_value(v, ctx);
-        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
+        let hv = HeaderValue::from_str(v).map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("Invalid header value: {e}"),
