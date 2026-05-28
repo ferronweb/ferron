@@ -1,6 +1,6 @@
 //! Connection pool using thread-local storage.
 //!
-//! This isa simple, single-threaded pool stored in thread-local storage.
+//! This is a simple, single-threaded pool stored in thread-local storage.
 //! Each thread owns its own pool exclusively, eliminating synchronization
 //! overhead entirely.
 
@@ -14,7 +14,9 @@ use crossbeam_queue::SegQueue;
 use rustc_hash::FxHashMap;
 use tokio_util::sync::CancellationToken;
 
-use crate::connpool_single::SingleThreadPool;
+mod pool;
+
+use self::pool::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
 use crate::types::upstream::UpstreamInner;
 
@@ -23,7 +25,7 @@ pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
 
 /// Concrete pool item type used throughout the proxy.
 pub(crate) type PooledConnection =
-    crate::connpool_single::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
+    self::pool::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///

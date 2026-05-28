@@ -7,7 +7,6 @@
 
 mod config;
 mod connections;
-mod connpool_single;
 mod health_check;
 mod proxy;
 mod send_net_io;
