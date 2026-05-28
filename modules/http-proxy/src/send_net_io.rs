@@ -13,16 +13,69 @@ use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use vibeio::net::PollTcpStream;
+#[cfg(unix)]
+use vibeio::net::PollUnixStream;
 
-/// A wrapper around vibeio's `PollTcpStream` that implements
+/// A wrapper around a `PollTcpStream` that supports cross-thread safety.
+pub type SendTcpStreamPoll = SendStreamPoll<PollTcpStream>;
+/// A guard that ensures the inner stream is properly marked as dropped when dropped.
+pub type SendTcpStreamPollDropGuard = SendStreamPollDropGuard<PollTcpStream>;
+
+/// A wrapper around a `PollUnixStream` that supports cross-thread safety.
+#[cfg(unix)]
+pub type SendUnixStreamPoll = SendStreamPoll<PollUnixStream>;
+/// A guard that ensures the inner stream is properly marked as dropped when dropped.
+#[cfg(unix)]
+pub type SendUnixStreamPollDropGuard = SendStreamPollDropGuard<PollUnixStream>;
+
+/// A trait that allows a stream to be wrapped in a `SendStreamPoll`.
+#[cfg(unix)]
+trait SendableStreamPoll: Sized + AsyncRead + AsyncWrite + IntoRawFd + AsRawFd + Unpin {
+    /// Creates a `SendableStreamPoll` from a raw file descriptor.
+    unsafe fn from_raw_fd(fd: RawFd) -> std::io::Result<Self>;
+}
+
+/// A trait that allows a stream to be wrapped in a `SendStreamPoll`.
+#[cfg(windows)]
+trait SendableStreamPoll: Sized + AsyncRead + AsyncWrite + IntoRawSocket + AsRawSocket + Unpin {
+    /// Creates a `SendableStreamPoll` from a raw socket.
+    unsafe fn from_raw_socket(fd: RawSocket) -> std::io::Result<Self>;
+}
+
+impl SendableStreamPoll for PollTcpStream {
+    #[cfg(unix)]
+    unsafe fn from_raw_fd(fd: RawFd) -> std::io::Result<Self> {
+        let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_fd(fd) };
+        let _ = std_tcp_stream.set_nonblocking(true);
+        PollTcpStream::from_std(std_tcp_stream)
+    }
+    #[cfg(windows)]
+    unsafe fn from_raw_socket(fd: RawSocket) -> std::io::Result<Self> {
+        let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_socket(fd) };
+        let _ = std_tcp_stream.set_nonblocking(true);
+        PollTcpStream::from_std(std_tcp_stream)
+    }
+}
+
+#[cfg(unix)]
+impl SendableStreamPoll for PollUnixStream {
+    unsafe fn from_raw_fd(fd: RawFd) -> std::io::Result<Self> {
+        let std_unix_stream = unsafe { std::os::unix::net::UnixStream::from_raw_fd(fd) };
+        let _ = std_unix_stream.set_nonblocking(true);
+        PollUnixStream::from_std(std_unix_stream)
+    }
+}
+
+/// A wrapper around vibeio's poll-based stream that implements
 /// `tokio::io::AsyncRead + AsyncWrite + Send` for use with hyper's client API.
 ///
 /// This wrapper handles cross-thread safety by reconstructing the stream
 /// from a raw file descriptor when moved between threads.
-pub struct SendTcpStreamPoll {
+#[allow(private_bounds)]
+pub struct SendStreamPoll<S: SendableStreamPoll> {
     thread_id: ThreadId,
-    inner: Option<PollTcpStream>,
-    prev_inner: Option<ManuallyDrop<PollTcpStream>>,
+    inner: Option<S>,
+    prev_inner: Option<ManuallyDrop<S>>,
     is_write_vectored: bool,
     #[cfg(unix)]
     inner_fd: RawFd,
@@ -32,16 +85,17 @@ pub struct SendTcpStreamPoll {
     marked_dropped: Arc<AtomicBool>,
 }
 
-impl SendTcpStreamPoll {
-    /// Creates a new wrapper from a vibeio `PollTcpStream`.
+#[allow(private_bounds)]
+impl<S: SendableStreamPoll> SendStreamPoll<S> {
+    /// Creates a new wrapper from a vibeio poll-based stream.
     #[inline]
-    pub fn new(inner: PollTcpStream) -> Self {
+    pub fn new(inner: S) -> Self {
         #[cfg(unix)]
         let inner_fd = inner.as_raw_fd();
         #[cfg(not(unix))]
         let inner_fd = inner.as_raw_socket();
         let is_write_vectored = inner.is_write_vectored();
-        SendTcpStreamPoll {
+        Self {
             thread_id: std::thread::current().id(),
             inner: Some(inner),
             prev_inner: None,
@@ -52,17 +106,17 @@ impl SendTcpStreamPoll {
         }
     }
 
-    /// Obtains a drop guard for the inner `PollTcpStream`.
+    /// Obtains a drop guard for the inner stream.
     ///
     /// # Safety
     ///
     /// This method is unsafe because it allows the caller to drop the inner
-    /// `PollTcpStream` without marking it as dropped. The drop guard must be
+    /// stream without marking it as dropped. The drop guard must be
     /// used exactly once.
     #[inline]
-    pub unsafe fn get_drop_guard(&mut self) -> SendTcpStreamPollDropGuard {
+    pub unsafe fn get_drop_guard(&mut self) -> SendStreamPollDropGuard<S> {
         if self.obtained_dropped {
-            panic!("the TcpStreamPoll's get_drop_guard method can be used only once");
+            panic!("the SendStreamPoll's get_drop_guard method can be used only once");
         }
         self.obtained_dropped = true;
         let inner = if let Some(inner) = self.inner.as_ref() {
@@ -73,7 +127,7 @@ impl SendTcpStreamPoll {
         } else {
             None
         };
-        SendTcpStreamPollDropGuard {
+        SendStreamPollDropGuard {
             inner,
             marked_dropped: self.marked_dropped.clone(),
         }
@@ -98,30 +152,28 @@ impl SendTcpStreamPoll {
 
         if marked_dropped || current_thread_id != self.thread_id {
             if !self.obtained_dropped {
-                panic!("the TcpStreamPoll can be used only once if drop guard is not obtained")
+                panic!("the SendStreamPoll can be used only once if drop guard is not obtained")
             }
             if self.prev_inner.is_some() {
-                panic!("the TcpStreamPoll can be moved only once across threads or if it is marked as dropped");
+                panic!("the SendStreamPoll can be moved only once across threads or if it is marked as dropped");
             }
 
-            // Safety: The inner TcpStreamPoll is manually dropped, so it's safe to use the raw fd
+            // Safety: The inner stream is manually dropped, so it's safe to use the raw fd
             #[cfg(unix)]
-            let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_fd(self.inner_fd) };
+            let send_stream_poll =
+                unsafe { S::from_raw_fd(self.inner_fd) }.expect("failed to create SendStreamPoll");
             #[cfg(windows)]
-            let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_socket(self.inner_fd) };
-            let _ = std_tcp_stream.set_nonblocking(true);
-
-            let tcp_stream_poll =
-                PollTcpStream::from_std(std_tcp_stream).expect("failed to create PollTcpStream");
-            self.is_write_vectored = tcp_stream_poll.is_write_vectored();
+            let send_stream_poll = unsafe { S::from_raw_socket(self.inner_fd) }
+                .expect("failed to create SendStreamPoll");
+            self.is_write_vectored = send_stream_poll.is_write_vectored();
             self.prev_inner = self.inner.take().map(ManuallyDrop::new);
-            self.inner = Some(tcp_stream_poll);
+            self.inner = Some(send_stream_poll);
             self.thread_id = current_thread_id;
         }
     }
 }
 
-impl AsyncRead for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsyncRead for SendStreamPoll<S> {
     #[inline]
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -133,7 +185,7 @@ impl AsyncRead for SendTcpStreamPoll {
     }
 }
 
-impl AsyncWrite for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsyncWrite for SendStreamPoll<S> {
     #[inline]
     fn poll_write(
         mut self: Pin<&mut Self>,
@@ -180,7 +232,7 @@ impl AsyncWrite for SendTcpStreamPoll {
 }
 
 #[cfg(unix)]
-impl AsRawFd for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsRawFd for SendStreamPoll<S> {
     #[inline]
     fn as_raw_fd(&self) -> RawFd {
         self.inner_fd
@@ -188,7 +240,7 @@ impl AsRawFd for SendTcpStreamPoll {
 }
 
 #[cfg(unix)]
-impl AsFd for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsFd for SendStreamPoll<S> {
     #[inline]
     fn as_fd(&self) -> BorrowedFd<'_> {
         // Safety: inner_fd is valid, as it is taken from the inner value
@@ -197,7 +249,7 @@ impl AsFd for SendTcpStreamPoll {
 }
 
 #[cfg(not(unix))]
-impl AsRawSocket for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsRawSocket for SendStreamPoll<S> {
     #[inline]
     fn as_raw_socket(&self) -> RawSocket {
         self.inner_fd
@@ -205,7 +257,7 @@ impl AsRawSocket for SendTcpStreamPoll {
 }
 
 #[cfg(not(unix))]
-impl AsSocket for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> AsSocket for SendStreamPoll<S> {
     #[inline]
     fn as_socket(&self) -> BorrowedSocket<'_> {
         // Safety: inner_fd is valid, as it is taken from the inner value
@@ -213,7 +265,8 @@ impl AsSocket for SendTcpStreamPoll {
     }
 }
 
-impl Drop for SendTcpStreamPoll {
+impl<S: SendableStreamPoll> Drop for SendStreamPoll<S> {
+    #[inline]
     fn drop(&mut self) {
         if !self.marked_dropped.swap(true, Ordering::Relaxed) {
             self.populate_if_different_thread_or_marked_dropped(true);
@@ -224,18 +277,20 @@ impl Drop for SendTcpStreamPoll {
 }
 
 // Safety: vibeio's internal Rc in InnerRawFd is only cloned during async operations.
-unsafe impl Send for SendTcpStreamPoll {}
+unsafe impl<S: SendableStreamPoll> Send for SendStreamPoll<S> {}
 
-/// Drop guard for `SendTcpStreamPoll`.
+/// Drop guard for `SendStreamPoll`.
 ///
 /// Ensures the inner stream is properly marked as dropped to prevent double-free
 /// when the stream is returned to the connection pool.
-pub struct SendTcpStreamPollDropGuard {
-    inner: Option<ManuallyDrop<PollTcpStream>>,
+#[allow(private_bounds)]
+pub struct SendStreamPollDropGuard<S: SendableStreamPoll> {
+    inner: Option<ManuallyDrop<S>>,
     marked_dropped: Arc<AtomicBool>,
 }
 
-impl Drop for SendTcpStreamPollDropGuard {
+impl<S: SendableStreamPoll> Drop for SendStreamPollDropGuard<S> {
+    #[inline]
     fn drop(&mut self) {
         if let Some(inner) = self.inner.take() {
             if !self.marked_dropped.swap(true, Ordering::Relaxed) {
