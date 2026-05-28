@@ -1388,6 +1388,7 @@ dependencies = [
 name = "ferron-http-cache"
 version = "3.0.0-beta.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "bytes",
  "cidr",

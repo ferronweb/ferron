@@ -17,6 +17,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
 use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
+use rustc_hash::FxBuildHasher;
 
 use crate::config::{
     apply_rewrite_rules, is_rewrite_log_enabled, parse_rewrite_config, RewriteResult,
@@ -25,13 +26,13 @@ use crate::validator::RewriteValidator;
 
 /// Shared state for the http-response module.
 pub struct RewriteEngine {
-    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>>,
+    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>, FxBuildHasher>,
 }
 
 impl RewriteEngine {
     pub fn new() -> Self {
         Self {
-            compiled_regexes: DashMap::new(),
+            compiled_regexes: DashMap::with_hasher(FxBuildHasher),
         }
     }
 }

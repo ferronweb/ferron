@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 
 use crate::types::upstream::UpstreamInner;
 
 /// A concurrent TTL (time-to-live) cache backed by a sharded, lock-free map.
 pub struct ConcurrentTtlCache<K, V> {
-    cache: DashMap<K, (V, Instant)>,
+    cache: DashMap<K, (V, Instant), FxBuildHasher>,
     ttl: Duration,
 }
 
@@ -18,7 +19,7 @@ where
 {
     pub fn new(ttl: Duration) -> Self {
         Self {
-            cache: DashMap::new(),
+            cache: DashMap::with_hasher(FxBuildHasher),
             ttl,
         }
     }

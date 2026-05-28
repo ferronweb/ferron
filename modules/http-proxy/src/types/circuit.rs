@@ -39,5 +39,10 @@ impl Default for CircuitBreakerState {
     }
 }
 
-pub type CircuitBreakerStateMap =
-    Arc<dashmap::DashMap<Arc<super::upstream::UpstreamInner>, CircuitBreakerState>>;
+pub type CircuitBreakerStateMap = Arc<
+    dashmap::DashMap<
+        Arc<super::upstream::UpstreamInner>,
+        CircuitBreakerState,
+        rustc_hash::FxBuildHasher,
+    >,
+>;

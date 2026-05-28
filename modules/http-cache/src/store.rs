@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use ahash::{AHashMap, AHashSet, RandomState};
 use bytes::Bytes;
 use dashmap::DashMap;
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
 use quick_cache::{sync::Cache, DefaultHashBuilder, Lifecycle, UnitWeighter};
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 
 use crate::lscache::{PurgeOperation, PurgeSelector, ScopedTag};
 use crate::policy::CacheScope;
@@ -60,7 +60,7 @@ pub struct StoreStats {
 
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
-    variants_by_base: DashMap<String, Vec<StoredVariant>, FxBuildHasher>,
+    variants_by_base: DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
 }
 
@@ -94,7 +94,7 @@ impl CacheStore {
                 DefaultHashBuilder::default(),
                 StoreLifecycle,
             ),
-            variants_by_base: DashMap::with_hasher(FxBuildHasher),
+            variants_by_base: DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
         }
     }
@@ -112,7 +112,7 @@ impl CacheStore {
         &self,
         base_key: &str,
         headers: &HeaderMap,
-        cookies: &FxHashMap<String, String>,
+        cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
     ) -> (Option<LookupEntry>, StoreStats, usize) {
         let stats = StoreStats {
@@ -182,7 +182,7 @@ impl CacheStore {
         mut entry: StoredEntry,
         private_key: Option<&str>,
         request_headers: &HeaderMap,
-        request_cookies: &FxHashMap<String, String>,
+        request_cookies: &AHashMap<String, String>,
     ) -> (StoreStats, usize) {
         let mut stats = StoreStats {
             expired_evictions: self.cleanup_expired(),
@@ -233,7 +233,7 @@ impl CacheStore {
         current_private_key: Option<&str>,
     ) -> (StoreStats, usize) {
         let mut stats = StoreStats::default();
-        let mut keys_to_remove = FxHashSet::default();
+        let mut keys_to_remove = AHashSet::default();
 
         for (key, entry) in self.entries.iter() {
             if operations
@@ -276,7 +276,7 @@ pub fn build_entry_key(
     private_key: Option<&str>,
     vary: &VaryRule,
     headers: &HeaderMap,
-    cookies: &FxHashMap<String, String>,
+    cookies: &AHashMap<String, String>,
 ) -> String {
     let mut key = String::with_capacity(base_key.len() + 128);
     key.push_str(base_key);
@@ -380,7 +380,7 @@ mod tests {
         headers
     }
 
-    fn request_cookies(pairs: &[(&str, &str)]) -> FxHashMap<String, String> {
+    fn request_cookies(pairs: &[(&str, &str)]) -> AHashMap<String, String> {
         pairs
             .iter()
             .map(|(name, value)| ((*name).to_string(), (*value).to_string()))
@@ -415,7 +415,7 @@ mod tests {
     fn builds_distinct_public_and_private_keys() {
         let vary = VaryRule::default();
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         let public = build_entry_key(
             "https://example.com/test",
@@ -469,7 +469,7 @@ mod tests {
         let store = CacheStore::new(4);
         let base_key = "https://example.com/account";
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         let public = stored_entry(base_key, CacheScope::Public, "public", VaryRule::default());
         store.insert_with_request(public, None, &headers, &cookies);
@@ -497,7 +497,7 @@ mod tests {
     fn insert_evicts_least_recently_used_entry_at_capacity() {
         let store = CacheStore::new(2);
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         store.insert_with_request(
             stored_entry(
@@ -557,7 +557,7 @@ mod tests {
     fn set_max_entries_trims_entries_to_capacity() {
         let store = CacheStore::new(3);
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         store.insert_with_request(
             stored_entry(
@@ -620,7 +620,7 @@ mod tests {
     fn lookup_cleans_up_expired_entries() {
         let store = CacheStore::new(4);
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         store.insert_with_request(
             stored_entry(
@@ -677,7 +677,7 @@ mod tests {
     fn purge_respects_scope_selectors_and_private_key() {
         let store = CacheStore::new(8);
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         let mut public = stored_entry(
             "https://example.com/listing",
@@ -763,7 +763,7 @@ mod tests {
     fn zero_capacity_store_skips_insert() {
         let store = CacheStore::new(0);
         let headers = HeaderMap::new();
-        let cookies = FxHashMap::default();
+        let cookies = AHashMap::default();
 
         let (stats, len) = store.insert_with_request(
             stored_entry(

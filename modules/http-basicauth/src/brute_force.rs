@@ -7,6 +7,7 @@ use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 
 /// Configuration for brute-force protection.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -102,7 +103,7 @@ impl AttemptTracker {
 /// eviction to prevent unbounded memory growth.
 pub struct BruteForceEngine {
     /// Per-username attempt trackers.
-    trackers: DashMap<IpAddr, AttemptTracker>,
+    trackers: DashMap<IpAddr, AttemptTracker, FxBuildHasher>,
     /// Configuration for this engine.
     config: BruteForceConfig,
 }
@@ -111,7 +112,7 @@ impl BruteForceEngine {
     /// Create a new brute-force engine with the given configuration.
     pub fn new(config: BruteForceConfig) -> Self {
         Self {
-            trackers: DashMap::new(),
+            trackers: DashMap::with_hasher(FxBuildHasher),
             config,
         }
     }

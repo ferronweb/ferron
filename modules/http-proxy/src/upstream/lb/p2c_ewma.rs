@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 
 use crate::types::upstream::UpstreamInner;
 
@@ -34,7 +35,7 @@ pub struct EwmaData {
 }
 
 /// Shared map from upstream to its EWMA data.
-pub type EwmaStateMap = Arc<DashMap<Arc<UpstreamInner>, EwmaData>>;
+pub type EwmaStateMap = Arc<DashMap<Arc<UpstreamInner>, EwmaData, FxBuildHasher>>;
 
 /// Tunable parameters for the P2C+EWMA algorithm.
 ///

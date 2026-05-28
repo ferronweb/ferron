@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use rustc_hash::FxBuildHasher;
 use std::{sync::Arc, time::Duration};
 
 use crate::types::affinity::AffinityType;
@@ -94,7 +95,7 @@ fn test_select_backend_index_least_connections() {
         (0, make_upstream("http://backend1")),
         (1, make_upstream("http://backend2")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
@@ -116,7 +117,7 @@ fn test_select_backend_index_two_random_choices() {
         (1, make_upstream("http://backend2")),
         (2, make_upstream("http://backend3")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     for _ in 0..100 {
@@ -128,7 +129,7 @@ fn test_select_backend_index_two_random_choices() {
 #[test]
 fn test_select_backend_single_backend() {
     let backends = vec![(0, make_upstream("http://backend1"))];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
@@ -167,7 +168,7 @@ fn test_determine_proxy_to_single_backend() {
     let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
         Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
     let result = determine_proxy_to(
         &upstreams,
@@ -384,7 +385,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
     let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
         Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());
+    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     health_check_state.insert(
         "http://backend1".to_string(),
         HealthCheckState {
@@ -425,7 +426,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
     let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
         Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::new());
+    let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
@@ -603,7 +604,7 @@ fn test_select_backend_index_least_connections_fewer_connections() {
         (0, make_upstream("http://backend1")),
         (1, make_upstream("http://backend2")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // Simulate 3 connections on backend1, 0 on backend2
@@ -625,7 +626,7 @@ fn test_select_backend_index_least_connections_weighted_higher_weight_favored() 
         (0, make_upstream_with_weight("http://backend1", 1)),
         (1, make_upstream_with_weight("http://backend2", 3)),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // Simulate 3 connections on backend1 (weight 1) and 6 connections on backend2 (weight 3)
@@ -655,7 +656,7 @@ fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
         (0, make_upstream_with_weight("http://backend1", 3)),
         (1, make_upstream_with_weight("http://backend2", 1)),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // Simulate 6 connections on backend1 (weight 3) and 3 connections on backend2 (weight 1)
@@ -685,7 +686,7 @@ fn test_select_backend_index_least_connections_weighted_equal_score() {
         (0, make_upstream_with_weight("http://backend1", 2)),
         (1, make_upstream_with_weight("http://backend2", 1)),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // Simulate 2 connections on backend1 (weight 2) and 4 connections on backend2 (weight 1)
@@ -715,7 +716,7 @@ fn test_select_backend_index_least_connections_all_zero_weight() {
         (0, make_upstream_with_weight("http://backend1", 0)),
         (1, make_upstream_with_weight("http://backend2", 0)),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     // All backends have weight 0, should fall back to index 0
@@ -730,7 +731,7 @@ fn test_select_backend_index_least_connections_weighted_uneven_distribution() {
         (1, make_upstream_with_weight("http://backend2", 2)),
         (2, make_upstream_with_weight("http://backend3", 3)),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
     let mut trackers = vec![];
@@ -771,8 +772,8 @@ fn test_select_backend_index_p2c_ewma_basic() {
         (1, make_upstream("http://backend2")),
         (2, make_upstream("http://backend3")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     for _ in 0..100 {
@@ -785,8 +786,8 @@ fn test_select_backend_index_p2c_ewma_basic() {
 #[test]
 fn test_select_backend_index_p2c_ewma_single_backend() {
     let backends = vec![(0, make_upstream("http://backend1"))];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
@@ -799,8 +800,8 @@ fn test_select_backend_index_p2c_ewma_prefers_lower_latency() {
         (0, make_upstream("http://backend1")),
         (1, make_upstream("http://backend2")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     // Initialise trackers so both backends have 0 active connections
@@ -841,8 +842,8 @@ fn test_select_backend_index_p2c_ewma_prefers_fewer_connections() {
         (0, make_upstream("http://backend1")),
         (1, make_upstream("http://backend2")),
     ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
 
     // Equal EWMA latencies
@@ -883,7 +884,7 @@ fn test_select_backend_index_p2c_ewma_prefers_fewer_connections() {
 
 #[test]
 fn test_p2c_ewma_update() {
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let upstream = make_upstream("http://backend1");
     let params = super::lb::p2c_ewma::P2cEwmaParams::default();
 
@@ -902,7 +903,7 @@ fn test_p2c_ewma_update() {
 
 #[test]
 fn test_p2c_ewma_warmup_transitions_to_ewma() {
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let upstream = make_upstream("http://backend1");
     let params = super::lb::p2c_ewma::P2cEwmaParams::default();
 
@@ -926,7 +927,7 @@ fn test_p2c_ewma_warmup_transitions_to_ewma() {
 
 #[test]
 fn test_p2c_ewma_default_ewma_for_unknown_backend() {
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let upstream = make_upstream("http://unknown");
     let params = super::lb::p2c_ewma::P2cEwmaParams::default();
 

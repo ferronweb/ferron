@@ -10,8 +10,8 @@ use ferron_http_cache::policy::CacheScope;
 use ferron_http_cache::store::{build_entry_key, CacheStore, StoredEntry, VaryRule};
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
+use ahash::AHashMap;
 use libfuzzer_sys::fuzz_target;
-use rustc_hash::FxHashMap;
 
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
@@ -80,7 +80,7 @@ fuzz_target!(|data: &[u8]| {
         }
 
         // Build request cookies
-        let mut cookies = FxHashMap::default();
+        let mut cookies = AHashMap::default();
         for _ in 0..num_cookies {
             let name = extract_string(&mut u, 32);
             let value = extract_string(&mut u, 64);

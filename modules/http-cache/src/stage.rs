@@ -3,6 +3,7 @@ use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ahash::AHashMap;
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use ferron_core::pipeline::{PipelineError, Stage};
@@ -17,6 +18,7 @@ use http::{HeaderMap, Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
+#[cfg(test)]
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
@@ -47,7 +49,7 @@ struct RequestState {
     config: CacheConfig,
     base_key: String,
     request_headers: HeaderMap,
-    request_cookies: FxHashMap<String, String>,
+    request_cookies: AHashMap<String, String>,
     private_key: Option<String>,
     purge_url: String,
     request_policy: RequestCachePolicy,
@@ -687,8 +689,8 @@ fn build_base_key(
     format!("{scheme}://{host}{path_and_query}")
 }
 
-fn parse_cookies(headers: &HeaderMap) -> FxHashMap<String, String> {
-    let mut cookies = FxHashMap::default();
+fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
+    let mut cookies = AHashMap::default();
     for value in headers.get_all(header::COOKIE) {
         let Some(text) = value.to_str().ok() else {
             continue;
@@ -708,7 +710,7 @@ fn parse_cookies(headers: &HeaderMap) -> FxHashMap<String, String> {
 }
 
 fn build_private_cache_key(
-    cookies: &FxHashMap<String, String>,
+    cookies: &AHashMap<String, String>,
     remote_ip: std::net::IpAddr,
     auth_user: Option<&str>,
 ) -> String {
@@ -949,7 +951,7 @@ mod tests {
 
     #[test]
     fn parses_private_key_from_cookies() {
-        let mut cookies = FxHashMap::default();
+        let mut cookies = AHashMap::default();
         cookies.insert("PHPSESSID".to_string(), "1234567890abcdef".to_string());
         let key = build_private_cache_key(&cookies, "127.0.0.1".parse().unwrap(), Some("user"));
         assert!(key.contains("auth=user"));

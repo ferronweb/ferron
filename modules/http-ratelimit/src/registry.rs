@@ -5,6 +5,7 @@
 //! memory growth from one-shot clients.
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -54,7 +55,7 @@ fn now_secs() -> u64 {
 #[derive(Clone)]
 pub struct TokenBucketRegistry {
     /// Sharded concurrent map from key → bucket entry.
-    buckets: Arc<DashMap<String, BucketEntry>>,
+    buckets: Arc<DashMap<String, BucketEntry, FxBuildHasher>>,
     /// Parameters for creating new buckets.
     capacity: u64,
     refill_rate: f64,
@@ -69,7 +70,7 @@ impl TokenBucketRegistry {
     /// Create a new registry with the given parameters.
     pub fn new(capacity: u64, refill_rate: f64, ttl_secs: u64, max_buckets: usize) -> Self {
         Self {
-            buckets: Arc::new(DashMap::new()),
+            buckets: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             capacity,
             refill_rate,
             ttl_secs,

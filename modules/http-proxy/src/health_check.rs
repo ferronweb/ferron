@@ -562,6 +562,7 @@ mod tests {
     use super::*;
     use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, HealthCheckState};
     use dashmap::DashMap;
+    use rustc_hash::FxBuildHasher;
 
     #[test]
     fn test_status_code_matching() {
@@ -586,7 +587,7 @@ mod tests {
     #[test]
     fn test_health_state_transition_to_unhealthy() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
             ..Default::default()
@@ -624,7 +625,7 @@ mod tests {
     #[test]
     fn test_health_state_recovery() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let config = UpstreamHealthCheckConfig {
             consecutive_fails: 2,
             consecutive_passes: 2,
@@ -687,7 +688,7 @@ mod tests {
     #[test]
     fn test_response_time_threshold() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let config = UpstreamHealthCheckConfig {
             response_time_threshold: Some(Duration::from_millis(50)),
             consecutive_fails: 1,
@@ -737,7 +738,7 @@ mod tests {
     #[test]
     fn test_body_match_success() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
             method: HealthCheckMethod::Get,
@@ -767,7 +768,7 @@ mod tests {
     #[test]
     fn test_body_match_failure() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let config = UpstreamHealthCheckConfig {
             body_match: Some("ok".to_string()),
             method: HealthCheckMethod::Get,
@@ -796,7 +797,7 @@ mod tests {
 
     #[test]
     fn test_is_upstream_healthy() {
-        let state_map: HealthCheckStateMap = Arc::new(DashMap::new());
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
         assert!(is_upstream_healthy(&state_map, "http://localhost:8080"));
 

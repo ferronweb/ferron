@@ -30,6 +30,7 @@ use std::time::Duration;
 use dashmap::DashMap;
 use ferron_observability::build_composite_sink;
 use parking_lot::RwLock;
+use rustc_hash::FxBuildHasher;
 
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
@@ -227,14 +228,15 @@ struct ProxyState {
             Arc<LoadBalancerAlgorithmInner>,
             Arc<RwLock<ConsistentHashRing>>,
         ),
+        FxBuildHasher,
     >,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: types::health::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
     /// Used to clean up tasks on reload.
-    health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>>,
+    health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>, FxBuildHasher>,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
-    active_unhealthy_counters: DashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>>,
+    active_unhealthy_counters: DashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>, FxBuildHasher>,
 }
 
 impl ProxyState {
@@ -244,13 +246,13 @@ impl ProxyState {
             failed_backends: Arc::new(crate::upstream::ConcurrentTtlCache::new(
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             )),
-            circuit_breaker_state: Arc::new(DashMap::new()),
-            conn_state: Arc::new(DashMap::new()),
-            ewma_state: Arc::new(DashMap::new()),
-            algorithms: DashMap::new(),
-            active_health_check_state: Arc::new(DashMap::new()),
-            health_check_tasks: DashMap::new(),
-            active_unhealthy_counters: DashMap::new(),
+            circuit_breaker_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
+            conn_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
+            ewma_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
+            algorithms: DashMap::with_hasher(FxBuildHasher),
+            active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
+            health_check_tasks: DashMap::with_hasher(FxBuildHasher),
+            active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
         }
     }
 

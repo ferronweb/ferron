@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 use ferron_http_proxy::types::upstream::UpstreamInner;
 use ferron_http_proxy::types::ConnectionsTrackState;
 use ferron_http_proxy::upstream::lb::selector::select_backend_index;
@@ -81,8 +82,8 @@ fuzz_target!(|input: &[u8]| {
         return;
     };
 
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::new());
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
     // Convert to indices + upstreams format consumed by select_backend_index
     let healthy: Vec<usize> = (0..backends.len()).collect();

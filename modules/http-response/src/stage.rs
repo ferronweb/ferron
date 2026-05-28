@@ -16,6 +16,7 @@ use ferron_observability::{
 use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
+use rustc_hash::FxBuildHasher;
 #[cfg(test)]
 use rustc_hash::FxHashMap;
 
@@ -25,13 +26,13 @@ const LOG_TARGET: &str = "ferron-http-response";
 
 /// Shared state for the http-response module.
 pub struct ResponseEngine {
-    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>>,
+    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>, FxBuildHasher>,
 }
 
 impl ResponseEngine {
     pub fn new() -> Self {
         Self {
-            compiled_regexes: DashMap::new(),
+            compiled_regexes: DashMap::with_hasher(FxBuildHasher),
         }
     }
 }

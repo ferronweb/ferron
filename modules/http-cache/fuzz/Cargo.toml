@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 arbitrary = "1"
 ferron-http-cache = { path = "..", features = ["fuzz"] }
 http = "1"
-rustc-hash = "2"
+ahash = "0.8"
 bytes = "1"
 
 [[bin]]

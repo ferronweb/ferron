@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 use ferron_http_proxy::types::upstream::UpstreamInner;
 use ferron_http_proxy::upstream::lb::p2c_ewma::{
     compute_score, get_decayed_ewma, is_warming_up, update_ewma, EwmaStateMap, P2cEwmaParams,
@@ -125,7 +126,7 @@ fuzz_target!(|input: &[u8]| {
         return;
     };
 
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::new());
+    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let params = P2cEwmaParams::default();
 
     for (&op, &value) in ops.iter().zip(values.iter()) {

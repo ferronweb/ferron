@@ -13,6 +13,7 @@ use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Method};
+use rustc_hash::FxBuildHasher;
 use tokio::sync::Semaphore;
 
 use crate::brute_force::{BruteForceConfig, BruteForceEngine};
@@ -30,14 +31,14 @@ pub(crate) static GLOBAL_CONCURRENCY_SEMAPHORE: LazyLock<
 /// Pipeline stage that enforces HTTP Basic Authentication.
 pub struct BasicAuthStage {
     /// A map of cached brute force engines
-    engines: DashMap<BruteForceConfig, BruteForceEngine>,
+    engines: DashMap<BruteForceConfig, BruteForceEngine, FxBuildHasher>,
 }
 
 impl BasicAuthStage {
     /// Create a new basic auth stage with the shared engine.
     pub fn new() -> Self {
         Self {
-            engines: DashMap::new(),
+            engines: DashMap::with_hasher(FxBuildHasher),
         }
     }
 

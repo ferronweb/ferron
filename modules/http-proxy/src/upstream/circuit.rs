@@ -277,6 +277,7 @@ mod tests {
 
     use dashmap::DashMap;
     use parking_lot::RwLock;
+    use rustc_hash::FxBuildHasher;
 
     use crate::{
         types::upstream::UpstreamInner,
@@ -301,7 +302,8 @@ mod tests {
     fn test_circuit_breaker_opens_after_transport_failures() {
         let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
             Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
         let upstream = make_upstream("http://backend1");
         let mut metrics = crate::ProxyMetrics::new();
         let circuit_breaker = crate::config::CircuitBreakerConfig {
@@ -353,7 +355,8 @@ mod tests {
         ];
         let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
             Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
         let circuit_breaker = crate::config::CircuitBreakerConfig {
             enabled: true,
             max_fails: 1,
@@ -395,7 +398,8 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
-        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
         let upstream = make_upstream("http://backend1");
         let circuit_breaker = crate::config::CircuitBreakerConfig {
             enabled: true,
@@ -444,7 +448,8 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_reopens_after_half_open_failure() {
-        let circuit_breaker_state: CircuitBreakerStateMap = Arc::new(DashMap::new());
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
         let upstream = make_upstream("http://backend1");
         let circuit_breaker = crate::config::CircuitBreakerConfig {
             enabled: true,

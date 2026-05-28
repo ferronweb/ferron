@@ -3,6 +3,7 @@
 use cidr::IpCidr;
 use dashmap::DashMap;
 use ferron_http::HttpContext;
+use rustc_hash::FxBuildHasher;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -123,9 +124,9 @@ impl EventTracker {
 /// and per-IP-per-event-type event tracking for threshold aggregation.
 pub struct AbuseRegistry {
     /// Active bans by IP address.
-    bans: DashMap<IpAddr, BanEntry>,
+    bans: DashMap<IpAddr, BanEntry, FxBuildHasher>,
     /// Event trackers per IP and event type (key: "ip:event_type").
-    event_trackers: DashMap<String, EventTracker>,
+    event_trackers: DashMap<String, EventTracker, FxBuildHasher>,
     /// Metrics: total bans triggered.
     bans_triggered: AtomicU64,
 }
@@ -140,8 +141,8 @@ impl AbuseRegistry {
     /// Create a new abuse registry with the given configuration.
     pub fn new() -> Self {
         Self {
-            bans: DashMap::new(),
-            event_trackers: DashMap::new(),
+            bans: DashMap::with_hasher(FxBuildHasher),
+            event_trackers: DashMap::with_hasher(FxBuildHasher),
             bans_triggered: AtomicU64::new(0),
         }
     }

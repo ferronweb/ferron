@@ -5,6 +5,7 @@ use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Uri};
+use rustc_hash::FxBuildHasher;
 
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
@@ -29,8 +30,8 @@ enum Segment {
     Var(String),
 }
 
-static TEMPLATE_CACHE: LazyLock<dashmap::DashMap<String, Arc<Vec<Segment>>>> =
-    LazyLock::new(dashmap::DashMap::new);
+static TEMPLATE_CACHE: LazyLock<dashmap::DashMap<String, Arc<Vec<Segment>>, FxBuildHasher>> =
+    LazyLock::new(|| dashmap::DashMap::with_hasher(FxBuildHasher));
 
 fn compile_template(value: &str) -> Vec<Segment> {
     let mut segs: Vec<Segment> = Vec::new();

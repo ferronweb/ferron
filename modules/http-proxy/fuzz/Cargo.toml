@@ -11,6 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 ferron-http-proxy = { path = "..", features = ["fuzz"] }
 dashmap = "6.2.1"
+rustc-hash = "2"
 
 [[bin]]
 name = "consistent_hash_ring"
