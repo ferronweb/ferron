@@ -2,9 +2,31 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::read_kdl::read_kdl_file;
 
+/// Migration diagnostics for Ferron 2 to Ferron 3 conversion
+#[derive(Debug, Clone, Default)]
+pub struct MigrationDiagnostics {
+    pub warnings: Vec<String>,
+    pub todos: Vec<String>,
+}
+
+impl MigrationDiagnostics {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn warn(&mut self, msg: impl Into<String>) {
+        self.warnings.push(msg.into());
+    }
+
+    pub fn todo(&mut self, msg: impl Into<String>) {
+        self.todos.push(msg.into());
+    }
+}
+
 pub fn translate(
     doc: &kdlite::dom::Document<'static>,
     snippets: &mut HashMap<String, kdlite::dom::Document<'static>>,
+    diagnostics: &mut MigrationDiagnostics,
 ) -> Result<ferronconf::Config, anyhow::Error> {
     let mut config = ferronconf::Config { statements: vec![] };
 
@@ -27,9 +49,9 @@ pub fn translate(
                             .as_path(),
                     )
                     .map_err(|e| anyhow::anyhow!("can't parse kdl file: {}", e))?;
-                    config
-                        .statements
-                        .extend(translate(&kdl_document, snippets)?.statements);
+                    config.statements.extend(
+                        translate(&kdl_document, snippets, diagnostics)?.statements,
+                    );
                 }
             }
             "snippet" => {
@@ -57,7 +79,7 @@ pub fn translate(
                 if let Some(snippet) = snippets.get(&value.to_string()).cloned() {
                     config
                         .statements
-                        .extend(translate(&snippet, snippets)?.statements);
+                        .extend(translate(&snippet, snippets, diagnostics)?.statements);
                 } else {
                     return Err(anyhow::anyhow!("snippet not found: {}", value));
                 }
@@ -68,6 +90,7 @@ pub fn translate(
                         .as_ref()
                         .ok_or_else(|| anyhow::anyhow!("block node must have children"))?,
                     snippets,
+                    diagnostics,
                 )?;
 
                 let stmt = if block_scope == "globals" {
@@ -118,9 +141,10 @@ pub fn translate(
 pub fn process_block(
     block: &kdlite::dom::Document<'static>,
     snippets: &HashMap<String, kdlite::dom::Document<'static>>,
+    diagnostics: &mut MigrationDiagnostics,
 ) -> Result<ferronconf::Block, anyhow::Error> {
     let mut statements = Vec::new();
-    let mut nested_directives: HashMap<&'static str, ferronconf::Block> = HashMap::new();
+    let mut nested_directives: HashMap<String, ferronconf::Block> = HashMap::new();
     let mut date_format: Option<String> = None; // `log_date_format`
 
     // `log`
@@ -205,7 +229,7 @@ pub fn process_block(
                 });
                 if enabled {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -229,7 +253,7 @@ pub fn process_block(
                 });
                 if let Some(contact) = contact {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -253,7 +277,7 @@ pub fn process_block(
                 });
                 if let Some(cache) = cache {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -282,7 +306,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -306,7 +330,7 @@ pub fn process_block(
                 });
                 if let Some(challenge) = challenge {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -348,7 +372,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -373,7 +397,7 @@ pub fn process_block(
                 });
                 if let (Some(key_id), Some(hmac)) = (key_id, hmac) {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -407,7 +431,7 @@ pub fn process_block(
                 });
                 if let (Some(cert), Some(key)) = (cert, key) {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -437,7 +461,7 @@ pub fn process_block(
                 });
                 if let Some(cmd) = cmd {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -466,7 +490,7 @@ pub fn process_block(
                         .unwrap_or(node.name())
                         .to_string();
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -489,7 +513,7 @@ pub fn process_block(
                     match &e.value {
                         kdlite::dom::Value::Bool(b) => {
                             nested_directives
-                                .entry("tls")
+                                .entry("tls".to_string())
                                 .or_insert_with(|| ferronconf::Block {
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
@@ -507,7 +531,7 @@ pub fn process_block(
                         }
                         kdlite::dom::Value::String(s) => {
                             nested_directives
-                                .entry("tls")
+                                .entry("tls".to_string())
                                 .or_insert_with(|| ferronconf::Block {
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
@@ -548,7 +572,7 @@ pub fn process_block(
                     },
                 ));
                 nested_directives
-                    .entry("tls")
+                    .entry("tls".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -568,7 +592,7 @@ pub fn process_block(
                 });
                 if enabled {
                     nested_directives
-                        .entry("tls")
+                        .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -615,7 +639,7 @@ pub fn process_block(
                     .collect::<Vec<_>>();
                 for ext in extensions {
                     nested_directives
-                        .entry("cgi")
+                        .entry("cgi".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -648,7 +672,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 nested_directives
-                    .entry("cgi")
+                    .entry("cgi".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -672,7 +696,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry("cgi")
+                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -693,6 +717,8 @@ pub fn process_block(
                             block: None,
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
+                } else {
+                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
                 }
             }
             "scgi" => {
@@ -723,7 +749,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry("scgi")
+                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -744,6 +770,8 @@ pub fn process_block(
                             block: None,
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
+                } else {
+                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
                 }
             }
             "fcgi" => {
@@ -824,7 +852,7 @@ pub fn process_block(
                     .collect::<Vec<_>>();
                 for ext in extensions {
                     nested_directives
-                        .entry("fcgi")
+                        .entry("fcgi".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -852,7 +880,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry("fcgi")
+                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -873,6 +901,8 @@ pub fn process_block(
                             block: None,
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
+                } else {
+                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
                 }
             }
             "trust_x_forwarded_for" => {
@@ -915,6 +945,8 @@ pub fn process_block(
                     })
                     .ok_or_else(|| anyhow::anyhow!("status code must be an integer"))?;
                 if code == 401 {
+                    diagnostics.todo("Manual review recommended for 'status 401' (Basic Auth). Ferron 3 uses a different approach for authentication.");
+                    diagnostics.warn("Directive 'status 401' was detected but automatic conversion is incomplete. Manual configuration is required.");
                     let mut basic_auth_block = ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -1030,6 +1062,7 @@ pub fn process_block(
                                                     args: vec![
                                                     convert_placeholders_into_interpolated_strings(
                                                         s,
+                                                        diagnostics,
                                                     ),
                                                 ],
                                                     block: None,
@@ -1066,7 +1099,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(hash)) = (name, hash) {
                     nested_directives
-                        .entry("basic_auth")
+                        .entry("basic_auth".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -1593,7 +1626,7 @@ pub fn process_block(
                 });
                 let proxy_block =
                     nested_directives
-                        .entry("proxy")
+                        .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -1610,6 +1643,8 @@ pub fn process_block(
                             block: None,
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
+                } else {
+                    diagnostics.warn("Directive 'proxy' was ignored because it is missing a target.");
                 }
                 for entry in &node.entries[1..] {
                     if let Some(key) = entry.key() {
@@ -1699,7 +1734,7 @@ pub fn process_block(
                     _ => true,
                 });
                 nested_directives
-                    .entry("proxy")
+                    .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -1719,7 +1754,7 @@ pub fn process_block(
                 if let Some(e) = node.entries.first() {
                     if let kdlite::dom::Value::Integer(i) = &e.value {
                         let proxy_statements = &mut nested_directives
-                            .entry("proxy")
+                            .entry("proxy".to_string())
                             .or_insert_with(|| ferronconf::Block {
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
@@ -1773,7 +1808,7 @@ pub fn process_block(
                     _ => true,
                 });
                 nested_directives
-                    .entry("proxy")
+                    .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -1802,7 +1837,7 @@ pub fn process_block(
                 });
                 if let Some(alg) = alg {
                     nested_directives
-                        .entry("proxy")
+                        .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -1823,7 +1858,7 @@ pub fn process_block(
                 if let Some(e) = node.entries.first() {
                     if let kdlite::dom::Value::Integer(i) = &e.value {
                         let proxy_statements = &mut nested_directives
-                            .entry("proxy")
+                            .entry("proxy".to_string())
                             .or_insert_with(|| ferronconf::Block {
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
@@ -1873,7 +1908,7 @@ pub fn process_block(
                 });
                 if let Some(ver) = ver {
                     nested_directives
-                        .entry("proxy")
+                        .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -2062,7 +2097,7 @@ pub fn process_block(
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
                     kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s))
+                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
                     }
                     _ => None,
                 });
@@ -2122,7 +2157,7 @@ pub fn process_block(
                     _ => unreachable!(),
                 };
                 nested_directives
-                    .entry("proxy")
+                    .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -2192,6 +2227,8 @@ pub fn process_block(
                         block: None,
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
+                } else {
+                    diagnostics.warn("Directive 'root' was ignored because it is missing a path.");
                 }
             }
             "etag" | "compressed" | "precompressed" | "directory_listing"
@@ -2270,7 +2307,7 @@ pub fn process_block(
                     }));
                 } else {
                     nested_directives
-                        .entry("cache")
+                        .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -2284,7 +2321,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     nested_directives
-                        .entry("cache")
+                        .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -2308,7 +2345,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     nested_directives
-                        .entry("cache")
+                        .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -2338,7 +2375,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 nested_directives
-                    .entry("cache")
+                    .entry("cache".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -2364,7 +2401,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 nested_directives
-                    .entry("cache")
+                    .entry("cache".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -2504,6 +2541,7 @@ pub fn process_block(
                             .as_ref()
                             .ok_or_else(|| anyhow::anyhow!("if block must have children"))?,
                         snippets,
+                        diagnostics,
                     )?),
                     span: ferronconf::Span { line: 0, column: 0 },
                 }));
@@ -2528,6 +2566,7 @@ pub fn process_block(
                             .as_ref()
                             .ok_or_else(|| anyhow::anyhow!("if_not block must have children"))?,
                         snippets,
+                        diagnostics,
                     )?),
                     span: ferronconf::Span { line: 0, column: 0 },
                 }));
@@ -2552,6 +2591,7 @@ pub fn process_block(
                             anyhow::anyhow!("error_config block must have children")
                         })?,
                         snippets,
+                        diagnostics,
                     )?),
                     span: ferronconf::Span { line: 0, column: 0 },
                 }));
@@ -2707,7 +2747,7 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -2745,7 +2785,7 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -2791,7 +2831,7 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -2829,7 +2869,7 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -2875,7 +2915,7 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -2949,7 +2989,7 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
                                         }
                                         _ => None,
                                     })
@@ -3021,6 +3061,7 @@ pub fn process_block(
                                 // No-ops in Ferron 3
                                 // - is_rego is deprecated in Ferron 2
                                 // - set_constant would be unused aside `is_language` in Ferron 2
+                                diagnostics.todo(format!("Directive '{}' was ignored as it is a no-op in Ferron 3.", child.name()));
                             }
                             "is_language" => {
                                 let language = child
@@ -3092,12 +3133,14 @@ pub fn process_block(
                                 anyhow::anyhow!("location block must have children")
                             })?,
                             snippets,
+                            diagnostics,
                         )?),
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
                 } else {
                     // Since in Ferron 3 "location" blocks always strip base paths,
                     // we have to use "if" with custom "match" block.
+                    diagnostics.todo(format!("'location {location_path}' (with remove_base: false) is simulated using 'if' and 'match' blocks in Ferron 3."));
                     let match_id = rand::random::<u64>();
                     let match_id_str = format!("ferron2__location_{:x}", match_id);
                     statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
@@ -3130,6 +3173,7 @@ pub fn process_block(
                                 anyhow::anyhow!("location block must have children")
                             })?,
                             snippets,
+                            diagnostics,
                         )?),
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
@@ -3147,7 +3191,7 @@ pub fn process_block(
                     })
                     .ok_or(anyhow::anyhow!("snippet node must have a value"))?;
                 if let Some(snippet) = snippets.get(&value.to_string()).cloned() {
-                    statements.extend(process_block(&snippet, snippets)?.statements);
+                    statements.extend(process_block(&snippet, snippets, diagnostics)?.statements);
                 } else {
                     return Err(anyhow::anyhow!("snippet not found: {}", value));
                 }
@@ -3202,7 +3246,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 nested_directives
-                    .entry("http")
+                    .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3232,7 +3276,7 @@ pub fn process_block(
                         anyhow::anyhow!("timeout directive must have timeout duration")
                     })?;
                 nested_directives
-                    .entry("http")
+                    .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3257,7 +3301,7 @@ pub fn process_block(
                         anyhow::anyhow!("HTTP/2 integer directive must have integer value")
                     })?;
                 nested_directives
-                    .entry("http")
+                    .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3276,7 +3320,7 @@ pub fn process_block(
                     _ => true,
                 });
                 nested_directives
-                    .entry("http")
+                    .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3302,7 +3346,7 @@ pub fn process_block(
                     })
                     .ok_or_else(|| anyhow::anyhow!("Invalid value for buffer size"))?;
                 nested_directives
-                    .entry("http")
+                    .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3332,7 +3376,7 @@ pub fn process_block(
                         anyhow::anyhow!("listen_ip directive must have a string value")
                     })?;
                 nested_directives
-                    .entry("tcp")
+                    .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3354,7 +3398,7 @@ pub fn process_block(
                     _ => true,
                 });
                 nested_directives
-                    .entry("runtime")
+                    .entry("runtime".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3382,7 +3426,7 @@ pub fn process_block(
                         anyhow::anyhow!("tcp_send_buffer directive must have a buffer size")
                     })?;
                 nested_directives
-                    .entry("tcp")
+                    .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3410,7 +3454,7 @@ pub fn process_block(
                         anyhow::anyhow!("tcp_recv_buffer directive must have a buffer size")
                     })?;
                 nested_directives
-                    .entry("tcp")
+                    .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
@@ -3435,7 +3479,7 @@ pub fn process_block(
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
                     kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s))
+                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
                     }
                     _ => None,
                 });
@@ -3452,6 +3496,8 @@ pub fn process_block(
                         block: None,
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
+                } else {
+                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
                 }
             }
             "header_remove" => {
@@ -3478,7 +3524,7 @@ pub fn process_block(
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
                     kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s))
+                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
                     }
                     _ => None,
                 });
@@ -3495,6 +3541,8 @@ pub fn process_block(
                         block: None,
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
+                } else {
+                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
                 }
             }
             "server_administrator_email" => {
@@ -3547,6 +3595,7 @@ pub fn process_block(
                 if enabled {
                     // There isn't a direct replacement for "wwwredirect",
                     // so let's simulate it using "status" and "if"
+                    diagnostics.todo("'wwwredirect' is simulated using 'if' and 'status 301' blocks in Ferron 3.");
                     let match_id = rand::random::<u64>();
                     let match_id_str = format!("ferron2__wwwredirect_{:x}", match_id);
 
@@ -3718,7 +3767,10 @@ pub fn process_block(
             }
 
             // Unsupported
-            _ => {}
+            unsupported => {
+                diagnostics.todo(format!("Unsupported directive: {unsupported}"));
+                diagnostics.warn(format!("Directive '{unsupported}' is not supported and was ignored."));
+            }
         }
     }
 
@@ -3789,7 +3841,10 @@ fn duration_kdl_to_ferron(duration: &kdlite::dom::Value) -> Option<ferronconf::V
     }
 }
 
-fn convert_placeholders_into_interpolated_strings(templated: &str) -> ferronconf::Value {
+fn convert_placeholders_into_interpolated_strings(
+    templated: &str,
+    diagnostics: &mut MigrationDiagnostics,
+) -> ferronconf::Value {
     let mut parts: Vec<ferronconf::StringPart> = Vec::new();
     let mut remaining = templated.to_string();
     while let Some(start) = remaining.find('{') {
@@ -3823,6 +3878,7 @@ fn convert_placeholders_into_interpolated_strings(templated: &str) -> ferronconf
                     resolved.split('.').map(String::from).collect::<Vec<_>>(),
                 ));
             } else {
+                diagnostics.todo(format!("Unknown placeholder {{{placeholder}}} was ignored or kept as-is. Please verify manual conversion."));
                 parts.push(ferronconf::StringPart::Literal(format!(
                     "{{{placeholder}}}",
                 )));

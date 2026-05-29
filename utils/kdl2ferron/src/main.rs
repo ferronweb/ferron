@@ -67,7 +67,8 @@ fn main() {
     };
 
     // Convert the server configuration
-    let ferronconf_config = match translate(&kdl_config, &mut HashMap::new()) {
+    let mut diagnostics = crate::translate::MigrationDiagnostics::new();
+    let ferronconf_config = match translate(&kdl_config, &mut HashMap::new(), &mut diagnostics) {
         Ok(config) => config,
         Err(err) => {
             eprintln!("Error converting the server configuration: {err}");
@@ -75,9 +76,24 @@ fn main() {
         }
     };
 
+    // Prepare output content with TODOs as comments at the start
+    let mut output_content = String::new();
+    for todo in diagnostics.todos {
+        output_content.push_str(&format!("# TODO(ferron-migrate): {todo}\n"));
+    }
+    if !output_content.is_empty() {
+        output_content.push('\n');
+    }
+    output_content.push_str(&ferronconf_config.to_string());
+
     // Write the converted server configuration
-    if let Err(err) = fs::write(output_pathbuf, ferronconf_config.to_string()) {
+    if let Err(err) = fs::write(output_pathbuf, output_content) {
         eprintln!("Error writing the server configuration: {err}");
         std::process::exit(1);
+    }
+
+    // Report warnings to stderr
+    for warning in diagnostics.warnings {
+        eprintln!("Warning: {warning}");
     }
 }
