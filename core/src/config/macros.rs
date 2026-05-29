@@ -678,7 +678,7 @@ macro_rules! validate_directive {
 macro_rules! validate_args {
     // Single pattern (may include "or" patterns like Type1 | Type2)
     ($directive:expr, [$pattern:pat $(if $guard:expr)?]) => {
-        if !matches!($directive.args[0], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[0], $pattern $(if $guard)?) {
             return Err("Invalid directive: argument type mismatch at position 0".into());
         }
     };
@@ -690,7 +690,7 @@ macro_rules! validate_args {
 
     // Internal: process multiple patterns with index counter
     (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
-        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
             return Err(format!(
                 "Invalid directive: argument type mismatch at position {}",
                 $idx
@@ -699,7 +699,7 @@ macro_rules! validate_args {
     };
 
     (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
-        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
             return Err(format!(
                 "Invalid directive: argument type mismatch at position {}",
                 $idx
@@ -714,11 +714,11 @@ macro_rules! validate_args {
     };
 
     (@check_impl $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
-        matches!($directive.args[$idx], $pattern $(if $guard)?)
+        !$directive.args.is_empty() && matches!($directive.args[$idx], $pattern $(if $guard)?)
     };
 
     (@check_impl $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
-        matches!($directive.args[$idx], $pattern $(if $guard)?) &&
+        !$directive.args.is_empty() && matches!($directive.args[$idx], $pattern $(if $guard)?) &&
         $crate::validate_args!(@check_impl $directive, $idx + 1, [$($rest)+])
     };
 }
@@ -889,7 +889,7 @@ macro_rules! validate_nested {
     };
 
     (@check_args_impl $block:expr, $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?], $subdirective_name:ident) => {
-        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
             return Err(format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                 stringify!($block), stringify!($subdirective_name), $idx
@@ -898,7 +898,7 @@ macro_rules! validate_nested {
     };
 
     (@check_args_impl $block:expr, $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+], $subdirective_name:ident) => {
-        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+        if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
             return Err(format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                 stringify!($block), stringify!($subdirective_name), $idx
@@ -1181,11 +1181,11 @@ macro_rules! validate_nested {
     };
 
     (@check_bool_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
-        matches!($directive.args[$idx], $pattern $(if $guard)?)
+       !$directive.args.is_empty() && matches!($directive.args[$idx], $pattern $(if $guard)?)
     };
 
     (@check_bool_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
-        matches!($directive.args[$idx], $pattern $(if $guard)?) &&
+        !$directive.args.is_empty() && matches!($directive.args[$idx], $pattern $(if $guard)?) &&
         $crate::validate_nested!(@check_bool_impl $directive, $idx + 1, [$($rest)+])
     };
 }
