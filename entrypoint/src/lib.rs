@@ -577,6 +577,7 @@ pub(crate) fn run(
         config_adapter_params,
         global_validator_registry,
         per_protocol_validator_registry,
+        #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(scoped_validator_registry),
     )?;
 
@@ -613,6 +614,7 @@ fn validate(
         &config,
         &global_validator_registry,
         &per_protocol_validator_registry,
+        #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(scoped_validator_registry),
     )?;
 
