@@ -49,9 +49,9 @@ pub fn translate(
                             .as_path(),
                     )
                     .map_err(|e| anyhow::anyhow!("can't parse kdl file: {}", e))?;
-                    config.statements.extend(
-                        translate(&kdl_document, snippets, diagnostics)?.statements,
-                    );
+                    config
+                        .statements
+                        .extend(translate(&kdl_document, snippets, diagnostics)?.statements);
                 }
             }
             "snippet" => {
@@ -696,7 +696,12 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
+                        .entry(
+                            node.name()
+                                .strip_suffix("_environment")
+                                .unwrap_or(node.name())
+                                .to_string(),
+                        )
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -718,7 +723,10 @@ pub fn process_block(
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
                 } else {
-                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
+                    diagnostics.warn(format!(
+                        "Directive '{}' was ignored because it is missing a name or value.",
+                        node.name()
+                    ));
                 }
             }
             "scgi" => {
@@ -749,7 +757,12 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
+                        .entry(
+                            node.name()
+                                .strip_suffix("_environment")
+                                .unwrap_or(node.name())
+                                .to_string(),
+                        )
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -771,7 +784,10 @@ pub fn process_block(
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
                 } else {
-                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
+                    diagnostics.warn(format!(
+                        "Directive '{}' was ignored because it is missing a name or value.",
+                        node.name()
+                    ));
                 }
             }
             "fcgi" => {
@@ -880,7 +896,12 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     nested_directives
-                        .entry(node.name().strip_suffix("_environment").unwrap_or(node.name()).to_string())
+                        .entry(
+                            node.name()
+                                .strip_suffix("_environment")
+                                .unwrap_or(node.name())
+                                .to_string(),
+                        )
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
@@ -902,7 +923,10 @@ pub fn process_block(
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
                 } else {
-                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
+                    diagnostics.warn(format!(
+                        "Directive '{}' was ignored because it is missing a name or value.",
+                        node.name()
+                    ));
                 }
             }
             "trust_x_forwarded_for" => {
@@ -1644,7 +1668,8 @@ pub fn process_block(
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
                 } else {
-                    diagnostics.warn("Directive 'proxy' was ignored because it is missing a target.");
+                    diagnostics
+                        .warn("Directive 'proxy' was ignored because it is missing a target.");
                 }
                 for entry in &node.entries[1..] {
                     if let Some(key) = entry.key() {
@@ -2096,9 +2121,9 @@ pub fn process_block(
                     _ => None,
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
-                    kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
-                    }
+                    kdlite::dom::Value::String(s) => Some(
+                        convert_placeholders_into_interpolated_strings(s, diagnostics),
+                    ),
                     _ => None,
                 });
 
@@ -2747,7 +2772,10 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -2785,7 +2813,10 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -2831,7 +2862,10 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -2869,7 +2903,10 @@ pub fn process_block(
                                     .get(1)
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -2915,7 +2952,10 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -2989,7 +3029,10 @@ pub fn process_block(
                                     .first()
                                     .and_then(|e| match &e.value {
                                         kdlite::dom::Value::String(v) => {
-                                            Some(convert_placeholders_into_interpolated_strings(v, diagnostics))
+                                            Some(convert_placeholders_into_interpolated_strings(
+                                                v,
+                                                diagnostics,
+                                            ))
                                         }
                                         _ => None,
                                     })
@@ -3061,7 +3104,10 @@ pub fn process_block(
                                 // No-ops in Ferron 3
                                 // - is_rego is deprecated in Ferron 2
                                 // - set_constant would be unused aside `is_language` in Ferron 2
-                                diagnostics.todo(format!("Directive '{}' was ignored as it is a no-op in Ferron 3.", child.name()));
+                                diagnostics.todo(format!(
+                                    "Directive '{}' was ignored as it is a no-op in Ferron 3.",
+                                    child.name()
+                                ));
                             }
                             "is_language" => {
                                 let language = child
@@ -3478,9 +3524,9 @@ pub fn process_block(
                     _ => None,
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
-                    kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
-                    }
+                    kdlite::dom::Value::String(s) => Some(
+                        convert_placeholders_into_interpolated_strings(s, diagnostics),
+                    ),
                     _ => None,
                 });
                 if let (Some(name), Some(value)) = (name, value) {
@@ -3497,7 +3543,10 @@ pub fn process_block(
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
                 } else {
-                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
+                    diagnostics.warn(format!(
+                        "Directive '{}' was ignored because it is missing a name or value.",
+                        node.name()
+                    ));
                 }
             }
             "header_remove" => {
@@ -3523,9 +3572,9 @@ pub fn process_block(
                     _ => None,
                 });
                 let value = node.entries.get(1).and_then(|e| match &e.value {
-                    kdlite::dom::Value::String(s) => {
-                        Some(convert_placeholders_into_interpolated_strings(s, diagnostics))
-                    }
+                    kdlite::dom::Value::String(s) => Some(
+                        convert_placeholders_into_interpolated_strings(s, diagnostics),
+                    ),
                     _ => None,
                 });
                 if let (Some(name), Some(value)) = (name, value) {
@@ -3542,7 +3591,10 @@ pub fn process_block(
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
                 } else {
-                    diagnostics.warn(format!("Directive '{}' was ignored because it is missing a name or value.", node.name()));
+                    diagnostics.warn(format!(
+                        "Directive '{}' was ignored because it is missing a name or value.",
+                        node.name()
+                    ));
                 }
             }
             "server_administrator_email" => {
@@ -3769,7 +3821,9 @@ pub fn process_block(
             // Unsupported
             unsupported => {
                 diagnostics.todo(format!("Unsupported directive: {unsupported}"));
-                diagnostics.warn(format!("Directive '{unsupported}' is not supported and was ignored."));
+                diagnostics.warn(format!(
+                    "Directive '{unsupported}' is not supported and was ignored."
+                ));
             }
         }
     }
