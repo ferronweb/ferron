@@ -28,6 +28,8 @@ impl ConfigurationValidator for AdminConfigurationValidator {
                 ferron_core::validate_nested!(admin, status, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 ferron_core::validate_nested!(admin, config, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 ferron_core::validate_nested!(admin, reload, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, reload_get, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, runtime, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             });
         }
 
