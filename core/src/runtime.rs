@@ -50,6 +50,11 @@ impl Runtime {
         );
         let mut primary_task_channels = Vec::with_capacity(available_parallelism);
 
+        {
+            let mut runtime_metrics = crate::admin::ADMIN_METRICS.runtime_metrics.write();
+            runtime_metrics.primary_threads = available_parallelism;
+        }
+
         for i in 0..available_parallelism {
             let core_id = core_ids
                 .as_ref()
@@ -73,6 +78,9 @@ impl Runtime {
                 if !use_io_uring {
                     // Disable `io_uring` driver manually
                     rt_builder = rt_builder.driver(vibeio::DriverKind::Mio);
+                } else {
+                    let mut runtime_metrics = crate::admin::ADMIN_METRICS.runtime_metrics.write();
+                    runtime_metrics.io_uring_supported = true;
                 }
 
                 let rt = rt_builder
@@ -80,14 +88,20 @@ impl Runtime {
                     .expect("failed to create vibeio runtime for primary tasks");
 
                 rt.block_on(async move {
-                    if use_io_uring && !vibeio::util::supports_completion() {
-                        IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
-                            log_warn!(
-                                "io_uring is enabled in configuration and \
+                    {
+                        let mut runtime_metrics =
+                            crate::admin::ADMIN_METRICS.runtime_metrics.write();
+                        runtime_metrics.io_uring_runtime_enabled = true;
+                        if use_io_uring && !vibeio::util::supports_completion() {
+                            IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
+                                log_warn!(
+                                    "io_uring is enabled in configuration and \
                                  supported on this system, but failed to \
                                  initialize io_uring; falling back to epoll"
-                            );
-                        });
+                                );
+                            });
+                            runtime_metrics.io_uring_runtime_enabled = false;
+                        }
                     }
                     while let Some(task_factory) = rx.recv().await {
                         vibeio::spawn((task_factory.as_ref())());

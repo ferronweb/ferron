@@ -1187,6 +1187,7 @@ version = "3.0.0-beta.1"
 dependencies = [
  "arc-swap",
  "axum",
+ "chrono",
  "ferron-core",
  "serde_json",
  "tokio",

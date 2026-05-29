@@ -92,4 +92,71 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("1"),
         description: Some("Approximate current length of the observability event queue."),
     }));
+
+    // --- Reload metrics ---
+    {
+        let reload_metrics = metrics.reload_metrics.read();
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.reload.successful",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(if reload_metrics.last_reload_error.is_some() {
+                0
+            } else {
+                1
+            }),
+            unit: Some("1"),
+            description: Some("Whether the last configuration reload was successful."),
+        }));
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.reload.active_generation",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(reload_metrics.active_generation),
+            unit: Some("1"),
+            description: Some("Active generation of the configuration being reloaded."),
+        }));
+    }
+
+    // --- Runtime metrics ---
+    {
+        let runtime_metrics = metrics.runtime_metrics.read();
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.primary_threads",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(runtime_metrics.primary_threads as u64),
+            unit: Some("1"),
+            description: Some("Number of primary threads."),
+        }));
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.io_uring_supported",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(if runtime_metrics.io_uring_supported {
+                1
+            } else {
+                0
+            }),
+            unit: Some("1"),
+            description: Some("Whether io_uring is supported."),
+        }));
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.io_uring_runtime_enabled",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(if runtime_metrics.io_uring_runtime_enabled {
+                1
+            } else {
+                0
+            }),
+            unit: Some("1"),
+            description: Some("Whether io_uring is enabled at runtime."),
+        }));
+    }
 }

@@ -7,7 +7,10 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use crate::config::AdminConfig;
-use crate::handlers::{config_handler, health_handler, reload_handler, status_handler, AdminState};
+use crate::handlers::{
+    config_handler, health_handler, reload_get_handler, reload_handler, runtime_handler,
+    status_handler, AdminState,
+};
 
 /// Build the admin API axum router.
 ///
@@ -27,6 +30,12 @@ pub fn build_admin_router(config: &AdminConfig, state: AdminState) -> Router {
     }
     if config.reload {
         router = router.route("/reload", post(reload_handler));
+    }
+    if config.reload_get {
+        router = router.route("/reload", get(reload_get_handler));
+    }
+    if config.runtime {
+        router = router.route("/runtime", get(runtime_handler));
     }
 
     // Fallback for any unmatched admin paths

@@ -646,6 +646,8 @@ fn load_modules(
             registry.clone(),
         ) {
             Ok((config, watcher, modules)) => {
+                let first_time = runtime.is_none();
+
                 let mut layered_config = LayeredConfiguration::new();
                 layered_config.add_layer(config.global_config.clone());
                 let io_uring_enabled = layered_config
@@ -666,12 +668,23 @@ fn load_modules(
                     module.start(runtime)?;
                 }
 
+                if !first_time {
+                    let mut reload_metrics =
+                        ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
+                    reload_metrics.last_reload_error = None;
+                    reload_metrics.active_generation =
+                        reload_metrics.active_generation.saturating_add(1);
+                }
+
                 (runtime, watcher)
             }
             Err(e) => {
                 if let (Some(runtime), Some(watcher)) =
                     (runtime.as_mut(), watcher.borrow_mut().take())
                 {
+                    let mut reload_metrics =
+                        ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
+                    reload_metrics.last_reload_error = Some(e.to_string());
                     ferron_core::log_warn!(
                         "Can't reload the server, \
                         continuing to run with the previous configuration: {e}"
@@ -711,6 +724,11 @@ fn load_modules(
             ferron_core::admin::ADMIN_METRICS
                 .reloads
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            {
+                // Update reload metrics
+                let mut reload_metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
+                reload_metrics.last_reload_time = std::time::SystemTime::now();
+            }
             log_info!("Reloading configuration...");
         }
     }

@@ -20,8 +20,12 @@ pub struct AdminConfig {
     pub status: bool,
     /// Whether the `/config` endpoint is enabled.
     pub config: bool,
-    /// Whether the `/reload` endpoint is enabled.
+    /// Whether the `/reload` POST endpoint is enabled.
     pub reload: bool,
+    /// Whether the `/reload` GET endpoint is enabled.
+    pub reload_get: bool,
+    /// Whether the `/runtime` endpoint is enabled.
+    pub runtime: bool,
 }
 
 impl AdminConfig {
@@ -40,6 +44,8 @@ impl AdminConfig {
         let status = parse_bool_flag(admin_block, "status").unwrap_or(true);
         let config = parse_bool_flag(admin_block, "config").unwrap_or(true);
         let reload = parse_bool_flag(admin_block, "reload").unwrap_or(true);
+        let reload_get = parse_bool_flag(admin_block, "reload_get").unwrap_or(true);
+        let runtime = parse_bool_flag(admin_block, "runtime").unwrap_or(true);
 
         Some(Self {
             listen,
@@ -47,6 +53,8 @@ impl AdminConfig {
             status,
             config,
             reload,
+            reload_get,
+            runtime,
         })
     }
 }
@@ -73,16 +81,5 @@ fn parse_bool_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<
         return Some(true);
     }
 
-    let value = entry.args.first()?;
-    if let Some(b) = value.as_boolean() {
-        Some(b)
-    } else if let Some(s) = value.as_str() {
-        match s {
-            "true" => Some(true),
-            "false" => Some(false),
-            _ => None,
-        }
-    } else {
-        None
-    }
+    Some(entry.get_flag())
 }

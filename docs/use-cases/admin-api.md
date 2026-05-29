@@ -20,6 +20,8 @@ The recommended default binds the admin API to the loopback interface and enable
         status false
         config false
         reload true
+        reload_get true
+        runtime true
     }
 }
 ```
@@ -39,6 +41,8 @@ If your server runs inside a container or is managed by an orchestrator (Docker,
         status false
         config false
         reload false
+        reload_get false
+        runtime false
     }
 }
 ```
@@ -64,6 +68,8 @@ curl http://127.0.0.1:8081/health
 curl http://127.0.0.1:8081/status
 curl http://127.0.0.1:8081/config
 curl -X POST http://127.0.0.1:8081/reload
+curl http://127.0.0.1:8081/reload
+curl http://127.0.0.1:8081/runtime
 ```
 
 The SSH connection provides encryption and authentication, compensating for the lack of TLS and auth in the admin API itself.
@@ -110,6 +116,8 @@ For operators who only need to check server status:
         status true
         config true
         reload false
+        reload_get false
+        runtime false
     }
 }
 ```
@@ -127,6 +135,8 @@ For operators who need to manage the server:
         status true
         config true
         reload true
+        reload_get true
+        runtime true
     }
 }
 ```
@@ -144,6 +154,8 @@ For deployments where only health monitoring is needed:
         status false
         config false
         reload false
+        reload_get false
+        runtime false
     }
 }
 ```
@@ -153,7 +165,7 @@ For deployments where only health monitoring is needed:
 Use this checklist to verify your admin API is properly secured:
 
 - [ ] The `listen` address is set to `127.0.0.1` (or another loopback address).
-- [ ] Unnecessary endpoints are disabled (`status false`, `config false`, `reload false`).
+- [ ] Unnecessary endpoints are disabled (`status false`, `config false`, `reload false`, `reload_get false`, `runtime false`).
 - [ ] No firewall rule allows external traffic to the admin port.
 - [ ] Remote access uses SSH tunneling or an authenticating reverse proxy.
 - [ ] The admin API is **never** bound to `0.0.0.0` or a public IP address.
@@ -176,13 +188,17 @@ If nothing is listed, check Ferron's logs for startup errors. The admin block mu
 
 The admin API is not designed for remote access. Use SSH tunneling or a reverse proxy as described in [Accessing the admin API from a remote machine](#accessing-the-admin-api-from-a-remote-machine).
 
+### `GET /reload` returns an error
+
+The `GET /reload` endpoint requires `reload_get true` in the admin configuration. If it returns an error, check that the endpoint is enabled.
+
 ### `POST /reload` returns an error
 
-The `reload` endpoint requires `reload true` in the admin configuration. If it returns an error, check that the endpoint is enabled and that the new configuration file is valid. Use `ferron validate -c ferron.conf` before reloading to catch configuration errors.
+The `POST /reload` endpoint requires `reload true` in the admin configuration. If it returns an error, check that the endpoint is enabled and that the new configuration file is valid. Use `ferron validate -c ferron.conf` before reloading to catch configuration errors.
 
 ### `GET /config` shows redacted values
 
-Sensitive values (TLS keys, passwords, tokens) are automatically redacted and replaced with `"[redacted]"`. This is intentional and cannot be disabled. The redacted configuration is still useful for auditing routing rules, upstream addresses, and host configuration.
+Sensitive values (TLS keys, passwords, tokens, bearer credentials, and htpasswd entries) are automatically redacted and replaced with `"[redacted]"`. This is intentional and cannot be disabled. The redacted configuration is still useful for auditing routing rules, upstream addresses, and host configuration.
 
 ### Admin API stops responding after a configuration change
 
@@ -200,6 +216,8 @@ If you have bound the admin API to `0.0.0.0`, change it to `127.0.0.1` immediate
         status false
         config false
         reload true
+        reload_get false
+        runtime false
     }
 }
 ```

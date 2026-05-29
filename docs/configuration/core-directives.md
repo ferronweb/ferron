@@ -135,6 +135,10 @@ The `admin` block configures the built-in administration endpoints. If the `admi
   - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
 - `reload <bool>` (`admin-api`)
   - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
+- `reload_get <bool>` (`admin-api`)
+  - This directive specifies whether the `GET /reload` endpoint is enabled. Returns the current reload status. Default: `reload_get true`
+- `runtime <bool>` (`admin-api`)
+  - This directive specifies whether the `GET /runtime` endpoint is enabled. Returns runtime information such as thread count and io_uring status. Default: `runtime true`
 
 **Configuration example:**
 
@@ -147,6 +151,8 @@ The `admin` block configures the built-in administration endpoints. If the `admi
         status true
         config true
         reload true
+        reload_get true
+        runtime true
     }
 }
 ```
@@ -155,7 +161,7 @@ Notes:
 
 - All endpoint flags accept `true` or `false`. A bare directive without a value (e.g. `health`) counts as enabled.
 - The admin listener runs on a separate secondary Tokio runtime, isolated from the primary data-plane runtime.
-- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`.
+- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, `htpasswd`.
 
 ### Observability
 
@@ -423,9 +429,45 @@ Returns JSON with server metrics:
 
 Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
 
+#### `GET /reload`
+
+Returns the current reload status as JSON:
+
+```json
+{
+  "last_reload_time": "2026-05-29T12:00:00Z",
+  "last_reload_error": null,
+  "active_generation": 42
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `last_reload_time` | ISO 8601 timestamp of the last reload attempt. |
+| `last_reload_error` | Error message from the last reload, or `null` if successful. |
+| `active_generation` | The configuration generation number currently in effect. |
+
 #### `POST /reload`
 
 Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
+
+#### `GET /runtime`
+
+Returns the runtime status as JSON:
+
+```json
+{
+  "primary_threads": 8,
+  "io_uring_supported": true,
+  "io_uring_runtime_enabled": true
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `primary_threads` | Number of primary threads (typically equal to CPU count). |
+| `io_uring_supported` | Whether `io_uring` is supported on the current system. |
+| `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime. |
 
 ## Notes and troubleshooting
 
