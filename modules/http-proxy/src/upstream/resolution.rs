@@ -154,7 +154,7 @@ pub fn determine_proxy_to(
                 .then_some(circuit_breaker_state)
                 .flatten()
                 .and_then(|s| s.get(&upstream))
-                .map_or(false, |s| matches!(s.status, CircuitBreakerStatus::Open));
+                .is_some_and(|s| matches!(s.status, CircuitBreakerStatus::Open));
 
             if open {
                 metrics.excluded_circuit_open.push(Arc::clone(&upstream));
