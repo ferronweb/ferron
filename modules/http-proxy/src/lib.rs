@@ -500,17 +500,15 @@ impl Module for ReverseProxyModule {
                         "worker",
                         MetricAttributeValue::String(format!("{:?}", thread_id)),
                     ));
-                    let _ = pool_sink.emit(Event::Metric(MetricEvent {
+                    pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.pool.idle",
                         attributes: attrs.clone(),
                         ty: MetricType::Gauge,
                         value: MetricValue::U64(idle as u64),
                         unit: Some("{connection}"),
-                        description: Some(
-                            "Current number of idle connections in the pool.",
-                        ),
+                        description: Some("Current number of idle connections in the pool."),
                     }));
-                    let _ = pool_sink.emit(Event::Metric(MetricEvent {
+                    pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.pool.outstanding",
                         attributes: attrs,
                         ty: MetricType::Gauge,
@@ -934,71 +932,82 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // --- Retry metrics ---
         if metrics.retry_count > 0 {
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.retry.count",
-                attributes: upstream_attrs.clone(),
-                ty: MetricType::Counter,
-                value: MetricValue::U64(metrics.retry_count),
-                unit: Some("{attempt}"),
-                description: Some("Number of retry attempts during backend selection."),
-            }));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.retry.count",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(metrics.retry_count),
+                    unit: Some("{attempt}"),
+                    description: Some("Number of retry attempts during backend selection."),
+                }));
             let mut final_attrs = upstream_attrs.clone();
-            final_attrs.push((
-                "ferron.proxy.retry.final",
-                MetricAttributeValue::Bool(true),
-            ));
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
+            final_attrs.push(("ferron.proxy.retry.final", MetricAttributeValue::Bool(true)));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
                 name: "ferron.proxy.retry.final",
                 attributes: final_attrs,
                 ty: MetricType::Gauge,
                 value: MetricValue::U64(1),
                 unit: Some("{request}"),
-                description: Some("Indicates the request succeeded after a retry (1) or required no retries (0)."),
+                description: Some(
+                    "Indicates the request succeeded after a retry (1) or required no retries (0).",
+                ),
             }));
         }
 
         // --- Pool hit / miss ---
         if metrics.pool_hit {
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.pool.hit",
-                attributes: upstream_attrs.clone(),
-                ty: MetricType::Counter,
-                value: MetricValue::U64(1),
-                unit: Some("{request}"),
-                description: Some("A pooled connection was available immediately."),
-            }));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.hit",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("A pooled connection was available immediately."),
+                }));
         }
         if metrics.pool_miss {
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.pool.miss",
-                attributes: upstream_attrs.clone(),
-                ty: MetricType::Counter,
-                value: MetricValue::U64(1),
-                unit: Some("{request}"),
-                description: Some("No pooled connection was available; a new connection was established."),
-            }));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.miss",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "No pooled connection was available; a new connection was established.",
+                    ),
+                }));
         }
 
         // --- Connection latency histograms ---
         if metrics.connect_time_secs > 0.0 {
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.connect.latency",
-                attributes: upstream_attrs.clone(),
-                ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
-                value: MetricValue::F64(metrics.connect_time_secs),
-                unit: Some("s"),
-                description: Some("Duration of TCP/TLS connection establishment to the upstream."),
-            }));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.connect.latency",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
+                    value: MetricValue::F64(metrics.connect_time_secs),
+                    unit: Some("s"),
+                    description: Some(
+                        "Duration of TCP/TLS connection establishment to the upstream.",
+                    ),
+                }));
         }
         if metrics.ttfb_secs > 0.0 {
-            ctx.events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.ttfb",
-                attributes: upstream_attrs.clone(),
-                ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
-                value: MetricValue::F64(metrics.ttfb_secs),
-                unit: Some("s"),
-                description: Some("Time from request send to first byte of response headers received."),
-            }));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.ttfb",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
+                    value: MetricValue::F64(metrics.ttfb_secs),
+                    unit: Some("s"),
+                    description: Some(
+                        "Time from request send to first byte of response headers received.",
+                    ),
+                }));
         }
 
         // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend

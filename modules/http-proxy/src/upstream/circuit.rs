@@ -450,10 +450,10 @@ mod tests {
             Some(&circuit_breaker_state),
             None,
             None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-    )
+            &RwLock::new(ConsistentHashRing::new(&[])),
+            &ferron_observability::CompositeEventSink::new(vec![]),
+            &mut crate::ProxyMetrics::new(),
+        )
         .unwrap();
 
         assert_eq!(result.upstream.proxy_to, "http://backend2");

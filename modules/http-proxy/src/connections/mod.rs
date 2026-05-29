@@ -59,16 +59,22 @@ static PENDING_PULLS: LazyLock<
 pub static POOL_STATS: LazyLock<PoolStatsCollector> = LazyLock::new(PoolStatsCollector::new);
 
 pub struct PoolStatsCollector {
-    inner: DashMap<(std::thread::ThreadId, Arc<UpstreamInner>), (AtomicUsize, AtomicUsize), FxBuildHasher>,
+    inner: DashMap<
+        (std::thread::ThreadId, Arc<UpstreamInner>),
+        (AtomicUsize, AtomicUsize),
+        FxBuildHasher,
+    >,
 }
 
 impl PoolStatsCollector {
+    #[inline]
     pub fn new() -> Self {
         Self {
             inner: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
+    #[inline]
     pub fn record_pull(&self, upstream: &Arc<UpstreamInner>) {
         let entry = self
             .inner
@@ -77,6 +83,7 @@ impl PoolStatsCollector {
         entry.value().1.fetch_add(1, Ordering::Relaxed);
     }
 
+    #[inline]
     pub fn record_return(&self, upstream: &Arc<UpstreamInner>, stored: bool) {
         let entry = self
             .inner
@@ -90,6 +97,8 @@ impl PoolStatsCollector {
         }
     }
 
+    #[allow(clippy::type_complexity)]
+    #[inline]
     pub fn snapshot(&self) -> Vec<((std::thread::ThreadId, Arc<UpstreamInner>), (usize, usize))> {
         self.inner
             .iter()

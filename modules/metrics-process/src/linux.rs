@@ -130,6 +130,7 @@ pub async fn collect_process_metrics(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_metrics(
     event_sink: &CompositeEventSink,
     cpu_user_time_increase: f64,
