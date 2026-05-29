@@ -15,9 +15,9 @@ impl Provider<DnsContext<'static>> for NetcupDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let customer_number = required_string(ctx, "customer_number", "netcup", "customer number")?;
-        let api_key = required_string(ctx, "api_key", "netcup", "API key")?;
-        let api_password = required_string(ctx, "api_password", "netcup", "API password")?;
+        let customer_number = required_string(ctx, "customer_number", "netcup")?;
+        let api_key = required_string(ctx, "api_key", "netcup")?;
+        let api_password = required_string(ctx, "api_password", "netcup")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_netcup(&customer_number, &api_key, &api_password, None)?,

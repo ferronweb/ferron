@@ -17,11 +17,11 @@ impl Provider<DnsContext<'static>> for BlueCatV2DnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = BluecatV2Config {
-            server_url: required_string(ctx, "server_url", "bluecatv2", "server URL")?,
-            username: required_string(ctx, "username", "bluecatv2", "username")?,
-            password: required_string(ctx, "password", "bluecatv2", "password")?,
-            config_name: required_string(ctx, "config_name", "bluecatv2", "config name")?,
-            view_name: required_string(ctx, "view_name", "bluecatv2", "view name")?,
+            server_url: required_string(ctx, "server_url", "bluecatv2")?,
+            username: required_string(ctx, "username", "bluecatv2")?,
+            password: required_string(ctx, "password", "bluecatv2")?,
+            config_name: required_string(ctx, "config_name", "bluecatv2")?,
+            view_name: required_string(ctx, "view_name", "bluecatv2")?,
             skip_deploy: opt_bool(ctx, "skip_deploy").unwrap_or(false),
             request_timeout: None,
         };

@@ -15,9 +15,8 @@ impl Provider<DnsContext<'static>> for TransipDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let login = required_string(ctx, "login", "transip", "login")?;
-        let private_key_pem =
-            required_string(ctx, "private_key_pem", "transip", "private key PEM")?;
+        let login = required_string(ctx, "login", "transip")?;
+        let private_key_pem = required_string(ctx, "private_key_pem", "transip")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_transip(&login, &private_key_pem, None)?,

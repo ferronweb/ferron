@@ -17,13 +17,8 @@ impl Provider<DnsContext<'static>> for Route53DnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = Route53Config {
-            access_key_id: required_string(ctx, "access_key_id", "route53", "access key ID")?,
-            secret_access_key: required_string(
-                ctx,
-                "secret_access_key",
-                "route53",
-                "secret access key",
-            )?,
+            access_key_id: required_string(ctx, "access_key_id", "route53")?,
+            secret_access_key: required_string(ctx, "secret_access_key", "route53")?,
             region: opt_string(ctx, "region"),
             session_token: opt_string(ctx, "session_token"),
             hosted_zone_id: opt_string(ctx, "hosted_zone_id"),

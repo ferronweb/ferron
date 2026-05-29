@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for ConstellixDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "constellix", "API key")?;
-        let secret_key = required_string(ctx, "secret_key", "constellix", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "constellix")?;
+        let secret_key = required_string(ctx, "secret_key", "constellix")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_constellix(&api_key, &secret_key, None)?,

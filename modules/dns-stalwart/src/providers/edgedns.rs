@@ -17,10 +17,10 @@ impl Provider<DnsContext<'static>> for EdgeDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = EdgeDnsConfig {
-            host: required_string(ctx, "host", "edgedns", "host")?,
-            client_token: required_string(ctx, "client_token", "edgedns", "client token")?,
-            client_secret: required_string(ctx, "client_secret", "edgedns", "client secret")?,
-            access_token: required_string(ctx, "access_token", "edgedns", "access token")?,
+            host: required_string(ctx, "host", "edgedns")?,
+            client_token: required_string(ctx, "client_token", "edgedns")?,
+            client_secret: required_string(ctx, "client_secret", "edgedns")?,
+            access_token: required_string(ctx, "access_token", "edgedns")?,
             account_switch_key: opt_string(ctx, "account_switch_key"),
             request_timeout: None,
         };

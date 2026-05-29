@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for LuaDnsDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_username = required_string(ctx, "api_username", "luadns", "API username")?;
-        let api_token = required_string(ctx, "api_token", "luadns", "API token")?;
+        let api_username = required_string(ctx, "api_username", "luadns")?;
+        let api_token = required_string(ctx, "api_token", "luadns")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_luadns(&api_username, &api_token, None)?,

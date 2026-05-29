@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for DomeneshopDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_token = required_string(ctx, "api_token", "domeneshop", "API token")?;
-        let api_secret = required_string(ctx, "api_secret", "domeneshop", "API secret")?;
+        let api_token = required_string(ctx, "api_token", "domeneshop")?;
+        let api_secret = required_string(ctx, "api_secret", "domeneshop")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_domeneshop(&api_token, &api_secret, None)?,

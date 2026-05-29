@@ -17,7 +17,7 @@ impl Provider<DnsContext<'static>> for ClouDNSProvider {
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let auth_id = opt_string(ctx, "auth_id");
         let sub_auth_id = opt_string(ctx, "sub_auth_id");
-        let password = required_string(ctx, "password", "cloudns", "password")?;
+        let password = required_string(ctx, "password", "cloudns")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_cloudns(auth_id, sub_auth_id, &password, None)?,

@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for UltraDnsDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let username = required_string(ctx, "username", "ultradns", "username")?;
-        let password = required_string(ctx, "password", "ultradns", "password")?;
+        let username = required_string(ctx, "username", "ultradns")?;
+        let password = required_string(ctx, "password", "ultradns")?;
         let endpoint = opt_string(ctx, "endpoint");
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(

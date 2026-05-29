@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for PorkbunDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "porkbun", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "porkbun", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "porkbun")?;
+        let api_secret = required_string(ctx, "api_secret", "porkbun")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_porkbun(&api_key, &api_secret, None)?,

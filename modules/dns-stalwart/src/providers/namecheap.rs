@@ -15,9 +15,9 @@ impl Provider<DnsContext<'static>> for NamecheapDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "namecheap", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "namecheap", "API secret")?;
-        let client_ip = required_string(ctx, "client_ip", "namecheap", "client IP")?;
+        let api_key = required_string(ctx, "api_key", "namecheap")?;
+        let api_secret = required_string(ctx, "api_secret", "namecheap")?;
+        let client_ip = required_string(ctx, "client_ip", "namecheap")?;
         let username = opt_string(ctx, "username");
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
