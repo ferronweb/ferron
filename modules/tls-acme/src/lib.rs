@@ -700,7 +700,7 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         >,
     ) {
         registry.insert(
-            config_validator_scoped_key!("tls", "local"),
+            config_validator_scoped_key!("tls", "acme"),
             Box::new(validator::TlsAcmeConfigurationValidator),
         );
     }

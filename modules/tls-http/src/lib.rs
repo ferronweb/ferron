@@ -179,7 +179,7 @@ impl ModuleLoader for TlsHttpModuleLoader {
         >,
     ) {
         registry.insert(
-            config_validator_scoped_key!("tls", "local"),
+            config_validator_scoped_key!("tls", "http"),
             Box::new(validator::TlsHttpConfigurationValidator),
         );
     }
