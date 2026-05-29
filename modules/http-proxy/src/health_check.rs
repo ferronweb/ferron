@@ -335,6 +335,43 @@ fn process_probe_result(
         false
     };
 
+    // Emit health check metrics
+    use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+    let duration_secs = result.response_time.as_secs_f64();
+    let health_attrs = vec![(
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(upstream_url.to_string()),
+    )];
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.health.duration",
+        attributes: health_attrs.clone(),
+        ty: MetricType::Histogram(None),
+        value: MetricValue::F64(duration_secs),
+        unit: Some("s"),
+        description: Some("Duration of active health check probe."),
+    }));
+
+    if probe_success {
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.health.success",
+            attributes: health_attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{probe}"),
+            description: Some("Successful active health check probes."),
+        }));
+    } else {
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.health.failure",
+            attributes: health_attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{probe}"),
+            description: Some("Failed active health check probes."),
+        }));
+    }
+
     let now = SystemTime::now();
     let _was_healthy = state.is_healthy;
 

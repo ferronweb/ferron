@@ -42,6 +42,12 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Edge-case visibility** - granular HTTP observability metrics for pre-handler failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - **Admin sinks** - added a dropped-events admin metric for non-blocking observability sinks.
 - **Unix file descriptor metrics** - added `process.unix.file_descriptor.count` (UpDownCounter) to track the change in number of unix file descriptors since the last measurement. (Linux only)
+- **Backend exclusion tracking** - new `ferron.proxy.backend.excluded` counter that records each exclusion event with `backend_url` and `reason` attributes, covering passive-check failures, open circuit breakers, retry exclusion, and overloaded backends.
+- **Retry observability** - new `ferron.proxy.retry.count` counter and `ferron.proxy.retry.final` gauge to track retry attempts and whether the final attempt succeeded.
+- **Connection pool metrics** - new `ferron.proxy.pool.hit` and `ferron.proxy.pool.miss` counters, plus `ferron.proxy.pool.idle` and `ferron.proxy.pool.outstanding` worker-scoped gauges for per-upstream connection pool depth monitoring.
+- **Connect latency & TTFB** - new `ferron.proxy.connect.latency` and `ferron.proxy.ttfb` histograms measuring TCP connection establishment time and time to first response byte.
+- **Health check instrumentation** - new `ferron.proxy.health.success`, `ferron.proxy.health.failure`, and `ferron.proxy.health.duration` metrics for active health probe outcomes.
+- **Circuit breaker metrics** - new `ferron.proxy.circuit.state` gauge (0/1/2 for Closed/HalfOpen/Open) and `ferron.proxy.circuit.open_total` counter tracking circuit breaker state transitions.
 
 ### Changed
 

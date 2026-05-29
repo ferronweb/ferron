@@ -2,10 +2,8 @@
 
 use std::sync::Arc;
 
-use rustc_hash::FxHashSet;
-
 use crate::config::{AffinityType, CircuitBreakerConfig};
-use crate::types::circuit::CircuitBreakerStateMap;
+use crate::types::circuit::{CircuitBreakerStateMap, CircuitBreakerStatus};
 use crate::types::health::HealthCheckStateMap;
 use crate::types::lb::SelectedBackend;
 use crate::types::upstream::{Upstream, UpstreamInner};
@@ -57,50 +55,51 @@ pub fn determine_proxy_to(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    selected_backends: &FxHashSet<Arc<UpstreamInner>>,
     affinity_type: Option<&AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
+    metrics: &mut crate::ProxyMetrics,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
     }
 
     // Build healthy list of indices into `upstreams` — avoids Arc clones
-    // until the final selection.
-    let mut healthy: Vec<usize> = {
-        let failed = if health_check_enabled {
-            Some(failed_backends)
-        } else {
-            None
-        };
-        upstreams
-            .iter()
-            .enumerate()
-            .filter(|(_, u)| {
-                // Check passive failure cache
-                let not_failed = failed.as_ref().is_none_or(|failed| {
-                    failed
-                        .get(u)
-                        .is_none_or(|fails| fails <= health_check_max_fails)
-                });
+    // until the final selection, while tracking exclusion reasons.
+    let mut healthy: Vec<usize> = upstreams
+        .iter()
+        .enumerate()
+        .filter_map(|(i, u)| {
+            // Check passive failure cache
+            if health_check_enabled {
+                if let Some(fails) = failed_backends.get(u) {
+                    if fails > health_check_max_fails {
+                        metrics.excluded_passive.push(Arc::clone(u));
+                        return None;
+                    }
+                }
+            }
 
-                // Check active health check state
-                let active_healthy = if let Some(state_map) = health_check_state {
-                    crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)
-                } else {
-                    true
-                };
+            // Check active health check state
+            if let Some(state_map) = health_check_state {
+                if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
+                    // Active health exclusion is tracked via the existing
+                    // active_unhealthy_backends metric — no separate exclusion
+                    // metric needed.
+                    return None;
+                }
+            }
 
-                // Check if backend is already selected
-                let not_selected = !selected_backends.contains(*u);
+            // Check if backend is already selected (retry loop)
+            if metrics.selected_backends.contains(u) {
+                metrics.excluded_already_tried.push(Arc::clone(u));
+                return None;
+            }
 
-                not_failed && active_healthy && not_selected
-            })
-            .map(|(i, _)| i)
-            .collect()
-    };
+            Some(i)
+        })
+        .collect();
 
     let mut affinity_index = None;
 
@@ -143,12 +142,33 @@ pub fn determine_proxy_to(
             affinity_index = None;
         }
 
+        // Check circuit breaker state and track exclusion reasons
+        if circuit_breaker.enabled {
+            if let Some(cb_state) = circuit_breaker_state {
+                if let Some(state) = cb_state.get(&upstream) {
+                    match state.status {
+                        CircuitBreakerStatus::Open => {
+                            metrics.excluded_circuit_open.push(Arc::clone(&upstream));
+                            continue;
+                        }
+                        CircuitBreakerStatus::HalfOpen if state.half_open_in_flight => {
+                            metrics.excluded_overloaded.push(Arc::clone(&upstream));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         if !try_acquire_circuit_breaker_slot(
             circuit_breaker_state,
             circuit_breaker,
             &upstream,
             event_sink,
         ) {
+            // Slot acquisition may have failed due to a race — treat as overloaded
+            metrics.excluded_overloaded.push(Arc::clone(&upstream));
             continue;
         }
 

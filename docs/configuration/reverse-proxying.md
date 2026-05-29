@@ -472,6 +472,34 @@ The proxy module emits the following metrics:
   - Attributes: backend URL or unix socket path
 - `ferron.proxy.lb.selections` (Counter) — P2C+EWMA backend selection with combined score.
   - Attributes: backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score)
+- `ferron.proxy.backend.excluded` (Counter) — backend excluded from selection.
+  - Attributes: backend URL or unix socket path; `ferron.proxy.reason` (`"passive"`, `"circuit_open"`, `"already_tried"`, `"overloaded"`)
+- `ferron.proxy.retry.count` (Counter) — number of retry attempts made for a request.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.retry.final` (Gauge) — whether the final retry attempt succeeded (`1`) or failed (`0`).
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.pool.hit` (Counter) — pooled connection reused successfully.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.pool.miss` (Counter) — pooled connection unavailable, new connection established.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.pool.idle` (Gauge) — current number of idle connections in the pool.
+  - Attributes: backend URL or unix socket path; `worker` (thread identifier)
+- `ferron.proxy.pool.outstanding` (Gauge) — current number of outstanding (in-use) connections in the pool.
+  - Attributes: backend URL or unix socket path; `worker` (thread identifier)
+- `ferron.proxy.connect.latency` (Histogram) — time to establish a TCP/TLS connection to the backend.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.ttfb` (Histogram) — time to first response byte from the backend.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.health.success` (Counter) — health check probe succeeded.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.health.failure` (Counter) — health check probe failed.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.health.duration` (Histogram) — duration of health check probes.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.circuit.state` (Gauge) — circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.circuit.open_total` (Counter) — number of times the circuit breaker has transitioned to Open state.
+  - Attributes: backend URL or unix socket path
 
 ## Notes and troubleshooting
 

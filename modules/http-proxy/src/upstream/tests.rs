@@ -153,11 +153,11 @@ fn test_determine_proxy_to_no_upstreams() {
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_none());
 }
@@ -181,11 +181,11 @@ fn test_determine_proxy_to_single_backend() {
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -216,11 +216,11 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -251,11 +251,11 @@ fn test_determine_proxy_to_all_unhealthy() {
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_none());
 }
@@ -286,11 +286,11 @@ fn test_determine_proxy_to_health_check_disabled() {
         None,
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_some());
 }
@@ -407,11 +407,11 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         Some(&health_check_state),
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -440,11 +440,11 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         Some(&health_check_state),
         &crate::config::CircuitBreakerConfig::default(),
         None,
-        &rustc_hash::FxHashSet::default(),
         None,
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &mut crate::ProxyMetrics::new(),
     );
     assert!(result.is_some());
     let selected = result.unwrap();

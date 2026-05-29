@@ -108,11 +108,11 @@ pub async fn execute_proxy(
             health_check_state,
             &config.circuit_breaker,
             Some(&circuit_breaker_state),
-            &metrics.selected_backends,
             config.affinity.as_ref().map(|t| &t.affinity_type),
             affinity_key.as_deref(),
             ring,
             &ctx.events,
+            &mut metrics,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
@@ -224,6 +224,7 @@ pub async fn execute_proxy(
                     );
 
                     if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {
+                        metrics.retry_count += 1;
                         ctx.events.emit(Event::Log(LogEvent {
                             level: LogLevel::Warn,
                             message: format!(
