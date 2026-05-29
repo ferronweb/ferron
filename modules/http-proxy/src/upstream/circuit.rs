@@ -236,12 +236,17 @@ fn record_circuit_breaker_failure(
                 state.opened_at = Some(now);
                 state.half_open_pass_count = 0;
                 state.half_open_in_flight = false;
-                ferron_core::log_warn!(
-                    "Upstream {} circuit opened after {} failures within {:?}",
-                    upstream.proxy_to,
-                    circuit_breaker.max_fails,
-                    circuit_breaker.window
-                );
+                event_sink.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Warn,
+                        message: format!(
+                            "Upstream {} circuit opened after {} failures within {:?}",
+                            upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
+                        ),
+                        target: crate::LOG_TARGET,
+                        trace_context: None,
+                    },
+                ));
                 emit_circuit_metric(
                     event_sink,
                     upstream,
