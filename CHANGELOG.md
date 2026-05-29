@@ -41,6 +41,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Edge-case visibility** - granular HTTP observability metrics for pre-handler failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - **Admin sinks** - added a dropped-events admin metric for non-blocking observability sinks.
+- **Unix file descriptor metrics** - added `process.unix.file_descriptor.count` (UpDownCounter) to track the change in number of unix file descriptors since the last measurement. (Linux only)
 
 ### Changed
 
