@@ -142,25 +142,6 @@ pub fn determine_proxy_to(
             affinity_index = None;
         }
 
-        // Check circuit breaker state and track exclusion reasons
-        if circuit_breaker.enabled {
-            if let Some(cb_state) = circuit_breaker_state {
-                if let Some(state) = cb_state.get(&upstream) {
-                    match state.status {
-                        CircuitBreakerStatus::Open => {
-                            metrics.excluded_circuit_open.push(Arc::clone(&upstream));
-                            continue;
-                        }
-                        CircuitBreakerStatus::HalfOpen if state.half_open_in_flight => {
-                            metrics.excluded_overloaded.push(Arc::clone(&upstream));
-                            continue;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
         if !try_acquire_circuit_breaker_slot(
             circuit_breaker_state,
             circuit_breaker,
@@ -168,7 +149,19 @@ pub fn determine_proxy_to(
             event_sink,
         ) {
             // Slot acquisition may have failed due to a race — treat as overloaded
-            metrics.excluded_overloaded.push(Arc::clone(&upstream));
+            let open = circuit_breaker
+                .enabled
+                .then_some(circuit_breaker_state)
+                .flatten()
+                .and_then(|s| s.get(&upstream))
+                .map_or(false, |s| matches!(s.status, CircuitBreakerStatus::Open));
+
+            if open {
+                metrics.excluded_circuit_open.push(Arc::clone(&upstream));
+            } else {
+                metrics.excluded_overloaded.push(Arc::clone(&upstream));
+            }
+
             continue;
         }
 
