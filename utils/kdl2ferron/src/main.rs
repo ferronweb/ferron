@@ -79,7 +79,7 @@ fn main() {
     // Prepare output content with TODOs as comments at the start
     let mut output_content = String::new();
     for todo in diagnostics.todos {
-        output_content.push_str(&format!("# TODO(ferron-migrate): {todo}\n"));
+        output_content.push_str(&format!("# TODO(ferron-kdl2ferron): {todo}\n"));
     }
     if !output_content.is_empty() {
         output_content.push('\n');
