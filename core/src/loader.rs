@@ -66,7 +66,7 @@ pub trait ModuleLoader {
         &mut self,
         registry: &mut HashMap<
             ConfigurationValidatorScopedKey,
-            Vec<Box<dyn crate::config::validator::ConfigurationValidator>>,
+            Box<dyn crate::config::validator::ConfigurationValidator>,
         >,
     ) {
     }

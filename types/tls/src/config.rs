@@ -383,6 +383,47 @@ fn load_ca_cert_file(
         })
 }
 
+#[macro_export]
+macro_rules! validate_tls_common {
+    ($config:expr, $validator_ctx: expr) => {
+       {
+           use ferron_core::config::ServerConfigurationValue;
+           use ferron_core::{validate_directive, validate_nested};
+
+           let used = &mut $validator_ctx.used_directives;
+
+           // TLS certificate configuration
+           validate_directive!($config, used, cert, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, key, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // mTLS configuration
+           validate_directive!($config, used, client_auth, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, client_auth_ca, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // TLS protocol configuration
+           validate_directive!($config, used, cipher_suite, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, ecdh_curve, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, min_version, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, max_version, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // OCSP stapling configuration
+           validate_directive!($config, used, ocsp, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
+                validate_nested!(ocsp, enabled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+           });
+
+           // Session ticket keys configuration
+           validate_directive!($config, used, ticket_keys, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
+                validate_nested!(ticket_keys, file, args(1) => [ServerConfigurationValue::String(_, _) |
+                    ServerConfigurationValue::InterpolatedString(_, _)]);
+                validate_nested!(ticket_keys, auto_rotate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(ticket_keys, rotation_internval, args(1) => [ServerConfigurationValue::String(_, _) |
+                    ServerConfigurationValue::InterpolatedString(_, _) |
+                    ServerConfigurationValue::Number(_, _)]);
+                validate_nested!(ticket_keys, max_keys, args(1) => [ServerConfigurationValue::Number(_, _)]);
+           });
+       }
+    };
+}
 #[cfg(test)]
 mod tests {
     use super::*;

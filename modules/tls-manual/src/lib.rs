@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use ferron_core::loader::ModuleLoader;
+use ferron_core::config_validator_scoped_key;
 use ferron_core::providers::Provider;
+use ferron_core::{config::validator::ConfigurationValidator, loader::ModuleLoader};
+use ferron_tls::validate_tls_common;
 use ferron_tls::{
     builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
 };
@@ -161,6 +163,20 @@ pub fn load_private_key(filename: &str) -> std::io::Result<PrivateKeyDer<'static
     }
 }
 
+pub struct TlsManualConfigurationValidator;
+
+impl ConfigurationValidator for TlsManualConfigurationValidator {
+    fn validate_block(
+        &self,
+        config: &ferron_core::config::ServerConfigurationBlock,
+        validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        validate_tls_common!(config, validator_ctx);
+
+        Ok(())
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct TlsManualModuleLoader;
 
@@ -170,5 +186,18 @@ impl ModuleLoader for TlsManualModuleLoader {
         registry: ferron_core::registry::RegistryBuilder,
     ) -> ferron_core::registry::RegistryBuilder {
         registry.with_provider::<TcpTlsContext, _>(|| Arc::new(TcpTlsManualProvider))
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("tls", "manual"),
+            Box::new(TlsManualConfigurationValidator),
+        );
     }
 }

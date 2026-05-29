@@ -387,14 +387,22 @@ fn run_configuration_validators(
         &'static str,
         Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     >,
+    scoped_validator_registry: Arc<
+        HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Run global validators
     let mut validator_ctx = ConfigurationValidatorContext {
         used_directives: HashSet::new(),
         is_global: true,
+        scoped_validators: scoped_validator_registry.clone(),
     };
     for validator in global_validator_registry {
         validator_ctx.is_global = true; // Reset validator ctx
+        validator_ctx.scoped_validators = scoped_validator_registry.clone();
         validator
             .validate_block(&config.global_config, &mut validator_ctx)
             .map_err(|e| {
@@ -429,6 +437,7 @@ fn run_configuration_validators(
                 validator_ctx.used_directives.clear();
                 for validator in validators {
                     validator_ctx.is_global = false; // Reset validator ctx
+                    validator_ctx.scoped_validators = scoped_validator_registry.clone();
                     validator
                         .validate_block(block.1, &mut validator_ctx)
                         .map_err(|e| {
@@ -516,9 +525,11 @@ pub(crate) fn run(
     let mut registry_builder = RegistryBuilder::new();
     let mut global_validator_registry = Vec::new();
     let mut per_protocol_validator_registry = HashMap::new();
+    let mut scoped_validator_registry = HashMap::new();
     for loader in &mut loaders {
         loader.register_per_protocol_configuration_validators(&mut per_protocol_validator_registry);
         loader.register_global_configuration_validators(&mut global_validator_registry);
+        loader.register_scoped_configuration_validators(&mut scoped_validator_registry);
         loader.register_configuration_adapters(&mut config_registry);
         registry_builder = loader.register_stages(registry_builder);
         registry_builder = loader.register_providers(registry_builder);
@@ -566,6 +577,7 @@ pub(crate) fn run(
         config_adapter_params,
         global_validator_registry,
         per_protocol_validator_registry,
+        Arc::new(scoped_validator_registry),
     )?;
 
     Ok(())
@@ -585,9 +597,11 @@ fn validate(
 
     let mut global_validator_registry = Vec::new();
     let mut per_protocol_validator_registry = HashMap::new();
+    let mut scoped_validator_registry = HashMap::new();
     for loader in &mut loaders {
         loader.register_per_protocol_configuration_validators(&mut per_protocol_validator_registry);
         loader.register_global_configuration_validators(&mut global_validator_registry);
+        loader.register_scoped_configuration_validators(&mut scoped_validator_registry);
     }
 
     let (config, _) = config_adapter
@@ -599,6 +613,7 @@ fn validate(
         &config,
         &global_validator_registry,
         &per_protocol_validator_registry,
+        Arc::new(scoped_validator_registry),
     )?;
 
     Ok(loaders)
@@ -635,6 +650,12 @@ fn load_modules(
         &'static str,
         Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     >,
+    scoped_validator_registry: Arc<
+        HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = None;
     let watcher = std::rc::Rc::new(std::cell::RefCell::new(None));
@@ -649,6 +670,7 @@ fn load_modules(
             &mut loaders,
             &global_validator_registry,
             &per_protocol_validator_registry,
+            scoped_validator_registry.clone(),
             registry.clone(),
         ) {
             Ok((config, watcher, modules)) => {
@@ -762,6 +784,12 @@ fn load_modules_config(
         &'static str,
         Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     >,
+    scoped_validator_registry: Arc<
+        HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    >,
     module_registry: Arc<Registry>,
 ) -> Result<
     (
@@ -784,6 +812,7 @@ fn load_modules_config(
         &config,
         global_validator_registry,
         per_protocol_validator_registry,
+        scoped_validator_registry,
     )?;
 
     for loader in loaders {

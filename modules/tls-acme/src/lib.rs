@@ -28,10 +28,12 @@ pub mod on_demand;
 pub mod provision;
 pub mod resolver;
 pub mod stages;
+mod validator;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ferron_core::config_validator_scoped_key;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{ProviderRegistry, RegistryBuilder, GLOBAL_REGISTRY};
@@ -688,6 +690,19 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         modules.push(Arc::new(TlsAcmeModule::new(task_state)));
 
         Ok(())
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("tls", "local"),
+            Box::new(validator::TlsAcmeConfigurationValidator),
+        );
     }
 }
 

@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use cidr::IpCidr;
-use ferron_core::{config::ServerConfigurationValue, validate_directive, validate_nested};
+use ferron_core::{
+    config::{validator::validate_scoped_block, ServerConfigurationValue},
+    validate_directive, validate_nested,
+};
 
 pub struct HttpConfigurationValidator;
 
@@ -12,41 +15,32 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let is_global = ctx.is_global;
-        let used_directives = &mut ctx.used_directives;
         // Global-only directives (default port configuration)
         if is_global {
-            validate_directive!(config, used_directives, default_http_port, optional args(1) => [
+            validate_directive!(config, ctx.used_directives, default_http_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(_, _)
             ], {});
 
-            validate_directive!(config, used_directives, default_https_port, optional args(1) => [
+            validate_directive!(config, ctx.used_directives, default_https_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(_, _)
             ], {});
         }
 
         // TLS settings
-        validate_directive!(config, used_directives, tls, optional
+        validate_directive!(config, ctx.used_directives, tls, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(2) => [
                 ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _),
                 ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
             ],
             {
-            validate_nested!(tls, provider, optional args(1) => [ServerConfigurationValue::String(_, _)]);
-
-            // Session ticket keys configuration (validated at runtime by provider)
-            validate_nested!(tls, ticket_keys, optional args(?) => [
-                ServerConfigurationValue::String(_, _)
-                    | ServerConfigurationValue::InterpolatedString(_, _)
-                    | ServerConfigurationValue::Number(_, _)
-                    | ServerConfigurationValue::Boolean(_, _)
-            ]);
+              validate_scoped_block(tls, ctx, "provider", "tls", Some("manual"))?;
         });
 
         // HTTP settings
-        validate_directive!(config, used_directives, http, no_args, {
+        validate_directive!(config, ctx.used_directives, http, no_args, {
             validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
             // OPTIONS * allowed methods
@@ -90,22 +84,22 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         });
 
         // Webroot
-        validate_directive!(config, used_directives, root, args(1) => [
+        validate_directive!(config, ctx.used_directives, root, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
         // Server administrator's email address
-        validate_directive!(config, used_directives, admin_email, args(1) => [
+        validate_directive!(config, ctx.used_directives, admin_email, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
         // PROXY protocol
-        validate_directive!(config, used_directives, protocol_proxy, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, protocol_proxy, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
         // Observability aliases
-        validate_directive!(config, used_directives, log, optional
+        validate_directive!(config, ctx.used_directives, log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
@@ -114,7 +108,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
         });
 
-        validate_directive!(config, used_directives, error_log, optional
+        validate_directive!(config, ctx.used_directives, error_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
@@ -122,28 +116,29 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(error_log, error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
         });
 
-        validate_directive!(config, used_directives, console_log, optional
+        validate_directive!(config, ctx.used_directives, console_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
             validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
         });
 
         // Index file names
-        validate_directive!(config, used_directives, index, optional args(?), {});
+        validate_directive!(config, ctx.used_directives, index, optional args(?), {});
 
         // Trailing slash redirect for directories
-        validate_directive!(config, used_directives, trailing_slash_redirect, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, trailing_slash_redirect, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
         // HTTPS redirect toggle
-        validate_directive!(config, used_directives, https_redirect, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, https_redirect, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
         // Client IP from forwarded header
         if let Some(entries) = config.directives.get("client_ip_from_header") {
-            used_directives.insert("client_ip_from_header".to_string());
+            ctx.used_directives
+                .insert("client_ip_from_header".to_string());
             for entry in entries {
                 if entry.args.len() != 1 {
                     return Err(format!(
@@ -173,7 +168,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                     }
 
                     if let Some(trusted_proxy_entries) = children.directives.get("trusted_proxy") {
-                        used_directives.insert("trusted_proxy".to_string());
+                        ctx.used_directives.insert("trusted_proxy".to_string());
                         for trusted_proxy_entry in trusted_proxy_entries {
                             if trusted_proxy_entry.args.is_empty() {
                                 return Err(
@@ -222,16 +217,16 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
         // Conditional directives
         if config.has_directive("if") {
-            used_directives.insert("if".to_string());
+            ctx.used_directives.insert("if".to_string());
         }
         if config.has_directive("if_not") {
-            used_directives.insert("if_not".to_string());
+            ctx.used_directives.insert("if_not".to_string());
         }
         if config.has_directive("location") {
-            used_directives.insert("location".to_string());
+            ctx.used_directives.insert("location".to_string());
         }
         if config.has_directive("handle_error") {
-            used_directives.insert("handle_error".to_string());
+            ctx.used_directives.insert("handle_error".to_string());
         }
 
         Ok(())
