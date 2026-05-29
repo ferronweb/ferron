@@ -10,7 +10,9 @@ use std::sync::Arc;
 use clap::Parser;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
-use ferron_core::config::validator::ConfigurationValidatorContext;
+use ferron_core::config::validator::{
+    ConfigurationValidatorContext, ConfigurationValidatorDiagnosticKind,
+};
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
@@ -18,6 +20,7 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use malloc_best_effort::BEMalloc;
+use serde::Serialize;
 
 #[cfg(windows)]
 use crate::cli::WinServiceCommands;
@@ -144,6 +147,9 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
             config_params,
             config_adapter,
         } => {
+            if !ferron_core::logging::is_init() {
+                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
+            }
             validate(config_path, config_params, config_adapter, loaders)?;
         }
         Commands::Adapt {
@@ -359,25 +365,12 @@ fn load_config_adapters(
     })
 }
 
-fn format_location(
-    block_name: Option<&str>,
-    span: Option<&ferron_core::config::ServerConfigurationSpan>,
-) -> String {
-    let mut location = String::new();
-    if let Some(name) = block_name {
-        location.push_str(&format!("block '{}'", name));
-    } else {
-        location.push_str("global configuration");
-    }
-    if let Some(span) = span {
-        if let Some(file) = &span.file {
-            location.push_str(&format!(" in file '{}'", file));
-        }
-        location.push_str(&format!(" at line {}", span.line));
-        location.push_str(&format!(", column {}", span.column));
-    }
-    location
+#[derive(Serialize)]
+pub struct ConfigurationValidationResult {
+    valid: bool,
+    diagnostics: Vec<ferron_core::config::validator::ConfigurationValidatorDiagnostic>,
 }
+
 /// Run global and per-protocol configuration validators
 fn run_configuration_validators(
     loaders: &mut [Box<dyn ModuleLoader>],
@@ -393,24 +386,35 @@ fn run_configuration_validators(
             Box<dyn ferron_core::config::validator::ConfigurationValidator>,
         >,
     >,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> ConfigurationValidationResult {
+    let mut all_diagnostics = Vec::new();
+
     // Run global validators
     let mut validator_ctx = ConfigurationValidatorContext {
         used_directives: HashSet::new(),
         is_global: true,
         scoped_validators: scoped_validator_registry.clone(),
+        diagnostics: Vec::new(),
+        scope: None,
     };
     for validator in global_validator_registry {
         validator_ctx.is_global = true; // Reset validator ctx
         validator_ctx.scoped_validators = scoped_validator_registry.clone();
-        validator
-            .validate_block(&config.global_config, &mut validator_ctx)
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Invalid configuration ({}): {e}",
-                    format_location(None, config.global_config.span.as_ref())
-                )
-            })?;
+        validator_ctx.scope = None;
+        let validator_result = validator.validate_block(&config.global_config, &mut validator_ctx);
+        if let Err(err) = validator_result {
+            let diagnostic = validator_ctx.create_diagnostic(
+                ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                err.to_string(),
+                config.global_config.span.clone(),
+            );
+            all_diagnostics.extend(validator_ctx.diagnostics);
+            all_diagnostics.push(diagnostic);
+            return ConfigurationValidationResult {
+                valid: false,
+                diagnostics: all_diagnostics,
+            };
+        }
     }
     let unused_global_directives: Vec<String> = config
         .global_config
@@ -420,11 +424,15 @@ fn run_configuration_validators(
         .cloned()
         .collect();
     for directive in unused_global_directives {
-        log_warn!(
-            "Unused directive ({}): {directive}",
-            format_location(None, config.global_config.span.as_ref())
-        );
+        validator_ctx
+            .diagnostics
+            .push(validator_ctx.create_diagnostic(
+                ConfigurationValidatorDiagnosticKind::UnknownDirective,
+                format!("`{directive}` is unused in the block"),
+                config.global_config.span.clone(),
+            ));
     }
+    all_diagnostics.extend(validator_ctx.diagnostics.drain(..));
 
     // Run per-protocol validators
     let mut config_blocks_registry = HashMap::new();
@@ -435,20 +443,25 @@ fn run_configuration_validators(
         if let Some(validators) = per_protocol_validator_registry.get(protocol) {
             for block in blocks {
                 validator_ctx.used_directives.clear();
+                validator_ctx.diagnostics.clear();
                 for validator in validators {
                     validator_ctx.is_global = false; // Reset validator ctx
                     validator_ctx.scoped_validators = scoped_validator_registry.clone();
-                    validator
-                        .validate_block(block.1, &mut validator_ctx)
-                        .map_err(|e| {
-                            anyhow::anyhow!(
-                                "Invalid configuration ({}): {e}",
-                                format_location(
-                                    Some(&format!("{protocol} {}", block.0)),
-                                    block.1.span.as_ref()
-                                )
-                            )
-                        })?;
+                    validator_ctx.scope = Some(format!("{protocol} {}", block.0));
+                    let validator_result = validator.validate_block(block.1, &mut validator_ctx);
+                    if let Err(err) = validator_result {
+                        let diagnostic = validator_ctx.create_diagnostic(
+                            ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            err.to_string(),
+                            block.1.span.clone(),
+                        );
+                        all_diagnostics.extend(validator_ctx.diagnostics);
+                        all_diagnostics.push(diagnostic);
+                        return ConfigurationValidationResult {
+                            valid: false,
+                            diagnostics: all_diagnostics,
+                        };
+                    }
                 }
                 let unused_directives: Vec<String> = block
                     .1
@@ -458,16 +471,37 @@ fn run_configuration_validators(
                     .cloned()
                     .collect();
                 for directive in unused_directives {
-                    log_warn!(
-                        "Unused directive ({}): {directive}",
-                        format_location(
-                            Some(&format!("{protocol} {}", block.0)),
-                            block.1.span.as_ref()
-                        )
-                    );
+                    validator_ctx
+                        .diagnostics
+                        .push(validator_ctx.create_diagnostic(
+                            ConfigurationValidatorDiagnosticKind::UnknownDirective,
+                            format!("`{directive}` is unused in the block"),
+                            block.1.span.clone(),
+                        ));
                 }
+                all_diagnostics.extend(validator_ctx.diagnostics.drain(..));
             }
         }
+    }
+
+    ConfigurationValidationResult {
+        valid: true,
+        diagnostics: all_diagnostics,
+    }
+}
+
+fn print_validation_result(
+    validation_result: ConfigurationValidationResult,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for diagnostic in validation_result.diagnostics {
+        // Log warnings for configuration diagnostics (e.g., unknown directives)
+        log_warn!("{diagnostic}");
+    }
+
+    if !validation_result.valid {
+        Err(anyhow::anyhow!(
+            "The configuration validation failed. Check the configuration diagnostics above."
+        ))?;
     }
 
     Ok(())
@@ -609,14 +643,15 @@ fn validate(
         .adapt(&config_adapter_params)
         .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
 
-    run_configuration_validators(
+    let validation_result = run_configuration_validators(
         &mut loaders,
         &config,
         &global_validator_registry,
         &per_protocol_validator_registry,
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(scoped_validator_registry),
-    )?;
+    );
+    print_validation_result(validation_result)?;
 
     Ok(loaders)
 }
@@ -809,13 +844,14 @@ fn load_modules_config(
     let mut modules = Vec::new();
 
     // Configuration validation
-    run_configuration_validators(
+    let validation_result = run_configuration_validators(
         loaders,
         &config,
         global_validator_registry,
         per_protocol_validator_registry,
         scoped_validator_registry,
-    )?;
+    );
+    print_validation_result(validation_result)?;
 
     for loader in loaders {
         loader.register_modules(module_registry.clone(), &mut modules, config.clone())?;

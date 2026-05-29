@@ -1305,6 +1305,7 @@ dependencies = [
  "ferron-tls-manual",
  "malloc-best-effort",
  "nix",
+ "serde",
  "serde_json",
  "shadow-rs",
  "signal-hook",
