@@ -1,9 +1,6 @@
 //! Configuration validator for `basic_auth` directives.
 //!
 //! Validates that `basic_auth` blocks contain recognized directives,
-/// that all password values are proper hashes (Argon2, PBKDF2, or scrypt),
-/// and that nested blocks use only known directive names.
-use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
@@ -25,9 +22,10 @@ impl ConfigurationValidator for BasicAuthValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         if is_global {
             validate_directive!(config, used_directives, basic_auth_concurrency, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
         }

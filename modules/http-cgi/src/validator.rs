@@ -6,9 +6,9 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         ferron_core::validate_directive!(config, used_directives, cgi, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {
             ferron_core::validate_nested!(cgi, extension, args(*) => [ServerConfigurationValue::String(_, _)]);
 

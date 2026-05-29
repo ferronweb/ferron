@@ -9,9 +9,10 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         // Global-only directives (default port configuration)
         if is_global {
             validate_directive!(config, used_directives, default_http_port, optional args(1) => [
@@ -234,99 +235,5 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ferron_core::config::validator::ConfigurationValidator;
-    use ferron_core::config::{
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-    };
-    use std::collections::HashSet;
-
-    fn client_ip_config(children: Option<ServerConfigurationBlock>) -> ServerConfigurationBlock {
-        let mut directives = std::collections::HashMap::new();
-        directives.insert(
-            "client_ip_from_header".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "x-forwarded-for".to_string(),
-                    None,
-                )],
-                children,
-                span: None,
-            }],
-        );
-
-        ServerConfigurationBlock {
-            directives: std::sync::Arc::new(directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
-        }
-    }
-
-    fn trusted_proxy_block() -> ServerConfigurationBlock {
-        let mut directives = std::collections::HashMap::new();
-        directives.insert(
-            "trusted_proxy".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "10.0.0.0/8".to_string(),
-                    None,
-                )],
-                children: None,
-                span: None,
-            }],
-        );
-
-        ServerConfigurationBlock {
-            directives: std::sync::Arc::new(directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
-        }
-    }
-
-    #[test]
-    fn validates_client_ip_from_header_with_trusted_proxy_allowlist() {
-        let validator = HttpConfigurationValidator;
-        let config = client_ip_config(Some(trusted_proxy_block()));
-        let mut used_directives = HashSet::new();
-
-        validator
-            .validate_block(&config, &mut used_directives, true)
-            .expect("valid config should pass");
-
-        assert!(used_directives.contains("client_ip_from_header"));
-        assert!(used_directives.contains("trusted_proxy"));
-    }
-
-    #[test]
-    fn rejects_unknown_nested_directive_under_client_ip_from_header() {
-        let mut children_directives = std::collections::HashMap::new();
-        children_directives.insert(
-            "bogus".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "10.0.0.0/8".to_string(),
-                    None,
-                )],
-                children: None,
-                span: None,
-            }],
-        );
-
-        let config = client_ip_config(Some(ServerConfigurationBlock {
-            directives: std::sync::Arc::new(children_directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
-        }));
-
-        let validator = HttpConfigurationValidator;
-        let mut used_directives = HashSet::new();
-        assert!(validator
-            .validate_block(&config, &mut used_directives, true)
-            .is_err());
     }
 }

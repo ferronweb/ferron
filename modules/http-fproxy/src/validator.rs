@@ -1,6 +1,5 @@
 //! Configuration validation for the forward proxy module.
 
-use std::collections::HashSet;
 use std::error::Error;
 
 use ferron_core::config::validator::ConfigurationValidator;
@@ -13,9 +12,9 @@ impl ConfigurationValidator for ForwardProxyConfigurationValidator {
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
-    ) -> Result<(), Box<dyn Error>> {
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         if let Some(entries) = config.directives.get("forward_proxy") {
             used_directives.insert("forward_proxy".to_string());
             validate_forward_proxy_entries(entries)?;

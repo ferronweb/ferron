@@ -1,7 +1,6 @@
 //! Configuration validation for the reverse proxy module.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::error::Error;
 use std::str::FromStr;
 
@@ -18,9 +17,10 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        is_global: bool,
-    ) -> Result<(), Box<dyn Error>> {
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         if is_global {
             // Validate global concurrent_conns directive
             if let Some(entries) = config.directives.get("concurrent_conns") {

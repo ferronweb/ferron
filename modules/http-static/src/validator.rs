@@ -9,9 +9,9 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         // Static file compression (on-the-fly)
         validate_directive!(config, used_directives, compressed, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)], {});

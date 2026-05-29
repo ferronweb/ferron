@@ -3,8 +3,6 @@
 //! Validates that `map` entries contain recognized sub-directives
 //! (`default`, `exact`, `regex`) with valid argument types and block options.
 
-use std::collections::HashSet;
-
 use fancy_regex::Regex;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
@@ -23,9 +21,9 @@ impl ConfigurationValidator for MapValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         if let Some(entries) = config.directives.get("map") {
             used_directives.insert("map".to_string());
             for entry in entries {

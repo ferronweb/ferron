@@ -6,9 +6,11 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
     fn validate_block(
         &self,
         config: &crate::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        is_global: bool,
+        ctx: &mut crate::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
+
         if is_global {
             validate_directive!(config, used_directives, runtime, no_args, {
                 validate_nested!(runtime, io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);

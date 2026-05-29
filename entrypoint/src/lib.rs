@@ -10,6 +10,7 @@ use std::sync::Arc;
 use clap::Parser;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
+use ferron_core::config::validator::ConfigurationValidatorContext;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
@@ -388,10 +389,14 @@ fn run_configuration_validators(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Run global validators
-    let mut used_global_directives = HashSet::new();
+    let mut validator_ctx = ConfigurationValidatorContext {
+        used_directives: HashSet::new(),
+        is_global: true,
+    };
     for validator in global_validator_registry {
+        validator_ctx.is_global = true; // Reset validator ctx
         validator
-            .validate_block(&config.global_config, &mut used_global_directives, true)
+            .validate_block(&config.global_config, &mut validator_ctx)
             .map_err(|e| {
                 anyhow::anyhow!(
                     "Invalid configuration ({}): {e}",
@@ -403,7 +408,7 @@ fn run_configuration_validators(
         .global_config
         .directives
         .keys()
-        .filter(|d| !used_global_directives.contains(*d))
+        .filter(|d| !validator_ctx.used_directives.contains(*d))
         .cloned()
         .collect();
     for directive in unused_global_directives {
@@ -421,10 +426,11 @@ fn run_configuration_validators(
     for (protocol, blocks) in &config_blocks_registry {
         if let Some(validators) = per_protocol_validator_registry.get(protocol) {
             for block in blocks {
-                let mut used_directives = HashSet::new();
+                validator_ctx.used_directives.clear();
                 for validator in validators {
+                    validator_ctx.is_global = false; // Reset validator ctx
                     validator
-                        .validate_block(block.1, &mut used_directives, false)
+                        .validate_block(block.1, &mut validator_ctx)
                         .map_err(|e| {
                             anyhow::anyhow!(
                                 "Invalid configuration ({}): {e}",
@@ -439,7 +445,7 @@ fn run_configuration_validators(
                     .1
                     .directives
                     .keys()
-                    .filter(|d| !used_directives.contains(*d))
+                    .filter(|d| !validator_ctx.used_directives.contains(*d))
                     .cloned()
                     .collect();
                 for directive in unused_directives {

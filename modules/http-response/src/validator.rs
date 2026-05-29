@@ -49,9 +49,9 @@ impl ConfigurationValidator for HttpResponseValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         ferron_core::validate_directive!(config, used_directives, abort, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
 
         validate_ip_directive(config, used_directives, "block")?;

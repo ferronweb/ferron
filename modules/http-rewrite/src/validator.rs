@@ -3,8 +3,6 @@
 //! Validates that `rewrite` entries contain recognized arguments and options
 //! with valid value types.
 
-use std::collections::HashSet;
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
@@ -19,9 +17,9 @@ impl ConfigurationValidator for RewriteValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         // Validate `rewrite` directive
         if let Some(entries) = config.directives.get("rewrite") {
             used_directives.insert("rewrite".to_string());

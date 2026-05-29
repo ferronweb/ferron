@@ -1,6 +1,6 @@
 //! Configuration validation for the HTTP headers module.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 
@@ -15,9 +15,10 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
-    ) -> Result<(), Box<dyn Error>> {
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let _is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         // Validate header directives
         if let Some(entries) = config.directives.get("header") {
             used_directives.insert("header".to_string());

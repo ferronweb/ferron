@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
@@ -25,9 +23,10 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         if is_global {
             if let Some(entries) = config.directives.get("cache") {
                 used_directives.insert("cache".to_string());

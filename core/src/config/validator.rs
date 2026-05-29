@@ -3,6 +3,13 @@
 //! Validators check configuration blocks for correctness, tracking used directives
 //! and reporting errors for invalid or missing configuration.
 
+/// A key for scoped configuration validators.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ConfigurationValidatorScopedKey {
+    pub namespace: &'static str,
+    pub module: String,
+}
+
 /// Validator for configuration blocks.
 ///
 /// Validators are called during configuration loading to check that:
@@ -16,10 +23,7 @@ pub trait ConfigurationValidator {
     /// # Arguments
     ///
     /// * `config` - The configuration block to validate
-    /// * `used_directives` - Set of directive names that have been processed.
-    ///   Validators should add recognized directives to this set.
-    /// * `is_global` - Whether this is the global configuration block
-    ///   (as opposed to protocol-specific or host-specific blocks)
+    /// * `validator_ctx` - Context for tracking used directives and other data.
     ///
     /// # Errors
     ///
@@ -28,7 +32,15 @@ pub trait ConfigurationValidator {
     fn validate_block(
         &self,
         config: &crate::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        is_global: bool,
+        validator_ctx: &mut ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>>;
+}
+
+/// Context for tracking used directives and other data during configuration validation.
+pub struct ConfigurationValidatorContext {
+    /// Set of directive names that have been processed by validators.
+    pub used_directives: std::collections::HashSet<String>,
+    /// Whether this is the global configuration block (as opposed to protocol-specific
+    /// or host-specific blocks).
+    pub is_global: bool,
 }

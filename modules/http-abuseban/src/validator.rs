@@ -26,9 +26,10 @@ impl ConfigurationValidator for AbuseProtectionValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
+
         // Check if this block contains an `abuse_protection` directive
         if let Some(entries) = config.directives.get("abuse_protection") {
             used_directives.insert("abuse_protection".to_string());

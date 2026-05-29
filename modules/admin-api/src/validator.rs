@@ -2,8 +2,6 @@
 //!
 //! Validates the `admin { ... }` global configuration directive.
 
-use std::collections::HashSet;
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::ServerConfigurationValue;
 
@@ -13,9 +11,11 @@ impl ConfigurationValidator for AdminConfigurationValidator {
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
+
         if is_global {
             ferron_core::validate_directive!(config, used_directives, admin, optional
                 args(1) => [ServerConfigurationValue::Boolean(_, _)], {

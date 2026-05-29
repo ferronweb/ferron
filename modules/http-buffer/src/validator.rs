@@ -2,7 +2,6 @@
 //!
 //! Validates that both directives, if present, contain either an integer
 //! (buffer size in bytes) or `#null` (disabled).
-use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::ServerConfigurationBlock;
@@ -16,9 +15,9 @@ impl ConfigurationValidator for HttpBufferConfigurationValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         validate_directive!(config, used_directives, buffer_request, optional
             args(1) => [ferron_core::config::ServerConfigurationValue::Number(_, _)], {});
 

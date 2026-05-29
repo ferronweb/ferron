@@ -6,9 +6,10 @@ impl ferron_core::config::validator::ConfigurationValidator for FcgiConfiguratio
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+        let used_directives = &mut ctx.used_directives;
         if is_global {
             // Manual validation for fcgi_concurrent_conns directive
             if let Some(directives) = config.directives.get(stringify!(fcgi_concurrent_conns)) {

@@ -3,8 +3,6 @@
 //! Validates that `rate_limit` blocks contain recognized directives
 //! with valid value types.
 
-use std::collections::HashSet;
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
@@ -28,9 +26,9 @@ impl ConfigurationValidator for RateLimitValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         // Check if this block contains a `rate_limit` directive
         if let Some(entries) = config.directives.get("rate_limit") {
             used_directives.insert("rate_limit".to_string());
