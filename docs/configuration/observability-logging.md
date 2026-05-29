@@ -135,6 +135,7 @@ The `metrics-process` module collects process-level metrics automatically when a
   - Attributes: `cpu.mode` (`"user"` or `"system"`)
 - `process.memory.usage` (UpDownCounter) — the change in physical memory (RSS) since the last measurement.
 - `process.memory.virtual` (UpDownCounter) — the change in committed virtual memory (VMS) since the last measurement.
+- `process.unix.file_descriptor.count` (UpDownCounter) — the change in number of unix file descriptors since the last measurement. (Linux only)
 
 #### Admin API metrics
 
