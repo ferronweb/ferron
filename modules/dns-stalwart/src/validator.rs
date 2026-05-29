@@ -403,10 +403,9 @@ fn req_str(
     match config.get_value(key) {
         Some(ServerConfigurationValue::String(_, _))
         | Some(ServerConfigurationValue::InterpolatedString(_, _)) => Ok(()),
-        _ => Err(format!(
-            "Missing or invalid directive '{key}' for '{provider}' DNS provider"
-        )
-        .into()),
+        _ => Err(
+            format!("Missing or invalid directive '{key}' for '{provider}' DNS provider").into(),
+        ),
     }
 }
 
