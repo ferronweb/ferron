@@ -400,7 +400,7 @@ fn add_http_block_best_practice_diagnostics(
             if unique_pathnames.contains(pathname) {
                 // Duplicate pathname!
                 ctx.add_best_practice_violation(
-                    &format!("`location` block with duplicate pathname: {pathname}"),
+                    format!("`location` block with duplicate pathname: {pathname}"),
                     entry_span(entry),
                 );
             } else {

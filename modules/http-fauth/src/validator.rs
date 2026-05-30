@@ -1,9 +1,8 @@
 use ferron_core::{
     check_unused_subdirectives,
     config::{
-        validator::ConfigurationValidator,
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-        ServerConfigurationValue,
+        validator::ConfigurationValidator, ServerConfigurationBlock,
+        ServerConfigurationDirectiveEntry, ServerConfigurationSpan, ServerConfigurationValue,
     },
     validate_directive, validate_nested,
 };
@@ -26,8 +25,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                 if let Some(directives) =
                     config.directives.get(stringify!(auth_to_concurrent_conns))
                 {
-                    used_directives
-                        .insert(stringify!(auth_to_concurrent_conns).to_string());
+                    used_directives.insert(stringify!(auth_to_concurrent_conns).to_string());
                     for directive in directives {
                         if directive.args.len() != 1 {
                             return Err(format!(
