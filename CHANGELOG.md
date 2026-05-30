@@ -43,6 +43,11 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Admin sinks** - added a dropped-events admin metric for non-blocking observability sinks.
 - **Admin API** - added `GET /reload` and `GET /runtime` endpoints to the admin listener.
 
+#### Configuration validation
+
+- JSON configuration validation results are now printed to stdout when `--json` is specified, improving observability for automated tools and CI/CD pipelines.
+- Unused subdirectives are now reported as well as directives.
+
 ### Changed
 
 #### Reverse proxy

@@ -71,6 +71,10 @@ pub enum Commands {
         /// Configuration adapter name
         #[arg(long = "config-adapter")]
         config_adapter: Option<String>,
+
+        /// Output JSON representation of the configuration
+        #[arg(long = "json", short = 'j')]
+        json: bool,
     },
     /// Translates the web server configuration into JSON representation
     Adapt {

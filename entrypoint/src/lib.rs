@@ -146,11 +146,12 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
             config_path,
             config_params,
             config_adapter,
+            json,
         } => {
-            if !ferron_core::logging::is_init() {
+            if !json && !ferron_core::logging::is_init() {
                 let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
             }
-            validate(config_path, config_params, config_adapter, loaders)?;
+            validate(config_path, config_params, config_adapter, loaders, json)?;
         }
         Commands::Adapt {
             config_path,
@@ -201,6 +202,7 @@ fn run_daemon(
         config_params.clone(),
         config_adapter.clone(),
         loaders,
+        false,
     )?;
     log_info!("Configuration validation successful");
 
@@ -623,6 +625,7 @@ fn validate(
     config_params: Option<String>,
     config_adapter: Option<String>,
     loaders: Vec<Box<dyn ModuleLoader>>,
+    json: bool,
 ) -> Result<Vec<Box<dyn ModuleLoader>>, Box<dyn std::error::Error>> {
     let ConfigLoadResult {
         mut loaders,
@@ -651,7 +654,16 @@ fn validate(
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(scoped_validator_registry),
     );
-    print_validation_result(validation_result)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&validation_result).map_err(|e| anyhow::anyhow!(
+                "Failed to prepare JSON configuration validation result {e}"
+            ))?
+        );
+    } else {
+        print_validation_result(validation_result)?;
+    }
 
     Ok(loaders)
 }
