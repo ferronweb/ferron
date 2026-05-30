@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 
-use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::ServerConfigurationValue;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_core::config::validator::{ConfigurationValidator, ConfigurationValidatorContext};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
+    ServerConfigurationInterpolatedStringPart, ServerConfigurationSpan, ServerConfigurationValue,
+};
 use ferron_core::util::parse_duration;
 use http::header::HeaderName;
 
@@ -44,7 +46,7 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
 
 fn validate_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
     for entry in entries {
         if entry.args.len() > 1 {
@@ -56,6 +58,7 @@ fn validate_proxy_entries(
             if arg.as_string_with_interpolations(&HashMap::new()).is_none() {
                 return Err("Invalid proxy upstream URL — expected a string".into());
             }
+            warn_user_controlled_upstream(arg, entry, ctx);
         }
         if let Some(block) = &entry.children {
             validate_proxy_block(block, ctx)?;
@@ -66,7 +69,7 @@ fn validate_proxy_entries(
 
 fn validate_proxy_block(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
     let mut sub = std::collections::HashSet::new();
 
@@ -79,6 +82,12 @@ fn validate_proxy_block(
     ferron_core::validate_nested!(block, used(sub), http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    if block_flag(block, "no_verification") == Some(true) {
+        ctx.add_best_practice_violation(
+            "`proxy.no_verification` disables TLS certificate verification for HTTPS upstreams; use it only for testing or tightly controlled internal networks",
+            first_entry_span(block, "no_verification"),
+        );
+    }
     ferron_core::validate_nested!(block, used(sub), proxy_header, optional args(1) => [ServerConfigurationValue::String(_, _)]);
     if block.directives.contains_key("request_header") {
         sub.insert("request_header".to_string());
@@ -158,7 +167,7 @@ fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<d
 
 fn validate_upstream_directives(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("upstream") {
@@ -171,6 +180,9 @@ fn validate_upstream_directives(
             {
                 return Err("The `upstream` directive requires a URL argument".into());
             }
+            if let Some(value) = e.args.first() {
+                warn_user_controlled_upstream(value, e, ctx);
+            }
             if let Some(up_block) = &e.children {
                 validate_upstream_block(up_block, ctx)?;
             }
@@ -181,7 +193,7 @@ fn validate_upstream_directives(
 
 fn validate_upstream_block(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
     let mut sub = std::collections::HashSet::new();
 
@@ -245,7 +257,7 @@ fn validate_srv_block(
 
 fn validate_passive_check_directives(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(passive_block) = block
@@ -278,7 +290,7 @@ fn validate_passive_check_directives(
 
 fn validate_active_check_directives(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(active_block) = block
@@ -318,6 +330,12 @@ fn validate_active_check_directives(
         }
         validate_number(active_block, "consecutive_passes", 1)?;
         ferron_core::validate_nested!(active_block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+        if block_flag(active_block, "no_verification") == Some(true) {
+            ctx.add_best_practice_violation(
+                "`active_check.no_verification` disables TLS certificate verification for health checks; keep verification enabled unless probes target a strictly internal endpoint",
+                first_entry_span(active_block, "no_verification"),
+            );
+        }
 
         ferron_core::check_unused_subdirectives!(
             active_block,
@@ -332,7 +350,7 @@ fn validate_active_check_directives(
 
 fn validate_circuit_breaker_directives(
     block: &ServerConfigurationBlock,
-    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(cb_block) = block
@@ -370,4 +388,62 @@ fn validate_circuit_breaker_directives(
     }
 
     Ok(())
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
+}
+
+fn first_entry_span(
+    block: &ServerConfigurationBlock,
+    directive: &str,
+) -> Option<ServerConfigurationSpan> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .and_then(entry_span)
+}
+
+fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .map(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+fn value_uses_request_header_interpolation(value: &ServerConfigurationValue) -> bool {
+    match value {
+        ServerConfigurationValue::InterpolatedString(parts, _) => parts.iter().any(|part| {
+            matches!(
+                part,
+                ServerConfigurationInterpolatedStringPart::Variable(variable)
+                    if variable.starts_with("request.header.")
+            )
+        }),
+        ServerConfigurationValue::String(value, _) => value.contains("{{request.header."),
+        _ => false,
+    }
+}
+
+fn warn_user_controlled_upstream(
+    value: &ServerConfigurationValue,
+    entry: &ServerConfigurationDirectiveEntry,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    if value_uses_request_header_interpolation(value) {
+        ctx.add_best_practice_violation(
+            "Proxy upstream URLs interpolate user-controlled request headers; derive upstream targets from static configuration or trusted server-controlled variables to avoid SSRF",
+            entry_span(entry),
+        );
+    }
 }

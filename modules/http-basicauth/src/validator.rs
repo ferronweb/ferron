@@ -1,6 +1,7 @@
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
 use ferron_core::validate_directive;
 
@@ -23,6 +24,19 @@ impl ConfigurationValidator for BasicAuthValidator {
         let is_global = ctx.is_global;
         if is_global {
             validate_directive!(config, ctx.used_directives, basic_auth_concurrency, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
+            if let Some(entries) = config.directives.get("basic_auth_concurrency") {
+                for entry in entries {
+                    if matches!(
+                        entry.args.first(),
+                        Some(ServerConfigurationValue::Boolean(false, _))
+                    ) {
+                        ctx.add_best_practice_violation(
+                            "`basic_auth_concurrency false` disables the global password-verification concurrency limit; keep a bounded limit to prevent expensive hash checks from exhausting resources",
+                            entry_span(entry),
+                        );
+                    }
+                }
+            }
         }
 
         if let Some(entries) = config.directives.get("basic_auth") {
@@ -73,7 +87,7 @@ impl BasicAuthValidator {
 
         for users_entry in users_entries.into_iter().flatten() {
             if let Some(ref users_block) = users_entry.children {
-                self.validate_users_block(users_block)?;
+                self.validate_users_block(users_block, ctx)?;
             } else {
                 return Err(
                     "Invalid `basic_auth` — `users` must be a block form: `users {{ ... }}`".into(),
@@ -104,6 +118,7 @@ impl BasicAuthValidator {
     fn validate_users_block(
         &self,
         block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if block.directives.is_empty() {
             return Err(
@@ -120,6 +135,14 @@ impl BasicAuthValidator {
                 if let Some(value) = entry.args.first() {
                     if let Some(hash_str) = value.as_str() {
                         Self::validate_password_hash(hash_str, username)?;
+                        if !hash_str.starts_with("$argon2id$") {
+                            ctx.add_best_practice_violation(
+                                format!(
+                                    "Password hash for user '{username}' does not use Argon2id; prefer Argon2id for new Basic Auth credentials"
+                                ),
+                                entry_span(entry),
+                            );
+                        }
                     }
                 }
             }
@@ -174,10 +197,17 @@ impl BasicAuthValidator {
         if let Some(entries) = block.directives.get("enabled") {
             sub.insert("enabled".to_string());
             for entry in entries {
-                if entry.args.first().and_then(|v| v.as_boolean()).is_none() {
+                let enabled = entry.args.first().and_then(|v| v.as_boolean());
+                if enabled.is_none() {
                     return Err(
                         "Invalid `brute_force_protection` — `enabled` must be a boolean value"
                             .into(),
+                    );
+                }
+                if enabled == Some(false) {
+                    ctx.add_best_practice_violation(
+                        "`brute_force_protection.enabled false` disables credential-guessing protection; only disable it when equivalent protection exists at another layer",
+                        entry_span(entry),
                     );
                 }
             }
@@ -276,4 +306,16 @@ impl BasicAuthValidator {
 
         Ok(())
     }
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

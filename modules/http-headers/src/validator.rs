@@ -3,7 +3,10 @@ use std::error::Error;
 use std::str::FromStr;
 
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
 use http::header::HeaderName;
 
 /// Configuration validator for the HTTP headers module.
@@ -72,6 +75,56 @@ fn validate_cors_block(
     ferron_core::validate_nested!(block, used(sub), credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), max_age, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, used(sub), expose_headers, args(*) => [ServerConfigurationValue::String(_, _)]);
+
+    if block_flag(block, "credentials") == Some(true) && origins_allow_all(block) {
+        ctx.add_best_practice_violation(
+            "`cors.credentials` is enabled while `origins \"*\"` allows every origin; use explicit trusted origins when credentials are allowed",
+            first_entry_span(block, "credentials").or_else(|| first_entry_span(block, "origins")),
+        );
+    }
+
     ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
+}
+
+fn origins_allow_all(block: &ServerConfigurationBlock) -> bool {
+    block.directives.get("origins").is_some_and(|entries| {
+        entries.iter().any(|entry| {
+            entry
+                .args
+                .iter()
+                .any(|value| value.as_str().is_some_and(|origin| origin == "*"))
+        })
+    })
+}
+
+fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .map(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+fn first_entry_span(
+    block: &ServerConfigurationBlock,
+    directive: &str,
+) -> Option<ServerConfigurationSpan> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .and_then(entry_span)
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

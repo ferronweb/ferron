@@ -151,7 +151,32 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
             if !json && !ferron_core::logging::is_init() {
                 let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
             }
-            validate(config_path, config_params, config_adapter, loaders, json)?;
+            validate(
+                config_path,
+                config_params,
+                config_adapter,
+                loaders,
+                json,
+                false,
+            )?;
+        }
+        Commands::Doctor {
+            config_path,
+            config_params,
+            config_adapter,
+            json,
+        } => {
+            if !json && !ferron_core::logging::is_init() {
+                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
+            }
+            validate(
+                config_path,
+                config_params,
+                config_adapter,
+                loaders,
+                json,
+                true, // Don't filter best practice violations
+            )?;
         }
         Commands::Adapt {
             config_path,
@@ -202,6 +227,7 @@ fn run_daemon(
         config_params.clone(),
         config_adapter.clone(),
         loaders,
+        false,
         false,
     )?;
     log_info!("Configuration validation successful");
@@ -626,6 +652,7 @@ fn validate(
     config_adapter: Option<String>,
     loaders: Vec<Box<dyn ModuleLoader>>,
     json: bool,
+    doctor: bool,
 ) -> Result<Vec<Box<dyn ModuleLoader>>, Box<dyn std::error::Error>> {
     let ConfigLoadResult {
         mut loaders,
@@ -646,7 +673,7 @@ fn validate(
         .adapt(&config_adapter_params)
         .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
 
-    let validation_result = run_configuration_validators(
+    let mut validation_result = run_configuration_validators(
         &mut loaders,
         &config,
         &global_validator_registry,
@@ -654,6 +681,17 @@ fn validate(
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(scoped_validator_registry),
     );
+
+    if !doctor {
+        // Remove best practice violations from diagnostics, since this is not `ferron doctor`...
+        validation_result.diagnostics.retain(|d| {
+            !matches!(
+                d.kind,
+                ConfigurationValidatorDiagnosticKind::BestPracticeViolation
+            )
+        });
+    }
+
     if json {
         println!(
             "{}",

@@ -478,3 +478,28 @@ Returns the runtime status as JSON:
 - For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability-logging).
 - For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/http-host).
 - For admin API security hardening, see [Security considerations](#security-considerations) under the Admin API section.
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### Log rotation
+
+- **`log` without rotation** — File-based access logging should include `access_log_rotate_size` (or an external log rotation policy) to prevent unbounded disk growth.
+- **`error_log` without rotation** — File-based error logging should include `error_log_rotate_size` (or an external log rotation policy).
+
+### Default ports
+
+- **Both default ports disabled** — Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Ensure all host blocks specify explicit ports, or keep at least one default listener enabled.
+
+### PROXY protocol
+
+- **`protocol_proxy` enabled** — PROXY protocol trusts client-provided addresses. Enable it only on listeners reachable exclusively by trusted load balancers.
+
+### Admin API
+
+- **`admin.listen` on non-loopback address** — The admin API is unauthenticated and unencrypted. Bind to a loopback address or restrict access via network controls.
+
+### Location blocks
+
+- **No duplicate `location` block pathnames** — Duplicate pathnames in location blocks will cause the server to return an ambiguous response, so they should be avoided.

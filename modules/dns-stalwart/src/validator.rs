@@ -1,6 +1,7 @@
 use ferron_core::config::{
     validator::{ConfigurationValidator, ConfigurationValidatorContext},
-    ServerConfigurationBlock, ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
 
 pub struct DnsStalwartConfigurationValidator;
@@ -389,6 +390,8 @@ fn validate_provider(
         _ => {}
     }
 
+    add_dns_secret_best_practice_diagnostics(config, ctx);
+
     Ok(())
 }
 
@@ -458,4 +461,76 @@ fn req_enum(
         .into());
     }
     Ok(())
+}
+
+fn add_dns_secret_best_practice_diagnostics(
+    config: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    for (key, entries) in config.directives.iter() {
+        if !is_sensitive_dns_key(key) {
+            continue;
+        }
+
+        for entry in entries {
+            if entry
+                .args
+                .iter()
+                .any(|value| matches!(value, ServerConfigurationValue::String(_, _)))
+            {
+                ctx.add_best_practice_violation(
+                    format!(
+                        "`{key}` appears to contain a DNS provider secret directly in configuration; prefer environment variable interpolation or another secret-management path"
+                    ),
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+}
+
+fn is_sensitive_dns_key(key: &str) -> bool {
+    matches!(
+        key,
+        "access_key"
+            | "access_key_id"
+            | "access_key_secret"
+            | "access_token"
+            | "api_key"
+            | "api_password"
+            | "api_secret"
+            | "api_token"
+            | "application_key"
+            | "application_secret"
+            | "auth_token"
+            | "client_secret"
+            | "client_token"
+            | "consumer_key"
+            | "credentials"
+            | "iam_token_b64"
+            | "key"
+            | "oauth_token"
+            | "password"
+            | "personal_access_token"
+            | "private_key_password"
+            | "private_key_pem"
+            | "secret"
+            | "secret_access_key"
+            | "secret_key"
+            | "security_token"
+            | "session_token"
+            | "token"
+    )
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

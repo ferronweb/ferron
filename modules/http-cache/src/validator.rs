@@ -1,7 +1,8 @@
 use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
 use http::header::HeaderName;
 
@@ -48,6 +49,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         children,
                         ctx,
                         &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
+                        false,
                     )?;
                     if !children.directives.contains_key("max_entries") {
                         return Err(
@@ -76,7 +78,12 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         );
                     }
 
-                    validate_cache_block(children, ctx, HOST_CACHE_DIRECTIVES)?;
+                    validate_cache_block(
+                        children,
+                        ctx,
+                        HOST_CACHE_DIRECTIVES,
+                        config.directives.contains_key("basic_auth"),
+                    )?;
                 } else {
                     if entry.args.len() > 1 {
                         return Err(
@@ -100,6 +107,7 @@ fn validate_cache_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     allowed_directives: &[&str],
+    parent_has_basic_auth: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sub = std::collections::HashSet::new();
 
@@ -133,6 +141,12 @@ fn validate_cache_block(
     if let Some(entries) = block.directives.get("litespeed_override_cache_control") {
         for entry in entries {
             validate_boolean_entry(entry, "litespeed_override_cache_control")?;
+            if entry.get_flag() {
+                ctx.add_best_practice_violation(
+                    "`litespeed_override_cache_control` makes LiteSpeed cache headers override standard HTTP cache policy; enable it only for applications that require LiteSpeed-compatible semantics",
+                    entry_span(entry),
+                );
+            }
         }
     }
 
@@ -145,11 +159,33 @@ fn validate_cache_block(
     if let Some(entries) = block.directives.get("purge_method") {
         for entry in entries {
             validate_boolean_entry(entry, "purge_method")?;
+            if entry.get_flag()
+                && !parent_has_basic_auth
+                && !block.directives.contains_key("purge_allowed_ips")
+            {
+                ctx.add_best_practice_violation(
+                    "`purge_method` is enabled without `purge_allowed_ips` or a `basic_auth` block in the same scope; add an explicit purge access control before relying on cache purging",
+                    entry_span(entry),
+                );
+            }
         }
     }
 
     if let Some(entries) = block.directives.get("purge_allowed_ips") {
         validate_cidr_list(entries, "purge_allowed_ips")?;
+        for entry in entries {
+            for arg in &entry.args {
+                if arg
+                    .as_str()
+                    .is_some_and(|value| value == "0.0.0.0/0" || value == "::/0")
+                {
+                    ctx.add_best_practice_violation(
+                        "`purge_allowed_ips` allows every source address; restrict cache purging to trusted operators or internal networks",
+                        entry_span(entry),
+                    );
+                }
+            }
+        }
     }
 
     if let Some(entries) = block.directives.get("vary") {
@@ -161,6 +197,18 @@ fn validate_cache_block(
     }
 
     Ok(())
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }
 
 fn validate_boolean_entry(

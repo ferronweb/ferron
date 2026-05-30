@@ -73,7 +73,7 @@ Each diagnostic entry contains:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | `string` | The diagnostic category — `"Unknown directive"` or `"Invalid configuration"`. |
+| `kind` | `string` | The diagnostic category — `"Unknown directive"`, `"Invalid configuration"`, or `"Best practice violation"`. |
 | `message` | `string` | A human-readable description of the issue. |
 | `span` | `Span \| null` | Source location (line, column, file) where the issue occurred. |
 | `scope` | `string \| null` | The configuration block scope (e.g., `"http port 443"`, `"global"`). |
@@ -132,6 +132,30 @@ example.com {
 
 When `valid` is `false`, the command exits with code 1.
 
+### Best practice violation
+
+A configuration pattern is technically valid but deviates from recommended practices. This is an **advisory** diagnostic — `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
+
+```ferron
+example.com {
+    directory_listing
+}
+```
+
+```json
+{
+  "valid": true,
+  "diagnostics": [
+    {
+      "kind": "Best practice violation",
+      "message": "`directory_listing` exposes generated indexes for directories without index files; enable it only for intentionally public file listings",
+      "span": { "line": 2, "column": 5, "file": "ferron.conf" },
+      "scope": "http example.com"
+    }
+  ]
+}
+```
+
 ## Span metadata
 
 The `span` field pinpoints the exact location of the diagnostic in the configuration file:
@@ -169,6 +193,16 @@ ferron validate -c config.json --config-adapter json
 Validation runs after the adapter has loaded and parsed the configuration. If the configuration file cannot be parsed, validation reports the parse error directly.
 
 ## Related commands
+
+### ferron doctor
+
+The `doctor` command extends validation with best-practice checks for security, reliability, and operational hygiene. It reports advisory diagnostics for patterns that are technically valid but deviate from recommended practices:
+
+```bash
+ferron doctor -c ferron.conf
+```
+
+See [Configuration doctor](/docs/v3/configuration/doctor) for the full list of checks.
 
 ### ferron adapt
 

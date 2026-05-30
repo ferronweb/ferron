@@ -2063,3 +2063,9 @@ Choose the `endpoint` that matches where your domain is registered:
 
 - [ACME automatic TLS](/docs/v3/configuration/tls-acme) — full ACME configuration reference
 - [Automatic TLS use case](/docs/v3/use-cases/automatic-tls) — guided walkthrough
+
+## Best practices
+
+The following best-practice check is reported by `ferron doctor` for DNS provider directives.
+
+- **Secrets in plain configuration** — DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings to avoid leaking secrets in version control or logs.

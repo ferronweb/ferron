@@ -121,3 +121,10 @@ proxy.example.com {
 - For HTTPS forwarding, clients must use CONNECT tunneling — direct `https://` URLs in HTTP requests are not supported.
 - For reverse proxy configuration, see [Reverse proxy](/docs/v3/configuration/reverse-proxying).
 - For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`allow_domains "*"`** — Allowing proxying to any public domain defeats the purpose of a forward proxy. Restrict to destinations your clients actually need.
+- **Custom `deny_ips` without loopback and metadata ranges** — Overriding the default deny list without including `127.0.0.0/8`, `::1`, and `169.254.169.254/32` can expose internal services through the proxy.

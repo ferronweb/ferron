@@ -1,4 +1,10 @@
-use crate::{config::ServerConfigurationValue, validate_directive, validate_nested};
+use crate::{
+    config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+        ServerConfigurationValue,
+    },
+    validate_directive, validate_nested,
+};
 
 pub struct BuiltinConfigurationValidator;
 
@@ -146,6 +152,65 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
             crate::check_unused_subdirectives!(console_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
+        add_log_rotation_best_practice_diagnostics(config, ctx);
+
         Ok(())
     }
+}
+
+fn add_log_rotation_best_practice_diagnostics(
+    config: &ServerConfigurationBlock,
+    ctx: &mut crate::config::validator::ConfigurationValidatorContext,
+) {
+    if let Some(entries) = config.directives.get("log") {
+        for entry in entries {
+            if directive_has_path_arg(entry)
+                && !entry
+                    .children
+                    .as_ref()
+                    .is_some_and(|block| block.directives.contains_key("access_log_rotate_size"))
+            {
+                ctx.add_best_practice_violation(
+                    "`log` writes to a file without built-in rotation; configure `access_log_rotate_size` or ensure an external log rotation policy manages it",
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+
+    if let Some(entries) = config.directives.get("error_log") {
+        for entry in entries {
+            if directive_has_path_arg(entry)
+                && !entry
+                    .children
+                    .as_ref()
+                    .is_some_and(|block| block.directives.contains_key("error_log_rotate_size"))
+            {
+                ctx.add_best_practice_violation(
+                    "`error_log` writes to a file without built-in rotation; configure `error_log_rotate_size` or ensure an external log rotation policy manages it",
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+}
+
+fn directive_has_path_arg(entry: &ServerConfigurationDirectiveEntry) -> bool {
+    matches!(
+        entry.args.first(),
+        Some(ServerConfigurationValue::String(_, _))
+            | Some(ServerConfigurationValue::InterpolatedString(_, _))
+    )
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

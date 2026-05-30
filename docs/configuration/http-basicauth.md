@@ -230,3 +230,11 @@ example.com {
 - The `basic_auth_concurrency` directive is **global-only** and must be placed in the top-level block, not inside a host block.
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
 - For routing and URL processing, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`basic_auth_concurrency false`** — Disabling the global password-verification concurrency limit removes backpressure on expensive hash checks. Keep a bounded limit.
+- **Non-Argon2id password hashes** — Prefer Argon2id for new Basic Auth credentials. Other hash algorithms are weaker against offline attacks.
+- **`brute_force_protection { enabled false }`** — Disabling credential-guessing protection removes a layer of security. Only disable when equivalent protection exists at another layer.

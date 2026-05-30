@@ -85,6 +85,19 @@ impl ConfigurationValidatorContext {
             scope: self.scope.clone(),
         }
     }
+
+    pub fn add_best_practice_violation(
+        &mut self,
+        message: impl Into<String>,
+        span: Option<crate::config::ServerConfigurationSpan>,
+    ) {
+        let diagnostic = self.create_diagnostic(
+            ConfigurationValidatorDiagnosticKind::BestPracticeViolation,
+            message,
+            span,
+        );
+        self.diagnostics.push(diagnostic);
+    }
 }
 
 /// Validates a block of configuration that is scoped to a specific namespace/module.
@@ -193,6 +206,8 @@ pub enum ConfigurationValidatorDiagnosticKind {
     InvalidConfiguration,
     /// A directive was encountered that is not recognized by the validator.
     UnknownDirective,
+    /// A best practice violation was detected in the configuration.
+    BestPracticeViolation,
 }
 
 impl std::fmt::Display for ConfigurationValidatorDiagnosticKind {
@@ -200,6 +215,7 @@ impl std::fmt::Display for ConfigurationValidatorDiagnosticKind {
         let kind_str = match self {
             Self::InvalidConfiguration => "Invalid configuration",
             Self::UnknownDirective => "Unknown directive",
+            Self::BestPracticeViolation => "Best practice violation",
         };
         write!(f, "{kind_str}")?;
         Ok(())

@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use cidr::IpCidr;
 use ferron_core::{
     check_unused_subdirectives,
-    config::{validator::validate_scoped_block, ServerConfigurationValue},
+    config::{
+        validator::{validate_scoped_block, ConfigurationValidatorContext},
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+        ServerConfigurationValue,
+    },
     validate_directive, validate_nested,
 };
 
@@ -27,6 +31,21 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(_, _)
             ], {});
+
+            if config
+                .get_value("default_http_port")
+                .and_then(ServerConfigurationValue::as_boolean)
+                == Some(false)
+                && config
+                    .get_value("default_https_port")
+                    .and_then(ServerConfigurationValue::as_boolean)
+                    == Some(false)
+            {
+                ctx.add_best_practice_violation(
+                    "`default_http_port false` and `default_https_port false` disable implicit listeners for host blocks without explicit ports",
+                    config.span.clone(),
+                );
+            }
         }
 
         // TLS settings
@@ -92,6 +111,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 );
             });
 
+            add_http_block_best_practice_diagnostics(http, ctx);
             check_unused_subdirectives!(http, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
@@ -109,6 +129,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         validate_directive!(config, ctx.used_directives, protocol_proxy, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
+        if first_flag(config, "protocol_proxy") == Some(true) {
+            ctx.add_best_practice_violation(
+                "`protocol_proxy` trusts client-provided PROXY protocol addresses; enable it only on listeners reachable exclusively by trusted load balancers",
+                first_entry_span(config, "protocol_proxy"),
+            );
+        }
 
         // Observability aliases
         validate_directive!(config, ctx.used_directives, log, optional
@@ -187,6 +213,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
                     if let Some(trusted_proxy_entries) = children.directives.get("trusted_proxy") {
                         ctx.used_directives.insert("trusted_proxy".to_string());
+                        let mut has_trusted_proxy = false;
                         for trusted_proxy_entry in trusted_proxy_entries {
                             if trusted_proxy_entry.args.is_empty() {
                                 return Err(
@@ -226,9 +253,32 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                     )
                                     .into());
                                 }
+                                has_trusted_proxy = true;
+                                if expanded == "0.0.0.0/0" || expanded == "::/0" {
+                                    ctx.add_best_practice_violation(
+                                        "`trusted_proxy` trusts every source address; restrict forwarded client IP headers to reverse proxies you control",
+                                        trusted_proxy_entry.span.clone(),
+                                    );
+                                }
                             }
                         }
+                        if !has_trusted_proxy {
+                            ctx.add_best_practice_violation(
+                                "`client_ip_from_header` has no trusted proxy ranges, so forwarded client IP headers will be ignored",
+                                entry.span.clone(),
+                            );
+                        }
+                    } else {
+                        ctx.add_best_practice_violation(
+                            "`client_ip_from_header` should include `trusted_proxy` ranges for the reverse proxies allowed to supply client IP headers",
+                            entry.span.clone(),
+                        );
                     }
+                } else {
+                    ctx.add_best_practice_violation(
+                        "`client_ip_from_header` should include a nested `trusted_proxy` block so untrusted clients cannot spoof forwarded client IP headers",
+                        entry.span.clone(),
+                    );
                 }
             }
         }
@@ -248,5 +298,114 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         }
 
         Ok(())
+    }
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
+}
+
+fn first_entry_span(
+    block: &ServerConfigurationBlock,
+    directive: &str,
+) -> Option<ServerConfigurationSpan> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .and_then(entry_span)
+}
+
+fn first_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .map(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+fn add_http_block_best_practice_diagnostics(
+    http: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    if first_flag(http, "url_sanitize") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`url_sanitize false` disables request path traversal normalization before routing; keep URL sanitization enabled unless a specific backend requires raw paths",
+            first_entry_span(http, "url_sanitize"),
+        );
+    }
+
+    if first_flag(http, "url_reject_backslash") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`url_reject_backslash false` permits backslashes in request paths; keep rejection enabled to avoid backend path interpretation issues",
+            first_entry_span(http, "url_reject_backslash"),
+        );
+    }
+
+    if first_flag(http, "timeout") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`timeout false` disables request pipeline timeouts; configure a bounded timeout to reduce slow request resource exhaustion",
+            first_entry_span(http, "timeout"),
+        );
+    }
+
+    if let Some(entries) = http.directives.get("options_allowed_methods") {
+        for entry in entries {
+            if let Some(methods) = entry
+                .args
+                .first()
+                .and_then(|value| value.as_string_with_interpolations(&HashMap::new()))
+            {
+                let has_sensitive_method = methods.split(',').map(str::trim).any(|method| {
+                    method.eq_ignore_ascii_case("TRACE") || method.eq_ignore_ascii_case("CONNECT")
+                });
+                if has_sensitive_method {
+                    ctx.add_best_practice_violation(
+                        "`options_allowed_methods` advertises TRACE or CONNECT; avoid exposing methods you do not intentionally support",
+                        entry_span(entry),
+                    );
+                }
+            }
+        }
+    }
+
+    if let Some(entries) = http.directives.get("protocols") {
+        for entry in entries {
+            if entry
+                .args
+                .iter()
+                .any(|value| value.as_str().is_some_and(|protocol| protocol == "h3"))
+            {
+                ctx.add_best_practice_violation(
+                    "`protocols` enables experimental HTTP/3; verify client compatibility and operational monitoring before using it in production",
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+
+    // Detect "location" block duplicates
+    let mut unique_pathnames = std::collections::HashSet::new();
+
+    for entry in http.directives.get("location").unwrap_or(&vec![]) {
+        if let Some(pathname) = entry.args.first().and_then(|value| value.as_str()) {
+            if unique_pathnames.contains(pathname) {
+                // Duplicate pathname!
+                ctx.add_best_practice_violation(
+                    &format!("`location` block with duplicate pathname: {pathname}"),
+                    entry_span(entry),
+                );
+            } else {
+                unique_pathnames.insert(pathname.to_string());
+            }
+        }
     }
 }

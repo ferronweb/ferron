@@ -76,6 +76,24 @@ pub enum Commands {
         #[arg(long = "json", short = 'j')]
         json: bool,
     },
+    /// Validates the web server configuration and checks for best practice violations
+    Doctor {
+        /// Path to the configuration file
+        #[arg(short = 'c', long = "config")]
+        config_path: Option<String>,
+
+        /// Configuration parameters in key=value;key2=value2 format
+        #[arg(long = "config-params")]
+        config_params: Option<String>,
+
+        /// Configuration adapter name
+        #[arg(long = "config-adapter")]
+        config_adapter: Option<String>,
+
+        /// Output JSON representation of the configuration
+        #[arg(long = "json", short = 'j')]
+        json: bool,
+    },
     /// Translates the web server configuration into JSON representation
     Adapt {
         /// Path to the configuration file

@@ -1,5 +1,9 @@
+use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
 
 /// Recognized directives inside an `abuse_protection { ... }` block.
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
@@ -28,6 +32,12 @@ impl ConfigurationValidator for AbuseProtectionValidator {
         if let Some(entries) = config.directives.get("abuse_protection") {
             ctx.used_directives.insert("abuse_protection".to_string());
             for entry in entries {
+                if !entry.get_flag() {
+                    ctx.add_best_practice_violation(
+                        "`abuse_protection false` disables IP banning for repeated abuse events; keep it enabled unless another layer handles abusive clients",
+                        entry_span(entry),
+                    );
+                }
                 if let Some(ref children) = entry.children {
                     self.validate_abuse_protection_block(children, ctx)?;
                 }
@@ -87,6 +97,29 @@ impl AbuseProtectionValidator {
                 for entry in entries {
                     if let Some(ref children) = entry.children {
                         self.validate_threshold_block(children, threshold_name)?;
+                    }
+                }
+            }
+        }
+
+        if let Some(entries) = block.directives.get("allowlist") {
+            sub.insert("allowlist".to_string());
+            for entry in entries {
+                if entry.args.is_empty() {
+                    return Err("Invalid `allowlist` — expected at least one IP or CIDR".into());
+                }
+                for arg in &entry.args {
+                    let value = arg
+                        .as_str()
+                        .ok_or("Invalid `allowlist` — expected string IP/CIDR values")?;
+                    value.parse::<IpCidr>().map_err(|_| {
+                        format!("Invalid `allowlist` — invalid IP or CIDR `{value}`")
+                    })?;
+                    if value == "0.0.0.0/0" || value == "::/0" {
+                        ctx.add_best_practice_violation(
+                            "`allowlist` exempts every source address from abuse protection; restrict it to known trusted clients",
+                            entry_span(entry),
+                        );
                     }
                 }
             }
@@ -183,4 +216,16 @@ impl AbuseProtectionValidator {
 
         Ok(())
     }
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

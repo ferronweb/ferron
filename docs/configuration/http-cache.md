@@ -195,3 +195,11 @@ The cache module emits the following metrics:
 - For static file cache headers such as `file_cache_control` and `etag`, see [Static file serving](/docs/v3/configuration/static-content.md).
 - For response header mutation and CORS handling, see [HTTP headers and CORS](/docs/v3/configuration/http-headers.md).
 - For reverse proxy configuration, see [Reverse proxying](/docs/v3/configuration/reverse-proxying.md).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`litespeed_override_cache_control`** — This makes LiteSpeed cache headers override standard HTTP cache policy. Enable only for applications that require LiteSpeed-compatible semantics.
+- **`purge_method` without access control** — Cache purging enabled without `purge_allowed_ips` or `basic_auth` in the same scope allows unauthenticated cache invalidation.
+- **`purge_allowed_ips` with wildcard** — Allowing every source address for cache purging should be restricted to trusted operators or internal networks.
