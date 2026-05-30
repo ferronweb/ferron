@@ -1301,6 +1301,7 @@ dependencies = [
  "ferron-observability-prometheus",
  "ferron-ocsp-stapler",
  "ferron-tls-acme",
+ "ferron-tls-http",
  "ferron-tls-local",
  "ferron-tls-manual",
  "malloc-best-effort",

@@ -43,6 +43,7 @@ ferron-dns-stalwart = { path = "../modules/dns-stalwart", optional = true }
 ferron-tls-manual = { path = "../modules/tls-manual", optional = true }
 ferron-tls-acme = { path = "../modules/tls-acme", optional = true }
 ferron-tls-local = { path = "../modules/tls-local", optional = true }
+ferron-tls-http = { path = "../modules/tls-http", optional = true }
 ferron-ocsp-stapler = { path = "../modules/ocsp-stapler", optional = true }
 ferron-observability-consolelog = { path = "../modules/observability-consolelog", optional = true }
 ferron-observability-logfile = { path = "../modules/observability-logfile", optional = true }
@@ -93,6 +94,7 @@ profile-default = [
     "ferron-tls-manual",
     "ferron-tls-acme",
     "ferron-tls-local",
+    "ferron-tls-http",
     "ferron-ocsp-stapler",
     "ferron-observability-consolelog",
     "ferron-observability-logfile",

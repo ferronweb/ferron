@@ -581,7 +581,7 @@ macro_rules! validate_tls_common {
 
            // mTLS configuration
            validate_directive!($config, used, client_auth, optional args(1) => [ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
-           validate_directive!($config, used, client_auth_ca, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, client_auth_ca, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
            // TLS protocol configuration
            validate_directive!($config, used, cipher_suite, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});

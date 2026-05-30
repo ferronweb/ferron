@@ -109,6 +109,7 @@ example.com {
 A recognized directive has invalid arguments or a misconfigured value. This is an **error** — validation fails and the server cannot start with this configuration.
 
 ```ferron
+# INVALID: bogus TLS provider
 example.com {
   tls {
     provider bogus

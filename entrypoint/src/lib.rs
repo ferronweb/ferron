@@ -65,6 +65,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_tls_manual::TlsManualModuleLoader),
         Box::new(ferron_tls_acme::TlsAcmeModuleLoader),
         Box::new(ferron_tls_local::LocalTlsModuleLoader),
+        Box::new(ferron_tls_http::TlsHttpModuleLoader::default()),
         Box::new(ferron_observability_consolelog::ConsoleObservabilityModuleLoader::default()),
         Box::new(ferron_observability_logfile::LogFileObservabilityModuleLoader::default()),
         Box::new(ferron_observability_otlp::OtlpObservabilityModuleLoader::default()),

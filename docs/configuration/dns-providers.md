@@ -12,8 +12,9 @@ DNS providers are used by the `tls-acme` module to solve the **DNS-01 ACME chall
         challenge dns-01
         contact "admin@example.com"
         dns {
-            provider "<provider-name>"
-            # provider-specific directives …
+            provider cloudflare
+            api_key "{{env.CF_API_TOKEN}}"
+            # provider-specific directives...
         }
     }
 }
@@ -383,7 +384,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | deSEC API token. | — (required) |
+| `auth_token` | `<string>` | deSEC API token. | — (required) |
 
 **Configuration example:**
 
@@ -395,7 +396,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
         dns {
             provider desec
-            api_token "YOUR_DESEC_API_TOKEN"
+            auth_token "YOUR_DESEC_API_TOKEN"
         }
     }
 }
@@ -409,7 +410,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `oauth_token` | `<string>` | DigitalOcean personal access token (OAuth token). | — (required) |
+| `auth_token` | `<string>` | DigitalOcean personal access token (OAuth token). | — (required) |
 
 **Configuration example:**
 
@@ -421,7 +422,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
         dns {
             provider digitalocean
-            oauth_token "YOUR_DO_OAUTH_TOKEN"
+            auth_token "YOUR_DO_OAUTH_TOKEN"
         }
     }
 }
@@ -1223,7 +1224,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `auth_token` | `<string>` | Linode API v4 token. | — (required) |
+| `api_token` | `<string>` | Linode API v4 token. | — (required) |
 
 **Configuration example:**
 
@@ -1235,7 +1236,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
         dns {
             provider linode
-            auth_token "YOUR_LINODE_API_TOKEN"
+            api_token "YOUR_LINODE_API_TOKEN"
         }
     }
 }

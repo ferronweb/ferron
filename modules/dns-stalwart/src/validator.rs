@@ -184,7 +184,7 @@ fn validate_provider(
         }
         "porkbun" => {
             req_str(config, ctx, provider, "api_key")?;
-            req_str(config, ctx, provider, "api_secret")?;
+            req_str(config, ctx, provider, "secret_key")?;
         }
         "spaceship" => {
             req_str(config, ctx, provider, "api_key")?;
