@@ -103,7 +103,7 @@ pub fn try_acquire_circuit_breaker_slot(
     };
 
     // Get a reference instead of a mutable reference for fast paths.
-    let state = if let Some(state) = circuit_breaker_state.get(&*upstream) {
+    let state = if let Some(state) = circuit_breaker_state.get(upstream) {
         state
     } else {
         circuit_breaker_state
