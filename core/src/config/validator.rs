@@ -127,6 +127,7 @@ pub fn validate_scoped_block(
             provider_namespace
         ))?
     };
+    local_ctx.used_directives.insert(provider_field.to_string());
     let Some(provider_validator) = ctx.scoped_validators.get(&ConfigurationValidatorScopedKey {
         namespace: provider_namespace,
         module: provider.to_string(),
