@@ -69,6 +69,7 @@ pub fn determine_proxy_to(
 
     // Build healthy list of indices into `upstreams` — avoids Arc clones
     // until the final selection.
+    let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
     let mut healthy: Vec<usize> = {
         let failed = if health_check_enabled {
             Some(failed_backends)
@@ -78,7 +79,7 @@ pub fn determine_proxy_to(
         upstreams
             .iter()
             .enumerate()
-            .filter(|(_, u)| {
+            .filter(|(i, u)| {
                 // Check passive failure cache
                 let not_failed = failed.as_ref().is_none_or(|failed| {
                     failed
@@ -96,7 +97,11 @@ pub fn determine_proxy_to(
                 // Check if backend is already selected
                 let not_selected = !selected_backends.contains(*u);
 
-                not_failed && active_healthy && not_selected
+                let healthy = not_failed && active_healthy && not_selected;
+                if !healthy {
+                    unhealthy.insert(*i);
+                }
+                healthy
             })
             .map(|(i, _)| i)
             .collect()
@@ -113,8 +118,13 @@ pub fn determine_proxy_to(
         // matches affinity_index
         if affinity_index.is_none() {
             if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
-                affinity_index =
-                    super::affinity::resolve_affinity_index(affinity_type, key, upstreams, ring);
+                affinity_index = super::affinity::resolve_affinity_index(
+                    affinity_type,
+                    key,
+                    upstreams,
+                    &unhealthy,
+                    ring,
+                );
             };
         }
         let start_pos = affinity_index.and_then(|aff_idx| {
@@ -137,6 +147,7 @@ pub fn determine_proxy_to(
             )
         };
         let upstream_idx = healthy.swap_remove(index);
+        unhealthy.insert(upstream_idx);
         let upstream = Arc::clone(&upstreams[upstream_idx]);
         if start_pos == Some(index) {
             // Affine backend is no longer healthy; reset affinity index

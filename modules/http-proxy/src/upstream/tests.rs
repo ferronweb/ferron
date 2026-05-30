@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHashSet};
 use std::{sync::Arc, time::Duration};
 
 use crate::types::affinity::AffinityType;
@@ -579,6 +579,7 @@ fn test_resolve_affinity_index_ip_affinity() {
         &affinity_type,
         key,
         &backends,
+        &FxHashSet::default(),
         &RwLock::new(ConsistentHashRing::new(&backends)),
     );
     assert!(idx.is_some());
@@ -589,6 +590,7 @@ fn test_resolve_affinity_index_ip_affinity() {
         &affinity_type,
         key,
         &backends,
+        &FxHashSet::default(),
         &RwLock::new(ConsistentHashRing::new(&backends)),
     );
     assert_eq!(idx, idx2);
