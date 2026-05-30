@@ -45,6 +45,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 #### Configuration validation
 
+- **Best-practice enforcement** - `ferron doctor` subcommand for validating best practices across the configuration.
 - JSON configuration validation results are now printed to stdout when `--json` is specified, improving observability for automated tools and CI/CD pipelines.
 - Unused subdirectives are now reported as well as directives.
 
