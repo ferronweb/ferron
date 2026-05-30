@@ -210,6 +210,12 @@ export default [
     label: "JSON configuration",
   },
   {
+    href: "/docs/v3/configuration/validation",
+    target: "_self",
+    sub: true,
+    label: "Configuration validation",
+  },
+  {
     href: "/docs/v3/configuration/conditionals",
     target: "_self",
     label: "Conditionals and variables",
