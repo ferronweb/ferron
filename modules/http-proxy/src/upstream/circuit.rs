@@ -102,7 +102,15 @@ pub fn try_acquire_circuit_breaker_slot(
         return true;
     };
 
-    let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+    // Get a reference instead of a mutable reference for fast paths.
+    let state = if let Some(state) = circuit_breaker_state.get(&*upstream) {
+        state
+    } else {
+        circuit_breaker_state
+            .entry(upstream.clone())
+            .or_default()
+            .downgrade()
+    };
 
     match state.status {
         CircuitBreakerStatus::Closed => true,
@@ -115,6 +123,8 @@ pub fn try_acquire_circuit_breaker_slot(
                 return false;
             }
 
+            drop(state);
+            let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
             state.status = CircuitBreakerStatus::HalfOpen;
             state.opened_at = None;
             state.half_open_in_flight = true;
@@ -136,6 +146,8 @@ pub fn try_acquire_circuit_breaker_slot(
             if state.half_open_in_flight {
                 false
             } else {
+                drop(state);
+                let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
                 state.half_open_in_flight = true;
                 true
             }
@@ -222,13 +234,17 @@ fn record_circuit_breaker_success(
         return;
     };
 
+    // Use `get` instead of `get_mut` for fast path.
+    if circuit_breaker_state
+        .get(upstream)
+        .is_none_or(|s| s.status != CircuitBreakerStatus::HalfOpen)
+    {
+        return;
+    }
+
     let Some(mut state) = circuit_breaker_state.get_mut(upstream) else {
         return;
     };
-
-    if state.status != CircuitBreakerStatus::HalfOpen {
-        return;
-    }
 
     state.half_open_in_flight = false;
     state.half_open_pass_count += 1;
