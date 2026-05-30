@@ -115,10 +115,7 @@ fn validate_number(
     Ok(())
 }
 
-fn validate_duration(
-    block: &ServerConfigurationBlock,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
@@ -131,9 +128,7 @@ fn validate_duration(
     Ok(())
 }
 
-fn validate_request_header(
-    block: &ServerConfigurationBlock,
-) -> Result<(), Box<dyn Error>> {
+fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("request_header") {
         for e in entries {
             if e.args.is_empty() {
@@ -271,7 +266,12 @@ fn validate_passive_check_directives(
         }
         validate_duration(passive_block, "window")?;
 
-        ferron_core::check_unused_subdirectives!(passive_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            passive_block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
     }
     Ok(())
 }
@@ -301,7 +301,10 @@ fn validate_active_check_directives(
         }
         validate_duration(active_block, "timeout")?;
         ferron_core::validate_nested!(active_block, used(sub), expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
-        if active_block.directives.contains_key("response_time_threshold") {
+        if active_block
+            .directives
+            .contains_key("response_time_threshold")
+        {
             sub.insert("response_time_threshold".to_string());
         }
         validate_duration(active_block, "response_time_threshold")?;
@@ -316,7 +319,12 @@ fn validate_active_check_directives(
         validate_number(active_block, "consecutive_passes", 1)?;
         ferron_core::validate_nested!(active_block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
-        ferron_core::check_unused_subdirectives!(active_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            active_block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
     }
 
     Ok(())
@@ -353,7 +361,12 @@ fn validate_circuit_breaker_directives(
         }
         validate_number(cb_block, "consecutive_passes", 1)?;
 
-        ferron_core::check_unused_subdirectives!(cb_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            cb_block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
     }
 
     Ok(())

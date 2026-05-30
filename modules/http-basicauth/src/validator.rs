@@ -92,7 +92,12 @@ impl BasicAuthValidator {
             }
         }
 
-        ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
         Ok(())
     }
 
@@ -202,7 +207,12 @@ impl BasicAuthValidator {
             }
         }
 
-        ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
         Ok(())
     }
 

@@ -104,7 +104,12 @@ impl RewriteValidator {
                 }
             }
         }
-        ferron_core::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
+        ferron_core::check_unused_subdirectives!(
+            children,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
         Ok(())
     }
 

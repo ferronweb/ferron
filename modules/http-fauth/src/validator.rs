@@ -1,6 +1,7 @@
 use ferron_core::{
+    check_unused_subdirectives,
     config::{validator::ConfigurationValidator, ServerConfigurationValue},
-    check_unused_subdirectives, validate_directive, validate_nested,
+    validate_directive, validate_nested,
 };
 
 pub struct ForwardedAuthenticationConfigurationValidator;

@@ -15,7 +15,12 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
             validate_directive!(config, used_directives, runtime, no_args, {
                 let mut sub = std::collections::HashSet::new();
                 validate_nested!(runtime, used(sub), io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                crate::check_unused_subdirectives!(runtime, sub, &mut ctx.diagnostics, ctx.scope.clone());
+                crate::check_unused_subdirectives!(
+                    runtime,
+                    sub,
+                    &mut ctx.diagnostics,
+                    ctx.scope.clone()
+                );
             });
 
             validate_directive!(config, used_directives, tcp, no_args, {
@@ -23,7 +28,12 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                 validate_nested!(tcp, used(sub), listen, args(1) => [ServerConfigurationValue::String(_, _)]);
                 validate_nested!(tcp, used(sub), send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
                 validate_nested!(tcp, used(sub), recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
-                crate::check_unused_subdirectives!(tcp, sub, &mut ctx.diagnostics, ctx.scope.clone());
+                crate::check_unused_subdirectives!(
+                    tcp,
+                    sub,
+                    &mut ctx.diagnostics,
+                    ctx.scope.clone()
+                );
             });
         }
 
@@ -116,7 +126,12 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                             }
                         }
                     }
-                    crate::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
+                    crate::check_unused_subdirectives!(
+                        children,
+                        sub,
+                        &mut ctx.diagnostics,
+                        ctx.scope.clone()
+                    );
                 }
                 // error_log may or may not have children, both are valid
             }

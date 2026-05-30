@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use cidr::IpCidr;
 use ferron_core::{
+    check_unused_subdirectives,
     config::{validator::validate_scoped_block, ServerConfigurationValue},
-    check_unused_subdirectives, validate_directive, validate_nested,
+    validate_directive, validate_nested,
 };
 
 pub struct HttpConfigurationValidator;
@@ -83,7 +84,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 let mut trace_sub = std::collections::HashSet::new();
                 validate_nested!(trace, used(trace_sub), generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 validate_nested!(trace, used(trace_sub), sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                check_unused_subdirectives!(trace, trace_sub, &mut ctx.diagnostics, ctx.scope.clone());
+                check_unused_subdirectives!(
+                    trace,
+                    trace_sub,
+                    &mut ctx.diagnostics,
+                    ctx.scope.clone()
+                );
             });
 
             check_unused_subdirectives!(http, sub, &mut ctx.diagnostics, ctx.scope.clone());

@@ -62,7 +62,12 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
                             }
                         }
                     }
-                    ferron_core::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
+                    ferron_core::check_unused_subdirectives!(
+                        children,
+                        sub,
+                        &mut ctx.diagnostics,
+                        ctx.scope.clone()
+                    );
                 }
             }
             used_directives.insert("replace".to_string());
