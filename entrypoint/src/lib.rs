@@ -432,7 +432,7 @@ fn run_configuration_validators(
                 config.global_config.span.clone(),
             ));
     }
-    all_diagnostics.extend(validator_ctx.diagnostics.drain(..));
+    all_diagnostics.append(&mut validator_ctx.diagnostics);
 
     // Run per-protocol validators
     let mut config_blocks_registry = HashMap::new();
@@ -479,7 +479,7 @@ fn run_configuration_validators(
                             block.1.span.clone(),
                         ));
                 }
-                all_diagnostics.extend(validator_ctx.diagnostics.drain(..));
+                all_diagnostics.append(&mut validator_ctx.diagnostics);
             }
         }
     }

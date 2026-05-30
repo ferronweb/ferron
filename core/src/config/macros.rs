@@ -789,6 +789,15 @@ macro_rules! validate_args {
 /// ```
 #[macro_export]
 macro_rules! validate_nested {
+    // Tracking variant — marks the subdirective name as used, then delegates to the non-tracking variant.
+    // Usage: validate_nested!(block, used(ctx.used_directives), name, args(1) => [Type]);
+    ($block:expr, used($used:expr), $name:ident, $($rest:tt)*) => {
+        {
+            $used.insert(stringify!($name).to_string());
+            $crate::validate_nested!($block, $name, $($rest)*)
+        }
+    };
+
     // Any number of arguments with type pattern validation (array syntax) - must come before args($count:expr)
     ($block:expr, $name:ident, args(*) => [$($pattern:pat $(if $guard:expr)?),+]) => {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
@@ -1187,6 +1196,38 @@ macro_rules! validate_nested {
     (@check_bool_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
         !$directive.args.is_empty() && matches!($directive.args[$idx], $pattern $(if $guard)?) &&
         $crate::validate_nested!(@check_bool_impl $directive, $idx + 1, [$($rest)+])
+    };
+}
+
+/// Emit `UnknownDirective` diagnostics for directives in a block that were not tracked as used.
+///
+/// Use after validating all known subdirectives in a nested block to catch unrecognized ones.
+///
+/// # Usage
+///
+/// ```ignore
+/// let mut local = std::collections::HashSet::new();
+/// validate_nested!(block, used(local), known_directive, args(1) => [Type]);
+/// // ... more validate_nested! calls
+/// check_unused_subdirectives!(block, local, diagnostics, scope);
+/// ```
+///
+/// `diagnostics` must be `&mut Vec<ConfigurationValidatorDiagnostic>`, `scope` is `Option<String>`.
+#[macro_export]
+macro_rules! check_unused_subdirectives {
+    ($block:expr, $used:expr, $diagnostics:expr, $scope:expr) => {
+        for directive_name in $block.directives.keys() {
+            if !$used.contains(directive_name) {
+                $diagnostics.push(
+                    $crate::config::validator::ConfigurationValidatorDiagnostic {
+                        kind: $crate::config::validator::ConfigurationValidatorDiagnosticKind::UnknownDirective,
+                        message: format!("`{directive_name}` is unused in the block"),
+                        span: $block.span.clone(),
+                        scope: $scope.clone(),
+                    }
+                );
+            }
+        }
     };
 }
 

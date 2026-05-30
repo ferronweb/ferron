@@ -1,7 +1,3 @@
-//! Configuration validation for abuse protection.
-
-use std::collections::HashSet;
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
@@ -28,14 +24,12 @@ impl ConfigurationValidator for AbuseProtectionValidator {
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let used_directives = &mut ctx.used_directives;
-
         // Check if this block contains an `abuse_protection` directive
         if let Some(entries) = config.directives.get("abuse_protection") {
-            used_directives.insert("abuse_protection".to_string());
+            ctx.used_directives.insert("abuse_protection".to_string());
             for entry in entries {
                 if let Some(ref children) = entry.children {
-                    self.validate_abuse_protection_block(children, used_directives)?;
+                    self.validate_abuse_protection_block(children, ctx)?;
                 }
             }
         }
@@ -48,8 +42,10 @@ impl AbuseProtectionValidator {
     fn validate_abuse_protection_block(
         &self,
         block: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
+
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
@@ -62,7 +58,7 @@ impl AbuseProtectionValidator {
 
         // Validate `enabled` — optional, must be a boolean
         if let Some(entries) = block.directives.get("enabled") {
-            used_directives.insert("enabled".to_string());
+            sub.insert("enabled".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     if value.as_boolean().is_none() {
@@ -74,7 +70,7 @@ impl AbuseProtectionValidator {
 
         // Validate `ban_duration` — optional, must be a duration
         if let Some(entries) = block.directives.get("ban_duration") {
-            used_directives.insert("ban_duration".to_string());
+            sub.insert("ban_duration".to_string());
             for entry in entries {
                 self.validate_duration_entry(entry, "ban_duration")?;
             }
@@ -87,7 +83,7 @@ impl AbuseProtectionValidator {
             "custom_threshold",
         ] {
             if let Some(entries) = block.directives.get(*threshold_name) {
-                used_directives.insert(threshold_name.to_string());
+                sub.insert(threshold_name.to_string());
                 for entry in entries {
                     if let Some(ref children) = entry.children {
                         self.validate_threshold_block(children, threshold_name)?;
@@ -96,6 +92,7 @@ impl AbuseProtectionValidator {
             }
         }
 
+        ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
         Ok(())
     }
 

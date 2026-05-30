@@ -13,13 +13,17 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
 
         if is_global {
             validate_directive!(config, used_directives, runtime, no_args, {
-                validate_nested!(runtime, io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                let mut sub = std::collections::HashSet::new();
+                validate_nested!(runtime, used(sub), io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                crate::check_unused_subdirectives!(runtime, sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
 
             validate_directive!(config, used_directives, tcp, no_args, {
-                validate_nested!(tcp, listen, args(1) => [ServerConfigurationValue::String(_, _)]);
-                validate_nested!(tcp, send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
-                validate_nested!(tcp, recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                let mut sub = std::collections::HashSet::new();
+                validate_nested!(tcp, used(sub), listen, args(1) => [ServerConfigurationValue::String(_, _)]);
+                validate_nested!(tcp, used(sub), send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                validate_nested!(tcp, used(sub), recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                crate::check_unused_subdirectives!(tcp, sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
         }
 
@@ -27,10 +31,12 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
         validate_directive!(config, used_directives, observability, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
-            validate_nested!(observability, provider, args(1) => ServerConfigurationValue::String(_, _));
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(observability, used(sub), provider, args(1) => ServerConfigurationValue::String(_, _));
 
             // Common fields
-            validate_nested!(observability, format, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(observability, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
+            crate::check_unused_subdirectives!(observability, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         // Alias: log /path/to/access.log { ... } -> observability { provider file; access_log /path/to/access.log; ... }
@@ -38,9 +44,11 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
-            validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
-            validate_nested!(log, access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(log, used(sub), access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(log, used(sub), access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            crate::check_unused_subdirectives!(log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         // Alias: error_log /path/to/error.log { ... } -> observability { provider file; error_log /path/to/error.log; ... }
@@ -69,10 +77,11 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                 }
                 // Validate nested block if present
                 if let Some(ref children) = directive.children {
+                    let mut sub = std::collections::HashSet::new();
                     if let Some(rotate_size_entries) =
                         children.directives.get("error_log_rotate_size")
                     {
-                        used_directives.insert("error_log_rotate_size".to_string());
+                        sub.insert("error_log_rotate_size".to_string());
                         for entry in rotate_size_entries {
                             if entry.args.len() != 1 {
                                 return Err(format!(
@@ -91,7 +100,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                     if let Some(rotate_keep_entries) =
                         children.directives.get("error_log_rotate_keep")
                     {
-                        used_directives.insert("error_log_rotate_keep".to_string());
+                        sub.insert("error_log_rotate_keep".to_string());
                         for entry in rotate_keep_entries {
                             if entry.args.len() != 1 {
                                 return Err(format!(
@@ -107,6 +116,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                             }
                         }
                     }
+                    crate::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
                 }
                 // error_log may or may not have children, both are valid
             }
@@ -116,7 +126,9 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
         validate_directive!(config, used_directives, console_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
-            validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(console_log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
+            crate::check_unused_subdirectives!(console_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         Ok(())

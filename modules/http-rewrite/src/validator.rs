@@ -1,8 +1,3 @@
-//! Configuration validator for `rewrite` and `rewrite_log` directives.
-//!
-//! Validates that `rewrite` entries contain recognized arguments and options
-//! with valid value types.
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
@@ -19,18 +14,17 @@ impl ConfigurationValidator for RewriteValidator {
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let used_directives = &mut ctx.used_directives;
         // Validate `rewrite` directive
         if let Some(entries) = config.directives.get("rewrite") {
-            used_directives.insert("rewrite".to_string());
+            ctx.used_directives.insert("rewrite".to_string());
             for entry in entries {
-                self.validate_rewrite_entry(entry)?;
+                self.validate_rewrite_entry(entry, ctx)?;
             }
         }
 
         // Validate `rewrite_log` directive
         if let Some(entries) = config.directives.get("rewrite_log") {
-            used_directives.insert("rewrite_log".to_string());
+            ctx.used_directives.insert("rewrite_log".to_string());
             for entry in entries {
                 self.validate_rewrite_log_entry(entry)?;
             }
@@ -44,6 +38,7 @@ impl RewriteValidator {
     fn validate_rewrite_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Must have exactly 2 positional arguments
         if entry.args.len() != 2 {
@@ -74,7 +69,7 @@ impl RewriteValidator {
 
         // Validate optional block
         if let Some(ref children) = entry.children {
-            self.validate_rewrite_block_options(children)?;
+            self.validate_rewrite_block_options(children, ctx)?;
         }
 
         Ok(())
@@ -83,7 +78,9 @@ impl RewriteValidator {
     fn validate_rewrite_block_options(
         &self,
         children: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
         for (key, nested_entries) in children.directives.iter() {
             if !RECOGNIZED_OPTIONS.contains(&key.as_str()) {
                 return Err(format!(
@@ -92,6 +89,7 @@ impl RewriteValidator {
                 )
                 .into());
             }
+            sub.insert(key.clone());
             for nested_entry in nested_entries {
                 if nested_entry.args.len() > 1 {
                     return Err(format!("Invalid `{key}` — must have at most one value").into());
@@ -106,6 +104,7 @@ impl RewriteValidator {
                 }
             }
         }
+        ferron_core::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
         Ok(())
     }
 

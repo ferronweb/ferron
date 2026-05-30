@@ -46,8 +46,8 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
 
                     validate_cache_block(
                         children,
+                        ctx,
                         &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
-                        "global `cache`",
                     )?;
                     if !children.directives.contains_key("max_entries") {
                         return Err(
@@ -76,7 +76,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         );
                     }
 
-                    validate_cache_block(children, HOST_CACHE_DIRECTIVES, "`cache`")?;
+                    validate_cache_block(children, ctx, HOST_CACHE_DIRECTIVES)?;
                 } else {
                     if entry.args.len() > 1 {
                         return Err(
@@ -98,20 +98,14 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
 
 fn validate_cache_block(
     block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     allowed_directives: &[&str],
-    context: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for directive_name in block.directives.keys() {
-        if !allowed_directives.contains(&directive_name.as_str()) {
-            return Err(format!(
-                "Invalid `{directive_name}` - unknown directive in {context} block"
-            )
-            .into());
-        }
-    }
+    let mut sub = std::collections::HashSet::new();
 
     for allowed in allowed_directives {
         if let Some(entries) = block.directives.get(*allowed) {
+            sub.insert(allowed.to_string());
             for entry in entries {
                 if entry.children.is_some() {
                     return Err(
@@ -121,6 +115,8 @@ fn validate_cache_block(
             }
         }
     }
+
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
 
     if let Some(entries) = block.directives.get("max_entries") {
         for entry in entries {

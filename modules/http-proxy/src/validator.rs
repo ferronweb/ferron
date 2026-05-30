@@ -1,5 +1,3 @@
-//! Configuration validation for the reverse proxy module.
-
 use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
@@ -38,7 +36,7 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
         }
         if let Some(entries) = config.directives.get("proxy") {
             used_directives.insert("proxy".to_string());
-            validate_proxy_entries(entries)?;
+            validate_proxy_entries(entries, ctx)?;
         }
         Ok(())
     }
@@ -46,6 +44,7 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
 
 fn validate_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
     for entry in entries {
         if entry.args.len() > 1 {
@@ -59,28 +58,41 @@ fn validate_proxy_entries(
             }
         }
         if let Some(block) = &entry.children {
-            validate_proxy_block(block)?;
+            validate_proxy_block(block, ctx)?;
         }
     }
     Ok(())
 }
 
-fn validate_proxy_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
-    ferron_core::validate_nested!(block, algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
-    validate_passive_check_directives(block)?;
-    validate_circuit_breaker_directives(block)?;
-    ferron_core::validate_nested!(block, retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, proxy_header, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+fn validate_proxy_block(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn Error>> {
+    let mut sub = std::collections::HashSet::new();
+
+    ferron_core::validate_nested!(block, used(sub), algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
+    validate_passive_check_directives(block, ctx, &mut sub)?;
+    validate_circuit_breaker_directives(block, ctx, &mut sub)?;
+    ferron_core::validate_nested!(block, used(sub), retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), proxy_header, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+    if block.directives.contains_key("request_header") {
+        sub.insert("request_header".to_string());
+    }
     validate_request_header(block)?;
+    if block.directives.contains_key("proxy_concurrent_conns") {
+        sub.insert("proxy_concurrent_conns".to_string());
+    }
     validate_number(block, "proxy_concurrent_conns", 0)?;
-    validate_upstream_directives(block)?;
+    validate_upstream_directives(block, ctx, &mut sub)?;
     #[cfg(feature = "srv-lookup")]
-    validate_srv_directives(block)?;
+    validate_srv_directives(block, ctx, &mut sub)?;
+
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }
 
@@ -103,7 +115,10 @@ fn validate_number(
     Ok(())
 }
 
-fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
+fn validate_duration(
+    block: &ServerConfigurationBlock,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get(name) {
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
@@ -116,7 +131,9 @@ fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(),
     Ok(())
 }
 
-fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+fn validate_request_header(
+    block: &ServerConfigurationBlock,
+) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("request_header") {
         for e in entries {
             if e.args.is_empty() {
@@ -144,8 +161,13 @@ fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<d
     Ok(())
 }
 
-fn validate_upstream_directives(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+fn validate_upstream_directives(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
+) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("upstream") {
+        parent_used.insert("upstream".to_string());
         for e in entries {
             if e.args
                 .first()
@@ -155,35 +177,50 @@ fn validate_upstream_directives(block: &ServerConfigurationBlock) -> Result<(), 
                 return Err("The `upstream` directive requires a URL argument".into());
             }
             if let Some(up_block) = &e.children {
-                validate_upstream_block(up_block)?;
+                validate_upstream_block(up_block, ctx)?;
             }
         }
     }
     Ok(())
 }
 
-fn validate_upstream_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
-    validate_active_check_directives(block)?;
-    ferron_core::validate_nested!(block, limit, args(1) => [ServerConfigurationValue::Number(_, _)]);
+fn validate_upstream_block(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn Error>> {
+    let mut sub = std::collections::HashSet::new();
+
+    validate_active_check_directives(block, ctx, &mut sub)?;
+    ferron_core::validate_nested!(block, used(sub), limit, args(1) => [ServerConfigurationValue::Number(_, _)]);
+    if block.directives.contains_key("idle_timeout") {
+        sub.insert("idle_timeout".to_string());
+    }
     validate_duration(block, "idle_timeout")?;
-    ferron_core::validate_nested!(block, unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());
     }
+
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }
 
 /// Validate SRV upstream directives.
 #[cfg(feature = "srv-lookup")]
-fn validate_srv_directives(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+fn validate_srv_directives(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
+) -> Result<(), Box<dyn Error>> {
     if let Some(entries) = block.directives.get("srv") {
+        parent_used.insert("srv".to_string());
         for e in entries {
             if e.args.first().and_then(|v| v.as_str()).is_none() {
                 return Err("The `srv` directive requires an SRV record name argument".into());
             }
             if let Some(srv_block) = &e.children {
-                validate_srv_block(srv_block)?;
+                validate_srv_block(srv_block, ctx)?;
             }
         }
     }
@@ -191,47 +228,95 @@ fn validate_srv_directives(block: &ServerConfigurationBlock) -> Result<(), Box<d
 }
 
 #[cfg(feature = "srv-lookup")]
-fn validate_srv_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+fn validate_srv_block(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn Error>> {
+    let mut sub = std::collections::HashSet::new();
+
+    if block.directives.contains_key("limit") {
+        sub.insert("limit".to_string());
+    }
     validate_number(block, "limit", 1)?;
+    if block.directives.contains_key("idle_timeout") {
+        sub.insert("idle_timeout".to_string());
+    }
     validate_duration(block, "idle_timeout")?;
-    ferron_core::validate_nested!(block, dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
+
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }
 
 fn validate_passive_check_directives(
     block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(block) = block
+    if let Some(passive_block) = block
         .directives
         .get("passive_check")
         .and_then(|d| d.first())
         .and_then(|d| d.children.as_ref())
     {
-        validate_number(block, "max_fails", 0)?;
-        validate_duration(block, "window")?;
+        parent_used.insert("passive_check".to_string());
+        let mut sub = std::collections::HashSet::new();
+
+        if passive_block.directives.contains_key("max_fails") {
+            sub.insert("max_fails".to_string());
+        }
+        validate_number(passive_block, "max_fails", 0)?;
+        if passive_block.directives.contains_key("window") {
+            sub.insert("window".to_string());
+        }
+        validate_duration(passive_block, "window")?;
+
+        ferron_core::check_unused_subdirectives!(passive_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     }
     Ok(())
 }
 
 fn validate_active_check_directives(
     block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(block) = block
+    if let Some(active_block) = block
         .directives
         .get("active_check")
         .and_then(|d| d.first())
         .and_then(|d| d.children.as_ref())
     {
-        ferron_core::validate_nested!(block, uri, args(1) => [ServerConfigurationValue::String(_, _)]);
-        ferron_core::validate_nested!(block, method, args(1) => [ServerConfigurationValue::String(_, _)]);
-        validate_duration(block, "interval")?;
-        validate_duration(block, "timeout")?;
-        ferron_core::validate_nested!(block, expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
-        validate_duration(block, "response_time_threshold")?;
-        ferron_core::validate_nested!(block, body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
-        validate_number(block, "consecutive_fails", 1)?;
-        validate_number(block, "consecutive_passes", 1)?;
-        ferron_core::validate_nested!(block, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+        parent_used.insert("active_check".to_string());
+        let mut sub = std::collections::HashSet::new();
+
+        ferron_core::validate_nested!(active_block, used(sub), uri, args(1) => [ServerConfigurationValue::String(_, _)]);
+        ferron_core::validate_nested!(active_block, used(sub), method, args(1) => [ServerConfigurationValue::String(_, _)]);
+        if active_block.directives.contains_key("interval") {
+            sub.insert("interval".to_string());
+        }
+        validate_duration(active_block, "interval")?;
+        if active_block.directives.contains_key("timeout") {
+            sub.insert("timeout".to_string());
+        }
+        validate_duration(active_block, "timeout")?;
+        ferron_core::validate_nested!(active_block, used(sub), expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
+        if active_block.directives.contains_key("response_time_threshold") {
+            sub.insert("response_time_threshold".to_string());
+        }
+        validate_duration(active_block, "response_time_threshold")?;
+        ferron_core::validate_nested!(active_block, used(sub), body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
+        if active_block.directives.contains_key("consecutive_fails") {
+            sub.insert("consecutive_fails".to_string());
+        }
+        validate_number(active_block, "consecutive_fails", 1)?;
+        if active_block.directives.contains_key("consecutive_passes") {
+            sub.insert("consecutive_passes".to_string());
+        }
+        validate_number(active_block, "consecutive_passes", 1)?;
+        ferron_core::validate_nested!(active_block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+
+        ferron_core::check_unused_subdirectives!(active_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     }
 
     Ok(())
@@ -239,17 +324,36 @@ fn validate_active_check_directives(
 
 fn validate_circuit_breaker_directives(
     block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(block) = block
+    if let Some(cb_block) = block
         .directives
         .get("circuit_breaker")
         .and_then(|d| d.first())
         .and_then(|d| d.children.as_ref())
     {
-        validate_number(block, "max_fails", 1)?;
-        validate_duration(block, "window")?;
-        validate_duration(block, "open_duration")?;
-        validate_number(block, "consecutive_passes", 1)?;
+        parent_used.insert("circuit_breaker".to_string());
+        let mut sub = std::collections::HashSet::new();
+
+        if cb_block.directives.contains_key("max_fails") {
+            sub.insert("max_fails".to_string());
+        }
+        validate_number(cb_block, "max_fails", 1)?;
+        if cb_block.directives.contains_key("window") {
+            sub.insert("window".to_string());
+        }
+        validate_duration(cb_block, "window")?;
+        if cb_block.directives.contains_key("open_duration") {
+            sub.insert("open_duration".to_string());
+        }
+        validate_duration(cb_block, "open_duration")?;
+        if cb_block.directives.contains_key("consecutive_passes") {
+            sub.insert("consecutive_passes".to_string());
+        }
+        validate_number(cb_block, "consecutive_passes", 1)?;
+
+        ferron_core::check_unused_subdirectives!(cb_block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     }
 
     Ok(())

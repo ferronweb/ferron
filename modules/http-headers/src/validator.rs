@@ -1,5 +1,3 @@
-//! Configuration validation for the HTTP headers module.
-
 use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
@@ -54,7 +52,7 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
             used_directives.insert("cors".to_string());
             for e in entries {
                 if let Some(block) = &e.children {
-                    validate_cors_block(block)?;
+                    validate_cors_block(block, ctx)?;
                 }
             }
         }
@@ -63,13 +61,17 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
     }
 }
 
-fn validate_cors_block(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
-    ferron_core::validate_nested!(block, origins, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, methods, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, headers, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-    ferron_core::validate_nested!(block, max_age, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, expose_headers, args(*) => [ServerConfigurationValue::String(_, _)]);
-
+fn validate_cors_block(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn Error>> {
+    let mut sub = std::collections::HashSet::new();
+    ferron_core::validate_nested!(block, used(sub), origins, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), methods, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), headers, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), max_age, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), expose_headers, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }

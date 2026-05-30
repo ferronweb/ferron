@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cidr::IpCidr;
 use ferron_core::{
     config::{validator::validate_scoped_block, ServerConfigurationValue},
-    validate_directive, validate_nested,
+    check_unused_subdirectives, validate_directive, validate_nested,
 };
 
 pub struct HttpConfigurationValidator;
@@ -41,16 +41,18 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
         // HTTP settings
         validate_directive!(config, ctx.used_directives, http, no_args, {
-            validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+
+            validate_nested!(http, used(sub), protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
             // OPTIONS * allowed methods
-            validate_nested!(http, options_allowed_methods, args(1) => [
+            validate_nested!(http, used(sub), options_allowed_methods, args(1) => [
                 ServerConfigurationValue::String(_, _)
                     | ServerConfigurationValue::InterpolatedString(_, _)
             ]);
 
             // Timeout
-            validate_nested!(http, timeout, args(1) => [
+            validate_nested!(http, used(sub), timeout, args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(false, _)
                     | ServerConfigurationValue::String(_, _)
@@ -59,28 +61,32 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
             // URL sanitization
             if is_global {
-                validate_nested!(http, url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(http, url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, used(sub), url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, used(sub), url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             }
 
             // HTTP/1.x settings
-            validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // 103 Early Hints
-            validate_nested!(http, early_hints, optional);
+            validate_nested!(http, used(sub), early_hints, optional);
 
             // HTTP/2 settings
-            validate_nested!(http, h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // W3C Trace Context
-            validate_nested!(http, trace, {
-                validate_nested!(trace, generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(trace, sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), trace, {
+                let mut trace_sub = std::collections::HashSet::new();
+                validate_nested!(trace, used(trace_sub), generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, used(trace_sub), sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                check_unused_subdirectives!(trace, trace_sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
+
+            check_unused_subdirectives!(http, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         // Webroot
@@ -103,23 +109,29 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
-            validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
-            validate_nested!(log, access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(log, used(sub), access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(log, used(sub), access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            check_unused_subdirectives!(log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         validate_directive!(config, ctx.used_directives, error_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
-            validate_nested!(error_log, error_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(error_log, error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(error_log, used(sub), error_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(error_log, used(sub), error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            check_unused_subdirectives!(error_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         validate_directive!(config, ctx.used_directives, console_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
-            validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(console_log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
+            check_unused_subdirectives!(console_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         // Index file names

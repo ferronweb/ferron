@@ -10,10 +10,12 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
     ) -> Result<(), Box<dyn std::error::Error>> {
         let used_directives = &mut ctx.used_directives;
         ferron_core::validate_directive!(config, used_directives, cgi, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {
-            ferron_core::validate_nested!(cgi, extension, args(*) => [ServerConfigurationValue::String(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            ferron_core::validate_nested!(cgi, used(sub), extension, args(*) => [ServerConfigurationValue::String(_, _)]);
 
             // Manual validation of `interpreter` subdirective...
             if let Some(directives) = cgi.directives.get(stringify!(interpreter)) {
+                sub.insert(stringify!(interpreter).to_string());
                 for directive in directives {
                     if directive.args.len() < 2 {
                         return Err(format!(
@@ -57,7 +59,8 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
                 }
             };
 
-            ferron_core::validate_nested!(cgi, environment, args(2) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _), ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+            ferron_core::validate_nested!(cgi, used(sub), environment, args(2) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _), ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+            ferron_core::check_unused_subdirectives!(cgi, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         Ok(())

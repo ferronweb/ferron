@@ -1,7 +1,3 @@
-//! Configuration validator for `status`, `abort`, `block`, and `allow` directives.
-
-use std::collections::HashSet;
-
 use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
@@ -9,7 +5,7 @@ use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 #[inline]
 fn validate_ip_directive(
     config: &ServerConfigurationBlock,
-    used_directives: &mut HashSet<String>,
+    used_directives: &mut std::collections::HashSet<String>,
     directive: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(entries) = config.directives.get(directive) {
@@ -134,7 +130,9 @@ impl ConfigurationValidator for HttpResponseValidator {
 
         // Validate `early_hints` directives
         ferron_core::validate_directive!(config, used_directives, early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {
-            ferron_core::validate_nested!(early_hints, link, args(*) => [ServerConfigurationValue::String(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            ferron_core::validate_nested!(early_hints, used(sub), link, args(*) => [ServerConfigurationValue::String(_, _)]);
+            ferron_core::check_unused_subdirectives!(early_hints, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         Ok(())

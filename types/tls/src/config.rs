@@ -408,18 +408,22 @@ macro_rules! validate_tls_common {
 
            // OCSP stapling configuration
            validate_directive!($config, used, ocsp, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
-                validate_nested!(ocsp, enabled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                let mut ocsp_used = std::collections::HashSet::new();
+                validate_nested!(ocsp, used(ocsp_used), enabled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::check_unused_subdirectives!(ocsp, ocsp_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());
            });
 
            // Session ticket keys configuration
            validate_directive!($config, used, ticket_keys, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
-                validate_nested!(ticket_keys, file, args(1) => [ServerConfigurationValue::String(_, _) |
-                    ServerConfigurationValue::InterpolatedString(_, _)]);
-                validate_nested!(ticket_keys, auto_rotate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(ticket_keys, rotation_internval, args(1) => [ServerConfigurationValue::String(_, _) |
-                    ServerConfigurationValue::InterpolatedString(_, _) |
-                    ServerConfigurationValue::Number(_, _)]);
-                validate_nested!(ticket_keys, max_keys, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                 let mut tk_used = std::collections::HashSet::new();
+                 validate_nested!(ticket_keys, used(tk_used), file, args(1) => [ServerConfigurationValue::String(_, _) |
+                     ServerConfigurationValue::InterpolatedString(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), auto_rotate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), rotation_internval, args(1) => [ServerConfigurationValue::String(_, _) |
+                     ServerConfigurationValue::InterpolatedString(_, _) |
+                     ServerConfigurationValue::Number(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), max_keys, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                 ferron_core::check_unused_subdirectives!(ticket_keys, tk_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());
            });
        }
     };

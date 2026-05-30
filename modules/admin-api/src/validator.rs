@@ -1,7 +1,3 @@
-//! Admin configuration validator.
-//!
-//! Validates the `admin { ... }` global configuration directive.
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::ServerConfigurationValue;
 
@@ -20,16 +16,20 @@ impl ConfigurationValidator for AdminConfigurationValidator {
             ferron_core::validate_directive!(config, used_directives, admin, optional
                 args(1) => [ServerConfigurationValue::Boolean(_, _)], {
 
+                let mut sub = std::collections::HashSet::new();
+
                 // Listen address
-                ferron_core::validate_nested!(admin, listen, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), listen, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
 
                 // Endpoint flags
-                ferron_core::validate_nested!(admin, health, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::validate_nested!(admin, status, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::validate_nested!(admin, config, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::validate_nested!(admin, reload, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::validate_nested!(admin, reload_get, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::validate_nested!(admin, runtime, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), health, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), status, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), config, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), reload, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), reload_get, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::validate_nested!(admin, used(sub), runtime, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+
+                ferron_core::check_unused_subdirectives!(admin, sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
         }
 

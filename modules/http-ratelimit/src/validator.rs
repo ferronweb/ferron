@@ -1,8 +1,3 @@
-//! Configuration validator for `rate_limit` directives.
-//!
-//! Validates that `rate_limit` blocks contain recognized directives
-//! with valid value types.
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
@@ -28,13 +23,11 @@ impl ConfigurationValidator for RateLimitValidator {
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let used_directives = &mut ctx.used_directives;
-        // Check if this block contains a `rate_limit` directive
         if let Some(entries) = config.directives.get("rate_limit") {
-            used_directives.insert("rate_limit".to_string());
+            ctx.used_directives.insert("rate_limit".to_string());
             for entry in entries {
                 if let Some(ref children) = entry.children {
-                    self.validate_rate_limit_block(children)?;
+                    self.validate_rate_limit_block(children, ctx)?;
                 }
             }
         }
@@ -47,7 +40,10 @@ impl RateLimitValidator {
     fn validate_rate_limit_block(
         &self,
         block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
+
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
@@ -67,9 +63,11 @@ impl RateLimitValidator {
         for entry in rate_entry.into_iter().flatten() {
             self.validate_number_entry(entry, "rate", 1)?;
         }
+        sub.insert("rate".to_string());
 
         // Validate `burst` — optional, must be a non-negative integer
         if let Some(entries) = block.directives.get("burst") {
+            sub.insert("burst".to_string());
             for entry in entries {
                 self.validate_number_entry(entry, "burst", 0)?;
             }
@@ -77,6 +75,7 @@ impl RateLimitValidator {
 
         // Validate `key` — optional, must be a valid key extractor string
         if let Some(entries) = block.directives.get("key") {
+            sub.insert("key".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     let key_str = value
@@ -94,6 +93,7 @@ impl RateLimitValidator {
 
         // Validate `deny_status` — optional, must be a valid HTTP status code
         if let Some(entries) = block.directives.get("deny_status") {
+            sub.insert("deny_status".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     let n = value
@@ -111,6 +111,7 @@ impl RateLimitValidator {
 
         // Validate `bucket_ttl` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("bucket_ttl") {
+            sub.insert("bucket_ttl".to_string());
             for entry in entries {
                 self.validate_number_entry(entry, "bucket_ttl", 1)?;
             }
@@ -118,11 +119,13 @@ impl RateLimitValidator {
 
         // Validate `max_buckets` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("max_buckets") {
+            sub.insert("max_buckets".to_string());
             for entry in entries {
                 self.validate_number_entry(entry, "max_buckets", 1)?;
             }
         }
 
+        ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
         Ok(())
     }
 

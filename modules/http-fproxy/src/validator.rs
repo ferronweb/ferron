@@ -1,5 +1,3 @@
-//! Configuration validation for the forward proxy module.
-
 use std::error::Error;
 
 use ferron_core::config::validator::ConfigurationValidator;
@@ -17,7 +15,7 @@ impl ConfigurationValidator for ForwardProxyConfigurationValidator {
         let used_directives = &mut ctx.used_directives;
         if let Some(entries) = config.directives.get("forward_proxy") {
             used_directives.insert("forward_proxy".to_string());
-            validate_forward_proxy_entries(entries)?;
+            validate_forward_proxy_entries(entries, ctx)?;
         }
         Ok(())
     }
@@ -25,6 +23,7 @@ impl ConfigurationValidator for ForwardProxyConfigurationValidator {
 
 fn validate_forward_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
     for entry in entries {
         // Validate args: at most one boolean (the enable toggle)
@@ -41,7 +40,7 @@ fn validate_forward_proxy_entries(
 
         // Validate block children
         if let Some(block) = &entry.children {
-            validate_forward_proxy_block(block)?;
+            validate_forward_proxy_block(block, ctx)?;
         }
     }
     Ok(())
@@ -49,14 +48,18 @@ fn validate_forward_proxy_entries(
 
 fn validate_forward_proxy_block(
     block: &ferron_core::config::ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn Error>> {
-    ferron_core::validate_nested!(block, allow_domains, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, deny_ips, args(*) => [ServerConfigurationValue::String(_, _)]);
-    ferron_core::validate_nested!(block, connect_method, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    let mut sub = std::collections::HashSet::new();
+
+    ferron_core::validate_nested!(block, used(sub), allow_domains, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), deny_ips, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), connect_method, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
     // -- manual validation ---------------
     // allow_ports — accepts numeric arguments
     if let Some(entries) = block.directives.get("allow_ports") {
+        sub.insert("allow_ports".to_string());
         for e in entries {
             if e.args.is_empty() {
                 return Err("The `allow_ports` directive requires at least one argument".into());
@@ -75,6 +78,7 @@ fn validate_forward_proxy_block(
 
     // http_version — enum
     if let Some(entries) = block.directives.get("http_version") {
+        sub.insert("http_version".to_string());
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
                 if val != "1.0" && val != "1.1" {
@@ -86,5 +90,6 @@ fn validate_forward_proxy_block(
         }
     }
 
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }

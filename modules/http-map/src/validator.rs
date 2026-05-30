@@ -1,8 +1,3 @@
-//! Configuration validator for the `map` directive.
-//!
-//! Validates that `map` entries contain recognized sub-directives
-//! (`default`, `exact`, `regex`) with valid argument types and block options.
-
 use fancy_regex::Regex;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
@@ -23,11 +18,10 @@ impl ConfigurationValidator for MapValidator {
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let used_directives = &mut ctx.used_directives;
         if let Some(entries) = config.directives.get("map") {
-            used_directives.insert("map".to_string());
+            ctx.used_directives.insert("map".to_string());
             for entry in entries {
-                self.validate_map_entry(entry)?;
+                self.validate_map_entry(entry, ctx)?;
             }
         }
 
@@ -39,6 +33,7 @@ impl MapValidator {
     fn validate_map_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Must have exactly 2 positional arguments: source and destination
         if entry.args.len() != 2 {
@@ -75,7 +70,7 @@ impl MapValidator {
         };
 
         // Validate the child block
-        self.validate_map_block(children)?;
+        self.validate_map_block(children, ctx)?;
 
         Ok(())
     }
@@ -83,7 +78,9 @@ impl MapValidator {
     fn validate_map_block(
         &self,
         block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
         for (key, entries) in block.directives.iter() {
             if !MAP_BLOCK_DIRECTIVES.contains(&key.as_str()) {
                 return Err(format!(
@@ -93,16 +90,17 @@ impl MapValidator {
                 .into());
             }
 
+            sub.insert(key.clone());
             for entry in entries {
                 match key.as_str() {
                     "default" => self.validate_default_entry(entry)?,
                     "exact" => self.validate_exact_entry(entry)?,
-                    "regex" => self.validate_regex_entry(entry)?,
+                    "regex" => self.validate_regex_entry(entry, ctx)?,
                     _ => unreachable!(),
                 }
             }
         }
-
+        ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
         Ok(())
     }
 
@@ -163,6 +161,7 @@ impl MapValidator {
     fn validate_regex_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if entry.args.len() != 2 {
             return Err(format!(
@@ -209,7 +208,7 @@ impl MapValidator {
 
         // Validate optional block
         if let Some(ref children) = entry.children {
-            self.validate_regex_block_options(children)?;
+            self.validate_regex_block_options(children, ctx)?;
         }
 
         Ok(())
@@ -218,7 +217,9 @@ impl MapValidator {
     fn validate_regex_block_options(
         &self,
         children: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
         for (key, nested_entries) in children.directives.iter() {
             if !REGEX_OPTIONS.contains(&key.as_str()) {
                 return Err(format!(
@@ -227,9 +228,10 @@ impl MapValidator {
                 )
                 .into());
             }
+            sub.insert(key.clone());
             for nested_entry in nested_entries {
                 if nested_entry.args.is_empty() {
-                    continue; // No args means default value (false)
+                    continue;
                 }
                 if nested_entry.args.len() != 1 {
                     return Err(format!(
@@ -248,6 +250,7 @@ impl MapValidator {
                 }
             }
         }
+        ferron_core::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
         Ok(())
     }
 }

@@ -126,11 +126,10 @@ pub fn validate_scoped_block(
     };
 
     let result = provider_validator.validate_block(block, &mut local_ctx);
-    ctx.diagnostics.extend(local_ctx.diagnostics.drain(..));
+    ctx.diagnostics.append(&mut local_ctx.diagnostics);
     for unused_directive in block
         .directives
         .keys()
-        .into_iter()
         .filter(|dn| !local_ctx.used_directives.contains(*dn))
     {
         ctx.diagnostics.push(local_ctx.create_diagnostic(

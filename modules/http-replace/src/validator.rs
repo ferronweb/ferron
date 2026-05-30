@@ -1,12 +1,7 @@
-//! Configuration validator for the http-replace module.
-//!
-//! Validates `replace`, `replace_last_modified`, and `replace_filter_types` directives.
-
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::config::ServerConfigurationValue;
 
-/// Validator for http-replace module directives.
 #[derive(Default)]
 pub struct ReplaceConfigurationValidator;
 
@@ -43,10 +38,11 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
 
                 // Validate `once` option in child block
                 if let Some(children) = &entry.children {
+                    let mut sub = std::collections::HashSet::new();
                     if let Some(once_entries) = children.directives.get("once") {
+                        sub.insert("once".to_string());
                         for once_entry in once_entries {
                             if once_entry.args.is_empty() {
-                                // `once` can be specified without arguments (defaults to true)
                                 continue;
                             }
                             if once_entry.args.len() != 1 {
@@ -66,6 +62,7 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
                             }
                         }
                     }
+                    ferron_core::check_unused_subdirectives!(children, sub, &mut ctx.diagnostics, ctx.scope.clone());
                 }
             }
             used_directives.insert("replace".to_string());
@@ -75,7 +72,6 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
         if let Some(entries) = config.directives.get("replace_last_modified") {
             for entry in entries {
                 if entry.args.is_empty() {
-                    // No arguments means default to true
                     continue;
                 }
                 if entry.args.len() != 1 {

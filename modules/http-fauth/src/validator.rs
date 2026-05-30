@@ -1,6 +1,6 @@
 use ferron_core::{
     config::{validator::ConfigurationValidator, ServerConfigurationValue},
-    validate_directive, validate_nested,
+    check_unused_subdirectives, validate_directive, validate_nested,
 };
 
 pub struct ForwardedAuthenticationConfigurationValidator;
@@ -43,12 +43,14 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
         }
 
         validate_directive!(config, used_directives, auth_to, optional args(1) => [ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::String(_, _)], {
-            validate_nested!(auth_to, url, args(1) => [ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::String(_, _)]);
-            validate_nested!(auth_to, unix, args(1) => [ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::String(_, _)]);
-            validate_nested!(auth_to, limit, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)]);
-            validate_nested!(auth_to, idle_timeout, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)]);
-            validate_nested!(auth_to, no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-            validate_nested!(auth_to, copy, args(*) => [ServerConfigurationValue::String(_, _)]);
+            let mut sub = std::collections::HashSet::new();
+            validate_nested!(auth_to, used(sub), url, args(1) => [ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(auth_to, used(sub), unix, args(1) => [ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(auth_to, used(sub), limit, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)]);
+            validate_nested!(auth_to, used(sub), idle_timeout, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)]);
+            validate_nested!(auth_to, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(auth_to, used(sub), copy, args(*) => [ServerConfigurationValue::String(_, _)]);
+            check_unused_subdirectives!(auth_to, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         Ok(())
