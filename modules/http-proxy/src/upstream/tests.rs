@@ -138,8 +138,7 @@ fn test_select_backend_single_backend() {
 
 #[test]
 fn test_determine_proxy_to_no_upstreams() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
@@ -158,6 +157,7 @@ fn test_determine_proxy_to_no_upstreams() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_none());
 }
@@ -165,8 +165,7 @@ fn test_determine_proxy_to_no_upstreams() {
 #[test]
 fn test_determine_proxy_to_single_backend() {
     let upstreams = vec![make_upstream("http://backend1")];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
@@ -186,6 +185,7 @@ fn test_determine_proxy_to_single_backend() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -198,10 +198,9 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    failed_backends.insert(make_upstream("http://backend1"), 5);
+    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -221,6 +220,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -232,11 +232,10 @@ fn test_determine_proxy_to_all_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    failed_backends.insert(make_upstream("http://backend1"), 5);
-    failed_backends.insert(make_upstream("http://backend2"), 5);
+    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
+    failed_backends.insert((make_upstream("http://backend2"), vec![]), 5);
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -256,6 +255,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_none());
 }
@@ -266,11 +266,10 @@ fn test_determine_proxy_to_health_check_disabled() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     {
-        failed_backends.insert(make_upstream("http://backend1"), 100);
+        failed_backends.insert((make_upstream("http://backend1"), vec![]), 100);
     }
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
@@ -291,14 +290,14 @@ fn test_determine_proxy_to_health_check_disabled() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
 }
 
 #[test]
 fn test_record_backend_transport_failure() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
@@ -310,10 +309,11 @@ fn test_record_backend_transport_failure() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 1);
-    assert_eq!(failed_backends.get(&upstream), Some(1));
+    assert_eq!(failed_backends.get(&(upstream.clone(), vec![])), Some(1));
 
     record_backend_transport_failure(
         Arc::clone(&failed_backends),
@@ -323,15 +323,15 @@ fn test_record_backend_transport_failure() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
-    assert_eq!(failed_backends.get(&upstream), Some(2));
+    assert_eq!(failed_backends.get(&(upstream, vec![])), Some(2));
 }
 
 #[test]
 fn test_record_backend_transport_failure_passive_check_disabled() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
@@ -343,10 +343,11 @@ fn test_record_backend_transport_failure_passive_check_disabled() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 0);
-    assert_eq!(failed_backends.get(&upstream), None);
+    assert_eq!(failed_backends.get(&(upstream, vec![])), None);
 }
 
 #[test]
@@ -382,8 +383,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     health_check_state.insert(
@@ -412,6 +412,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -423,8 +424,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::Random;
@@ -445,6 +445,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     let selected = result.unwrap();

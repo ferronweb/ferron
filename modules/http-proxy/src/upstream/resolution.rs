@@ -24,6 +24,7 @@ pub async fn resolve_upstreams(
     failed_backends: Arc<FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
+    config_key: &[usize],
 ) -> Vec<Arc<UpstreamInner>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
@@ -34,6 +35,7 @@ pub async fn resolve_upstreams(
                     Arc::clone(&failed_backends),
                     health_check_max_fails,
                     active_health_check_state.clone(),
+                    config_key,
                 )
                 .await,
         );
@@ -62,6 +64,7 @@ pub fn determine_proxy_to(
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
+    config_key: &[usize],
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -83,7 +86,7 @@ pub fn determine_proxy_to(
                 // Check passive failure cache
                 let not_failed = failed.as_ref().is_none_or(|failed| {
                     failed
-                        .get(u)
+                        .get(&(u.to_owned().clone(), config_key.to_vec()))
                         .is_none_or(|fails| fails <= health_check_max_fails)
                 });
 
