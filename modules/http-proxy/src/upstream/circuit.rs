@@ -41,6 +41,8 @@ pub fn is_circuit_breaker_available(
 }
 
 /// Record a transport-level backend failure.
+#[allow(clippy::too_many_arguments)]
+#[inline]
 pub fn record_backend_transport_failure(
     failed_backends: Arc<FailureCache>,
     passive_check_enabled: bool,

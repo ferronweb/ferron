@@ -9,6 +9,7 @@ use crate::types::upstream::UpstreamInner;
 use crate::upstream::FailureCache;
 
 /// Count how many backends are currently available for selection.
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn count_available_backends(
     upstreams: &[Arc<UpstreamInner>],
