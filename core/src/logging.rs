@@ -5,7 +5,7 @@
 //! stdout/stderr when running as a regular console application.
 
 use std::io::IsTerminal;
-use std::sync::{atomic::AtomicUsize, atomic::Ordering};
+use std::sync::{atomic::AtomicUsize, atomic::Ordering, OnceLock};
 
 #[cfg(windows)]
 use std::sync::Mutex;
@@ -134,11 +134,11 @@ unsafe impl Send for AppLogger {}
 #[cfg(windows)]
 unsafe impl Sync for AppLogger {}
 
-static mut GLOBAL_LOGGER: Option<&'static AppLogger> = None;
+static GLOBAL_LOGGER: OnceLock<AppLogger> = OnceLock::new();
 
 /// Get the global logger instance
 fn get_logger() -> Option<&'static AppLogger> {
-    unsafe { GLOBAL_LOGGER }
+    GLOBAL_LOGGER.get()
 }
 
 /// Check if a logger is initialized
@@ -154,19 +154,17 @@ pub fn init(backend: LoggerBackend, level: LogLevel) -> anyhow::Result<()> {
     } else {
         std::io::stdout().is_terminal()
     };
-    let logger = Box::new(AppLogger {
+    let logger = AppLogger {
         backend,
         max_level: AtomicUsize::new(level as usize),
         is_tty,
         #[cfg(windows)]
         event_source: Mutex::new(None),
-    });
+    };
 
-    let static_logger: &'static AppLogger = Box::leak(logger);
-
-    unsafe {
-        GLOBAL_LOGGER = Some(static_logger);
-    }
+    GLOBAL_LOGGER
+        .set(logger)
+        .map_err(|_| anyhow::anyhow!("Logger already initialized"))?;
 
     Ok(())
 }
@@ -174,18 +172,16 @@ pub fn init(backend: LoggerBackend, level: LogLevel) -> anyhow::Result<()> {
 /// Initialize logger for Windows service (uses Event Log)
 #[cfg(windows)]
 pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Result<()> {
-    let logger = Box::new(AppLogger {
+    let logger = AppLogger {
         backend: LoggerBackend::EventLog,
         max_level: AtomicUsize::new(level as usize),
         is_tty: false, // Windows Event Log isn't a TTY
         event_source: Mutex::new(Some(WindowsEventSource::new(service_name)?)),
-    });
+    };
 
-    let static_logger: &'static AppLogger = Box::leak(logger);
-
-    unsafe {
-        GLOBAL_LOGGER = Some(static_logger);
-    }
+    GLOBAL_LOGGER
+        .set(logger)
+        .map_err(|_| anyhow::anyhow!("Logger already initialized"))?;
 
     Ok(())
 }
@@ -193,19 +189,17 @@ pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Resul
 /// Initialize logger for console application (uses stdout/stderr)
 pub fn init_stdio_logger(level: LogLevel) -> anyhow::Result<()> {
     let is_tty = std::io::stdout().is_terminal();
-    let logger = Box::new(AppLogger {
+    let logger = AppLogger {
         backend: LoggerBackend::Stdio,
         max_level: AtomicUsize::new(level as usize),
         is_tty,
         #[cfg(windows)]
         event_source: Mutex::new(None),
-    });
+    };
 
-    let static_logger: &'static AppLogger = Box::leak(logger);
-
-    unsafe {
-        GLOBAL_LOGGER = Some(static_logger);
-    }
+    GLOBAL_LOGGER
+        .set(logger)
+        .map_err(|_| anyhow::anyhow!("Logger already initialized"))?;
 
     Ok(())
 }
