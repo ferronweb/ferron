@@ -17,7 +17,7 @@
 //!
 //! The key file will consist of one or more 80-byte records. Each record contains:
 //! - 16 bytes: Key Name (identifier)
-//! - 32 bytes: AES-256-GCM Key
+//! - 32 bytes: AES-256-CBC Key
 //! - 32 bytes: HMAC-SHA256 Key
 //!
 //! The first key in the file will be used for encryption (issuing new tickets),
@@ -136,7 +136,7 @@ impl TicketKeyRotationConfig {
 ///
 /// Each record contains:
 /// - 16 bytes: Key Name
-/// - 32 bytes: AES-256-GCM Key
+/// - 32 bytes: AES-256-CBC Key
 /// - 32 bytes: HMAC-SHA256 Key
 pub const TICKET_KEY_RECORD_SIZE: usize = 80;
 
@@ -155,7 +155,7 @@ pub type TicketKeyComponents = ([u8; 16], [u8; 32], [u8; 32]);
 /// Creates an 80-byte key suitable for use with TLS session tickets.
 /// The key contains:
 /// - 16 bytes: Random key name (identifier)
-/// - 32 bytes: Random AES-256-GCM key
+/// - 32 bytes: Random AES-256-CBC key
 /// - 32 bytes: Random HMAC-SHA256 key
 ///
 /// # Returns
@@ -419,7 +419,7 @@ pub fn validate_ticket_keys_file(filename: &str) -> std::io::Result<usize> {
 /// This function reads the file and returns the raw components that would be
 /// needed to implement a custom `ProducesTickets` trait:
 /// - Key names (16 bytes each)
-/// - AES-256-GCM keys (32 bytes each)
+/// - AES-256-CBC keys (32 bytes each)
 /// - HMAC-SHA256 keys (32 bytes each)
 ///
 /// # Arguments
