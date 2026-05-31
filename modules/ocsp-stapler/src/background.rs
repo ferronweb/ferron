@@ -295,6 +295,13 @@ fn verify_single_res(
         return Err(anyhow::anyhow!("Serial number mismatch in OCSP response"));
     }
 
+    // Check if the response falls between the issuer's valid time range,
+    // allowing for a 60-second clock skew to account for network latency and time differences.
+    let now = chrono::DateTime::<chrono::Utc>::from(SystemTime::now() + Duration::from_secs(60));
+    if single_res.this_update > now || single_res.next_update.as_ref().is_some_and(|nu| *nu < now) {
+        return Err(anyhow::anyhow!("OCSP response is not current"));
+    }
+
     Ok(())
 }
 
