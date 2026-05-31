@@ -310,8 +310,15 @@ pub async fn background_ocsp_task(
     let mut known_certs: HashMap<Vec<u8>, CertifiedKey> = HashMap::new();
 
     // Build HTTPS client with native certificate store and webpki-roots fallback
-    let https_connector =
-        build_https_connector().expect("failed to create HTTPS connector with native/webpki roots");
+    let Ok(https_connector) = build_https_connector() else {
+        emit_log(
+            &event_sink,
+            LogLevel::Info,
+            "Failed to initialize HTTPS for OCSP background task",
+            "ferron_ocsp",
+        );
+        return;
+    };
 
     let client = Client::builder(TokioExecutor::new())
         .build::<_, http_body_util::Full<Bytes>>(https_connector);
