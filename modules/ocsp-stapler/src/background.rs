@@ -571,11 +571,17 @@ async fn fetch_ocsp_response(
 ) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
     // Try SHA-256 first, fall back to SHA-1
     let response = fetch_ocsp_response_inner(client, chain, true).await;
-    if response.is_ok() {
-        return response;
-    }
-    if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
-        return Ok(sha1_response);
+    let fetch_sha1 = response.is_ok()
+        || response.as_ref().is_err_and(|e| {
+            let e_message = e.to_string();
+            e_message.starts_with("OCSP request failed with status ")
+                || e_message.starts_with("Failed to decode OCSP response:")
+                || e_message.starts_with("OCSP response status unsuccessful:")
+        });
+    if fetch_sha1 {
+        if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
+            return Ok(sha1_response);
+        }
     }
     response
 }
