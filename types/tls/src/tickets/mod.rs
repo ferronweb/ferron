@@ -372,7 +372,7 @@ pub fn persist_ticket_keys(filename: &str, keys: &[TicketKeyComponents]) -> std:
 pub fn validate_ticket_keys_file(filename: &str) -> std::io::Result<usize> {
     // Read the file metadata to check size
     let metadata = fs::metadata(filename)?;
-    let file_size = metadata.len() as usize;
+    let file_size = metadata.len();
 
     // Validate file size
     if file_size == 0 {
@@ -382,7 +382,7 @@ pub fn validate_ticket_keys_file(filename: &str) -> std::io::Result<usize> {
         ));
     }
 
-    if !file_size.is_multiple_of(TICKET_KEY_RECORD_SIZE) {
+    if !file_size.is_multiple_of(TICKET_KEY_RECORD_SIZE as u64) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!(
@@ -392,7 +392,7 @@ pub fn validate_ticket_keys_file(filename: &str) -> std::io::Result<usize> {
         ));
     }
 
-    let num_keys = file_size / TICKET_KEY_RECORD_SIZE;
+    let num_keys = (file_size / TICKET_KEY_RECORD_SIZE as u64) as usize;
 
     if num_keys == 0 {
         return Err(std::io::Error::new(
