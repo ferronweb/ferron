@@ -297,8 +297,12 @@ fn verify_single_res(
 
     // Check if the response falls between the issuer's valid time range,
     // allowing for a 60-second clock skew to account for network latency and time differences.
-    let now = chrono::DateTime::<chrono::Utc>::from(SystemTime::now() + Duration::from_secs(60));
-    if single_res.this_update > now || single_res.next_update.as_ref().is_some_and(|nu| *nu < now) {
+    let now_with_skew =
+        chrono::DateTime::<chrono::Utc>::from(SystemTime::now() + Duration::from_secs(60));
+    let now = chrono::DateTime::<chrono::Utc>::from(SystemTime::now());
+    if single_res.this_update > now_with_skew
+        || single_res.next_update.as_ref().is_some_and(|nu| *nu < now)
+    {
         return Err(anyhow::anyhow!("OCSP response is not current"));
     }
 
