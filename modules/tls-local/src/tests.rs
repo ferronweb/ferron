@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::cache::LocalTlsCache;
     use crate::provision::provision_local_cert;
@@ -14,7 +15,7 @@ mod tests {
             ip: None,
         };
 
-        let result = provision_local_cert(&cache, &filters);
+        let result = provision_local_cert(&cache, &filters, None);
         assert!(result.is_ok());
         let certified_key = result.unwrap();
         assert!(!certified_key.cert.is_empty());
@@ -37,8 +38,8 @@ mod tests {
             ip: None,
         };
 
-        let result1 = provision_local_cert(&cache, &filters).unwrap();
-        let result2 = provision_local_cert(&cache, &filters).unwrap();
+        let result1 = provision_local_cert(&cache, &filters, None).unwrap();
+        let result2 = provision_local_cert(&cache, &filters, None).unwrap();
 
         // Certificates should be identical if cached
         assert_eq!(result1.cert, result2.cert);

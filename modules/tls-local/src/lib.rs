@@ -1,11 +1,12 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::Module;
+use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::{
     builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
 };
@@ -20,6 +21,21 @@ mod tests;
 
 use crate::cache::LocalTlsCache;
 use crate::provision::provision_local_cert;
+
+/// Global event sink for the `tls-local` module, populated from
+/// [`LocalTlsModuleLoader::register_modules`] and read by
+/// [`TcpTlsLocalProvider::execute`].
+static EVENT_SINK: OnceLock<Arc<CompositeEventSink>> = OnceLock::new();
+
+/// Set the event sink for the `tls-local` module. Call during module
+/// initialization. Multiple calls are ignored; only the first one wins.
+pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
+    let _ = EVENT_SINK.set(event_sink);
+}
+
+fn event_sink() -> Option<Arc<CompositeEventSink>> {
+    EVENT_SINK.get().cloned()
+}
 
 #[derive(Debug)]
 struct LocalSingleCertResolver(Arc<CertifiedKey>);
@@ -66,7 +82,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsLocalProvider {
             .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
 
         // Provision the local certificate (CA + leaf)
-        let certified_key = provision_local_cert(&self.cache, &ctx.domain)?;
+        let certified_key = provision_local_cert(&self.cache, &ctx.domain, event_sink().as_ref())?;
 
         // Build the ServerConfig
         let config_builder =
@@ -109,6 +125,17 @@ impl ModuleLoader for LocalTlsModuleLoader {
             Arc::new(TcpTlsLocalProvider::new(cache_path.clone()))
         });
         registry
+    }
+
+    fn register_modules(
+        &mut self,
+        registry: Arc<ferron_core::registry::Registry>,
+        _modules: &mut Vec<Arc<dyn ferron_core::Module>>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        set_event_sink(event_sink);
+        Ok(())
     }
 }
 

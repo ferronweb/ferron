@@ -8,6 +8,8 @@ use vibeio::net::PollTcpStream;
 
 pub mod builder;
 pub mod config;
+#[cfg(feature = "observability")]
+pub mod observability;
 pub mod tickets;
 
 pub struct TcpTlsContext<'a> {

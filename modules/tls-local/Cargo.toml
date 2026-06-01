@@ -10,7 +10,8 @@ rustls-pki-types = "1.14.0"
 rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "aws_lc_rs", "pem"] }
 dirs = "6.0"
 ferron-core = { path = "../../core" }
-ferron-tls = { path = "../../types/tls" }
+ferron-observability = { path = "../../types/observability" }
+ferron-tls = { path = "../../types/tls", features = ["observability"] }
 time = "0.3"
 x509-parser = "0.18"
 anyhow = "1.0.102"
