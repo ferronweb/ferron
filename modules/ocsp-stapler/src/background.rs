@@ -580,20 +580,29 @@ async fn fetch_ocsp_response(
     >,
     chain: &[CertificateDer<'_>],
 ) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
-    // Try SHA-256 first, fall back to SHA-1
+    // Try SHA-256 first (preferred algorithm)
     let response = fetch_ocsp_response_inner(client, chain, true).await;
-    let fetch_sha1 = response.is_ok()
-        || response.as_ref().is_err_and(|e| {
-            let e_message = e.to_string();
-            e_message.starts_with("OCSP request failed with status ")
-                || e_message.starts_with("Failed to decode OCSP response:")
-                || e_message.starts_with("OCSP response status unsuccessful:")
-        });
-    if fetch_sha1 {
+    
+    // If SHA-256 succeeded, return immediately (do not downgrade to SHA-1)
+    if response.is_ok() {
+        return response;
+    }
+    
+    // Only try SHA-1 fallback for specific error types
+    let should_try_sha1 = response.as_ref().is_err_and(|e| {
+        let e_message = e.to_string();
+        e_message.starts_with("OCSP request failed with status ")
+            || e_message.starts_with("Failed to decode OCSP response:")
+            || e_message.starts_with("OCSP response status unsuccessful:")
+    });
+    
+    if should_try_sha1 {
         if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
             return Ok(sha1_response);
         }
     }
+    
+    // Return the original SHA-256 error or success
     response
 }
 
