@@ -18,9 +18,15 @@ const SENSITIVE_DIRECTIVES: &[&str] = &[
 ];
 
 /// Check if a directive name is considered sensitive and should be redacted.
+///
+/// A directive is considered sensitive if its lowercase name contains any of
+/// the configured sensitive keywords (e.g. `private_key`, `tls_cert`,
+/// `auth_token`).
 fn is_sensitive(name: &str) -> bool {
-    SENSITIVE_DIRECTIVES.contains(&name)
-        || name.contains(|c| SENSITIVE_DIRECTIVES.iter().any(|s| s.contains(c)))
+    let name_lower = name.to_lowercase();
+    SENSITIVE_DIRECTIVES
+        .iter()
+        .any(|sensitive| name_lower.contains(sensitive))
 }
 
 /// Serialize a single configuration value to JSON.
@@ -139,4 +145,46 @@ pub fn sanitize_config(config: &ServerConfiguration) -> Value {
 
     result.insert("ports".to_string(), Value::Object(ports_map));
     Value::Object(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_sensitive_matches_known_substrings() {
+        // Exact matches
+        assert!(is_sensitive("password"));
+        assert!(is_sensitive("private_key"));
+        assert!(is_sensitive("htpasswd"));
+        assert!(is_sensitive("secret"));
+
+        // Compound names that should be redacted
+        assert!(is_sensitive("tls_cert"));
+        assert!(is_sensitive("ssl_private_key"));
+        assert!(is_sensitive("auth_token"));
+        assert!(is_sensitive("api_bearer"));
+        assert!(is_sensitive("session_ticket_keys"));
+
+        // Case insensitive
+        assert!(is_sensitive("PASSWORD"));
+        assert!(is_sensitive("Tls_Cert"));
+    }
+
+    #[test]
+    fn is_sensitive_does_not_match_unrelated_directives() {
+        // Unrelated directives that share no sensitive substring
+        assert!(!is_sensitive("listen"));
+        assert!(!is_sensitive("root"));
+        assert!(!is_sensitive("server_name"));
+        assert!(!is_sensitive("log_level"));
+        assert!(!is_sensitive("max_connections"));
+
+        // Single characters that previously caused false positives
+        // (e.g. "m" in "max_memory" was matching "m" from "password"/"secret")
+        assert!(!is_sensitive("m"));
+        assert!(!is_sensitive("k"));
+        assert!(!is_sensitive("s"));
+        assert!(!is_sensitive("h"));
+    }
 }
