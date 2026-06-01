@@ -213,7 +213,7 @@ fn generate_directory_listing(
         let Some(metadata) = entry.metadata else {
             let link = format!(
                 "⚠️ <a href=\"{}/{}\">{}</a>",
-                path_without_slashes,
+                anti_xss(path_without_slashes),
                 anti_xss(urlencoding::encode(&filename).as_ref()),
                 anti_xss(&filename)
             );
@@ -231,7 +231,7 @@ fn generate_directory_listing(
         let link = format!(
             "{} <a href=\"{}/{}{}\">{}</a>",
             icon,
-            path_without_slashes,
+            anti_xss(path_without_slashes),
             anti_xss(urlencoding::encode(&filename).as_ref()),
             suffix,
             anti_xss(&filename)
