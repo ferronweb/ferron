@@ -31,6 +31,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### DNS & ACME
 
 - **58 new DNS providers** - native ACME DNS-01 challenge support expanded to include Alibaba Cloud DNS, Azure DNS, ClouDNS, Hetzner DNS, Oracle Cloud DNS, Vercel, Vultr, Yandex Cloud DNS, and 50+ others.
+- **CLI arguments in post-obtain command** - added support for passing CLI arguments to the post-obtain command in automatic TLS configurations.
 
 #### HTTP server core
 
