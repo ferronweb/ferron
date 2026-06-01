@@ -91,7 +91,6 @@ impl Runtime {
                     {
                         let mut runtime_metrics =
                             crate::admin::ADMIN_METRICS.runtime_metrics.write();
-                        runtime_metrics.io_uring_runtime_enabled = true;
                         if use_io_uring && !vibeio::util::supports_completion() {
                             IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
                                 log_warn!(
@@ -101,6 +100,8 @@ impl Runtime {
                                 );
                             });
                             runtime_metrics.io_uring_runtime_enabled = false;
+                        } else {
+                            runtime_metrics.io_uring_runtime_enabled = use_io_uring;
                         }
                     }
                     while let Some(task_factory) = rx.recv().await {
