@@ -170,9 +170,8 @@ async fn install_certified_key(
                 "ferron-tls-acme",
             );
 
-            // Split command into program and args using simple whitespace splitting.
-            // Avoid invoking a shell and ensure the program path is executed directly.
-            let mut parts = command.split_whitespace();
+            // Split command into program and args using `shlex` splitting.
+            let mut parts = shlex::Shlex::new(command);
             if let Some(program) = parts.next() {
                 let mut cmd = tokio::process::Command::new(program);
                 for arg in parts {
