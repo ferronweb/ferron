@@ -221,25 +221,26 @@ fn record_circuit_breaker_failure(
             if state.recent_failures.as_ref().is_none_or(|rf| {
                 rf.force_push(now)
                     .is_some_and(|timestamp| now.duration_since(timestamp) < circuit_breaker.window)
-            }) => {
-                state
-                    .status
-                    .store(CIRCUIT_BREAKER_STATUS_OPEN, Ordering::Relaxed);
+            }) =>
+        {
+            state
+                .status
+                .store(CIRCUIT_BREAKER_STATUS_OPEN, Ordering::Relaxed);
 
-                if let Some(rf) = &state.recent_failures {
-                    while rf.pop().is_some() {}
-                }
-                *state.opened_at.write() = Some(now);
-                state.half_open_pass_count.store(0, Ordering::Relaxed);
-                state.half_open_in_flight.store(false, Ordering::Relaxed);
-                ferron_core::log_warn!(
-                    "Upstream {} circuit opened after {} failures within {:?}",
-                    upstream.proxy_to,
-                    circuit_breaker.max_fails,
-                    circuit_breaker.window
-                );
-                true
+            if let Some(rf) = &state.recent_failures {
+                while rf.pop().is_some() {}
             }
+            *state.opened_at.write() = Some(now);
+            state.half_open_pass_count.store(0, Ordering::Relaxed);
+            state.half_open_in_flight.store(false, Ordering::Relaxed);
+            ferron_core::log_warn!(
+                "Upstream {} circuit opened after {} failures within {:?}",
+                upstream.proxy_to,
+                circuit_breaker.max_fails,
+                circuit_breaker.window
+            );
+            true
+        }
         _ => false,
     }
 }
