@@ -119,42 +119,17 @@ impl<S: SendableStreamPoll> SendStreamPoll<S> {
             panic!("the SendStreamPoll's get_drop_guard method can be used only once");
         }
         self.obtained_dropped = true;
-
-        // Move the current inner stream into the guard safely instead of doing a raw
-        // memory copy (which is undefined behaviour for non-Copy types). Recreate
-        // a replacement stream from the stored raw fd so the wrapper remains usable.
-        if let Some(inner_val) = self.inner.take() {
-            let guard_inner = ManuallyDrop::new(inner_val);
-
-            // Attempt to create a replacement stream from the raw fd/socket.
-            #[cfg(unix)]
-            let replacement = match unsafe { S::from_raw_fd(self.inner_fd) } {
-                Ok(s) => s,
-                Err(e) => {
-                    // Restore original inner to preserve invariants and panic consistently
-                    self.inner = Some(ManuallyDrop::into_inner(guard_inner));
-                    panic!("failed to create SendStreamPoll: {}", e);
-                }
-            };
-            #[cfg(not(unix))]
-            let replacement = match unsafe { S::from_raw_socket(self.inner_fd) } {
-                Ok(s) => s,
-                Err(e) => {
-                    self.inner = Some(ManuallyDrop::into_inner(guard_inner));
-                    panic!("failed to create SendStreamPoll: {}", e);
-                }
-            };
-
-            self.inner = Some(replacement);
-            SendStreamPollDropGuard {
-                inner: Some(guard_inner),
-                marked_dropped: self.marked_dropped.clone(),
-            }
+        let inner = if let Some(inner) = self.inner.as_ref() {
+            // Copy the inner TcpStreamPoll
+            let mut inner_data = std::mem::MaybeUninit::uninit();
+            std::ptr::copy_nonoverlapping(inner as *const _, inner_data.as_mut_ptr(), 1);
+            Some(ManuallyDrop::new(inner_data.assume_init()))
         } else {
-            SendStreamPollDropGuard {
-                inner: None,
-                marked_dropped: self.marked_dropped.clone(),
-            }
+            None
+        };
+        SendStreamPollDropGuard {
+            inner,
+            marked_dropped: self.marked_dropped.clone(),
         }
     }
 
