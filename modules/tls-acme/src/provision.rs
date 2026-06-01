@@ -166,15 +166,23 @@ async fn install_certified_key(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Info,
-                &format!("Post-obtain command started for {domains}: {command}"),
+                &format!("Post-obtain command started for {domains}"),
                 "ferron-tls-acme",
             );
 
-            // Split command into program and args using `shlex` splitting.
-            let mut parts = shlex::Shlex::new(command);
-            if let Some(program) = parts.next() {
+            let Some(parts) = shlex::split(command) else {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Warn,
+                    &format!("Post-obtain command has malformed quoting for {domains}"),
+                    "ferron-tls-acme",
+                );
+                return Ok(());
+            };
+
+            if let Some((program, args)) = parts.split_first() {
                 let mut cmd = tokio::process::Command::new(program);
-                for arg in parts {
+                for arg in args {
                     cmd.arg(arg);
                 }
                 cmd.env("FERRON_ACME_DOMAIN", config.domains.join(","))
