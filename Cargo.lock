@@ -1423,6 +1423,7 @@ dependencies = [
  "http-body-util",
  "memchr",
  "send_wrapper",
+ "shlex 2.0.1",
  "tokio",
  "vibeio",
  "vibeio-cegla",

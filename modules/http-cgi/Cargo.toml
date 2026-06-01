@@ -19,3 +19,6 @@ vibeio-cegla = { version = "0.2.1", features = ["cgi-client"] }
 http-body = "1.0.1"
 send_wrapper = "0.6.0"
 tokio = "1.52.1"
+
+[target.'cfg(not(unix))'.dependencies]
+shlex = "2.0.1"
