@@ -700,6 +700,9 @@ fn validate(
                 "Failed to prepare JSON configuration validation result {e}"
             ))?
         );
+        if !validation_result.valid {
+            std::process::exit(1);
+        }
     } else {
         print_validation_result(validation_result)?;
     }
