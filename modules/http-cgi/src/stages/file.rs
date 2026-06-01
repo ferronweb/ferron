@@ -101,7 +101,7 @@ impl Stage<HttpFileContext> for CgiStage {
                 if let Some(authorization) = request.headers().get(http::header::AUTHORIZATION) {
                     let authorization_value =
                         String::from_utf8_lossy(authorization.as_bytes()).to_string();
-                    let mut authorization_value_split = authorization_value.split(" ");
+                    let mut authorization_value_split = authorization_value.split_whitespace();
                     authorization_value_split
                         .next()
                         .map(|authorization_type| authorization_type.to_string())
