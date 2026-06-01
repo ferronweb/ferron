@@ -46,18 +46,21 @@ impl BasicAuthStage {
     ///
     /// The value is expected to be `Basic <base64(username:password)>`.
     fn parse_basic_auth_header(value: &str) -> Option<(String, String)> {
-        let value = value
-            .trim_start_matches("Basic ")
-            .trim_start_matches("basic ");
+        if value.len() < 6 {
+            return None;
+        }
+
+        let (scheme, rest) = value.split_once(' ')?;
+        if !scheme.eq_ignore_ascii_case("Basic") {
+            return None;
+        }
+
         let decoded =
-            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, value).ok()?;
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, rest.trim()).ok()?;
         let credentials = String::from_utf8(decoded).ok()?;
 
-        let colon_pos = credentials.find(':')?;
-        let username = credentials[..colon_pos].to_string();
-        let password = credentials[colon_pos + 1..].to_string();
-
-        Some((username, password))
+        let (username, password) = credentials.split_once(':')?;
+        Some((username.to_string(), password.to_string()))
     }
 
     /// Verify a password against a stored hash.
