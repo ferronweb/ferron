@@ -1010,28 +1010,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
-        if let (Some(backend), LoadBalancerAlgorithmInner::P2cEwma) =
-            (metrics.final_selected_backend.as_ref(), &*algorithm)
-        {
-            let params = P2cEwmaParams::default();
-            let ewma_backend_attrs = vec![(
-                "ferron.proxy.backend_url",
-                MetricAttributeValue::String(backend.proxy_to.clone()),
-            )];
-
-            // Backend EWMA latency gauge
-            let ewma_latency = p2c_ewma::get_decayed_ewma(&self.state.ewma_state, backend, &params);
-            ctx.events
-                .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.lb.ewma_latency",
-                    attributes: ewma_backend_attrs.clone(),
-                    ty: MetricType::Gauge,
-                    value: MetricValue::F64(ewma_latency),
-                    unit: Some("s"),
-                    description: Some("Current EWMA response latency for the selected backend."),
-                }));
-
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
             // Backend active connections gauge
             let active_conns = self
                 .state
@@ -1041,43 +1020,63 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.lb.active_connections",
-                    attributes: ewma_backend_attrs.clone(),
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Gauge,
                     value: MetricValue::U64(active_conns as u64),
                     unit: Some("{connection}"),
                     description: Some("Active tracked connections for the selected backend."),
                 }));
 
-            // Backend warm-up state gauge
-            let warming_up = p2c_ewma::is_warming_up(&self.state.ewma_state, backend);
-            ctx.events
+            // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
+            if matches!(&*algorithm, LoadBalancerAlgorithmInner::P2cEwma) {
+                let params = P2cEwmaParams::default();
+
+                // Backend EWMA latency gauge
+                let ewma_latency =
+                    p2c_ewma::get_decayed_ewma(&self.state.ewma_state, backend, &params);
+                ctx.events
+                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                        name: "ferron.proxy.lb.ewma_latency",
+                        attributes: upstream_attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(ewma_latency),
+                        unit: Some("s"),
+                        description: Some(
+                            "Current EWMA response latency for the selected backend.",
+                        ),
+                    }));
+
+                // Backend warm-up state gauge
+                let warming_up = p2c_ewma::is_warming_up(&self.state.ewma_state, backend);
+                ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.lb.warmup_state",
-                    attributes: ewma_backend_attrs,
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Gauge,
                     value: MetricValue::U64(if warming_up { 1 } else { 0 }),
                     unit: Some("{state}"),
                     description: Some("Whether the selected backend is still in EWMA warm-up phase (1 = warming up, 0 = settled)."),
                 }));
 
-            // Emit routing decision counter with reason
-            if ewma_latency > 0.0 {
-                let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
-                let mut sel_attrs = upstream_attrs.clone();
-                sel_attrs.push((
-                    "ferron.proxy.lb.reason",
-                    MetricAttributeValue::String("p2c_ewma".to_string()),
-                ));
-                sel_attrs.push(("ferron.proxy.lb.score", MetricAttributeValue::F64(score)));
-                ctx.events
-                    .emit(ferron_observability::Event::Metric(MetricEvent {
-                        name: "ferron.proxy.lb.selections",
-                        attributes: sel_attrs,
-                        ty: MetricType::Counter,
-                        value: MetricValue::U64(1),
-                        unit: Some("{selection}"),
-                        description: Some("P2C+EWMA backend selection with combined score."),
-                    }));
+                // Emit routing decision counter with reason
+                if ewma_latency > 0.0 {
+                    let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
+                    let mut sel_attrs = upstream_attrs.clone();
+                    sel_attrs.push((
+                        "ferron.proxy.lb.reason",
+                        MetricAttributeValue::String("p2c_ewma".to_string()),
+                    ));
+                    sel_attrs.push(("ferron.proxy.lb.score", MetricAttributeValue::F64(score)));
+                    ctx.events
+                        .emit(ferron_observability::Event::Metric(MetricEvent {
+                            name: "ferron.proxy.lb.selections",
+                            attributes: sel_attrs,
+                            ty: MetricType::Counter,
+                            value: MetricValue::U64(1),
+                            unit: Some("{selection}"),
+                            description: Some("P2C+EWMA backend selection with combined score."),
+                        }));
+                }
             }
         }
 

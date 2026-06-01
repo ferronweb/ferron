@@ -464,9 +464,9 @@ The proxy module emits the following metrics:
   - Attributes: backend URL or unix socket path
 - `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
   - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.ewma_latency` (Gauge) — current EWMA response latency for the selected backend (`p2c_ewma` algorithm).
+- `ferron.proxy.lb.active_connections` (Gauge) — active tracked connections for the selected backend.
   - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.active_connections` (Gauge) — active tracked connections for the selected backend (`p2c_ewma` algorithm).
+- `ferron.proxy.lb.ewma_latency` (Gauge) — current EWMA response latency for the selected backend (`p2c_ewma` algorithm).
   - Attributes: backend URL or unix socket path
 - `ferron.proxy.lb.warmup_state` (Gauge) — whether the selected backend is in EWMA warm-up phase (1) or settled (0).
   - Attributes: backend URL or unix socket path
