@@ -99,9 +99,10 @@ fn make_dns_record(
             let fields = value
                 .split_once(' ')
                 .ok_or_else(|| ferron_dns::DnsProviderError::new("invalid MX record"))?;
+            let priority = fields.0.parse().map_err(|_| ferron_dns::DnsProviderError::new("invalid MX priority"))?;
             dns_update::MXRecord {
                 exchange: fields.1.to_string(),
-                priority: fields.0.parse().unwrap_or(0),
+                priority,
             }
         }),
         ferron_dns::DnsRecordType::NS => dns_update::DnsRecord::NS(value),
@@ -110,10 +111,13 @@ fn make_dns_record(
             if fields.len() != 4 {
                 return Err(ferron_dns::DnsProviderError::new("invalid SRV record"));
             }
+            let priority = fields[0].parse().map_err(|_| ferron_dns::DnsProviderError::new("invalid SRV record"))?;
+            let weight = fields[1].parse().map_err(|_| ferron_dns::DnsProviderError::new("invalid SRV record"))?;
+            let port = fields[2].parse().map_err(|_| ferron_dns::DnsProviderError::new("invalid SRV record"))?;
             dns_update::SRVRecord {
-                priority: fields[0].parse().unwrap_or(0),
-                weight: fields[1].parse().unwrap_or(0),
-                port: fields[2].parse().unwrap_or(0),
+                priority,
+                weight,
+                port,
                 target: fields[3].to_string(),
             }
         }),
@@ -121,7 +125,7 @@ fn make_dns_record(
             let fields = value
                 .split_once(' ')
                 .ok_or_else(|| ferron_dns::DnsProviderError::new("invalid CAA record"))?;
-            let flags = fields.0.parse().unwrap_or(0);
+            let flags: u8 = fields.0.parse::<u8>().map_err(|_| ferron_dns::DnsProviderError::new("invalid CAA flags"))?;
             let fields = fields
                 .1
                 .split_once(' ')
