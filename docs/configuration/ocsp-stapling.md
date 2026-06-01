@@ -180,7 +180,7 @@ The OCSP background task emits log events and metrics through the configured obs
 
 **Metrics:**
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.ocsp.fetches_total` | Counter | `status` (`success`, `error`, `skipped`) | Total OCSP fetch attempts |
 | `ferron.ocsp.fetch_duration_seconds` | Histogram | — | Time to fetch OCSP response |

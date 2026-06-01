@@ -158,9 +158,11 @@ All directives (`status`, `abort`, `block`, `allow`, `early_hints`) can be place
 
 ### Metrics
 
-- `ferron.response.aborted` (Counter) — connections aborted via the `abort` directive.
-- `ferron.response.ip_blocked` (Counter) — connections blocked via `block`/`allow` directives. This metric does **not** include raw IP addresses.
-- `ferron.response.status_rule_matched` (Counter) — custom status codes returned via `status` directives. Includes `http.response.status_code` and `ferron.rule_id` attributes.
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.response.aborted` | Counter | — | Connections aborted via the `abort` directive |
+| `ferron.response.ip_blocked` | Counter | — | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
+| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives |
 
 ## Notes and troubleshooting
 

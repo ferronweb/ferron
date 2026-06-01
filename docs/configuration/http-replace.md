@@ -177,9 +177,11 @@ This ordering ensures that string replacement operates on raw, uncompressed resp
 
 ### Metrics
 
-- `ferron.replace.replacements_applied` (Counter) — responses successfully modified by replacement rules.
-- `ferron.replace.skipped_compressed` (Counter) — responses skipped due to `Content-Encoding` header (compressed data).
-- `ferron.replace.skipped_mime` (Counter) — responses skipped due to MIME type mismatch.
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.replace.replacements_applied` | Counter | — | Responses successfully modified by replacement rules |
+| `ferron.replace.skipped_compressed` | Counter | — | Responses skipped due to `Content-Encoding` header (compressed data) |
+| `ferron.replace.skipped_mime` | Counter | — | Responses skipped due to MIME type mismatch |
 
 ## Notes and troubleshooting
 

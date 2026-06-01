@@ -111,8 +111,10 @@ Rewrite rules are applied after client IP resolution and before reverse proxying
 
 ### Metrics
 
-- `ferron.rewrite.rewrites_applied` (Counter) — URLs successfully rewritten.
-- `ferron.rewrite.invalid` (Counter) — rewrite rules that produced an invalid path (resulting in a 400 response).
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.rewrite.rewrites_applied` | Counter | — | URLs successfully rewritten |
+| `ferron.rewrite.invalid` | Counter | — | Rewrite rules that produced an invalid path (resulting in a 400 response) |
 
 ### Logs
 

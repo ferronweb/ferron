@@ -154,7 +154,7 @@ The `tls-http` module emits log events and metrics through the configured observ
 
 ### Metrics
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.tls_http.requests_total` | Counter | `status` (`success`, `error`) | Total HTTP requests to the certificate endpoint |
 | `ferron.tls_http.request_duration_seconds` | Histogram | `status` (`success`, `error`) | HTTP request duration in seconds |
@@ -162,22 +162,6 @@ The `tls-http` module emits log events and metrics through the configured observ
 | `ferron.tls_http.cert_expires_at` | Gauge | — | Certificate expiration time (Unix timestamp) |
 | `ferron.tls_http.cert_days_remaining` | Gauge | — | Days until certificate expiration |
 | `ferron.tls_http.next_refresh_seconds` | Gauge | — | Seconds until next certificate refresh |
-
-### Example PromQL queries
-
-```promql
-# Certificate refresh rate
-rate(ferron.tls_http.certificates_refreshed_total[5m])
-
-# HTTP error rate for certificate endpoint
-rate(ferron.tls_http.requests_total{status="error"}[5m])
-
-# Average certificate refresh duration
-histogram_quantile(0.95, rate(ferron.tls_http.request_duration_seconds_bucket[5m]))
-
-# Certificates expiring soon (less than 7 days)
-ferron.tls_http.cert_days_remaining < 7
-```
 
 ## Security considerations
 
