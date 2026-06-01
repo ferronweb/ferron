@@ -217,11 +217,11 @@ fn record_circuit_breaker_failure(
             *state.opened_at.write() = Some(now);
             false
         }
-        CIRCUIT_BREAKER_STATUS_CLOSED => {
+        CIRCUIT_BREAKER_STATUS_CLOSED
             if state.recent_failures.as_ref().is_none_or(|rf| {
                 rf.force_push(now)
                     .is_some_and(|timestamp| now.duration_since(timestamp) < circuit_breaker.window)
-            }) {
+            }) => {
                 state
                     .status
                     .store(CIRCUIT_BREAKER_STATUS_OPEN, Ordering::Relaxed);
@@ -239,10 +239,7 @@ fn record_circuit_breaker_failure(
                     circuit_breaker.window
                 );
                 true
-            } else {
-                false
             }
-        }
         _ => false,
     }
 }
