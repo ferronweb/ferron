@@ -169,26 +169,42 @@ async fn install_certified_key(
                 &format!("Post-obtain command started for {domains}: {command}"),
                 "ferron-tls-acme",
             );
-            match tokio::process::Command::new(command)
-                .env("FERRON_ACME_DOMAIN", config.domains.join(","))
-                .env("FERRON_ACME_CERT_PATH", cert_path)
-                .env("FERRON_ACME_KEY_PATH", key_path)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                Ok(mut child) => {
-                    let _ = child.wait().await;
+
+            // Split command into program and args using simple whitespace splitting.
+            // Avoid invoking a shell and ensure the program path is executed directly.
+            let mut parts = command.split_whitespace();
+            if let Some(program) = parts.next() {
+                let mut cmd = tokio::process::Command::new(program);
+                for arg in parts {
+                    cmd.arg(arg);
                 }
-                Err(e) => {
-                    emit_log(
-                        event_sink,
-                        ferron_observability::LogLevel::Warn,
-                        &format!("Post-obtain command failed for {domains}: {e}"),
-                        "ferron-tls-acme",
-                    );
+                cmd.env("FERRON_ACME_DOMAIN", config.domains.join(","))
+                    .env("FERRON_ACME_CERT_PATH", cert_path)
+                    .env("FERRON_ACME_KEY_PATH", key_path)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+
+                match cmd.spawn() {
+                    Ok(mut child) => {
+                        let _ = child.wait().await;
+                    }
+                    Err(e) => {
+                        emit_log(
+                            event_sink,
+                            ferron_observability::LogLevel::Warn,
+                            &format!("Post-obtain command failed for {domains}: {e}"),
+                            "ferron-tls-acme",
+                        );
+                    }
                 }
+            } else {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Warn,
+                    &format!("Post-obtain command is empty for {domains}"),
+                    "ferron-tls-acme",
+                );
             }
         }
     }
