@@ -56,7 +56,7 @@ pub(super) fn normalize_host_header(
         if host_header_option.next().is_some() {
             Err(anyhow::anyhow!("Multiple Host headers found"))?;
         }
-        let host_header = header_data.to_str()?;
+        let host_header = header_data.to_str()?.trim();
         let host_header_lower_case = host_header.to_lowercase();
         let host_header_without_dot = host_header_lower_case
             .strip_suffix('.')
