@@ -225,6 +225,18 @@ impl AbuseRegistry {
             return EventResult::Recorded;
         }
 
+        // Opportunistically evict trackers whose events are all older than the
+        // largest configured window. Prevents unbounded memory growth from
+        // many distinct IP+event_type combinations.
+        let max_window_secs = config
+            .thresholds
+            .iter()
+            .map(|t| t.window_secs)
+            .max()
+            .unwrap_or(3600);
+        let eviction_window = Duration::from_secs(max_window_secs);
+        self.evict_stale_trackers_with_window(eviction_window);
+
         let key = format!("{}:{}", event.ip, event.event_type.as_str());
         let mut tracker = self
             .event_trackers
@@ -283,10 +295,23 @@ impl AbuseRegistry {
 
     /// Evict stale event trackers to prevent unbounded memory growth.
     ///
-    /// Should be called periodically (e.g., every minute) or lazily.
+    /// A tracker is removed when all of its events are older than
+    /// `max_window`. Should be called periodically (e.g., every minute) or
+    /// lazily. Without an upper bound on the eviction window, default
+    /// thresholds (up to 5 minutes) are used as a safe fallback.
     pub fn evict_stale_trackers(&self) {
+        self.evict_stale_trackers_with_window(Duration::from_secs(3600));
+    }
+
+    /// Evict event trackers whose events are all older than `max_window`.
+    /// Passing a conservative window ensures we keep at least as much
+    /// state as any configured threshold needs.
+    pub fn evict_stale_trackers_with_window(&self, max_window: Duration) {
+        let cutoff = Instant::now()
+            .checked_sub(max_window)
+            .unwrap_or(Instant::now());
         self.event_trackers
-            .retain(|_, tracker| !tracker.events.is_empty());
+            .retain(|_, tracker| tracker.events.iter().any(|&t| t >= cutoff));
     }
 }
 
