@@ -114,6 +114,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Runtime operations
 
 - Fixed an Admin API-initiated reload loop that caused infinite configuration reload loops.
+- Fixed admin API over-redacting configuration directives in `/config` endpoint responses, which could lead to confusion when verifying configuration values.
 - Eliminated a rate limiting race condition when initializing a brand new key bucket, which previously allowed traffic to briefly exceed configured capacities.
 - Fixed manual TLS session ticket key rotation to properly read from configured key files instead of silently falling back to in-memory generation.
 - Fixed a bug on Linux where `io_uring` could not be explicitly disabled through the server configuration file.
