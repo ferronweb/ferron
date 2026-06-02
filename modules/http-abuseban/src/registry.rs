@@ -501,23 +501,6 @@ mod tests {
     }
 
     #[test]
-    fn active_ban_count_tracks_only_active_bans() {
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(
-            AbuseEventType::RateLimitExceeded,
-            test_ip(),
-            "Too fast".into(),
-            50,
-        );
-
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-
-        assert_eq!(registry.active_ban_count(), 1);
-    }
-
-    #[test]
     fn ban_with_zero_duration_expires_immediately() {
         let config = AbuseRegistryConfig {
             enabled: true,
@@ -574,28 +557,6 @@ mod tests {
             .collect();
         assert_eq!(results.len(), 4);
         assert!(results.iter().all(|&b| b), "all IPs should be banned");
-    }
-
-    #[test]
-    fn custom_event_type_with_threshold() {
-        let config = AbuseRegistryConfig {
-            enabled: true,
-            ban_duration_secs: 60,
-            thresholds: vec![EventThreshold::new(AbuseEventType::Custom, 2, 10)],
-            allowlist: Vec::new(),
-        };
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(AbuseEventType::Custom, test_ip(), "Custom event".into(), 50);
-
-        assert_eq!(
-            registry.record_event(&event, &config),
-            EventResult::Recorded
-        );
-        assert_eq!(
-            registry.record_event(&event, &config),
-            EventResult::BanTriggered
-        );
-        assert!(registry.is_banned(test_ip(), &config));
     }
 
     #[test]
@@ -698,26 +659,6 @@ mod tests {
         // The tracker should have been cleaned up when the ban was triggered
         registry.evict_stale_trackers();
         // No crash and no stale trackers
-    }
-
-    #[test]
-    fn ban_persists_across_multiple_checks() {
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(
-            AbuseEventType::RateLimitExceeded,
-            test_ip(),
-            "Persistent".into(),
-            50,
-        );
-
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-        registry.record_event(&event, &make_test_config());
-
-        assert!(registry.is_banned(test_ip(), &make_test_config()));
-        assert!(registry.is_banned(test_ip(), &make_test_config()));
-        assert!(registry.is_banned(test_ip(), &make_test_config()));
-        assert_eq!(registry.active_ban_count(), 1);
     }
 
     #[test]

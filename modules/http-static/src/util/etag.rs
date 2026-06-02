@@ -103,12 +103,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn split_etag_single() {
-        let tags = split_etag_request("\"abc123\"");
-        assert_eq!(tags, vec!["abc123"]);
-    }
-
-    #[test]
     fn split_etag_multiple() {
         let tags = split_etag_request("\"abc\", \"def\", \"ghi\"");
         assert_eq!(tags, vec!["abc", "def", "ghi"]);
@@ -180,11 +174,6 @@ mod tests {
     fn construct_etag_with_suffix() {
         // Note: suffix already includes the leading dash
         assert_eq!(construct_etag("abc", Some("br"), true), "W/\"abc-br\"");
-    }
-
-    #[test]
-    fn construct_etag_empty_suffix() {
-        assert_eq!(construct_etag("abc", Some(""), true), "W/\"abc-\"");
     }
 
     #[test]

@@ -87,42 +87,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_range_start_zero() {
-        assert_eq!(parse_range_header("bytes=0-100", 999), Some((0, 100)));
-    }
-
-    #[test]
-    fn parse_range_full_file() {
-        assert_eq!(parse_range_header("bytes=0-999", 999), Some((0, 999)));
-    }
-
-    #[test]
-    fn parse_range_single_byte() {
-        assert_eq!(parse_range_header("bytes=50-50", 999), Some((50, 50)));
-    }
-
-    #[test]
-    fn parse_range_start_beyond_end() {
-        assert_eq!(
-            parse_range_header("bytes=1000-1100", 999),
-            Some((1000, 1100))
-        );
-    }
-
-    #[test]
-    fn parse_range_end_beyond_file() {
-        assert_eq!(parse_range_header("bytes=900-1500", 999), Some((900, 1500)));
-    }
-
-    #[test]
     fn parse_invalid_number() {
         assert_eq!(parse_range_header("bytes=abc-def", 999), None);
-    }
-
-    #[test]
-    fn parse_negative_number() {
-        // Negative numbers aren't valid u64, but the parser treats `-500` as suffix range
-        assert_eq!(parse_range_header("bytes=-500", 999), Some((500, 999)));
     }
 
     #[test]

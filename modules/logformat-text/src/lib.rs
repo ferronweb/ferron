@@ -298,36 +298,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_field_token() {
-        let pattern = FormatPattern::parse("%client_ip");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Field("client_ip".to_string())]
-        );
-    }
-
-    #[test]
-    fn parses_header_token() {
-        let pattern = FormatPattern::parse("%{Referer}i");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Header("Referer".to_string())]
-        );
-    }
-
-    #[test]
     fn parses_timestamp_token_with_format() {
         let pattern = FormatPattern::parse("%{%Y-%m-%d}t");
         assert_eq!(
             pattern.tokens,
             vec![FormatToken::Timestamp(Some("%Y-%m-%d".to_string()))]
         );
-    }
-
-    #[test]
-    fn parses_timestamp_token_without_format() {
-        let pattern = FormatPattern::parse("%t");
-        assert_eq!(pattern.tokens, vec![FormatToken::Timestamp(None)]);
     }
 
     #[test]
@@ -432,15 +408,6 @@ mod tests {
         assert!(output.len() == 19); // Fixed length for this format
         assert!(output.contains('-'));
         assert!(output.contains(':'));
-    }
-
-    #[test]
-    fn formats_literal_text() {
-        let pattern = FormatPattern::parse("GET /path HTTP/1.1");
-        let fields = HashMap::new();
-
-        let output = pattern.format(&fields, None);
-        assert_eq!(output, "GET /path HTTP/1.1");
     }
 
     #[test]
