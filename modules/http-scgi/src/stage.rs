@@ -55,17 +55,18 @@ impl Stage<HttpContext> for ScgiStage {
         let mut env_builder = cegla_scgi::client::CgiBuilder::new();
 
         if let Some(auth_user) = ctx.auth_user.as_deref() {
-            let authorization_type =
-                if let Some(authorization) = request.headers().get(http::header::AUTHORIZATION) {
-                    let authorization_value =
-                        String::from_utf8_lossy(authorization.as_bytes()).to_string();
-                    let mut authorization_value_split = authorization_value.split_whitespace();
-                    authorization_value_split
-                        .next()
-                        .map(|authorization_type| authorization_type.to_string())
-                } else {
-                    None
-                };
+            let authorization_type = if let Some(authorization_value) = request
+                .headers()
+                .get(http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+            {
+                let mut authorization_value_split = authorization_value.split_whitespace();
+                authorization_value_split
+                    .next()
+                    .map(|authorization_type| authorization_type.to_string())
+            } else {
+                None
+            };
             env_builder = env_builder.auth(authorization_type, auth_user.to_string());
         }
 

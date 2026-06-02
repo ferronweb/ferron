@@ -96,17 +96,18 @@ impl Stage<HttpContext> for FcgiPassStage {
         let mut env_builder = cegla_fcgi::client::CgiBuilder::new();
 
         if let Some(auth_user) = ctx.auth_user.as_deref() {
-            let authorization_type =
-                if let Some(authorization) = request.headers().get(http::header::AUTHORIZATION) {
-                    let authorization_value =
-                        String::from_utf8_lossy(authorization.as_bytes()).to_string();
-                    let mut authorization_value_split = authorization_value.split_whitespace();
-                    authorization_value_split
-                        .next()
-                        .map(|authorization_type| authorization_type.to_string())
-                } else {
-                    None
-                };
+            let authorization_type = if let Some(authorization_value) = request
+                .headers()
+                .get(http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+            {
+                let mut authorization_value_split = authorization_value.split_whitespace();
+                authorization_value_split
+                    .next()
+                    .map(|authorization_type| authorization_type.to_string())
+            } else {
+                None
+            };
             env_builder = env_builder.auth(authorization_type, auth_user.to_string());
         }
 
@@ -172,10 +173,11 @@ impl Stage<HttpContext> for FcgiPassStage {
             }
         };
 
-        let (response, mut stderr) = conn_item
-            .inner()
-            .as_ref()
-            .unwrap()
+        let conn = conn_item.inner().as_ref().ok_or_else(|| {
+            // This would be a rare edge case (see `client.rs`)...
+            PipelineError::custom("FastCGI connection is not available")
+        })?;
+        let (response, mut stderr) = conn
             .send_request(request, env_builder)
             .await
             .map_err(|e| PipelineError::custom(e.to_string()))?;
