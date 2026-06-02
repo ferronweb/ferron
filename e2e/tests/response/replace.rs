@@ -1,14 +1,13 @@
 use std::io::Write;
 use testcontainers::core::ContainerPort;
 
-mod common;
 
 #[tokio::test]
 async fn test_string_replacement() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
+    let webroot_dir = crate::common::create_temp_dir();
+    let mut config_file = crate::common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -24,9 +23,9 @@ async fn test_string_replacement() {
         )
         .unwrap();
 
-    common::write_file(webroot_dir.path().join("test.txt"), b"Hello, World!").unwrap();
+    crate::common::write_file(webroot_dir.path().join("test.txt"), b"Hello, World!").unwrap();
 
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = crate::common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 

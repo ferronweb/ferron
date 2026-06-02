@@ -1,12 +1,12 @@
 use std::io::Write;
+
 use testcontainers::{
     GenericImage, ImageExt,
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
     runners::AsyncRunner,
 };
 
-mod common;
-use common::{create_temp_dir, create_temp_file};
+use crate::common;
 
 async fn create_ferron_container(
     webroot_dir: &std::path::Path,
@@ -40,16 +40,14 @@ async fn create_ferron_container(
     image.start().await
 }
 
-/// include loads additional configuration files at the top level.
-/// Directives from the included file are merged inline.
 #[tokio::test]
 async fn test_include_extra_config() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = create_temp_dir();
+    let webroot_dir = common::create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    let mut extra_file = create_temp_file();
+    let mut extra_file = common::create_temp_file();
     extra_file
         .as_file_mut()
         .write_all(
@@ -62,7 +60,7 @@ async fn test_include_extra_config() {
         .unwrap();
     extra_file.flush().unwrap();
 
-    let mut config_file = create_temp_file();
+    let mut config_file = common::create_temp_file();
     config_file
         .as_file_mut()
         .write_all(
@@ -104,15 +102,14 @@ async fn test_include_extra_config() {
     assert_eq!(body, "hello", "Response body should be correct");
 }
 
-/// include with a glob pattern loads all matching files.
 #[tokio::test]
 async fn test_include_glob_pattern() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = create_temp_dir();
+    let webroot_dir = common::create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    let mut extra_file = create_temp_file();
+    let mut extra_file = common::create_temp_file();
     extra_file
         .as_file_mut()
         .write_all(
@@ -125,7 +122,7 @@ async fn test_include_glob_pattern() {
         .unwrap();
     extra_file.flush().unwrap();
 
-    let mut config_file = create_temp_file();
+    let mut config_file = common::create_temp_file();
     config_file
         .as_file_mut()
         .write_all(
@@ -163,15 +160,14 @@ async fn test_include_glob_pattern() {
     assert_eq!(body, "hello", "Response body should be correct");
 }
 
-/// Two includes are allowed and both are processed in order.
 #[tokio::test]
 async fn test_include_multiple_files() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = create_temp_dir();
+    let webroot_dir = common::create_temp_dir();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    let mut extra_a = create_temp_file();
+    let mut extra_a = common::create_temp_file();
     extra_a
         .as_file_mut()
         .write_all(
@@ -184,7 +180,7 @@ async fn test_include_multiple_files() {
         .unwrap();
     extra_a.flush().unwrap();
 
-    let mut extra_b = create_temp_file();
+    let mut extra_b = common::create_temp_file();
     extra_b
         .as_file_mut()
         .write_all(
@@ -197,7 +193,7 @@ async fn test_include_multiple_files() {
         .unwrap();
     extra_b.flush().unwrap();
 
-    let mut config_file = create_temp_file();
+    let mut config_file = common::create_temp_file();
     config_file
         .as_file_mut()
         .write_all(

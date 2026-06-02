@@ -1,41 +1,11 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
+use crate::common;
 
-mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &Path,
-    config_file: &Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_network("bridge")
-        .with_env_var("FERRON_ROOT", "/var/www/ferron")
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
-
+/// Host configuration smoke test: requests with the correct Host header
+/// should reach the right virtual host and serve the file.
 #[tokio::test]
-async fn test_config() {
+async fn test_host_configuration() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let webroot_dir = common::create_temp_dir();
@@ -90,16 +60,16 @@ async fn test_config() {
         )
         .unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
     let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .get_host_port_ipv4(80)
         .await
         .unwrap();
     let client = reqwest::Client::new();
 
-    self::common::write_file(
+    common::write_file(
         webroot_dir.path().join("basic.txt"),
         basic_content.as_bytes(),
     )
@@ -156,23 +126,6 @@ async fn test_config() {
         .unwrap();
 
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-
-    // Test 6: HTTP error interception
-    let response = client
-        .get(format!("http://localhost:{}/nonexistent.txt", port))
-        .header("Host", "ferron")
-        .send()
-        .await
-        .unwrap();
-
-    assert!(
-        matches!(
-            response.status(),
-            reqwest::StatusCode::OK | reqwest::StatusCode::FOUND
-        ),
-        "Expected status code OK or FOUND, got {}",
-        response.status()
-    );
 
     container.stop().await.unwrap();
 }

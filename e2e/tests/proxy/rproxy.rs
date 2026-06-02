@@ -9,12 +9,11 @@ use testcontainers::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-mod common;
 
 async fn create_otlp_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let otlp_image = self::common::build_otlp_image().await?;
+    let otlp_image = crate::common::build_otlp_image().await?;
     otlp_image
         .with_exposed_port(ContainerPort::Tcp(4318))
         .with_wait_for(WaitFor::seconds(2))
@@ -31,7 +30,7 @@ async fn create_backend_container(
     backend_name: &str,
     unstable_fails: u32,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_image = self::common::build_backend_image().await?;
+    let backend_image = crate::common::build_backend_image().await?;
     backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_exposed_port(ContainerPort::Tcp(3001))
@@ -56,7 +55,7 @@ async fn create_ferron_container(
     network: &str,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_exposed_port(ContainerPort::Tcp(8889)) // Prometheus endpoint
@@ -137,9 +136,9 @@ impl RProxyTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = common::create_temp_dir();
+        let cert_dir = crate::common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = common::create_temp_file();
+        let mut config_file = crate::common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();
@@ -238,9 +237,9 @@ impl CircuitBreakerTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = common::create_temp_dir();
+        let cert_dir = crate::common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = common::create_temp_file();
+        let mut config_file = crate::common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();
@@ -636,9 +635,9 @@ async fn test_proxy_http2_only() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let cert_dir = common::create_temp_dir();
+    let cert_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
 
     #[cfg(not(unix))]
     let cert_dir = tempfile::tempdir().unwrap();
@@ -702,9 +701,9 @@ async fn test_proxy_keepalive_metrics() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let cert_dir = common::create_temp_dir();
+    let cert_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
 
     #[cfg(not(unix))]
     let cert_dir = tempfile::tempdir().unwrap();

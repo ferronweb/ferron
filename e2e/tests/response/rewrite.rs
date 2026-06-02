@@ -7,13 +7,12 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_ferron_container(
     webroot_dir: &Path,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -42,9 +41,9 @@ async fn test_url_rewriting() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
     #[cfg(not(unix))]
@@ -70,7 +69,7 @@ async fn test_url_rewriting() {
         )
         .unwrap();
 
-    self::common::write_file(webroot_dir.path().join("basic.txt"), b"test content").unwrap();
+    crate::common::write_file(webroot_dir.path().join("basic.txt"), b"test content").unwrap();
 
     let container = create_ferron_container(webroot_dir.path(), config_file.path())
         .await
