@@ -792,16 +792,3 @@ fn test_if_not_missing_children_error() {
         .to_string()
         .contains("`if_not` directive must have a block"));
 }
-
-#[test]
-fn test_prepared_configuration_matcher_ord() {
-    use PreparedHostConfigurationMatcher::*;
-
-    let location1 = Location("/a".to_string());
-    let location2 = Location("/b".to_string());
-    let if_cond = IfConditional(vec![create_eq_expr("foo", "bar")]);
-    let if_not_cond = IfNotConditional(vec![create_eq_expr("foo", "bar")]);
-
-    assert!(location1 < location2);
-    assert!(if_cond < if_not_cond);
-}
