@@ -150,7 +150,7 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
             json,
         } => {
             if !json && !ferron_core::logging::is_init() {
-                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
+                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Info);
             }
             validate(
                 config_path,
@@ -159,6 +159,7 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
                 loaders,
                 json,
                 false,
+                true, // Print "all good" when configuration is valid with no diagnostics
             )?;
         }
         Commands::Doctor {
@@ -168,7 +169,7 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
             json,
         } => {
             if !json && !ferron_core::logging::is_init() {
-                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Warn);
+                let _ = ferron_core::logging::init_stdio_logger(LogLevel::Info);
             }
             validate(
                 config_path,
@@ -177,6 +178,7 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
                 loaders,
                 json,
                 true, // Don't filter best practice violations
+                true, // Print "all good" when configuration is valid with no diagnostics
             )?;
         }
         Commands::Adapt {
@@ -228,6 +230,7 @@ fn run_daemon(
         config_params.clone(),
         config_adapter.clone(),
         loaders,
+        false,
         false,
         false,
     )?;
@@ -521,7 +524,10 @@ fn run_configuration_validators(
 
 fn print_validation_result(
     validation_result: ConfigurationValidationResult,
+    print_all_good: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let all_good = validation_result.diagnostics.is_empty() && validation_result.valid;
+
     for diagnostic in validation_result.diagnostics {
         // Log warnings for configuration diagnostics (e.g., unknown directives)
         log_warn!("{diagnostic}");
@@ -531,6 +537,10 @@ fn print_validation_result(
         Err(anyhow::anyhow!(
             "The configuration validation failed. Check the configuration diagnostics above."
         ))?;
+    }
+
+    if all_good && print_all_good {
+        log_info!("All good! Configuration check passed with no issues.");
     }
 
     Ok(())
@@ -654,6 +664,7 @@ fn validate(
     loaders: Vec<Box<dyn ModuleLoader>>,
     json: bool,
     doctor: bool,
+    print_all_good: bool,
 ) -> Result<Vec<Box<dyn ModuleLoader>>, Box<dyn std::error::Error>> {
     let ConfigLoadResult {
         mut loaders,
@@ -704,7 +715,7 @@ fn validate(
             std::process::exit(1);
         }
     } else {
-        print_validation_result(validation_result)?;
+        print_validation_result(validation_result, print_all_good)?;
     }
 
     Ok(loaders)
@@ -905,7 +916,7 @@ fn load_modules_config(
         per_protocol_validator_registry,
         scoped_validator_registry,
     );
-    print_validation_result(validation_result)?;
+    print_validation_result(validation_result, false)?;
 
     for loader in loaders {
         loader.register_modules(module_registry.clone(), &mut modules, config.clone())?;
