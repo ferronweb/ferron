@@ -294,5 +294,4 @@ mod tests {
         // Empty search pattern should not match anything
         assert_eq!(result, b"test");
     }
-
 }
