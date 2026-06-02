@@ -758,7 +758,7 @@ fn test_if_missing_children_error() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("Location directive must have a block"));
+        .contains("`if` directive must have a block"));
 }
 
 #[test]
@@ -790,7 +790,7 @@ fn test_if_not_missing_children_error() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("Location directive must have a block"));
+        .contains("`if_not` directive must have a block"));
 }
 
 #[test]
