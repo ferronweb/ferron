@@ -92,10 +92,10 @@ pub async fn fetch_tls_cert_loop(
             .enable_http2()
             .build(),
     );
-    let mut is_first = false;
+    let mut is_first = true;
     loop {
         if is_first {
-            is_first = true;
+            is_first = false;
         } else {
             tokio::time::sleep(config.refresh_interval).await;
         }
