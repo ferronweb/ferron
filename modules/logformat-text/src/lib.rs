@@ -158,6 +158,9 @@ impl FormatPattern {
             }
         }
 
+        // Strip away control characters for safety (e.g., newlines)
+        output.retain(|c| !c.is_control());
+
         output
     }
 }
@@ -204,11 +207,11 @@ fn parse_config(
 }
 
 /// Cache for compiled format patterns to avoid re-parsing
-static PATTERN_CACHE: Lazy<std::sync::Mutex<HashMap<String, FormatPattern>>> =
-    Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
+static PATTERN_CACHE: Lazy<parking_lot::Mutex<HashMap<String, FormatPattern>>> =
+    Lazy::new(|| parking_lot::Mutex::new(HashMap::new()));
 
 fn get_or_compile_pattern(pattern_str: &str) -> FormatPattern {
-    let mut cache = PATTERN_CACHE.lock().unwrap();
+    let mut cache = PATTERN_CACHE.lock();
     if let Some(pattern) = cache.get(pattern_str) {
         return pattern.clone();
     }

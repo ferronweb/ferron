@@ -1770,6 +1770,7 @@ dependencies = [
  "ferron-core",
  "ferron-observability",
  "once_cell",
+ "parking_lot",
 ]
 
 [[package]]
