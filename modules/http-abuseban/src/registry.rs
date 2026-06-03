@@ -731,7 +731,7 @@ mod tests {
         // be slightly higher (e.g., 2-3), but should be much less than 20.
         let triggered = registry.total_bans_triggered();
         assert!(
-            triggered >= 1 && triggered <= 5,
+            (1..=5).contains(&triggered),
             "bans_triggered should be 1-5, got {triggered}"
         );
     }

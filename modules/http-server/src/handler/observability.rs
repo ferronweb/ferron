@@ -352,7 +352,7 @@ pub fn build_metric_attributes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http_body_util::{BodyExt, Empty};
+    use http_body_util::BodyExt;
 
     #[test]
     fn categorize_standard_methods() {
