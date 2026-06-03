@@ -87,6 +87,16 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
 
             // Try to open the error page file
             let path = Path::new(file_path);
+
+            // Reject paths that attempt to traverse upwards to mitigate path traversal
+            if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                ferron_core::log_warn!(
+                    "Error page path contains parent directory '..', rejecting: {}",
+                    file_path
+                );
+                continue;
+            }
+
             let meta = match vibeio::fs::metadata(path).await {
                 Ok(m) => m,
                 Err(_) => {
