@@ -316,6 +316,7 @@ example.com {
 
     observability {
         provider console
+        format json
     }
 }
 ```
