@@ -172,7 +172,7 @@ impl AbuseRegistry {
         }
 
         // Evict expired entry if present
-        self.bans.retain(|_, entry| entry.is_active());
+        self.bans.remove(&ip);
         false
     }
 
