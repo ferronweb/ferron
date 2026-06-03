@@ -411,7 +411,11 @@ mod tests {
 
         let request = http::Request::builder()
             .method("FROBULATE")
-            .body(Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed_unsync())
+            .body(
+                Empty::<Bytes>::new()
+                    .map_err(|_| unreachable!())
+                    .boxed_unsync(),
+            )
             .unwrap();
 
         let attrs = build_metric_attributes(&request, false, None);

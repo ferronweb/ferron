@@ -1,5 +1,5 @@
-use crate::providers::CorrelationContext;
 use crate::providers::sanitize_label_value;
+use crate::providers::CorrelationContext;
 
 use super::*;
 use ferron_observability::{MetricAttributeValue, TraceAttributeValue, TraceEvent};
@@ -211,10 +211,7 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
         let method = format!("CUSTOM_{i:04}");
         let event = MetricEvent {
             name: "test.cardinality",
-            attributes: vec![(
-                "http.request.method",
-                MetricAttributeValue::String(method),
-            )],
+            attributes: vec![("http.request.method", MetricAttributeValue::String(method))],
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
             unit: None,
