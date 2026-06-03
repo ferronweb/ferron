@@ -20,10 +20,19 @@ static ERROR_PIPELINE_SPAN_COUNTER: AtomicU64 = AtomicU64::new(1);
 #[inline]
 pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
     if let Some(authority) = request.uri().authority() {
-        let authority = authority.to_owned();
-        let headers = request.headers_mut();
-        if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
-            headers.append(http::header::HOST, authority_value);
+        let authority_str = authority.as_str();
+        // Defense-in-depth: reject empty authority and authority containing control characters
+        // to prevent CRLF injection if a non-conformant HTTP/2 parser passes through bad data.
+        if !authority_str.is_empty()
+            && authority_str
+                .bytes()
+                .all(|b| b >= 0x20 && b != 0x7F && b != b'\r' && b != b'\n')
+        {
+            let authority = authority.to_owned();
+            let headers = request.headers_mut();
+            if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
+                headers.append(http::header::HOST, authority_value);
+            }
         }
     }
 
@@ -321,5 +330,61 @@ mod tests {
         assert!(check_backslash_in_path("/api/v2", true).is_ok());
         assert!(check_backslash_in_path("/users/123", true).is_ok());
         assert!(check_backslash_in_path("/path?query=1", true).is_ok());
+    }
+
+    #[test]
+    fn normalize_h2_request_adds_host_from_authority() {
+        use http_body_util::Empty;
+
+        let mut request = http::Request::builder()
+            .version(http::Version::HTTP_2)
+            .uri("https://example.com/path")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .unwrap();
+
+        normalize_http2_http3_request(&mut request);
+
+        let host = request.headers().get(http::header::HOST);
+        assert!(host.is_some());
+        assert_eq!(host.unwrap().to_str().unwrap(), "example.com");
+    }
+
+    #[test]
+    fn normalize_h2_request_skips_empty_authority() {
+        use http_body_util::Empty;
+
+        // Authority-less URI (shouldn't happen in practice, but tests defense-in-depth)
+        let mut request = http::Request::builder()
+            .version(http::Version::HTTP_2)
+            .uri("/path-only")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .unwrap();
+
+        normalize_http2_http3_request(&mut request);
+
+        // No Host header should be added from authority when authority is absent
+        assert!(!request.headers().contains_key(http::header::HOST));
+    }
+
+    #[test]
+    fn normalize_h2_request_preserves_existing_host_header() {
+        use http_body_util::Empty;
+
+        let mut request = http::Request::builder()
+            .version(http::Version::HTTP_2)
+            .uri("https://authority.example.com/path")
+            .header(http::header::HOST, "original.example.com")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .unwrap();
+
+        normalize_http2_http3_request(&mut request);
+
+        // Host header should have the authority value appended (since we use append)
+        let hosts: Vec<_> = request
+            .headers()
+            .get_all(http::header::HOST)
+            .iter()
+            .collect();
+        assert_eq!(hosts.len(), 2);
     }
 }
