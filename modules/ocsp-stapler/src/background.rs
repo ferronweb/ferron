@@ -386,10 +386,10 @@ pub async fn background_ocsp_task(
         for key in updates_to_fetch {
             if let Some(cert) = known_certs.get(&key) {
                 let start = std::time::Instant::now();
-                match fetch_ocsp_response(&client, &cert).await {
+                match fetch_ocsp_response(&client, cert).await {
                     Ok(Some((response_der, next_update_time))) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
@@ -426,7 +426,7 @@ pub async fn background_ocsp_task(
                         next_updates.insert(key, next_update_time);
                     }
                     Ok(None) => {
-                        let ident = cert_identifier(&cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
@@ -454,7 +454,7 @@ pub async fn background_ocsp_task(
                     }
                     Err(e) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,
