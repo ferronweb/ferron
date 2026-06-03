@@ -238,3 +238,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 ### HTTP/3
 
 - **`protocols` includes `h3`** — HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
+
+### TLS deployment
+
+- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder that TLS termination should be performed by an upstream proxy or load balancer. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.

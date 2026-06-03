@@ -271,6 +271,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ctx.used_directives.insert("handle_error".to_string());
         }
 
+        // HTTP-only deployment check (per-host only)
+        if !is_global {
+            add_http_only_best_practice_diagnostics(config, ctx);
+        }
+
         Ok(())
     }
 }
@@ -382,4 +387,46 @@ fn add_http_block_best_practice_diagnostics(
             }
         }
     }
+}
+
+/// Emit a best-practice violation when a non-localhost host block has no TLS
+/// configuration, reminding the operator to ensure TLS termination happens
+/// somewhere in the request path.
+fn add_http_only_best_practice_diagnostics(
+    config: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    if config.directives.contains_key("tls") {
+        return;
+    }
+
+    if let Some(scope) = &ctx.scope {
+        if let Some(hostname) = extract_hostname_from_scope(scope) {
+            if !is_localhost_hostname(&hostname) {
+                ctx.add_best_practice_violation(
+                    "HTTP-only deployment detected. Ensure TLS termination is performed by an upstream proxy or load balancer.",
+                    config.span.clone(),
+                );
+            }
+        }
+    }
+}
+
+/// Extract hostname from a scope string like "http port 80 host example.com".
+fn extract_hostname_from_scope(scope: &str) -> Option<String> {
+    let rest = scope.strip_prefix("http ")?;
+    let after_port = rest.split_whitespace().nth(1)?;
+    let hostname = after_port.strip_prefix("host ")?;
+    Some(hostname.split_whitespace().next()?.to_string())
+}
+
+/// Check if a hostname refers to a loopback or otherwise local address.
+fn is_localhost_hostname(hostname: &str) -> bool {
+    let lower = hostname.to_ascii_lowercase();
+    lower == "localhost"
+        || lower == "127.0.0.1"
+        || lower == "::1"
+        || lower == "[::1]"
+        || lower.starts_with("127.")
+        || lower.ends_with(".localhost")
 }

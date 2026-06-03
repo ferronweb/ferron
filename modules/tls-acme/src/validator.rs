@@ -114,4 +114,75 @@ fn add_acme_best_practice_diagnostics(
             config.span.clone(),
         );
     }
+
+    add_non_public_domain_diagnostics(config, ctx);
+}
+
+/// Check if a domain name uses a non-public TLD that is unlikely to be resolvable
+/// by ACME certificate authorities.
+fn is_non_public_domain(domain: &str) -> bool {
+    // 1. Strip trailing root dot and normalize to lowercase
+    let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
+
+    // 2. Extract the final segment after the last dot
+    let extracted_tld = normalized
+        .rsplit_once('.')
+        .map_or(normalized.as_str(), |(_, tld)| tld);
+
+    // 3. Verify against the IANA-backed static map
+    !tld::exist(extracted_tld)
+}
+
+/// Emit diagnostics for domains that are unlikely to be publicly resolvable,
+/// which would cause ACME certificate issuance to fail.
+fn add_non_public_domain_diagnostics(
+    config: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    // Check explicit domains directive
+    if let Some(entries) = config.directives.get("domains") {
+        for entry in entries {
+            for arg in &entry.args {
+                if let Some(domain) = arg.as_str() {
+                    if is_non_public_domain(domain) {
+                        ctx.add_best_practice_violation(
+                            format!(
+                                "Domain `{domain}` is unlikely to be publicly resolvable; automatic TLS certificate issuance may fail"
+                            ),
+                            entry_span(entry),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Check scope for on_demand or implicit domain contexts
+    if let Some(scope) = &ctx.scope {
+        if let Some(hostname) = extract_hostname_from_scope(scope) {
+            if is_non_public_domain(&hostname) {
+                ctx.add_best_practice_violation(
+                    format!(
+                        "Domain `{hostname}` is unlikely to be publicly resolvable; automatic TLS certificate issuance may fail"
+                    ),
+                    config.span.clone(),
+                );
+            }
+        }
+    }
+}
+
+/// Extract hostname from a scope string like "http port 80 host example.com".
+fn extract_hostname_from_scope(scope: &str) -> Option<String> {
+    let (_, rest) = scope.split_once(' ')?; // for example, "http ..."
+
+    // Skip "port "
+    let after_host = rest.strip_prefix("port ")?;
+
+    // Skip port number
+    let after_port = after_host.split_whitespace().nth(1)?;
+    // after_port is either "host <name>" or "ip <addr>"
+    let hostname = after_port.strip_prefix("host ")?;
+    // Take until the next space (there might be "ip ..." after)
+    Some(hostname.split_whitespace().next()?.to_string())
 }
