@@ -207,7 +207,7 @@ example.com {
 
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
-        format combined
+        format text
     }
 }
 ```
@@ -233,13 +233,13 @@ example.com {
     # These are equivalent:
 
     log /var/log/access.log {
-        format combined
+        format text
     }
 
     observability {
         provider file
         access_log /var/log/access.log
-        format combined
+        format text
     }
 }
 ```
