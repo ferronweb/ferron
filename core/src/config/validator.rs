@@ -157,6 +157,53 @@ pub fn validate_scoped_block(
     result
 }
 
+/// Validates a block of configuration that is scoped to a specific namespace/module,
+/// in a "flat" style where the provider directive is expected to be at the same level as
+/// other configuration directives, rather than in a nested block.
+pub fn validate_scoped_block_flat(
+    block: &super::ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+    provider_field: &'static str,
+    provider_namespace: &'static str,
+    default_provider: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut local_ctx = ConfigurationValidatorContext {
+        used_directives: std::collections::HashSet::new(),
+        is_global: false, // Inapplicable for scoped configurations
+        scoped_validators: ctx.scoped_validators.clone(), // Allow sub-scopes
+        diagnostics: Vec::new(),
+        scope: ctx.scope.clone(),
+    };
+
+    // Validate provider and get scoped validator
+    let Some(provider) = block
+        .get_value(provider_field)
+        .and_then(|s| s.as_str())
+        .or(default_provider)
+    else {
+        Err(anyhow::anyhow!(
+            "Missing or invalid provider name for `{}`",
+            provider_namespace
+        ))?
+    };
+    local_ctx.used_directives.insert(provider_field.to_string());
+    let Some(provider_validator) = ctx.scoped_validators.get(&ConfigurationValidatorScopedKey {
+        namespace: provider_namespace,
+        module: provider.to_string(),
+    }) else {
+        Err(anyhow::anyhow!(
+            "`{}` provider not found: {}",
+            provider_namespace,
+            provider
+        ))?
+    };
+
+    let result = provider_validator.validate_block(block, &mut local_ctx);
+    ctx.used_directives.extend(local_ctx.used_directives);
+    ctx.diagnostics.extend(local_ctx.diagnostics);
+    result
+}
+
 fn format_location(block_name: Option<&str>, span: Option<&ServerConfigurationSpan>) -> String {
     let mut location = String::new();
     if let Some(name) = block_name {

@@ -1,4 +1,5 @@
 mod endpoint;
+mod validator;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -6,6 +7,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
+use ferron_core::config_validator_scoped_key;
 use ferron_core::{
     config::ServerConfigurationBlock,
     loader::ModuleLoader,
@@ -662,5 +664,18 @@ impl ModuleLoader for PrometheusObservabilityModuleLoader {
         }));
 
         Ok(())
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("observability", "prometheus"),
+            Box::new(validator::PrometheusObservabilityConfigurationValidator),
+        );
     }
 }
