@@ -169,10 +169,11 @@ impl AbuseRegistry {
             if entry.is_active() {
                 return true;
             }
+
+            // Ban expired, remove it.
+            self.bans.remove(&ip);
         }
 
-        // Evict expired entry if present
-        self.bans.remove(&ip);
         false
     }
 
