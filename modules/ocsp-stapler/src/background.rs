@@ -122,8 +122,9 @@ fn verify_ocsp_signature(
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
                 // Get curve OID
-                let curve_oid: Option<ObjectIdentifier> = basic_response
-                    .signature_algorithm
+                let curve_oid: Option<ObjectIdentifier> = issuer_cert
+                    .public_key()
+                    .algorithm
                     .parameters
                     .as_ref()
                     .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v.as_bytes()).ok());
