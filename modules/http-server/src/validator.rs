@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use cidr::IpCidr;
 use ferron_core::{
+    builtin::validate_observability_directives,
     check_unused_subdirectives,
     config::{
         validator::{validate_scoped_block, ConfigurationValidatorContext},
@@ -136,35 +137,8 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             );
         }
 
-        // Observability aliases
-        validate_directive!(config, ctx.used_directives, log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)]
-            | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
-            {
-            let mut sub = std::collections::HashSet::new();
-            validate_nested!(log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
-            validate_nested!(log, used(sub), access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(log, used(sub), access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            check_unused_subdirectives!(log, sub, &mut ctx.diagnostics, ctx.scope.clone());
-        });
-
-        validate_directive!(config, ctx.used_directives, error_log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)]
-            | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
-            {
-            let mut sub = std::collections::HashSet::new();
-            validate_nested!(error_log, used(sub), error_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(error_log, used(sub), error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            check_unused_subdirectives!(error_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
-        });
-
-        validate_directive!(config, ctx.used_directives, console_log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)],
-            {
-            let mut sub = std::collections::HashSet::new();
-            validate_nested!(console_log, used(sub), format, args(1) => ServerConfigurationValue::String(_, _));
-            check_unused_subdirectives!(console_log, sub, &mut ctx.diagnostics, ctx.scope.clone());
-        });
+        // Observability directives
+        validate_observability_directives(config, ctx)?;
 
         // Index file names
         validate_directive!(config, ctx.used_directives, index, optional args(?), {});
