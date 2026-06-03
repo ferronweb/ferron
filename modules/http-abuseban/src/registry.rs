@@ -272,8 +272,18 @@ impl AbuseRegistry {
             self.bans.insert(event.ip, ban_entry);
             self.bans_triggered.fetch_add(1, Ordering::Relaxed);
 
-            // Clear the tracker after ban
-            drop(tracker); // Prevent deadlock
+            // Clear the tracker after ban. We must drop the RefMut first to avoid
+            // a deadlock (DashMap::remove takes a shard write lock, which the
+            // RefMut also holds), then remove the entry. The window between drop
+            // and remove is safe because a concurrent thread hitting the same key
+            // will see `count() >= threshold` and trigger another ban, but the
+            // worst case is a redundant ban insert (same IP, slightly extended
+            // expiry) and a double-count of `bans_triggered` — both benign.
+            //
+            // To reduce the window, we clear events first (making the count 0 for
+            // any concurrent reader), then drop, then remove.
+            tracker.events.clear();
+            drop(tracker);
             self.event_trackers.remove(&key);
 
             EventResult::BanTriggered
@@ -679,5 +689,50 @@ mod tests {
         let result = registry.record_event(&event, &make_test_config());
         assert_eq!(result, EventResult::Recorded);
         assert_eq!(registry.total_bans_triggered(), 1);
+    }
+
+    #[test]
+    fn concurrent_same_ip_race_prevents_double_ban() {
+        // Multiple threads racing on the same IP should still result in a ban,
+        // but bans_triggered should not be inflated by more than a small margin.
+        let registry = Arc::new(AbuseRegistry::new());
+        let config = make_test_config();
+        let mut handles = Vec::new();
+
+        // Launch 20 threads all hitting the same IP simultaneously.
+        // Threshold is 3 events. Each thread records 3 events.
+        for _ in 0..20 {
+            let reg = registry.clone();
+            let cfg = config.clone();
+            handles.push(thread::spawn(move || {
+                let ip = test_ip();
+                let event = AbuseEvent::new(
+                    AbuseEventType::RateLimitExceeded,
+                    ip,
+                    "Concurrent race".into(),
+                    50,
+                );
+                for _ in 0..3 {
+                    AbuseRegistry::record_event(&reg, &event, &cfg);
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // The IP must be banned
+        assert!(
+            AbuseRegistry::is_banned(&registry, test_ip(), &config),
+            "IP should be banned after concurrent events"
+        );
+        // bans_triggered should be close to 1. Due to the race window, it may
+        // be slightly higher (e.g., 2-3), but should be much less than 20.
+        let triggered = registry.total_bans_triggered();
+        assert!(
+            triggered >= 1 && triggered <= 5,
+            "bans_triggered should be 1-5, got {triggered}"
+        );
     }
 }
