@@ -26,14 +26,13 @@ use rasn_ocsp::{
     BasicOcspResponse, CertId, OcspRequest, OcspResponse, OcspResponseStatus,
     Request as RasnOcspRequest, TbsRequest,
 };
-use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use x509_parser::prelude::*;
 
 // Type alias for the OCSP cache to reduce type complexity
-type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Arc<CertifiedKey>>>>>;
+type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 
 // ---------------------------------------------------------------------------
 // HTTPS client construction
@@ -311,7 +310,7 @@ fn verify_single_res(
 }
 
 pub async fn background_ocsp_task(
-    mut receiver: mpsc::UnboundedReceiver<CertifiedKey>,
+    mut receiver: mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>,
     cache: OcspCache,
     cancel_token: CancellationToken,
     event_sink: Option<Arc<CompositeEventSink>>,
@@ -319,7 +318,7 @@ pub async fn background_ocsp_task(
     // Track next-update times per cert
     let mut next_updates: HashMap<Vec<u8>, SystemTime> = HashMap::new();
     // Track known cert chains
-    let mut known_certs: HashMap<Vec<u8>, CertifiedKey> = HashMap::new();
+    let mut known_certs: HashMap<Vec<u8>, Vec<CertificateDer<'static>>> = HashMap::new();
 
     // Build HTTPS client with native certificate store and webpki-roots fallback
     let Ok(https_connector) = build_https_connector() else {
@@ -358,19 +357,18 @@ pub async fn background_ocsp_task(
         };
 
         // Process newly received cert
-        if let Some(certified_key) = received_certified_key {
-            let chain = &certified_key.cert;
+        if let Some(chain) = received_certified_key {
             if let Some(leaf) = chain.first() {
                 let key: Vec<u8> = leaf.to_vec();
                 if !known_certs.contains_key(&key) {
-                    let ident = cert_identifier(chain);
+                    let ident = cert_identifier(&chain);
                     emit_log(
                         &event_sink,
                         LogLevel::Debug,
                         &format!("OCSP fetch triggered for certificate {ident}"),
                         "ferron_ocsp",
                     );
-                    known_certs.insert(key.clone(), certified_key);
+                    known_certs.insert(key.clone(), chain.clone());
                     // Trigger immediate fetch (use time in the past to ensure it is fetched immediately)
                     next_updates.insert(key, SystemTime::now() - std::time::Duration::from_secs(1));
                 }
@@ -386,12 +384,12 @@ pub async fn background_ocsp_task(
             .collect();
 
         for key in updates_to_fetch {
-            if let Some(certified_key) = known_certs.get(&key) {
+            if let Some(cert) = known_certs.get(&key) {
                 let start = std::time::Instant::now();
-                match fetch_ocsp_response(&client, &certified_key.cert).await {
+                match fetch_ocsp_response(&client, &cert).await {
                     Ok(Some((response_der, next_update_time))) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(&cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
@@ -424,20 +422,17 @@ pub async fn background_ocsp_task(
                             vec![],
                         );
 
-                        let mut new_certified_key = certified_key.clone();
-                        new_certified_key.ocsp = Some(response_der);
-                        cache
-                            .write()
-                            .insert(key.clone(), Some(Arc::new(new_certified_key)));
+                        cache.write().insert(key.clone(), Some(response_der));
                         next_updates.insert(key, next_update_time);
                     }
                     Ok(None) => {
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(&cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
                             &format!(
-                                "OCSP stapling skipped — \n                                no OCSP URL or incomplete chain in certificate {ident}"
+                                "OCSP stapling skipped — \
+                                no OCSP URL or incomplete chain in certificate {ident}"
                             ),
                             "ferron_ocsp",
                         );
@@ -459,7 +454,7 @@ pub async fn background_ocsp_task(
                     }
                     Err(e) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(&cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,

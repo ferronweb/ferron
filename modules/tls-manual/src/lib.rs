@@ -128,7 +128,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
                         );
                     }
                 }
-                ocsp_handle.preload(certified_key);
+                ocsp_handle.preload(certified_key.cert.clone());
             }
         }
 
