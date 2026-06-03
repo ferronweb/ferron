@@ -179,6 +179,15 @@ mod tests {
     }
 
     #[test]
+    fn extract_etag_with_precompress_and_suffix() {
+        let result = extract_etag_inner("\"abc-precompress-br\"", true);
+        assert_eq!(
+            result,
+            Some(("abc".to_string(), Some("br".to_string()), false))
+        );
+    }
+
+    #[test]
     fn extract_etag_no_weak_prefix() {
         let result = extract_etag_inner("\"abc\"", false);
         assert_eq!(result, Some(("abc".to_string(), None, false)));

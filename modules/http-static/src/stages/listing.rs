@@ -211,10 +211,11 @@ fn generate_directory_listing(
     for entry in entries {
         let filename = entry.filename;
         let Some(metadata) = entry.metadata else {
+            let encoded_filename = urlencoding::encode(&filename);
+            let href = format!("{}/{}", path_without_slashes, encoded_filename);
             let link = format!(
-                "⚠️ <a href=\"{}/{}\">{}</a>",
-                anti_xss(path_without_slashes),
-                anti_xss(urlencoding::encode(&filename).as_ref()),
+                "⚠️ <a href=\"{}\">{}</a>",
+                anti_xss(&href),
                 anti_xss(&filename)
             );
             rows.push(format!(
@@ -228,12 +229,12 @@ fn generate_directory_listing(
         let icon = file_icon(entry.extension.as_deref(), is_dir);
         let suffix = if is_dir { "/" } else { "" };
 
+        let encoded_filename = urlencoding::encode(&filename);
+        let href = format!("{}/{}{}", path_without_slashes, encoded_filename, suffix);
         let link = format!(
-            "{} <a href=\"{}/{}{}\">{}</a>",
+            "{} <a href=\"{}\">{}</a>",
             icon,
-            anti_xss(path_without_slashes),
-            anti_xss(urlencoding::encode(&filename).as_ref()),
-            suffix,
+            anti_xss(&href),
             anti_xss(&filename)
         );
 
