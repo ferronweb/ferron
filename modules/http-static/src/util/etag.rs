@@ -2,6 +2,8 @@
 
 use http::header::{self, HeaderValue};
 
+use crate::util::compression::COMP_SUFFIXES;
+
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
     etag: &str,
@@ -83,9 +85,6 @@ pub fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<Str
     if trimmed.is_empty() {
         return None;
     }
-
-    // Known compression suffixes (without leading dash)
-    const COMP_SUFFIXES: &[&str] = &["gzip", "br", "deflate", "zstd"];
 
     // Detect compression suffix at the end (e.g. "abc-precompress-br" -> base="abc", suffix="br")
     for &sfx in COMP_SUFFIXES.iter() {

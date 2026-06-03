@@ -14,6 +14,9 @@ use super::file_stream::FileStream;
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
 
+/// Known HTTP compression ETag suffixes (without leading dash)
+pub const COMP_SUFFIXES: &[&str] = &["gzip", "br", "deflate", "zstd"];
+
 /// Compression algorithm
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
