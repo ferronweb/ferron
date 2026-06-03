@@ -295,6 +295,25 @@ fn http_version_string(version: http::Version) -> Option<&'static str> {
     }
 }
 
+/// Categorize an HTTP method into a bounded set for metric dimensions.
+///
+/// Standard methods are kept as-is; unknown methods are collapsed into `_other`
+/// to prevent high-cardinality label explosion from custom/fuzzed HTTP methods.
+fn categorize_http_method(method: &http::Method) -> &'static str {
+    match *method {
+        http::Method::GET => "GET",
+        http::Method::HEAD => "HEAD",
+        http::Method::POST => "POST",
+        http::Method::PUT => "PUT",
+        http::Method::DELETE => "DELETE",
+        http::Method::CONNECT => "CONNECT",
+        http::Method::OPTIONS => "OPTIONS",
+        http::Method::TRACE => "TRACE",
+        http::Method::PATCH => "PATCH",
+        _ => "_other",
+    }
+}
+
 /// Build the common metric attributes shared across all HTTP metrics.
 #[inline]
 pub fn build_metric_attributes(
@@ -305,7 +324,7 @@ pub fn build_metric_attributes(
     let mut attrs = Vec::with_capacity(5);
     attrs.push((
         "http.request.method",
-        MetricAttributeValue::String(request.method().as_str().to_owned()),
+        MetricAttributeValue::StaticStr(categorize_http_method(request.method())),
     ));
     attrs.push((
         "url.scheme",
@@ -328,4 +347,82 @@ pub fn build_metric_attributes(
         ));
     }
     attrs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::{BodyExt, Empty};
+
+    #[test]
+    fn categorize_standard_methods() {
+        assert_eq!(categorize_http_method(&http::Method::GET), "GET");
+        assert_eq!(categorize_http_method(&http::Method::HEAD), "HEAD");
+        assert_eq!(categorize_http_method(&http::Method::POST), "POST");
+        assert_eq!(categorize_http_method(&http::Method::PUT), "PUT");
+        assert_eq!(categorize_http_method(&http::Method::DELETE), "DELETE");
+        assert_eq!(categorize_http_method(&http::Method::CONNECT), "CONNECT");
+        assert_eq!(categorize_http_method(&http::Method::OPTIONS), "OPTIONS");
+        assert_eq!(categorize_http_method(&http::Method::TRACE), "TRACE");
+        assert_eq!(categorize_http_method(&http::Method::PATCH), "PATCH");
+    }
+
+    #[test]
+    fn categorize_unknown_method_to_other() {
+        // Custom methods (attacker-controlled) must collapse to _other
+        let custom = http::Method::from_bytes(b"PURGE").unwrap();
+        assert_eq!(categorize_http_method(&custom), "_other");
+
+        let custom2 = http::Method::from_bytes(b"PROPFIND").unwrap();
+        assert_eq!(categorize_http_method(&custom2), "_other");
+
+        // Fuzzed/long method names
+        let fuzzed = http::Method::from_bytes(b"AAAAA").unwrap();
+        assert_eq!(categorize_http_method(&fuzzed), "_other");
+    }
+
+    #[test]
+    fn method_cardinality_is_bounded() {
+        // At most 10 unique label values (9 standard + 1 _other)
+        let mut values = std::collections::HashSet::new();
+        for method in &[
+            http::Method::GET,
+            http::Method::HEAD,
+            http::Method::POST,
+            http::Method::PUT,
+            http::Method::DELETE,
+            http::Method::CONNECT,
+            http::Method::OPTIONS,
+            http::Method::TRACE,
+            http::Method::PATCH,
+        ] {
+            values.insert(categorize_http_method(method));
+        }
+        values.insert(categorize_http_method(
+            &http::Method::from_bytes(b"CUSTOM").unwrap(),
+        ));
+        assert_eq!(values.len(), 10, "bounded to 9 standard + 1 _other");
+    }
+
+    #[test]
+    fn build_metric_attributes_uses_bounded_method() {
+        use bytes::Bytes;
+        use http_body_util::Empty;
+
+        let request = http::Request::builder()
+            .method("FROBULATE")
+            .body(Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed_unsync())
+            .unwrap();
+
+        let attrs = build_metric_attributes(&request, false, None);
+        let method_attr = attrs
+            .iter()
+            .find(|(k, _)| *k == "http.request.method")
+            .expect("method attr must exist");
+
+        match &method_attr.1 {
+            MetricAttributeValue::StaticStr(val) => assert_eq!(*val, "_other"),
+            _ => panic!("method should be StaticStr after categorization"),
+        }
+    }
 }

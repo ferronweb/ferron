@@ -457,6 +457,28 @@ pub fn emit_access_log(
     logger.emit(record);
 }
 
+/// Maximum length for a metric label value before it is hashed to prevent cardinality explosion.
+const MAX_LABEL_VALUE_LEN: usize = 128;
+
+/// Sanitize a metric label value to prevent high-cardinality telemetry poisoning.
+///
+/// Values longer than 128 characters are replaced with a deterministic hash.
+/// Control characters are replaced with `?` to avoid log injection.
+pub(crate) fn sanitize_label_value(s: &str) -> String {
+    let s = s.trim();
+    if s.len() <= MAX_LABEL_VALUE_LEN {
+        s.chars()
+            .map(|c| if c.is_control() { '?' } else { c })
+            .collect()
+    } else {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        s.hash(&mut hasher);
+        format!("hash_{:x}", hasher.finish())
+    }
+}
+
 pub fn emit_metric(
     provider: &opentelemetry_sdk::metrics::SdkMeterProvider,
     event: &MetricEvent,
@@ -469,16 +491,22 @@ pub fn emit_metric(
         .attributes
         .iter()
         .map(|(k, v)| {
-            KeyValue::new(
-                *k,
-                match v {
-                    MetricAttributeValue::F64(val) => opentelemetry::Value::from(*val),
-                    MetricAttributeValue::I64(val) => opentelemetry::Value::from(*val),
-                    MetricAttributeValue::String(val) => opentelemetry::Value::from(val.clone()),
-                    MetricAttributeValue::StaticStr(val) => opentelemetry::Value::from(*val),
-                    MetricAttributeValue::Bool(val) => opentelemetry::Value::from(*val),
-                },
-            )
+            let value = match v {
+                MetricAttributeValue::F64(val) => opentelemetry::Value::from(*val),
+                MetricAttributeValue::I64(val) => opentelemetry::Value::from(*val),
+                MetricAttributeValue::String(val) => {
+                    opentelemetry::Value::from(sanitize_label_value(val))
+                }
+                MetricAttributeValue::StaticStr(val) => {
+                    if val.len() > MAX_LABEL_VALUE_LEN {
+                        opentelemetry::Value::from(sanitize_label_value(val))
+                    } else {
+                        opentelemetry::Value::from(*val)
+                    }
+                }
+                MetricAttributeValue::Bool(val) => opentelemetry::Value::from(*val),
+            };
+            KeyValue::new(*k, value)
         })
         .collect();
 
