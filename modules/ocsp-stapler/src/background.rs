@@ -115,8 +115,8 @@ fn verify_ocsp_signature(
                 &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
             }
 
-            // ED25519
-            [1, 3, 101, 112, 1] => &aws_lc_rs::signature::ED25519,
+            // Ed25519
+            [1, 3, 101, 112] => &aws_lc_rs::signature::ED25519,
 
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
