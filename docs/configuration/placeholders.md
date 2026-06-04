@@ -1,9 +1,64 @@
 ---
 title: "Configuration: placeholders"
-description: "Request and logging placeholders available across headers, subconditions, proxy directives, and log formats."
+description: "Environment variable interpolation and request/logging placeholders available across headers, subconditions, proxy directives, and log formats."
 ---
 
-This page lists placeholder variables that can be used in KDL directives for routing, proxying, conditions, and logging.
+This page describes placeholder variables that can be used in KDL directives. There are two kinds: **environment variable placeholders** (resolved when the configuration file is loaded) and **request/logging placeholders** (resolved per request).
+
+## Environment variable placeholders
+
+Environment variable placeholders let you reference environment variables directly in your KDL configuration. They are resolved when the server starts, so the values are baked into the parsed configuration.
+
+### Syntax
+
+```
+{env:VARIABLE_NAME}
+```
+
+### Behavior
+
+- If the environment variable exists, its value is substituted in place of the placeholder.
+- If the environment variable is missing or unset, the placeholder text is kept as-is (for example, `{env:MY_VAR}`).
+- Unknown placeholder kinds (anything other than `env`) are also kept as-is.
+
+### Examples
+
+Given these environment variables:
+
+```
+export APP_ROOT="/var/www/app"
+export DB_HOST="db.example.com"
+```
+
+You can use them in a KDL configuration like this:
+
+```kdl
+site {
+  root "{env:APP_ROOT}/public"
+
+  reverseProxy {
+    to "http://{env:DB_HOST}:5432"
+  }
+}
+```
+
+At load time, these resolve to:
+
+```kdl
+site {
+  root "/var/www/app/public"
+
+  reverseProxy {
+    to "http://db.example.com:5432"
+  }
+}
+```
+
+### Notes
+
+- Environment variable placeholders work in any string value throughout the KDL configuration file.
+- They are resolved early, before the configuration is parsed, so they behave like compile-time constants.
+- If you need a variable that changes at runtime (per request), use one of the [request placeholders](#placeholders) instead.
 
 ## Placeholders
 
