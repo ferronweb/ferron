@@ -14,6 +14,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // --- find "ferron" code blocks in the parsed Markdown ---
         let ferron_code_blocks = find_ferron_code_blocks(&parsed);
         for (block, pos) in ferron_code_blocks {
+            // --- ignore blocks declared invalid ---
+            if let Some(first_line) = block.lines().next() {
+                let first_line_lower = first_line.trim().to_ascii_lowercase();
+                if first_line_lower.starts_with("# invalid:") || first_line_lower == "# invalid" {
+                    continue;
+                }
+            }
+
             // --- write temporary config file with the code block ---
             let temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(&temp_file, block)?;
@@ -32,13 +40,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .wait_with_output()?;
             if !output.status.success() || !output.stderr.is_empty() {
                 Err(anyhow::anyhow!(
-                    "Configuration validation (in {}{}) failed with status: {}\n{}",
+                    "Configuration validation (in {}{}) failed with status: {}\n\n--- STDOUT ---\n{}\n--- STDERR ---\n{}",
                     file.display(),
                     pos.map_or(String::new(), |p| format!(
                         " beginning at line {}, column {}",
                         p.start.line, p.start.column
                     )),
                     output.status,
+                    String::from_utf8_lossy(&output.stdout),
                     String::from_utf8_lossy(&output.stderr)
                 ))?;
             }

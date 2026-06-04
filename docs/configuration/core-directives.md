@@ -135,6 +135,10 @@ The `admin` block configures the built-in administration endpoints. If the `admi
   - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
 - `reload <bool>` (`admin-api`)
   - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
+- `reload_get <bool>` (`admin-api`)
+  - This directive specifies whether the `GET /reload` endpoint is enabled. Returns the current reload status. Default: `reload_get true`
+- `runtime <bool>` (`admin-api`)
+  - This directive specifies whether the `GET /runtime` endpoint is enabled. Returns runtime information such as thread count and io_uring status. Default: `runtime true`
 
 **Configuration example:**
 
@@ -147,6 +151,8 @@ The `admin` block configures the built-in administration endpoints. If the `admi
         status true
         config true
         reload true
+        reload_get true
+        runtime true
     }
 }
 ```
@@ -155,7 +161,7 @@ Notes:
 
 - All endpoint flags accept `true` or `false`. A bare directive without a value (e.g. `health`) counts as enabled.
 - The admin listener runs on a separate secondary Tokio runtime, isolated from the primary data-plane runtime.
-- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`.
+- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, `htpasswd`.
 
 ### Observability
 
@@ -201,7 +207,7 @@ example.com {
 
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
-        format combined
+        format text
     }
 }
 ```
@@ -227,13 +233,13 @@ example.com {
     # These are equivalent:
 
     log /var/log/access.log {
-        format combined
+        format text
     }
 
     observability {
         provider file
         access_log /var/log/access.log
-        format combined
+        format text
     }
 }
 ```
@@ -310,6 +316,7 @@ example.com {
 
     observability {
         provider console
+        format json
     }
 }
 ```
@@ -423,9 +430,45 @@ Returns JSON with server metrics:
 
 Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
 
+#### `GET /reload`
+
+Returns the current reload status as JSON:
+
+```json
+{
+  "last_reload_time": "2026-05-29T12:00:00Z",
+  "last_reload_error": null,
+  "active_generation": 42
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `last_reload_time` | ISO 8601 timestamp of the last reload attempt. |
+| `last_reload_error` | Error message from the last reload, or `null` if successful. |
+| `active_generation` | The configuration generation number currently in effect. |
+
 #### `POST /reload`
 
 Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
+
+#### `GET /runtime`
+
+Returns the runtime status as JSON:
+
+```json
+{
+  "primary_threads": 8,
+  "io_uring_supported": true,
+  "io_uring_runtime_enabled": true
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `primary_threads` | Number of primary threads (typically equal to CPU count). |
+| `io_uring_supported` | Whether `io_uring` is supported on the current system. |
+| `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime. |
 
 ## Notes and troubleshooting
 
@@ -436,3 +479,28 @@ Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon pr
 - For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability-logging).
 - For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/http-host).
 - For admin API security hardening, see [Security considerations](#security-considerations) under the Admin API section.
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### Log rotation
+
+- **`log` without rotation** — File-based access logging should include `access_log_rotate_size` (or an external log rotation policy) to prevent unbounded disk growth.
+- **`error_log` without rotation** — File-based error logging should include `error_log_rotate_size` (or an external log rotation policy).
+
+### Default ports
+
+- **Both default ports disabled** — Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Ensure all host blocks specify explicit ports, or keep at least one default listener enabled.
+
+### PROXY protocol
+
+- **`protocol_proxy` enabled** — PROXY protocol trusts client-provided addresses. Enable it only on listeners reachable exclusively by trusted load balancers.
+
+### Admin API
+
+- **`admin.listen` on non-loopback address** — The admin API is unauthenticated and unencrypted. Bind to a loopback address or restrict access via network controls.
+
+### Location blocks
+
+- **No duplicate `location` block pathnames** — Duplicate pathnames in location blocks will cause the server to return an ambiguous response, so they should be avoided.

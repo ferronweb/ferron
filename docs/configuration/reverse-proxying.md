@@ -478,3 +478,16 @@ example.com {
   - Passive health checks, circuit breaking, and active health checks work together: any of them can make a backend temporarily ineligible.
 - For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### TLS verification
+
+- **`proxy { no_verification }`** — Disabling TLS certificate verification for HTTPS upstreams should only be used for testing or tightly controlled internal networks.
+- **`active_check { no_verification }`** — Disabling TLS verification for health check probes should only be used for strictly internal endpoints.
+
+### Upstream SSRF risk
+
+- **Upstream URL with request header interpolation** — Upstream URLs containing `{{request.header.*}}` are vulnerable to SSRF. Derive upstream targets from static configuration or trusted server-controlled variables.

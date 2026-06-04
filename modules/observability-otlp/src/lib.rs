@@ -1,6 +1,7 @@
 mod client;
 mod config;
 mod providers;
+mod validator;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -9,6 +10,7 @@ use std::sync::{Arc, Once};
 
 use ferron_core::{
     config::ServerConfigurationBlock,
+    config_validator_scoped_key,
     loader::ModuleLoader,
     log_warn,
     providers::Provider,
@@ -298,6 +300,19 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
         }
 
         Ok(())
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("observability", "otlp"),
+            Box::new(validator::OtlpObservabilityConfigurationValidator),
+        );
     }
 }
 

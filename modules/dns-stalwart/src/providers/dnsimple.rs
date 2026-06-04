@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = required_string(ctx, "oauth_token", "dnsimple", "OAuth token")?;
-        let account_id = required_string(ctx, "account_id", "dnsimple", "account ID")?;
+        let oauth_token = required_string(ctx, "oauth_token", "dnsimple")?;
+        let account_id = required_string(ctx, "account_id", "dnsimple")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,

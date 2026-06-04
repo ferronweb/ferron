@@ -15,9 +15,9 @@ impl Provider<DnsContext<'static>> for CpanelDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = required_string(ctx, "base_url", "cpanel", "base URL")?;
-        let username = required_string(ctx, "username", "cpanel", "username")?;
-        let token = required_string(ctx, "token", "cpanel", "token")?;
+        let base_url = required_string(ctx, "base_url", "cpanel")?;
+        let username = required_string(ctx, "username", "cpanel")?;
+        let token = required_string(ctx, "token", "cpanel")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_cpanel(&base_url, &username, &token, None)?,

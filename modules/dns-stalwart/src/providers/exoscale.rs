@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for ExoscaleDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "exoscale", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "exoscale", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "exoscale")?;
+        let api_secret = required_string(ctx, "api_secret", "exoscale")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_exoscale(&api_key, &api_secret, None)?,

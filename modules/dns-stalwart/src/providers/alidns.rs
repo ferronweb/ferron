@@ -15,9 +15,8 @@ impl Provider<DnsContext<'static>> for AlibabaCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key_id = required_string(ctx, "access_key_id", "alidns", "access key ID")?;
-        let access_key_secret =
-            required_string(ctx, "access_key_secret", "alidns", "access key secret")?;
+        let access_key_id = required_string(ctx, "access_key_id", "alidns")?;
+        let access_key_secret = required_string(ctx, "access_key_secret", "alidns")?;
         let region = opt_string(ctx, "region");
         let security_token = opt_string(ctx, "security_token");
         let line = opt_string(ctx, "line");

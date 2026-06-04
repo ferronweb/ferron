@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for IbmCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let username = required_string(ctx, "username", "ibmcloud", "username")?;
-        let api_key = required_string(ctx, "api_key", "ibmcloud", "API key")?;
+        let username = required_string(ctx, "username", "ibmcloud")?;
+        let api_key = required_string(ctx, "api_key", "ibmcloud")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_ibmcloud(&username, &api_key, None)?,

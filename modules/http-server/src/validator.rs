@@ -1,7 +1,16 @@
 use std::collections::HashMap;
 
 use cidr::IpCidr;
-use ferron_core::{config::ServerConfigurationValue, validate_directive, validate_nested};
+use ferron_core::{
+    builtin::validate_observability_directives,
+    check_unused_subdirectives,
+    config::{
+        validator::{validate_scoped_block, ConfigurationValidatorContext},
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+        ServerConfigurationValue,
+    },
+    validate_directive, validate_nested,
+};
 
 pub struct HttpConfigurationValidator;
 
@@ -9,53 +18,62 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
         // Global-only directives (default port configuration)
         if is_global {
-            validate_directive!(config, used_directives, default_http_port, optional args(1) => [
+            validate_directive!(config, ctx.used_directives, default_http_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(_, _)
             ], {});
 
-            validate_directive!(config, used_directives, default_https_port, optional args(1) => [
+            validate_directive!(config, ctx.used_directives, default_https_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(_, _)
             ], {});
+
+            if config
+                .get_value("default_http_port")
+                .and_then(ServerConfigurationValue::as_boolean)
+                == Some(false)
+                && config
+                    .get_value("default_https_port")
+                    .and_then(ServerConfigurationValue::as_boolean)
+                    == Some(false)
+            {
+                ctx.add_best_practice_violation(
+                    "`default_http_port false` and `default_https_port false` disable implicit listeners for host blocks without explicit ports",
+                    config.span.clone(),
+                );
+            }
         }
 
         // TLS settings
-        validate_directive!(config, used_directives, tls, optional
+        validate_directive!(config, ctx.used_directives, tls, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(2) => [
                 ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _),
                 ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
             ],
             {
-            validate_nested!(tls, provider, optional args(1) => [ServerConfigurationValue::String(_, _)]);
-
-            // Session ticket keys configuration (validated at runtime by provider)
-            validate_nested!(tls, ticket_keys, optional args(?) => [
-                ServerConfigurationValue::String(_, _)
-                    | ServerConfigurationValue::InterpolatedString(_, _)
-                    | ServerConfigurationValue::Number(_, _)
-                    | ServerConfigurationValue::Boolean(_, _)
-            ]);
+              validate_scoped_block(tls, ctx, "provider", "tls", Some("manual"))?;
         });
 
         // HTTP settings
-        validate_directive!(config, used_directives, http, no_args, {
-            validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
+        validate_directive!(config, ctx.used_directives, http, no_args, {
+            let mut sub = std::collections::HashSet::new();
+
+            validate_nested!(http, used(sub), protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
             // OPTIONS * allowed methods
-            validate_nested!(http, options_allowed_methods, args(1) => [
+            validate_nested!(http, used(sub), options_allowed_methods, args(1) => [
                 ServerConfigurationValue::String(_, _)
                     | ServerConfigurationValue::InterpolatedString(_, _)
             ]);
 
             // Timeout
-            validate_nested!(http, timeout, args(1) => [
+            validate_nested!(http, used(sub), timeout, args(1) => [
                 ServerConfigurationValue::Number(_, _)
                     | ServerConfigurationValue::Boolean(false, _)
                     | ServerConfigurationValue::String(_, _)
@@ -64,85 +82,81 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
             // URL sanitization
             if is_global {
-                validate_nested!(http, url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(http, url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, used(sub), url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, used(sub), url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
             }
 
             // HTTP/1.x settings
-            validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // 103 Early Hints
-            validate_nested!(http, early_hints, optional);
+            validate_nested!(http, used(sub), early_hints, optional);
 
             // HTTP/2 settings
-            validate_nested!(http, h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             // W3C Trace Context
-            validate_nested!(http, trace, {
-                validate_nested!(trace, generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                validate_nested!(trace, sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(http, used(sub), trace, {
+                let mut trace_sub = std::collections::HashSet::new();
+                validate_nested!(trace, used(trace_sub), generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, used(trace_sub), sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                check_unused_subdirectives!(
+                    trace,
+                    trace_sub,
+                    &mut ctx.diagnostics,
+                    ctx.scope.clone()
+                );
             });
+
+            add_http_block_best_practice_diagnostics(http, ctx);
+            check_unused_subdirectives!(http, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
         // Webroot
-        validate_directive!(config, used_directives, root, args(1) => [
+        validate_directive!(config, ctx.used_directives, root, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
         // Server administrator's email address
-        validate_directive!(config, used_directives, admin_email, args(1) => [
+        validate_directive!(config, ctx.used_directives, admin_email, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
         // PROXY protocol
-        validate_directive!(config, used_directives, protocol_proxy, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, protocol_proxy, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
+        if first_flag(config, "protocol_proxy") == Some(true) {
+            ctx.add_best_practice_violation(
+                "`protocol_proxy` trusts client-provided PROXY protocol addresses; enable it only on listeners reachable exclusively by trusted load balancers",
+                first_entry_span(config, "protocol_proxy"),
+            );
+        }
 
-        // Observability aliases
-        validate_directive!(config, used_directives, log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)]
-            | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
-            {
-            validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
-            validate_nested!(log, access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-        });
-
-        validate_directive!(config, used_directives, error_log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)]
-            | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
-            {
-            validate_nested!(error_log, error_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-            validate_nested!(error_log, error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
-        });
-
-        validate_directive!(config, used_directives, console_log, optional
-            args(1) => [ServerConfigurationValue::Boolean(_, _)],
-            {
-            validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
-        });
+        // Observability directives
+        validate_observability_directives(config, ctx)?;
 
         // Index file names
-        validate_directive!(config, used_directives, index, optional args(?), {});
+        validate_directive!(config, ctx.used_directives, index, optional args(?), {});
 
         // Trailing slash redirect for directories
-        validate_directive!(config, used_directives, trailing_slash_redirect, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, trailing_slash_redirect, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
         // HTTPS redirect toggle
-        validate_directive!(config, used_directives, https_redirect, optional args(1) => [
+        validate_directive!(config, ctx.used_directives, https_redirect, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
         // Client IP from forwarded header
         if let Some(entries) = config.directives.get("client_ip_from_header") {
-            used_directives.insert("client_ip_from_header".to_string());
+            ctx.used_directives
+                .insert("client_ip_from_header".to_string());
             for entry in entries {
                 if entry.args.len() != 1 {
                     return Err(format!(
@@ -172,7 +186,8 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                     }
 
                     if let Some(trusted_proxy_entries) = children.directives.get("trusted_proxy") {
-                        used_directives.insert("trusted_proxy".to_string());
+                        ctx.used_directives.insert("trusted_proxy".to_string());
+                        let mut has_trusted_proxy = false;
                         for trusted_proxy_entry in trusted_proxy_entries {
                             if trusted_proxy_entry.args.is_empty() {
                                 return Err(
@@ -212,121 +227,206 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                     )
                                     .into());
                                 }
+                                has_trusted_proxy = true;
+                                if expanded == "0.0.0.0/0" || expanded == "::/0" {
+                                    ctx.add_best_practice_violation(
+                                        "`trusted_proxy` trusts every source address; restrict forwarded client IP headers to reverse proxies you control",
+                                        trusted_proxy_entry.span.clone(),
+                                    );
+                                }
                             }
                         }
+                        if !has_trusted_proxy {
+                            ctx.add_best_practice_violation(
+                                "`client_ip_from_header` has no trusted proxy ranges, so forwarded client IP headers will be ignored",
+                                entry.span.clone(),
+                            );
+                        }
+                    } else {
+                        ctx.add_best_practice_violation(
+                            "`client_ip_from_header` should include `trusted_proxy` ranges for the reverse proxies allowed to supply client IP headers",
+                            entry.span.clone(),
+                        );
                     }
+                } else {
+                    ctx.add_best_practice_violation(
+                        "`client_ip_from_header` should include a nested `trusted_proxy` block so untrusted clients cannot spoof forwarded client IP headers",
+                        entry.span.clone(),
+                    );
                 }
             }
         }
 
         // Conditional directives
         if config.has_directive("if") {
-            used_directives.insert("if".to_string());
+            ctx.used_directives.insert("if".to_string());
         }
         if config.has_directive("if_not") {
-            used_directives.insert("if_not".to_string());
+            ctx.used_directives.insert("if_not".to_string());
         }
         if config.has_directive("location") {
-            used_directives.insert("location".to_string());
+            ctx.used_directives.insert("location".to_string());
         }
         if config.has_directive("handle_error") {
-            used_directives.insert("handle_error".to_string());
+            ctx.used_directives.insert("handle_error".to_string());
+        }
+
+        // HTTP-only deployment check (per-host only)
+        if !is_global {
+            add_http_only_best_practice_diagnostics(config, ctx);
         }
 
         Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ferron_core::config::validator::ConfigurationValidator;
-    use ferron_core::config::{
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-    };
-    use std::collections::HashSet;
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
+}
 
-    fn client_ip_config(children: Option<ServerConfigurationBlock>) -> ServerConfigurationBlock {
-        let mut directives = std::collections::HashMap::new();
-        directives.insert(
-            "client_ip_from_header".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "x-forwarded-for".to_string(),
-                    None,
-                )],
-                children,
-                span: None,
-            }],
+fn first_entry_span(
+    block: &ServerConfigurationBlock,
+    directive: &str,
+) -> Option<ServerConfigurationSpan> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .and_then(entry_span)
+}
+
+fn first_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .map(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+fn add_http_block_best_practice_diagnostics(
+    http: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    if first_flag(http, "url_sanitize") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`url_sanitize false` disables request path traversal normalization before routing; keep URL sanitization enabled unless a specific backend requires raw paths",
+            first_entry_span(http, "url_sanitize"),
         );
+    }
 
-        ServerConfigurationBlock {
-            directives: std::sync::Arc::new(directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
+    if first_flag(http, "url_reject_backslash") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`url_reject_backslash false` permits backslashes in request paths; keep rejection enabled to avoid backend path interpretation issues",
+            first_entry_span(http, "url_reject_backslash"),
+        );
+    }
+
+    if first_flag(http, "timeout") == Some(false) {
+        ctx.add_best_practice_violation(
+            "`timeout false` disables request pipeline timeouts; configure a bounded timeout to reduce slow request resource exhaustion",
+            first_entry_span(http, "timeout"),
+        );
+    }
+
+    if let Some(entries) = http.directives.get("options_allowed_methods") {
+        for entry in entries {
+            if let Some(methods) = entry
+                .args
+                .first()
+                .and_then(|value| value.as_string_with_interpolations(&HashMap::new()))
+            {
+                let has_sensitive_method = methods.split(',').map(str::trim).any(|method| {
+                    method.eq_ignore_ascii_case("TRACE") || method.eq_ignore_ascii_case("CONNECT")
+                });
+                if has_sensitive_method {
+                    ctx.add_best_practice_violation(
+                        "`options_allowed_methods` advertises TRACE or CONNECT; avoid exposing methods you do not intentionally support",
+                        entry_span(entry),
+                    );
+                }
+            }
         }
     }
 
-    fn trusted_proxy_block() -> ServerConfigurationBlock {
-        let mut directives = std::collections::HashMap::new();
-        directives.insert(
-            "trusted_proxy".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "10.0.0.0/8".to_string(),
-                    None,
-                )],
-                children: None,
-                span: None,
-            }],
-        );
-
-        ServerConfigurationBlock {
-            directives: std::sync::Arc::new(directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
+    if let Some(entries) = http.directives.get("protocols") {
+        for entry in entries {
+            if entry
+                .args
+                .iter()
+                .any(|value| value.as_str().is_some_and(|protocol| protocol == "h3"))
+            {
+                ctx.add_best_practice_violation(
+                    "`protocols` enables experimental HTTP/3; verify client compatibility and operational monitoring before using it in production",
+                    entry_span(entry),
+                );
+            }
         }
     }
 
-    #[test]
-    fn validates_client_ip_from_header_with_trusted_proxy_allowlist() {
-        let validator = HttpConfigurationValidator;
-        let config = client_ip_config(Some(trusted_proxy_block()));
-        let mut used_directives = HashSet::new();
+    // Detect "location" block duplicates
+    let mut unique_pathnames = std::collections::HashSet::new();
 
-        validator
-            .validate_block(&config, &mut used_directives, true)
-            .expect("valid config should pass");
+    for entry in http.directives.get("location").unwrap_or(&vec![]) {
+        if let Some(pathname) = entry.args.first().and_then(|value| value.as_str()) {
+            if unique_pathnames.contains(pathname) {
+                // Duplicate pathname!
+                ctx.add_best_practice_violation(
+                    format!("`location` block with duplicate pathname: {pathname}"),
+                    entry_span(entry),
+                );
+            } else {
+                unique_pathnames.insert(pathname.to_string());
+            }
+        }
+    }
+}
 
-        assert!(used_directives.contains("client_ip_from_header"));
-        assert!(used_directives.contains("trusted_proxy"));
+/// Emit a best-practice violation when a non-localhost host block has no TLS
+/// configuration, reminding the operator to ensure TLS termination happens
+/// somewhere in the request path.
+fn add_http_only_best_practice_diagnostics(
+    config: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
+    if config.directives.contains_key("tls") {
+        return;
     }
 
-    #[test]
-    fn rejects_unknown_nested_directive_under_client_ip_from_header() {
-        let mut children_directives = std::collections::HashMap::new();
-        children_directives.insert(
-            "bogus".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::String(
-                    "10.0.0.0/8".to_string(),
-                    None,
-                )],
-                children: None,
-                span: None,
-            }],
-        );
-
-        let config = client_ip_config(Some(ServerConfigurationBlock {
-            directives: std::sync::Arc::new(children_directives),
-            matchers: std::collections::HashMap::new(),
-            span: None,
-        }));
-
-        let validator = HttpConfigurationValidator;
-        let mut used_directives = HashSet::new();
-        assert!(validator
-            .validate_block(&config, &mut used_directives, true)
-            .is_err());
+    if let Some(scope) = &ctx.scope {
+        if let Some(hostname) = extract_hostname_from_scope(scope) {
+            if !is_localhost_hostname(&hostname) {
+                ctx.add_best_practice_violation(
+                    "HTTP-only deployment detected. Ensure TLS termination is performed by an upstream proxy or load balancer.",
+                    config.span.clone(),
+                );
+            }
+        }
     }
+}
+
+/// Extract hostname from a scope string like "http port 80 host example.com".
+fn extract_hostname_from_scope(scope: &str) -> Option<String> {
+    let rest = scope.strip_prefix("http ")?;
+    let after_port = rest.split_whitespace().nth(1)?;
+    let hostname = after_port.strip_prefix("host ")?;
+    Some(hostname.split_whitespace().next()?.to_string())
+}
+
+/// Check if a hostname refers to a loopback or otherwise local address.
+fn is_localhost_hostname(hostname: &str) -> bool {
+    let lower = hostname.to_ascii_lowercase();
+    lower == "localhost"
+        || lower == "127.0.0.1"
+        || lower == "::1"
+        || lower == "[::1]"
+        || lower.starts_with("127.")
+        || lower.ends_with(".localhost")
 }

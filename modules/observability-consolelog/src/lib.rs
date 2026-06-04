@@ -1,6 +1,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
+use ferron_core::config::validator::{validate_scoped_block_flat, ConfigurationValidator};
+use ferron_core::config_validator_scoped_key;
 use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,
     log_warn, providers::Provider, registry::Registry, Module,
@@ -246,6 +248,34 @@ impl ModuleLoader for ConsoleObservabilityModuleLoader {
             self.cache = Some(module.clone());
             modules.push(module);
         }
+
+        Ok(())
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("observability", "console"),
+            Box::new(ConsoleObservabilityConfigValidator),
+        );
+    }
+}
+
+struct ConsoleObservabilityConfigValidator;
+
+impl ConfigurationValidator for ConsoleObservabilityConfigValidator {
+    fn validate_block(
+        &self,
+        config: &ferron_core::config::ServerConfigurationBlock,
+        validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Log format
+        validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
 
         Ok(())
     }

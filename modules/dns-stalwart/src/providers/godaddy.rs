@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for GoDaddyDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "godaddy", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "godaddy", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "godaddy")?;
+        let api_secret = required_string(ctx, "api_secret", "godaddy")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_godaddy(&api_key, &api_secret, None)?,

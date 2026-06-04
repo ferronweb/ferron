@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::config::adapter::ConfigurationAdapter;
+use crate::config::{adapter::ConfigurationAdapter, validator::ConfigurationValidatorScopedKey};
 
 /// Trait for modules to register their components and configuration.
 ///
@@ -54,6 +54,19 @@ pub trait ModuleLoader {
         registry: &mut HashMap<
             &'static str,
             Vec<Box<dyn crate::config::validator::ConfigurationValidator>>,
+        >,
+    ) {
+    }
+
+    /// Register scoped configuration validators.
+    ///
+    /// Called once per module to register validators for nested configuration blocks.
+    #[allow(unused_variables)]
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut HashMap<
+            ConfigurationValidatorScopedKey,
+            Box<dyn crate::config::validator::ConfigurationValidator>,
         >,
     ) {
     }

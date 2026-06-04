@@ -289,3 +289,13 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets) — session resumption
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling) — OCSP response stapling
 - [HTTP host directives](/docs/v3/configuration/http-host) — per-host TLS configuration
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`no_verification` for ACME directory** — Disabling TLS verification for the ACME directory should only be used for testing.
+- **`on_demand` without `on_demand_ask`** — On-demand certificate issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
+- **`on_demand_ask_no_verification`** — Disabling TLS verification for the approval endpoint should only be used for strictly internal and otherwise authenticated endpoints.
+- **Missing `contact`** — Without an ACME account email, the certificate authority cannot send expiry or account notices.
+- **Non-public domain** — Domains using non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. Certificate issuance via ACME will fail because the CA cannot complete domain validation. This check applies to both explicit `domains` directives and to the host block's hostname when `on_demand` TLS is used.

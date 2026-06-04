@@ -17,23 +17,13 @@ impl Provider<DnsContext<'static>> for OracleCloudDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = OracleCloudConfig {
-            tenancy_ocid: required_string(ctx, "tenancy_ocid", "oraclecloud", "tenancy OCID")?,
-            user_ocid: required_string(ctx, "user_ocid", "oraclecloud", "user OCID")?,
-            fingerprint: required_string(ctx, "fingerprint", "oraclecloud", "fingerprint")?,
-            private_key_pem: required_string(
-                ctx,
-                "private_key_pem",
-                "oraclecloud",
-                "private key PEM",
-            )?,
+            tenancy_ocid: required_string(ctx, "tenancy_ocid", "oraclecloud")?,
+            user_ocid: required_string(ctx, "user_ocid", "oraclecloud")?,
+            fingerprint: required_string(ctx, "fingerprint", "oraclecloud")?,
+            private_key_pem: required_string(ctx, "private_key_pem", "oraclecloud")?,
             private_key_password: opt_string(ctx, "private_key_password"),
-            region: required_string(ctx, "region", "oraclecloud", "region")?,
-            compartment_ocid: required_string(
-                ctx,
-                "compartment_ocid",
-                "oraclecloud",
-                "compartment OCID",
-            )?,
+            region: required_string(ctx, "region", "oraclecloud")?,
+            compartment_ocid: required_string(ctx, "compartment_ocid", "oraclecloud")?,
             request_timeout: None,
         };
 

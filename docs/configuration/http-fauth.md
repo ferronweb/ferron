@@ -216,3 +216,10 @@ example.com {
 - For authentication backends behind TLS, ensure the backend's certificate is valid or use `no_verification true` for development/testing.
 - For Basic Auth configuration, see [HTTP basic authentication](/docs/v3/configuration/http-basicauth).
 - For reverse proxy configuration, see [Reverse proxy](/docs/v3/configuration/reverse-proxying).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`auth_to_concurrent_conns false`** — Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
+- **`auth_to { no_verification }`** — Disabling TLS verification for the authentication backend should only be used in tightly controlled internal test environments.

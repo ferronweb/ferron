@@ -4,7 +4,10 @@
 //! [`ServerConfigurationBlock`](ferron_core::config::ServerConfigurationBlock).
 //! These types are reusable across any TLS resolver provider.
 
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
 use rustls_pki_types::pem::PemObject;
 use std::sync::Arc;
 
@@ -383,6 +386,234 @@ fn load_ca_cert_file(
         })
 }
 
+fn value_span(value: &ServerConfigurationValue) -> Option<ServerConfigurationSpan> {
+    match value {
+        ServerConfigurationValue::String(_, span)
+        | ServerConfigurationValue::Number(_, span)
+        | ServerConfigurationValue::Float(_, span)
+        | ServerConfigurationValue::Boolean(_, span)
+        | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+    }
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry
+        .span
+        .clone()
+        .or_else(|| entry.args.first().and_then(value_span))
+}
+
+fn first_directive_value<'a>(
+    config: &'a ServerConfigurationBlock,
+    name: &str,
+) -> Option<(
+    &'a ServerConfigurationValue,
+    Option<ServerConfigurationSpan>,
+)> {
+    let entry = config.directives.get(name)?.first()?;
+    let value = entry.args.first()?;
+    Some((value, entry_span(entry)))
+}
+
+fn first_directive_bool(config: &ServerConfigurationBlock, name: &str) -> Option<bool> {
+    first_directive_value(config, name).and_then(|(value, _)| match value {
+        ServerConfigurationValue::Boolean(value, _) => Some(*value),
+        ServerConfigurationValue::String(value, _) => value.parse().ok(),
+        _ => None,
+    })
+}
+
+fn is_interpolated(value: &ServerConfigurationValue) -> bool {
+    matches!(value, ServerConfigurationValue::InterpolatedString(_, _))
+}
+
+fn ocsp_disabled(config: &ServerConfigurationBlock) -> Option<Option<ServerConfigurationSpan>> {
+    let entry = config.directives.get("ocsp")?.first()?;
+
+    if entry
+        .args
+        .first()
+        .and_then(ServerConfigurationValue::as_boolean)
+        == Some(false)
+    {
+        return Some(entry_span(entry));
+    }
+
+    let ocsp_block = entry.children.as_ref()?;
+    let enabled_entry = ocsp_block.directives.get("enabled")?.first()?;
+    if enabled_entry.get_flag() {
+        None
+    } else {
+        Some(entry_span(enabled_entry))
+    }
+}
+
+fn ticket_keys_enabled(entry: &ServerConfigurationDirectiveEntry) -> bool {
+    entry
+        .args
+        .first()
+        .and_then(ServerConfigurationValue::as_boolean)
+        .unwrap_or(true)
+}
+
+fn ticket_keys_auto_rotate(block: &ServerConfigurationBlock) -> bool {
+    block
+        .directives
+        .get("auto_rotate")
+        .and_then(|entries| entries.first())
+        .is_some_and(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+pub fn add_tls_common_best_practice_diagnostics(
+    config: &ServerConfigurationBlock,
+    validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) {
+    if let Some((ServerConfigurationValue::String(version, _), span)) =
+        first_directive_value(config, "max_version")
+    {
+        if version == "TLSv1.2" {
+            validator_ctx.add_best_practice_violation(
+                "`max_version TLSv1.2` disables TLS 1.3; prefer allowing TLS 1.3 unless legacy clients require TLS 1.2 only",
+                span,
+            );
+        }
+    }
+
+    if first_directive_bool(config, "client_auth") == Some(true) {
+        match first_directive_value(config, "client_auth_ca") {
+            Some((ServerConfigurationValue::String(source, _), span))
+                if source == "system" || source == "webpki" =>
+            {
+                validator_ctx.add_best_practice_violation(
+                    "`client_auth_ca` uses a public trust store; for mTLS, prefer a private CA bundle file that only trusts your client certificates",
+                    span,
+                );
+            }
+            Some((value, _)) if is_interpolated(value) => {}
+            None => {
+                validator_ctx.add_best_practice_violation(
+                    "`client_auth true` without `client_auth_ca` uses the default public webpki roots; prefer a private CA bundle file for mTLS",
+                    config.span.clone(),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(span) = ocsp_disabled(config) {
+        validator_ctx.add_best_practice_violation(
+            "`ocsp` is disabled; keep OCSP stapling enabled for better TLS privacy, performance, and revocation behavior",
+            span,
+        );
+    }
+
+    if let Some(entries) = config.directives.get("ecdh_curve") {
+        for entry in entries {
+            for value in &entry.args {
+                if let Some(curve) = value.as_str() {
+                    if curve == "x25519mlkem768" || curve == "mlkem768" {
+                        validator_ctx.add_best_practice_violation(
+                            format!(
+                                "`ecdh_curve {curve}` is experimental; use it only when all clients are expected to support post-quantum key exchange"
+                            ),
+                            entry_span(entry),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(entry) = config
+        .directives
+        .get("ticket_keys")
+        .and_then(|entries| entries.first())
+        .filter(|entry| ticket_keys_enabled(entry))
+    {
+        if let Some(block) = entry.children.as_ref() {
+            if !ticket_keys_auto_rotate(block) {
+                validator_ctx.add_best_practice_violation(
+                    "`ticket_keys` is configured without `auto_rotate`; enable automatic rotation for production session ticket keys",
+                    entry_span(entry),
+                );
+            }
+
+            if let Some((ServerConfigurationValue::Number(max_keys, _), span)) =
+                first_directive_value(block, "max_keys")
+            {
+                if *max_keys < 2 || *max_keys > 5 {
+                    validator_ctx.add_best_practice_violation(
+                        "`ticket_keys.max_keys` should be between 2 and 5 so rotation keeps overlap without retaining too many old keys",
+                        span,
+                    );
+                }
+            }
+
+            if ticket_keys_auto_rotate(block) {
+                if let Some((value, span)) = first_directive_value(block, "rotation_interval") {
+                    if value.as_duration().is_some_and(|duration| {
+                        duration > std::time::Duration::from_secs(24 * 60 * 60)
+                    }) {
+                        validator_ctx.add_best_practice_violation(
+                            "`ticket_keys.rotation_interval` is longer than 24 hours; rotate session ticket keys every 12-24 hours in production",
+                            span,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! validate_tls_common {
+    ($config:expr, $validator_ctx: expr) => {
+       {
+           use ferron_core::config::ServerConfigurationValue;
+           use ferron_core::{validate_directive, validate_nested};
+
+           {
+           let used = &mut $validator_ctx.used_directives;
+
+           // TLS certificate configuration
+           validate_directive!($config, used, cert, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, key, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // mTLS configuration
+           validate_directive!($config, used, client_auth, optional args(1) => [ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, client_auth_ca, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // TLS protocol configuration
+           validate_directive!($config, used, cipher_suite, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, ecdh_curve, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, min_version, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, max_version, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+           // OCSP stapling configuration
+           validate_directive!($config, used, ocsp, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
+                let mut ocsp_used = std::collections::HashSet::new();
+                validate_nested!(ocsp, used(ocsp_used), enabled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                ferron_core::check_unused_subdirectives!(ocsp, ocsp_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());
+           });
+
+           // Session ticket keys configuration
+           validate_directive!($config, used, ticket_keys, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
+                 let mut tk_used = std::collections::HashSet::new();
+                 validate_nested!(ticket_keys, used(tk_used), file, args(1) => [ServerConfigurationValue::String(_, _) |
+                     ServerConfigurationValue::InterpolatedString(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), auto_rotate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), rotation_interval, args(1) => [ServerConfigurationValue::String(_, _) |
+                     ServerConfigurationValue::InterpolatedString(_, _) |
+                     ServerConfigurationValue::Number(_, _)]);
+                 validate_nested!(ticket_keys, used(tk_used), max_keys, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                 ferron_core::check_unused_subdirectives!(ticket_keys, tk_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());
+           });
+           }
+
+           $crate::config::add_tls_common_best_practice_diagnostics($config, $validator_ctx);
+       }
+    };
+}
 #[cfg(test)]
 mod tests {
     use super::*;

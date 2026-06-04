@@ -149,3 +149,15 @@ The `min_version` or `max_version` value is not recognized. Ensure you use exact
 - [ACME automatic TLS](/docs/v3/configuration/tls-acme)
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets)
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling)
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`max_version TLSv1.2`** — Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
+- **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS.
+- **`ocsp` disabled** — OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
+- **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use only when all clients are expected to support them.
+- **`ticket_keys` without `auto_rotate`** — Session ticket keys should rotate automatically in production to limit the impact of key compromise.
+- **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for seamless rotation without excessive retention.
+- **`ticket_keys.rotation_interval` > 24h** — Rotate session ticket keys every 12–24 hours in production.

@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for MythicBeastsDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let username = required_string(ctx, "username", "mythicbeasts", "username")?;
-        let password = required_string(ctx, "password", "mythicbeasts", "password")?;
+        let username = required_string(ctx, "username", "mythicbeasts")?;
+        let password = required_string(ctx, "password", "mythicbeasts")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_mythicbeasts(&username, &password, None)?,

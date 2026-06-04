@@ -43,6 +43,14 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Edge-case visibility** - granular HTTP observability metrics for pre-handler failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.
 - **Admin sinks** - added a dropped-events admin metric for non-blocking observability sinks.
 - **Unified certificate expiration gauge** - a single `ferron.tls.certificate_not_after` gauge is emitted by every TLS provider (`manual`, `acme`, `http`, `local`) whenever a certificate is mounted into the in-memory rustls context. The value is the certificate `notAfter` field as Unix epoch seconds; attributes are `ferron.host` (SNI hostname or IP), `ferron.tls.provider` (provider name), and `crypto.certificate.serial_number` (lowercase hex). Replaces the previous provider-specific expiration gauges.
+- **Admin API** - added `GET /reload` and `GET /runtime` endpoints to the admin listener.
+
+#### Configuration validation
+
+- **Best-practice enforcement** - `ferron doctor` subcommand for validating best practices across the configuration.
+- **Print "all good" message** - a message is now printed when the configuration is valid with no diagnostics.
+- JSON configuration validation results are now printed to stdout when `--json` is specified, improving observability for automated tools and CI/CD pipelines.
+- Unused subdirectives are now reported as well as directives.
 
 ### Changed
 

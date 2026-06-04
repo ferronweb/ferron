@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for AutoDNSProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let username = required_string(ctx, "username", "autodns", "username")?;
-        let password = required_string(ctx, "password", "autodns", "password")?;
+        let username = required_string(ctx, "username", "autodns")?;
+        let password = required_string(ctx, "password", "autodns")?;
         let context = ctx
             .config
             .get_value("context")

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::RegistryBuilder;
-use ferron_core::Module;
+use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::{
     builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
@@ -18,6 +18,7 @@ pub mod cache;
 pub mod provision;
 #[cfg(test)]
 mod tests;
+mod validator;
 
 use crate::cache::LocalTlsCache;
 use crate::provision::provision_local_cert;
@@ -125,6 +126,19 @@ impl ModuleLoader for LocalTlsModuleLoader {
             Arc::new(TcpTlsLocalProvider::new(cache_path.clone()))
         });
         registry
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("tls", "local"),
+            Box::new(validator::TlsLocalConfigurationValidator),
+        );
     }
 
     fn register_modules(

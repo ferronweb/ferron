@@ -17,8 +17,8 @@ impl Provider<DnsContext<'static>> for VolcengineDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = VolcengineConfig {
-            access_key: required_string(ctx, "access_key", "volcengine", "access key")?,
-            secret_key: required_string(ctx, "secret_key", "volcengine", "secret key")?,
+            access_key: required_string(ctx, "access_key", "volcengine")?,
+            secret_key: required_string(ctx, "secret_key", "volcengine")?,
             region: opt_string(ctx, "region"),
             host: opt_string(ctx, "host"),
             scheme: opt_string(ctx, "scheme"),

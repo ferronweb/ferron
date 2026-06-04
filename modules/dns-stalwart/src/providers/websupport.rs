@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for WebSupportDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "websupport", "API key")?;
-        let secret = required_string(ctx, "secret", "websupport", "secret")?;
+        let api_key = required_string(ctx, "api_key", "websupport")?;
+        let secret = required_string(ctx, "secret", "websupport")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_websupport(&api_key, &secret, None)?,

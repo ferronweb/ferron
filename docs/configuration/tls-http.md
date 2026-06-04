@@ -222,3 +222,10 @@ If metrics or logs aren't appearing:
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets) — session resumption
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling) — OCSP response stapling
 - [HTTP host directives](/docs/v3/configuration/http-host) — per-host TLS configuration
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`url` with plain HTTP** — Certificate endpoints returning private keys should use HTTPS with authentication.
+- **`no_verification` for certificate endpoint** — Disabling TLS verification for the certificate endpoint should only be used for strictly internal and otherwise authenticated endpoints.

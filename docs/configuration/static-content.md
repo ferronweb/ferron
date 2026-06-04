@@ -144,3 +144,9 @@ Notes:
 - For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing#url-sanitation-and-redirects).
 - For response control (`status`, `abort`), see [HTTP response control](/docs/v3/configuration/http-response).
 - For URL rewriting, see [URL rewriting](/docs/v3/configuration/http-rewrite).
+
+## Best practices
+
+The following best-practice check is reported by `ferron doctor` for directives on this page.
+
+- **`directory_listing` enabled** — Auto-generated directory indexes expose file structure. Enable only for intentionally public file listings.

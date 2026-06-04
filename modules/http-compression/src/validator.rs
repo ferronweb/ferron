@@ -10,9 +10,9 @@ impl ferron_core::config::validator::ConfigurationValidator
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
-        used_directives: &mut std::collections::HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let used_directives = &mut ctx.used_directives;
         // Dynamic content compression (on-the-fly)
         validate_directive!(config, used_directives, dynamic_compressed, optional
             args(1) => [ferron_core::config::ServerConfigurationValue::Boolean(_, _)], {});

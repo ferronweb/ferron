@@ -214,3 +214,33 @@ All metrics include attributes for `http.request.method`, `url.scheme`, `network
 - The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1, HTTP/2, and experimental HTTP/3 protocol support.
 - For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).
 - For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security-tls).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### Client IP resolution
+
+- **`trusted_proxy 0.0.0.0/0` or `::/0`** — Trusting every source address for forwarded client IP headers allows spoofing. Restrict `trusted_proxy` to specific reverse proxy addresses.
+- **`client_ip_from_header` without `trusted_proxy`** — If `client_ip_from_header` is configured without trusted proxy ranges, forwarded headers are either ignored or untrusted. Add explicit `trusted_proxy` entries for your reverse proxies.
+
+### URL processing
+
+- **`url_sanitize false`** — Disabling path traversal normalization can expose backend path interpretation issues. Keep sanitization enabled unless a specific backend requires raw paths.
+- **`url_reject_backslash false`** — Permitting backslashes in request paths can cause backend routing confusion. Keep rejection enabled unless required.
+
+### Timeouts
+
+- **`timeout false`** — Disabling request pipeline timeouts exposes the server to slow-request resource exhaustion. Set a bounded timeout value.
+
+### HTTP methods
+
+- **`options_allowed_methods` with TRACE or CONNECT** — Advertising TRACE or CONNECT in OPTIONS responses may expose unintended attack surface. Remove these methods unless intentionally supported.
+
+### HTTP/3
+
+- **`protocols` includes `h3`** — HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
+
+### TLS deployment
+
+- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder that TLS termination should be performed by an upstream proxy or load balancer. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.

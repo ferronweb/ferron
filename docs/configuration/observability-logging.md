@@ -121,7 +121,7 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/http-rewrite#metrics).
 - **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/reverse-proxying#metrics).
 - **Process metrics** — CPU time, CPU utilization, and memory usage from the operating system. See [Process metrics](#process-metrics) below.
-- **Admin API metrics** — uptime, active connections, request count, configuration reloads, and observability event backpressure. See [Admin API metrics](#admin-api-metrics) below.
+- **Admin API metrics** — uptime, active connections, request count, configuration reloads, observability event backpressure, and runtime status. See [Admin API metrics](#admin-api-metrics) below.
 
 #### Process metrics
 
@@ -148,6 +148,14 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 | `ferron.admin.reloads` | Counter | — | Number of configuration reloads performed |
 | `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
 | `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
+
+#### Admin API runtime metrics
+
+The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
+
+- `ferron.admin.runtime.primary_threads` (Gauge) — number of primary threads (typically equal to CPU count).
+- `ferron.admin.runtime.io_uring_supported` (Gauge) — whether `io_uring` is supported on the current system (`1` = yes, `0` = no).
+- `ferron.admin.runtime.io_uring_runtime_enabled` (Gauge) — whether `io_uring` was successfully enabled at runtime (`1` = yes, `0` = no).
 
 These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 

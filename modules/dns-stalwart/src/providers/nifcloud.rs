@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for NifcloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "nifcloud", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "nifcloud", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "nifcloud")?;
+        let api_secret = required_string(ctx, "api_secret", "nifcloud")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_nifcloud(&api_key, &api_secret, None)?,

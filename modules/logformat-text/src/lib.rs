@@ -2,7 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Local;
-use ferron_core::{loader::ModuleLoader, providers::Provider};
+use ferron_core::{
+    config::{validator::ConfigurationValidator, ServerConfigurationValue},
+    config_validator_scoped_key,
+    loader::ModuleLoader,
+    providers::Provider,
+    validate_directive,
+};
 use ferron_observability::{AccessVisitor, LogFormatterContext};
 use once_cell::sync::Lazy;
 
@@ -293,6 +299,35 @@ impl ModuleLoader for TextFormatObservabilityModuleLoader {
     ) -> ferron_core::registry::RegistryBuilder {
         registry
             .with_provider::<LogFormatterContext, _>(|| Arc::new(TextFormatObservabilityProvider))
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("logformat", "text"),
+            Box::new(TextFormatLogFormatConfigurationValidator),
+        );
+    }
+}
+
+struct TextFormatLogFormatConfigurationValidator;
+
+impl ConfigurationValidator for TextFormatLogFormatConfigurationValidator {
+    fn validate_block(
+        &self,
+        config: &ferron_core::config::ServerConfigurationBlock,
+        validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        validate_directive!(config, validator_ctx.used_directives, fields, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, access_pattern, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, timestamp_format, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+        Ok(())
     }
 }
 

@@ -1,4 +1,4 @@
-use ferron_core::log_warn;
+use ferron_core::{config_validator_scoped_key, log_warn};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
@@ -17,6 +17,7 @@ use ferron_observability::{
 use crate::rotate::{rotate_log_file, RotationConfig};
 
 mod rotate;
+mod validator;
 
 static DROPPED_EVENT: Once = Once::new();
 
@@ -444,5 +445,18 @@ impl ModuleLoader for LogFileObservabilityModuleLoader {
         }
 
         Ok(())
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("observability", "file"),
+            Box::new(validator::LogFileObservabilityConfigurationValidator),
+        );
     }
 }

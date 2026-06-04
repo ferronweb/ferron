@@ -15,7 +15,7 @@ impl Provider<DnsContext<'static>> for VercelDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let auth_token = required_string(ctx, "auth_token", "vercel", "auth token")?;
+        let auth_token = required_string(ctx, "auth_token", "vercel")?;
         let team_id = opt_string(ctx, "team_id");
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(

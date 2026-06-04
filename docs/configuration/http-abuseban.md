@@ -192,3 +192,10 @@ The abuse protection module emits the following metrics:
 - [Rate limiting](/docs/v3/configuration/http-ratelimit)
 - [HTTP basic authentication](/docs/v3/configuration/http-basicauth)
 - [Routing and URL processing](/docs/v3/configuration/routing-url-processing)
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`abuse_protection false`** — Disabling IP banning for repeated abuse events removes a layer of protection. Keep it enabled unless another layer handles abusive clients.
+- **`allowlist` with wildcard** — Exempting every source address from abuse protection should be restricted to known trusted clients.

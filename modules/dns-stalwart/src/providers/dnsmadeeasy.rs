@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for DNSMadeEasyDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "dnsmadeeasy", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "dnsmadeeasy", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "dnsmadeeasy")?;
+        let api_secret = required_string(ctx, "api_secret", "dnsmadeeasy")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_dnsmadeeasy(&api_key, &api_secret, None)?,
