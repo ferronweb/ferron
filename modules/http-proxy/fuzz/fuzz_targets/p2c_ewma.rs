@@ -3,12 +3,12 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use rustc_hash::FxBuildHasher;
 use ferron_http_proxy::types::upstream::UpstreamInner;
 use ferron_http_proxy::upstream::lb::p2c_ewma::{
     compute_score, get_decayed_ewma, is_warming_up, update_ewma, EwmaStateMap, P2cEwmaParams,
 };
 use libfuzzer_sys::fuzz_target;
+use rustc_hash::FxBuildHasher;
 
 /// Parse P2C+EWMA operations from raw bytes.
 ///
@@ -22,7 +22,7 @@ use libfuzzer_sys::fuzz_target;
 ///       [op_tag: u8]  (0 = update, 1 = get_decayed, 2 = compute_score)
 ///       [backend_idx: u8]
 ///       [latency_or_connections: f64 LE or u32 LE depending on op]
-fn parse_input(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<u8>, Vec<f64>)> {
+fn parse_input(input: &[u8]) -> Option<(Vec<Arc<UpstreamInner>>, Vec<u8>, Vec<f64>)> {
     if input.is_empty() {
         return None;
     }
@@ -51,11 +51,11 @@ fn parse_input(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<u8>, Vec<f64>)> 
         pos += name_len;
 
         let proxy_to = String::from_utf8(name_bytes.to_vec()).ok()?;
-        backends.push(UpstreamInner {
+        backends.push(Arc::new(UpstreamInner {
             proxy_to,
             proxy_unix: None,
             weight: 1,
-        });
+        }));
     }
 
     if pos + 1 > input.len() {
@@ -104,12 +104,8 @@ fn parse_input(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<u8>, Vec<f64>)> 
             if pos + 4 > input.len() {
                 return None;
             }
-            let conns = u32::from_le_bytes([
-                input[pos],
-                input[pos + 1],
-                input[pos + 2],
-                input[pos + 3],
-            ]);
+            let conns =
+                u32::from_le_bytes([input[pos], input[pos + 1], input[pos + 2], input[pos + 3]]);
             pos += 4;
             conns as f64
         };

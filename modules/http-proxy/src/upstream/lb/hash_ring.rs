@@ -112,6 +112,12 @@ impl ConsistentHashRing {
         self.backend_count = backends.len();
         self.weights_hash = weights_hash;
     }
+
+    #[cfg(feature = "fuzz")]
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
 }
 
 #[cfg(test)]

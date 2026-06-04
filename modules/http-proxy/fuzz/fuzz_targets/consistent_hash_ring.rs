@@ -1,7 +1,9 @@
 #![no_main]
 
-use ferron_http_proxy::upstream::lb::ConsistentHashRing;
+use std::sync::Arc;
+
 use ferron_http_proxy::types::upstream::UpstreamInner;
+use ferron_http_proxy::upstream::lb::ConsistentHashRing;
 use libfuzzer_sys::fuzz_target;
 
 /// Parse backends and keys from raw bytes.
@@ -16,7 +18,7 @@ use libfuzzer_sys::fuzz_target;
 ///     for each key:
 ///       [key_len: u16 LE]
 ///       [key: key_len bytes]
-fn parse_backends_and_keys(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<Vec<u8>>)> {
+fn parse_backends_and_keys(input: &[u8]) -> Option<(Vec<Arc<UpstreamInner>>, Vec<Vec<u8>>)> {
     let mut pos = 0;
 
     if pos + 2 > input.len() {
@@ -35,12 +37,8 @@ fn parse_backends_and_keys(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<Vec<
         if pos + 4 > input.len() {
             return None;
         }
-        let weight = u32::from_le_bytes([
-            input[pos],
-            input[pos + 1],
-            input[pos + 2],
-            input[pos + 3],
-        ]);
+        let weight =
+            u32::from_le_bytes([input[pos], input[pos + 1], input[pos + 2], input[pos + 3]]);
         pos += 4;
 
         if pos + 2 > input.len() {
@@ -56,11 +54,11 @@ fn parse_backends_and_keys(input: &[u8]) -> Option<(Vec<UpstreamInner>, Vec<Vec<
         pos += name_len;
 
         let proxy_to = String::from_utf8(name_bytes.to_vec()).ok()?;
-        backends.push(UpstreamInner {
+        backends.push(Arc::new(UpstreamInner {
             proxy_to,
             proxy_unix: None,
             weight,
-        });
+        }));
     }
 
     if pos + 2 > input.len() {
@@ -103,14 +101,17 @@ fuzz_target!(|input: &[u8]| {
     // Invariant 1: Empty ring returns None for any key
     if backends.is_empty() {
         for key in &keys {
-            assert!(ring.get(key).is_none(), "empty ring must return None");
+            assert!(
+                ring.get(key, &Default::default()).is_none(),
+                "empty ring must return None"
+            );
         }
         return;
     }
 
     // Invariant 2: get() always returns a valid index
     for key in &keys {
-        if let Some(idx) = ring.get(key) {
+        if let Some(idx) = ring.get(key, &Default::default()) {
             assert!(
                 idx < backends.len(),
                 "ring.get({:?}) returned index {idx} >= {} backends",
@@ -122,22 +123,28 @@ fuzz_target!(|input: &[u8]| {
 
     // Invariant 3: Deterministic — same key returns same result
     for key in &keys {
-        if let (Some(a), Some(b)) = (ring.get(key), ring.get(key)) {
+        if let (Some(a), Some(b)) = (
+            ring.get(key, &Default::default()),
+            ring.get(key, &Default::default()),
+        ) {
             assert_eq!(a, b, "ring.get() must be deterministic for the same key");
         }
     }
 
     // Invariant 4: needs_rebuild returns true when backends change
     let rebuild_needed = ring.needs_rebuild(&backends);
-    assert!(!rebuild_needed, "needs_rebuild must be false for same backends");
+    assert!(
+        !rebuild_needed,
+        "needs_rebuild must be false for same backends"
+    );
 
     // Invariant 5: rebuild doesn't change get() results for same backends
     if !backends.is_empty() {
         let mut cloned_ring = ring.clone();
         cloned_ring.rebuild(&backends);
         for key in &keys {
-            let orig = ring.get(key);
-            let after = cloned_ring.get(key);
+            let orig = ring.get(key, &Default::default());
+            let after = cloned_ring.get(key, &Default::default());
             assert_eq!(
                 orig, after,
                 "rebuild with same backends must not change get() results"
