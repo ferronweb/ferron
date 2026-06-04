@@ -243,7 +243,7 @@ impl ModuleLoader for TlsManualModuleLoader {
             Box::new(TlsManualConfigurationValidator),
         );
     }
-  
+
     fn register_modules(
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
