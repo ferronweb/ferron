@@ -140,6 +140,25 @@ async fn install_certified_key(
     *config.certified_key_lock.write().await =
         Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
+    // Emit the unified `ferron.tls.certificate_not_after` gauge for the leaf
+    // of the just-mounted chain. Wildcard SANs (e.g. `*.example.com`) and
+    // multi-SAN certificates would benefit from per-SNI labels in a
+    // follow-up; for now the primary domain is used.
+    if let Some(leaf) = config
+        .certified_key_lock
+        .read()
+        .await
+        .as_deref()
+        .and_then(|ck| ck.cert.first())
+    {
+        ferron_tls::observability::emit_certificate_not_after(
+            event_sink,
+            "acme",
+            config.domains.first().map(String::as_str).unwrap_or(""),
+            leaf,
+        );
+    }
+
     emit_log(
         event_sink,
         ferron_observability::LogLevel::Debug,

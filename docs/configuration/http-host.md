@@ -200,9 +200,11 @@ For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/tl
 
 The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
 
-- `http.server.active_requests` (UpDownCounter) — number of active HTTP requests.
-- `http.server.request.duration` (Histogram) — duration of HTTP requests in seconds.
-- `ferron.http.server.request_count` (Counter) — total number of HTTP requests completed.
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `http.server.active_requests` | UpDownCounter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version` | Number of active HTTP requests |
+| `http.server.request.duration` | Histogram | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Duration of HTTP requests in seconds |
+| `ferron.http.server.request_count` | Counter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Total number of HTTP requests completed |
 
 All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
 

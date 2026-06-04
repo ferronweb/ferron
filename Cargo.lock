@@ -1948,6 +1948,7 @@ dependencies = [
  "async-trait",
  "aws-lc-rs",
  "ferron-core",
+ "ferron-observability",
  "getrandom 0.4.2",
  "rustls",
  "rustls-native-certs",
@@ -1956,6 +1957,7 @@ dependencies = [
  "tokio-rustls",
  "vibeio",
  "webpki-roots",
+ "x509-parser",
 ]
 
 [[package]]
@@ -2023,7 +2025,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "webpki-roots",
- "x509-parser",
 ]
 
 [[package]]
@@ -2034,6 +2035,7 @@ dependencies = [
  "async-trait",
  "dirs",
  "ferron-core",
+ "ferron-observability",
  "ferron-tls",
  "rcgen",
  "rustls",
@@ -2050,6 +2052,7 @@ dependencies = [
  "async-trait",
  "der-parser",
  "ferron-core",
+ "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
  "rustls",

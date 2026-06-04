@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 ferron-core = { path = "../../core" }
-ferron-tls = { path = "../../types/tls" }
+ferron-tls = { path = "../../types/tls", features = ["observability"] }
 ferron-dns = { path = "../../types/dns" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }

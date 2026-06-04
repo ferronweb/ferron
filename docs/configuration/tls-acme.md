@@ -266,10 +266,11 @@ The ACME background task emits log events and metrics through the configured obs
 
 **Metrics:**
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
 | `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ### Verifying certificates
 

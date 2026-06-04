@@ -8,8 +8,9 @@ async-trait = "0.1"
 rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
 
 ferron-core = { path = "../../core" }
+ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp" }
-ferron-tls = { path = "../../types/tls" }
+ferron-tls = { path = "../../types/tls", features = ["observability"] }
 rustls-pki-types = "1.14.0"
 x509-parser = "0.18"
 der-parser = "10"

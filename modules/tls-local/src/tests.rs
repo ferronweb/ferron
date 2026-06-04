@@ -12,7 +12,7 @@ fn test_local_tls_provisioning() {
         ip: None,
     };
 
-    let result = provision_local_cert(&cache, &filters);
+    let result = provision_local_cert(&cache, &filters, None);
     assert!(result.is_ok());
     let certified_key = result.unwrap();
     assert!(!certified_key.cert.is_empty());
@@ -35,8 +35,8 @@ fn test_local_tls_cache_reuse() {
         ip: None,
     };
 
-    let result1 = provision_local_cert(&cache, &filters).unwrap();
-    let result2 = provision_local_cert(&cache, &filters).unwrap();
+    let result1 = provision_local_cert(&cache, &filters, None).unwrap();
+    let result2 = provision_local_cert(&cache, &filters, None).unwrap();
 
     // Certificates should be identical if cached
     assert_eq!(result1.cert, result2.cert);
