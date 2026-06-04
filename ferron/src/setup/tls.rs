@@ -460,13 +460,12 @@ fn build_eager_acme(
       .first()
       .and_then(|v| v.as_str())
       .and_then(|v| PathBuf::from_str(v).ok())
-      .and_then(|v| {
+      .zip(
         e.values
           .get(1)
           .and_then(|v| v.as_str())
-          .and_then(|v| PathBuf::from_str(v).ok())
-          .map(|v2| (v, v2))
-      })
+          .and_then(|v| PathBuf::from_str(v).ok()),
+      )
   });
 
   let acme_config = AcmeConfig {
