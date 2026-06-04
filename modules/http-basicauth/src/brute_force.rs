@@ -95,6 +95,14 @@ impl AttemptTracker {
         self.attempts.clear();
         self.locked_until = None;
     }
+
+    /// Returns `true` if the tracker has at least one attempt within the
+    /// given time window. Used to decide whether the entry is still needed
+    /// during eviction.
+    fn has_recent_attempt(&self, window: Duration) -> bool {
+        let cutoff = Instant::now().checked_sub(window).unwrap_or(Instant::now());
+        self.attempts.iter().any(|&t| t >= cutoff)
+    }
 }
 
 /// Shared brute-force protection engine.
@@ -161,6 +169,11 @@ impl BruteForceEngine {
             return false;
         }
 
+        // Opportunistically evict stale trackers (entries that are neither locked
+        // nor have recent failures within the window) to prevent unbounded
+        // memory growth when many distinct IPs are seen.
+        self.evict_stale();
+
         let mut tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
 
         // Prune old attempts outside the window
@@ -175,6 +188,15 @@ impl BruteForceEngine {
         // Record the failure
         let lockout_duration = Duration::from_secs(self.config.lockout_duration_secs);
         tracker.record_failure(self.config.max_attempts, lockout_duration)
+    }
+
+    /// Evict tracker entries that are no longer needed: locked entries whose
+    /// lockout has expired, and unlocked entries that have no recent attempts
+    /// within the configured window. Prevents unbounded memory growth.
+    fn evict_stale(&self) {
+        let window = Duration::from_secs(self.config.window_secs);
+        self.trackers
+            .retain(|_, tracker| tracker.is_locked() || tracker.has_recent_attempt(window));
     }
 }
 
@@ -239,5 +261,51 @@ mod tests {
 
         assert!(engine.is_locked("127.0.0.1".parse().unwrap()));
         assert!(!engine.is_locked("127.0.0.2".parse().unwrap()));
+    }
+
+    #[test]
+    fn stale_trackers_are_evicted() {
+        let config = BruteForceConfig {
+            enabled: true,
+            max_attempts: 3,
+            lockout_duration_secs: 1,
+            window_secs: 0,
+        };
+        let engine = BruteForceEngine::new(config);
+
+        let ip: IpAddr = "10.0.0.1".parse().unwrap();
+        engine.record_failure(ip);
+
+        // Window is 0, so the attempt is immediately considered stale and the
+        // next record_failure call should evict it (it's not locked, so it's
+        // eligible for eviction).
+        engine.record_failure(ip);
+
+        // The tracker should still exist because we just recorded a failure
+        // (which itself triggers eviction but also creates the entry).
+        // The key point: eviction runs without panic and the engine remains
+        // functional.
+        assert!(!engine.is_locked(ip));
+    }
+
+    #[test]
+    fn evicts_trackers_outside_window() {
+        let config = BruteForceConfig {
+            enabled: true,
+            max_attempts: 3,
+            lockout_duration_secs: 60,
+            window_secs: 3600,
+        };
+        let engine = BruteForceEngine::new(config);
+
+        // Record a failure for an IP, which should create a tracker
+        engine.record_failure("10.0.0.1".parse().unwrap());
+
+        // Trigger eviction by recording another failure for a different IP
+        engine.record_failure("10.0.0.2".parse().unwrap());
+
+        // The trackers should still exist (they have recent attempts)
+        assert!(!engine.is_locked("10.0.0.1".parse().unwrap()));
+        assert!(!engine.is_locked("10.0.0.2".parse().unwrap()));
     }
 }

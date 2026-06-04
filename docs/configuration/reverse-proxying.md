@@ -450,28 +450,18 @@ example.com {
 
 ### Metrics
 
-The proxy module emits the following metrics:
-
-- `ferron.proxy.backends.selected` (Counter) — backends selected during load balancing.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.backends.unhealthy` (Counter) — backends marked as unhealthy.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits)
-- `ferron.proxy.requests` (Counter) — upstream proxy requests completed.
-  - Attributes: `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code`
-- `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.ewma_latency` (Gauge) — current EWMA response latency for the selected backend (`p2c_ewma` algorithm).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.active_connections` (Gauge) — active tracked connections for the selected backend (`p2c_ewma` algorithm).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.warmup_state` (Gauge) — whether the selected backend is in EWMA warm-up phase (1) or settled (0).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.selections` (Counter) — P2C+EWMA backend selection with combined score.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score)
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path | Backends selected during load balancing |
+| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"`, `"active"`, `"circuit_breaker"`) | Backends marked as unhealthy |
+| `ferron.proxy.requests` | Counter | `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code` | Upstream proxy requests completed |
+| `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |
+| `ferron.proxy.pool.waits` | Counter | backend URL or unix socket path | Times the connection pool was exhausted and a request had to wait |
+| `ferron.proxy.pool.wait_time` | Histogram | backend URL or unix socket path | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s |
+| `ferron.proxy.lb.ewma_latency` | Gauge | backend URL or unix socket path | Current EWMA response latency for the selected backend (`p2c_ewma` algorithm) |
+| `ferron.proxy.lb.active_connections` | Gauge | backend URL or unix socket path | Active tracked connections for the selected backend (`p2c_ewma` algorithm) |
+| `ferron.proxy.lb.warmup_state` | Gauge | backend URL or unix socket path | Whether the selected backend is in EWMA warm-up phase (1) or settled (0) |
+| `ferron.proxy.lb.selections` | Counter | backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score) | P2C+EWMA backend selection with combined score |
 
 ## Notes and troubleshooting
 

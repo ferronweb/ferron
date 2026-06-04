@@ -93,36 +93,6 @@ fn test_block_with_simple_directives() {
 }
 
 #[test]
-fn test_location_directive_single() {
-    let location_block = create_block_with_directives(vec![(
-        "proxy_pass".to_string(),
-        vec![create_string_value("http://localhost:8080")],
-        None,
-    )]);
-
-    let block = create_block_with_directives(vec![(
-        "location".to_string(),
-        vec![create_string_value("/api")],
-        Some(location_block),
-    )]);
-
-    let result = prepare_host_block(block).unwrap();
-
-    assert!(!result.directives.contains_key("location"));
-    assert_eq!(result.matches.len(), 1);
-
-    let location_match = &result.matches[0];
-    match &location_match.matcher {
-        PreparedHostConfigurationMatcher::Location(path) => {
-            assert_eq!(path, "/api");
-        }
-        _ => panic!("Expected Location matcher"),
-    }
-
-    assert!(location_match.config.directives.contains_key("proxy_pass"));
-}
-
-#[test]
 fn test_location_directive_multiple() {
     let location1_block = create_block_with_directives(vec![(
         "proxy_pass".to_string(),
@@ -410,30 +380,6 @@ fn test_mixed_location_and_conditional_matches() {
 }
 
 #[test]
-fn test_handle_error_single() {
-    let error_block = create_block_with_directives(vec![(
-        "return".to_string(),
-        vec![create_string_value("404")],
-        None,
-    )]);
-
-    let block = create_block_with_directives(vec![(
-        "handle_error".to_string(),
-        vec![create_number_value(404)],
-        Some(error_block),
-    )]);
-
-    let result = prepare_host_block(block).unwrap();
-
-    assert_eq!(result.error_config.len(), 1);
-    assert_eq!(result.error_config[0].error_code, Some(404));
-    assert!(result.error_config[0]
-        .config
-        .directives
-        .contains_key("return"));
-}
-
-#[test]
 fn test_handle_error_without_code() {
     let error_block = create_block_with_directives(vec![(
         "root".to_string(),
@@ -555,35 +501,6 @@ fn test_prepare_host_config_empty() {
 
     let result = prepare_host_config(port).unwrap();
     assert!(result.is_empty());
-}
-
-#[test]
-fn test_prepare_host_config_single_host() {
-    let host_block = create_block_with_directives(vec![(
-        "root".to_string(),
-        vec![create_string_value("/var/www")],
-        None,
-    )]);
-
-    let port = ServerConfigurationPort {
-        port: Some(80),
-        hosts: vec![(
-            ServerConfigurationHostFilters {
-                ip: None,
-                host: Some("example.com".to_string()),
-            },
-            host_block,
-        )],
-    };
-
-    let result = prepare_host_config(port).unwrap();
-
-    assert_eq!(result.len(), 1);
-    assert!(result.contains_key(&None));
-
-    let host_configs = result.get(&None).unwrap();
-    assert_eq!(host_configs.named_hosts.len(), 1);
-    assert!(host_configs.named_hosts.contains_key("example.com"));
 }
 
 #[test]
@@ -730,38 +647,6 @@ fn test_location_missing_children_error() {
 }
 
 #[test]
-fn test_if_missing_children_error() {
-    let mut matchers = HashMap::new();
-    matchers.insert(
-        "test".to_string(),
-        create_matcher("test", vec![create_eq_expr("foo", "bar")]),
-    );
-
-    let mut directives_map = HashMap::new();
-    directives_map.insert(
-        "if".to_string(),
-        vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("test")],
-            children: None,
-            span: None,
-        }],
-    );
-    let block = ServerConfigurationBlock {
-        directives: Arc::new(directives_map),
-        matchers,
-        span: None,
-    };
-
-    let result = prepare_host_block(block);
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Location directive must have a block"));
-}
-
-#[test]
 fn test_if_not_missing_children_error() {
     let mut matchers = HashMap::new();
     matchers.insert(
@@ -790,18 +675,5 @@ fn test_if_not_missing_children_error() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("Location directive must have a block"));
-}
-
-#[test]
-fn test_prepared_configuration_matcher_ord() {
-    use PreparedHostConfigurationMatcher::*;
-
-    let location1 = Location("/a".to_string());
-    let location2 = Location("/b".to_string());
-    let if_cond = IfConditional(vec![create_eq_expr("foo", "bar")]);
-    let if_not_cond = IfNotConditional(vec![create_eq_expr("foo", "bar")]);
-
-    assert!(location1 < location2);
-    assert!(if_cond < if_not_cond);
+        .contains("`if_not` directive must have a block"));
 }

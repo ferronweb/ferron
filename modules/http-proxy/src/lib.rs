@@ -524,6 +524,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         Arc::clone(&self.state.failed_backends),
                         config.passive_check.max_fails,
                         Some(Arc::clone(&self.state.active_health_check_state)),
+                        &config_key,
                     )
                     .await;
                 for resolved_upstream in resolved {
@@ -569,6 +570,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),
+            &config_key,
         )
         .await;
 

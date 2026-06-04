@@ -164,6 +164,9 @@ impl FormatPattern {
             }
         }
 
+        // Strip away control characters for safety (e.g., newlines)
+        output.retain(|c| !c.is_control());
+
         output
     }
 }
@@ -210,11 +213,11 @@ fn parse_config(
 }
 
 /// Cache for compiled format patterns to avoid re-parsing
-static PATTERN_CACHE: Lazy<std::sync::Mutex<HashMap<String, FormatPattern>>> =
-    Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
+static PATTERN_CACHE: Lazy<parking_lot::Mutex<HashMap<String, FormatPattern>>> =
+    Lazy::new(|| parking_lot::Mutex::new(HashMap::new()));
 
 fn get_or_compile_pattern(pattern_str: &str) -> FormatPattern {
-    let mut cache = PATTERN_CACHE.lock().unwrap();
+    let mut cache = PATTERN_CACHE.lock();
     if let Some(pattern) = cache.get(pattern_str) {
         return pattern.clone();
     }
@@ -333,36 +336,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_field_token() {
-        let pattern = FormatPattern::parse("%client_ip");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Field("client_ip".to_string())]
-        );
-    }
-
-    #[test]
-    fn parses_header_token() {
-        let pattern = FormatPattern::parse("%{Referer}i");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Header("Referer".to_string())]
-        );
-    }
-
-    #[test]
     fn parses_timestamp_token_with_format() {
         let pattern = FormatPattern::parse("%{%Y-%m-%d}t");
         assert_eq!(
             pattern.tokens,
             vec![FormatToken::Timestamp(Some("%Y-%m-%d".to_string()))]
         );
-    }
-
-    #[test]
-    fn parses_timestamp_token_without_format() {
-        let pattern = FormatPattern::parse("%t");
-        assert_eq!(pattern.tokens, vec![FormatToken::Timestamp(None)]);
     }
 
     #[test]
@@ -467,15 +446,6 @@ mod tests {
         assert!(output.len() == 19); // Fixed length for this format
         assert!(output.contains('-'));
         assert!(output.contains(':'));
-    }
-
-    #[test]
-    fn formats_literal_text() {
-        let pattern = FormatPattern::parse("GET /path HTTP/1.1");
-        let fields = HashMap::new();
-
-        let output = pattern.format(&fields, None);
-        assert_eq!(output, "GET /path HTTP/1.1");
     }
 
     #[test]

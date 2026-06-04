@@ -140,6 +140,25 @@ async fn install_certified_key(
     *config.certified_key_lock.write().await =
         Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
+    // Emit the unified `ferron.tls.certificate_not_after` gauge for the leaf
+    // of the just-mounted chain. Wildcard SANs (e.g. `*.example.com`) and
+    // multi-SAN certificates would benefit from per-SNI labels in a
+    // follow-up; for now the primary domain is used.
+    if let Some(leaf) = config
+        .certified_key_lock
+        .read()
+        .await
+        .as_deref()
+        .and_then(|ck| ck.cert.first())
+    {
+        ferron_tls::observability::emit_certificate_not_after(
+            event_sink,
+            "acme",
+            config.domains.first().map(String::as_str).unwrap_or(""),
+            leaf,
+        );
+    }
+
     emit_log(
         event_sink,
         ferron_observability::LogLevel::Debug,
@@ -166,29 +185,52 @@ async fn install_certified_key(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Info,
-                &format!("Post-obtain command started for {domains}: {command}"),
+                &format!("Post-obtain command started for {domains}"),
                 "ferron-tls-acme",
             );
-            match tokio::process::Command::new(command)
-                .env("FERRON_ACME_DOMAIN", config.domains.join(","))
-                .env("FERRON_ACME_CERT_PATH", cert_path)
-                .env("FERRON_ACME_KEY_PATH", key_path)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                Ok(mut child) => {
-                    let _ = child.wait().await;
+
+            let Some(parts) = shlex::split(command) else {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Warn,
+                    &format!("Post-obtain command has malformed quoting for {domains}"),
+                    "ferron-tls-acme",
+                );
+                return Ok(());
+            };
+
+            if let Some((program, args)) = parts.split_first() {
+                let mut cmd = tokio::process::Command::new(program);
+                for arg in args {
+                    cmd.arg(arg);
                 }
-                Err(e) => {
-                    emit_log(
-                        event_sink,
-                        ferron_observability::LogLevel::Warn,
-                        &format!("Post-obtain command failed for {domains}: {e}"),
-                        "ferron-tls-acme",
-                    );
+                cmd.env("FERRON_ACME_DOMAIN", config.domains.join(","))
+                    .env("FERRON_ACME_CERT_PATH", cert_path)
+                    .env("FERRON_ACME_KEY_PATH", key_path)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+
+                match cmd.spawn() {
+                    Ok(mut child) => {
+                        let _ = child.wait().await;
+                    }
+                    Err(e) => {
+                        emit_log(
+                            event_sink,
+                            ferron_observability::LogLevel::Warn,
+                            &format!("Post-obtain command failed for {domains}: {e}"),
+                            "ferron-tls-acme",
+                        );
+                    }
                 }
+            } else {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Warn,
+                    &format!("Post-obtain command is empty for {domains}"),
+                    "ferron-tls-acme",
+                );
             }
         }
     }

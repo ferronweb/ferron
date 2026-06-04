@@ -126,10 +126,10 @@ Notes:
 
 #### Static file serving
 
-- `ferron.static.files_served` (Counter) — number of static files served.
-  - Attributes: `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`)
-- `ferron.static.bytes_sent` (Histogram) — bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB.
-  - Attributes: same as above
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.static.files_served` | Counter | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Number of static files served |
+| `ferron.static.bytes_sent` | Histogram | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB |
 
 ### Logs
 

@@ -6,12 +6,11 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_backend_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_image = self::common::build_backend_image().await?;
+    let backend_image = crate::common::build_backend_image().await?;
     backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -31,7 +30,7 @@ async fn create_bind9_container(
     bind9_config_file: &std::path::Path,
     zones_dir: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let bind9_image = self::common::build_bind9_image().await?;
+    let bind9_image = crate::common::build_bind9_image().await?;
     bind9_image
         .with_exposed_port(ContainerPort::Tcp(53))
         .with_exposed_port(ContainerPort::Udp(53))
@@ -54,7 +53,7 @@ async fn create_ferron_container(
     config_file: &std::path::Path,
     resolv_conf: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -84,13 +83,13 @@ async fn test_proxy_srv_resolution() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let zones_dir = common::create_temp_dir();
+    let zones_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut bind9_config = common::create_temp_file();
+    let mut bind9_config = crate::common::create_temp_file();
     #[cfg(unix)]
-    let mut ferron_config = common::create_temp_file();
+    let mut ferron_config = crate::common::create_temp_file();
     #[cfg(unix)]
-    let mut resolv_conf = common::create_temp_file();
+    let mut resolv_conf = crate::common::create_temp_file();
 
     #[cfg(not(unix))]
     let zones_dir = tempfile::tempdir().unwrap();

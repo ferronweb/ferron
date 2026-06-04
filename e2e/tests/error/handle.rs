@@ -1,6 +1,5 @@
-mod common;
+use crate::common;
 
-/// handle_error 404 with a redirect sends a 302 to the fallback page.
 #[tokio::test]
 async fn test_handle_error_redirect_on_404() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -42,7 +41,6 @@ async fn test_handle_error_redirect_on_404() {
         .build()
         .unwrap();
 
-    // Request a non-existent file — should redirect to /basic.txt
     let response = client
         .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
@@ -61,7 +59,6 @@ async fn test_handle_error_redirect_on_404() {
     );
 }
 
-/// handle_error without a specific code catches all errors.
 #[tokio::test]
 async fn test_handle_error_catch_all() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -103,7 +100,6 @@ async fn test_handle_error_catch_all() {
         .build()
         .unwrap();
 
-    // Request a non-existent file — should redirect to /basic.txt
     let response = client
         .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
@@ -126,7 +122,6 @@ async fn test_handle_error_catch_all() {
     );
 }
 
-/// Existing files are served normally even with handle_error configured.
 #[tokio::test]
 async fn test_handle_error_normal_requests_unaffected() {
     let _ = rustls::crypto::ring::default_provider().install_default();

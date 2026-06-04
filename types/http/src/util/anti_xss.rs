@@ -5,4 +5,5 @@ pub fn anti_xss(input: &str) -> String {
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
+        .replace("'", "&#x27;")
 }

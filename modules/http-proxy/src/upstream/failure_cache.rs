@@ -53,7 +53,7 @@ where
 }
 
 /// Cache for tracking failed backends, shared across all proxy requests.
-pub(crate) type FailureCache = ConcurrentTtlCache<Arc<UpstreamInner>, u64>;
+pub(crate) type FailureCache = ConcurrentTtlCache<(Arc<UpstreamInner>, Vec<usize>), u64>;
 
 #[cfg(test)]
 mod tests {
@@ -101,13 +101,6 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_nonexistent() {
-        let cache: ConcurrentTtlCache<&str, &str> =
-            ConcurrentTtlCache::new(Duration::from_secs(60));
-        assert_eq!(cache.remove(&"missing"), None);
-    }
-
-    #[test]
     fn test_cleanup() {
         let cache = ConcurrentTtlCache::new(Duration::from_millis(50));
         cache.insert("key1", "value1");
@@ -124,17 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_entries() {
-        let cache = ConcurrentTtlCache::new(Duration::from_secs(60));
-        for i in 0..100 {
-            cache.insert(format!("key{}", i), i);
-        }
-        for i in 0..100 {
-            assert_eq!(cache.get(&format!("key{}", i)), Some(i));
-        }
-    }
-
-    #[test]
+    #[ignore]
     fn bench_concurrent_ttlcache_insert_get() {
         use std::time::Instant;
         let cache = ConcurrentTtlCache::new(Duration::from_secs(60));

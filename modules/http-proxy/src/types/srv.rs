@@ -12,6 +12,7 @@ pub async fn resolve_srv(
     failed_backends: std::sync::Arc<crate::upstream::FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<super::health::HealthCheckStateMap>,
+    config_key: &[usize],
 ) -> Vec<std::sync::Arc<super::upstream::UpstreamInner>> {
     let candidates = resolve_srv_inner(srv_data).await;
 
@@ -25,7 +26,7 @@ pub async fn resolve_srv(
         .into_iter()
         .filter(move |(upstream, _, _)| {
             failed
-                .get(upstream)
+                .get(&(upstream.clone(), config_key.to_vec()))
                 .is_none_or(|fails| fails <= health_check_max_fails)
                 && active_health_check_state.as_ref().is_none_or(|s| {
                     s.get(upstream.proxy_to.as_str())

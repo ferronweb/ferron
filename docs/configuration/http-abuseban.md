@@ -170,8 +170,9 @@ example.com {
 
 The abuse protection module emits the following metrics:
 
-- `ferron.abuseban.rejected` (Counter) — requests rejected due to IP ban.
-  - Attributes: `ferron.abuseban.reason` (the reason for the ban, e.g., `"rate_limit"`, `"brute_force"`)
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.abuseban.rejected` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests rejected due to IP ban |
 
 ### Logs
 

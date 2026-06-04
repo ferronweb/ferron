@@ -18,7 +18,12 @@ mod config;
 mod fetch;
 mod validator;
 
-type TcpTlsHttpTaskData = (TlsHttpConfig, CertifiedKeyLock, Arc<CancellationToken>);
+type TcpTlsHttpTaskData = (
+    TlsHttpConfig,
+    CertifiedKeyLock,
+    String,
+    Arc<CancellationToken>,
+);
 
 pub struct TcpTlsHttpResolver {
     config: Arc<ServerConfig>,
@@ -83,9 +88,17 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
 
         ctx.resolver = Some(Arc::new(TcpTlsHttpResolver { config }));
 
+        let host = ctx
+            .domain
+            .host
+            .clone()
+            .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()))
+            .unwrap_or_default();
+
         let _ = self.tx.try_send((
             http_config,
             certified_key,
+            host,
             ferron_core::shutdown::RELOAD_TOKEN.load().clone(),
         ));
         Ok(())
@@ -113,9 +126,9 @@ impl ferron_core::Module for TcpTlsHttpModule {
         let rx = self.rx.clone();
         let sink = self.event_sink.clone();
         runtime.spawn_secondary_task(async move {
-            while let Ok((config, certified_key, cancel_token)) = rx.recv().await {
+            while let Ok((config, certified_key, host, cancel_token)) = rx.recv().await {
                 tokio::spawn(cancel_token.deref().clone().run_until_cancelled_owned(
-                    fetch_tls_cert_loop(config, certified_key, sink.clone()),
+                    fetch_tls_cert_loop(config, certified_key, host, sink.clone()),
                 ));
             }
         });

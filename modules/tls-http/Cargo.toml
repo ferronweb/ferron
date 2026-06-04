@@ -9,8 +9,7 @@ async-trait = "0.1"
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp" }
-ferron-tls = { path = "../../types/tls" }
-x509-parser = "0.18"
+ferron-tls = { path = "../../types/tls", features = ["observability"] }
 
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "tokio", "http1", "http2"] }

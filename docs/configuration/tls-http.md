@@ -154,30 +154,15 @@ The `tls-http` module emits log events and metrics through the configured observ
 
 ### Metrics
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.tls_http.requests_total` | Counter | `status` (`success`, `error`) | Total HTTP requests to the certificate endpoint |
 | `ferron.tls_http.request_duration_seconds` | Histogram | `status` (`success`, `error`) | HTTP request duration in seconds |
 | `ferron.tls_http.certificates_refreshed_total` | Counter | `status` (`success`, `error`) | Certificate refresh outcomes |
-| `ferron.tls_http.cert_expires_at` | Gauge | — | Certificate expiration time (Unix timestamp) |
-| `ferron.tls_http.cert_days_remaining` | Gauge | — | Days until certificate expiration |
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 | `ferron.tls_http.next_refresh_seconds` | Gauge | — | Seconds until next certificate refresh |
 
-### Example PromQL queries
-
-```promql
-# Certificate refresh rate
-rate(ferron.tls_http.certificates_refreshed_total[5m])
-
-# HTTP error rate for certificate endpoint
-rate(ferron.tls_http.requests_total{status="error"}[5m])
-
-# Average certificate refresh duration
-histogram_quantile(0.95, rate(ferron.tls_http.request_duration_seconds_bucket[5m]))
-
-# Certificates expiring soon (less than 7 days)
-ferron.tls_http.cert_days_remaining < 7
-```
+The certificate expiration gauge is shared across all TLS providers (manual, ACME, HTTP, local) and is emitted every time a certificate is mounted into the in-memory context.
 
 ## Security considerations
 
@@ -219,7 +204,7 @@ If the certificate isn't updating despite changes on the server side:
 
 1. Check the logs for `TLS certificate refreshed successfully` — if missing, the fetch may be failing
 2. Verify the endpoint URL is correct and reachable
-3. Check `ferron.tls_http.cert_days_remaining` to see if the certificate is actually expiring soon
+3. Check `ferron.tls.certificate_not_after` (with `ferron.tls.provider="http"`) to see when the loaded certificate actually expires
 4. Ensure the `refresh_interval` isn't too long for your use case
 
 ### Observability data missing

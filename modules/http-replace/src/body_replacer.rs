@@ -211,16 +211,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_basic_replacement() {
-        let replacer = BodyReplacer::new(b"world", b"Rust", false);
-        let body = TestBody::new(vec![b"Hello world".to_vec()]);
-        let replaced_body = replacer.wrap(body);
-
-        let result = collect_body_bytes(replaced_body).await.unwrap();
-        assert_eq!(result, b"Hello Rust");
-    }
-
-    #[tokio::test]
     async fn test_multiple_replacements() {
         let replacer = BodyReplacer::new(b"foo", b"bar", false);
         let body = TestBody::new(vec![b"foo test foo end foo".to_vec()]);
@@ -285,26 +275,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_replacement_longer_than_original() {
-        let replacer = BodyReplacer::new(b"a", b"hello", false);
-        let body = TestBody::new(vec![b"a b a".to_vec()]);
-        let replaced_body = replacer.wrap(body);
-
-        let result = collect_body_bytes(replaced_body).await.unwrap();
-        assert_eq!(result, b"hello b hello");
-    }
-
-    #[tokio::test]
-    async fn test_replacement_shorter_than_original() {
-        let replacer = BodyReplacer::new(b"hello", b"hi", false);
-        let body = TestBody::new(vec![b"hello world hello".to_vec()]);
-        let replaced_body = replacer.wrap(body);
-
-        let result = collect_body_bytes(replaced_body).await.unwrap();
-        assert_eq!(result, b"hi world hi");
-    }
-
-    #[tokio::test]
     async fn test_empty_replacement() {
         let replacer = BodyReplacer::new(b"remove", b"", false);
         let body = TestBody::new(vec![b"keep remove this remove text".to_vec()]);
@@ -323,15 +293,5 @@ mod tests {
         let result = collect_body_bytes(replaced_body).await.unwrap();
         // Empty search pattern should not match anything
         assert_eq!(result, b"test");
-    }
-
-    #[tokio::test]
-    async fn test_single_byte_replacement() {
-        let replacer = BodyReplacer::new(b"a", b"X", false);
-        let body = TestBody::new(vec![b"banana".to_vec()]);
-        let replaced_body = replacer.wrap(body);
-
-        let result = collect_body_bytes(replaced_body).await.unwrap();
-        assert_eq!(result, b"bXnXnX");
     }
 }

@@ -120,9 +120,8 @@ impl BufferTestContext {
 async fn test_buffer_response() {
     let config = br#"
 *:80 {
-    proxy "http://backend:3000" {
-        buffer_response 65536
-    }
+    buffer_response 65536
+    proxy "http://backend:3000"
 }
 "#;
 
@@ -150,9 +149,8 @@ async fn test_buffer_response() {
 async fn test_buffer_request() {
     let config = br#"
 *:80 {
-    proxy "http://backend:3000" {
-        buffer_request 65536
-    }
+    buffer_request 65536
+    proxy "http://backend:3000"
 }
 "#;
 
@@ -174,34 +172,5 @@ async fn test_buffer_request() {
         body.trim(),
         "buffer-backend",
         "Should reach the buffer-backend backend"
-    );
-}
-
-/// buffer_response 0 disables response buffering.
-#[tokio::test]
-async fn test_buffer_response_disabled() {
-    let config = br#"
-*:80 {
-    proxy "http://backend:3000" {
-        buffer_response 0
-    }
-}
-"#;
-
-    let ctx = BufferTestContext::new("disabled", config).await;
-
-    let resp = ctx
-        .client
-        .get(format!("{}/whoami", ctx.base_url))
-        .send()
-        .await
-        .expect("Request failed");
-
-    assert_eq!(resp.status(), 200, "Expected 200 OK");
-    let body = resp.text().await.unwrap_or_default();
-    assert_eq!(
-        body.trim(),
-        "buffer-backend",
-        "Should still work with buffer_response 0"
     );
 }

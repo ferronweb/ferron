@@ -114,6 +114,14 @@ Notes:
 - The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
 - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
+## Observability
+
+**Metrics:**
+
+| Metric | Type | Attributes | Description |
+|--------|------|--------|-------------|
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
+
 ## Security considerations
 
 - Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`) — they are simpler and avoid known TLS 1.2 weaknesses.

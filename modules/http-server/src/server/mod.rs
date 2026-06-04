@@ -379,15 +379,11 @@ impl BasicHttpModule {
                         ip,
                         host,
                         http_connection_options.clone(),
-                        false,
                     );
                 }
                 (Some(host), None) => {
-                    http_connection_options_resolver.insert_hostname(
-                        host,
-                        http_connection_options.clone(),
-                        false,
-                    );
+                    http_connection_options_resolver
+                        .insert_hostname(host, http_connection_options.clone());
                 }
                 (None, Some(ip)) => {
                     http_connection_options_resolver.insert_ip(ip, http_connection_options.clone());
@@ -510,15 +506,10 @@ impl BasicHttpModule {
                         (observability_provider, observability_block_arc);
                     match (&host_config.0.host, host_config.0.ip) {
                         (Some(host), Some(ip)) => {
-                            observability_resolver.insert_ip_and_hostname(
-                                ip,
-                                host,
-                                vec![entry],
-                                false,
-                            );
+                            observability_resolver.insert_ip_and_hostname(ip, host, vec![entry]);
                         }
                         (Some(host), None) => {
-                            observability_resolver.insert_hostname(host, vec![entry], false);
+                            observability_resolver.insert_hostname(host, vec![entry]);
                         }
                         (None, Some(ip)) => {
                             observability_resolver.insert_ip(ip, vec![entry]);
@@ -717,10 +708,10 @@ impl BasicHttpModule {
 
             match (&host_config.0.host, host_config.0.ip) {
                 (Some(host), Some(ip)) => {
-                    tls_resolver.insert_ip_and_hostname(ip, host, tls_resolver_sub, false);
+                    tls_resolver.insert_ip_and_hostname(ip, host, tls_resolver_sub);
                 }
                 (Some(host), None) => {
-                    tls_resolver.insert_hostname(host, tls_resolver_sub, false);
+                    tls_resolver.insert_hostname(host, tls_resolver_sub);
                 }
                 (None, Some(ip)) => {
                     tls_resolver.insert_ip(ip, tls_resolver_sub);
@@ -831,6 +822,3 @@ impl Drop for BasicHttpModule {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

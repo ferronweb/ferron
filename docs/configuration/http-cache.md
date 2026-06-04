@@ -167,15 +167,13 @@ When the cache module is enabled, Ferron understands the following response head
 
 The cache module emits the following metrics:
 
-- `ferron.cache.requests` (Counter) — cache hits, misses, and bypasses.
-  - Attributes: `ferron.cache.result`, `ferron.cache.scope`
-- `ferron.cache.entries` (Gauge) — current number of cached entries.
-- `ferron.cache.stores` (Counter) — responses stored in the cache.
-  - Attributes: `ferron.cache.scope`
-- `ferron.cache.evictions` (Counter) — entries evicted from the cache.
-  - Attributes: `ferron.cache.reason` (`"expired"` or `"size"`)
-- `ferron.cache.purges` (Counter) — entries purged through LSCache-compatible controls.
-  - Attributes: `ferron.cache.scope`
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.cache.requests` | Counter | `ferron.cache.result`, `ferron.cache.scope` | Cache hits, misses, and bypasses |
+| `ferron.cache.entries` | Gauge | — | Current number of cached entries |
+| `ferron.cache.stores` | Counter | `ferron.cache.scope` | Responses stored in the cache |
+| `ferron.cache.evictions` | Counter | `ferron.cache.reason` (`"expired"` or `"size"`) | Entries evicted from the cache |
+| `ferron.cache.purges` | Counter | `ferron.cache.scope` | Entries purged through LSCache-compatible controls |
 
 ### Logs
 

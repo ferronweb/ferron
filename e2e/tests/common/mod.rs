@@ -59,6 +59,7 @@ pub async fn create_ferron_container(
             config_file.to_string_lossy(),
             "/etc/ferron.conf",
         ))
+        .with_env_var("FERRON_ROOT", "/var/www/ferron") // For some tests...
         .start()
         .await
 }

@@ -46,6 +46,9 @@ pub async fn get_executable(
                 let read = read_result.0?;
                 let mut buf = bytes::Bytes::from_owner(read_result.1);
                 buf.truncate(read);
+                if read == 0 {
+                    break;
+                }
 
                 shebang_bytes_read += read as u64;
                 if let Some(index) = memchr::memchr(b'\n', &buf) {
@@ -60,12 +63,12 @@ pub async fn get_executable(
             }
             let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
 
-            let mut command_begin: Vec<String> = shebang_line[2..]
-                .replace("\r", "")
-                .replace("\n", "")
-                .split(" ")
-                .map(|s| s.to_owned())
-                .collect();
+            let shebang_command = shebang_line[2..].trim_end_matches(|c| c == '\r' || c == '\n');
+            let mut command_begin = shlex::split(shebang_command)
+                .ok_or_else(|| anyhow::anyhow!("The CGI program shebang line is malformed"))?;
+            if command_begin.is_empty() {
+                Err(anyhow::anyhow!("The CGI program shebang line is empty"))?
+            }
             command_begin.push(execute_pathbuf.to_string_lossy().to_string());
             Ok(command_begin)
         }

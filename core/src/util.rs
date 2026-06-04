@@ -2,6 +2,25 @@
 
 use std::time::Duration;
 
+#[inline]
+fn checked_secs(value: f64, multiplier: f64, label: &str) -> Result<Duration, String> {
+    if !value.is_finite() {
+        return Err(format!("Invalid {label}: value is not finite"));
+    }
+    if value < 0.0 {
+        return Err(format!("Invalid {label}: value is negative"));
+    }
+    // Reject values that would overflow u64 seconds when scaled. The
+    // maximum representable u64 seconds is approximately 1.8446744e19.
+    // Use a conservative bound to stay safely within `Duration` limits.
+    const MAX_SECS: f64 = (u64::MAX as f64) / 2.0;
+    let total = value * multiplier;
+    if total > MAX_SECS {
+        return Err(format!("Invalid {label}: value is too large"));
+    }
+    Ok(Duration::from_secs_f64(total))
+}
+
 /// Parse a duration string (e.g., "12h", "30m", "90s", "1d") into a `Duration`.
 ///
 /// Supported suffixes (case-insensitive):
@@ -32,31 +51,31 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
             .trim()
             .parse()
             .map_err(|e| format!("Invalid hours '{}': {}", s, e))?;
-        Ok(Duration::from_secs_f64(hours * 3600.0))
+        checked_secs(hours, 3600.0, &format!("hours '{s}'"))
     } else if let Some(num_str) = s.strip_suffix(['m', 'M']) {
         let minutes: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid minutes '{}': {}", s, e))?;
-        Ok(Duration::from_secs_f64(minutes * 60.0))
+        checked_secs(minutes, 60.0, &format!("minutes '{s}'"))
     } else if let Some(num_str) = s.strip_suffix(['s', 'S']) {
         let seconds: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid seconds '{}': {}", s, e))?;
-        Ok(Duration::from_secs_f64(seconds))
+        checked_secs(seconds, 1.0, &format!("seconds '{s}'"))
     } else if let Some(num_str) = s.strip_suffix(['d', 'D']) {
         let days: f64 = num_str
             .trim()
             .parse()
             .map_err(|e| format!("Invalid days '{}': {}", s, e))?;
-        Ok(Duration::from_secs_f64(days * 86400.0))
+        checked_secs(days, 86400.0, &format!("days '{s}'"))
     } else {
         // Try plain number (assume seconds)
         let seconds: f64 = s
             .parse()
             .map_err(|e| format!("Invalid duration '{}': {}", s, e))?;
-        Ok(Duration::from_secs_f64(seconds))
+        checked_secs(seconds, 1.0, &format!("duration '{s}'"))
     }
 }
 
@@ -113,5 +132,27 @@ mod tests {
     fn test_parse_duration_whitespace() {
         assert_eq!(parse_duration(" 12h ").unwrap(), Duration::from_secs(43200));
         assert_eq!(parse_duration(" 30m ").unwrap(), Duration::from_secs(1800));
+    }
+
+    #[test]
+    fn test_parse_duration_rejects_negative() {
+        assert!(parse_duration("-1h").is_err());
+        assert!(parse_duration("-30m").is_err());
+        assert!(parse_duration("-10").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_rejects_overflow() {
+        // A value that would overflow u64 seconds when scaled
+        assert!(parse_duration("999999999999999999h").is_err());
+        assert!(parse_duration("999999999999999d").is_err());
+        assert!(parse_duration("99999999999999999999").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_rejects_nan_and_infinity() {
+        assert!(parse_duration("NaNh").is_err());
+        assert!(parse_duration("infinitys").is_err());
+        assert!(parse_duration("-infinitym").is_err());
     }
 }

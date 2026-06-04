@@ -106,7 +106,7 @@ example.com {
         cache "/var/cache/ferron-acme"
 
         save "/etc/ssl/certs/example.com.pem" "/etc/ssl/private/example.com.pem"
-        # `post_obtain_command` arg must be a script/binary name
+        # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
         post_obtain_command "/var/lib/post_obtain_command.sh"
 
         ocsp {
@@ -266,10 +266,11 @@ The ACME background task emits log events and metrics through the configured obs
 
 **Metrics:**
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
 | `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ### Verifying certificates
 

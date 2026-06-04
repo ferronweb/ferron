@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 pub struct LocalTlsCache {
     path: PathBuf,
 }
@@ -23,7 +26,18 @@ impl LocalTlsCache {
 
     pub fn save_ca(&self, cert: &str, key: &str) -> std::io::Result<()> {
         fs::write(self.path.join("ca.crt"), cert)?;
-        fs::write(self.path.join("ca.key"), key)?;
+
+        // Write CA private key with restrictive permissions (0o600 on Unix)
+        let key_path = self.path.join("ca.key");
+        let mut open_options = std::fs::OpenOptions::new();
+        open_options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        open_options.mode(0o600);
+
+        let mut file = open_options.open(&key_path)?;
+        std::io::Write::write_all(&mut file, key.as_bytes())?;
+
         Ok(())
     }
 
@@ -37,7 +51,18 @@ impl LocalTlsCache {
 
     pub fn save_leaf(&self, san_hash: &str, cert: &str, key: &str) -> std::io::Result<()> {
         fs::write(self.path.join(format!("{}.crt", san_hash)), cert)?;
-        fs::write(self.path.join(format!("{}.key", san_hash)), key)?;
+
+        // Write leaf private key with restrictive permissions (0o600 on Unix)
+        let key_path = self.path.join(format!("{}.key", san_hash));
+        let mut open_options = std::fs::OpenOptions::new();
+        open_options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        open_options.mode(0o600);
+
+        let mut file = open_options.open(&key_path)?;
+        std::io::Write::write_all(&mut file, key.as_bytes())?;
+
         Ok(())
     }
 

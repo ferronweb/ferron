@@ -1,14 +1,39 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use ferron_core::config_validator_scoped_key;
 use ferron_core::providers::Provider;
 use ferron_core::{config::validator::ConfigurationValidator, loader::ModuleLoader};
+use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::validate_tls_common;
 use ferron_tls::{
-    builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
+    builder::build_server_config_builder, config::TlsServerConfig, observability, TcpTlsContext,
+    TcpTlsResolver,
 };
 use rustls::ServerConfig;
 use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+
+/// Global event sink for the `tls-manual` module, populated from
+/// [`TlsManualModuleLoader::register_modules`] and read by
+/// [`TcpTlsManualProvider::execute`].
+static EVENT_SINK: OnceLock<Arc<CompositeEventSink>> = OnceLock::new();
+
+/// Set the event sink for the `tls-manual` module. Call during module
+/// initialization. Multiple calls are ignored; only the first one wins.
+pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
+    let _ = EVENT_SINK.set(event_sink);
+}
+
+fn event_sink() -> Option<Arc<CompositeEventSink>> {
+    EVENT_SINK.get().cloned()
+}
+
+fn resolve_host(ctx: &TcpTlsContext<'_>) -> String {
+    ctx.domain
+        .host
+        .clone()
+        .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()))
+        .unwrap_or_default()
+}
 
 /// Check if a certificate has the OCSP Must-Staple (TLS Feature status_request) extension.
 ///
@@ -96,6 +121,13 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         ))?)
         .map_err(|e| std::io::Error::other(format!("Error while loading TLS private key: {e}")))?;
 
+        // Emit the unified `ferron.tls.certificate_not_after` gauge for the
+        // leaf certificate that is about to be mounted into the in-memory
+        // rustls context.
+        if let (Some(sink), Some(leaf)) = (event_sink(), certs.first()) {
+            observability::emit_certificate_not_after(&sink, "manual", &resolve_host(ctx), leaf);
+        }
+
         // Build the config with certificates
         let mut config_with_tickets =
             config_builder.with_single_cert(certs.clone(), private_key.clone_key())?;
@@ -129,8 +161,19 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
                             "OCSP stapling enabled — Must-Staple detected, preloading certificate"
                         );
                     }
+                    // The same leaf is being mounted into the OCSP service; emit
+                    // the unified cert expiration gauge a second time so
+                    // observers can see that preload as a distinct mount.
+                    if let Some(sink) = event_sink() {
+                        observability::emit_certificate_not_after(
+                            &sink,
+                            "manual",
+                            &resolve_host(ctx),
+                            leaf,
+                        );
+                    }
                 }
-                ocsp_handle.preload(certified_key);
+                ocsp_handle.preload(certified_key.cert.clone());
             }
         }
 
@@ -199,5 +242,16 @@ impl ModuleLoader for TlsManualModuleLoader {
             config_validator_scoped_key!("tls", "manual"),
             Box::new(TlsManualConfigurationValidator),
         );
+    }
+  
+    fn register_modules(
+        &mut self,
+        registry: Arc<ferron_core::registry::Registry>,
+        _modules: &mut Vec<Arc<dyn ferron_core::Module>>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        set_event_sink(event_sink);
+        Ok(())
     }
 }

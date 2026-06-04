@@ -132,17 +132,15 @@ where
         u16::from_be_bytes([buffer[V2_LENGTH_INDEX], buffer[V2_LENGTH_INDEX + 1]]) as usize;
     let full_length = V2_MINIMUM_LEN + length;
 
-    // Switch to dynamic buffer if header is too long; v2 has no maximum length
+    // Fail if header is too long; v2 has no maximum length
+    // - PROXY v2 header with IPv4 would have 28 bytes
+    // - PROXY v2 header with IPv6 would have 52 bytes
+    // - PROXY v2 header with Unix sockets would have 232 bytes
     if full_length > READ_BUFFER_LEN {
-        let mut dynamic_buffer = vec![0u8; full_length];
-        dynamic_buffer.extend_from_slice(&buffer[..V2_MINIMUM_LEN]);
-
-        // Read the remaining header length
-        stream
-            .read_exact(&mut dynamic_buffer[V2_MINIMUM_LEN..full_length])
-            .await?;
-
-        Ok(Some(dynamic_buffer))
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "PROXY protocol V2 header too long",
+        ))
     } else {
         // Read the remaining header length
         stream
