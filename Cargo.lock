@@ -1367,9 +1367,9 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b70617312220ada56e308bf4a2287c942629ce36635204eb18faa74db2470514"
+checksum = "2e604aeb4f51008621f91c1065de951552940bd1506415f09ae98d8bc6111c4f"
 dependencies = [
  "aws-lc-rs",
  "base64",
