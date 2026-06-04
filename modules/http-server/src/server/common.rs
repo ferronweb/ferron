@@ -178,20 +178,23 @@ fn resolve_observability_sink_with_normalized(
     ip: IpAddr,
     hostname: Option<&str>,
 ) -> CompositeEventSink {
-    // Fast path: if hostname matches SNI, return connection-level sink
-    if hostname.is_none() {
-        return connection_observability.clone();
-    }
-
-    // Slow path: hostname differs from SNI, need to lookup
-    let entries = observability_resolver.lookup_ip_and_hostname(ip, hostname.unwrap());
-    let sinks = entries
-        .map(|e| initialize_sinks_from_providers(&e))
-        .unwrap_or_default();
-    if sinks.is_empty() {
-        connection_observability.clone()
-    } else {
-        CompositeEventSink::new(sinks)
+    match hostname {
+        Some(hostname) => {
+            // Slow path: hostname differs from SNI, need to lookup
+            let entries = observability_resolver.lookup_ip_and_hostname(ip, hostname);
+            let sinks = entries
+                .map(|e| initialize_sinks_from_providers(&e))
+                .unwrap_or_default();
+            if sinks.is_empty() {
+                connection_observability.clone()
+            } else {
+                CompositeEventSink::new(sinks)
+            }
+        }
+        None => {
+            // Fast path: no hostname, return connection-level sink
+            connection_observability.clone()
+        }
     }
 }
 

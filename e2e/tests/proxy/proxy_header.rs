@@ -6,14 +6,13 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_ferron_container_proxy(
     network: &str,
     hostname: &str,
     config_file: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::seconds(3))
@@ -35,9 +34,9 @@ async fn test_proxy_header_v1() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let mut config_a = common::create_temp_file();
+    let mut config_a = crate::common::create_temp_file();
     #[cfg(unix)]
-    let mut config_b = common::create_temp_file();
+    let mut config_b = crate::common::create_temp_file();
 
     #[cfg(not(unix))]
     let mut config_a = tempfile::NamedTempFile::new().unwrap();
@@ -104,9 +103,9 @@ async fn test_proxy_header_end_to_end() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let mut config_a = common::create_temp_file();
+    let mut config_a = crate::common::create_temp_file();
     #[cfg(unix)]
-    let mut config_b = common::create_temp_file();
+    let mut config_b = crate::common::create_temp_file();
 
     #[cfg(not(unix))]
     let mut config_a = tempfile::NamedTempFile::new().unwrap();

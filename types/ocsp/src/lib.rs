@@ -31,13 +31,14 @@ use std::sync::Arc;
 
 use ferron_observability::CompositeEventSink;
 use parking_lot::RwLock;
+use rustls::pki_types::CertificateDer;
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 // Type alias for the OCSP cache to reduce type complexity
-type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Arc<CertifiedKey>>>>>;
+type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 
 /// Error returned when `init_ocsp_service` is called more than once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,8 +60,8 @@ impl std::error::Error for AlreadyInitialized {}
 /// certs can be queued via the sender even before `init_ocsp_service` spawns
 /// the background task.
 struct GlobalState {
-    sender: mpsc::UnboundedSender<CertifiedKey>,
-    receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<CertifiedKey>>>,
+    sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
+    receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>>>,
     cache: OcspCache,
     cancel_token: CancellationToken,
     event_sink: parking_lot::Mutex<Option<Arc<CompositeEventSink>>>,
@@ -98,7 +99,7 @@ pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
 #[allow(clippy::type_complexity)]
 pub fn take_ocsp_startup_state() -> Result<
     (
-        mpsc::UnboundedReceiver<CertifiedKey>,
+        mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>,
         OcspCache,
         CancellationToken,
         Option<Arc<CompositeEventSink>>,
@@ -138,15 +139,15 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
 /// Cheap to clone (`Arc`-backed channels and locks).
 #[derive(Clone)]
 pub struct OcspServiceHandle {
-    sender: mpsc::UnboundedSender<CertifiedKey>,
+    sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
     cache: OcspCache,
 }
 
 impl OcspServiceHandle {
-    /// Send a `CertifiedKey` to the background task for OCSP fetching.
-    pub fn preload(&self, key: CertifiedKey) {
-        if !key.cert.is_empty() {
-            let _ = self.sender.send(key);
+    /// Send a `Vec<CertificateDer<'static>>` to the background task for OCSP fetching.
+    pub fn preload(&self, cert: Vec<CertificateDer<'static>>) {
+        if !cert.is_empty() {
+            let _ = self.sender.send(cert);
         }
     }
 }
@@ -165,7 +166,7 @@ impl OcspServiceHandle {
 pub struct OcspStapler {
     inner: Arc<dyn ResolvesServerCert>,
     cache: OcspCache,
-    sender: mpsc::UnboundedSender<CertifiedKey>,
+    sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
 }
 
 impl OcspStapler {
@@ -181,7 +182,7 @@ impl OcspStapler {
 
 impl ResolvesServerCert for OcspStapler {
     fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-        let original_key = self.inner.resolve(client_hello)?;
+        let mut original_key = self.inner.resolve(client_hello)?;
         if let Some(leaf) = original_key.cert.first() {
             let leaf_bytes: Vec<u8> = leaf.to_vec();
 
@@ -190,14 +191,21 @@ impl ResolvesServerCert for OcspStapler {
             let cached = self.cache.read();
 
             if let Some(cached_entry) = cached.get(&leaf_bytes) {
-                if let Some(stapled) = cached_entry {
-                    return Some(stapled.clone());
+                if let Some(ocsp) = cached_entry {
+                    // Put the OCSP response into the CertifiedKey
+                    if let Some(original_key_mut) = Arc::get_mut(&mut original_key) {
+                        original_key_mut.ocsp = Some(ocsp.clone());
+                    } else {
+                        let mut original_key_mut = (*original_key).clone();
+                        original_key_mut.ocsp = Some(ocsp.clone());
+                        original_key = Arc::new(original_key_mut);
+                    }
                 }
                 // Entry exists but has no OCSP yet — return original without re-triggering
             } else {
                 // Not in cache yet — trigger fetch
                 drop(cached);
-                let _ = self.sender.send((*original_key).clone());
+                let _ = self.sender.send(original_key.cert.clone());
             }
         }
         Some(original_key)

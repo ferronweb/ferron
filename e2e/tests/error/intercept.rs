@@ -1,5 +1,6 @@
-#[cfg(unix)]
-use std::{io::Write, path::Path, time::Duration};
+use std::io::Write;
+use std::path::Path;
+use std::time::Duration;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -7,14 +8,14 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
+use crate::common;
 
 async fn create_backend_container(
     network: &str,
     hostname: &str,
     unstable_fails: u32,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_image = self::common::build_backend_image().await?;
+    let backend_image = common::build_backend_image().await?;
     backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -34,7 +35,7 @@ async fn create_ferron_container(
     network: &str,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -65,26 +66,17 @@ impl InterceptTestContext {
     async fn new(test_name: &str, config_body: &[u8], unstable_fails: u32) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-intercept-{test_name}");
 
-        // Start backend
         let backend = create_backend_container(&network, "backend", unstable_fails)
             .await
             .expect("Failed to create backend");
 
-        // Write Ferron config
         config_file.as_file_mut().write_all(config_body).unwrap();
         config_file.flush().unwrap();
 
-        // Start Ferron
         let ferron = create_ferron_container(&network, config_file.path())
             .await
             .expect("Failed to create Ferron");
@@ -99,7 +91,6 @@ impl InterceptTestContext {
             .build()
             .unwrap();
 
-        // Wait for Ferron to be ready via the backend proxy
         let base_url = format!("http://localhost:{port}");
         for _ in 0..60 {
             if let Ok(resp) = client.get(format!("{base_url}/")).send().await
@@ -121,8 +112,6 @@ impl InterceptTestContext {
     }
 }
 
-/// When intercept_errors is true, upstream 4xx/5xx responses should be replaced
-/// with Ferron's built-in error pages.
 #[tokio::test]
 async fn test_intercept_errors_true() {
     let config = br#"
@@ -135,7 +124,6 @@ async fn test_intercept_errors_true() {
 
     let ctx = InterceptTestContext::new("true", config, 1).await;
 
-    // Request /unstable — backend returns 503 (with UNSTABLE_FAILS=1)
     let resp = ctx
         .client
         .get(format!("{}/unstable", ctx.base_url))
@@ -143,7 +131,6 @@ async fn test_intercept_errors_true() {
         .await
         .expect("request failed");
 
-    // With intercept_errors true, Ferron replaces the 503 body with its own
     assert_eq!(resp.status(), 503, "Expected 503 Service Unavailable");
     let body = resp.text().await.unwrap_or_default();
     assert!(
@@ -155,7 +142,6 @@ async fn test_intercept_errors_true() {
         "With intercept_errors true, body should be Ferron's built-in error page, got: {body}"
     );
 
-    // Request a non-existent path — backend returns its own 404
     let resp = ctx
         .client
         .get(format!("{}/nonexistent", ctx.base_url))
@@ -170,8 +156,6 @@ async fn test_intercept_errors_true() {
     );
 }
 
-/// Default (intercept_errors false): upstream 4xx/5xx responses should be
-/// passed through unchanged.
 #[tokio::test]
 async fn test_intercept_errors_default_passthrough() {
     let config = br#"
@@ -182,7 +166,6 @@ async fn test_intercept_errors_default_passthrough() {
 
     let ctx = InterceptTestContext::new("default", config, 1).await;
 
-    // Request /unstable — backend returns 503
     let resp = ctx
         .client
         .get(format!("{}/unstable", ctx.base_url))
@@ -197,7 +180,6 @@ async fn test_intercept_errors_default_passthrough() {
         "Without intercept_errors, body should contain backend content ('unstable'), got: {body}"
     );
 
-    // Request a non-existent path — backend returns its own 404
     let resp = ctx
         .client
         .get(format!("{}/nonexistent", ctx.base_url))
@@ -212,7 +194,6 @@ async fn test_intercept_errors_default_passthrough() {
     );
 }
 
-/// When intercept_errors is false explicitly, same as default.
 #[tokio::test]
 async fn test_intercept_errors_false_explicit() {
     let config = br#"
@@ -252,7 +233,6 @@ async fn test_intercept_errors_successful_requests_unaffected() {
 
     let ctx = InterceptTestContext::new("success", config, 0).await;
 
-    // Successful requests should pass through unchanged
     let resp = ctx
         .client
         .get(format!("{}/", ctx.base_url))
@@ -267,7 +247,6 @@ async fn test_intercept_errors_successful_requests_unaffected() {
         "Successful upstream response should pass through unchanged, got: {body}"
     );
 
-    // /whoami should return the backend name
     let resp = ctx
         .client
         .get(format!("{}/whoami", ctx.base_url))

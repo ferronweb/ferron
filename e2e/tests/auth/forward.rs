@@ -7,12 +7,11 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_auth_backend_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let auth_backend_image = self::common::build_auth_backend_image().await?;
+    let auth_backend_image = crate::common::build_auth_backend_image().await?;
     auth_backend_image
         .with_exposed_port(ContainerPort::Tcp(9090))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -31,7 +30,7 @@ async fn create_ferron_container(
     webroot_dir: &Path,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -70,9 +69,9 @@ impl FAuthTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let webroot_dir = common::create_temp_dir();
+        let webroot_dir = crate::common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = common::create_temp_file();
+        let mut config_file = crate::common::create_temp_file();
         #[cfg(not(unix))]
         let webroot_dir = tempfile::tempdir().unwrap();
         #[cfg(not(unix))]
@@ -82,7 +81,7 @@ impl FAuthTestContext {
 
         let auth_backend = create_auth_backend_container(&network).await.unwrap();
 
-        self::common::write_file(webroot_dir.path().join("index.html"), b"Authenticated!").unwrap();
+        crate::common::write_file(webroot_dir.path().join("index.html"), b"Authenticated!").unwrap();
 
         config_file
             .as_file_mut()
@@ -293,9 +292,9 @@ async fn test_fauth_connection_refused() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
     #[cfg(not(unix))]
@@ -303,7 +302,7 @@ async fn test_fauth_connection_refused() {
 
     let network = "e2e-test-fauth-conn-refused";
 
-    self::common::write_file(webroot_dir.path().join("index.html"), b"test").unwrap();
+    crate::common::write_file(webroot_dir.path().join("index.html"), b"test").unwrap();
 
     config_file
         .as_file_mut()
@@ -577,9 +576,9 @@ async fn test_fauth_no_auth_config() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
     #[cfg(not(unix))]
@@ -587,7 +586,7 @@ async fn test_fauth_no_auth_config() {
 
     let network = "e2e-test-fauth-no-auth";
 
-    self::common::write_file(webroot_dir.path().join("index.html"), b"No auth required").unwrap();
+    crate::common::write_file(webroot_dir.path().join("index.html"), b"No auth required").unwrap();
 
     config_file
         .as_file_mut()

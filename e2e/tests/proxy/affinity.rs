@@ -7,14 +7,13 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_backend_container(
     network: &str,
     alias: &str,
     name: Option<&str>,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_image = common::build_backend_image().await?;
+    let backend_image = crate::common::build_backend_image().await?;
     let mut builder = backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -34,7 +33,7 @@ async fn create_ferron_container(
     network: &str,
     config_file: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -56,7 +55,7 @@ async fn create_ferron_container(
 async fn test_affinity_cookie() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
 
     let network = "e2e-test-affinity-cookie";
 
@@ -132,7 +131,7 @@ ferron-affinity-cookie:80 {
 async fn test_affinity_ip() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
 
     let network = "e2e-test-affinity-ip";
 
@@ -200,7 +199,7 @@ async fn test_affinity_header() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 

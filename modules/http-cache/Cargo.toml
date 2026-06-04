@@ -19,11 +19,12 @@ ahash = "0.8"
 typemap_rev = "0.4"
 dashmap = "6.2.1"
 cidr = "0.3"
+tokio = { version = "1", features = ["sync"] }
+rustc-hash = "2"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
-rustc-hash = "2"
+tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }

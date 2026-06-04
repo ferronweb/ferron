@@ -24,6 +24,7 @@ pub async fn resolve_upstreams(
     failed_backends: Arc<FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
+    config_key: &[usize],
 ) -> Vec<Arc<UpstreamInner>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
@@ -34,6 +35,7 @@ pub async fn resolve_upstreams(
                     Arc::clone(&failed_backends),
                     health_check_max_fails,
                     active_health_check_state.clone(),
+                    config_key,
                 )
                 .await,
         );
@@ -62,6 +64,7 @@ pub fn determine_proxy_to(
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
+    config_key: &[usize],
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -69,6 +72,7 @@ pub fn determine_proxy_to(
 
     // Build healthy list of indices into `upstreams` — avoids Arc clones
     // until the final selection.
+    let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
     let mut healthy: Vec<usize> = {
         let failed = if health_check_enabled {
             Some(failed_backends)
@@ -78,11 +82,11 @@ pub fn determine_proxy_to(
         upstreams
             .iter()
             .enumerate()
-            .filter(|(_, u)| {
+            .filter(|(i, u)| {
                 // Check passive failure cache
                 let not_failed = failed.as_ref().is_none_or(|failed| {
                     failed
-                        .get(u)
+                        .get(&(u.to_owned().clone(), config_key.to_vec()))
                         .is_none_or(|fails| fails <= health_check_max_fails)
                 });
 
@@ -96,7 +100,11 @@ pub fn determine_proxy_to(
                 // Check if backend is already selected
                 let not_selected = !selected_backends.contains(*u);
 
-                not_failed && active_healthy && not_selected
+                let healthy = not_failed && active_healthy && not_selected;
+                if !healthy {
+                    unhealthy.insert(*i);
+                }
+                healthy
             })
             .map(|(i, _)| i)
             .collect()
@@ -113,8 +121,13 @@ pub fn determine_proxy_to(
         // matches affinity_index
         if affinity_index.is_none() {
             if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
-                affinity_index =
-                    super::affinity::resolve_affinity_index(affinity_type, key, upstreams, ring);
+                affinity_index = super::affinity::resolve_affinity_index(
+                    affinity_type,
+                    key,
+                    upstreams,
+                    &unhealthy,
+                    ring,
+                );
             };
         }
         let start_pos = affinity_index.and_then(|aff_idx| {
@@ -137,6 +150,7 @@ pub fn determine_proxy_to(
             )
         };
         let upstream_idx = healthy.swap_remove(index);
+        unhealthy.insert(upstream_idx);
         let upstream = Arc::clone(&upstreams[upstream_idx]);
         if start_pos == Some(index) {
             // Affine backend is no longer healthy; reset affinity index

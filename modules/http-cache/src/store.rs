@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ahash::{AHashMap, AHashSet, RandomState};
@@ -7,6 +8,8 @@ use dashmap::DashMap;
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
 use quick_cache::{sync::Cache, DefaultHashBuilder, Lifecycle, UnitWeighter};
+use rustc_hash::FxBuildHasher;
+use tokio::sync::Notify;
 
 use crate::lscache::{PurgeOperation, PurgeSelector, ScopedTag};
 use crate::policy::CacheScope;
@@ -62,6 +65,12 @@ pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
     variants_by_base: DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
+    inflight: DashMap<String, InflightEntry, FxBuildHasher>,
+}
+
+/// Tracks an in-flight upstream fetch for a specific cache key.
+struct InflightEntry {
+    notify: Arc<Notify>,
 }
 
 #[derive(Clone, Default)]
@@ -96,6 +105,7 @@ impl CacheStore {
             ),
             variants_by_base: DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
+            inflight: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
@@ -108,17 +118,50 @@ impl CacheStore {
         self.entries.len()
     }
 
+    /// Try to become the in-flight fetch leader for `cache_key`.
+    ///
+    /// Returns `(is_leader, notify)`:
+    /// - `is_leader == true`: This caller won the race. It should proceed with
+    ///   the upstream fetch and call `complete_fetch(cache_key)` when done.
+    /// - `is_leader == false`: Another request is already fetching. The caller
+    ///   should `await notify.notified()` then re-check the cache.
+    #[inline]
+    pub fn begin_fetch(&self, cache_key: &str) -> (bool, Arc<Notify>) {
+        let mut is_leader = false;
+        let entry = self
+            .inflight
+            .entry(cache_key.to_string())
+            .or_insert_with(|| {
+                is_leader = true;
+                InflightEntry {
+                    notify: Arc::new(Notify::new()),
+                }
+            });
+        let notify = entry.notify.clone();
+        (is_leader, notify)
+    }
+
+    /// Complete an in-flight fetch: remove the entry and wake all waiters.
+    #[inline]
+    pub fn complete_fetch(&self, cache_key: &str) {
+        if let Some((_, entry)) = self.inflight.remove(cache_key) {
+            entry.notify.notify_waiters();
+        }
+    }
+
     pub fn lookup(
         &self,
         base_key: &str,
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
-    ) -> (Option<LookupEntry>, StoreStats, usize) {
+    ) -> (Option<LookupEntry>, StoreStats, usize, bool) {
         let stats = StoreStats {
             expired_evictions: self.cleanup_expired(),
             ..Default::default()
         };
+
+        let has_variants = self.variants_by_base.contains_key(base_key);
 
         let variants = self
             .variants_by_base
@@ -170,11 +213,12 @@ impl CacheStore {
                     }),
                     stats,
                     self.entries.len(),
+                    false,
                 );
             }
         }
 
-        (None, stats, self.entries.len())
+        (None, stats, self.entries.len(), has_variants)
     }
 
     pub fn insert_with_request(
@@ -454,10 +498,11 @@ mod tests {
         assert_eq!(stats.size_evictions, 0);
         assert_eq!(len, 1);
 
-        let (lookup, stats, len) = store.lookup(base_key, &headers, &cookies, None);
+        let (lookup, stats, len, had_expired) = store.lookup(base_key, &headers, &cookies, None);
         let lookup = lookup.expect("expected cache hit");
         assert_eq!(stats.expired_evictions, 0);
         assert_eq!(len, 1);
+        assert!(!had_expired);
         assert_eq!(lookup.scope, CacheScope::Public);
         assert_eq!(lookup.status, StatusCode::OK);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"cached-body")));
@@ -482,12 +527,12 @@ mod tests {
         );
         store.insert_with_request(private, Some("user=1"), &headers, &cookies);
 
-        let (lookup, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
+        let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
         let lookup = lookup.expect("expected private cache hit");
         assert_eq!(lookup.scope, CacheScope::Private);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
-        let (lookup, _, _) = store.lookup(base_key, &headers, &cookies, None);
+        let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
         let lookup = lookup.expect("expected public cache hit");
         assert_eq!(lookup.scope, CacheScope::Public);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
@@ -522,7 +567,7 @@ mod tests {
             &cookies,
         );
 
-        let (lookup, _, _) = store.lookup("https://example.com/a", &headers, &cookies, None);
+        let (lookup, _, _, _) = store.lookup("https://example.com/a", &headers, &cookies, None);
         assert!(lookup.is_some(), "expected a to become most recently used");
 
         let (stats, len) = store.insert_with_request(
@@ -662,11 +707,12 @@ mod tests {
                 .is_ok());
         }
 
-        let (lookup, stats, len) =
+        let (lookup, stats, len, had_expired) =
             store.lookup("https://example.com/fresh", &headers, &cookies, None);
         assert!(lookup.is_some());
         assert_eq!(stats.expired_evictions, 1);
         assert_eq!(len, 1);
+        assert!(!had_expired);
         assert!(store
             .lookup("https://example.com/expired", &headers, &cookies, None)
             .0
@@ -792,5 +838,322 @@ mod tests {
 
         assert!(!headers.contains_key(AGE));
         assert_eq!(headers.get(COOKIE), Some(&HeaderValue::from_static("a=b")));
+    }
+
+    #[test]
+    fn had_expired_is_true_when_entry_expired() {
+        let store = CacheStore::new(4);
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/exp",
+                CacheScope::Public,
+                "data",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+
+        // Expire the entry
+        {
+            let mut entry = store
+                .entries
+                .get("https://example.com/exp\nscope=public")
+                .expect("expected inserted entry");
+            entry.created_at = Instant::now() - Duration::from_secs(10);
+            entry.ttl = Duration::from_secs(1);
+            assert!(store
+                .entries
+                .replace(
+                    "https://example.com/exp\nscope=public".to_string(),
+                    entry,
+                    false,
+                )
+                .is_ok());
+        }
+
+        // First-time key returns false
+        let (_, _, _, had_expired) =
+            store.lookup("https://example.com/new", &headers, &cookies, None);
+        assert!(!had_expired);
+
+        // Expired key returns true (variants exist, but no valid entries)
+        let (_, _, _, had_expired) =
+            store.lookup("https://example.com/exp", &headers, &cookies, None);
+        assert!(had_expired);
+    }
+
+    #[test]
+    fn begin_fetch_returns_leader_and_follower() {
+        let store = CacheStore::new(4);
+        let key = "https://example.com/concurrent";
+
+        let (is_leader1, _notify1) = store.begin_fetch(key);
+        assert!(is_leader1, "first caller should be leader");
+
+        let (is_leader2, _notify2) = store.begin_fetch(key);
+        assert!(!is_leader2, "second caller should be follower");
+
+        let (is_leader3, _notify3) = store.begin_fetch(key);
+        assert!(!is_leader3, "third caller should be follower");
+
+        // Clean up
+        store.complete_fetch(key);
+    }
+
+    #[test]
+    fn complete_fetch_notifies_waiters() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let store = CacheStore::new(4);
+        let key = "https://example.com/notify-test";
+
+        let (_leader, _leader_notify) = store.begin_fetch(key);
+        let (follower, follower_notify) = store.begin_fetch(key);
+
+        assert!(!follower);
+
+        let fired = Arc::new(AtomicBool::new(false));
+        let fired_clone = fired.clone();
+        let handle = std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                follower_notify.notified().await;
+                fired_clone.store(true, Ordering::SeqCst);
+            });
+        });
+
+        // Give the thread time to start waiting
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        store.complete_fetch(key);
+        handle.join().unwrap();
+
+        assert!(fired.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let store = Arc::new(CacheStore::new(4));
+        let base_key = "https://example.com/popular";
+
+        // Insert an entry and then expire it
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+        store.insert_with_request(
+            stored_entry(base_key, CacheScope::Public, "data", VaryRule::default()),
+            None,
+            &headers,
+            &cookies,
+        );
+        {
+            let mut entry = store
+                .entries
+                .get(&format!("{base_key}\nscope=public"))
+                .expect("expected entry");
+            entry.created_at = Instant::now() - Duration::from_secs(10);
+            entry.ttl = Duration::from_secs(1);
+            store
+                .entries
+                .replace(format!("{base_key}\nscope=public"), entry, false)
+                .ok();
+        }
+
+        // Verify lookup returns had_expired
+        let (_, _, _, had_expired) = store.lookup(base_key, &headers, &cookies, None);
+        assert!(had_expired);
+
+        let fetch_count = Arc::new(AtomicUsize::new(0));
+        let mut handles = Vec::new();
+
+        for _ in 0..10 {
+            let store = store.clone();
+            let fetch_count = fetch_count.clone();
+            let base_key = base_key.to_string();
+            let headers = headers.clone();
+            let cookies = cookies.clone();
+
+            handles.push(tokio::spawn(async move {
+                let (is_leader, notify) = store.begin_fetch(&base_key);
+
+                #[allow(clippy::needless_return)]
+                if !is_leader {
+                    // Follower: wait for leader to complete
+                    notify.notified().await;
+                    // Re-check cache
+                    let (lookup, _, _, _) = store.lookup(&base_key, &headers, &cookies, None);
+                    if lookup.is_some() {
+                        return;
+                    }
+                } else {
+                    // Leader: simulate upstream fetch
+                    fetch_count.fetch_add(1, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+                    // Store the response
+                    store.insert_with_request(
+                        stored_entry(
+                            &base_key,
+                            CacheScope::Public,
+                            "fresh-data",
+                            VaryRule::default(),
+                        ),
+                        None,
+                        &headers,
+                        &cookies,
+                    );
+                    store.complete_fetch(&base_key);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Only one upstream fetch should have occurred
+        assert_eq!(
+            fetch_count.load(Ordering::SeqCst),
+            1,
+            "only one leader should fetch upstream"
+        );
+
+        // Cache should now have the entry
+        let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
+        assert!(
+            lookup.is_some(),
+            "cache should be populated after coalesced fetch"
+        );
+    }
+
+    #[tokio::test]
+    async fn follower_gets_cached_response_after_leader_stores() {
+        let store = Arc::new(CacheStore::new(4));
+        let base_key = "https://example.com/leader-follower";
+
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        // Insert and expire
+        store.insert_with_request(
+            stored_entry(base_key, CacheScope::Public, "old", VaryRule::default()),
+            None,
+            &headers,
+            &cookies,
+        );
+        {
+            let mut entry = store
+                .entries
+                .get(&format!("{base_key}\nscope=public"))
+                .expect("expected entry");
+            entry.created_at = Instant::now() - Duration::from_secs(10);
+            entry.ttl = Duration::from_secs(1);
+            store
+                .entries
+                .replace(format!("{base_key}\nscope=public"), entry, false)
+                .ok();
+        }
+
+        // Leader begins
+        let (is_leader, notify) = store.begin_fetch(base_key);
+        assert!(is_leader);
+
+        // Spawn a follower that waits
+        let store_clone = store.clone();
+        let base_key_clone = base_key.to_string();
+        let headers_clone = headers.clone();
+        let cookies_clone = cookies.clone();
+        let follower_handle = tokio::spawn(async move {
+            // Follower waits
+            notify.notified().await;
+            // After notification, re-check cache
+            let (lookup, _, _, _) =
+                store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
+            lookup.and_then(|e| e.body)
+        });
+
+        // Give follower time to start waiting
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        // Leader stores the response
+        store.insert_with_request(
+            stored_entry(
+                base_key,
+                CacheScope::Public,
+                "new-data",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+        store.complete_fetch(base_key);
+
+        // Follower should get the new cached response
+        let body = follower_handle.await.unwrap();
+        assert_eq!(body, Some(Bytes::from_static(b"new-data")));
+    }
+
+    #[tokio::test]
+    async fn leader_non_cacheable_wakes_followers_without_cached_entry() {
+        let store = Arc::new(CacheStore::new(4));
+        let base_key = "https://example.com/non-cacheable";
+
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        // Insert and expire
+        store.insert_with_request(
+            stored_entry(base_key, CacheScope::Public, "old", VaryRule::default()),
+            None,
+            &headers,
+            &cookies,
+        );
+        {
+            let mut entry = store
+                .entries
+                .get(&format!("{base_key}\nscope=public"))
+                .expect("expected entry");
+            entry.created_at = Instant::now() - Duration::from_secs(10);
+            entry.ttl = Duration::from_secs(1);
+            store
+                .entries
+                .replace(format!("{base_key}\nscope=public"), entry, false)
+                .ok();
+        }
+
+        // Leader begins
+        let (is_leader, notify) = store.begin_fetch(base_key);
+        assert!(is_leader);
+
+        let store_clone = store.clone();
+        let base_key_clone = base_key.to_string();
+        let headers_clone = headers.clone();
+        let cookies_clone = cookies.clone();
+        let follower_handle = tokio::spawn(async move {
+            notify.notified().await;
+            let (lookup, _, _, _) =
+                store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
+            lookup.is_none() // Should be None since leader didn't store
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        // Leader decides NOT to store (non-cacheable response)
+        // Just complete the fetch without inserting
+        store.complete_fetch(base_key);
+
+        let follower_saw_miss = follower_handle.await.unwrap();
+        assert!(
+            follower_saw_miss,
+            "follower should see miss after non-cacheable leader"
+        );
     }
 }

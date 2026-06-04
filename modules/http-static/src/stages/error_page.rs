@@ -87,6 +87,7 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
 
             // Try to open the error page file
             let path = Path::new(file_path);
+
             let meta = match vibeio::fs::metadata(path).await {
                 Ok(m) => m,
                 Err(_) => {

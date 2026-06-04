@@ -297,6 +297,78 @@ impl Stage<HttpContext> for HttpResponseStage {
     }
 }
 
+/// Pipeline stage that sends 103 Early Hints responses.
+///
+/// This stage evaluates the `early_hints` directive and sends a 103 Early Hints
+/// response with the configured `Link` headers before the final response is ready.
+/// The stage never short-circuits the pipeline — it always returns `Ok(true)`.
+pub struct EarlyHintsStage {
+    engine: Arc<ResponseEngine>,
+}
+
+impl EarlyHintsStage {
+    pub fn new(engine: Arc<ResponseEngine>) -> Self {
+        Self { engine }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl Stage<HttpContext> for EarlyHintsStage {
+    fn name(&self) -> &str {
+        "early_hints"
+    }
+
+    fn constraints(&self) -> Vec<StageConstraint> {
+        vec![
+            StageConstraint::After("http_response".to_string()),
+            StageConstraint::Before("reverse_proxy".to_string()),
+            StageConstraint::Before("static_file".to_string()),
+        ]
+    }
+
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        let Some(c) = config else { return false };
+        c.has_directive("early_hints")
+    }
+
+    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let config = crate::config::ResponseConfig::from_config(&ctx.configuration, &self.engine);
+        if config.early_hints.links.is_empty() {
+            return Ok(true);
+        }
+
+        // Build Link headers
+        let mut headers = HeaderMap::new();
+        for link in &config.early_hints.links {
+            if let Ok(value) = HeaderValue::from_str(link) {
+                headers.insert(http::header::LINK, value);
+            }
+        }
+
+        if headers.is_empty() {
+            return Ok(true);
+        }
+
+        // Attempt to send 103 Early Hints. If it fails (e.g., not supported on
+        // this connection), log a warning and continue the pipeline normally.
+        if let Some(req) = ctx.req.as_mut() {
+            if let Err(e) = vibeio_http::send_early_hints(req, headers).await {
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    target: LOG_TARGET,
+                    message: format!("Failed to send 103 Early Hints: {e}"),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
+            }
+        }
+
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -672,77 +744,5 @@ mod tests {
         };
         assert!(HttpResponseStage::rule_matches(&rule, "/missing").is_some());
         assert!(HttpResponseStage::rule_matches(&rule, "/other").is_none());
-    }
-}
-
-/// Pipeline stage that sends 103 Early Hints responses.
-///
-/// This stage evaluates the `early_hints` directive and sends a 103 Early Hints
-/// response with the configured `Link` headers before the final response is ready.
-/// The stage never short-circuits the pipeline — it always returns `Ok(true)`.
-pub struct EarlyHintsStage {
-    engine: Arc<ResponseEngine>,
-}
-
-impl EarlyHintsStage {
-    pub fn new(engine: Arc<ResponseEngine>) -> Self {
-        Self { engine }
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl Stage<HttpContext> for EarlyHintsStage {
-    fn name(&self) -> &str {
-        "early_hints"
-    }
-
-    fn constraints(&self) -> Vec<StageConstraint> {
-        vec![
-            StageConstraint::After("http_response".to_string()),
-            StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
-        ]
-    }
-
-    fn is_applicable(
-        &self,
-        config: Option<&ferron_core::config::ServerConfigurationBlock>,
-    ) -> bool {
-        let Some(c) = config else { return false };
-        c.has_directive("early_hints")
-    }
-
-    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = crate::config::ResponseConfig::from_config(&ctx.configuration, &self.engine);
-        if config.early_hints.links.is_empty() {
-            return Ok(true);
-        }
-
-        // Build Link headers
-        let mut headers = HeaderMap::new();
-        for link in &config.early_hints.links {
-            if let Ok(value) = HeaderValue::from_str(link) {
-                headers.insert(http::header::LINK, value);
-            }
-        }
-
-        if headers.is_empty() {
-            return Ok(true);
-        }
-
-        // Attempt to send 103 Early Hints. If it fails (e.g., not supported on
-        // this connection), log a warning and continue the pipeline normally.
-        if let Some(req) = ctx.req.as_mut() {
-            if let Err(e) = vibeio_http::send_early_hints(req, headers).await {
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Warn,
-                    target: LOG_TARGET,
-                    message: format!("Failed to send 103 Early Hints: {e}"),
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-            }
-        }
-
-        Ok(true)
     }
 }

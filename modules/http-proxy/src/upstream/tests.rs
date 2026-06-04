@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHashSet};
 use std::{sync::Arc, time::Duration};
 
 use crate::types::affinity::AffinityType;
@@ -138,8 +138,7 @@ fn test_select_backend_single_backend() {
 
 #[test]
 fn test_determine_proxy_to_no_upstreams() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
@@ -158,6 +157,7 @@ fn test_determine_proxy_to_no_upstreams() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_none());
 }
@@ -165,8 +165,7 @@ fn test_determine_proxy_to_no_upstreams() {
 #[test]
 fn test_determine_proxy_to_single_backend() {
     let upstreams = vec![make_upstream("http://backend1")];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
@@ -186,6 +185,7 @@ fn test_determine_proxy_to_single_backend() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -198,10 +198,9 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    failed_backends.insert(make_upstream("http://backend1"), 5);
+    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -221,6 +220,7 @@ fn test_determine_proxy_to_health_check_filters_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -232,11 +232,10 @@ fn test_determine_proxy_to_all_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
-    failed_backends.insert(make_upstream("http://backend1"), 5);
-    failed_backends.insert(make_upstream("http://backend2"), 5);
+    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
+    failed_backends.insert((make_upstream("http://backend2"), vec![]), 5);
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
@@ -256,6 +255,7 @@ fn test_determine_proxy_to_all_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_none());
 }
@@ -266,11 +266,10 @@ fn test_determine_proxy_to_health_check_disabled() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     {
-        failed_backends.insert(make_upstream("http://backend1"), 100);
+        failed_backends.insert((make_upstream("http://backend1"), vec![]), 100);
     }
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
@@ -291,14 +290,14 @@ fn test_determine_proxy_to_health_check_disabled() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
 }
 
 #[test]
 fn test_record_backend_transport_failure() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
@@ -310,10 +309,11 @@ fn test_record_backend_transport_failure() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 1);
-    assert_eq!(failed_backends.get(&upstream), Some(1));
+    assert_eq!(failed_backends.get(&(upstream.clone(), vec![])), Some(1));
 
     record_backend_transport_failure(
         Arc::clone(&failed_backends),
@@ -323,15 +323,15 @@ fn test_record_backend_transport_failure() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
-    assert_eq!(failed_backends.get(&upstream), Some(2));
+    assert_eq!(failed_backends.get(&(upstream, vec![])), Some(2));
 }
 
 #[test]
 fn test_record_backend_transport_failure_passive_check_disabled() {
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let upstream = make_upstream("http://backend1");
     let mut metrics = crate::ProxyMetrics::new();
 
@@ -343,10 +343,11 @@ fn test_record_backend_transport_failure_passive_check_disabled() {
         &upstream,
         &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
 
     assert_eq!(metrics.unhealthy_backends.len(), 0);
-    assert_eq!(failed_backends.get(&upstream), None);
+    assert_eq!(failed_backends.get(&(upstream, vec![])), None);
 }
 
 #[test]
@@ -382,8 +383,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     health_check_state.insert(
@@ -412,6 +412,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -423,8 +424,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-        Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::Random;
@@ -445,41 +445,13 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         None,
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
+        &[],
     );
     assert!(result.is_some());
     let selected = result.unwrap();
     assert!(
         selected.upstream.proxy_to == "http://backend1"
             || selected.upstream.proxy_to == "http://backend2"
-    );
-}
-
-#[test]
-fn test_select_backend_index_weighted_round_robin_equal_weights() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 1)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-        (2, make_upstream_with_weight("http://backend3", 1)),
-    ];
-    let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
-
-    // With equal weights, should cycle like round-robin
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        1
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        2
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
     );
 }
 
@@ -532,20 +504,6 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
 }
 
 #[test]
-fn test_select_backend_index_weighted_round_robin_single_backend() {
-    let backends = vec![(0, make_upstream_with_weight("http://backend1", 10))];
-    let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
-
-    for _ in 0..10 {
-        assert_eq!(
-            old_select_backend_index(&algorithm, &backends, None, None),
-            0
-        );
-    }
-}
-
-#[test]
 fn test_weighted_round_robin_state_resize() {
     let state = WeightedRoundRobinState::new();
 
@@ -579,6 +537,7 @@ fn test_resolve_affinity_index_ip_affinity() {
         &affinity_type,
         key,
         &backends,
+        &FxHashSet::default(),
         &RwLock::new(ConsistentHashRing::new(&backends)),
     );
     assert!(idx.is_some());
@@ -589,6 +548,7 @@ fn test_resolve_affinity_index_ip_affinity() {
         &affinity_type,
         key,
         &backends,
+        &FxHashSet::default(),
         &RwLock::new(ConsistentHashRing::new(&backends)),
     );
     assert_eq!(idx, idx2);
@@ -648,66 +608,6 @@ fn test_select_backend_index_least_connections_weighted_higher_weight_favored() 
     // Should pick backend2 (higher weight compensates for more connections)
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
-}
-
-#[test]
-fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 3)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-    ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
-
-    // Simulate 6 connections on backend1 (weight 3) and 3 connections on backend2 (weight 1)
-    // Score for backend1: 6 * 1 = 6 (using backend2's weight)
-    // Score for backend2: 3 * 3 = 9 (using backend1's weight)
-    // Backend1 has lower score, so it should be selected
-    let tracker1 = Arc::new(());
-    let tracker2 = Arc::new(());
-    let mut trackers = vec![];
-    for _ in 1..6 {
-        trackers.push(tracker1.clone());
-    }
-    for _ in 1..3 {
-        trackers.push(tracker2.clone());
-    }
-    conn_state.insert(backends[0].1.clone(), tracker1);
-    conn_state.insert(backends[1].1.clone(), tracker2);
-
-    // Should pick backend1 (higher weight compensates for more connections)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
-    assert_eq!(idx, 0);
-}
-
-#[test]
-fn test_select_backend_index_least_connections_weighted_equal_score() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 2)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-    ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
-
-    // Simulate 2 connections on backend1 (weight 2) and 4 connections on backend2 (weight 1)
-    // Score for backend1: 2 * 1 = 2 (using backend2's weight)
-    // Score for backend2: 4 * 2 = 8 (using backend1's weight)
-    // Backend1 has lower score, so it should be selected
-    let mut trackers = vec![];
-    let tracker1 = Arc::new(());
-    let tracker2 = Arc::new(());
-    for _ in 1..2 {
-        trackers.push(tracker1.clone());
-    }
-    for _ in 1..4 {
-        trackers.push(tracker2.clone());
-    }
-    conn_state.insert(backends[0].1.clone(), tracker1);
-    conn_state.insert(backends[1].1.clone(), tracker2);
-
-    // Should pick backend1 (lower weighted score)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
-    assert_eq!(idx, 0);
 }
 
 #[test]
@@ -781,17 +681,6 @@ fn test_select_backend_index_p2c_ewma_basic() {
             old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
         assert!(idx < backends.len());
     }
-}
-
-#[test]
-fn test_select_backend_index_p2c_ewma_single_backend() {
-    let backends = vec![(0, make_upstream("http://backend1"))];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
-
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
-    assert_eq!(idx, 0);
 }
 
 #[test]

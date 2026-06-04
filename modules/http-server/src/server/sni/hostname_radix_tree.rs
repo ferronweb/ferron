@@ -6,6 +6,7 @@ struct HostnameRadixTreeMultiKey<'a>(Vec<Cow<'a, str>>);
 
 #[allow(clippy::non_canonical_partial_ord_impl)]
 impl<'a> PartialOrd for HostnameRadixTreeMultiKey<'a> {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         for i in 0..self.0.len().max(other.0.len()) {
             let self_element = self.0.get(i);
@@ -25,6 +26,7 @@ impl<'a> PartialOrd for HostnameRadixTreeMultiKey<'a> {
 }
 
 impl<'a> Ord for HostnameRadixTreeMultiKey<'a> {
+    #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // The `partial_cmp` method returns `None` if the keys are of different lengths,
         // but for the `Ord` trait we need to define a total order.
@@ -55,6 +57,7 @@ pub struct HostnameRadixTree<T> {
 
 impl<T> HostnameRadixTree<T> {
     /// Creates a new empty hostname radix tree
+    #[inline]
     pub fn new() -> Self {
         Self {
             root: HostnameRadixTreeNode {
@@ -66,6 +69,7 @@ impl<T> HostnameRadixTree<T> {
     }
 
     /// Inserts a configuration value into the tree based on the provided key
+    #[inline]
     pub fn insert(&mut self, matcher: String, value: T) {
         let mut key: Vec<Cow<'static, str>> = Vec::new();
         let mut is_wildcard = false;
@@ -176,6 +180,7 @@ impl<T> HostnameRadixTree<T> {
     }
 
     /// Obtains a reference to the configuration value associated with the provided multi-key, if it exists
+    #[inline]
     pub fn get<'a>(&'a self, hostname: &'a str) -> Option<&'a T> {
         let mut key: HostnameRadixTreeMultiKey<'a> = HostnameRadixTreeMultiKey(
             hostname

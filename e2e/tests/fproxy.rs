@@ -97,7 +97,7 @@ async fn test_forward_proxy_connect_port_80() {
     forward_proxy {
         allow_domains "*"
         allow_ports 3000
-        deny_ips;
+        deny_ips "255.255.255.255"
     }
     root "/var/www/ferron"
 }
@@ -165,7 +165,7 @@ async fn test_forward_proxy_http_forwarding() {
     forward_proxy {
         allow_domains "*"
         allow_ports 3000
-        deny_ips;
+        deny_ips "255.255.255.255"
     }
     root "/var/www/ferron"
 }

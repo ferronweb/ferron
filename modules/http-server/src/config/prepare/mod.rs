@@ -192,7 +192,7 @@ pub fn prepare_host_block(
                     config: Arc::new(prepare_host_block(
                         entry
                             .children
-                            .ok_or(anyhow::anyhow!("Location directive must have a block"))?,
+                            .ok_or(anyhow::anyhow!("`if` directive must have a block"))?,
                     )?),
                 };
 
@@ -243,7 +243,7 @@ pub fn prepare_host_block(
                     config: Arc::new(prepare_host_block(
                         entry
                             .children
-                            .ok_or(anyhow::anyhow!("Location directive must have a block"))?,
+                            .ok_or(anyhow::anyhow!("`if_not` directive must have a block"))?,
                     )?),
                 };
 

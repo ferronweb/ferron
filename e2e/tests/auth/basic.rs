@@ -2,14 +2,13 @@ use std::io::Write;
 
 use testcontainers::core::ContainerPort;
 
-mod common;
 
 #[tokio::test]
 async fn test_http_auth_success() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
+    let webroot_dir = crate::common::create_temp_dir();
+    let mut config_file = crate::common::create_temp_file();
 
     let password_hash = password_auth::generate_hash("test");
 
@@ -33,13 +32,13 @@ async fn test_http_auth_success() {
         )
         .unwrap();
 
-    common::write_file(
+    crate::common::write_file(
         webroot_dir.path().join("test.txt").to_path_buf(),
         b"test content",
     )
     .unwrap();
 
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = crate::common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -66,8 +65,8 @@ async fn test_http_auth_success() {
 async fn test_http_auth_failure() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
+    let webroot_dir = crate::common::create_temp_dir();
+    let mut config_file = crate::common::create_temp_file();
 
     let password_hash = "$argon2id$v=19$m=65536,t=3,p=1$c2VjcmV0c2FsdDEyMzQ1Njc4$R7dF5Q8QYJZQYJZQYJZQYJZQYJZQYJZQYJZQYJZQYJQ";
 
@@ -91,13 +90,13 @@ async fn test_http_auth_failure() {
         )
         .unwrap();
 
-    common::write_file(
+    crate::common::write_file(
         webroot_dir.path().join("test.txt").to_path_buf(),
         b"test content",
     )
     .unwrap();
 
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = crate::common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 
@@ -123,8 +122,8 @@ async fn test_http_auth_failure() {
 async fn test_http_auth_too_many_attempts() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
+    let webroot_dir = crate::common::create_temp_dir();
+    let mut config_file = crate::common::create_temp_file();
 
     let password_hash = "$argon2id$v=19$m=65536,t=3,p=1$c2VjcmV0c2FsdDEyMzQ1Njc4$R7dF5Q8QYJZQYJZQYJZQYJZQYJZQYJZQYJZQYJZQYJQ";
 
@@ -155,13 +154,13 @@ async fn test_http_auth_too_many_attempts() {
         )
         .unwrap();
 
-    common::write_file(
+    crate::common::write_file(
         webroot_dir.path().join("test.txt").to_path_buf(),
         b"test content",
     )
     .unwrap();
 
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = crate::common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
 

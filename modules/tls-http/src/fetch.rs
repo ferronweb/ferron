@@ -92,7 +92,14 @@ pub async fn fetch_tls_cert_loop(
             .enable_http2()
             .build(),
     );
+    let mut is_first = true;
     loop {
+        if is_first {
+            is_first = false;
+        } else {
+            tokio::time::sleep(config.refresh_interval).await;
+        }
+
         let start = Instant::now();
         let request = match hyper::Request::builder()
             .method("GET")
@@ -111,7 +118,7 @@ pub async fn fetch_tls_cert_loop(
             }
         };
 
-        let mut response = match hyper_client.request(request).await {
+        let response = match hyper_client.request(request).await {
             Ok(res) => res,
             Err(e) => {
                 let duration = start.elapsed().as_secs_f64();
@@ -154,13 +161,32 @@ pub async fn fetch_tls_cert_loop(
             vec![("status", MetricAttributeValue::StaticStr("success"))],
         );
 
+        if !response.status().is_success() {
+            emit_log(
+                &event_sink,
+                LogLevel::Warn,
+                &format!(
+                    "TLS certificate endpoint returned unsuccessful status: {}",
+                    response.status()
+                ),
+                "ferron_tls_http",
+            );
+            continue;
+        }
+
         // Get TLS certificate chain and private key from response
-        let body_bytes = response
-            .body_mut()
-            .collect()
-            .await
-            .unwrap_or_default()
-            .to_bytes();
+        let body_bytes = match response.into_body().collect().await {
+            Ok(body) => body.to_bytes(),
+            Err(e) => {
+                emit_log(
+                    &event_sink,
+                    LogLevel::Warn,
+                    &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
+                    "ferron_tls_http",
+                );
+                continue;
+            }
+        };
         let body: TlsHttpResponse = match serde_json::from_slice(&body_bytes) {
             Ok(b) => b,
             Err(e) => {
@@ -271,8 +297,6 @@ pub async fn fetch_tls_cert_loop(
             Some("Seconds until next certificate refresh"),
             vec![],
         );
-
-        tokio::time::sleep(config.refresh_interval).await;
     }
 }
 

@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use rustc_hash::FxHashSet;
 
 use crate::{types::upstream::UpstreamInner, upstream::lb::ConsistentHashRing};
 
@@ -16,6 +17,7 @@ pub fn resolve_affinity_index(
     affinity_type: &crate::types::affinity::AffinityType,
     affinity_key: &[u8],
     backends: &[Arc<UpstreamInner>],
+    excluded_backend_indexes: &FxHashSet<usize>,
     ring: &RwLock<ConsistentHashRing>,
 ) -> Option<usize> {
     if backends.is_empty() {
@@ -37,7 +39,7 @@ pub fn resolve_affinity_index(
                     g.rebuild(backends);
                 })
             }
-            guard.get(affinity_key)
+            guard.get(affinity_key, excluded_backend_indexes)
         }
     }
 }

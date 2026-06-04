@@ -9,7 +9,7 @@ use testcontainers::{
 #[path = "../common/mod.rs"]
 mod common;
 
-// Add more modules as needed
+mod abuseban;
 mod client_ip;
 mod fproxy;
 mod http;

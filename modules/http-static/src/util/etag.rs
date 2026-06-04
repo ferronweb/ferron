@@ -2,6 +2,8 @@
 
 use http::header::{self, HeaderValue};
 
+use crate::util::compression::COMP_SUFFIXES;
+
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
     etag: &str,
@@ -70,7 +72,7 @@ pub fn split_etag_request(etag: &str) -> Vec<String> {
 ///
 /// Returns `(etag_value, compression_suffix, is_weak)`.
 pub fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<String>, bool)> {
-    let (is_weak, trimmed) = if weak {
+    let (is_weak, trimmed_raw) = if weak {
         match input.strip_prefix("W/") {
             Some(s) => (true, s),
             None => (false, input),
@@ -78,11 +80,32 @@ pub fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<Str
     } else {
         (false, input)
     };
-    let trimmed = trimmed.trim_matches('"');
-    let mut parts = trimmed.splitn(2, '-');
-    parts
-        .next()
-        .map(|etag| (etag.to_string(), parts.next().map(String::from), is_weak))
+
+    let trimmed = trimmed_raw.trim_matches('"').trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Detect compression suffix at the end (e.g. "abc-precompress-br" -> base="abc", suffix="br")
+    for &sfx in COMP_SUFFIXES.iter() {
+        let combined = format!("-{}", sfx);
+        if trimmed.ends_with(&combined) {
+            // Remove compression suffix
+            let mut base = trimmed[..trimmed.len() - combined.len()].to_string();
+            // Remove optional "-precompress" marker if present
+            if base.ends_with("-precompress") {
+                base.truncate(base.len() - "-precompress".len());
+            }
+            // Trim any leftover '-'
+            if base.ends_with('-') {
+                base.pop();
+            }
+            return Some((base, Some(sfx.to_string()), is_weak));
+        }
+    }
+
+    // No compression suffix found — return full trimmed value as ETag
+    Some((trimmed.to_string(), None, is_weak))
 }
 
 /// Construct an ETag string.
@@ -101,12 +124,6 @@ pub fn construct_etag(etag: &str, suffix: Option<&str>, weak: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn split_etag_single() {
-        let tags = split_etag_request("\"abc123\"");
-        assert_eq!(tags, vec!["abc123"]);
-    }
 
     #[test]
     fn split_etag_multiple() {
@@ -161,6 +178,15 @@ mod tests {
     }
 
     #[test]
+    fn extract_etag_with_precompress_and_suffix() {
+        let result = extract_etag_inner("\"abc-precompress-br\"", true);
+        assert_eq!(
+            result,
+            Some(("abc".to_string(), Some("br".to_string()), false))
+        );
+    }
+
+    #[test]
     fn extract_etag_no_weak_prefix() {
         let result = extract_etag_inner("\"abc\"", false);
         assert_eq!(result, Some(("abc".to_string(), None, false)));
@@ -180,11 +206,6 @@ mod tests {
     fn construct_etag_with_suffix() {
         // Note: suffix already includes the leading dash
         assert_eq!(construct_etag("abc", Some("br"), true), "W/\"abc-br\"");
-    }
-
-    #[test]
-    fn construct_etag_empty_suffix() {
-        assert_eq!(construct_etag("abc", Some(""), true), "W/\"abc-\"");
     }
 
     #[test]

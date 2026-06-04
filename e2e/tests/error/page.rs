@@ -1,50 +1,12 @@
 use std::io::Write;
 
-use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
-    runners::AsyncRunner,
-};
+use crate::common;
 
-mod common;
-
-async fn create_ferron_container(
-    webroot_dir: &std::path::Path,
-    config_file: &std::path::Path,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
-
-/// error_page serves a custom file for 404 Not Found responses.
 #[tokio::test]
 async fn test_error_page_custom_404() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
     std::fs::create_dir_all(webroot_dir.path().join("custom")).unwrap();
     std::fs::write(
         webroot_dir.path().join("custom").join("404.html"),
@@ -52,10 +14,7 @@ async fn test_error_page_custom_404() {
     )
     .unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -70,7 +29,7 @@ async fn test_error_page_custom_404() {
         .unwrap();
     config_file.flush().unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 
@@ -84,7 +43,6 @@ async fn test_error_page_custom_404() {
 
     let client = reqwest::Client::new();
 
-    // Request a non-existent file — should return custom 404 page
     let response = client
         .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
@@ -99,19 +57,11 @@ async fn test_error_page_custom_404() {
     );
 }
 
-/// A request to an existing file returns normally; error_page does not interfere.
 #[tokio::test]
 async fn test_error_page_normal_request_unaffected() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
     std::fs::create_dir_all(webroot_dir.path().join("custom")).unwrap();
     std::fs::write(
         webroot_dir.path().join("custom").join("404.html"),
@@ -120,10 +70,7 @@ async fn test_error_page_normal_request_unaffected() {
     .unwrap();
     std::fs::write(webroot_dir.path().join("index.html"), b"hello world").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -138,7 +85,7 @@ async fn test_error_page_normal_request_unaffected() {
         .unwrap();
     config_file.flush().unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 
@@ -152,7 +99,6 @@ async fn test_error_page_normal_request_unaffected() {
 
     let client = reqwest::Client::new();
 
-    // Request an existing file — should return 200 with its content
     let response = client
         .get(format!("{}/index.html", ferron_addr))
         .send()
@@ -167,19 +113,11 @@ async fn test_error_page_normal_request_unaffected() {
     );
 }
 
-/// error_page supports multiple status codes mapped to the same file.
 #[tokio::test]
 async fn test_error_page_multiple_codes() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-
     std::fs::create_dir_all(webroot_dir.path().join("custom")).unwrap();
     std::fs::write(
         webroot_dir.path().join("custom").join("50x.html"),
@@ -187,10 +125,7 @@ async fn test_error_page_multiple_codes() {
     )
     .unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -205,7 +140,7 @@ async fn test_error_page_multiple_codes() {
         .unwrap();
     config_file.flush().unwrap();
 
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .expect("Failed to create container");
 
@@ -219,8 +154,6 @@ async fn test_error_page_multiple_codes() {
 
     let client = reqwest::Client::new();
 
-    // Request a non-existent file — returns 404, not 50x, so the custom page
-    // should NOT be served. This validates that codes are matched specifically.
     let response = client
         .get(format!("{}/nonexistent.html", ferron_addr))
         .send()
