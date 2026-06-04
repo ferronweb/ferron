@@ -41,7 +41,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
                 .connections_active
                 .load(std::sync::atomic::Ordering::Relaxed),
         ),
-        unit: Some("1"),
+        unit: Some("{connection}"),
         description: Some("Currently open TCP connections across all HTTP listeners."),
     }));
 
@@ -54,7 +54,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
                 .requests_total
                 .load(std::sync::atomic::Ordering::Relaxed),
         ),
-        unit: Some("1"),
+        unit: Some("{request}"),
         description: Some("Total HTTP requests served across all listeners."),
     }));
 
@@ -63,7 +63,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         attributes: vec![],
         ty: MetricType::Gauge,
         value: MetricValue::U64(metrics.reloads.load(std::sync::atomic::Ordering::Relaxed)),
-        unit: Some("1"),
+        unit: Some("{reload}"),
         description: Some("Number of configuration reloads performed."),
     }));
 
@@ -76,7 +76,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
                 .observability_events_dropped
                 .load(std::sync::atomic::Ordering::Relaxed),
         ),
-        unit: Some("1"),
+        unit: Some("{event}"),
         description: Some("Total number of observability events dropped due to backpressure."),
     }));
 
@@ -89,7 +89,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
                 .observability_event_queue_len
                 .load(std::sync::atomic::Ordering::Relaxed),
         ),
-        unit: Some("1"),
+        unit: Some("{event}"),
         description: Some("Approximate current length of the observability event queue."),
     }));
 
@@ -106,7 +106,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             } else {
                 1
             }),
-            unit: Some("1"),
+            unit: Some("{enabled}"),
             description: Some("Whether the last configuration reload was successful."),
         }));
 
@@ -115,7 +115,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             attributes: vec![],
             ty: MetricType::Gauge,
             value: MetricValue::U64(reload_metrics.active_generation),
-            unit: Some("1"),
+            unit: Some("{generation}"),
             description: Some("Active generation of the configuration being reloaded."),
         }));
     }
@@ -129,7 +129,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             attributes: vec![],
             ty: MetricType::Gauge,
             value: MetricValue::U64(runtime_metrics.primary_threads as u64),
-            unit: Some("1"),
+            unit: Some("{thread}"),
             description: Some("Number of primary threads."),
         }));
 
@@ -142,7 +142,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             } else {
                 0
             }),
-            unit: Some("1"),
+            unit: Some("{enabled}"),
             description: Some("Whether io_uring is supported."),
         }));
 
@@ -155,7 +155,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             } else {
                 0
             }),
-            unit: Some("1"),
+            unit: Some("{enabled}"),
             description: Some("Whether io_uring is enabled at runtime."),
         }));
     }
