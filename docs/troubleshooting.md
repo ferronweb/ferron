@@ -46,7 +46,7 @@ Use at least one access log and one error log.
 - File logs - `log` and `error_log`
 - Common package paths - `/var/log/ferron/access.log` and `/var/log/ferron/error.log` on Linux packages
 - Windows Event Log (if using Ferron on Windows)
-- If you prefer structured output, use [Observability and logging](/docs/v3/configuration/observability-logging) instead of relying on defaults
+- If you prefer structured output, use [Observability and logging](/docs/v3/configuration/observability/logging) instead of relying on defaults
 
 Read the newest error lines first, then reproduce the request once and read again.
 
@@ -83,7 +83,7 @@ For HTTPS upstreams with private or self-signed certs:
 - `connection refused` - wrong port or host, or the service is down.
 - timeout - route, firewall, DNS, or upstream responsiveness problem.
 
-See [Reverse proxying](/docs/v3/use-cases/reverse-proxy) and [Configuration: reverse proxying](/docs/v3/configuration/reverse-proxying).
+See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy) and [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy).
 
 ## TLS issues
 
@@ -123,7 +123,7 @@ Ferron must be able to read files and traverse directories.
 
 For SPAs, route fallback rewrites are commonly required. If rewrites are involved, enable `rewrite_log` while diagnosing.
 
-See [Static file serving](/docs/v3/use-cases/static-file-serving), [URL rewriting](/docs/v3/use-cases/url-rewriting), and [Configuration: routing and URL processing](/docs/v3/configuration/routing-url-processing).
+See [Static file serving](/docs/v3/use-cases/content/static-files), [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/v3/configuration/routing/url-processing).
 
 ## Rate limiting and access control
 
@@ -139,7 +139,7 @@ If Ferron is behind a proxy or load balancer and client IP handling is wrong, ac
 
 Set `client_ip_from_header` only when the trusted proxy path supplies forwarded client IP headers. Use `trusted_proxy` to restrict who can provide them. For PROXY protocol frontends, use `protocol_proxy`.
 
-See [HTTP host directives](/docs/v3/configuration/http-host), [Rate limiting](/docs/v3/use-cases/rate-limiting), [Access control](/docs/v3/use-cases/access-control), and [Configuration: conditionals](/docs/v3/configuration/conditionals).
+See [HTTP host directives](/docs/v3/configuration/server/host), [Rate limiting](/docs/v3/use-cases/security/rate-limiting), [Access control](/docs/v3/use-cases/security/access-control), and [Configuration: conditionals](/docs/v3/configuration/fundamentals/conditionals).
 
 ## Configuration mistakes
 
@@ -163,7 +163,7 @@ All subconditions in one `condition` block must pass. If one fails, the conditio
 
 Start with a minimal known-good config, validate it with `ferron validate -c ferron.conf`, then add one change at a time.
 
-See [Getting started](/docs/v3/getting-started), [Configuration syntax](/docs/v3/configuration/syntax), and [Core directives](/docs/v3/configuration/core-directives).
+See [Getting started](/docs/v3/getting-started), [Configuration syntax](/docs/v3/configuration/fundamentals/syntax), and [Core directives](/docs/v3/configuration/server/core-directives).
 
 ## Observability and logs
 

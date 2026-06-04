@@ -60,7 +60,7 @@ api.example.com {
 }
 ```
 
-More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/syntax).
+More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
 
 ## Building from source
 
@@ -105,7 +105,7 @@ just installer # Linux installer
 
 ## Configuration
 
-The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/syntax).
+The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
 
 ## Contributing
 

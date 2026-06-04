@@ -77,19 +77,19 @@ Ferron 3 strips the matched `location` prefix before the next stage runs, so the
 ## Recommended path for first-time users
 
 1. Install Ferron with the guide that matches your environment:
-   - [Linux installer](/docs/v3/installation/installer)
-   - [Debian/Ubuntu](/docs/v3/installation/debian)
-   - [RHEL/Fedora](/docs/v3/installation/rpm)
+   - [Linux installer](/docs/v3/installation/linux/installer)
+   - [Debian/Ubuntu](/docs/v3/installation/linux/debian-ubuntu)
+   - [RHEL/Fedora](/docs/v3/installation/linux/rhel-fedora)
    - [Docker](/docs/v3/installation/docker)
    - [Windows installer](/docs/v3/installation/windows)
-   - [Manual installation](/docs/v3/installation/archive)
-   - [Build from source with default modules](/docs/v3/installation/source-default-modules)
-   - [Build from source with custom modules](/docs/v3/installation/source-custom-modules)
+   - [Manual installation](/docs/v3/installation/manual-installation)
+   - [Build from source with default modules](/docs/v3/installation/source/default-modules)
+   - [Build from source with custom modules](/docs/v3/installation/source/custom-modules)
 2. Start with the smallest working config from this page.
 3. Pick a deeper guide once the basic setup works:
-   - [Static file serving](/docs/v3/use-cases/static-file-serving)
-   - [Reverse proxying](/docs/v3/use-cases/reverse-proxy)
-   - [Automatic TLS](/docs/v3/use-cases/automatic-tls)
+   - [Static file serving](/docs/v3/use-cases/content/static-files)
+   - [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy)
+   - [Automatic TLS](/docs/v3/use-cases/security/automatic-tls)
 4. Validate your config before restarting or reloading Ferron with `ferron validate -c ferron.conf`.
 
 ## Common beginner mistakes

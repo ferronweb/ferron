@@ -1,0 +1,246 @@
+---
+title: "Configuration: HTTP host directives"
+description: "Per-host directives for protocol behavior, TLS, HTTPS redirects, client IP resolution, and server metadata."
+---
+
+This page documents directives consumed from HTTP host blocks such as:
+
+```ferron
+example.com {
+}
+
+http example.com:8080 {
+}
+```
+
+## Directives
+
+### Automatic TLS
+
+When a hostname is specified (e.g. `example.com`) and no explicit port is given, Ferron starts **two listeners**:
+
+- One on `default_http_port` (default: 80) — serves plain HTTP with no TLS
+- One on `default_https_port` (default: 443) — serves HTTPS with automatic ACME TLS
+
+On the HTTPS listener, if no explicit `tls` directive is present, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). Certificates are obtained and renewed automatically at startup.
+
+Hostnames that have **special automatic TLS behavior**:
+
+- `localhost`, `127.0.0.1`, `::1` — These loopback addresses automatically use the **local TLS provider** instead of ACME, enabling HTTPS for development without requiring public certificates.
+
+To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
+
+```ferron
+example.com {
+    tls false
+    root /var/www/html
+}
+```
+
+To use manual TLS instead:
+
+```ferron
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/cert.pem"
+        key "/etc/ssl/key.pem"
+    }
+    root /var/www/html
+}
+```
+
+Or with an alias:
+
+```ferron
+example.com {
+    tls /etc/ssl/cert.pem /etc/ssl/key.pem
+    root /var/www/html
+}
+```
+
+When an **explicit port** is specified (e.g. `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
+
+See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
+
+### HTTPS redirect
+
+- `https_redirect <bool>`
+  - This directive specifies whether automatic HTTP-to-HTTPS redirects are enabled. The redirect uses **308 Permanent Redirect**, which preserves the HTTP method and request body. Default: `https_redirect true` (when TLS is enabled)
+
+**Configuration example:**
+
+```ferron
+example.com {
+    https_redirect false
+}
+```
+
+Notes:
+
+- `localhost` hostnames never get redirected — there is no HTTPS listener for them.
+- When an explicit port is specified (e.g. `example.com:8080`), no redirect is performed since no separate HTTPS listener exists.
+- The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
+
+### Client IP from forwarded headers
+
+- `client_ip_from_header <header: string> { ... }` (global scope)
+  - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Default: disabled
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `trusted_proxy` | `<ip-or-cidr: string>...` | Trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. | none |
+
+**Configuration example:**
+
+```ferron
+{
+    client_ip_from_header x-forwarded-for {
+        # Only trust forwarded headers from these proxy networks.
+        trusted_proxy "10.0.0.0/8"
+        trusted_proxy "192.168.0.0/16"
+    }
+}
+
+example.com {
+    root /var/www/html
+}
+```
+
+#### `x-forwarded-for`
+
+Reads the `X-Forwarded-For` header and extracts the **first (leftmost)** IP address from the comma-separated chain.
+
+#### `forwarded` (RFC 7239)
+
+Reads the `Forwarded` header and extracts the first `for=` token. Both quoted and unquoted values are supported. IPv6 addresses are also supported.
+
+**Trust boundary warning:** Ferron only trusts forwarded client IP headers when the connecting peer matches at least one `trusted_proxy` entry. If the `trusted_proxy` list is empty, the header is ignored. Keep this list limited to the reverse proxies or load balancers that you control.
+
+### HTTP protocol settings
+
+- `protocols <protocols: string>...`
+  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3, experimental). Default: `protocols h1 h2`
+- `options_allowed_methods <methods: string>`
+  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
+- `timeout <duration>`
+  - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
+
+  > **Warning:** A bare number without a suffix is interpreted as **seconds** by the duration parser (e.g. `timeout 5` means 5 seconds, not 5ms). Always use an explicit suffix like `300s` or `5m` for timeouts.
+
+- `h1_enable_early_hints <bool>`
+  - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
+- `h2_initial_window_size <size: integer>`
+  - This directive specifies the HTTP/2 initial flow-control window size. Default: unset
+- `h2_max_frame_size <size: integer>`
+  - This directive specifies the HTTP/2 maximum frame size. Default: unset
+- `h2_max_concurrent_streams <count: integer>`
+  - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset
+- `h2_max_header_list_size <size: integer>`
+  - This directive specifies the HTTP/2 maximum header list size. Default: unset
+- `h2_enable_connect_protocol <bool>`
+  - This directive specifies whether the HTTP/2 extended CONNECT protocol setting is enabled. Default: `h2_enable_connect_protocol false`
+- `url_sanitize [bool: boolean]`
+  - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. This directive is applicable only for global scope. Default: `url_sanitize true`
+- `url_reject_backslash [bool: boolean]`
+  - This directive specifies whether URLs containing backslashes are rejected. When enabled (the default), requests with literal `\` or percent-encoded backslashes (`%5C`) in the path are rejected with a 400 Bad Request response. This prevents path interpretation issues on Windows backends where backslashes may be treated as path separators. This directive is applicable only for global scope. Default: `url_reject_backslash true`
+
+**Configuration example:**
+
+```ferron
+example.com {
+    http {
+        protocols h1 h2 h3
+        options_allowed_methods "GET, HEAD, POST, PUT, DELETE, OPTIONS"
+        timeout "30m"
+        h1_enable_early_hints false
+    }
+}
+```
+
+Notes:
+
+- `protocols` must leave at least one supported protocol enabled.
+- HTTP/3 (`h3`) is currently **experimental**. When enabled, Ferron will start an additional QUIC listener on the same port for HTTP/3 traffic.
+- The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE` to reduce the attack surface reported by security scanners. You can customize this list based on your server's requirements.
+- When HTTP/3 is enabled, the server will automatically add an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
+
+Notes for `url_sanitize`:
+
+- URL sanitization is applied early in request processing, before configuration resolution.
+- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+- Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
+- **Warning:** When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
+- Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
+
+Notes for `url_reject_backslash`:
+
+- Backslash rejection is applied early in request processing, before configuration resolution and URL sanitization.
+- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+- Both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`) are rejected.
+- Disabling this directive may be necessary if you have Windows backends that legitimately use backslashes in URLs, but **warning**: this can expose backends to path interpretation vulnerabilities.
+
+### TLS
+
+- `provider <name: string>` (`tls-manual`, `tls-acme`)
+  - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual` (`tls-manual`), `acme` (`tls-acme`). Default: none
+
+For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/configuration/security/tls).
+
+For OCSP stapling configuration, see [OCSP stapling](/docs/v3/configuration/security/ocsp).
+
+For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/security/session-tickets).
+
+### `admin_email`
+
+- `admin_email <email: string>`
+  - This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported. Default: none
+
+### Metrics
+
+The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `http.server.active_requests` | UpDownCounter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version` | Number of active HTTP requests |
+| `http.server.request.duration` | Histogram | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Duration of HTTP requests in seconds |
+| `ferron.http.server.request_count` | Counter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Total number of HTTP requests completed |
+
+All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
+
+## Notes and troubleshooting
+
+- These directives are host-scoped rather than global.
+- The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1, HTTP/2, and experimental HTTP/3 protocol support.
+- For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme).
+- For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### Client IP resolution
+
+- **`trusted_proxy 0.0.0.0/0` or `::/0`** — Trusting every source address for forwarded client IP headers allows spoofing. Restrict `trusted_proxy` to specific reverse proxy addresses.
+- **`client_ip_from_header` without `trusted_proxy`** — If `client_ip_from_header` is configured without trusted proxy ranges, forwarded headers are either ignored or untrusted. Add explicit `trusted_proxy` entries for your reverse proxies.
+
+### URL processing
+
+- **`url_sanitize false`** — Disabling path traversal normalization can expose backend path interpretation issues. Keep sanitization enabled unless a specific backend requires raw paths.
+- **`url_reject_backslash false`** — Permitting backslashes in request paths can cause backend routing confusion. Keep rejection enabled unless required.
+
+### Timeouts
+
+- **`timeout false`** — Disabling request pipeline timeouts exposes the server to slow-request resource exhaustion. Set a bounded timeout value.
+
+### HTTP methods
+
+- **`options_allowed_methods` with TRACE or CONNECT** — Advertising TRACE or CONNECT in OPTIONS responses may expose unintended attack surface. Remove these methods unless intentionally supported.
+
+### HTTP/3
+
+- **`protocols` includes `h3`** — HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
+
+### TLS deployment
+
+- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder that TLS termination should be performed by an upstream proxy or load balancer. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.

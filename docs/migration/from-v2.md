@@ -668,8 +668,8 @@ Before switching to production:
 
 - The migration tool is a starting point. Manual review and adjustments are expected, especially for conditionals and complex proxy configurations.
 - If `ferron validate` reports errors, address them before deploying to production.
-- For `match` block expressions, see [Conditionals and variables](/docs/v3/configuration/conditionals).
-- For `location` behavior, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
-- For TLS configuration, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).
-- For observability configuration, see [Observability and logging](/docs/v3/configuration/observability-logging).
-- For the full Ferron 3 configuration reference, see [Syntax and file structure](/docs/v3/configuration/syntax).
+- For `match` block expressions, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
+- For `location` behavior, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
+- For TLS configuration, see [ACME automatic TLS](/docs/v3/configuration/security/acme).
+- For observability configuration, see [Observability and logging](/docs/v3/configuration/observability/logging).
+- For the full Ferron 3 configuration reference, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax).
