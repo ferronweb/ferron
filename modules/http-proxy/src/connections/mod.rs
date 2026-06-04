@@ -75,12 +75,15 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_pull(&self, upstream: &Arc<UpstreamInner>) {
+    pub fn record_pull(&self, upstream: &Arc<UpstreamInner>, had_idle: bool) {
         let entry = self
             .inner
             .entry((std::thread::current().id(), upstream.clone()))
             .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)));
         entry.value().1.fetch_add(1, Ordering::Relaxed);
+        if had_idle {
+            entry.value().0.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 
     #[inline]
@@ -92,8 +95,6 @@ impl PoolStatsCollector {
         entry.value().1.fetch_sub(1, Ordering::Relaxed);
         if stored {
             entry.value().0.fetch_add(1, Ordering::Relaxed);
-        } else {
-            entry.value().0.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
@@ -346,8 +347,8 @@ impl ConnectionManager {
             pools.tcp_pool.pull(key)
         });
 
-        if result.is_some() {
-            POOL_STATS.record_pull(&upstream_for_stats);
+        if let Some(result) = &result {
+            POOL_STATS.record_pull(&upstream_for_stats, result.inner().is_some());
         }
 
         result
@@ -406,8 +407,8 @@ impl ConnectionManager {
             pools.tcp_pool.pull_with_local_limit(key, limit)
         });
 
-        if result.is_some() {
-            POOL_STATS.record_pull(&upstream_for_stats);
+        if let Some(result) = &result {
+            POOL_STATS.record_pull(&upstream_for_stats, result.inner().is_some());
         }
 
         result
@@ -425,30 +426,32 @@ pub fn return_connection_to_pool(
     local_limit_key: Option<Arc<UpstreamInner>>,
     is_unix: bool,
 ) {
-    POOL_STATS.record_return(&key.0, true);
-
-    TLS_POOLS.with(|tls| {
+    let stored = TLS_POOLS.with(|tls| {
         // SAFETY: We are strictly single-threaded per core, and no re-entrant
         // mutable borrows occur during connection pulls.
         let guard = unsafe { &*tls.get() };
         let Some(pools) = guard.as_ref() else {
-            return; // Pool not initialized, discard connection
+            return false; // Pool not initialized, discard connection
         };
 
-        if is_unix {
+        let stored = if is_unix {
             #[cfg(unix)]
-            pools.unix_pool.return_connection_with_local_limit(
+            let stored = pools.unix_pool.return_connection_with_local_limit(
                 key.clone(),
                 wrapper,
                 local_limit_key.clone(),
             );
+            #[cfg(not(unix))]
+            let stored = false;
+
+            stored
         } else {
             pools.tcp_pool.return_connection_with_local_limit(
                 key.clone(),
                 wrapper,
                 local_limit_key.clone(),
-            );
-        }
+            )
+        };
 
         if let Some(pending_pull) = PENDING_PULLS
             .read()
@@ -467,5 +470,9 @@ pub fn return_connection_to_pool(
                 pending_pull.cancel();
             }
         }
+
+        stored
     });
+
+    POOL_STATS.record_return(&key.0, stored);
 }

@@ -278,8 +278,9 @@ where
     /// Returns a connection to the pool.
     ///
     /// If the pool is at capacity, the connection is dropped instead.
+    /// Returns `true` if the connection was stored in the pool, or `false` if it was dropped.
     #[inline]
-    pub fn return_connection(&self, key: K, inner: I) {
+    pub fn return_connection(&self, key: K, inner: I) -> bool {
         let state = unsafe { &mut *self.inner.get() };
         let outstanding_before = state.outstanding;
         let idle_total_before = state.idle_total;
@@ -299,16 +300,22 @@ where
             state.idle_total += 1;
         }
         // else: drop the connection (it will be dropped when this function ends)
+        can_store
     }
 
     /// Returns a connection to the pool with local limit tracking.
     #[inline]
-    pub fn return_connection_with_local_limit(&self, key: K, inner: I, local_limit_key: Option<L>) {
+    pub fn return_connection_with_local_limit(
+        &self,
+        key: K,
+        inner: I,
+        local_limit_key: Option<L>,
+    ) -> bool {
         if let Some(ref limit_key) = local_limit_key {
             self.decrement_local_outstanding(limit_key);
         }
 
-        self.return_connection(key, inner);
+        self.return_connection(key, inner)
     }
 }
 
