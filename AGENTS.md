@@ -13,6 +13,9 @@ Ferron 3 is a Rust workspace (resolver "2"). Key directories:
 - `docs/` — user-facing docs; sidebar in `docs/docLinks.ts`; synced to separate website repo on push to `3.x`
 - `soak/` — soak/chaos tests via Docker Compose
 - `doctest/` — standalone harness that runs doc examples against the built binary
+- `utils/` — CLI utilities (`kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
+
+**Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `modules/*/fuzz` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. Each has its own `Cargo.toml` and a dedicated run command — see tables below.
 
 ## Essential commands
 
@@ -35,24 +38,37 @@ Run from repository root unless noted.
 ### Run server
 
 ```
-cargo run -p ferron -- run -c ferron.conf          # start
-cargo run -p ferron -- validate -c ferron.conf      # validate config
-cargo run -p ferron -- adapt -c ferron.conf         # config as JSON
-cargo run -p ferron -- daemon -c ferron.conf --pid-file /path  # daemon
+cargo run -p ferron -- run -c ferron.conf                         # start
+cargo run -p ferron -- run -c ferron.conf --verbose               # debug logging
+cargo run -p ferron -- validate -c ferron.conf                    # validate config
+cargo run -p ferron -- validate -c ferron.conf --json             # validate, JSON output
+cargo run -p ferron -- doctor -c ferron.conf                      # best-practice check
+cargo run -p ferron -- adapt -c ferron.conf                       # dump config as JSON
+cargo run -p ferron -- daemon -c ferron.conf --pid-file /path     # Unix daemon
+cargo run -p ferron -- winservice install -c ferron.conf          # Windows service install
+cargo run -p ferron -- version                                    # version + build info
 ```
+
+`--config-params key=value;key2=value2` and `--config-adapter <name>` flags are accepted by `run`, `validate`, `doctor`, `adapt`, and `winservice install` (see `entrypoint/src/cli.rs:5`).
 
 ### Justfile shortcuts
 
 ```
-just build            # cargo build -r
-just run              # cargo run --bin ferron
-just prepare-config   # cp configs/ferron.conf.example ferron.conf
-just package [target]  # release archive
-just package-deb / just package-rpm
-just soak / just chaos  # Docker Compose based, configurable duration/concurrency
+just build                       # cargo build -r
+just run                         # cargo run --bin ferron
+just prepare-config              # cp configs/ferron.conf.example ferron.conf
+just package [target]            # release archive (delegates to packaging/archive)
+just package-deb [target]        # Debian package (uses Docker)
+just package-rpm [target]        # RPM package (uses Docker)
+just package-windows [target]    # Windows installer (Windows host only)
+just installer                   # Linux installer (runs `make` in installer/)
+just soak [duration] [concurrency]   # Docker Compose, defaults 60m / 50
+just chaos [duration] [concurrency]  # Docker Compose, defaults 60m / 50
 ```
 
 ### Fuzzing examples (requires nightly)
+
+Fuzz crates live under `modules/*/fuzz/` and are excluded from the main workspace. Each needs a separate `cargo +nightly fuzz` invocation from inside the fuzz directory.
 
 ```
 cargo +nightly fuzz run canonicalize_path           # modules/http-server/fuzz
@@ -65,13 +81,14 @@ cargo +nightly fuzz run rate_limit_concurrent       # modules/http-ratelimit/fuz
 
 Three tiers:
 1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files.
-2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH.
-3. **Fuzz**: `modules/*/fuzz/` — nightly `cargo-fuzz`.
+2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH. CI first builds `e2e/Dockerfile.test` (image tag `e2e-test-ferron:latest`); reproduce locally with `docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .` before `cd e2e && cargo test`.
+3. **Fuzz**: `modules/*/fuzz/` — nightly `cargo-fuzz`. Excluded from main workspace.
 
-Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]`).
+Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]` on the `ferron-http-server` crate).
 
 ## Conventions
 
+- **Branch**: all work targets `develop-3.x` (CI workflows filter on it; the 3.x docs site syncs from it).
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (e.g., `Modules`, `Reverse proxy & load balancing`, `DNS & ACME`, `HTTP server core`, `Observability & metrics`, `Core runtime`). Use bold inline headers for each bullet to aid scanning.
 - **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
