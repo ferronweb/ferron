@@ -476,3 +476,36 @@ pub fn return_connection_to_pool(
 
     POOL_STATS.record_return(&key.0, stored);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pool_stats_collector() {
+        let collector = PoolStatsCollector::new();
+        let upstream = Arc::new(UpstreamInner {
+            proxy_to: "http://backend".to_string(),
+            proxy_unix: None,
+            weight: 1,
+        });
+
+        // Record some pulls and returns
+        // - record_pull with had_idle = true: +1 outstanding, -1 idle
+        // - record_pull with had_idle = false: +1 outstanding, 0 idle
+        // - record_return with stored = true: -1 outstanding, +1 idle
+        // - record_return with stored = false: -1 outstanding, 0 idle
+        collector.record_pull(&upstream, false); // +1 outstanding, 0 idle
+        collector.record_return(&upstream, true); // -1 outstanding, +1 idle
+        collector.record_pull(&upstream, true); // +1 outstanding, -1 idle
+        collector.record_pull(&upstream, false); // +1 outstanding, 0 idle
+        collector.record_return(&upstream, false); // -1 outstanding, 0 idle
+
+        let snapshot = collector.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        let ((_thread_id, recorded_upstream), (idle, outstanding)) = &snapshot[0];
+        assert_eq!(recorded_upstream.proxy_to, "http://backend");
+        assert_eq!(*idle, 0);
+        assert_eq!(*outstanding, 1);
+    }
+}
