@@ -15,9 +15,8 @@ impl Provider<DnsContext<'static>> for BaiduCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let access_key_id = required_string(ctx, "access_key_id", "baiducloud", "access key ID")?;
-        let access_key_secret =
-            required_string(ctx, "access_key_secret", "baiducloud", "access key secret")?;
+        let access_key_id = required_string(ctx, "access_key_id", "baiducloud")?;
+        let access_key_secret = required_string(ctx, "access_key_secret", "baiducloud")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_baiducloud(&access_key_id, &access_key_secret, None)?,

@@ -516,7 +516,15 @@ fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipeline
     for component in Path::new(request_path).components() {
         match component {
             Component::RootDir => {}
-            Component::Normal(segment) => segments.push(segment.to_string_lossy().into_owned()),
+            Component::Normal(segment) => {
+                let segment_str = segment.to_string_lossy().into_owned();
+                // Reject segments containing ':' to prevent Windows Alternate Data Stream
+                // (ADS) access (e.g., /file.txt::$DATA) and scheme injection.
+                if segment_str.contains(':') {
+                    return Err(FilePipelineExecutionError::Forbidden);
+                }
+                segments.push(segment_str);
+            }
             Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
                 return Err(FilePipelineExecutionError::Forbidden);
             }
@@ -703,6 +711,19 @@ mod tests {
         let error = resolve_http_file_target(&root, "/escape.txt", None)
             .await
             .expect_err("symlink escape should be rejected");
+
+        assert!(matches!(error, FilePipelineExecutionError::Forbidden));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn rejects_alternate_data_stream_access() {
+        let root = TestDir::new("ads-rejection");
+        std::fs::write(root.path.join("file.txt"), b"content").expect("failed to write file");
+
+        // Windows ADS-style path: /file.txt::$DATA
+        let error = resolve_http_file_target(&root.path, "/file.txt::$DATA", None)
+            .await
+            .expect_err("ADS access should be rejected");
 
         assert!(matches!(error, FilePipelineExecutionError::Forbidden));
     }

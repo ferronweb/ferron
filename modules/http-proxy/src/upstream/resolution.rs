@@ -22,6 +22,7 @@ pub async fn resolve_upstreams(
     failed_backends: Arc<FailureCache>,
     health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
+    config_key: &[usize],
 ) -> Vec<Arc<UpstreamInner>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
@@ -32,6 +33,7 @@ pub async fn resolve_upstreams(
                     Arc::clone(&failed_backends),
                     health_check_max_fails,
                     active_health_check_state.clone(),
+                    config_key,
                 )
                 .await,
         );
@@ -60,6 +62,7 @@ pub fn determine_proxy_to(
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
     metrics: &mut crate::ProxyMetrics,
+    config_key: &[usize],
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -67,6 +70,7 @@ pub fn determine_proxy_to(
 
     // Build healthy list of indices into `upstreams` — avoids Arc clones
     // until the final selection, while tracking exclusion reasons.
+    let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
     let mut healthy: Vec<usize> = upstreams
         .iter()
         .enumerate()
@@ -75,6 +79,7 @@ pub fn determine_proxy_to(
             if health_check_enabled {
                 if let Some(fails) = failed_backends.get(u) {
                     if fails > health_check_max_fails {
+                        unhealthy.insert(*i);
                         metrics.excluded_passive.push(Arc::clone(u));
                         return None;
                     }
@@ -87,12 +92,14 @@ pub fn determine_proxy_to(
                     // Active health exclusion is tracked via the existing
                     // active_unhealthy_backends metric — no separate exclusion
                     // metric needed.
+                    unhealthy.insert(*i);
                     return None;
                 }
             }
 
             // Check if backend is already selected (retry loop)
             if metrics.selected_backends.contains(u) {
+                unhealthy.insert(*i);
                 metrics.excluded_already_tried.push(Arc::clone(u));
                 return None;
             }
@@ -112,8 +119,13 @@ pub fn determine_proxy_to(
         // matches affinity_index
         if affinity_index.is_none() {
             if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
-                affinity_index =
-                    super::affinity::resolve_affinity_index(affinity_type, key, upstreams, ring);
+                affinity_index = super::affinity::resolve_affinity_index(
+                    affinity_type,
+                    key,
+                    upstreams,
+                    &unhealthy,
+                    ring,
+                );
             };
         }
         let start_pos = affinity_index.and_then(|aff_idx| {
@@ -136,6 +148,7 @@ pub fn determine_proxy_to(
             )
         };
         let upstream_idx = healthy.swap_remove(index);
+        unhealthy.insert(upstream_idx);
         let upstream = Arc::clone(&upstreams[upstream_idx]);
         if start_pos == Some(index) {
             // Affine backend is no longer healthy; reset affinity index

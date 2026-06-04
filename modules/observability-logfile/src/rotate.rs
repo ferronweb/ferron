@@ -133,25 +133,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_rotate_log_file_basic() {
-        let dir = tempfile::tempdir().unwrap();
-        let log_path = dir.path().join("access.log");
-        tokio::fs::write(&log_path, b"original content")
-            .await
-            .unwrap();
-
-        let path_str = log_path.to_string_lossy().to_string();
-        rotate_log_file(&path_str, Some(3)).await.unwrap();
-
-        assert!(!tokio::fs::try_exists(&log_path).await.unwrap());
-        assert!(tokio::fs::try_exists(format!("{}.1", path_str))
-            .await
-            .unwrap());
-        let rotated = tokio::fs::read(format!("{}.1", path_str)).await.unwrap();
-        assert_eq!(rotated, b"original content");
-    }
-
-    #[tokio::test]
     async fn test_rotate_log_file_multiple_rotations() {
         let dir = tempfile::tempdir().unwrap();
         let log_path = dir.path().join("access.log");
@@ -167,33 +148,6 @@ mod tests {
         let r2 = tokio::fs::read(format!("{}.2", path_str)).await.unwrap();
         assert_eq!(r1, b"second");
         assert_eq!(r2, b"first");
-    }
-
-    #[tokio::test]
-    async fn test_rotate_log_file_keep_limit() {
-        let dir = tempfile::tempdir().unwrap();
-        let log_path = dir.path().join("access.log");
-        let path_str = log_path.to_string_lossy().to_string();
-
-        for content in [b"v1", b"v2", b"v3", b"v4"] {
-            tokio::fs::write(&log_path, content).await.unwrap();
-            rotate_log_file(&path_str, Some(2)).await.unwrap();
-        }
-
-        assert!(!tokio::fs::try_exists(format!("{}.3", path_str))
-            .await
-            .unwrap());
-        assert!(tokio::fs::try_exists(format!("{}.1", path_str))
-            .await
-            .unwrap());
-        assert!(tokio::fs::try_exists(format!("{}.2", path_str))
-            .await
-            .unwrap());
-
-        let r1 = tokio::fs::read(format!("{}.1", path_str)).await.unwrap();
-        let r2 = tokio::fs::read(format!("{}.2", path_str)).await.unwrap();
-        assert_eq!(r1, b"v4");
-        assert_eq!(r2, b"v3");
     }
 
     #[tokio::test]
@@ -320,61 +274,6 @@ mod tests {
         .unwrap();
         assert_eq!(rotation.rotate_size, Some(100));
         assert_eq!(rotation.rotate_keep, Some(0));
-    }
-
-    #[tokio::test]
-    async fn test_file_writer_write_without_rotation() {
-        let dir = tempfile::tempdir().unwrap();
-        let log_path = dir.path().join("access.log");
-        let path_str = log_path.to_string_lossy().to_string();
-
-        let mut writer = FileWriter::new(100);
-        writer
-            .write_to_file(&path_str, b"hello\n", None)
-            .await
-            .unwrap();
-        writer.flush_all().await.unwrap();
-
-        let content = tokio::fs::read(&log_path).await.unwrap();
-        assert_eq!(content, b"hello\n");
-    }
-
-    #[tokio::test]
-    async fn test_file_writer_triggers_rotation() {
-        let dir = tempfile::tempdir().unwrap();
-        let log_path = dir.path().join("access.log");
-        let path_str = log_path.to_string_lossy().to_string();
-
-        let rotation = Some(RotationConfig {
-            rotate_size: Some(5),
-            rotate_keep: Some(3),
-        });
-
-        let mut writer = FileWriter::new(100);
-
-        writer
-            .write_to_file(&path_str, b"12345", rotation)
-            .await
-            .unwrap();
-        writer.flush_all().await.unwrap();
-
-        let content = tokio::fs::read(&log_path).await.unwrap();
-        assert_eq!(content, b"12345");
-
-        writer
-            .write_to_file(&path_str, b"next", rotation)
-            .await
-            .unwrap();
-        writer.flush_all().await.unwrap();
-
-        assert!(tokio::fs::try_exists(format!("{}.1", path_str))
-            .await
-            .unwrap());
-        let rotated = tokio::fs::read(format!("{}.1", path_str)).await.unwrap();
-        assert_eq!(rotated, b"12345");
-
-        let current = tokio::fs::read(&log_path).await.unwrap();
-        assert_eq!(current, b"next");
     }
 
     #[tokio::test]

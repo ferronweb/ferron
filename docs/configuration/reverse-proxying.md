@@ -450,56 +450,32 @@ example.com {
 
 ### Metrics
 
-The proxy module emits the following metrics:
-
-- `ferron.proxy.backends.selected` (Counter) — backends selected during load balancing.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.backends.unhealthy` (Counter) — backends marked as unhealthy.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits)
-- `ferron.proxy.requests` (Counter) — upstream proxy requests completed.
-  - Attributes: `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code`
-- `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.active_connections` (Gauge) — active tracked connections for the selected backend.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.ewma_latency` (Gauge) — current EWMA response latency for the selected backend (`p2c_ewma` algorithm).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.warmup_state` (Gauge) — whether the selected backend is in EWMA warm-up phase (1) or settled (0).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.lb.selections` (Counter) — P2C+EWMA backend selection with combined score.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score)
-- `ferron.proxy.backend.excluded` (Counter) — backend excluded from selection.
-  - Attributes: backend URL or unix socket path; `ferron.proxy.reason` (`"passive"`, `"circuit_open"`, `"already_tried"`, `"overloaded"`)
-- `ferron.proxy.retry.count` (Counter) — number of retry attempts made for a request.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.retry.final` (Gauge) — whether the final retry attempt succeeded (`1`) or failed (`0`).
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.hit` (Counter) — pooled connection reused successfully.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.miss` (Counter) — pooled connection unavailable, new connection established.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.pool.idle` (Gauge) — current number of idle connections in the pool.
-  - Attributes: backend URL or unix socket path; `worker` (thread identifier)
-- `ferron.proxy.pool.outstanding` (Gauge) — current number of outstanding (in-use) connections in the pool.
-  - Attributes: backend URL or unix socket path; `worker` (thread identifier)
-- `ferron.proxy.connect.latency` (Histogram) — time to establish a TCP/TLS connection to the backend.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.ttfb` (Histogram) — time to first response byte from the backend.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.health.success` (Counter) — health check probe succeeded.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.health.failure` (Counter) — health check probe failed.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.health.duration` (Histogram) — duration of health check probes.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.circuit.state` (Gauge) — circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open.
-  - Attributes: backend URL or unix socket path
-- `ferron.proxy.circuit.open_total` (Counter) — number of times the circuit breaker has transitioned to Open state.
-  - Attributes: backend URL or unix socket path
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path | Backends selected during load balancing |
+| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
+| `ferron.proxy.requests` | Counter | `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code` | Upstream proxy requests completed |
+| `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |
+| `ferron.proxy.pool.waits` | Counter | backend URL or unix socket path | Times the connection pool was exhausted and a request had to wait |
+| `ferron.proxy.pool.wait_time` | Histogram | backend URL or unix socket path | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s |
+| `ferron.proxy.lb.active_connections` | Gauge | backend URL or unix socket path | Active tracked connections for the selected backend |
+| `ferron.proxy.lb.ewma_latency` | Gauge | backend URL or unix socket path | Current EWMA response latency for the selected backend (`p2c_ewma` algorithm) |
+| `ferron.proxy.lb.warmup_state` | Gauge | backend URL or unix socket path | Whether the selected backend is in EWMA warm-up phase (1) or settled (0) |
+| `ferron.proxy.lb.selections` | Counter | backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score) | P2C+EWMA backend selection with combined score |
+| `ferron.proxy.backend.excluded` | Counter | backend URL or unix socket path; `ferron.proxy.reason` (`"passive"`, `"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
+| `ferron.proxy.retry.count` | Counter | backend URL or unix socket path | Number of retry attempts made for a request |
+| `ferron.proxy.retry.final` | Gauge | backend URL or unix socket path | Whether the final retry attempt succeeded (`1`) or failed (`0`) |
+| `ferron.proxy.pool.hit` | Counter | backend URL or unix socket path | Pooled connection reused successfully |
+| `ferron.proxy.pool.miss` | Counter | backend URL or unix socket path | Pooled connection unavailable, new connection established |
+| `ferron.proxy.pool.idle` | Gauge | backend URL or unix socket path; `worker` (thread identifier) | Current number of idle connections in the pool |
+| `ferron.proxy.pool.outstanding` | Gauge | backend URL or unix socket path; `worker` (thread identifier) | Current number of outstanding (in-use) connections in the pool |
+| `ferron.proxy.connect.latency` | Histogram | backend URL or unix socket path | Time to establish a TCP/TLS connection to the backend |
+| `ferron.proxy.ttfb` | Histogram | backend URL or unix socket path | Time to first response byte from the backend |
+| `ferron.proxy.health.success` | Counter | backend URL or unix socket path | Health check probe succeeded |
+| `ferron.proxy.health.failure` | Counter | backend URL or unix socket path | Health check probe failed |
+| `ferron.proxy.health.duration` | Histogram | backend URL or unix socket path | Duration of health check probes |
+| `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open |
+| `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
 
 ## Notes and troubleshooting
 
@@ -516,3 +492,16 @@ The proxy module emits the following metrics:
   - Passive health checks, circuit breaking, and active health checks work together: any of them can make a backend temporarily ineligible.
 - For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### TLS verification
+
+- **`proxy { no_verification }`** — Disabling TLS certificate verification for HTTPS upstreams should only be used for testing or tightly controlled internal networks.
+- **`active_check { no_verification }`** — Disabling TLS verification for health check probes should only be used for strictly internal endpoints.
+
+### Upstream SSRF risk
+
+- **Upstream URL with request header interpolation** — Upstream URLs containing `{{request.header.*}}` are vulnerable to SSRF. Derive upstream targets from static configuration or trusted server-controlled variables.

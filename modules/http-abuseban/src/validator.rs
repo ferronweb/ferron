@@ -1,9 +1,9 @@
-//! Configuration validation for abuse protection.
-
-use std::collections::HashSet;
-
+use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
 
 /// Recognized directives inside an `abuse_protection { ... }` block.
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
@@ -26,15 +26,20 @@ impl ConfigurationValidator for AbuseProtectionValidator {
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
-        _is_global: bool,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Check if this block contains an `abuse_protection` directive
         if let Some(entries) = config.directives.get("abuse_protection") {
-            used_directives.insert("abuse_protection".to_string());
+            ctx.used_directives.insert("abuse_protection".to_string());
             for entry in entries {
+                if !entry.get_flag() {
+                    ctx.add_best_practice_violation(
+                        "`abuse_protection false` disables IP banning for repeated abuse events; keep it enabled unless another layer handles abusive clients",
+                        entry_span(entry),
+                    );
+                }
                 if let Some(ref children) = entry.children {
-                    self.validate_abuse_protection_block(children, used_directives)?;
+                    self.validate_abuse_protection_block(children, ctx)?;
                 }
             }
         }
@@ -47,8 +52,10 @@ impl AbuseProtectionValidator {
     fn validate_abuse_protection_block(
         &self,
         block: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut sub = std::collections::HashSet::new();
+
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
@@ -61,7 +68,7 @@ impl AbuseProtectionValidator {
 
         // Validate `enabled` — optional, must be a boolean
         if let Some(entries) = block.directives.get("enabled") {
-            used_directives.insert("enabled".to_string());
+            sub.insert("enabled".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     if value.as_boolean().is_none() {
@@ -73,7 +80,7 @@ impl AbuseProtectionValidator {
 
         // Validate `ban_duration` — optional, must be a duration
         if let Some(entries) = block.directives.get("ban_duration") {
-            used_directives.insert("ban_duration".to_string());
+            sub.insert("ban_duration".to_string());
             for entry in entries {
                 self.validate_duration_entry(entry, "ban_duration")?;
             }
@@ -86,7 +93,7 @@ impl AbuseProtectionValidator {
             "custom_threshold",
         ] {
             if let Some(entries) = block.directives.get(*threshold_name) {
-                used_directives.insert(threshold_name.to_string());
+                sub.insert(threshold_name.to_string());
                 for entry in entries {
                     if let Some(ref children) = entry.children {
                         self.validate_threshold_block(children, threshold_name)?;
@@ -95,6 +102,35 @@ impl AbuseProtectionValidator {
             }
         }
 
+        if let Some(entries) = block.directives.get("allowlist") {
+            sub.insert("allowlist".to_string());
+            for entry in entries {
+                if entry.args.is_empty() {
+                    return Err("Invalid `allowlist` — expected at least one IP or CIDR".into());
+                }
+                for arg in &entry.args {
+                    let value = arg
+                        .as_str()
+                        .ok_or("Invalid `allowlist` — expected string IP/CIDR values")?;
+                    value.parse::<IpCidr>().map_err(|_| {
+                        format!("Invalid `allowlist` — invalid IP or CIDR `{value}`")
+                    })?;
+                    if value == "0.0.0.0/0" || value == "::/0" {
+                        ctx.add_best_practice_violation(
+                            "`allowlist` exempts every source address from abuse protection; restrict it to known trusted clients",
+                            entry_span(entry),
+                        );
+                    }
+                }
+            }
+        }
+
+        ferron_core::check_unused_subdirectives!(
+            block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
         Ok(())
     }
 
@@ -180,4 +216,16 @@ impl AbuseProtectionValidator {
 
         Ok(())
     }
+}
+
+fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
 }

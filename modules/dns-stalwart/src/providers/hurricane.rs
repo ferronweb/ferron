@@ -16,7 +16,7 @@ impl Provider<DnsContext<'static>> for HurricaneProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let credentials = required_string(ctx, "credentials", "hurricane", "credentials")?;
+        let credentials = required_string(ctx, "credentials", "hurricane")?;
         let credentials = parse_credentials(&credentials)?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(

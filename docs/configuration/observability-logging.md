@@ -121,7 +121,7 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/http-rewrite#metrics).
 - **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/reverse-proxying#metrics).
 - **Process metrics** — CPU time, CPU utilization, and memory usage from the operating system. See [Process metrics](#process-metrics) below.
-- **Admin API metrics** — uptime, active connections, request count, configuration reloads, and observability event backpressure. See [Admin API metrics](#admin-api-metrics) below.
+- **Admin API metrics** — uptime, active connections, request count, configuration reloads, observability event backpressure, and runtime status. See [Admin API metrics](#admin-api-metrics) below.
 
 #### Process metrics
 
@@ -129,24 +129,34 @@ The `metrics-process` module collects process-level metrics automatically when a
 
 **Platform support:** Linux and Windows. On other platforms, the module is a no-op.
 
-- `process.cpu.time` (Counter) — total CPU seconds broken down by different states.
-  - Attributes: `cpu.mode` (`"user"` or `"system"`)
-- `process.cpu.utilization` (Gauge) — CPU utilization since the last measurement.
-  - Attributes: `cpu.mode` (`"user"` or `"system"`)
-- `process.memory.usage` (UpDownCounter) — the change in physical memory (RSS) since the last measurement.
-- `process.memory.virtual` (UpDownCounter) — the change in committed virtual memory (VMS) since the last measurement.
-- `process.unix.file_descriptor.count` (UpDownCounter) — the change in number of unix file descriptors since the last measurement. (Linux only)
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `process.cpu.time` | Counter | `cpu.mode` (`"user"` or `"system"`) | Total CPU seconds broken down by different states |
+| `process.cpu.utilization` | Gauge | `cpu.mode` (`"user"` or `"system"`) | CPU utilization since the last measurement |
+| `process.memory.usage` | UpDownCounter | — | The change in physical memory (RSS) since the last measurement |
+| `process.memory.virtual` | UpDownCounter | — | The change in committed virtual memory (VMS) since the last measurement |
+| `process.unix.file_descriptor.count` | UpDownCounter | — | The change in number of unix file descriptors since the last measurement (Linux only) |
 
 #### Admin API metrics
 
 The `metrics-admin` module collects metrics exposed via admin API automatically when an observability backend is configured.
 
-- `ferron.admin.uptime` (Gauge) — time since the server started.
-- `ferron.admin.connections_active` (Gauge) — currently open TCP connections across all HTTP listeners.
-- `ferron.admin.requests_total` (Counter) — total HTTP requests served across all listeners.
-- `ferron.admin.reloads` (Counter) — number of configuration reloads performed.
-- `ferron.admin.observability_events_dropped` (Counter) — total number of observability events dropped due to backpressure.
-- `ferron.admin.observability_event_queue_len` (Gauge) — approximate current length of the observability event queue.
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.admin.uptime` | Gauge | — | Time since the server started |
+| `ferron.admin.connections_active` | Gauge | — | Currently open TCP connections across all HTTP listeners |
+| `ferron.admin.requests_total` | Counter | — | Total HTTP requests served across all listeners |
+| `ferron.admin.reloads` | Counter | — | Number of configuration reloads performed |
+| `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
+| `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
+
+#### Admin API runtime metrics
+
+The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
+
+- `ferron.admin.runtime.primary_threads` (Gauge) — number of primary threads (typically equal to CPU count).
+- `ferron.admin.runtime.io_uring_supported` (Gauge) — whether `io_uring` is supported on the current system (`1` = yes, `0` = no).
+- `ferron.admin.runtime.io_uring_runtime_enabled` (Gauge) — whether `io_uring` was successfully enabled at runtime (`1` = yes, `0` = no).
 
 These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 
@@ -154,14 +164,16 @@ These metrics correspond to the same data exposed by the admin API's `GET /statu
 
 Ferron also emits request-path metrics for common observability gaps:
 
-- `ferron.http.server.pre_handler_request_count` (Counter) — malformed or timed-out requests rejected before the normal HTTP handler completes.
-- `ferron.http.server.redirects` (Counter) — redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects.
-- `ferron.http.server.client_ip_rewrites` (Counter) — requests whose client IP was rewritten from a trusted proxy header.
-- `ferron.http.server.cors_preflights` (Counter) — CORS preflight requests handled before the main pipeline.
-- `ferron.http.server.connection_errors` (Counter) — listener and handshake failures, labeled by transport and lifecycle stage.
-- `ferron.proxy.failures` (Counter) — reverse-proxy failures that returned an error before a backend response was produced.
-- `ferron.forward_proxy.requests` (Counter) — forward-proxy requests, labeled by mode (`connect` or `request`) and outcome.
-- `ferron.static.responses` (Counter) — static-file responses across normal, conditional, range, and error paths.
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.http.server.pre_handler_request_count` | Counter | — | Malformed or timed-out requests rejected before the normal HTTP handler completes |
+| `ferron.http.server.redirects` | Counter | — | Redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects |
+| `ferron.http.server.client_ip_rewrites` | Counter | — | Requests whose client IP was rewritten from a trusted proxy header |
+| `ferron.http.server.cors_preflights` | Counter | — | CORS preflight requests handled before the main pipeline |
+| `ferron.http.server.connection_errors` | Counter | transport, lifecycle stage | Listener and handshake failures |
+| `ferron.proxy.failures` | Counter | — | Reverse-proxy failures that returned an error before a backend response was produced |
+| `ferron.forward_proxy.requests` | Counter | mode (`"connect"` or `"request"`), outcome | Forward-proxy requests |
+| `ferron.static.responses` | Counter | — | Static-file responses across normal, conditional, range, and error paths |
 
 ### Tracing
 

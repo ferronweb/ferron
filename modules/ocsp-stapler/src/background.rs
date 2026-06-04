@@ -26,14 +26,13 @@ use rasn_ocsp::{
     BasicOcspResponse, CertId, OcspRequest, OcspResponse, OcspResponseStatus,
     Request as RasnOcspRequest, TbsRequest,
 };
-use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use x509_parser::prelude::*;
 
 // Type alias for the OCSP cache to reduce type complexity
-type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Arc<CertifiedKey>>>>>;
+type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 
 // ---------------------------------------------------------------------------
 // HTTPS client construction
@@ -116,14 +115,15 @@ fn verify_ocsp_signature(
                 &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
             }
 
-            // ED25519
-            [1, 3, 101, 112, 1] => &aws_lc_rs::signature::ED25519,
+            // Ed25519
+            [1, 3, 101, 112] => &aws_lc_rs::signature::ED25519,
 
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
                 // Get curve OID
-                let curve_oid: Option<ObjectIdentifier> = basic_response
-                    .signature_algorithm
+                let curve_oid: Option<ObjectIdentifier> = issuer_cert
+                    .public_key()
+                    .algorithm
                     .parameters
                     .as_ref()
                     .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v.as_bytes()).ok());
@@ -295,11 +295,22 @@ fn verify_single_res(
         return Err(anyhow::anyhow!("Serial number mismatch in OCSP response"));
     }
 
+    // Check if the response falls between the issuer's valid time range,
+    // allowing for a 60-second clock skew to account for network latency and time differences.
+    let now_with_skew =
+        chrono::DateTime::<chrono::Utc>::from(SystemTime::now() + Duration::from_secs(60));
+    let now = chrono::DateTime::<chrono::Utc>::from(SystemTime::now());
+    if single_res.this_update > now_with_skew
+        || single_res.next_update.as_ref().is_some_and(|nu| *nu < now)
+    {
+        return Err(anyhow::anyhow!("OCSP response is not current"));
+    }
+
     Ok(())
 }
 
 pub async fn background_ocsp_task(
-    mut receiver: mpsc::UnboundedReceiver<CertifiedKey>,
+    mut receiver: mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>,
     cache: OcspCache,
     cancel_token: CancellationToken,
     event_sink: Option<Arc<CompositeEventSink>>,
@@ -307,11 +318,18 @@ pub async fn background_ocsp_task(
     // Track next-update times per cert
     let mut next_updates: HashMap<Vec<u8>, SystemTime> = HashMap::new();
     // Track known cert chains
-    let mut known_certs: HashMap<Vec<u8>, CertifiedKey> = HashMap::new();
+    let mut known_certs: HashMap<Vec<u8>, Vec<CertificateDer<'static>>> = HashMap::new();
 
     // Build HTTPS client with native certificate store and webpki-roots fallback
-    let https_connector =
-        build_https_connector().expect("failed to create HTTPS connector with native/webpki roots");
+    let Ok(https_connector) = build_https_connector() else {
+        emit_log(
+            &event_sink,
+            LogLevel::Info,
+            "Failed to initialize HTTPS for OCSP background task",
+            "ferron_ocsp",
+        );
+        return;
+    };
 
     let client = Client::builder(TokioExecutor::new())
         .build::<_, http_body_util::Full<Bytes>>(https_connector);
@@ -339,19 +357,18 @@ pub async fn background_ocsp_task(
         };
 
         // Process newly received cert
-        if let Some(certified_key) = received_certified_key {
-            let chain = &certified_key.cert;
+        if let Some(chain) = received_certified_key {
             if let Some(leaf) = chain.first() {
                 let key: Vec<u8> = leaf.to_vec();
                 if !known_certs.contains_key(&key) {
-                    let ident = cert_identifier(chain);
+                    let ident = cert_identifier(&chain);
                     emit_log(
                         &event_sink,
                         LogLevel::Debug,
                         &format!("OCSP fetch triggered for certificate {ident}"),
                         "ferron_ocsp",
                     );
-                    known_certs.insert(key.clone(), certified_key);
+                    known_certs.insert(key.clone(), chain.clone());
                     // Trigger immediate fetch (use time in the past to ensure it is fetched immediately)
                     next_updates.insert(key, SystemTime::now() - std::time::Duration::from_secs(1));
                 }
@@ -367,12 +384,12 @@ pub async fn background_ocsp_task(
             .collect();
 
         for key in updates_to_fetch {
-            if let Some(certified_key) = known_certs.get(&key) {
+            if let Some(cert) = known_certs.get(&key) {
                 let start = std::time::Instant::now();
-                match fetch_ocsp_response(&client, &certified_key.cert).await {
+                match fetch_ocsp_response(&client, cert).await {
                     Ok(Some((response_der, next_update_time))) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
@@ -405,20 +422,17 @@ pub async fn background_ocsp_task(
                             vec![],
                         );
 
-                        let mut new_certified_key = certified_key.clone();
-                        new_certified_key.ocsp = Some(response_der);
-                        cache
-                            .write()
-                            .insert(key.clone(), Some(Arc::new(new_certified_key)));
+                        cache.write().insert(key.clone(), Some(response_der));
                         next_updates.insert(key, next_update_time);
                     }
                     Ok(None) => {
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
                             &format!(
-                                "OCSP stapling skipped — \n                                no OCSP URL or incomplete chain in certificate {ident}"
+                                "OCSP stapling skipped — \
+                                no OCSP URL or incomplete chain in certificate {ident}"
                             ),
                             "ferron_ocsp",
                         );
@@ -440,7 +454,7 @@ pub async fn background_ocsp_task(
                     }
                     Err(e) => {
                         let duration = start.elapsed().as_secs_f64();
-                        let ident = cert_identifier(&certified_key.cert);
+                        let ident = cert_identifier(cert);
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,
@@ -562,14 +576,29 @@ async fn fetch_ocsp_response(
     >,
     chain: &[CertificateDer<'_>],
 ) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
-    // Try SHA-256 first, fall back to SHA-1
+    // Try SHA-256 first (preferred algorithm)
     let response = fetch_ocsp_response_inner(client, chain, true).await;
+
+    // If SHA-256 succeeded, return immediately (do not downgrade to SHA-1)
     if response.is_ok() {
         return response;
     }
-    if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
-        return Ok(sha1_response);
+
+    // Only try SHA-1 fallback for specific error types
+    let should_try_sha1 = response.as_ref().is_err_and(|e| {
+        let e_message = e.to_string();
+        e_message.starts_with("OCSP request failed with status ")
+            || e_message.starts_with("Failed to decode OCSP response:")
+            || e_message.starts_with("OCSP response status unsuccessful:")
+    });
+
+    if should_try_sha1 {
+        if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
+            return Ok(sha1_response);
+        }
     }
+
+    // Return the original SHA-256 error or success
     response
 }
 
@@ -671,7 +700,7 @@ async fn fetch_ocsp_response_inner(
     }
 
     let next_update =
-        min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_secs(43200));
+        min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_secs(300));
     Ok(Some((response_der, next_update)))
 }
 

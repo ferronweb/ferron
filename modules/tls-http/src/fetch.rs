@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Instant};
 use ferron_observability::{
     LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
 };
+use ferron_tls::observability;
 use http_body_util::{BodyExt, Empty};
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
@@ -11,8 +12,6 @@ use rustls::server::ResolvesServerCert;
 use rustls::ClientConfig;
 use rustls_pki_types::pem::PemObject;
 use serde::Deserialize;
-use x509_parser::certificate::X509Certificate;
-use x509_parser::prelude::FromDer;
 
 use crate::config::TlsHttpConfig;
 
@@ -63,6 +62,7 @@ struct TlsHttpResponse {
 pub async fn fetch_tls_cert_loop(
     config: TlsHttpConfig,
     certified_key: CertifiedKeyLock,
+    host: String,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) {
     let url_string = config.url.to_string();
@@ -92,7 +92,14 @@ pub async fn fetch_tls_cert_loop(
             .enable_http2()
             .build(),
     );
+    let mut is_first = true;
     loop {
+        if is_first {
+            is_first = false;
+        } else {
+            tokio::time::sleep(config.refresh_interval).await;
+        }
+
         let start = Instant::now();
         let request = match hyper::Request::builder()
             .method("GET")
@@ -111,7 +118,7 @@ pub async fn fetch_tls_cert_loop(
             }
         };
 
-        let mut response = match hyper_client.request(request).await {
+        let response = match hyper_client.request(request).await {
             Ok(res) => res,
             Err(e) => {
                 let duration = start.elapsed().as_secs_f64();
@@ -154,13 +161,32 @@ pub async fn fetch_tls_cert_loop(
             vec![("status", MetricAttributeValue::StaticStr("success"))],
         );
 
+        if !response.status().is_success() {
+            emit_log(
+                &event_sink,
+                LogLevel::Warn,
+                &format!(
+                    "TLS certificate endpoint returned unsuccessful status: {}",
+                    response.status()
+                ),
+                "ferron_tls_http",
+            );
+            continue;
+        }
+
         // Get TLS certificate chain and private key from response
-        let body_bytes = response
-            .body_mut()
-            .collect()
-            .await
-            .unwrap_or_default()
-            .to_bytes();
+        let body_bytes = match response.into_body().collect().await {
+            Ok(body) => body.to_bytes(),
+            Err(e) => {
+                emit_log(
+                    &event_sink,
+                    LogLevel::Warn,
+                    &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
+                    "ferron_tls_http",
+                );
+                continue;
+            }
+        };
         let body: TlsHttpResponse = match serde_json::from_slice(&body_bytes) {
             Ok(b) => b,
             Err(e) => {
@@ -240,36 +266,8 @@ pub async fn fetch_tls_cert_loop(
         };
 
         if key_changed {
-            // Emit certificate expiration metrics
             if let Some(first_cert) = certified_key_to_write.cert.first() {
-                if let Ok((_, cert)) = X509Certificate::from_der(first_cert) {
-                    let not_after = cert.validity().not_after.timestamp();
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-
-                    emit_metric(
-                        &event_sink,
-                        "ferron.tls_http.cert_expires_at",
-                        MetricValue::U64(not_after as u64),
-                        MetricType::Gauge,
-                        Some("{timestamp}"),
-                        Some("Certificate expiration time (Unix timestamp)"),
-                        vec![],
-                    );
-
-                    let days_remaining = (not_after - now as i64).max(0) / 86400;
-                    emit_metric(
-                        &event_sink,
-                        "ferron.tls_http.cert_days_remaining",
-                        MetricValue::I64(days_remaining),
-                        MetricType::Gauge,
-                        Some("{day}"),
-                        Some("Days until certificate expiration"),
-                        vec![],
-                    );
-                }
+                observability::emit_certificate_not_after(&event_sink, "http", &host, first_cert);
             }
 
             *certified_key.write() = Some(certified_key_to_write);
@@ -299,8 +297,6 @@ pub async fn fetch_tls_cert_loop(
             Some("Seconds until next certificate refresh"),
             vec![],
         );
-
-        tokio::time::sleep(config.refresh_interval).await;
     }
 }
 

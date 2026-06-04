@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for InwxDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let username = required_string(ctx, "username", "inwx", "username")?;
-        let password = required_string(ctx, "password", "inwx", "password")?;
+        let username = required_string(ctx, "username", "inwx")?;
+        let password = required_string(ctx, "password", "inwx")?;
         let shared_secret = opt_string(ctx, "shared_secret");
         let sandbox = opt_bool(ctx, "sandbox").unwrap_or(false);
 

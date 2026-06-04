@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::ops::Sub;
 use std::sync::Arc;
 
+use ferron_observability::CompositeEventSink;
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, IsCa, KeyIdMethod, KeyPair, SanType,
 };
@@ -37,10 +38,27 @@ pub fn check_certificate_validity(
     Ok(false)
 }
 
+fn emit_cert_metric(
+    event_sink: Option<&Arc<CompositeEventSink>>,
+    host: &str,
+    certified_key: &CertifiedKey,
+) {
+    if let (Some(sink), Some(leaf)) = (event_sink, certified_key.cert.first()) {
+        ferron_tls::observability::emit_certificate_not_after(sink, "local", host, leaf);
+    }
+}
+
 pub fn provision_local_cert(
     cache: &LocalTlsCache,
     filters: &ServerConfigurationHostFilters,
+    event_sink: Option<&Arc<CompositeEventSink>>,
 ) -> Result<Arc<CertifiedKey>, Box<dyn std::error::Error>> {
+    let host = filters
+        .host
+        .clone()
+        .or_else(|| filters.ip.map(|i| i.to_canonical().to_string()))
+        .unwrap_or_default();
+
     // Normalize and hash the SAN set
     let san_set = normalize_san_set(filters);
     let san_hash = compute_san_hash(&san_set);
@@ -58,6 +76,7 @@ pub fn provision_local_cert(
                 .and_then(|c| check_certificate_validity(c).ok())
                 .unwrap_or(false)
             {
+                emit_cert_metric(event_sink, &host, &certified_key);
                 return Ok(Arc::new(certified_key));
             }
         }
@@ -72,10 +91,16 @@ pub fn provision_local_cert(
         cache.ca_path().display()
     );
 
-    Ok(
-        generate_leaf_cert(cache, ca_params, ca_key_pair, san_set, san_hash)
-            .map_err(|e| anyhow::anyhow!("Leaf certificate generation failed: {e}"))?,
+    Ok(generate_leaf_cert(
+        cache,
+        ca_params,
+        ca_key_pair,
+        san_set,
+        san_hash,
+        event_sink,
+        &host,
     )
+    .map_err(|e| anyhow::anyhow!("Leaf certificate generation failed: {e}"))?)
 }
 
 fn generate_leaf_cert(
@@ -84,6 +109,8 @@ fn generate_leaf_cert(
     ca_key_pair: KeyPair,
     san_set: BTreeSet<String>,
     san_hash: String,
+    event_sink: Option<&Arc<CompositeEventSink>>,
+    host: &str,
 ) -> Result<Arc<CertifiedKey>, Box<dyn std::error::Error>> {
     // Generate leaf cert
     let mut leaf_cert_params = CertificateParams::default();
@@ -120,6 +147,7 @@ fn generate_leaf_cert(
     }
 
     let certified_key = parse_certified_key(&cert_pem, &key_pem)?;
+    emit_cert_metric(event_sink, host, &certified_key);
     Ok(Arc::new(certified_key))
 }
 

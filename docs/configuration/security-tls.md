@@ -114,6 +114,14 @@ Notes:
 - The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
 - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
+## Observability
+
+**Metrics:**
+
+| Metric | Type | Attributes | Description |
+|--------|------|--------|-------------|
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
+
 ## Security considerations
 
 - Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`) — they are simpler and avoid known TLS 1.2 weaknesses.
@@ -141,3 +149,15 @@ The `min_version` or `max_version` value is not recognized. Ensure you use exact
 - [ACME automatic TLS](/docs/v3/configuration/tls-acme)
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets)
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling)
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`max_version TLSv1.2`** — Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
+- **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS.
+- **`ocsp` disabled** — OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
+- **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use only when all clients are expected to support them.
+- **`ticket_keys` without `auto_rotate`** — Session ticket keys should rotate automatically in production to limit the impact of key compromise.
+- **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for seamless rotation without excessive retention.
+- **`ticket_keys.rotation_interval` > 24h** — Rotate session ticket keys every 12–24 hours in production.

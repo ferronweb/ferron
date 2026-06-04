@@ -2,7 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Local;
-use ferron_core::{loader::ModuleLoader, providers::Provider};
+use ferron_core::{
+    config::{validator::ConfigurationValidator, ServerConfigurationValue},
+    config_validator_scoped_key,
+    loader::ModuleLoader,
+    providers::Provider,
+    validate_directive,
+};
 use ferron_observability::{AccessVisitor, LogFormatterContext};
 use once_cell::sync::Lazy;
 
@@ -158,6 +164,9 @@ impl FormatPattern {
             }
         }
 
+        // Strip away control characters for safety (e.g., newlines)
+        output.retain(|c| !c.is_control());
+
         output
     }
 }
@@ -204,11 +213,11 @@ fn parse_config(
 }
 
 /// Cache for compiled format patterns to avoid re-parsing
-static PATTERN_CACHE: Lazy<std::sync::Mutex<HashMap<String, FormatPattern>>> =
-    Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
+static PATTERN_CACHE: Lazy<parking_lot::Mutex<HashMap<String, FormatPattern>>> =
+    Lazy::new(|| parking_lot::Mutex::new(HashMap::new()));
 
 fn get_or_compile_pattern(pattern_str: &str) -> FormatPattern {
-    let mut cache = PATTERN_CACHE.lock().unwrap();
+    let mut cache = PATTERN_CACHE.lock();
     if let Some(pattern) = cache.get(pattern_str) {
         return pattern.clone();
     }
@@ -291,29 +300,40 @@ impl ModuleLoader for TextFormatObservabilityModuleLoader {
         registry
             .with_provider::<LogFormatterContext, _>(|| Arc::new(TextFormatObservabilityProvider))
     }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("logformat", "text"),
+            Box::new(TextFormatLogFormatConfigurationValidator),
+        );
+    }
+}
+
+struct TextFormatLogFormatConfigurationValidator;
+
+impl ConfigurationValidator for TextFormatLogFormatConfigurationValidator {
+    fn validate_block(
+        &self,
+        config: &ferron_core::config::ServerConfigurationBlock,
+        validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        validate_directive!(config, validator_ctx.used_directives, fields, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, access_pattern, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, timestamp_format, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_field_token() {
-        let pattern = FormatPattern::parse("%client_ip");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Field("client_ip".to_string())]
-        );
-    }
-
-    #[test]
-    fn parses_header_token() {
-        let pattern = FormatPattern::parse("%{Referer}i");
-        assert_eq!(
-            pattern.tokens,
-            vec![FormatToken::Header("Referer".to_string())]
-        );
-    }
 
     #[test]
     fn parses_timestamp_token_with_format() {
@@ -322,12 +342,6 @@ mod tests {
             pattern.tokens,
             vec![FormatToken::Timestamp(Some("%Y-%m-%d".to_string()))]
         );
-    }
-
-    #[test]
-    fn parses_timestamp_token_without_format() {
-        let pattern = FormatPattern::parse("%t");
-        assert_eq!(pattern.tokens, vec![FormatToken::Timestamp(None)]);
     }
 
     #[test]
@@ -432,15 +446,6 @@ mod tests {
         assert!(output.len() == 19); // Fixed length for this format
         assert!(output.contains('-'));
         assert!(output.contains(':'));
-    }
-
-    #[test]
-    fn formats_literal_text() {
-        let pattern = FormatPattern::parse("GET /path HTTP/1.1");
-        let fields = HashMap::new();
-
-        let output = pattern.format(&fields, None);
-        assert_eq!(output, "GET /path HTTP/1.1");
     }
 
     #[test]

@@ -84,3 +84,17 @@ jobs:
 
       - name: Check for unused dependencies
         run: cargo shear
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install "cargo audit"
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-audit --force
+
+      - name: Check for vulnerable dependencies
+        run: cargo audit

@@ -17,13 +17,8 @@ impl Provider<DnsContext<'static>> for GoogleCloudDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = GoogleCloudDnsConfig {
-            service_account_json: required_string(
-                ctx,
-                "service_account_json",
-                "googlecloud",
-                "service account JSON",
-            )?,
-            project_id: required_string(ctx, "project_id", "googlecloud", "project ID")?,
+            service_account_json: required_string(ctx, "service_account_json", "googlecloud")?,
+            project_id: required_string(ctx, "project_id", "googlecloud")?,
             managed_zone: opt_string(ctx, "managed_zone"),
             private_zone: opt_bool(ctx, "private_zone").unwrap_or(false),
             impersonate_service_account: opt_string(ctx, "impersonate_service_account"),

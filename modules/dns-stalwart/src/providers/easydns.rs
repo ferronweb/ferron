@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for EasyDNSProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let token = required_string(ctx, "token", "easydns", "token")?;
-        let key = required_string(ctx, "key", "easydns", "key")?;
+        let token = required_string(ctx, "token", "easydns")?;
+        let key = required_string(ctx, "key", "easydns")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_easydns(&token, &key, None)?,

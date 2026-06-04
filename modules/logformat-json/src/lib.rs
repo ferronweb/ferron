@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use ferron_core::{loader::ModuleLoader, providers::Provider};
+use ferron_core::{
+    config::{validator::ConfigurationValidator, ServerConfigurationValue},
+    config_validator_scoped_key,
+    loader::ModuleLoader,
+    providers::Provider,
+    validate_directive,
+};
 use ferron_observability::{AccessVisitor, LogFormatterContext};
 use serde_json::{Map, Value};
 
@@ -93,5 +99,32 @@ impl ModuleLoader for JsonFormatObservabilityModuleLoader {
     ) -> ferron_core::registry::RegistryBuilder {
         registry
             .with_provider::<LogFormatterContext, _>(|| Arc::new(JsonFormatObservabilityProvider))
+    }
+
+    fn register_scoped_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            ferron_core::config::validator::ConfigurationValidatorScopedKey,
+            Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        >,
+    ) {
+        registry.insert(
+            config_validator_scoped_key!("logformat", "json"),
+            Box::new(JsonFormatLogFormatConfigurationValidator),
+        );
+    }
+}
+
+struct JsonFormatLogFormatConfigurationValidator;
+
+impl ConfigurationValidator for JsonFormatLogFormatConfigurationValidator {
+    fn validate_block(
+        &self,
+        config: &ferron_core::config::ServerConfigurationBlock,
+        validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        validate_directive!(config, validator_ctx.used_directives, fields, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+
+        Ok(())
     }
 }

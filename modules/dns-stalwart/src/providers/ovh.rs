@@ -15,12 +15,11 @@ impl Provider<DnsContext<'static>> for OvhDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let application_key = required_string(ctx, "application_key", "ovh", "application key")?;
-        let application_secret =
-            required_string(ctx, "application_secret", "ovh", "application secret")?;
-        let consumer_key = required_string(ctx, "consumer_key", "ovh", "consumer key")?;
+        let application_key = required_string(ctx, "application_key", "ovh")?;
+        let application_secret = required_string(ctx, "application_secret", "ovh")?;
+        let consumer_key = required_string(ctx, "consumer_key", "ovh")?;
 
-        let endpoint_name = required_string(ctx, "endpoint", "ovh", "endpoint")?;
+        let endpoint_name = required_string(ctx, "endpoint", "ovh")?;
         let endpoint = match endpoint_name.as_str() {
             "ovh-eu" => OvhEndpoint::OvhEu,
             "ovh-ca" => OvhEndpoint::OvhCa,

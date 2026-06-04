@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for PleskDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = required_string(ctx, "base_url", "plesk", "base URL")?;
-        let api_key = required_string(ctx, "api_key", "plesk", "API key")?;
+        let base_url = required_string(ctx, "base_url", "plesk")?;
+        let api_key = required_string(ctx, "api_key", "plesk")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_plesk(&base_url, &api_key, None)?,

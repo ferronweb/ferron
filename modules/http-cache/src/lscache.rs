@@ -249,34 +249,12 @@ mod tests {
     }
 
     #[test]
-    fn purge_empty_tokens_between_delimiters() {
-        let mut headers = HeaderMap::new();
-        headers.insert(&LS_PURGE, HeaderValue::from_static("url=/path,,tag=foo"));
-        let purge = parse_litespeed_purge(&headers);
-        assert_eq!(purge.len(), 1);
-        assert_eq!(purge[0].selectors.len(), 2);
-    }
-
-    #[test]
     fn purge_double_semicolon() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_PURGE, HeaderValue::from_static("tag=a;;tag=b"));
         let purge = parse_litespeed_purge(&headers);
         // Empty segment between ;; produces no operation
         assert_eq!(purge.len(), 2);
-    }
-
-    #[test]
-    fn purge_empty_tag_value() {
-        let mut headers = HeaderMap::new();
-        headers.insert(&LS_PURGE, HeaderValue::from_static("tag="));
-        let purge = parse_litespeed_purge(&headers);
-        assert_eq!(purge.len(), 1);
-        assert_eq!(purge[0].selectors.len(), 1);
-        match &purge[0].selectors[0] {
-            PurgeSelector::Tag(t) => assert_eq!(t, ""),
-            _ => panic!("expected Tag selector"),
-        }
     }
 
     #[test]

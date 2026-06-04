@@ -106,7 +106,7 @@ example.com {
         cache "/var/cache/ferron-acme"
 
         save "/etc/ssl/certs/example.com.pem" "/etc/ssl/private/example.com.pem"
-        # `post_obtain_command` arg must be a script/binary name
+        # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
         post_obtain_command "/var/lib/post_obtain_command.sh"
 
         ocsp {
@@ -266,10 +266,11 @@ The ACME background task emits log events and metrics through the configured obs
 
 **Metrics:**
 
-| Metric | Type | Labels | Description |
+| Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
 | `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
 | `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ### Verifying certificates
 
@@ -288,3 +289,13 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets) — session resumption
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling) — OCSP response stapling
 - [HTTP host directives](/docs/v3/configuration/http-host) — per-host TLS configuration
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+- **`no_verification` for ACME directory** — Disabling TLS verification for the ACME directory should only be used for testing.
+- **`on_demand` without `on_demand_ask`** — On-demand certificate issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
+- **`on_demand_ask_no_verification`** — Disabling TLS verification for the approval endpoint should only be used for strictly internal and otherwise authenticated endpoints.
+- **Missing `contact`** — Without an ACME account email, the certificate authority cannot send expiry or account notices.
+- **Non-public domain** — Domains using non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. Certificate issuance via ACME will fail because the CA cannot complete domain validation. This check applies to both explicit `domains` directives and to the host block's hostname when `on_demand` TLS is used.

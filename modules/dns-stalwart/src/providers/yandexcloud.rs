@@ -17,13 +17,8 @@ impl Provider<DnsContext<'static>> for YandexCloudDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = YandexCloudConfig {
-            iam_token_b64: required_string(
-                ctx,
-                "iam_token_b64",
-                "yandexcloud",
-                "IAM token (base64)",
-            )?,
-            folder_id: required_string(ctx, "folder_id", "yandexcloud", "folder ID")?,
+            iam_token_b64: required_string(ctx, "iam_token_b64", "yandexcloud")?,
+            folder_id: required_string(ctx, "folder_id", "yandexcloud")?,
             request_timeout: None,
         };
 

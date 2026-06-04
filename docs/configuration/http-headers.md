@@ -116,3 +116,9 @@ api.example.com {
 - If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
 - For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](./conditionals.md#ip-canonicalization) for details.
 - For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).
+
+## Best practices
+
+The following best-practice check is reported by `ferron doctor` for directives on this page.
+
+- **`cors { credentials true }` with `origins "*"`** — Allowing credentials with wildcard origins defeats the browser's same-origin protection. Use explicit trusted origins when credentials are allowed.

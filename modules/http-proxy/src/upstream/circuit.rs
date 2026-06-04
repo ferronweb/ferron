@@ -1,9 +1,13 @@
 //! Circuit breaker implementation for protecting upstream backends.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::config::CircuitBreakerConfig;
-use crate::types::circuit::{CircuitBreakerState, CircuitBreakerStateMap, CircuitBreakerStatus};
+use crate::types::circuit::{
+    CircuitBreakerStateMap, CIRCUIT_BREAKER_STATUS_CLOSED, CIRCUIT_BREAKER_STATUS_HALFOPEN,
+    CIRCUIT_BREAKER_STATUS_OPEN,
+};
 use crate::types::upstream::UpstreamInner;
 use crate::upstream::FailureCache;
 
@@ -25,16 +29,20 @@ pub fn is_circuit_breaker_available(
         return true;
     };
 
-    match state.status {
-        CircuitBreakerStatus::Closed => true,
-        CircuitBreakerStatus::Open => state
+    match state.status.load(Ordering::Relaxed) {
+        CIRCUIT_BREAKER_STATUS_CLOSED => true,
+        CIRCUIT_BREAKER_STATUS_OPEN => state
             .opened_at
+            .read()
             .is_some_and(|opened_at| opened_at.elapsed() >= circuit_breaker.open_duration),
-        CircuitBreakerStatus::HalfOpen => !state.half_open_in_flight,
+        CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.load(Ordering::Relaxed),
+        _ => false,
     }
 }
 
 /// Record a transport-level backend failure.
+#[allow(clippy::too_many_arguments)]
+#[inline]
 pub fn record_backend_transport_failure(
     failed_backends: Arc<FailureCache>,
     passive_check_enabled: bool,
@@ -43,11 +51,13 @@ pub fn record_backend_transport_failure(
     upstream: &Arc<UpstreamInner>,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
+    config_key: &[usize],
 ) {
     if passive_check_enabled {
         metrics.unhealthy_backends.push(upstream.clone());
-        let current = failed_backends.get(upstream).unwrap_or(0);
-        failed_backends.insert(upstream.clone(), current + 1);
+        let key = (upstream.clone(), config_key.to_vec());
+        let current = failed_backends.get(&key).unwrap_or(0);
+        failed_backends.insert(key, current + 1);
     }
 
     if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
@@ -102,23 +112,38 @@ pub fn try_acquire_circuit_breaker_slot(
         return true;
     };
 
-    let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+    // Get a reference instead of a mutable reference for fast paths.
+    let state = if let Some(state) = circuit_breaker_state.get(upstream) {
+        state
+    } else {
+        let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+        state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
+            Arc::new(crossbeam_queue::ArrayQueue::new(
+                (circuit_breaker.max_fails as usize).saturating_sub(1),
+            ))
+        });
+        state.downgrade()
+    };
 
-    match state.status {
-        CircuitBreakerStatus::Closed => true,
-        CircuitBreakerStatus::Open => {
-            let Some(opened_at) = state.opened_at else {
-                return false;
-            };
+    match state.status.load(Ordering::Relaxed) {
+        CIRCUIT_BREAKER_STATUS_CLOSED => true,
+        CIRCUIT_BREAKER_STATUS_OPEN => {
+            {
+                let Some(opened_at) = &*state.opened_at.read() else {
+                    return false;
+                };
 
-            if opened_at.elapsed() < circuit_breaker.open_duration {
-                return false;
+                if opened_at.elapsed() < circuit_breaker.open_duration {
+                    return false;
+                }
             }
 
-            state.status = CircuitBreakerStatus::HalfOpen;
-            state.opened_at = None;
-            state.half_open_in_flight = true;
-            state.half_open_pass_count = 0;
+            state
+                .status
+                .store(CIRCUIT_BREAKER_STATUS_HALFOPEN, Ordering::Relaxed);
+            *state.opened_at.write() = None;
+            state.half_open_in_flight.store(true, Ordering::Relaxed);
+            state.half_open_pass_count.store(0, Ordering::Relaxed);
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Info,
@@ -139,14 +164,8 @@ pub fn try_acquire_circuit_breaker_slot(
             );
             true
         }
-        CircuitBreakerStatus::HalfOpen => {
-            if state.half_open_in_flight {
-                false
-            } else {
-                state.half_open_in_flight = true;
-                true
-            }
-        }
+        CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.swap(true, Ordering::Relaxed),
+        _ => false, // Possibly corrupted state
     }
 }
 
@@ -186,15 +205,29 @@ fn record_circuit_breaker_failure(
     };
 
     let now = std::time::Instant::now();
-    let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+    let state = if let Some(state) = circuit_breaker_state.get(upstream) {
+        state
+    } else {
+        let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+        state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
+            Arc::new(crossbeam_queue::ArrayQueue::new(
+                (circuit_breaker.max_fails as usize).saturating_sub(1),
+            ))
+        });
+        state.downgrade()
+    };
 
-    match state.status {
-        CircuitBreakerStatus::HalfOpen => {
-            state.half_open_in_flight = false;
-            state.half_open_pass_count = 0;
-            state.recent_failures.clear();
-            state.status = CircuitBreakerStatus::Open;
-            state.opened_at = Some(now);
+    match state.status.load(Ordering::Relaxed) {
+        CIRCUIT_BREAKER_STATUS_HALFOPEN => {
+            state
+                .status
+                .store(CIRCUIT_BREAKER_STATUS_OPEN, Ordering::Relaxed);
+            state.half_open_in_flight.store(false, Ordering::Relaxed);
+            state.half_open_pass_count.store(0, Ordering::Relaxed);
+            if let Some(rf) = &state.recent_failures {
+                while rf.pop().is_some() {}
+            }
+            *state.opened_at.write() = Some(now);
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
@@ -222,50 +255,54 @@ fn record_circuit_breaker_failure(
             );
             true
         }
-        CircuitBreakerStatus::Open => {
-            state.opened_at = Some(now);
+        CIRCUIT_BREAKER_STATUS_OPEN => {
+            *state.opened_at.write() = Some(now);
             false
         }
-        CircuitBreakerStatus::Closed => {
-            prune_circuit_breaker_failures(&mut state, circuit_breaker.window, now);
-            state.recent_failures.push_back(now);
+        CIRCUIT_BREAKER_STATUS_CLOSED
+            if state.recent_failures.as_ref().is_none_or(|rf| {
+                rf.force_push(now)
+                    .is_some_and(|timestamp| now.duration_since(timestamp) < circuit_breaker.window)
+            }) =>
+        {
+            state
+                .status
+                .store(CIRCUIT_BREAKER_STATUS_OPEN, Ordering::Relaxed);
 
-            if state.recent_failures.len() as u64 >= circuit_breaker.max_fails {
-                state.recent_failures.clear();
-                state.status = CircuitBreakerStatus::Open;
-                state.opened_at = Some(now);
-                state.half_open_pass_count = 0;
-                state.half_open_in_flight = false;
-                event_sink.emit(ferron_observability::Event::Log(
-                    ferron_observability::LogEvent {
-                        level: ferron_observability::LogLevel::Warn,
-                        message: format!(
-                            "Upstream {} circuit opened after {} failures within {:?}",
-                            upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
-                        ),
-                        target: crate::LOG_TARGET,
-                        trace_context: None,
-                    },
-                ));
-                emit_circuit_metric(
-                    event_sink,
-                    upstream,
-                    "ferron.proxy.circuit.state",
-                    ferron_observability::MetricType::Gauge,
-                    ferron_observability::MetricValue::U64(2), // Open = 2
-                );
-                emit_circuit_metric(
-                    event_sink,
-                    upstream,
-                    "ferron.proxy.circuit.open_total",
-                    ferron_observability::MetricType::Counter,
-                    ferron_observability::MetricValue::U64(1),
-                );
-                true
-            } else {
-                false
+            if let Some(rf) = &state.recent_failures {
+                while rf.pop().is_some() {}
             }
+            *state.opened_at.write() = Some(now);
+            state.half_open_pass_count.store(0, Ordering::Relaxed);
+            state.half_open_in_flight.store(false, Ordering::Relaxed);
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Upstream {} circuit opened after {} failures within {:?}",
+                        upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
+                    ),
+                    target: crate::LOG_TARGET,
+                    trace_context: None,
+                },
+            ));
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.state",
+                ferron_observability::MetricType::Gauge,
+                ferron_observability::MetricValue::U64(2), // Open = 2
+            );
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.open_total",
+                ferron_observability::MetricType::Counter,
+                ferron_observability::MetricValue::U64(1),
+            );
+            true
         }
+        _ => false,
     }
 }
 
@@ -283,22 +320,30 @@ fn record_circuit_breaker_success(
         return;
     };
 
-    let Some(mut state) = circuit_breaker_state.get_mut(upstream) else {
-        return;
-    };
-
-    if state.status != CircuitBreakerStatus::HalfOpen {
+    // Use `get` instead of `get_mut` for fast path.
+    if circuit_breaker_state
+        .get(upstream)
+        .is_none_or(|s| s.status.load(Ordering::Relaxed) != CIRCUIT_BREAKER_STATUS_HALFOPEN)
+    {
         return;
     }
 
-    state.half_open_in_flight = false;
-    state.half_open_pass_count += 1;
+    let Some(state) = circuit_breaker_state.get(upstream) else {
+        return;
+    };
 
-    if state.half_open_pass_count >= circuit_breaker.consecutive_passes {
-        state.status = CircuitBreakerStatus::Closed;
-        state.opened_at = None;
-        state.half_open_pass_count = 0;
-        state.recent_failures.clear();
+    state.half_open_in_flight.store(false, Ordering::Relaxed);
+    let half_open_pass_count = state.half_open_pass_count.fetch_add(1, Ordering::Relaxed) + 1;
+
+    if half_open_pass_count >= circuit_breaker.consecutive_passes {
+        state
+            .status
+            .store(CIRCUIT_BREAKER_STATUS_CLOSED, Ordering::Relaxed);
+        *state.opened_at.write() = None;
+        state.half_open_pass_count.store(0, Ordering::Relaxed);
+        if let Some(rf) = &state.recent_failures {
+            while rf.pop().is_some() {}
+        }
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
@@ -320,26 +365,13 @@ fn record_circuit_breaker_success(
     }
 }
 
-fn prune_circuit_breaker_failures(
-    state: &mut CircuitBreakerState,
-    window: std::time::Duration,
-    now: std::time::Instant,
-) {
-    while state
-        .recent_failures
-        .front()
-        .is_some_and(|timestamp| now.duration_since(*timestamp) >= window)
-    {
-        state.recent_failures.pop_front();
-    }
-}
-
 fn is_circuit_breaker_failure_status(status: u16) -> bool {
     (500..600).contains(&status)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, AtomicU8};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -348,7 +380,7 @@ mod tests {
     use rustc_hash::FxBuildHasher;
 
     use crate::{
-        types::upstream::UpstreamInner,
+        types::{circuit::CircuitBreakerState, upstream::UpstreamInner},
         upstream::{
             determine_proxy_to,
             lb::{ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState},
@@ -368,8 +400,7 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_opens_after_transport_failures() {
-        let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+        let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap =
             Arc::new(DashMap::with_hasher(FxBuildHasher));
         let upstream = make_upstream("http://backend1");
@@ -390,6 +421,7 @@ mod tests {
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
+            &[],
         );
         assert!(is_circuit_breaker_available(
             Some(&circuit_breaker_state),
@@ -405,6 +437,7 @@ mod tests {
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
+            &[],
         );
 
         assert!(!is_circuit_breaker_available(
@@ -421,8 +454,7 @@ mod tests {
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<ConcurrentTtlCache<Arc<UpstreamInner>, u64>> =
-            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
+        let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap =
             Arc::new(DashMap::with_hasher(FxBuildHasher));
         let circuit_breaker = crate::config::CircuitBreakerConfig {
@@ -436,8 +468,8 @@ mod tests {
         circuit_breaker_state.insert(
             upstreams[0].clone(),
             CircuitBreakerState {
-                status: CircuitBreakerStatus::Open,
-                opened_at: Some(Instant::now()),
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_OPEN)),
+                opened_at: Arc::new(RwLock::new(Some(Instant::now()))),
                 ..Default::default()
             },
         );
@@ -458,6 +490,7 @@ mod tests {
             &RwLock::new(ConsistentHashRing::new(&[])),
             &ferron_observability::CompositeEventSink::new(vec![]),
             &mut crate::ProxyMetrics::new(),
+            &[],
         )
         .unwrap();
 
@@ -480,8 +513,8 @@ mod tests {
         circuit_breaker_state.insert(
             upstream.clone(),
             CircuitBreakerState {
-                status: CircuitBreakerStatus::Open,
-                opened_at: Some(Instant::now() - Duration::from_secs(2)),
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_OPEN)),
+                opened_at: Arc::new(RwLock::new(Some(Instant::now() - Duration::from_secs(2)))),
                 ..Default::default()
             },
         );
@@ -530,8 +563,8 @@ mod tests {
         circuit_breaker_state.insert(
             upstream.clone(),
             CircuitBreakerState {
-                status: CircuitBreakerStatus::HalfOpen,
-                half_open_in_flight: true,
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_HALFOPEN)),
+                half_open_in_flight: Arc::new(AtomicBool::new(true)),
                 ..Default::default()
             },
         );
@@ -545,6 +578,7 @@ mod tests {
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
+            &[],
         );
 
         assert!(!is_circuit_breaker_available(

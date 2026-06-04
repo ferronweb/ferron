@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for GlesysDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_user = required_string(ctx, "api_user", "glesys", "API user")?;
-        let api_key = required_string(ctx, "api_key", "glesys", "API key")?;
+        let api_user = required_string(ctx, "api_user", "glesys")?;
+        let api_key = required_string(ctx, "api_key", "glesys")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_glesys(&api_user, &api_key, None)?,

@@ -60,3 +60,23 @@ pub async fn reload_handler(
         axum::Json(serde_json::json!({ "status": "reload_initiated" })),
     )
 }
+
+/// `GET /reload` — returns the status of the reload operation.
+pub async fn reload_get_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
+    let metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.read();
+    axum::Json(serde_json::json!({
+        "last_reload_time": chrono::DateTime::<chrono::Utc>::from(metrics.last_reload_time).to_rfc3339(), // ISO 8601 format
+        "last_reload_error": metrics.last_reload_error,
+        "active_generation": metrics.active_generation,
+    }))
+}
+
+/// `GET /runtime` — returns the runtime status.
+pub async fn runtime_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
+    let metrics = ferron_core::admin::ADMIN_METRICS.runtime_metrics.read();
+    axum::Json(serde_json::json!({
+        "primary_threads": metrics.primary_threads,
+        "io_uring_supported": metrics.io_uring_supported,
+        "io_uring_runtime_enabled": metrics.io_uring_runtime_enabled,
+    }))
+}

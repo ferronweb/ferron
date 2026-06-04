@@ -187,3 +187,9 @@ When any loopback address is detected, the local provider automatically includes
 - [Security and TLS](/docs/v3/configuration/security-tls) — cipher suites, ECDH curves, mTLS
 - [ACME automatic TLS](/docs/v3/configuration/tls-acme) — production TLS certificates
 - [HTTP host directives](/docs/v3/configuration/http-host) — per-host TLS configuration
+
+## Best practices
+
+The following best-practice check is reported by `ferron doctor` for directives on this page.
+
+- **`provider local` on non-loopback hosts** — The local TLS provider issues self-signed certificates. Use ACME or manual certificates for production hostnames.

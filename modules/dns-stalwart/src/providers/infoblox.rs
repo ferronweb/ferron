@@ -17,10 +17,10 @@ impl Provider<DnsContext<'static>> for InfobloxDnsProvider {
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
         let config = InfobloxConfig {
-            host: required_string(ctx, "host", "infoblox", "host")?,
+            host: required_string(ctx, "host", "infoblox")?,
             port: opt_string(ctx, "port"),
-            username: required_string(ctx, "username", "infoblox", "username")?,
-            password: required_string(ctx, "password", "infoblox", "password")?,
+            username: required_string(ctx, "username", "infoblox")?,
+            password: required_string(ctx, "password", "infoblox")?,
             wapi_version: opt_string(ctx, "wapi_version"),
             dns_view: opt_string(ctx, "dns_view"),
             request_timeout: None,

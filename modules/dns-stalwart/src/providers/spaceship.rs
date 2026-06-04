@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for SpaceshipDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let api_key = required_string(ctx, "api_key", "spaceship", "API key")?;
-        let api_secret = required_string(ctx, "api_secret", "spaceship", "API secret")?;
+        let api_key = required_string(ctx, "api_key", "spaceship")?;
+        let api_secret = required_string(ctx, "api_secret", "spaceship")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
             DnsUpdater::new_spaceship(&api_key, &api_secret, None)?,

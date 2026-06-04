@@ -15,8 +15,8 @@ impl Provider<DnsContext<'static>> for TencentCloudDnsProvider {
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let secret_id = required_string(ctx, "secret_id", "tencentcloud", "secret ID")?;
-        let secret_key = required_string(ctx, "secret_key", "tencentcloud", "secret key")?;
+        let secret_id = required_string(ctx, "secret_id", "tencentcloud")?;
+        let secret_key = required_string(ctx, "secret_key", "tencentcloud")?;
         let region = opt_string(ctx, "region");
         let session_token = opt_string(ctx, "session_token");
 
