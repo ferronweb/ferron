@@ -171,6 +171,7 @@ impl AbuseRegistry {
             }
 
             // Ban expired, remove it.
+            drop(entry);
             self.bans.remove(&ip);
         }
 
