@@ -436,100 +436,103 @@ async fn run_acme_background_task(
         "ferron_tls_acme",
     );
 
-    let event_sink2 = event_sink.clone();
-    let configs2 = configs.clone();
-    tokio::spawn(async move {
-        // On-demand request loop
-        while let Ok((sni_hostname, port)) = on_demand_rx.recv().await {
-            emit_log(
-                &event_sink2,
-                LogLevel::Info,
-                &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
-                "ferron_tls_acme",
-            );
-            emit_metric(
-                &event_sink2,
-                "ferron.acme.on_demand_requests_total",
-                MetricValue::U64(1),
-                MetricType::Counter,
-                Some("{request}"),
-                Some("Total on-demand certificate requests"),
-                vec![],
-            );
+    // Don't spawn on-demand request loop task when config struct is empty
+    if !on_demand_configs.is_empty() {
+        let event_sink2 = event_sink.clone();
+        let configs2 = configs.clone();
+        tokio::spawn(async move {
+            // On-demand request loop
+            while let Ok((sni_hostname, port)) = on_demand_rx.recv().await {
+                emit_log(
+                    &event_sink2,
+                    LogLevel::Info,
+                    &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
+                    "ferron_tls_acme",
+                );
+                emit_metric(
+                    &event_sink2,
+                    "ferron.acme.on_demand_requests_total",
+                    MetricValue::U64(1),
+                    MetricType::Counter,
+                    Some("{request}"),
+                    Some("Total on-demand certificate requests"),
+                    vec![],
+                );
 
-            if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
-                existing_combinations.insert((sni_hostname.clone(), port));
+                if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
+                    existing_combinations.insert((sni_hostname.clone(), port));
 
-                // Find matching on-demand config and convert to eager config
-                for on_demand_data in &on_demand_configs {
-                    if on_demand_data.port == port {
-                        if let Some(ref pattern) = on_demand_data.sni_hostname {
-                            if crate::on_demand::match_hostname(pattern, &sni_hostname) {
-                                match check_ask_endpoint(
-                                    &sni_hostname,
-                                    on_demand_data.on_demand_ask.as_deref(),
-                                    on_demand_data.on_demand_ask_no_verification,
-                                )
-                                .await
-                                {
-                                    Ok(true) => (),
-                                    Ok(false) => {
-                                        emit_log(
-                                            &event_sink2,
-                                            LogLevel::Error,
-                                            &format!(
+                    // Find matching on-demand config and convert to eager config
+                    for on_demand_data in &on_demand_configs {
+                        if on_demand_data.port == port {
+                            if let Some(ref pattern) = on_demand_data.sni_hostname {
+                                if crate::on_demand::match_hostname(pattern, &sni_hostname) {
+                                    match check_ask_endpoint(
+                                        &sni_hostname,
+                                        on_demand_data.on_demand_ask.as_deref(),
+                                        on_demand_data.on_demand_ask_no_verification,
+                                    )
+                                    .await
+                                    {
+                                        Ok(true) => (),
+                                        Ok(false) => {
+                                            emit_log(
+                                                &event_sink2,
+                                                LogLevel::Error,
+                                                &format!(
                                                 "The TLS certificate cannot be issued for \"{}\" \
                                                 hostname",
                                                 &sni_hostname
                                             ),
-                                            "ferron_tls_acme",
-                                        );
+                                                "ferron_tls_acme",
+                                            );
 
-                                        continue;
-                                    }
-                                    Err(err) => {
-                                        emit_log(
-                                            &event_sink2,
-                                            LogLevel::Error,
-                                            &format!(
+                                            continue;
+                                        }
+                                        Err(err) => {
+                                            emit_log(
+                                                &event_sink2,
+                                                LogLevel::Error,
+                                                &format!(
                                                 "Error while determining if the TLS certificate \
                                                 can be issued for \"{}\" hostname: {err}",
                                                 &sni_hostname
                                             ),
-                                            "ferron_tls_acme",
-                                        );
+                                                "ferron_tls_acme",
+                                            );
 
-                                        continue;
+                                            continue;
+                                        }
                                     }
+
+                                    let _ = crate::on_demand::add_domain_to_cache(
+                                        port,
+                                        Some(pattern),
+                                        &on_demand_data.cache_path,
+                                        &sni_hostname,
+                                    )
+                                    .await;
+
+                                    let acme_config = crate::on_demand::convert_on_demand_config(
+                                        on_demand_data,
+                                        sni_hostname.clone(),
+                                        memory_account_cache.clone(),
+                                        &sni_resolver_lock,
+                                        &tls_alpn_01_resolvers,
+                                        &http_01_resolvers,
+                                    )
+                                    .await;
+
+                                    configs2.write().await.push(acme_config);
+                                    break;
                                 }
-
-                                let _ = crate::on_demand::add_domain_to_cache(
-                                    port,
-                                    Some(pattern),
-                                    &on_demand_data.cache_path,
-                                    &sni_hostname,
-                                )
-                                .await;
-
-                                let acme_config = crate::on_demand::convert_on_demand_config(
-                                    on_demand_data,
-                                    sni_hostname.clone(),
-                                    memory_account_cache.clone(),
-                                    &sni_resolver_lock,
-                                    &tls_alpn_01_resolvers,
-                                    &http_01_resolvers,
-                                )
-                                .await;
-
-                                configs2.write().await.push(acme_config);
-                                break;
                             }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    }
 
     // Sleep for 2ms to ensure configurations are loaded
     tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
