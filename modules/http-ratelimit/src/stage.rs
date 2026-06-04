@@ -10,6 +10,7 @@ use std::sync::Arc;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
@@ -99,6 +100,7 @@ impl RateLimitEngine {
                     value: MetricValue::U64(1),
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to rate limit registry at capacity."),
+                    trace_context: current_event_trace_context(ctx),
                 }));
                 return Some(Self::make_response(config.deny_status, 1.0));
             };
@@ -131,6 +133,7 @@ impl RateLimitEngine {
                     value: MetricValue::U64(1),
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to exhausted rate limit buckets."),
+                    trace_context: current_event_trace_context(ctx),
                 }));
 
                 // Emit abuse event so the abuse protection module can track
@@ -159,6 +162,7 @@ impl RateLimitEngine {
                 value: MetricValue::U64(1),
                 unit: Some("{request}"),
                 description: Some("Requests that passed rate limiting."),
+                trace_context: current_event_trace_context(ctx),
             }));
         }
 

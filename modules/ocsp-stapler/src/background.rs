@@ -546,6 +546,7 @@ fn emit_metric(
             value,
             unit,
             description,
+            trace_context: None,
         }));
     }
 }

@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
 use http::header::{CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, LAST_MODIFIED};
@@ -156,6 +157,7 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 value: MetricValue::U64(1),
                 unit: Some("{response}"),
                 description: Some("Responses skipped due to Content-Encoding header."),
+                trace_context: current_event_trace_context(ctx),
             }));
             ctx.res = Some(HttpResponse::Custom(response));
             return Ok(());
@@ -171,6 +173,7 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 value: MetricValue::U64(1),
                 unit: Some("{response}"),
                 description: Some("Responses skipped due to MIME type mismatch."),
+                trace_context: current_event_trace_context(ctx),
             }));
             ctx.res = Some(HttpResponse::Custom(response));
             return Ok(());
@@ -196,6 +199,7 @@ impl Stage<HttpContext> for HttpReplaceStage {
             value: MetricValue::U64(1),
             unit: Some("{response}"),
             description: Some("Responses successfully modified."),
+            trace_context: current_event_trace_context(ctx),
         }));
 
         Ok(())

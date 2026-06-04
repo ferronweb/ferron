@@ -66,6 +66,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             description: Some(
                 "Number of times the client IP address was rewritten from a trusted proxy header.",
             ),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
 
         Ok(true)

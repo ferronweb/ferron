@@ -101,6 +101,7 @@ pub async fn bad_request_handler(
         description: Some(
             "Number of malformed or timed-out HTTP requests rejected before request handling.",
         ),
+        trace_context: None,
     }));
     let mut response = if let Some(response) = execute_error_pipeline(
         error_pipeline.as_ref(),
@@ -259,6 +260,7 @@ pub async fn request_handler(
             value: MetricValue::I64(1),
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         }));
     }
 
@@ -361,6 +363,7 @@ pub async fn request_handler(
             value: MetricValue::I64(-1),
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         }));
 
         // Emit request duration histogram
@@ -371,6 +374,7 @@ pub async fn request_handler(
             value: MetricValue::F64(duration_secs),
             unit: Some("s"),
             description: Some("Duration of HTTP server requests."),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         }));
 
         // Emit request count
@@ -381,6 +385,7 @@ pub async fn request_handler(
             value: MetricValue::U64(1),
             unit: Some("{request}"),
             description: Some("Number of HTTP server requests."),
+            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         }));
 
         // Emit access log

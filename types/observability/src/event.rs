@@ -47,6 +47,8 @@ pub struct MetricEvent {
     pub unit: Option<&'static str>,
     /// Optional description of the metric
     pub description: Option<&'static str>,
+    /// Optional trace context for the metric, useful for correlating with trace events.
+    pub trace_context: Option<EventTraceContext>,
 }
 
 /// Represents a type of metric.

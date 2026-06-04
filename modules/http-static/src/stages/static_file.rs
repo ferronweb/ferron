@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::parse_q_value_header::parse_q_value_header;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
@@ -63,6 +64,7 @@ fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome:
         value: MetricValue::U64(1),
         unit: Some("{response}"),
         description: Some("Number of static file responses by outcome."),
+        trace_context: current_event_trace_context(&ctx.http),
     }));
 }
 
@@ -595,6 +597,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             value: MetricValue::U64(1),
             unit: Some("{file}"),
             description: Some("Number of static files served."),
+            trace_context: current_event_trace_context(&ctx.http),
         }));
 
         ctx.http.events.emit(Event::Metric(MetricEvent {
@@ -610,6 +613,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             value: MetricValue::F64(file_size as f64),
             unit: Some("By"),
             description: Some("Bytes sent for static file responses."),
+            trace_context: current_event_trace_context(&ctx.http),
         }));
 
         Ok(false)

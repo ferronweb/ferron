@@ -116,6 +116,7 @@ pub async fn execute_proxy(
             &ctx.events,
             &mut metrics,
             config_key,
+            ferron_http::trace_context::current_event_trace_context(ctx),
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
@@ -169,6 +170,7 @@ pub async fn execute_proxy(
                         status,
                         &mut metrics,
                         &ctx.events,
+                        ferron_http::trace_context::current_event_trace_context(ctx),
                     );
                 }
 
@@ -212,6 +214,7 @@ pub async fn execute_proxy(
                     &mut metrics,
                     &ctx.events,
                     config_key,
+                    ferron_http::trace_context::current_event_trace_context(ctx),
                 );
 
                 // Check if we should retry with another backend

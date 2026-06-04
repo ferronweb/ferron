@@ -227,6 +227,7 @@ pub(super) async fn execute_http_file_pipeline(
                     value: MetricValue::U64(1),
                     unit: Some("{redirect}"),
                     description: Some("Number of HTTP redirects emitted by the server."),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 return Ok(());
             }

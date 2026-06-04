@@ -144,6 +144,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             value: MetricValue::U64(1),
             unit: Some("{redirect}"),
             description: Some("Number of HTTP redirects emitted by the server."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
 
         // Stop the pipeline — response is ready.

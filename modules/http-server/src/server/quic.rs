@@ -50,6 +50,7 @@ fn emit_connection_error_metric(
         value: MetricValue::U64(1),
         unit: Some("{error}"),
         description: Some("Number of connection lifecycle errors by transport and stage."),
+        trace_context: None,
     }));
 }
 

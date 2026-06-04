@@ -52,6 +52,7 @@ pub fn record_backend_transport_failure(
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
     config_key: &[usize],
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     if passive_check_enabled {
         metrics.unhealthy_backends.push(upstream.clone());
@@ -60,8 +61,13 @@ pub fn record_backend_transport_failure(
         failed_backends.insert(key, current + 1);
     }
 
-    if record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
-    {
+    if record_circuit_breaker_failure(
+        circuit_breaker_state,
+        circuit_breaker,
+        upstream,
+        event_sink,
+        event_trace_context,
+    ) {
         metrics
             .circuit_breaker_unhealthy_backends
             .push(upstream.clone());
@@ -77,15 +83,23 @@ pub fn record_backend_response(
     status: u16,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
+    trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     let should_open = if is_circuit_breaker_failure_status(status) {
-        record_circuit_breaker_failure(circuit_breaker_state, circuit_breaker, upstream, event_sink)
+        record_circuit_breaker_failure(
+            circuit_breaker_state,
+            circuit_breaker,
+            upstream,
+            event_sink,
+            trace_context,
+        )
     } else {
         record_circuit_breaker_success(
             circuit_breaker_state,
             circuit_breaker,
             upstream,
             event_sink,
+            trace_context,
         );
         false
     };
@@ -103,6 +117,7 @@ pub fn try_acquire_circuit_breaker_slot(
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) -> bool {
     if !circuit_breaker.enabled {
         return true;
@@ -152,7 +167,7 @@ pub fn try_acquire_circuit_breaker_slot(
                         upstream.proxy_to
                     ),
                     target: crate::LOG_TARGET,
-                    trace_context: None,
+                    trace_context: event_trace_context.clone(),
                 },
             ));
             emit_circuit_metric(
@@ -161,6 +176,15 @@ pub fn try_acquire_circuit_breaker_slot(
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
                 ferron_observability::MetricValue::U64(1), // HalfOpen = 1
+                event_trace_context.clone(),
+            );
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.open_total",
+                ferron_observability::MetricType::Counter,
+                ferron_observability::MetricValue::I64(-1),
+                event_trace_context,
             );
             true
         }
@@ -175,6 +199,7 @@ fn emit_circuit_metric(
     name: &'static str,
     metric_type: ferron_observability::MetricType,
     value: ferron_observability::MetricValue,
+    trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent};
     event_sink.emit(Event::Metric(MetricEvent {
@@ -187,6 +212,7 @@ fn emit_circuit_metric(
         value,
         unit: Some("{circuit}"),
         description: Some("Circuit breaker state and transitions for upstream backends."),
+        trace_context,
     }));
 }
 
@@ -195,6 +221,7 @@ fn record_circuit_breaker_failure(
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) -> bool {
     if !circuit_breaker.enabled {
         return false;
@@ -236,7 +263,7 @@ fn record_circuit_breaker_failure(
                         upstream.proxy_to
                     ),
                     target: crate::LOG_TARGET,
-                    trace_context: None,
+                    trace_context: event_trace_context.clone(),
                 },
             ));
             emit_circuit_metric(
@@ -245,13 +272,15 @@ fn record_circuit_breaker_failure(
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
                 ferron_observability::MetricValue::U64(2), // Open = 2
+                event_trace_context.clone(),
             );
             emit_circuit_metric(
                 event_sink,
                 upstream,
                 "ferron.proxy.circuit.open_total",
                 ferron_observability::MetricType::Counter,
-                ferron_observability::MetricValue::U64(1),
+                ferron_observability::MetricValue::I64(1),
+                event_trace_context,
             );
             true
         }
@@ -283,7 +312,7 @@ fn record_circuit_breaker_failure(
                         upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
                     ),
                     target: crate::LOG_TARGET,
-                    trace_context: None,
+                    trace_context: event_trace_context.clone(),
                 },
             ));
             emit_circuit_metric(
@@ -292,13 +321,15 @@ fn record_circuit_breaker_failure(
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
                 ferron_observability::MetricValue::U64(2), // Open = 2
+                event_trace_context.clone(),
             );
             emit_circuit_metric(
                 event_sink,
                 upstream,
                 "ferron.proxy.circuit.open_total",
                 ferron_observability::MetricType::Counter,
-                ferron_observability::MetricValue::U64(1),
+                ferron_observability::MetricValue::I64(1),
+                event_trace_context,
             );
             true
         }
@@ -311,6 +342,7 @@ fn record_circuit_breaker_success(
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     if !circuit_breaker.enabled {
         return;
@@ -352,7 +384,7 @@ fn record_circuit_breaker_success(
                     upstream.proxy_to, circuit_breaker.consecutive_passes
                 ),
                 target: crate::LOG_TARGET,
-                trace_context: None,
+                trace_context: event_trace_context.clone(),
             },
         ));
         emit_circuit_metric(
@@ -361,6 +393,15 @@ fn record_circuit_breaker_success(
             "ferron.proxy.circuit.state",
             ferron_observability::MetricType::Gauge,
             ferron_observability::MetricValue::U64(0), // Closed = 0
+            event_trace_context.clone(),
+        );
+        emit_circuit_metric(
+            event_sink,
+            upstream,
+            "ferron.proxy.circuit.open_total",
+            ferron_observability::MetricType::Counter,
+            ferron_observability::MetricValue::I64(-1),
+            event_trace_context,
         );
     }
 }
@@ -422,6 +463,7 @@ mod tests {
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
             &[],
+            None,
         );
         assert!(is_circuit_breaker_available(
             Some(&circuit_breaker_state),
@@ -438,6 +480,7 @@ mod tests {
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
             &[],
+            None,
         );
 
         assert!(!is_circuit_breaker_available(
@@ -491,6 +534,7 @@ mod tests {
             &ferron_observability::CompositeEventSink::new(vec![]),
             &mut crate::ProxyMetrics::new(),
             &[],
+            None,
         )
         .unwrap();
 
@@ -524,6 +568,7 @@ mod tests {
             &circuit_breaker,
             &upstream,
             &ferron_observability::CompositeEventSink::new(vec![]),
+            None
         ));
         assert!(!is_circuit_breaker_available(
             Some(&circuit_breaker_state),
@@ -538,6 +583,7 @@ mod tests {
             200,
             &mut crate::ProxyMetrics::new(),
             &ferron_observability::CompositeEventSink::new(vec![]),
+            None,
         );
 
         assert!(is_circuit_breaker_available(
@@ -579,6 +625,7 @@ mod tests {
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
             &[],
+            None,
         );
 
         assert!(!is_circuit_breaker_available(

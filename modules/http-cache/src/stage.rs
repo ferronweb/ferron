@@ -126,6 +126,7 @@ impl HttpCacheStage {
             value: MetricValue::U64(1),
             unit: Some("{request}"),
             description: Some("Number of cache lookups handled by the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
@@ -134,6 +135,7 @@ impl HttpCacheStage {
             value: MetricValue::U64(items as u64),
             unit: Some("{entry}"),
             description: Some("Number of entries currently stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
     }
 
@@ -148,6 +150,7 @@ impl HttpCacheStage {
             value: MetricValue::U64(1),
             unit: Some("{response}"),
             description: Some("Number of responses stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
     }
 
@@ -163,6 +166,7 @@ impl HttpCacheStage {
                 value: MetricValue::U64(stats.expired_evictions as u64),
                 unit: Some("{entry}"),
                 description: Some("Number of cache entries evicted from the HTTP cache."),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
         if stats.size_evictions > 0 {
@@ -176,6 +180,7 @@ impl HttpCacheStage {
                 value: MetricValue::U64(stats.size_evictions as u64),
                 unit: Some("{entry}"),
                 description: Some("Number of cache entries evicted from the HTTP cache."),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
     }
@@ -194,6 +199,7 @@ impl HttpCacheStage {
             value: MetricValue::U64(purged as u64),
             unit: Some("{entry}"),
             description: Some("Number of cache entries purged via LSCache-compatible controls."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
@@ -202,6 +208,7 @@ impl HttpCacheStage {
             value: MetricValue::U64(items as u64),
             unit: Some("{entry}"),
             description: Some("Number of entries currently stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
     }
 }

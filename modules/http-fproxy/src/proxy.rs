@@ -137,6 +137,7 @@ async fn handle_connect(
     let error_logger = ctx.events.clone();
     let config = config.clone();
     let connect_address = connect_address.clone();
+    let trace_context = ferron_http::trace_context::current_event_trace_context(ctx);
 
     // Prepare HTTP upgrade for the request
     let (request, upgrade_future) = {
@@ -158,7 +159,7 @@ async fn handle_connect(
                             "Forward proxy: HTTP CONNECT upgrade failed for {connect_address}"
                         ),
                         target: LOG_TARGET,
-                        trace_context: None,
+                        trace_context: trace_context.clone(),
                     }));
                     emit_forward_proxy_metric_to_events(
                         &error_logger,
@@ -166,6 +167,7 @@ async fn handle_connect(
                         "upgrade_failed",
                         502,
                         Some("upgrade_failed".to_string()),
+                        trace_context.clone(),
                     );
                     return;
                 }
@@ -177,7 +179,7 @@ async fn handle_connect(
                         "Forward proxy: no upgrade future for CONNECT {connect_address}"
                     ),
                     target: LOG_TARGET,
-                    trace_context: None,
+                    trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
@@ -185,6 +187,7 @@ async fn handle_connect(
                     "upgrade_failed",
                     502,
                     Some("upgrade_failed".to_string()),
+                    trace_context.clone(),
                 );
                 return;
             }
@@ -198,7 +201,7 @@ async fn handle_connect(
                     level: LogLevel::Error,
                     message: format!("Forward proxy: cannot connect to {connect_address}: {err}"),
                     target: LOG_TARGET,
-                    trace_context: None,
+                    trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
@@ -206,6 +209,7 @@ async fn handle_connect(
                     "backend_connect_error",
                     502,
                     Some("backend_connect_error".to_string()),
+                    trace_context.clone(),
                 );
                 return;
             }
@@ -218,7 +222,7 @@ async fn handle_connect(
                     "Forward proxy: cannot set TCP_NODELAY for {connect_address}: {err}"
                 ),
                 target: LOG_TARGET,
-                trace_context: None,
+                trace_context: trace_context.clone(),
             }));
         }
 
@@ -231,7 +235,7 @@ async fn handle_connect(
                         "Forward proxy: cannot convert TCP stream to poll I/O for {connect_address}: {err}"
                     ),
                     target: LOG_TARGET,
-                    trace_context: None,
+                    trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
@@ -239,6 +243,7 @@ async fn handle_connect(
                     "backend_connect_error",
                     502,
                     Some("backend_connect_error".to_string()),
+                    trace_context.clone(),
                 );
                 return;
             }
@@ -257,7 +262,7 @@ async fn handle_connect(
                          backend→client: {backend_to_client} bytes)"
                     ),
                     target: LOG_TARGET,
-                    trace_context: None,
+                    trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
@@ -265,6 +270,7 @@ async fn handle_connect(
                     "tunnel_closed",
                     200,
                     None,
+                    trace_context.clone(),
                 );
             }
             Err(err) => {
@@ -274,7 +280,7 @@ async fn handle_connect(
                         "Forward proxy: CONNECT tunnel error for {connect_address}: {err}"
                     ),
                     target: LOG_TARGET,
-                    trace_context: None,
+                    trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
@@ -282,6 +288,7 @@ async fn handle_connect(
                     "tunnel_error",
                     502,
                     Some("tunnel_error".to_string()),
+                    trace_context.clone(),
                 );
             }
         }
@@ -652,7 +659,14 @@ fn emit_forward_proxy_metric(
     status_code: u16,
     error_type: Option<String>,
 ) {
-    emit_forward_proxy_metric_to_events(&ctx.events, mode, result, status_code, error_type);
+    emit_forward_proxy_metric_to_events(
+        &ctx.events,
+        mode,
+        result,
+        status_code,
+        error_type,
+        ferron_http::trace_context::current_event_trace_context(ctx),
+    );
 }
 
 fn emit_forward_proxy_metric_to_events(
@@ -661,6 +675,7 @@ fn emit_forward_proxy_metric_to_events(
     result: &'static str,
     status_code: u16,
     error_type: Option<String>,
+    trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     let mut attributes = vec![
         (
@@ -687,5 +702,6 @@ fn emit_forward_proxy_metric_to_events(
         value: MetricValue::U64(1),
         unit: Some("{request}"),
         description: Some("Number of forward proxy requests by mode and outcome."),
+        trace_context,
     }));
 }

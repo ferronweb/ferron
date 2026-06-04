@@ -66,6 +66,7 @@ pub fn determine_proxy_to(
     event_sink: &ferron_observability::CompositeEventSink,
     metrics: &mut crate::ProxyMetrics,
     config_key: &[usize],
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -163,6 +164,7 @@ pub fn determine_proxy_to(
             circuit_breaker,
             &upstream,
             event_sink,
+            event_trace_context.clone(),
         ) {
             // Slot acquisition may have failed due to a race — treat as overloaded
             let open = circuit_breaker

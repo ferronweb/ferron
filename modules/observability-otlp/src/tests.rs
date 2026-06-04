@@ -216,6 +216,7 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             value: MetricValue::U64(1),
             unit: None,
             description: None,
+            trace_context: None,
         };
         emit_metric(&provider, &event, &mut instruments);
 
@@ -246,6 +247,7 @@ async fn emit_metric_with_long_label_value_is_hashed() {
         value: MetricValue::U64(1),
         unit: None,
         description: None,
+        trace_context: None,
     };
 
     // Should not panic or OOM

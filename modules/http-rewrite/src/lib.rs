@@ -15,6 +15,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
+use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::HttpContext;
 use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
 use rustc_hash::FxBuildHasher;
@@ -142,6 +143,7 @@ impl Stage<HttpContext> for RewriteStage {
                     description: Some(
                         "Rewrite rules that produced an invalid path (400 response).",
                     ),
+                    trace_context: current_event_trace_context(ctx),
                 }));
                 return Ok(false);
             }
@@ -195,6 +197,7 @@ impl Stage<HttpContext> for RewriteStage {
             value: MetricValue::U64(1),
             unit: Some("{request}"),
             description: Some("URLs successfully rewritten."),
+            trace_context: current_event_trace_context(ctx),
         }));
 
         Ok(true)

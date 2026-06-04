@@ -350,6 +350,7 @@ fn process_probe_result(
         value: MetricValue::F64(duration_secs),
         unit: Some("s"),
         description: Some("Duration of active health check probe."),
+        trace_context: None,
     }));
 
     if probe_success {
@@ -360,6 +361,7 @@ fn process_probe_result(
             value: MetricValue::U64(1),
             unit: Some("{probe}"),
             description: Some("Successful active health check probes."),
+            trace_context: None,
         }));
     } else {
         event_sink.emit(Event::Metric(MetricEvent {
@@ -369,6 +371,7 @@ fn process_probe_result(
             value: MetricValue::U64(1),
             unit: Some("{probe}"),
             description: Some("Failed active health check probes."),
+            trace_context: None,
         }));
     }
 

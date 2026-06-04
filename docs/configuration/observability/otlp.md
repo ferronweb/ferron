@@ -234,6 +234,7 @@ Most commercial APM solutions support OTLP:
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
+- **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
 ## See also

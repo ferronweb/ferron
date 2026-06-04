@@ -69,5 +69,6 @@ pub fn emit_certificate_not_after(
         value: MetricValue::U64(not_after),
         unit: Some("s"),
         description: Some("Certificate `notAfter` field as Unix epoch seconds"),
+        trace_context: None,
     }));
 }
