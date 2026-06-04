@@ -1,11 +1,12 @@
 //! Upstream resolution and backend selection logic.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
 use crate::config::{AffinityType, CircuitBreakerConfig};
-use crate::types::circuit::CircuitBreakerStateMap;
+use crate::types::circuit::{CircuitBreakerStateMap, CIRCUIT_BREAKER_STATUS_OPEN};
 use crate::types::health::HealthCheckStateMap;
 use crate::types::lb::SelectedBackend;
 use crate::types::upstream::{Upstream, UpstreamInner};
@@ -59,11 +60,11 @@ pub fn determine_proxy_to(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    selected_backends: &FxHashSet<Arc<UpstreamInner>>,
     affinity_type: Option<&AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
+    metrics: &mut crate::ProxyMetrics,
     config_key: &[usize],
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
@@ -71,44 +72,44 @@ pub fn determine_proxy_to(
     }
 
     // Build healthy list of indices into `upstreams` — avoids Arc clones
-    // until the final selection.
+    // until the final selection, while tracking exclusion reasons.
     let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
-    let mut healthy: Vec<usize> = {
-        let failed = if health_check_enabled {
-            Some(failed_backends)
-        } else {
-            None
-        };
-        upstreams
-            .iter()
-            .enumerate()
-            .filter(|(i, u)| {
-                // Check passive failure cache
-                let not_failed = failed.as_ref().is_none_or(|failed| {
-                    failed
-                        .get(&(u.to_owned().clone(), config_key.to_vec()))
-                        .is_none_or(|fails| fails <= health_check_max_fails)
-                });
-
-                // Check active health check state
-                let active_healthy = if let Some(state_map) = health_check_state {
-                    crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)
-                } else {
-                    true
-                };
-
-                // Check if backend is already selected
-                let not_selected = !selected_backends.contains(*u);
-
-                let healthy = not_failed && active_healthy && not_selected;
-                if !healthy {
-                    unhealthy.insert(*i);
+    let mut healthy: Vec<usize> = upstreams
+        .iter()
+        .enumerate()
+        .filter_map(|(i, u)| {
+            // Check passive failure cache
+            if health_check_enabled {
+                if let Some(fails) = failed_backends.get(&(u.clone(), config_key.to_vec())) {
+                    if fails > health_check_max_fails {
+                        unhealthy.insert(i);
+                        metrics.excluded_passive.push(Arc::clone(u));
+                        return None;
+                    }
                 }
-                healthy
-            })
-            .map(|(i, _)| i)
-            .collect()
-    };
+            }
+
+            // Check active health check state
+            if let Some(state_map) = health_check_state {
+                if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
+                    // Active health exclusion is tracked via the existing
+                    // active_unhealthy_backends metric — no separate exclusion
+                    // metric needed.
+                    unhealthy.insert(i);
+                    return None;
+                }
+            }
+
+            // Check if backend is already selected (retry loop)
+            if metrics.selected_backends.contains(u) {
+                unhealthy.insert(i);
+                metrics.excluded_already_tried.push(Arc::clone(u));
+                return None;
+            }
+
+            Some(i)
+        })
+        .collect();
 
     let mut affinity_index = None;
 
@@ -163,6 +164,20 @@ pub fn determine_proxy_to(
             &upstream,
             event_sink,
         ) {
+            // Slot acquisition may have failed due to a race — treat as overloaded
+            let open = circuit_breaker
+                .enabled
+                .then_some(circuit_breaker_state)
+                .flatten()
+                .and_then(|s| s.get(&upstream))
+                .is_some_and(|s| s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN);
+
+            if open {
+                metrics.excluded_circuit_open.push(Arc::clone(&upstream));
+            } else {
+                metrics.excluded_overloaded.push(Arc::clone(&upstream));
+            }
+
             continue;
         }
 

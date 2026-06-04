@@ -18,6 +18,7 @@ struct ProcessState {
     previous_cpu_system_time: f64,
     previous_rss: u64,
     previous_vms: u64,
+    previous_fds_open: usize,
 }
 
 impl Default for ProcessState {
@@ -28,13 +29,22 @@ impl Default for ProcessState {
             previous_cpu_system_time: 0.0,
             previous_rss: 0,
             previous_vms: 0,
+            previous_fds_open: 0,
         }
     }
 }
 
 /// Reads the current process state from `/proc/self/stat`.
 fn read_process_state() -> Option<ProcessStateSnapshot> {
-    let stat = match procfs::process::Process::myself().and_then(|p| p.stat()) {
+    let process = match procfs::process::Process::myself() {
+        Ok(s) => s,
+        Err(e) => {
+            // Log at debug level — this is expected to fail occasionally during startup
+            ferron_core::log_debug!("Failed to read process stats: {}", e);
+            return None;
+        }
+    };
+    let stat = match process.stat() {
         Ok(s) => s,
         Err(e) => {
             // Log at debug level — this is expected to fail occasionally during startup
@@ -49,6 +59,7 @@ fn read_process_state() -> Option<ProcessStateSnapshot> {
         cpu_system_time: stat.stime as f64 / tps,
         rss: stat.rss * procfs::page_size(),
         vms: stat.vsize,
+        fds_open: process.fd_count().unwrap_or(0),
     })
 }
 
@@ -58,6 +69,7 @@ struct ProcessStateSnapshot {
     cpu_system_time: f64,
     rss: u64,
     vms: u64,
+    fds_open: usize,
 }
 
 /// Runs the background process metrics collection loop.
@@ -84,8 +96,10 @@ pub async fn collect_process_metrics(
 
         let cpu_user_time_increase = snapshot.cpu_user_time - state.previous_cpu_user_time;
         let cpu_system_time_increase = snapshot.cpu_system_time - state.previous_cpu_system_time;
+        let fd_increase = snapshot.fds_open as i64 - state.previous_fds_open as i64;
         state.previous_cpu_user_time = snapshot.cpu_user_time;
         state.previous_cpu_system_time = snapshot.cpu_system_time;
+        state.previous_fds_open = snapshot.fds_open;
 
         let rss_diff = snapshot.rss as i64 - state.previous_rss as i64;
         let vms_diff = snapshot.vms as i64 - state.previous_vms as i64;
@@ -111,10 +125,12 @@ pub async fn collect_process_metrics(
             cpu_system_utilization,
             rss_diff,
             vms_diff,
+            fd_increase,
         );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_metrics(
     event_sink: &CompositeEventSink,
     cpu_user_time_increase: f64,
@@ -123,6 +139,7 @@ fn emit_metrics(
     cpu_system_utilization: f64,
     rss_diff: i64,
     vms_diff: i64,
+    fd_increase: i64,
 ) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "process.cpu.time",
@@ -188,5 +205,14 @@ fn emit_metrics(
         value: MetricValue::I64(vms_diff),
         unit: Some("By"),
         description: Some("The amount of committed virtual memory."),
+    }));
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: "process.unix.file_descriptor.count",
+        attributes: vec![],
+        ty: MetricType::UpDownCounter,
+        value: MetricValue::I64(fd_increase),
+        unit: Some("{file_descriptor}"),
+        description: Some("Number of unix file descriptors in use by the process."),
     }));
 }

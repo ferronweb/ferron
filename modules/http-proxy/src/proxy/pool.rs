@@ -77,6 +77,7 @@ pub async fn try_send_with_pool(
 
     if is_ready {
         metrics.connection_reused = true;
+        metrics.pool_hit = true;
         let wrapper = item.inner_mut().take().unwrap();
         return send_via_wrapper(
             ctx,
@@ -109,6 +110,7 @@ pub async fn try_send_with_pool(
         match wait_for_any_ready(&mut pending_items, idle_timeout).await {
             Some(mut item) => {
                 metrics.connection_reused = true;
+                metrics.pool_hit = true;
                 let wrapper = item.inner_mut().take().unwrap();
                 return send_via_wrapper(
                     ctx,
@@ -201,6 +203,7 @@ pub async fn establish_and_send(
     existing_item: Option<PooledConnection>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+    metrics.pool_miss = true;
     let mut item: PooledConnection = if let Some(it) = existing_item {
         it
     } else if let Some(limit) = local_limit {
@@ -211,6 +214,8 @@ pub async fn establish_and_send(
     };
 
     *item.inner_mut() = None;
+
+    let connect_start = std::time::Instant::now();
 
     #[cfg(unix)]
     let is_unix = upstream.proxy_unix.is_some();
@@ -388,6 +393,8 @@ pub async fn establish_and_send(
         }
     };
 
+    metrics.connect_time_secs += connect_start.elapsed().as_secs_f64();
+
     send_via_wrapper(
         ctx,
         config,
@@ -423,7 +430,9 @@ pub async fn send_via_wrapper(
     let start = std::time::Instant::now();
     let response = match wrapper.send_request(request).await {
         Ok(resp) => {
-            metrics.upstream_time_secs = start.elapsed().as_secs_f64();
+            let elapsed = start.elapsed().as_secs_f64();
+            metrics.upstream_time_secs = elapsed;
+            metrics.ttfb_secs = elapsed;
             resp
         }
         Err(e) => {

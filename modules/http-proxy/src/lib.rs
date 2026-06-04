@@ -83,6 +83,32 @@ pub struct ProxyMetrics {
     pub upstream_time_secs: f64,
     /// HTTP response status code from the upstream.
     pub status_code: Option<u16>,
+
+    // -- Backend exclusion reasons --
+    /// Backends excluded due to passive health check failures.
+    pub excluded_passive: Vec<Arc<types::upstream::UpstreamInner>>,
+    /// Backends excluded due to circuit breaker being open.
+    pub excluded_circuit_open: Vec<Arc<types::upstream::UpstreamInner>>,
+    /// Backends excluded because they were already tried in a retry loop.
+    pub excluded_already_tried: Vec<Arc<types::upstream::UpstreamInner>>,
+    /// Backends excluded because circuit breaker was half-open with an in-flight request.
+    pub excluded_overloaded: Vec<Arc<types::upstream::UpstreamInner>>,
+
+    // -- Retry metadata --
+    /// Number of retry attempts made during this request.
+    pub retry_count: u64,
+
+    // -- Pool behavior --
+    /// A pooled connection was available immediately without waiting.
+    pub pool_hit: bool,
+    /// No pooled connection was available; a new connection was established.
+    pub pool_miss: bool,
+
+    // -- Connection timing --
+    /// Total time spent establishing new TCP/TLS connections (in seconds).
+    pub connect_time_secs: f64,
+    /// Time from request send to response headers received (TTFB, in seconds).
+    pub ttfb_secs: f64,
 }
 
 impl Default for ProxyMetrics {
@@ -108,6 +134,15 @@ impl ProxyMetrics {
             pool_wait_time_secs: 0.0,
             upstream_time_secs: 0.0,
             status_code: None,
+            excluded_passive: Vec::new(),
+            excluded_circuit_open: Vec::new(),
+            excluded_already_tried: Vec::new(),
+            excluded_overloaded: Vec::new(),
+            retry_count: 0,
+            pool_hit: false,
+            pool_miss: false,
+            connect_time_secs: 0.0,
+            ttfb_secs: 0.0,
         }
     }
 }
@@ -435,8 +470,58 @@ impl Module for ReverseProxyModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
-        // Capture the secondary Tokio runtime handle for SRV lookups
-        let _handle = get_secondary_runtime_handle(runtime, self.sink.clone());
+        // Capture the secondary Tokio runtime handle for SRV lookups and pool gauge emission
+        let (secondary_handle, pool_sink) =
+            get_secondary_runtime_handle(runtime, self.sink.clone());
+
+        // Spawn periodic pool depth gauge emission on the secondary runtime
+        secondary_handle.spawn(async move {
+            use ferron_observability::{
+                Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+            };
+
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+            loop {
+                interval.tick().await;
+                let snapshot = crate::connections::POOL_STATS.snapshot();
+                for ((thread_id, upstream), (idle, outstanding)) in snapshot {
+                    let mut attrs = Vec::with_capacity(3);
+                    attrs.push((
+                        "ferron.proxy.backend_url",
+                        MetricAttributeValue::String(upstream.proxy_to.clone()),
+                    ));
+                    if let Some(ref unix_path) = upstream.proxy_unix {
+                        attrs.push((
+                            "ferron.proxy.backend_unix_path",
+                            MetricAttributeValue::String(unix_path.clone()),
+                        ));
+                    }
+                    attrs.push((
+                        "worker",
+                        MetricAttributeValue::String(format!("{:?}", thread_id)),
+                    ));
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.pool.idle",
+                        attributes: attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(idle as u64),
+                        unit: Some("{connection}"),
+                        description: Some("Current number of idle connections in the pool."),
+                    }));
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.pool.outstanding",
+                        attributes: attrs,
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(outstanding as u64),
+                        unit: Some("{connection}"),
+                        description: Some(
+                            "Current number of outstanding (in-use) connections in the pool.",
+                        ),
+                    }));
+                }
+            }
+        });
+
         self.sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
@@ -804,28 +889,130 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
-        if let (Some(backend), LoadBalancerAlgorithmInner::P2cEwma) =
-            (metrics.final_selected_backend.as_ref(), &*algorithm)
-        {
-            let params = P2cEwmaParams::default();
-            let ewma_backend_attrs = vec![(
+        // --- Backend exclusion reasons ---
+        fn emit_backend_excluded(
+            events: &ferron_observability::CompositeEventSink,
+            backend: &Arc<types::upstream::UpstreamInner>,
+            reason: &'static str,
+        ) {
+            let mut attrs = Vec::with_capacity(3);
+            attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
-            )];
+            ));
+            if let Some(ref unix_path) = backend.proxy_unix {
+                attrs.push((
+                    "ferron.proxy.backend_unix_path",
+                    MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            attrs.push((
+                "ferron.proxy.reason",
+                MetricAttributeValue::StaticStr(reason),
+            ));
+            events.emit(ferron_observability::Event::Metric(MetricEvent {
+                name: "ferron.proxy.backend.excluded",
+                attributes: attrs,
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{backend}"),
+                description: Some("Backend excluded from selection due to health, circuit breaker, or retry state."),
+            }));
+        }
+        for backend in &metrics.excluded_passive {
+            emit_backend_excluded(&ctx.events, backend, "passive_failure");
+        }
+        for backend in &metrics.excluded_circuit_open {
+            emit_backend_excluded(&ctx.events, backend, "circuit_open");
+        }
+        for backend in &metrics.excluded_already_tried {
+            emit_backend_excluded(&ctx.events, backend, "already_tried");
+        }
+        for backend in &metrics.excluded_overloaded {
+            emit_backend_excluded(&ctx.events, backend, "overloaded");
+        }
 
-            // Backend EWMA latency gauge
-            let ewma_latency = p2c_ewma::get_decayed_ewma(&self.state.ewma_state, backend, &params);
+        // --- Retry metrics ---
+        if metrics.retry_count > 0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.lb.ewma_latency",
-                    attributes: ewma_backend_attrs.clone(),
-                    ty: MetricType::Gauge,
-                    value: MetricValue::F64(ewma_latency),
-                    unit: Some("s"),
-                    description: Some("Current EWMA response latency for the selected backend."),
+                    name: "ferron.proxy.retry.count",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(metrics.retry_count),
+                    unit: Some("{attempt}"),
+                    description: Some("Number of retry attempts during backend selection."),
                 }));
+            let mut final_attrs = upstream_attrs.clone();
+            final_attrs.push(("ferron.proxy.retry.final", MetricAttributeValue::Bool(true)));
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                name: "ferron.proxy.retry.final",
+                attributes: final_attrs,
+                ty: MetricType::Gauge,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some(
+                    "Indicates the request succeeded after a retry (1) or required no retries (0).",
+                ),
+            }));
+        }
 
+        // --- Pool hit / miss ---
+        if metrics.pool_hit {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.hit",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("A pooled connection was available immediately."),
+                }));
+        }
+        if metrics.pool_miss {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.miss",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "No pooled connection was available; a new connection was established.",
+                    ),
+                }));
+        }
+
+        // --- Connection latency histograms ---
+        if metrics.connect_time_secs > 0.0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.connect.latency",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
+                    value: MetricValue::F64(metrics.connect_time_secs),
+                    unit: Some("s"),
+                    description: Some(
+                        "Duration of TCP/TLS connection establishment to the upstream.",
+                    ),
+                }));
+        }
+        if metrics.ttfb_secs > 0.0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.ttfb",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Histogram(Some(Cow::Borrowed(PROXY_POOL_BUCKETS))),
+                    value: MetricValue::F64(metrics.ttfb_secs),
+                    unit: Some("s"),
+                    description: Some(
+                        "Time from request send to first byte of response headers received.",
+                    ),
+                }));
+        }
+
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
             // Backend active connections gauge
             let active_conns = self
                 .state
@@ -835,43 +1022,63 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.lb.active_connections",
-                    attributes: ewma_backend_attrs.clone(),
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Gauge,
                     value: MetricValue::U64(active_conns as u64),
                     unit: Some("{connection}"),
                     description: Some("Active tracked connections for the selected backend."),
                 }));
 
-            // Backend warm-up state gauge
-            let warming_up = p2c_ewma::is_warming_up(&self.state.ewma_state, backend);
-            ctx.events
+            // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
+            if matches!(&*algorithm, LoadBalancerAlgorithmInner::P2cEwma) {
+                let params = P2cEwmaParams::default();
+
+                // Backend EWMA latency gauge
+                let ewma_latency =
+                    p2c_ewma::get_decayed_ewma(&self.state.ewma_state, backend, &params);
+                ctx.events
+                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                        name: "ferron.proxy.lb.ewma_latency",
+                        attributes: upstream_attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(ewma_latency),
+                        unit: Some("s"),
+                        description: Some(
+                            "Current EWMA response latency for the selected backend.",
+                        ),
+                    }));
+
+                // Backend warm-up state gauge
+                let warming_up = p2c_ewma::is_warming_up(&self.state.ewma_state, backend);
+                ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.lb.warmup_state",
-                    attributes: ewma_backend_attrs,
+                    attributes: upstream_attrs.clone(),
                     ty: MetricType::Gauge,
                     value: MetricValue::U64(if warming_up { 1 } else { 0 }),
                     unit: Some("{state}"),
                     description: Some("Whether the selected backend is still in EWMA warm-up phase (1 = warming up, 0 = settled)."),
                 }));
 
-            // Emit routing decision counter with reason
-            if ewma_latency > 0.0 {
-                let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
-                let mut sel_attrs = upstream_attrs.clone();
-                sel_attrs.push((
-                    "ferron.proxy.lb.reason",
-                    MetricAttributeValue::String("p2c_ewma".to_string()),
-                ));
-                sel_attrs.push(("ferron.proxy.lb.score", MetricAttributeValue::F64(score)));
-                ctx.events
-                    .emit(ferron_observability::Event::Metric(MetricEvent {
-                        name: "ferron.proxy.lb.selections",
-                        attributes: sel_attrs,
-                        ty: MetricType::Counter,
-                        value: MetricValue::U64(1),
-                        unit: Some("{selection}"),
-                        description: Some("P2C+EWMA backend selection with combined score."),
-                    }));
+                // Emit routing decision counter with reason
+                if ewma_latency > 0.0 {
+                    let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
+                    let mut sel_attrs = upstream_attrs.clone();
+                    sel_attrs.push((
+                        "ferron.proxy.lb.reason",
+                        MetricAttributeValue::String("p2c_ewma".to_string()),
+                    ));
+                    sel_attrs.push(("ferron.proxy.lb.score", MetricAttributeValue::F64(score)));
+                    ctx.events
+                        .emit(ferron_observability::Event::Metric(MetricEvent {
+                            name: "ferron.proxy.lb.selections",
+                            attributes: sel_attrs,
+                            ty: MetricType::Counter,
+                            value: MetricValue::U64(1),
+                            unit: Some("{selection}"),
+                            description: Some("P2C+EWMA backend selection with combined score."),
+                        }));
+                }
             }
         }
 

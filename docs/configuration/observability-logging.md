@@ -135,6 +135,7 @@ The `metrics-process` module collects process-level metrics automatically when a
 | `process.cpu.utilization` | Gauge | `cpu.mode` (`"user"` or `"system"`) | CPU utilization since the last measurement |
 | `process.memory.usage` | UpDownCounter | — | The change in physical memory (RSS) since the last measurement |
 | `process.memory.virtual` | UpDownCounter | — | The change in committed virtual memory (VMS) since the last measurement |
+| `process.unix.file_descriptor.count` | UpDownCounter | — | The change in number of unix file descriptors since the last measurement (Linux only) |
 
 #### Admin API metrics
 

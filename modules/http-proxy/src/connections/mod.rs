@@ -11,7 +11,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
 
 use crossbeam_queue::SegQueue;
-use rustc_hash::FxHashMap;
+use dashmap::DashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use tokio_util::sync::CancellationToken;
 
 mod pool;
@@ -50,6 +51,66 @@ thread_local! {
 static PENDING_PULLS: LazyLock<
     parking_lot::RwLock<FxHashMap<(Option<Arc<UpstreamInner>>, bool), SegQueue<CancellationToken>>>,
 > = LazyLock::new(|| parking_lot::RwLock::new(FxHashMap::default()));
+
+/// Global pool depth stats collector.
+///
+/// Tracks idle and outstanding connection counts per (worker thread, upstream) pair.
+/// Updated at pull/return boundaries and consumed by a background gauge emission task.
+pub static POOL_STATS: LazyLock<PoolStatsCollector> = LazyLock::new(PoolStatsCollector::new);
+
+pub struct PoolStatsCollector {
+    inner: DashMap<
+        (std::thread::ThreadId, Arc<UpstreamInner>),
+        (AtomicUsize, AtomicUsize),
+        FxBuildHasher,
+    >,
+}
+
+impl PoolStatsCollector {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            inner: DashMap::with_hasher(FxBuildHasher),
+        }
+    }
+
+    #[inline]
+    pub fn record_pull(&self, upstream: &Arc<UpstreamInner>) {
+        let entry = self
+            .inner
+            .entry((std::thread::current().id(), upstream.clone()))
+            .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)));
+        entry.value().1.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn record_return(&self, upstream: &Arc<UpstreamInner>, stored: bool) {
+        let entry = self
+            .inner
+            .entry((std::thread::current().id(), upstream.clone()))
+            .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)));
+        entry.value().1.fetch_sub(1, Ordering::Relaxed);
+        if stored {
+            entry.value().0.fetch_add(1, Ordering::Relaxed);
+        } else {
+            entry.value().0.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    #[inline]
+    pub fn snapshot(&self) -> Vec<((std::thread::ThreadId, Arc<UpstreamInner>), (usize, usize))> {
+        self.inner
+            .iter()
+            .map(|entry| {
+                let key = entry.key().clone();
+                let idle = entry.value().0.load(Ordering::Relaxed);
+                let outstanding = entry.value().1.load(Ordering::Relaxed);
+                (key, (idle, outstanding))
+            })
+            .collect()
+    }
+}
 
 /// Connection pool manager for the reverse proxy.
 ///
@@ -244,10 +305,11 @@ impl ConnectionManager {
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
     ) -> Option<PooledConnection> {
+        let upstream_for_stats = upstream.clone();
         let key = (upstream, client_ip);
         let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
 
-        TLS_POOLS.with(|c| {
+        let result = TLS_POOLS.with(|c| {
             let ptr = c.get();
             let opt = unsafe { &mut *ptr };
 
@@ -282,7 +344,13 @@ impl ConnectionManager {
                 return pools.unix_pool.pull(key);
             }
             pools.tcp_pool.pull(key)
-        })
+        });
+
+        if result.is_some() {
+            POOL_STATS.record_pull(&upstream_for_stats);
+        }
+
+        result
     }
 
     /// Pull a connection with a local limit applied, returning immediately.
@@ -295,12 +363,13 @@ impl ConnectionManager {
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
     ) -> Option<PooledConnection> {
+        let upstream_for_stats = upstream.clone();
         let upstream_key = upstream;
         let key = (upstream_key.clone(), client_ip);
         let limit = local_limit.map(|limit| (upstream_key, limit));
         let per_thread = self.global_limit_per_thread.load(Ordering::Relaxed);
 
-        TLS_POOLS.with(|c| {
+        let result = TLS_POOLS.with(|c| {
             let ptr = c.get();
             let opt = unsafe { &mut *ptr };
 
@@ -335,7 +404,13 @@ impl ConnectionManager {
                 return pools.unix_pool.pull_with_local_limit(key, limit);
             }
             pools.tcp_pool.pull_with_local_limit(key, limit)
-        })
+        });
+
+        if result.is_some() {
+            POOL_STATS.record_pull(&upstream_for_stats);
+        }
+
+        result
     }
 }
 
@@ -350,6 +425,8 @@ pub fn return_connection_to_pool(
     local_limit_key: Option<Arc<UpstreamInner>>,
     is_unix: bool,
 ) {
+    POOL_STATS.record_return(&key.0, true);
+
     TLS_POOLS.with(|tls| {
         // SAFETY: We are strictly single-threaded per core, and no re-entrant
         // mutable borrows occur during connection pulls.

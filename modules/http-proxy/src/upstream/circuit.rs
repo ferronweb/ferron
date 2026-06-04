@@ -155,11 +155,39 @@ pub fn try_acquire_circuit_breaker_slot(
                     trace_context: None,
                 },
             ));
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.state",
+                ferron_observability::MetricType::Gauge,
+                ferron_observability::MetricValue::U64(1), // HalfOpen = 1
+            );
             true
         }
         CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.swap(true, Ordering::Relaxed),
         _ => false, // Possibly corrupted state
     }
+}
+
+fn emit_circuit_metric(
+    event_sink: &ferron_observability::CompositeEventSink,
+    upstream: &Arc<UpstreamInner>,
+    name: &'static str,
+    metric_type: ferron_observability::MetricType,
+    value: ferron_observability::MetricValue,
+) {
+    use ferron_observability::{Event, MetricAttributeValue, MetricEvent};
+    event_sink.emit(Event::Metric(MetricEvent {
+        name,
+        attributes: vec![(
+            "ferron.proxy.backend_url",
+            MetricAttributeValue::String(upstream.proxy_to.clone()),
+        )],
+        ty: metric_type,
+        value,
+        unit: Some("{circuit}"),
+        description: Some("Circuit breaker state and transitions for upstream backends."),
+    }));
 }
 
 fn record_circuit_breaker_failure(
@@ -211,6 +239,20 @@ fn record_circuit_breaker_failure(
                     trace_context: None,
                 },
             ));
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.state",
+                ferron_observability::MetricType::Gauge,
+                ferron_observability::MetricValue::U64(2), // Open = 2
+            );
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.open_total",
+                ferron_observability::MetricType::Counter,
+                ferron_observability::MetricValue::U64(1),
+            );
             true
         }
         CIRCUIT_BREAKER_STATUS_OPEN => {
@@ -233,11 +275,30 @@ fn record_circuit_breaker_failure(
             *state.opened_at.write() = Some(now);
             state.half_open_pass_count.store(0, Ordering::Relaxed);
             state.half_open_in_flight.store(false, Ordering::Relaxed);
-            ferron_core::log_warn!(
-                "Upstream {} circuit opened after {} failures within {:?}",
-                upstream.proxy_to,
-                circuit_breaker.max_fails,
-                circuit_breaker.window
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Upstream {} circuit opened after {} failures within {:?}",
+                        upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
+                    ),
+                    target: crate::LOG_TARGET,
+                    trace_context: None,
+                },
+            ));
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.state",
+                ferron_observability::MetricType::Gauge,
+                ferron_observability::MetricValue::U64(2), // Open = 2
+            );
+            emit_circuit_metric(
+                event_sink,
+                upstream,
+                "ferron.proxy.circuit.open_total",
+                ferron_observability::MetricType::Counter,
+                ferron_observability::MetricValue::U64(1),
             );
             true
         }
@@ -294,6 +355,13 @@ fn record_circuit_breaker_success(
                 trace_context: None,
             },
         ));
+        emit_circuit_metric(
+            event_sink,
+            upstream,
+            "ferron.proxy.circuit.state",
+            ferron_observability::MetricType::Gauge,
+            ferron_observability::MetricValue::U64(0), // Closed = 0
+        );
     }
 }
 
@@ -417,11 +485,11 @@ mod tests {
             None,
             &circuit_breaker,
             Some(&circuit_breaker_state),
-            &rustc_hash::FxHashSet::default(),
             None,
             None,
             &RwLock::new(ConsistentHashRing::new(&[])),
             &ferron_observability::CompositeEventSink::new(vec![]),
+            &mut crate::ProxyMetrics::new(),
             &[],
         )
         .unwrap();
