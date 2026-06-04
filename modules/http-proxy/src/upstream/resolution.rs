@@ -1,9 +1,12 @@
 //! Upstream resolution and backend selection logic.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use rustc_hash::FxHashSet;
+
 use crate::config::{AffinityType, CircuitBreakerConfig};
-use crate::types::circuit::{CircuitBreakerStateMap, CircuitBreakerStatus};
+use crate::types::circuit::{CircuitBreakerStateMap, CIRCUIT_BREAKER_STATUS_OPEN};
 use crate::types::health::HealthCheckStateMap;
 use crate::types::lb::SelectedBackend;
 use crate::types::upstream::{Upstream, UpstreamInner};
@@ -77,9 +80,9 @@ pub fn determine_proxy_to(
         .filter_map(|(i, u)| {
             // Check passive failure cache
             if health_check_enabled {
-                if let Some(fails) = failed_backends.get(u) {
+                if let Some(fails) = failed_backends.get(&(u.clone(), config_key.to_vec())) {
                     if fails > health_check_max_fails {
-                        unhealthy.insert(*i);
+                        unhealthy.insert(i);
                         metrics.excluded_passive.push(Arc::clone(u));
                         return None;
                     }
@@ -92,14 +95,14 @@ pub fn determine_proxy_to(
                     // Active health exclusion is tracked via the existing
                     // active_unhealthy_backends metric — no separate exclusion
                     // metric needed.
-                    unhealthy.insert(*i);
+                    unhealthy.insert(i);
                     return None;
                 }
             }
 
             // Check if backend is already selected (retry loop)
             if metrics.selected_backends.contains(u) {
-                unhealthy.insert(*i);
+                unhealthy.insert(i);
                 metrics.excluded_already_tried.push(Arc::clone(u));
                 return None;
             }
@@ -167,7 +170,7 @@ pub fn determine_proxy_to(
                 .then_some(circuit_breaker_state)
                 .flatten()
                 .and_then(|s| s.get(&upstream))
-                .is_some_and(|s| matches!(s.status, CircuitBreakerStatus::Open));
+                .is_some_and(|s| s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN);
 
             if open {
                 metrics.excluded_circuit_open.push(Arc::clone(&upstream));
