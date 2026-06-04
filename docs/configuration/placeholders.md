@@ -11,7 +11,7 @@ Environment variable placeholders let you reference environment variables direct
 
 ### Syntax
 
-```
+```text
 {env:VARIABLE_NAME}
 ```
 
@@ -25,7 +25,7 @@ Environment variable placeholders let you reference environment variables direct
 
 Given these environment variables:
 
-```
+```text
 export APP_ROOT="/var/www/app"
 export DB_HOST="db.example.com"
 ```
