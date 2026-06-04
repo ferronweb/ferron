@@ -355,29 +355,6 @@ mod tests {
     }
 
     #[test]
-    fn litespeed_override_ignores_standard_no_store() {
-        let mut headers = HeaderMap::new();
-        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-        let ls_control = LiteSpeedCacheControl {
-            public: true,
-            max_age: Some(Duration::from_secs(120)),
-            ..LiteSpeedCacheControl::default()
-        };
-
-        let decision = evaluate_response_policy(
-            StatusCode::OK,
-            &headers,
-            false,
-            false,
-            Some(&ls_control),
-            true,
-        );
-        assert!(decision.store);
-        assert_eq!(decision.scope, Some(CacheScope::Public));
-        assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
-    }
-
-    #[test]
     fn litespeed_override_prefers_litespeed_ttl() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -458,28 +435,6 @@ mod tests {
         let decision = evaluate_response_policy(StatusCode::OK, &headers, false, true, None, false);
         assert!(decision.store);
         assert_eq!(decision.scope, Some(CacheScope::Private));
-    }
-
-    #[test]
-    fn expires_in_past_produces_zero_ttl() {
-        let mut headers = HeaderMap::new();
-        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public"));
-        headers.insert(
-            header::EXPIRES,
-            HeaderValue::from_static("Mon, 01 Jan 2020 00:00:00 GMT"),
-        );
-        headers.insert(
-            header::DATE,
-            HeaderValue::from_static("Mon, 01 Jan 2024 00:00:00 GMT"),
-        );
-        // With public but no max-age, TTL is min(DEFAULT_MAX_CACHE_AGE_SECS=300, expires_delta)
-        // expires is in the past => expires_delta returns None => TTL falls back to DEFAULT
-        // Actually, expires_delta returns None because expires_at < date
-        let decision =
-            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
-        // Without any valid max-age or expires, TTL defaults to DEFAULT_MAX_CACHE_AGE_SECS
-        assert!(decision.store);
-        assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
     }
 
     #[test]

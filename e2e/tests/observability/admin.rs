@@ -7,13 +7,12 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_ferron_container(
     webroot_dir: &std::path::Path,
     config_file: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_exposed_port(ContainerPort::Tcp(8081))
@@ -39,8 +38,8 @@ async fn create_ferron_container(
 async fn test_admin_status_and_config() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
+    let webroot_dir = crate::common::create_temp_dir();
+    let mut config_file = crate::common::create_temp_file();
 
     config_file
         .as_file_mut()
@@ -62,7 +61,7 @@ async fn test_admin_status_and_config() {
         )
         .unwrap();
 
-    common::write_file(webroot_dir.path().join("index.html"), b"ok").unwrap();
+    crate::common::write_file(webroot_dir.path().join("index.html"), b"ok").unwrap();
 
     let container = create_ferron_container(webroot_dir.path(), config_file.path())
         .await

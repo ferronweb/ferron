@@ -56,12 +56,30 @@ struct RequestState {
     has_authorization: bool,
     head_only: bool,
     lookup_result: LookupResult,
+    /// When present, notifies coalesced waiters when the leader completes.
+    _inflight_guard: Option<InflightGuard>,
 }
 
 enum LookupResult {
     Hit,
-    Miss { stats: StoreStats },
+    Miss {
+        stats: StoreStats,
+        /// Key for inflight coalescing on expired-entry misses.
+        inflight_key: Option<String>,
+    },
     Bypass,
+}
+
+/// RAII guard that calls `complete_fetch` when dropped, notifying coalesced waiters.
+struct InflightGuard {
+    store: Arc<CacheStore>,
+    cache_key: String,
+}
+
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.store.complete_fetch(&self.cache_key);
+    }
 }
 
 enum CollectBodyOutcome {
@@ -322,7 +340,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             && request_policy.allow_lookup;
 
         let lookup_result = if request_is_lookup_eligible {
-            let (lookup, stats, items) = self.store.lookup(
+            let (lookup, stats, items, had_expired) = self.store.lookup(
                 &base_key,
                 &request_headers,
                 &request_cookies,
@@ -344,13 +362,79 @@ impl Stage<HttpContext> for HttpCacheStage {
                 LookupResult::Hit
             } else {
                 self.emit_eviction_metrics(ctx, stats);
-                LookupResult::Miss { stats }
+
+                if had_expired {
+                    // Thundering herd protection: coalesce concurrent requests
+                    let (is_leader, notify) = self.store.begin_fetch(&base_key);
+
+                    if !is_leader {
+                        // Another request is already fetching this key.
+                        // Wait for it to complete, then re-check the cache.
+                        notify.notified().await;
+
+                        let (retry_lookup, retry_stats, retry_items, _) = self.store.lookup(
+                            &base_key,
+                            &request_headers,
+                            &request_cookies,
+                            private_key.as_deref(),
+                        );
+                        if let Some(entry) = retry_lookup {
+                            // Leader populated the cache — serve from cache
+                            let scope = entry.scope;
+                            self.emit_eviction_metrics(ctx, retry_stats);
+                            self.emit_request_metric(ctx, "hit", Some(scope), retry_items);
+                            ctx.res = Some(if entry.body.is_none() {
+                                HttpResponse::BuiltinError(
+                                    entry.status.as_u16(),
+                                    Some(entry.headers.clone()),
+                                )
+                            } else {
+                                HttpResponse::Custom(build_cached_response(
+                                    entry,
+                                    head_only,
+                                    config.emit_litespeed_headers,
+                                )?)
+                            });
+                            return Ok(false);
+                        }
+                        // Leader's response was non-cacheable — proceed normally
+                        LookupResult::Miss {
+                            stats: retry_stats,
+                            inflight_key: None,
+                        }
+                    } else {
+                        // We are the leader — proceed to downstream, guard will notify on drop
+                        LookupResult::Miss {
+                            stats,
+                            inflight_key: Some(base_key.clone()),
+                        }
+                    }
+                } else {
+                    // First-time request or non-expiry miss — no coalescing
+                    LookupResult::Miss {
+                        stats,
+                        inflight_key: None,
+                    }
+                }
             }
         } else {
             LookupResult::Bypass
         };
 
         let stop = matches!(lookup_result, LookupResult::Hit);
+
+        let inflight_guard = if let LookupResult::Miss {
+            ref inflight_key, ..
+        } = lookup_result
+        {
+            inflight_key.as_ref().map(|key| InflightGuard {
+                store: self.store.clone(),
+                cache_key: key.clone(),
+            })
+        } else {
+            None
+        };
+
         ctx.extensions.insert::<RequestStateKey>(RequestState {
             config,
             base_key,
@@ -362,6 +446,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             has_authorization,
             head_only,
             lookup_result,
+            _inflight_guard: inflight_guard,
         });
 
         Ok(!stop)
@@ -374,7 +459,10 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         match state.lookup_result {
             LookupResult::Hit => return Ok(()),
-            LookupResult::Miss { stats } => self.emit_eviction_metrics(ctx, stats),
+            LookupResult::Miss {
+                stats,
+                inflight_key: _,
+            } => self.emit_eviction_metrics(ctx, stats),
             LookupResult::Bypass => {}
         }
 

@@ -7,7 +7,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 // Include the generated protobuf code (message types only)
 pub mod hello {
@@ -18,7 +17,7 @@ async fn create_backend_grpc_container(
     network: &str,
     cert_dir: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let backend_grpc_image: GenericImage = self::common::build_backend_grpc_image().await?;
+    let backend_grpc_image: GenericImage = crate::common::build_backend_grpc_image().await?;
     backend_grpc_image
         .with_exposed_port(ContainerPort::Tcp(50051))
         .with_wait_for(WaitFor::seconds(3)) // Fixed wait duration, since the gRPC server is HTTP/2-only
@@ -37,7 +36,7 @@ async fn create_ferron_container(
     config_file: &Path,
     cert_dir: &Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image: GenericImage = self::common::build_ferron_image().await?;
+    let ferron_image: GenericImage = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(443))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -83,9 +82,9 @@ impl GRpcRProxyTestContext {
         nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         #[cfg(unix)]
-        let cert_dir = common::create_temp_dir();
+        let cert_dir = crate::common::create_temp_dir();
         #[cfg(unix)]
-        let mut config_file = common::create_temp_file();
+        let mut config_file = crate::common::create_temp_file();
 
         #[cfg(not(unix))]
         let cert_dir = tempfile::tempdir().unwrap();

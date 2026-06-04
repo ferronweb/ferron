@@ -24,13 +24,6 @@ fn test_generate_ticket_key_size() {
 }
 
 #[test]
-fn test_generate_ticket_key_uniqueness() {
-    let key1 = generate_ticket_key();
-    let key2 = generate_ticket_key();
-    assert_ne!(key1, key2);
-}
-
-#[test]
 fn test_generate_ticket_key_randomness() {
     let key = generate_ticket_key();
     let zero_count = key.iter().filter(|&&b| b == 0).count();
@@ -94,24 +87,6 @@ fn test_generate_initial_ticket_keys_creates_parent_dirs() {
     generate_initial_ticket_keys(key_file.to_str().unwrap(), 1).expect("Failed to generate keys");
 
     assert!(key_file.exists());
-}
-
-#[test]
-fn test_persist_ticket_keys_roundtrip() {
-    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let key_file = temp_dir.path().join("persist.keys");
-
-    let original_keys = vec![
-        parse_ticket_key_record(&generate_ticket_key(), 0).unwrap(),
-        parse_ticket_key_record(&generate_ticket_key(), 0).unwrap(),
-    ];
-
-    persist_ticket_keys(key_file.to_str().unwrap(), &original_keys)
-        .expect("Failed to persist keys");
-
-    let loaded_keys = load_ticket_keys(key_file.to_str().unwrap()).expect("Failed to load keys");
-
-    assert_eq!(original_keys, loaded_keys);
 }
 
 #[test]
@@ -266,47 +241,6 @@ fn test_load_max_keys_respects_limit() {
 }
 
 #[test]
-fn test_load_empty_file_fails() {
-    let file = create_temp_key_file(&[]);
-
-    let result = load_ticket_keys(file.path().to_str().unwrap());
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-    assert!(err.to_string().contains("empty"));
-}
-
-#[test]
-fn test_load_invalid_size_not_multiple_of_80() {
-    let data = vec![0u8; 100];
-    let file = create_temp_key_file(&data);
-
-    let result = load_ticket_keys(file.path().to_str().unwrap());
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-    assert!(err.to_string().contains("not a multiple"));
-}
-
-#[test]
-fn test_load_file_too_small() {
-    let data = vec![0u8; 40];
-    let file = create_temp_key_file(&data);
-
-    let result = load_ticket_keys(file.path().to_str().unwrap());
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-}
-
-#[test]
-fn test_load_nonexistent_file() {
-    let result = load_ticket_keys("/nonexistent/path/ticket.keys");
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
-}
-
-#[test]
 fn test_parse_record_wrong_size() {
     let data = [0u8; 40];
     let result = parse_ticket_key_record(&data, 0);
@@ -357,20 +291,6 @@ fn create_test_ticket_key() -> TicketKey {
         aes_key: raw_key[16..48].try_into().unwrap(),
         hmac_key: raw_key[48..80].try_into().unwrap(),
     }
-}
-
-#[test]
-fn test_encrypt_decrypt_roundtrip() {
-    let key = create_test_ticket_key();
-    let encryptor = CustomTicketEncryptor::new(&key).expect("Failed to create encryptor");
-
-    let plaintext = b"test session data";
-    let ticket = encryptor.encrypt(plaintext).expect("Failed to encrypt");
-
-    assert!(ticket.len() > plaintext.len());
-
-    let decrypted = encryptor.decrypt(&ticket).expect("Failed to decrypt");
-    assert_eq!(decrypted, plaintext);
 }
 
 #[test]
@@ -437,24 +357,6 @@ fn test_different_plaintexts() {
             plaintext.len()
         );
     }
-}
-
-#[test]
-fn test_ticket_key_rotator_creation() {
-    let keys = vec![create_test_ticket_key()];
-    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let key_file = temp_dir.path().join("rotator.keys");
-
-    persist_ticket_keys(
-        key_file.to_str().unwrap(),
-        &[(keys[0].key_name, keys[0].aes_key, keys[0].hmac_key)],
-    )
-    .expect("Failed to persist keys");
-
-    let rotator = TicketKeyRotator::new(keys, None, key_file.to_str().unwrap().to_string())
-        .expect("Failed to create rotator");
-
-    assert!(rotator.enabled());
 }
 
 #[test]

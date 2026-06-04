@@ -1,7 +1,6 @@
 //! Static file serving stage with streaming I/O and optional zerocopy.
 
 use std::borrow::Cow;
-use std::ffi::OsStr;
 use std::io;
 
 use async_trait::async_trait;
@@ -325,15 +324,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
             if let Some(ext) = precompressed_ext {
                 if !ext.is_empty() {
                     let mut precomp_path = ctx.file_path.clone();
-                    let new_ext = format!(
-                        "{}.{}",
-                        ctx.file_path
-                            .extension()
-                            .map(OsStr::to_string_lossy)
-                            .unwrap_or_default(),
-                        ext
-                    );
-                    precomp_path.set_extension(&new_ext);
+                    // If the original file has an extension (e.g. file.txt) produce file.txt.br
+                    // Otherwise produce file.br
+                    if let Some(orig_ext) = ctx.file_path.extension() {
+                        let orig_ext_str = orig_ext.to_string_lossy();
+                        let new_ext = format!("{}.{}", orig_ext_str, ext);
+                        precomp_path.set_extension(new_ext);
+                    } else {
+                        precomp_path.set_extension(ext);
+                    }
 
                     if let Ok(meta) = vibeio::fs::metadata(&precomp_path).await {
                         if meta.is_file() {

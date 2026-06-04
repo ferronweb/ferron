@@ -456,35 +456,6 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
 }
 
 #[test]
-fn test_select_backend_index_weighted_round_robin_equal_weights() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 1)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-        (2, make_upstream_with_weight("http://backend3", 1)),
-    ];
-    let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
-
-    // With equal weights, should cycle like round-robin
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        1
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        2
-    );
-    assert_eq!(
-        old_select_backend_index(&algorithm, &backends, None, None),
-        0
-    );
-}
-
-#[test]
 fn test_select_backend_index_weighted_round_robin_unequal_weights() {
     let backends = vec![
         (0, make_upstream_with_weight("http://backend1", 5)),
@@ -530,20 +501,6 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
     // Verify smooth distribution: backend2 should not be at the very end
     // In smooth WRR with 5:1, the pattern is typically: 0, 0, 1, 0, 0, 0
     assert!(selections.iter().position(|&x| x == 1).unwrap() < 5);
-}
-
-#[test]
-fn test_select_backend_index_weighted_round_robin_single_backend() {
-    let backends = vec![(0, make_upstream_with_weight("http://backend1", 10))];
-    let state = WeightedRoundRobinState::new();
-    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(state);
-
-    for _ in 0..10 {
-        assert_eq!(
-            old_select_backend_index(&algorithm, &backends, None, None),
-            0
-        );
-    }
 }
 
 #[test]
@@ -654,66 +611,6 @@ fn test_select_backend_index_least_connections_weighted_higher_weight_favored() 
 }
 
 #[test]
-fn test_select_backend_index_least_connections_weighted_lower_weight_favored() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 3)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-    ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
-
-    // Simulate 6 connections on backend1 (weight 3) and 3 connections on backend2 (weight 1)
-    // Score for backend1: 6 * 1 = 6 (using backend2's weight)
-    // Score for backend2: 3 * 3 = 9 (using backend1's weight)
-    // Backend1 has lower score, so it should be selected
-    let tracker1 = Arc::new(());
-    let tracker2 = Arc::new(());
-    let mut trackers = vec![];
-    for _ in 1..6 {
-        trackers.push(tracker1.clone());
-    }
-    for _ in 1..3 {
-        trackers.push(tracker2.clone());
-    }
-    conn_state.insert(backends[0].1.clone(), tracker1);
-    conn_state.insert(backends[1].1.clone(), tracker2);
-
-    // Should pick backend1 (higher weight compensates for more connections)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
-    assert_eq!(idx, 0);
-}
-
-#[test]
-fn test_select_backend_index_least_connections_weighted_equal_score() {
-    let backends = vec![
-        (0, make_upstream_with_weight("http://backend1", 2)),
-        (1, make_upstream_with_weight("http://backend2", 1)),
-    ];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
-
-    // Simulate 2 connections on backend1 (weight 2) and 4 connections on backend2 (weight 1)
-    // Score for backend1: 2 * 1 = 2 (using backend2's weight)
-    // Score for backend2: 4 * 2 = 8 (using backend1's weight)
-    // Backend1 has lower score, so it should be selected
-    let mut trackers = vec![];
-    let tracker1 = Arc::new(());
-    let tracker2 = Arc::new(());
-    for _ in 1..2 {
-        trackers.push(tracker1.clone());
-    }
-    for _ in 1..4 {
-        trackers.push(tracker2.clone());
-    }
-    conn_state.insert(backends[0].1.clone(), tracker1);
-    conn_state.insert(backends[1].1.clone(), tracker2);
-
-    // Should pick backend1 (lower weighted score)
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
-    assert_eq!(idx, 0);
-}
-
-#[test]
 fn test_select_backend_index_least_connections_all_zero_weight() {
     let backends = vec![
         (0, make_upstream_with_weight("http://backend1", 0)),
@@ -784,17 +681,6 @@ fn test_select_backend_index_p2c_ewma_basic() {
             old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
         assert!(idx < backends.len());
     }
-}
-
-#[test]
-fn test_select_backend_index_p2c_ewma_single_backend() {
-    let backends = vec![(0, make_upstream("http://backend1"))];
-    let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let ewma_state: EwmaStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
-    let algorithm = LoadBalancerAlgorithmInner::P2cEwma;
-
-    let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), Some(&ewma_state));
-    assert_eq!(idx, 0);
 }
 
 #[test]

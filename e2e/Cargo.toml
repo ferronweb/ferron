@@ -11,16 +11,20 @@ nix = { version = "0.31.2", features = ["fs"] }
 prost-build = "0.14"
 
 [[test]]
+name = "abort"
+path = "tests/abort.rs"
+
+[[test]]
 name = "acme"
 path = "tests/acme.rs"
 
 [[test]]
-name = "admin"
-path = "tests/admin.rs"
+name = "auth"
+path = "tests/auth/mod.rs"
 
 [[test]]
-name = "auth"
-path = "tests/auth.rs"
+name = "buffer"
+path = "tests/buffer.rs"
 
 [[test]]
 name = "cache"
@@ -32,75 +36,23 @@ path = "tests/cgi.rs"
 
 [[test]]
 name = "config"
-path = "tests/config.rs"
+path = "tests/config/mod.rs"
 
 [[test]]
 name = "dcompress"
 path = "tests/dcompress.rs"
 
 [[test]]
+name = "early_hints"
+path = "tests/early_hints.rs"
+
+[[test]]
+name = "error"
+path = "tests/error/mod.rs"
+
+[[test]]
 name = "fcgi"
 path = "tests/fcgi.rs"
-
-[[test]]
-name = "lb"
-path = "tests/lb.rs"
-
-[[test]]
-name = "limit"
-path = "tests/limit.rs"
-
-[[test]]
-name = "ocsp"
-path = "tests/ocsp.rs"
-
-[[test]]
-name = "prometheus"
-path = "tests/prometheus.rs"
-
-[[test]]
-name = "redirecting"
-path = "tests/redirecting.rs"
-
-[[test]]
-name = "replace"
-path = "tests/replace.rs"
-
-[[test]]
-name = "reload"
-path = "tests/reload.rs"
-
-[[test]]
-name = "rewrite"
-path = "tests/rewrite.rs"
-
-[[test]]
-name = "rproxy"
-path = "tests/rproxy.rs"
-
-[[test]]
-name = "rproxy_grpc"
-path = "tests/rproxy_grpc.rs"
-
-[[test]]
-name = "static"
-path = "tests/static.rs"
-
-[[test]]
-name = "tls"
-path = "tests/tls.rs"
-
-[[test]]
-name = "otlp"
-path = "tests/otlp.rs"
-
-[[test]]
-name = "fauth"
-path = "tests/fauth.rs"
-
-[[test]]
-name = "security"
-path = "tests/security/mod.rs"
 
 [[test]]
 name = "fproxy"
@@ -115,60 +67,44 @@ name = "lscache"
 path = "tests/lscache.rs"
 
 [[test]]
-name = "abuseban"
-path = "tests/abuseban.rs"
+name = "observability"
+path = "tests/observability/mod.rs"
 
 [[test]]
-name = "affinity"
-path = "tests/affinity.rs"
+name = "ocsp"
+path = "tests/ocsp.rs"
+
+[[test]]
+name = "proxy"
+path = "tests/proxy/mod.rs"
 
 [[test]]
 name = "proxy_protocol"
 path = "tests/proxy_protocol.rs"
 
 [[test]]
-name = "response_headers"
-path = "tests/response_headers.rs"
+name = "reload"
+path = "tests/reload.rs"
 
 [[test]]
-name = "abort"
-path = "tests/abort.rs"
+name = "response"
+path = "tests/response/mod.rs"
 
 [[test]]
-name = "config_include"
-path = "tests/config_include.rs"
+name = "security"
+path = "tests/security/mod.rs"
 
 [[test]]
-name = "error_handle"
-path = "tests/error_handle.rs"
-
-[[test]]
-name = "error_page"
-path = "tests/error_page.rs"
-
-[[test]]
-name = "buffer"
-path = "tests/buffer.rs"
-
-[[test]]
-name = "health_check"
-path = "tests/health_check.rs"
+name = "static"
+path = "tests/static.rs"
 
 [[test]]
 name = "timeout"
 path = "tests/timeout.rs"
 
 [[test]]
-name = "rproxy_srv"
-path = "tests/rproxy_srv.rs"
-
-[[test]]
-name = "rproxy_proxy"
-path = "tests/rproxy_proxy.rs"
-
-[[test]]
-name = "early_hints"
-path = "tests/early_hints.rs"
+name = "tls"
+path = "tests/tls.rs"
 
 [dev-dependencies]
 aes = "0.9"

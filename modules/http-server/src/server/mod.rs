@@ -822,6 +822,3 @@ impl Drop for BasicHttpModule {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

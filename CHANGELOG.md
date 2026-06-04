@@ -31,6 +31,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### DNS & ACME
 
 - **58 new DNS providers** - native ACME DNS-01 challenge support expanded to include Alibaba Cloud DNS, Azure DNS, ClouDNS, Hetzner DNS, Oracle Cloud DNS, Vercel, Vultr, Yandex Cloud DNS, and 50+ others.
+- **CLI arguments in post-obtain command** - added support for passing CLI arguments to the post-obtain command in automatic TLS configurations.
 
 #### HTTP server core
 
@@ -95,6 +96,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### HTTP server core
 
 - **Auth bypass closed** - fixed a critical flaw where a misconfigured forwarded authentication block could result in bypassing authentication entirely.
+- **Cache thundering herd fixed** - implemented request coalescing for cache misses to prevent thundering herd scenarios when multiple requests hit the same uncached resource simultaneously.
 - Fixed a `500 Internal Server Error` when using the `auth_to { ... }` syntax inside forwarded authentication blocks.
 - Fixed a bug where case-insensitive HTTP cache control directives were not recognized correctly.
 - Fixed a bug where CONNECT requests with authority-form URIs were erroneously blocked by the URL canonicalizer.
@@ -104,6 +106,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 #### Observability
 
+- **Log injection fixed** - implemented strict sanitization of log fields to prevent potential log injection attacks for plain-text logs via malicious header values or other user input.
 - Fixed a data blind spot where malformed and timed-out requests rejected before normal handler completion went uncounted by the observability pipeline.
 - Corrected inaccurate memory metrics that were calculating values relative to initial memory usage instead of absolute usage.
 
@@ -115,6 +118,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Runtime operations
 
 - Fixed an Admin API-initiated reload loop that caused infinite configuration reload loops.
+- Fixed admin API over-redacting configuration directives in `/config` endpoint responses, which could lead to confusion when verifying configuration values.
 - Eliminated a rate limiting race condition when initializing a brand new key bucket, which previously allowed traffic to briefly exceed configured capacities.
 - Fixed manual TLS session ticket key rotation to properly read from configured key files instead of silently falling back to in-memory generation.
 - Fixed a bug on Linux where `io_uring` could not be explicitly disabled through the server configuration file.

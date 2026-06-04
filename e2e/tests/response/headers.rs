@@ -6,13 +6,12 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
 
 async fn create_ferron_container(
     webroot_dir: &std::path::Path,
     config_file: &std::path::Path,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
+    let ferron_image = crate::common::build_ferron_image().await?;
     ferron_image
         .with_exposed_port(ContainerPort::Tcp(80))
         .with_wait_for(WaitFor::Http(Box::new(
@@ -41,14 +40,14 @@ async fn test_header_add_custom() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
@@ -107,14 +106,14 @@ async fn test_header_add_then_remove() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
@@ -169,14 +168,14 @@ async fn test_header_replace() {
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     #[cfg(unix)]
-    let webroot_dir = common::create_temp_dir();
+    let webroot_dir = crate::common::create_temp_dir();
     #[cfg(not(unix))]
     let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
     #[cfg(unix)]
-    let mut config_file = common::create_temp_file();
+    let mut config_file = crate::common::create_temp_file();
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
