@@ -53,7 +53,7 @@ where
 }
 
 /// Cache for tracking failed backends, shared across all proxy requests.
-pub(crate) type FailureCache = ConcurrentTtlCache<Arc<UpstreamInner>, u64>;
+pub(crate) type FailureCache = ConcurrentTtlCache<(Arc<UpstreamInner>, Vec<usize>), u64>;
 
 #[cfg(test)]
 mod tests {

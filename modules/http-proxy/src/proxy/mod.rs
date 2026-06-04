@@ -63,6 +63,7 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&Mutex<HashMap<String, u64>>>,
+    config_key: &[usize],
 ) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
     let mut metrics = ProxyMetrics::new();
 
@@ -72,6 +73,7 @@ pub async fn execute_proxy(
         Arc::clone(&failed_backends),
         config.passive_check.max_fails,
         health_check_state.cloned(),
+        config_key,
     )
     .await;
 
@@ -113,6 +115,7 @@ pub async fn execute_proxy(
             affinity_key.as_deref(),
             ring,
             &ctx.events,
+            config_key,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
@@ -208,6 +211,7 @@ pub async fn execute_proxy(
                     &selected.upstream,
                     &mut metrics,
                     &ctx.events,
+                    config_key,
                 );
 
                 // Check if we should retry with another backend
@@ -221,6 +225,7 @@ pub async fn execute_proxy(
                         Some(&circuit_breaker_state),
                         &config.circuit_breaker,
                         &metrics.selected_backends,
+                        config_key,
                     );
 
                     if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {

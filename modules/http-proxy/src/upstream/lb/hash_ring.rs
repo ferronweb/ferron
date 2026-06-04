@@ -3,6 +3,8 @@
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use rustc_hash::FxHashSet;
+
 use crate::types::upstream::UpstreamInner;
 
 /// Ketama-style consistent hash ring for backend selection.
@@ -65,7 +67,7 @@ impl ConsistentHashRing {
     }
 
     #[inline]
-    pub fn get(&self, key: &[u8]) -> Option<usize> {
+    pub fn get(&self, key: &[u8], exclude_idx: &FxHashSet<usize>) -> Option<usize> {
         if self.nodes.is_empty() {
             return None;
         }
@@ -74,16 +76,22 @@ impl ConsistentHashRing {
         h.write(key);
         let hash = h.finish();
 
-        match self.nodes.binary_search_by_key(&hash, |(h, _)| *h) {
-            Ok(idx) => Some(self.nodes[idx].1),
-            Err(idx) => {
-                if idx < self.nodes.len() {
-                    Some(self.nodes[idx].1)
-                } else {
-                    Some(self.nodes[0].1)
-                }
-            }
-        }
+        // 1. O(log N) jump to the first element >= target
+        let start_idx = self.nodes.partition_point(|(h, _)| *h < hash);
+
+        // 2. Linear probe forward, skipping any ID found in the exclusion set.
+        // This compiles down to a highly optimized loop with excellent cache locality.
+        let start_idx_refined = self.nodes[start_idx..]
+            .iter()
+            .find(|&&(_, id)| !exclude_idx.contains(&id))
+            .or_else(|| {
+                self.nodes[..start_idx]
+                    .iter()
+                    .find(|&&(_, id)| !exclude_idx.contains(&id))
+            });
+
+        // 3. Return the refined index if found; otherwise return None.
+        start_idx_refined.map(|&(_, id)| id)
     }
 
     #[inline]
@@ -139,13 +147,17 @@ mod tests {
 
         // Same key should always map to the same backend
         let key1 = b"test-key-1";
-        let idx1 = ring.get(key1).unwrap();
-        let idx2 = ring.get(key1).unwrap();
+        let idx1 = ring.get(key1, &FxHashSet::default()).unwrap();
+        let idx2 = ring.get(key1, &FxHashSet::default()).unwrap();
         assert_eq!(idx1, idx2);
+
+        // Excluded backend should be redirected to another backend
+        let idx3 = ring.get(key1, &FxHashSet::from_iter([idx1])).unwrap();
+        assert_ne!(idx1, idx3);
 
         // Different keys may map to different backends
         let key2 = b"test-key-2";
-        let idx3 = ring.get(key2).unwrap();
+        let idx3 = ring.get(key2, &FxHashSet::default()).unwrap();
         assert!(idx3 < backends.len());
     }
 
@@ -162,7 +174,7 @@ mod tests {
         let mut seen = [false; 3];
         for i in 0..1000 {
             let key = format!("key-{i}");
-            if let Some(idx) = ring.get(key.as_bytes()) {
+            if let Some(idx) = ring.get(key.as_bytes(), &FxHashSet::default()) {
                 seen[idx] = true;
             }
         }
@@ -175,7 +187,7 @@ mod tests {
     fn test_consistent_hash_ring_empty() {
         let backends: Vec<Arc<UpstreamInner>> = vec![];
         let ring = ConsistentHashRing::new(&backends);
-        assert!(ring.get(b"test").is_none());
+        assert!(ring.get(b"test", &FxHashSet::default()).is_none());
     }
 
     #[test]
@@ -200,6 +212,25 @@ mod tests {
     }
 
     #[test]
+    fn test_consistent_hash_ring_same_no_rebuild() {
+        let three_backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let ring = ConsistentHashRing::new(&three_backends);
+
+        assert!(!ring.needs_rebuild(&three_backends));
+
+        let three_backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        assert!(!ring.needs_rebuild(&three_backends));
+    }
+
+    #[test]
     fn test_consistent_hash_ring_weighted_distribution() {
         let backends = vec![
             make_upstream_with_weight("http://heavy", 3),
@@ -212,7 +243,7 @@ mod tests {
         let mut heavy_count = 0;
         for i in 0..total {
             let key = format!("key-{i}");
-            if let Some(idx) = ring.get(key.as_bytes()) {
+            if let Some(idx) = ring.get(key.as_bytes(), &FxHashSet::default()) {
                 if idx == 0 {
                     heavy_count += 1;
                 }
