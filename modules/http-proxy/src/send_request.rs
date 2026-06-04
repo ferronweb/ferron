@@ -90,10 +90,8 @@ impl SendRequestWrapper {
             return (false, false);
         }
         if ready {
-            if let Some(t) = timeout {
-                if self.last_used.elapsed() > t {
-                    return (false, false);
-                }
+            if timeout.is_some_and(|t| self.last_used.elapsed() > t) {
+                return (false, false);
             }
             return (true, true);
         }
@@ -106,28 +104,16 @@ impl SendRequestWrapper {
     /// Returns `true` if the connection is now ready, `false` if closed/timed out.
     #[inline]
     pub async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
         std::future::poll_fn(|cx| match &mut self.inner {
             Some(i) => match i.poll_ready(cx) {
                 Poll::Ready(Ok(_)) => {
-                    if let Some(dl) = deadline {
-                        if self.last_used.elapsed()
-                            > dl - std::time::Instant::now() + self.last_used.elapsed()
-                        {
-                            // Check actual timeout since creation
-                        }
+                    if timeout.is_some_and(|t| self.last_used.elapsed() > t) {
+                        return Poll::Ready(false);
                     }
                     Poll::Ready(true)
                 }
                 Poll::Ready(Err(_)) => Poll::Ready(false),
-                Poll::Pending => {
-                    if let Some(dl) = deadline {
-                        if std::time::Instant::now() >= dl {
-                            return Poll::Ready(false);
-                        }
-                    }
-                    Poll::Pending
-                }
+                Poll::Pending => Poll::Pending,
             },
             None => Poll::Ready(false),
         })
