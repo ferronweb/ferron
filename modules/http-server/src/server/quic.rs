@@ -193,106 +193,111 @@ impl QuicListenerHandle {
         let cancel_token_clone = cancel_token.clone();
         let cancel_token_clone2 = cancel_token.clone();
 
-        std::thread::spawn(move || {
-            let tokio_runtime = match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(runtime) => runtime,
-                Err(error) => {
-                    listen_error_tx
-                        .send(Some(io::Error::other(format!(
-                            "Failed to create Tokio runtime for QUIC listener: {error}"
-                        ))))
-                        .unwrap_or_default();
-                    return;
-                }
-            };
-            tokio_runtime.block_on(async move {
-                let rustls_server_config = (match rustls::ServerConfig::builder_with_provider(
-                    Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
-                )
-                .with_safe_default_protocol_versions()
+        std::thread::Builder::new()
+            .name("QUIC listener".to_string())
+            .spawn(move || {
+                let tokio_runtime = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
                 {
-                    Ok(builder) => builder,
+                    Ok(runtime) => runtime,
                     Err(error) => {
                         listen_error_tx
                             .send(Some(io::Error::other(format!(
-                                "Failed to create Rustls ServerConfig builder: {error}"
-                            ))))
-                            .unwrap_or_default();
-                        return;
-                    }
-                })
-                .with_no_client_auth()
-                .with_cert_resolver(Arc::new(NoCertResolver));
-                let quinn_crypto_config: quinn::crypto::rustls::QuicServerConfig =
-                    match rustls_server_config.try_into() {
-                        Ok(config) => config,
-                        Err(error) => {
-                            listen_error_tx
-                                .send(Some(io::Error::other(format!(
-                                    "Failed to create Quinn crypto config: {error}"
-                                ))))
-                                .unwrap_or_default();
-                            return;
-                        }
-                    };
-                let server_config = quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
-
-                let udp_socket;
-                let mut tries: u64 = 0;
-                loop {
-                    if let Ok(socket) = bind_udp_socket(address) {
-                        udp_socket = socket;
-                        break;
-                    }
-                    tries += 1;
-                    let duration = Duration::from_millis(1000);
-                    if tries >= 10 {
-                        ferron_core::log_warn!("HTTP/3 port is used at try #{tries}, skipping...");
-                        listen_error_tx.send(None).unwrap_or_default();
-                        return;
-                    }
-                    ferron_core::log_warn!(
-                        "HTTP/3 port is used at try #{tries}, retrying in {duration:?}..."
-                    );
-                    if cancel_token_clone.is_cancelled() {
-                        return;
-                    }
-                    tokio::time::sleep(duration).await;
-                }
-                let endpoint = match quinn::Endpoint::new(
-                    quinn::EndpointConfig::default(),
-                    Some(server_config),
-                    udp_socket,
-                    Arc::new(EnterTokioRuntime),
-                ) {
-                    Ok(endpoint) => endpoint,
-                    Err(err) => {
-                        listen_error_tx
-                            .send(Some(std::io::Error::other(format!(
-                                "Cannot listen to HTTP/3 port: {err}"
+                                "Failed to create Tokio runtime for QUIC listener: {error}"
                             ))))
                             .unwrap_or_default();
                         return;
                     }
                 };
-                ferron_core::log_info!("HTTP/3 server listening on {address}");
-                listen_error_tx.send(None).unwrap_or_default();
+                tokio_runtime.block_on(async move {
+                    let rustls_server_config = (match rustls::ServerConfig::builder_with_provider(
+                        Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
+                    )
+                    .with_safe_default_protocol_versions()
+                    {
+                        Ok(builder) => builder,
+                        Err(error) => {
+                            listen_error_tx
+                                .send(Some(io::Error::other(format!(
+                                    "Failed to create Rustls ServerConfig builder: {error}"
+                                ))))
+                                .unwrap_or_default();
+                            return;
+                        }
+                    })
+                    .with_no_client_auth()
+                    .with_cert_resolver(Arc::new(NoCertResolver));
+                    let quinn_crypto_config: quinn::crypto::rustls::QuicServerConfig =
+                        match rustls_server_config.try_into() {
+                            Ok(config) => config,
+                            Err(error) => {
+                                listen_error_tx
+                                    .send(Some(io::Error::other(format!(
+                                        "Failed to create Quinn crypto config: {error}"
+                                    ))))
+                                    .unwrap_or_default();
+                                return;
+                            }
+                        };
+                    let server_config =
+                        quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
 
-                while let Some(incoming) = tokio::select! {
-                    incoming = endpoint.accept() => incoming,
-                    _ = cancel_token_clone.cancelled() => None,
-                } {
-                    if tx.send(incoming).await.is_err() {
-                        break;
+                    let udp_socket;
+                    let mut tries: u64 = 0;
+                    loop {
+                        if let Ok(socket) = bind_udp_socket(address) {
+                            udp_socket = socket;
+                            break;
+                        }
+                        tries += 1;
+                        let duration = Duration::from_millis(1000);
+                        if tries >= 10 {
+                            ferron_core::log_warn!(
+                                "HTTP/3 port is used at try #{tries}, skipping..."
+                            );
+                            listen_error_tx.send(None).unwrap_or_default();
+                            return;
+                        }
+                        ferron_core::log_warn!(
+                            "HTTP/3 port is used at try #{tries}, retrying in {duration:?}..."
+                        );
+                        if cancel_token_clone.is_cancelled() {
+                            return;
+                        }
+                        tokio::time::sleep(duration).await;
                     }
-                }
+                    let endpoint = match quinn::Endpoint::new(
+                        quinn::EndpointConfig::default(),
+                        Some(server_config),
+                        udp_socket,
+                        Arc::new(EnterTokioRuntime),
+                    ) {
+                        Ok(endpoint) => endpoint,
+                        Err(err) => {
+                            listen_error_tx
+                                .send(Some(std::io::Error::other(format!(
+                                    "Cannot listen to HTTP/3 port: {err}"
+                                ))))
+                                .unwrap_or_default();
+                            return;
+                        }
+                    };
+                    ferron_core::log_info!("HTTP/3 server listening on {address}");
+                    listen_error_tx.send(None).unwrap_or_default();
 
-                endpoint.wait_idle().await;
-            });
-        });
+                    while let Some(incoming) = tokio::select! {
+                        incoming = endpoint.accept() => incoming,
+                        _ = cancel_token_clone.cancelled() => None,
+                    } {
+                        if tx.send(incoming).await.is_err() {
+                            break;
+                        }
+                    }
+
+                    endpoint.wait_idle().await;
+                });
+            })?;
 
         runtime.spawn_primary_task(move || {
             let rx = rx.clone();
