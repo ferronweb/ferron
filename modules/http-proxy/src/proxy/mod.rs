@@ -15,7 +15,7 @@ use std::time::Duration;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::StatusCode;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
@@ -62,7 +62,7 @@ pub async fn execute_proxy(
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
-    active_unhealthy_counter: Option<&Mutex<HashMap<String, u64>>>,
+    active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
     config_key: &[usize],
 ) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
     let mut metrics = ProxyMetrics::new();
@@ -86,7 +86,7 @@ pub async fn execute_proxy(
         }));
         // Collect active health check unhealthy metrics
         if let Some(counter) = active_unhealthy_counter {
-            let guard = counter.lock();
+            let guard = counter.read();
             metrics.active_unhealthy_backends =
                 guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
         }
@@ -126,7 +126,7 @@ pub async fn execute_proxy(
             }));
             // Collect active health check unhealthy metrics
             if let Some(counter) = active_unhealthy_counter {
-                let guard = counter.lock();
+                let guard = counter.read();
                 metrics.active_unhealthy_backends =
                     guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
             }
@@ -190,7 +190,7 @@ pub async fn execute_proxy(
 
                 // Collect active health check unhealthy metrics
                 if let Some(counter) = active_unhealthy_counter {
-                    let guard = counter.lock();
+                    let guard = counter.read();
                     metrics.active_unhealthy_backends =
                         guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                 }
@@ -267,7 +267,7 @@ pub async fn execute_proxy(
                 }));
                 // Collect active health check unhealthy metrics
                 if let Some(counter) = active_unhealthy_counter {
-                    let guard = counter.lock();
+                    let guard = counter.read();
                     metrics.active_unhealthy_backends =
                         guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                 }

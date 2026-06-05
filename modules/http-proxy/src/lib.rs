@@ -53,7 +53,7 @@ pub use send_net_io::SendTcpStreamPollDropGuard;
 pub use send_net_io::SendUnixStreamPoll;
 
 /// Shared counter type for tracking active health check unhealthy events.
-type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<String, u64>>;
+type ActiveUnhealthyCounters = parking_lot::RwLock<std::collections::HashMap<String, u64>>;
 
 static PROXY_POOL_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0];
 static PROXY_TLS_BUCKETS: &[f64] = &[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0];
@@ -364,7 +364,7 @@ impl ProxyState {
                 upstreams.to_vec(),
                 Arc::clone(&self.active_health_check_state),
                 Some(Arc::new(move |url: &str, _is_active: bool| {
-                    let mut guard = counter_clone.lock();
+                    let mut guard = counter_clone.write();
                     *guard.entry(url.to_string()).or_insert(0) += 1;
                 })),
                 &runtime_handle,
