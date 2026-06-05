@@ -347,7 +347,7 @@ async fn generate_directory_listing(
           } else {
             "❓"
           },
-          request_path_without_trailing_slashes,
+          anti_xss(request_path_without_trailing_slashes),
           anti_xss(urlencoding::encode(&filename).as_ref()),
           match metadata.is_dir() {
             true => "/",
@@ -379,7 +379,7 @@ async fn generate_directory_listing(
       Err(_) => {
         let filename_link = format!(
           "⚠️ <a href=\"{}/{}\">{}</a>",
-          request_path_without_trailing_slashes,
+          anti_xss(request_path_without_trailing_slashes),
           anti_xss(urlencoding::encode(&filename).as_ref()),
           anti_xss(&filename)
         );
