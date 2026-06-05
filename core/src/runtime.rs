@@ -63,58 +63,62 @@ impl Runtime {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<
                 Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static>,
             >();
-            std::thread::spawn(move || {
-                if let Some(core_id) = core_id {
-                    let _ = core_affinity::set_for_current(core_id);
-                }
-                let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
+            std::thread::Builder::new()
+                .name("Primary runtime".to_string())
+                .spawn(move || {
+                    if let Some(core_id) = core_id {
+                        let _ = core_affinity::set_for_current(core_id);
+                    }
+                    let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
 
-                #[allow(unused_mut)]
-                let mut rt_builder = vibeio::RuntimeBuilder::new()
-                    .enable_timer(true)
-                    .blocking_pool(Box::new(BlockingThreadPool));
+                    #[allow(unused_mut)]
+                    let mut rt_builder = vibeio::RuntimeBuilder::new()
+                        .enable_timer(true)
+                        .blocking_pool(Box::new(BlockingThreadPool));
 
-                #[cfg(target_os = "linux")]
-                if !use_io_uring {
-                    // Disable `io_uring` driver manually
-                    rt_builder = rt_builder.driver(vibeio::DriverKind::Mio);
-                } else {
-                    let mut runtime_metrics = crate::admin::ADMIN_METRICS.runtime_metrics.write();
-                    runtime_metrics.io_uring_supported = true;
-                }
-
-                let rt = rt_builder
-                    .build()
-                    .expect("failed to create vibeio runtime for primary tasks");
-
-                rt.block_on(async move {
-                    {
+                    #[cfg(target_os = "linux")]
+                    if !use_io_uring {
+                        // Disable `io_uring` driver manually
+                        rt_builder = rt_builder.driver(vibeio::DriverKind::Mio);
+                    } else {
                         let mut runtime_metrics =
                             crate::admin::ADMIN_METRICS.runtime_metrics.write();
-                        if use_io_uring && !vibeio::util::supports_completion() {
-                            IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
-                                log_warn!(
-                                    "io_uring is enabled in configuration and \
+                        runtime_metrics.io_uring_supported = true;
+                    }
+
+                    let rt = rt_builder
+                        .build()
+                        .expect("failed to create vibeio runtime for primary tasks");
+
+                    rt.block_on(async move {
+                        {
+                            let mut runtime_metrics =
+                                crate::admin::ADMIN_METRICS.runtime_metrics.write();
+                            if use_io_uring && !vibeio::util::supports_completion() {
+                                IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
+                                    log_warn!(
+                                        "io_uring is enabled in configuration and \
                                  supported on this system, but failed to \
                                  initialize io_uring; falling back to epoll"
-                                );
-                            });
-                            runtime_metrics.io_uring_runtime_enabled = false;
-                        } else {
-                            runtime_metrics.io_uring_runtime_enabled = use_io_uring;
+                                    );
+                                });
+                                runtime_metrics.io_uring_runtime_enabled = false;
+                            } else {
+                                runtime_metrics.io_uring_runtime_enabled = use_io_uring;
+                            }
                         }
-                    }
-                    while let Some(task_factory) = rx.recv().await {
-                        vibeio::spawn((task_factory.as_ref())());
-                    }
-                });
-            });
+                        while let Some(task_factory) = rx.recv().await {
+                            vibeio::spawn((task_factory.as_ref())());
+                        }
+                    });
+                })?;
             primary_task_channels.push(tx);
         }
 
         Ok(Self {
             primary_task_channels,
             secondary_runtime: tokio::runtime::Builder::new_multi_thread()
+                .thread_name("Secondary runtime".to_string())
                 .worker_threads((available_parallelism / 2).max(1))
                 .enable_all()
                 .build()?,
