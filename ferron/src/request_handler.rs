@@ -703,6 +703,31 @@ pub async fn request_handler(
     encrypted,
   };
 
+  // Deny CONNECT requests with pathnames
+  if request.method() == Method::CONNECT && !request.uri().path().is_empty() {
+    for logger in global_loggers {
+      logger
+        .send(LogMessage::new("CONNECT request with non-empty path".to_string(), true))
+        .await
+        .unwrap_or_default();
+    }
+    let response = basic_error_response(StatusCode::BAD_REQUEST);
+    let (request_parts, _) = request.into_parts();
+    return Ok(
+      finalize_basic_error_response(
+        response,
+        request_parts,
+        http3_alt_port,
+        global_loggers,
+        &socket_data,
+        global_log_date_format,
+        global_log_format,
+        global_log_json.as_ref(),
+      )
+      .await,
+    );
+  }
+
   // Sanitize "Host" header
   let host_header_option = request.headers().get(header::HOST);
   if let Some(header_data) = host_header_option {
