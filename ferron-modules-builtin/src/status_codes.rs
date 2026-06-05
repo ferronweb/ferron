@@ -21,6 +21,11 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, 
 
 use crate::util::parse_basic_auth;
 
+/// A fake hash used to thwart user enumeration attacks.
+/// This hash is a valid, hard-coded Argon2 hash for an empty password.
+const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
+p=1$xvAbcK77AZqOdJtrS1LqWA$bd5QzFMwzDFGZ5I7FAX3roi9Gw2m/nFo3Ivw/W25f50";
+
 /// A non-standard status code configuration
 struct NonStandardCode {
   status_code: u16,
@@ -426,6 +431,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               if let Some((username, password)) = parse_basic_auth(authorization_str) {
                 if let Some(users_vec_config) = get_entries!("user", config) {
                   let mut authorized_user = None;
+                  let mut user_found = false;
                   for user_config in &users_vec_config.inner {
                     if let Some(username_db) = user_config.values.first().and_then(|v| v.as_str()) {
                       if username_db != username {
@@ -436,6 +442,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                           continue;
                         }
                       }
+                      user_found = true;
                       if let Some(password_hash_db) = user_config.values.get(1).and_then(|v| v.as_str()) {
                         let password_cloned = password.clone();
                         let password_hash_db_cloned = password_hash_db.to_string();
@@ -451,6 +458,11 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                         }
                       }
                     }
+                  }
+                  if !user_found {
+                    // Thwart user enumeration
+                    let _ =
+                      ferron_common::runtime::spawn_blocking(move || verify_password("test", FAKE_HASH).is_ok()).await;
                   }
                   if let Some(authorized_user) = authorized_user {
                     auth_user = Some(authorized_user.to_owned());
