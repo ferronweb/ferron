@@ -181,20 +181,20 @@ pub(super) async fn http_proxy(
         error_logger.log(&format!("HTTP upgrade error: {err}")).await;
       }
     }
-  }
+  } else {
+    // Remove headers from the response as indicated by the "Connection" header,
+    // per RFC 7230.
+    let connection_value = proxy_response_parts.headers.get(hyper::header::CONNECTION).cloned();
 
-  // Remove headers from the response as indicated by the "Connection" header,
-  // per RFC 7230.
-  let connection_value = proxy_response_parts.headers.get(hyper::header::CONNECTION).cloned();
-
-  if let Some(connection) = connection_value {
-    let connection_str = connection.to_str().unwrap_or("");
-    for header in connection_str.split(',').map(|h| h.trim()) {
-      if !header.eq_ignore_ascii_case("upgrade") {
-        proxy_response_parts.headers.remove(header);
+    if let Some(connection) = connection_value {
+      let connection_str = connection.to_str().unwrap_or("");
+      for header in connection_str.split(',').map(|h| h.trim()) {
+        if !header.eq_ignore_ascii_case("upgrade") {
+          proxy_response_parts.headers.remove(header);
+        }
       }
+      proxy_response_parts.headers.remove(hyper::header::CONNECTION);
     }
-    proxy_response_parts.headers.remove(hyper::header::CONNECTION);
   }
 
   let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
