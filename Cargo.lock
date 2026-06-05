@@ -892,7 +892,7 @@ checksum = "10c8cc8e64f46d9c4a9ce216b9a8fdd90af900ea7567b3fd5b19fc8f47856cbd"
 dependencies = [
  "bytes",
  "futures-util",
- "hashlink",
+ "hashlink 0.11.0",
  "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -923,7 +923,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712fb2865241c0afad2ace738608fce3fb360480cc369f6f63e2fcbb6e22dcd1"
 dependencies = [
  "cegla",
- "hashlink",
+ "hashlink 0.11.0",
  "http 1.4.1",
  "http-body 1.0.1",
  "tokio",
@@ -1467,7 +1467,7 @@ dependencies = [
  "glob",
  "h3",
  "h3-quinn",
- "hashlink",
+ "hashlink 0.12.0",
  "http-body-util",
  "httpdate",
  "human-panic",
@@ -1595,7 +1595,7 @@ dependencies = [
  "ferron-common",
  "flate2",
  "futures-util",
- "hashlink",
+ "hashlink 0.12.0",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -1625,7 +1625,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "ferron-common",
- "hashlink",
+ "hashlink 0.12.0",
  "hyper",
  "hyper-rustls",
  "opentelemetry",
@@ -1682,7 +1682,7 @@ version = "2.6.2"
 dependencies = [
  "anyhow",
  "glob",
- "hashlink",
+ "hashlink 0.12.0",
  "kdl",
  "yaml-rust2",
 ]
@@ -1989,6 +1989,9 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashlink"
@@ -1997,6 +2000,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea0b22561a9c04a7cb1a302c013e0259cd3b4bb619f145b32f72b8b4bcbed230"
 dependencies = [
  "hashbrown 0.16.1",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5081f264ed7adee96ea4b4778b6bb9da0a7228b084587aa3bd3ff05da7c5a3b"
+dependencies = [
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -5661,7 +5673,7 @@ checksum = "631a50d867fafb7093e709d75aaee9e0e0d5deb934021fcea25ac2fe09edc51e"
 dependencies = [
  "arraydeque",
  "encoding_rs",
- "hashlink",
+ "hashlink 0.11.0",
 ]
 
 [[package]]
