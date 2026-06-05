@@ -82,7 +82,7 @@ static URING_ENABLED: LazyLockMutex<Option<bool>> = LazyLock::new(|| Arc::new(Mu
 static LISTENER_LOGGING_CHANNEL: LazyLockArc<(Sender<LogMessage>, Receiver<LogMessage>)> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
-/// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
+/// Handles shutdown signals (SIGHUP, SIGTERM and CTRL+C) and returns whether to continue running
 fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
   runtime.block_on(async move {
     #[cfg(unix)]
@@ -96,6 +96,17 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
     #[cfg(not(unix))]
     let configuration_reload_future = async { futures_util::future::pending::<Option<()>>().await };
 
+    #[cfg(unix)]
+    let sigterm_future = async {
+      if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        signal.recv().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+    #[cfg(not(unix))]
+    let sigterm_future = async { futures_util::future::pending::<Option<()>>().await };
+
     let shutdown_future = async {
       if tokio::signal::ctrl_c().await.is_err() {
         futures_util::future::pending().await
@@ -104,6 +115,9 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
 
     let continue_running = tokio::select! {
       _ = shutdown_future => {
+        false
+      }
+      _ = sigterm_future => {
         false
       }
       _ = configuration_reload_future => {

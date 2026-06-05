@@ -6,6 +6,7 @@
 
 ### Added
 
+- Custom SIGTERM signal handling for graceful shutdown.
 - Environment variable placeholders in KDL-format configurations
 - Google Cloud DNS provider for DNS-01 ACME challenges.
 - Spaceship DNS provider for DNS-01 ACME challenges.
