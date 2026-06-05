@@ -722,7 +722,6 @@ pub async fn request_handler(
         &socket_data,
         global_log_date_format,
         global_log_format,
-        global_log_json.as_ref(),
       )
       .await,
     );
