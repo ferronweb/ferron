@@ -13,7 +13,7 @@ pub fn match_location(path: &str, req_path: &str) -> bool {
   }
 
   while req_path_prepared.contains("//") {
-    req_path_prepared = path_prepared.replace("//", "/");
+    req_path_prepared = req_path_prepared.replace("//", "/");
   }
 
   if cfg!(windows) {
