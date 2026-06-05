@@ -140,6 +140,7 @@ malloc-best-effort = { version = "0.1.4", optional = true }
 # Build information
 shadow-rs = { version = "2.0.0", default-features = false }
 tempfile = "3.24.0"
+shlex = "2.0.1"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 # Process metrics

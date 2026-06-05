@@ -262,7 +262,15 @@ async fn post_process_obtained_certificate(
     file.flush().await.unwrap_or_default();
 
     if let Some(command) = &config.post_obtain_command {
-      tokio::process::Command::new(command)
+      let mut command_shlex = shlex::Shlex::new(command);
+      let Some(command) = command_shlex.next() else {
+        Err(anyhow::anyhow!("Invalid post-obtain command"))?
+      };
+      let mut command = tokio::process::Command::new(command);
+      for arg in command_shlex {
+        command.arg(arg);
+      }
+      command
         .env("FERRON_ACME_DOMAIN", config.domains.join(","))
         .env("FERRON_ACME_CERT_PATH", cert_path)
         .env("FERRON_ACME_KEY_PATH", key_path)

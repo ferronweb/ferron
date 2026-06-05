@@ -970,10 +970,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
       }
       let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
 
-      let mut command_begin: Vec<String> = shebang_line[2..]
-        .replace("\r", "")
-        .replace("\n", "")
-        .split(" ")
+      let mut command_begin: Vec<String> = shlex::Shlex::new(&shebang_line[2..].replace("\r", "").replace("\n", ""))
         .map(|s| s.to_owned())
         .collect();
       command_begin.push(execute_pathbuf.to_string_lossy().to_string());
@@ -1026,10 +1023,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
       }
       let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
 
-      let mut command_begin: Vec<String> = shebang_line[2..]
-        .replace("\r", "")
-        .replace("\n", "")
-        .split(" ")
+      let mut command_begin: Vec<String> = shlex::Shlex::new(&shebang_line[2..].replace("\r", "").replace("\n", ""))
         .map(|s| s.to_owned())
         .collect();
       command_begin.push(execute_pathbuf.to_string_lossy().to_string());
@@ -1066,10 +1060,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
       let mut shebang_line = String::new();
       buffered_file.read_line(&mut shebang_line).await?;
 
-      let mut command_begin: Vec<String> = (&shebang_line[2..])
-        .replace("\r", "")
-        .replace("\n", "")
-        .split(" ")
+      let mut command_begin: Vec<String> = shlex::Shlex::new(&shebang_line[2..].replace("\r", "").replace("\n", ""))
         .map(|s| s.to_owned())
         .collect();
       command_begin.push(execute_pathbuf.to_string_lossy().to_string());

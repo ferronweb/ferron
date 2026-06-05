@@ -10,11 +10,13 @@
 - Environment variable placeholders in KDL-format configurations
 - Google Cloud DNS provider for DNS-01 ACME challenges.
 - Spaceship DNS provider for DNS-01 ACME challenges.
+- Support for shell-style argument parsing in `auto_tls_post_obtain_command`.
 
 ### Changed
 
 - CONNECT requests with pathname URIs are now rejected.
 - Improved RFC 7230 compliance for reverse proxy (by stripping hop-by-hop headers).
+- Improved shebang handling for CGI on non-Unix systems.
 - OCSP responses are now verified when stapling is enabled.
 
 ### Fixed
