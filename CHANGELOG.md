@@ -7,6 +7,7 @@
 ### Fixed
 
 - 403 Forbidden responses were returned when URL sanitizer was disabled, even when it should have returned 404 Not Found.
+- `location` blocks matched path segments anywhere in the URL, not just at the start ([bug report](https://github.com/ferronweb/ferron/issues/639)).
 - So You Start endpoint names for OVH DNS provider were swapped.
 
 ## Ferron 2.6.2 LTS
