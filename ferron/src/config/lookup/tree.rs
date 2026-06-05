@@ -278,6 +278,7 @@ impl<T> ConfigFilterTree<T> {
 
         // If no fixed multi-key matches, try to match the predicate single keys
         let mut conditional_predicate_matched = false;
+        let mut wildcard_matched = false;
         for (predicate_key, child) in &current_node.children_predicate {
           if predicate_key.is_predicate() {
             // This is a predicate key, so we need to check if it matches the condition data
@@ -294,6 +295,7 @@ impl<T> ConfigFilterTree<T> {
               if current_node.value.is_some() {
                 value = current_node.value.as_ref();
               }
+              wildcard_matched = predicate_key == &ConfigFilterTreeSingleKey::HostDomainLevelWildcard;
               // There can be only one variation of HostDomainLevelWildcard at the same level of the tree,
               // so we can break after the first match. This is in contrast to Conditional predicates,
               // where there can be multiple different conditionals at the same level of the tree,
@@ -317,6 +319,11 @@ impl<T> ConfigFilterTree<T> {
           }
         }
         if conditional_predicate_matched {
+          break;
+        }
+        if !wildcard_matched {
+          // No match found for this segment — stop traversal to prevent matching location
+          // segments that appear later in the path.
           break;
         }
 
@@ -616,6 +623,108 @@ mod tests {
         )
         .unwrap(),
       Some(&"Value")
+    );
+  }
+
+  #[test]
+  fn test_wildcard_domain_location() {
+    // See GitHub issue ferronweb/ferron#639
+    let mut tree = ConfigFilterTree::new();
+    tree.insert(
+      vec![
+        ConfigFilterTreeSingleKey::Port(80),
+        ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+        ConfigFilterTreeSingleKey::HostDomainLevelWildcard,
+        ConfigFilterTreeSingleKey::LocationSegment("".to_string()),
+        ConfigFilterTreeSingleKey::LocationSegment("test".to_string()),
+      ],
+      "Value1",
+    );
+    tree.insert(
+      vec![
+        ConfigFilterTreeSingleKey::Port(80),
+        ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+        ConfigFilterTreeSingleKey::HostDomainLevelWildcard,
+        ConfigFilterTreeSingleKey::LocationSegment("".to_string()),
+      ],
+      "Value2",
+    );
+
+    assert_eq!(
+      tree
+        .get(
+          vec![
+            ConfigFilterTreeSingleKey::Port(80),
+            ConfigFilterTreeSingleKey::IPv4Octet(127),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(1),
+            ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+            ConfigFilterTreeSingleKey::HostDomainLevel("example".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("test".to_string())
+          ],
+          None
+        )
+        .unwrap(),
+      Some(&"Value1")
+    );
+    assert_eq!(
+      tree
+        .get(
+          vec![
+            ConfigFilterTreeSingleKey::Port(80),
+            ConfigFilterTreeSingleKey::IPv4Octet(127),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(1),
+            ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+            ConfigFilterTreeSingleKey::HostDomainLevel("example".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("".to_string())
+          ],
+          None
+        )
+        .unwrap(),
+      Some(&"Value2")
+    );
+    assert_eq!(
+      tree
+        .get(
+          vec![
+            ConfigFilterTreeSingleKey::Port(80),
+            ConfigFilterTreeSingleKey::IPv4Octet(127),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(1),
+            ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+            ConfigFilterTreeSingleKey::HostDomainLevel("example".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("a".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("test".to_string())
+          ],
+          None
+        )
+        .unwrap(),
+      Some(&"Value2")
+    );
+    assert_eq!(
+      tree
+        .get(
+          vec![
+            ConfigFilterTreeSingleKey::Port(80),
+            ConfigFilterTreeSingleKey::IPv4Octet(127),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(0),
+            ConfigFilterTreeSingleKey::IPv4Octet(1),
+            ConfigFilterTreeSingleKey::HostDomainLevel("com".to_string()),
+            ConfigFilterTreeSingleKey::HostDomainLevel("example".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("".to_string()),
+            ConfigFilterTreeSingleKey::LocationSegment("a".to_string())
+          ],
+          None
+        )
+        .unwrap(),
+      Some(&"Value2")
     );
   }
 }
