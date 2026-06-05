@@ -269,7 +269,9 @@ fn run_daemon(
         // Set up cleanup on shutdown
         let pid_path = pid_path.clone();
         std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread().build() else {
+                return;
+            };
             rt.block_on(async {
                 let shutdown_token = SHUTDOWN_TOKEN.load();
                 shutdown_token.cancelled().await;
