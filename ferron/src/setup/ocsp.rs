@@ -262,12 +262,7 @@ async fn fetch_ocsp_response(
 
   // Only try SHA-1 fallback for specific error types observed in the wild
   let should_try_sha1 = match &response {
-    Err(e) => {
-      let e_message = e.to_string();
-      e_message.contains("OCSP request failed with status")
-        || e_message.contains("Failed to decode OCSP response")
-        || e_message.contains("OCSP response status unsuccessful")
-    }
+    Err(e) => should_try_sha1_for_error(e),
     _ => false,
   };
 
@@ -609,6 +604,13 @@ fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec
   Ok(ctx.finish().as_ref().to_vec())
 }
 
+fn should_try_sha1_for_error(err: &anyhow::Error) -> bool {
+  let e_message = err.to_string();
+  e_message.contains("OCSP request failed with status")
+    || e_message.contains("Failed to decode OCSP response")
+    || e_message.contains("OCSP response status unsuccessful")
+}
+
 fn verify_single_res(
   single_res: &rasn_ocsp::SingleResponse,
   leaf_cert: &X509Certificate,
@@ -651,4 +653,48 @@ fn verify_single_res(
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use anyhow::anyhow;
+  use sha1::Sha1 as TestSha1;
+  use sha2::{Digest as Sha2Digest, Sha256 as TestSha256};
+
+  #[test]
+  fn test_should_try_sha1_for_error() {
+    let e1 = anyhow!("OCSP request failed with status 500 for URL");
+    assert!(super::should_try_sha1_for_error(&e1));
+
+    let e2 = anyhow!("Failed to decode OCSP response: malformed");
+    assert!(super::should_try_sha1_for_error(&e2));
+
+    let e3 = anyhow!("OCSP response status unsuccessful: 3");
+    assert!(super::should_try_sha1_for_error(&e3));
+
+    let e4 = anyhow!("network down");
+    assert!(!super::should_try_sha1_for_error(&e4));
+  }
+
+  #[test]
+  fn test_hash_oid_sha256_and_sha1() {
+    let data = b"abc";
+
+    // SHA-256
+    let oid_sha256 = rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256;
+    let got = hash_oid(data.as_ref(), oid_sha256.into()).expect("hash_oid sha256 failed");
+    let mut hasher = TestSha256::new();
+    hasher.update(data);
+    let expected = hasher.finalize().to_vec();
+    assert_eq!(got, expected);
+
+    // SHA-1
+    let oid_sha1 = rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1;
+    let got1 = hash_oid(data.as_ref(), oid_sha1.into()).expect("hash_oid sha1 failed");
+    let mut hasher1 = TestSha1::new();
+    hasher1.update(data);
+    let expected1 = hasher1.finalize().to_vec();
+    assert_eq!(got1, expected1);
+  }
 }
