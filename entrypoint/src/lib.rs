@@ -911,13 +911,20 @@ fn load_modules_config(
     let mut modules = Vec::new();
 
     // Configuration validation
-    let validation_result = run_configuration_validators(
+    let mut validation_result = run_configuration_validators(
         loaders,
         &config,
         global_validator_registry,
         per_protocol_validator_registry,
         scoped_validator_registry,
     );
+    // Remove best practice violations from diagnostics, since this is not `ferron doctor`...
+    validation_result.diagnostics.retain(|d| {
+        !matches!(
+            d.kind,
+            ConfigurationValidatorDiagnosticKind::BestPracticeViolation
+        )
+    });
     print_validation_result(validation_result, false)?;
 
     for loader in loaders {
