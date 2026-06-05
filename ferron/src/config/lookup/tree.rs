@@ -228,6 +228,7 @@ impl<T> ConfigFilterTree<T> {
     current_nodes.push_back((&self.root, ConfigFilterTreeMultiKey(key)));
     let mut value = current_nodes[0].0.value.as_ref();
     while let Some((mut current_node, mut key)) = current_nodes.pop_front() {
+      let mut have_path_start = None;
       while !key.0.is_empty() {
         let key_end = key.0.split_off(1);
         let mut partial_key = ConfigFilterTreeMultiKey(key.0);
@@ -321,7 +322,13 @@ impl<T> ConfigFilterTree<T> {
         if conditional_predicate_matched {
           break;
         }
-        if !wildcard_matched {
+        if have_path_start.is_none() {
+          have_path_start = Some(key.0.windows(2).any(|k| {
+            !matches!(&k[0], &ConfigFilterTreeSingleKey::LocationSegment(_))
+              && k[1] == ConfigFilterTreeSingleKey::LocationSegment(String::new())
+          }));
+        }
+        if !wildcard_matched && !have_path_start.is_some_and(|s| s) {
           // No match found for this segment — stop traversal to prevent matching location
           // segments that appear later in the path.
           break;
