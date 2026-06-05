@@ -48,3 +48,6 @@ Dockerfile*
 # Packaging files
 /packaging/
 /dist/
+
+# Fuzz targets
+/**/fuzz/target/
