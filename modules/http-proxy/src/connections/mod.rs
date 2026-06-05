@@ -211,21 +211,26 @@ impl ConnectionManager {
             }
 
             // Pool likely under capacity, wait for a connection to become available
-            let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
-            let pending_pulls_key = (None, upstream.proxy_unix.is_some());
-            let pending_pulls =
-                if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pulls_key) {
-                    pending_pulls
-                } else {
-                    pending_pulls_lock.with_upgraded(|pp| {
-                        pp.insert(pending_pulls_key.clone(), SegQueue::new());
-                    });
-                    pending_pulls_lock
-                        .get(&pending_pulls_key)
-                        .expect("pending pulls should have been initialized at this point")
-                };
-            let cancel_token = CancellationToken::new();
-            pending_pulls.push(cancel_token.clone());
+            // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
+            // because the lock was held across async boundary.
+            let cancel_token = {
+                let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
+                let pending_pulls_key = (None, upstream.proxy_unix.is_some());
+                let pending_pulls =
+                    if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pulls_key) {
+                        pending_pulls
+                    } else {
+                        pending_pulls_lock.with_upgraded(|pp| {
+                            pp.insert(pending_pulls_key.clone(), SegQueue::new());
+                        });
+                        pending_pulls_lock
+                            .get(&pending_pulls_key)
+                            .expect("pending pulls should have been initialized at this point")
+                    };
+                let cancel_token = CancellationToken::new();
+                pending_pulls.push(cancel_token.clone());
+                cancel_token
+            };
 
             // Wait for the connection to be available.
             cancel_token.cancelled().await;
@@ -273,24 +278,29 @@ impl ConnectionManager {
             };
 
             // Pool likely under capacity, wait for a connection to become available
-            let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
-            let pending_pull_key = (
-                at_local_limit.then_some(upstream.clone()),
-                upstream.proxy_unix.is_some(),
-            );
-            let pending_pulls =
-                if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pull_key) {
-                    pending_pulls
-                } else {
-                    pending_pulls_lock.with_upgraded(|pp| {
-                        pp.insert(pending_pull_key.clone(), SegQueue::new());
-                    });
-                    pending_pulls_lock
-                        .get(&pending_pull_key)
-                        .expect("pending pulls should have been initialized at this point")
-                };
-            let cancel_token = CancellationToken::new();
-            pending_pulls.push(cancel_token.clone());
+            // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
+            // because the lock was held across async boundary.
+            let cancel_token = {
+                let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
+                let pending_pull_key = (
+                    at_local_limit.then_some(upstream.clone()),
+                    upstream.proxy_unix.is_some(),
+                );
+                let pending_pulls =
+                    if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pull_key) {
+                        pending_pulls
+                    } else {
+                        pending_pulls_lock.with_upgraded(|pp| {
+                            pp.insert(pending_pull_key.clone(), SegQueue::new());
+                        });
+                        pending_pulls_lock
+                            .get(&pending_pull_key)
+                            .expect("pending pulls should have been initialized at this point")
+                    };
+                let cancel_token = CancellationToken::new();
+                pending_pulls.push(cancel_token.clone());
+                cancel_token
+            };
 
             // Wait for the connection to be available.
             cancel_token.cancelled().await;
