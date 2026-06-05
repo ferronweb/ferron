@@ -144,7 +144,7 @@ pub(super) async fn http_proxy(
 
   let status_code = proxy_response.status();
 
-  let (proxy_response_parts, proxy_response_body) = proxy_response.into_parts();
+  let (mut proxy_response_parts, proxy_response_body) = proxy_response.into_parts();
   if proxy_response_parts.status == StatusCode::SWITCHING_PROTOCOLS {
     let proxy_response_cloned = Response::from_parts(proxy_response_parts.clone(), ());
     match hyper::upgrade::on(proxy_response_cloned).await {
@@ -182,6 +182,21 @@ pub(super) async fn http_proxy(
       }
     }
   }
+
+  // Remove headers from the response as indicated by the "Connection" header,
+  // per RFC 7230.
+  let connection_value = proxy_response_parts.headers.get(hyper::header::CONNECTION).cloned();
+
+  if let Some(connection) = connection_value {
+    let connection_str = connection.to_str().unwrap_or("");
+    for header in connection_str.split(',').map(|h| h.trim()) {
+      if !header.eq_ignore_ascii_case("upgrade") {
+        proxy_response_parts.headers.remove(header);
+      }
+    }
+    proxy_response_parts.headers.remove(hyper::header::CONNECTION);
+  }
+
   let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
 
   let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
