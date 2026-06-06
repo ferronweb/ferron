@@ -113,7 +113,9 @@ fn validate_baggage_block(
             }
             if !matches!(&key_entry.args[0], ServerConfigurationValue::String(_, _)) {
                 let err: Box<dyn std::error::Error> =
-                    "Invalid `baggage key` directive: argument must be a string".to_string().into();
+                    "Invalid `baggage key` directive: argument must be a string"
+                        .to_string()
+                        .into();
                 Err(err)?;
             }
 
@@ -140,7 +142,9 @@ fn validate_baggage_block(
                                 }
                             } else {
                                 let err: Box<dyn std::error::Error> =
-                                    "Invalid `signals` value: must be a string".to_string().into();
+                                    "Invalid `signals` value: must be a string"
+                                        .to_string()
+                                        .into();
                                 Err(err)?;
                             }
                         }
@@ -152,15 +156,19 @@ fn validate_baggage_block(
                     sub.insert("max_distinct".to_string());
                     for max_entry in max_entries {
                         if max_entry.args.len() != 1 {
-                            let err: Box<dyn std::error::Error> = "Invalid `max_distinct` directive: expected exactly 1 argument".to_string()
-                            .into();
+                            let err: Box<dyn std::error::Error> =
+                                "Invalid `max_distinct` directive: expected exactly 1 argument"
+                                    .to_string()
+                                    .into();
                             Err(err)?;
                         } else if !matches!(
                             &max_entry.args[0],
                             ServerConfigurationValue::Number(_, _)
                         ) {
                             let err: Box<dyn std::error::Error> =
-                                "Invalid `max_distinct` value: must be a number".to_string().into();
+                                "Invalid `max_distinct` value: must be a number"
+                                    .to_string()
+                                    .into();
                             Err(err)?;
                         }
                     }
