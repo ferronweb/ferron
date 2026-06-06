@@ -539,6 +539,11 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
                 // Drop legacy-only fields; modern telemetry consumers prefer the
                 // standard attributes and the record timestamp.
             }
+            "content_length" => {
+                if let Ok(value) = str::parse::<i64>(value) {
+                    self.push("http.response.body.size", AnyValue::Int(value))
+                }
+            }
             _ => {
                 if let Some(header) = name.strip_prefix("header_") {
                     self.push(
