@@ -265,7 +265,6 @@ fn validate_provider(
         "inwx" => {
             req_str(config, ctx, provider, "username")?;
             req_str(config, ctx, provider, "password")?;
-            opt_str(ctx, "shared_secret");
             opt_bool(ctx, "sandbox");
         }
         "lightsail" => {
@@ -322,6 +321,11 @@ fn validate_provider(
             req_str(config, ctx, provider, "secret_key")?;
             opt_str(ctx, "region");
             opt_str(ctx, "session_token");
+        }
+        "transip" => {
+            req_str(config, ctx, provider, "login")?;
+            req_str(config, ctx, provider, "private_key_pem")?;
+            opt_bool(ctx, "global_key");
         }
         "ultradns" => {
             req_str(config, ctx, provider, "username")?;
