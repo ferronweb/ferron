@@ -1080,7 +1080,6 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 |-----------|-----------|-------------|---------|
 | `username` | `<string>` | INWX username. | — (required) |
 | `password` | `<string>` | INWX password. | — (required) |
-| `shared_secret` | `<string>` | Shared secret for 2FA. | — (optional) |
 | `sandbox` | `<bool>` | Use sandbox environment. | `false` |
 
 **Configuration example:**
@@ -1807,6 +1806,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 |-----------|-----------|-------------|---------|
 | `login` | `<string>` | TransIP account login. | — (required) |
 | `private_key_pem` | `<string>` | Private key in PEM format. | — (required) |
+| `global_key` | `<boolean>` | Use global key for authentication. | `false` |
 
 **Configuration example:**
 
@@ -1820,6 +1820,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
             provider transip
             login "YOUR_TRANSIP_LOGIN"
             private_key_pem "-----BEGIN PRIVATE KEY-----\n..."
+            global_key true
         }
     }
 }

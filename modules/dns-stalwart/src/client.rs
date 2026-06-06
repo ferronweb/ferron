@@ -30,12 +30,12 @@ impl DnsClient for DnsStalwartClient {
 
         if self
             .inner
-            .update(name, record.clone(), ttl, &origin)
+            .set_rrset(name, record.as_type(), ttl, vec![record.clone()], &origin)
             .await
             .is_err()
         {
             self.inner
-                .create(name, record, ttl, &origin)
+                .add_to_rrset(name, record.as_type(), ttl, vec![record], &origin)
                 .await
                 .map_err(|e| ferron_dns::DnsProviderError::new(e.to_string()))?;
         }
@@ -50,10 +50,10 @@ impl DnsClient for DnsStalwartClient {
     ) -> Result<(), ferron_dns::DnsProviderError> {
         let (_, origin) = separate_subdomain_from_domain_name(name).await;
 
+        // In `dns_update` 0.5.x, set_rrset with no records deletes the record set.
         self.inner
-            .delete(
+            .set_rrset(
                 name,
-                origin,
                 match record_type {
                     ferron_dns::DnsRecordType::A => dns_update::DnsRecordType::A,
                     ferron_dns::DnsRecordType::AAAA => dns_update::DnsRecordType::AAAA,
@@ -70,6 +70,9 @@ impl DnsClient for DnsStalwartClient {
                         ))
                     }
                 },
+                3600,
+                vec![],
+                origin,
             )
             .await
             .map_err(|e| ferron_dns::DnsProviderError::new(e.to_string()))?;
