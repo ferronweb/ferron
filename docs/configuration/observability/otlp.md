@@ -55,6 +55,37 @@ Each signal sub-block supports these nested directives:
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
 | `no_verification` | `<bool>` | Disable TLS certificate verification. Use with caution. | `false` |
 
+### Baggage promotion
+
+The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry attributes for logs, metrics, and traces. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your telemetry signals without custom instrumentation.
+
+```ferron
+observability {
+    provider otlp
+
+    traces "https://collector:4317/v1/traces" {
+        protocol "grpc"
+    }
+
+    baggage {
+        key "tenant.id" {
+            attribute "tenant.id"
+            signals traces logs
+            max_distinct 1000
+        }
+    }
+}
+```
+
+Each `key` entry configures one baggage key to promote:
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
+| `attribute` | `<string>` | The OpenTelemetry attribute name to use. | same as the baggage key |
+| `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
+| `max_distinct` | `<number>` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | no cap |
+
 ## Configuration examples
 
 ### Basic OTLP configuration
@@ -134,6 +165,35 @@ example.com {
 
         traces "https://localhost:4317/v1/traces" {
             protocol "grpc"
+        }
+    }
+}
+```
+
+### Baggage promotion with cardinality control
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+        service_name "my-service"
+
+        traces "https://collector:4317/v1/traces" {
+            protocol "grpc"
+        }
+
+        baggage {
+            # Promote tenant ID to traces and logs
+            key "tenant.id" {
+                attribute "tenant.id"
+                signals traces logs
+            }
+
+            # Promote user role to all signals with cardinality cap
+            key "user.role" {
+                attribute "ferron.user_role"
+                max_distinct 100
+            }
         }
     }
 }
@@ -237,7 +297,8 @@ Most commercial APM solutions support OTLP:
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
-- **Baggage** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
+- **Baggage propagation** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
+- **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into telemetry attributes. For metrics, always set `max_distinct` on keys with unbounded values to prevent high-cardinality label explosion. Values exceeding the distinct cap are automatically hashed.
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 

@@ -46,6 +46,33 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 - **`"text"`** — standard Prometheus text exposition format (default)
 - **`"protobuf"`** — Prometheus protobuf format for more efficient scraping
 
+### Baggage promotion
+
+The `baggage` sub-directive promotes specific W3C Baggage keys into Prometheus metric labels. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation.
+
+```ferron
+observability {
+    provider prometheus
+
+    baggage {
+        key "tenant.id" {
+            attribute "tenant.id"
+            max_distinct 100
+        }
+    }
+}
+```
+
+Each `key` entry configures one baggage key to promote:
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
+| `attribute` | `<string>` | The Prometheus label name to use. | same as the baggage key |
+| `max_distinct` | `<number>` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | no cap |
+
+**Cardinality warning:** Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
+
 ## Metrics endpoint
 
 When configured, the Prometheus module starts an HTTP server that exposes metrics at the `/metrics` endpoint:
@@ -152,6 +179,31 @@ api.example.com {
 }
 ```
 
+### Baggage promotion with cardinality control
+
+```ferron
+example.com {
+    observability {
+        provider prometheus
+        endpoint_listen "127.0.0.1:8889"
+
+        baggage {
+            # Promote tenant ID as a metric label (bounded cardinality)
+            key "tenant.id" {
+                attribute "tenant.id"
+                max_distinct 50
+            }
+
+            # Promote user role with strict cardinality cap
+            key "user.role" {
+                attribute "ferron.user_role"
+                max_distinct 10
+            }
+        }
+    }
+}
+```
+
 ## Prometheus server configuration
 
 Add the following to your `prometheus.yml` to scrape Ferron metrics:
@@ -168,7 +220,8 @@ scrape_configs:
 ## Notes and troubleshooting
 
 - **Endpoint availability** - the Prometheus endpoint is started lazily when the first metric event is received for a given configuration. This means there may be a slight delay for the first request.
-- **Metric cardinality** - be aware of high-cardinality labels that could cause performance issues in Prometheus. Ferron limits label values to reasonable cardinality.
+- **Metric cardinality** - be aware of high-cardinality labels that could cause performance issues in Prometheus. Ferron limits label values to reasonable cardinality. Use `max_distinct` on `baggage` keys to cap distinct label values.
+- **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into metric labels. Always set `max_distinct` for keys with unbounded values to prevent label explosion.
 - **Port conflicts** - if the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.
 - **Firewall rules** - ensure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
 - **Authentication** - the Prometheus endpoint does not currently support authentication. For secure deployments, place Ferron behind a reverse proxy with authentication or use network-level access controls.

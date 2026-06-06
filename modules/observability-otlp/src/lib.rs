@@ -143,22 +143,39 @@ impl Module for OtlpObservabilityModule {
                 match &msg.event {
                     Event::Log(log_event) => {
                         if let Some(ref provider) = entry.logs_provider {
-                            emit_log(provider, log_event);
+                            emit_log(provider, log_event, &entry.baggage_promotions);
                         }
                     }
                     Event::Metric(metric_event) => {
                         if let Some(ref provider) = entry.metrics_provider {
-                            emit_metric(provider, metric_event, &mut entry.metrics_instruments);
+                            emit_metric(
+                                provider,
+                                metric_event,
+                                &mut entry.metrics_instruments,
+                                &entry.baggage_promotions,
+                                &mut entry.baggage_tracker,
+                            );
                         }
                     }
                     Event::Trace(trace_event) => {
                         if let Some(ref provider) = entry.traces_provider {
-                            emit_trace(provider, trace_event, &entry.correlation);
+                            emit_trace(
+                                provider,
+                                trace_event,
+                                &entry.correlation,
+                                &entry.baggage_promotions,
+                            );
                         }
                     }
                     Event::Access(access_event) => {
                         if let Some(ref provider) = entry.logs_provider {
-                            emit_access_log(provider, access_event, &msg.log_config, &registry);
+                            emit_access_log(
+                                provider,
+                                access_event,
+                                &msg.log_config,
+                                &registry,
+                                &entry.baggage_promotions,
+                            );
                         }
                     }
                 }

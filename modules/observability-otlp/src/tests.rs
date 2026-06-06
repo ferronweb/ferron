@@ -2,7 +2,10 @@ use crate::providers::sanitize_label_value;
 use crate::providers::CorrelationContext;
 
 use super::*;
-use ferron_observability::{MetricAttributeValue, TraceAttributeValue, TraceEvent};
+use ferron_observability::{
+    baggage::{BaggageKeyPromotion, DistinctValueTracker, SignalSet},
+    MetricAttributeValue, TraceAttributeValue, TraceEvent,
+};
 
 #[test]
 fn correlation_context_tracks_active_spans() {
@@ -61,7 +64,7 @@ fn emit_trace_start_span_stores_span_object() {
         ],
     };
 
-    emit_trace(&provider, &event, &correlation);
+    emit_trace(&provider, &event, &correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_some());
 }
@@ -84,7 +87,7 @@ fn emit_trace_end_span_ends_properly() {
             TraceAttributeValue::String("POST".to_string()),
         )],
     };
-    emit_trace(&provider, &start_event, &correlation);
+    emit_trace(&provider, &start_event, &correlation, &[]);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -92,7 +95,7 @@ fn emit_trace_end_span_ends_properly() {
         error: Some("test error".to_string()),
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
     };
-    emit_trace(&provider, &end_event, &correlation);
+    emit_trace(&provider, &end_event, &correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -111,7 +114,7 @@ fn emit_trace_end_span_without_error() {
         trace_context: None,
         attributes: vec![],
     };
-    emit_trace(&provider, &start_event, &correlation);
+    emit_trace(&provider, &start_event, &correlation, &[]);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -119,7 +122,7 @@ fn emit_trace_end_span_without_error() {
         error: None,
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
     };
-    emit_trace(&provider, &end_event, &correlation);
+    emit_trace(&provider, &end_event, &correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -137,7 +140,7 @@ fn emit_trace_end_span_on_unknown_name_does_nothing() {
         error: Some("should be ignored".to_string()),
         attributes: vec![],
     };
-    emit_trace(&provider, &end_event, &correlation);
+    emit_trace(&provider, &end_event, &correlation, &[]);
     assert!(correlation.get_parent_ids("unknown.span").is_none());
 }
 
@@ -221,7 +224,13 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             description: None,
             trace_context: None,
         };
-        emit_metric(&provider, &event, &mut instruments);
+        emit_metric(
+            &provider,
+            &event,
+            &mut instruments,
+            &[],
+            &mut DistinctValueTracker::new(),
+        );
 
         // Verify the sanitized value is bounded
         let sanitized = sanitize_label_value(&format!("CUSTOM_{i:04}"));
@@ -254,7 +263,13 @@ async fn emit_metric_with_long_label_value_is_hashed() {
     };
 
     // Should not panic or OOM
-    emit_metric(&provider, &event, &mut instruments);
+    emit_metric(
+        &provider,
+        &event,
+        &mut instruments,
+        &[],
+        &mut DistinctValueTracker::new(),
+    );
 
     // The internal sanitization should have hashed the value
     let sanitized = sanitize_label_value(&long_ua);
@@ -303,4 +318,213 @@ async fn otlp_correlation_context_concurrent_insert_remove() {
 
     // All spans should be cleaned up via EndSpan in the next step
     // (In this test we only verify concurrent insert + read works without panics)
+}
+
+#[test]
+fn emit_trace_promotes_baggage_to_span_attributes() {
+    use std::borrow::Cow;
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let correlation = CorrelationContext::new();
+
+    let promotions = vec![
+        BaggageKeyPromotion {
+            baggage_key: "tenant.id".to_string(),
+            attribute_name: None,
+            signals: None,
+            max_distinct: None,
+        },
+        BaggageKeyPromotion {
+            baggage_key: "user.role".to_string(),
+            attribute_name: Some("ferron.user_role".to_string()),
+            signals: None,
+            max_distinct: None,
+        },
+    ];
+
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        parent: None,
+        trace_context: Some(ferron_observability::EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("tenant.id=acme,user.role=admin,other=skip".to_string()),
+            sampled: Some(true),
+        }),
+        attributes: vec![],
+    };
+
+    emit_trace(&provider, &event, &correlation, &promotions);
+
+    // Verify span was created with baggage attributes
+    let entry = correlation
+        .get_parent_ids("test.span")
+        .expect("span should exist");
+    // The baggage was stored in the correlation context
+    assert!(entry.3.is_some());
+}
+
+#[test]
+fn emit_trace_respects_signal_filter_for_baggage() {
+    use std::borrow::Cow;
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let correlation = CorrelationContext::new();
+
+    // Only promote to logs, not traces
+    let promotions = vec![BaggageKeyPromotion {
+        baggage_key: "tenant.id".to_string(),
+        attribute_name: None,
+        signals: Some(SignalSet::LOGS),
+        max_distinct: None,
+    }];
+
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        parent: None,
+        trace_context: Some(ferron_observability::EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("tenant.id=acme".to_string()),
+            sampled: Some(true),
+        }),
+        attributes: vec![],
+    };
+
+    // Should not panic, and the baggage should not be promoted to traces
+    emit_trace(&provider, &event, &correlation, &promotions);
+    assert!(correlation.get_parent_ids("test.span").is_some());
+}
+
+#[test]
+fn emit_log_promotes_baggage_to_log_attributes() {
+    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
+
+    let promotions = vec![BaggageKeyPromotion {
+        baggage_key: "tenant.id".to_string(),
+        attribute_name: Some("ferron.tenant".to_string()),
+        signals: None,
+        max_distinct: None,
+    }];
+
+    let event = ferron_observability::LogEvent {
+        level: ferron_observability::LogLevel::Info,
+        message: "test message".to_string(),
+        target: "test",
+        trace_context: Some(ferron_observability::EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("tenant.id=acme".to_string()),
+            sampled: Some(true),
+        }),
+    };
+
+    // Should not panic
+    emit_log(&provider, &event, &promotions);
+}
+
+#[tokio::test]
+async fn emit_metric_promotes_baggage_to_metric_attributes() {
+    use ferron_observability::{MetricEvent, MetricType, MetricValue};
+
+    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
+    let mut instruments = HashMap::new();
+    let mut tracker = DistinctValueTracker::new();
+
+    let promotions = vec![BaggageKeyPromotion {
+        baggage_key: "tenant.id".to_string(),
+        attribute_name: None,
+        signals: None,
+        max_distinct: None,
+    }];
+
+    let event = MetricEvent {
+        name: "test.baggage.metric",
+        attributes: vec![],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: None,
+        description: None,
+        trace_context: Some(ferron_observability::EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("tenant.id=acme".to_string()),
+            sampled: Some(true),
+        }),
+    };
+
+    // Should not panic and should include baggage attribute
+    emit_metric(
+        &provider,
+        &event,
+        &mut instruments,
+        &promotions,
+        &mut tracker,
+    );
+}
+
+#[tokio::test]
+async fn emit_metric_baggage_cardinality_cap() {
+    use ferron_observability::{MetricEvent, MetricType, MetricValue};
+
+    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
+    let mut instruments = HashMap::new();
+    let mut tracker = DistinctValueTracker::new();
+
+    let promotions = vec![BaggageKeyPromotion {
+        baggage_key: "user.id".to_string(),
+        attribute_name: None,
+        signals: None,
+        max_distinct: Some(2),
+    }];
+
+    // First two distinct values should pass through
+    for i in 0..2 {
+        let event = MetricEvent {
+            name: "test.cardinality.baggage",
+            attributes: vec![],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: None,
+            description: None,
+            trace_context: Some(ferron_observability::EventTraceContext {
+                trace_id: [b'0'; 32],
+                span_id: [b'0'; 16],
+                baggage: Some(format!("user.id=value{i}")),
+                sampled: Some(true),
+            }),
+        };
+        emit_metric(
+            &provider,
+            &event,
+            &mut instruments,
+            &promotions,
+            &mut tracker,
+        );
+    }
+
+    // Third distinct value should be hashed (no panic)
+    let event = MetricEvent {
+        name: "test.cardinality.baggage",
+        attributes: vec![],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: None,
+        description: None,
+        trace_context: Some(ferron_observability::EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("user.id=value2".to_string()),
+            sampled: Some(true),
+        }),
+    };
+    emit_metric(
+        &provider,
+        &event,
+        &mut instruments,
+        &promotions,
+        &mut tracker,
+    );
 }

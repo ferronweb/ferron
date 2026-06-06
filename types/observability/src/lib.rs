@@ -1,4 +1,5 @@
 mod access;
+pub mod baggage;
 mod config;
 mod event;
 mod provider;

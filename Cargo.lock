@@ -1804,6 +1804,7 @@ name = "ferron-observability"
 version = "3.0.0-beta.1"
 dependencies = [
  "ferron-core",
+ "urlencoding",
 ]
 
 [[package]]

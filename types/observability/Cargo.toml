@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 ferron-core = { path = "../../core" }
+urlencoding = "2.1.3"

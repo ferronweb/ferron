@@ -53,6 +53,30 @@ baggage: userId=alice,serverNode=5;props;otherKey=otherValue
 
 Each item is a `key=value` pair with optional semicolon-separated properties. Values are URL-encoded.
 
+### Baggage promotion to telemetry attributes
+
+In addition to propagating baggage to upstream services, you can promote specific baggage keys into OpenTelemetry attributes on your telemetry signals (logs, metrics, traces). This is configured via the `baggage` sub-directive within each observability backend block:
+
+```ferron
+observability {
+    provider otlp
+
+    traces "https://collector:4317/v1/traces" {
+        protocol "grpc"
+    }
+
+    baggage {
+        key "tenant.id" {
+            attribute "tenant.id"
+            signals traces logs
+            max_distinct 1000
+        }
+    }
+}
+```
+
+See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for full documentation of the `baggage` directive.
+
 ### Example
 
 A client sends:

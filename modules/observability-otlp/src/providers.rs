@@ -3,6 +3,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use dashmap::DashMap;
 use ferron_core::{config::ServerConfigurationBlock, registry::Registry};
 use ferron_observability::{
+    baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet},
     AccessEvent, LogEvent, LogFormatterContext, LogLevel, MetricAttributeValue, MetricEvent,
     MetricType, MetricValue, Parent, TraceAttributeValue, TraceEvent,
 };
@@ -128,6 +129,8 @@ pub struct OtlpProviderCache {
     pub traces_provider: Option<opentelemetry_sdk::trace::SdkTracerProvider>,
     pub correlation: Arc<CorrelationContext>,
     pub metrics_instruments: HashMap<&'static str, CachedInstrument>,
+    pub baggage_promotions: Vec<BaggageKeyPromotion>,
+    pub baggage_tracker: DistinctValueTracker,
 }
 
 impl OtlpProviderCache {
@@ -153,6 +156,8 @@ impl OtlpProviderCache {
             traces_provider,
             correlation,
             metrics_instruments: HashMap::new(),
+            baggage_promotions: config.baggage_promotions.clone(),
+            baggage_tracker: DistinctValueTracker::new(),
         }
     }
 }
@@ -434,6 +439,7 @@ pub fn emit_access_log(
     event: &Arc<dyn AccessEvent>,
     log_config: &Arc<ServerConfigurationBlock>,
     registry: &Registry,
+    promotions: &[BaggageKeyPromotion],
 ) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 
@@ -455,6 +461,14 @@ pub fn emit_access_log(
             ) {
                 record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
             }
+        }
+    }
+
+    // Promote configured baggage keys into access log attributes
+    if let Some(baggage_str) = event.trace_context().and_then(|c| c.baggage.as_deref()) {
+        let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::LOGS);
+        for attr in extracted {
+            record.add_attribute(attr.attribute_name, AnyValue::String(attr.value.into()));
         }
     }
 
@@ -487,11 +501,13 @@ pub fn emit_metric(
     provider: &opentelemetry_sdk::metrics::SdkMeterProvider,
     event: &MetricEvent,
     instruments: &mut HashMap<&'static str, CachedInstrument>,
+    promotions: &[BaggageKeyPromotion],
+    tracker: &mut DistinctValueTracker,
 ) {
     use opentelemetry::metrics::MeterProvider;
 
     let meter = provider.meter("ferron");
-    let attrs: Vec<KeyValue> = event
+    let mut attrs: Vec<KeyValue> = event
         .attributes
         .iter()
         .map(|(k, v)| {
@@ -513,6 +529,26 @@ pub fn emit_metric(
             KeyValue::new(*k, value)
         })
         .collect();
+
+    // Promote configured baggage keys into metric attributes
+    if let Some(baggage_str) = event
+        .trace_context
+        .as_ref()
+        .and_then(|c| c.baggage.as_deref())
+    {
+        let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::METRICS);
+        for attr in extracted {
+            let value = tracker.canonicalize(
+                &attr.attribute_name,
+                &attr.value,
+                promotions
+                    .iter()
+                    .find(|p| p.effective_attribute_name() == attr.attribute_name)
+                    .and_then(|p| p.max_distinct),
+            );
+            attrs.push(KeyValue::new(attr.attribute_name, value));
+        }
+    }
 
     match (&event.ty, event.value) {
         (MetricType::Counter, MetricValue::F64(val)) => {
@@ -664,6 +700,7 @@ pub fn emit_trace(
     provider: &opentelemetry_sdk::trace::SdkTracerProvider,
     event: &TraceEvent,
     correlation: &CorrelationContext,
+    promotions: &[BaggageKeyPromotion],
 ) {
     use opentelemetry::trace::{Span, SpanBuilder, Tracer};
 
@@ -694,6 +731,15 @@ pub fn emit_trace(
             // Set semantic convention attributes
             for (key, value) in attributes {
                 span.set_attribute(trace_kv(key, value));
+            }
+
+            // Promote configured baggage keys into span attributes
+            if let Some(baggage_str) = trace_context.as_ref().and_then(|c| c.baggage.as_deref()) {
+                let extracted =
+                    baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::TRACES);
+                for attr in extracted {
+                    span.set_attribute(KeyValue::new(attr.attribute_name, attr.value));
+                }
             }
 
             let trace_id_hex = span.span_context().trace_id().to_string();
@@ -731,7 +777,11 @@ pub fn emit_trace(
     }
 }
 
-pub fn emit_log(provider: &opentelemetry_sdk::logs::SdkLoggerProvider, event: &LogEvent) {
+pub fn emit_log(
+    provider: &opentelemetry_sdk::logs::SdkLoggerProvider,
+    event: &LogEvent,
+    promotions: &[BaggageKeyPromotion],
+) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider, Severity};
 
     let logger = provider.logger("ferron");
@@ -762,6 +812,18 @@ pub fn emit_log(provider: &opentelemetry_sdk::logs::SdkLoggerProvider, event: &L
             ) {
                 record.set_trace_context(trace_id, span_id, trace_flags(trace_context.sampled));
             }
+        }
+    }
+
+    // Promote configured baggage keys into log record attributes
+    if let Some(baggage_str) = event
+        .trace_context
+        .as_ref()
+        .and_then(|c| c.baggage.as_deref())
+    {
+        let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::LOGS);
+        for attr in extracted {
+            record.add_attribute(attr.attribute_name, AnyValue::String(attr.value.into()));
         }
     }
 

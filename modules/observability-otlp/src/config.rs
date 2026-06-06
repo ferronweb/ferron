@@ -1,4 +1,5 @@
 use ferron_core::config::ServerConfigurationBlock;
+use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
 
 /// Per-host configuration for a single OTLP signal (logs, metrics, or traces)
 pub struct SignalConfig {
@@ -14,6 +15,7 @@ pub struct OtlpBackendConfig {
     pub logs: Option<SignalConfig>,
     pub metrics: Option<SignalConfig>,
     pub traces: Option<SignalConfig>,
+    pub baggage_promotions: Vec<BaggageKeyPromotion>,
 }
 
 impl OtlpBackendConfig {
@@ -30,6 +32,7 @@ impl OtlpBackendConfig {
         let logs = SignalConfig::parse_config(config, "logs");
         let metrics = SignalConfig::parse_config(config, "metrics");
         let traces = SignalConfig::parse_config(config, "traces");
+        let baggage_promotions = parse_baggage_promotions(config);
 
         Self {
             service_name,
@@ -37,6 +40,7 @@ impl OtlpBackendConfig {
             logs,
             metrics,
             traces,
+            baggage_promotions,
         }
     }
 }
@@ -66,5 +70,217 @@ impl SignalConfig {
             protocol,
             authorization,
         })
+    }
+}
+
+/// Parse the `baggage` directive from the OTLP config block.
+///
+/// Expected format:
+/// ```text
+/// baggage {
+///     key "tenant.id" {
+///         attribute "tenant.id"
+///         signals traces logs
+///         max_distinct 1000
+///     }
+/// }
+/// ```
+fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKeyPromotion> {
+    let Some(baggage_entries) = config.directives.get("baggage") else {
+        return Vec::new();
+    };
+    let Some(baggage_block) = baggage_entries.first().and_then(|e| e.children.as_ref()) else {
+        return Vec::new();
+    };
+
+    let Some(key_entries) = baggage_block.directives.get("key") else {
+        return Vec::new();
+    };
+
+    let mut promotions = Vec::new();
+    for key_entry in key_entries {
+        let Some(baggage_key) = key_entry.args.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+
+        let children = key_entry.children.as_ref();
+
+        let attribute_name = children
+            .and_then(|c| c.get_value("attribute"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let signals = children.and_then(parse_signal_set);
+
+        let max_distinct = children
+            .and_then(|c| c.get_value("max_distinct"))
+            .and_then(|v| v.as_number())
+            .map(|n| n as usize);
+
+        promotions.push(BaggageKeyPromotion {
+            baggage_key: baggage_key.to_string(),
+            attribute_name,
+            signals,
+            max_distinct,
+        });
+    }
+
+    promotions
+}
+
+/// Parse a `signals` directive value into a SignalSet.
+/// The value can be a single signal name or multiple args.
+fn parse_signal_set(children: &ServerConfigurationBlock) -> Option<SignalSet> {
+    let entries = children.directives.get("signals")?;
+    let entry = entries.first()?;
+    if entry.args.is_empty() {
+        return None;
+    }
+    let mut set = SignalSet::empty();
+    for arg in &entry.args {
+        if let Some(name) = arg.as_str() {
+            match name {
+                "traces" => set = set.insert(SignalSet::TRACES),
+                "logs" => set = set.insert(SignalSet::LOGS),
+                "metrics" => set = set.insert(SignalSet::METRICS),
+                _ => {}
+            }
+        }
+    }
+    if set == SignalSet::empty() {
+        None
+    } else {
+        Some(set)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_config_defaults() {
+        let config = ServerConfigurationBlock::default();
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        assert_eq!(parsed.service_name, "ferron");
+        assert!(!parsed.no_verify);
+        assert!(parsed.logs.is_none());
+        assert!(parsed.metrics.is_none());
+        assert!(parsed.traces.is_none());
+        assert!(parsed.baggage_promotions.is_empty());
+    }
+
+    #[test]
+    fn parse_baggage_promotions_empty() {
+        let config = ServerConfigurationBlock::default();
+        assert!(parse_baggage_promotions(&config).is_empty());
+    }
+
+    #[test]
+    fn signal_set_parse() {
+        let mut children_directives = HashMap::new();
+        children_directives.insert(
+            "signals".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![
+                    ServerConfigurationValue::String("traces".to_string(), None),
+                    ServerConfigurationValue::String("logs".to_string(), None),
+                ],
+                children: None,
+                span: None,
+            }],
+        );
+        let children = ServerConfigurationBlock {
+            directives: Arc::new(children_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let set = parse_signal_set(&children).unwrap();
+        assert!(set.contains(SignalSet::TRACES));
+        assert!(set.contains(SignalSet::LOGS));
+        assert!(!set.contains(SignalSet::METRICS));
+    }
+
+    use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[test]
+    fn parse_baggage_promotions_with_key() {
+        let mut key_children_directives = HashMap::new();
+        key_children_directives.insert(
+            "attribute".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "custom.name".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        key_children_directives.insert(
+            "signals".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("traces".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        key_children_directives.insert(
+            "max_distinct".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Number(500, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let key_children = ServerConfigurationBlock {
+            directives: Arc::new(key_children_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let mut baggage_directives = HashMap::new();
+        baggage_directives.insert(
+            "key".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "tenant.id".to_string(),
+                    None,
+                )],
+                children: Some(key_children),
+                span: None,
+            }],
+        );
+        let baggage_block = ServerConfigurationBlock {
+            directives: Arc::new(baggage_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let mut top_directives = HashMap::new();
+        top_directives.insert(
+            "baggage".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(baggage_block),
+                span: None,
+            }],
+        );
+        let config = ServerConfigurationBlock {
+            directives: Arc::new(top_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let promotions = parse_baggage_promotions(&config);
+        assert_eq!(promotions.len(), 1);
+        assert_eq!(promotions[0].baggage_key, "tenant.id");
+        assert_eq!(promotions[0].attribute_name.as_deref(), Some("custom.name"));
+        assert_eq!(promotions[0].max_distinct, Some(500));
+        let sigs = promotions[0].signals.unwrap();
+        assert!(sigs.contains(SignalSet::TRACES));
+        assert!(!sigs.contains(SignalSet::LOGS));
     }
 }

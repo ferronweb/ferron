@@ -17,6 +17,7 @@ use ferron_core::{
     Module,
 };
 use ferron_observability::{
+    baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet},
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
 };
@@ -33,6 +34,7 @@ static DROPPED_EVENT: Once = Once::new();
 struct PrometheusBackendConfig {
     listen: SocketAddr,
     format: String,
+    baggage_promotions: Vec<BaggageKeyPromotion>,
 }
 
 /// Wrapper that carries an event with its configuration through the channel
@@ -121,7 +123,95 @@ fn parse_prometheus_config(
         .unwrap_or("text")
         .to_string();
 
-    Ok(PrometheusBackendConfig { listen, format })
+    let baggage_promotions = parse_baggage_promotions(config);
+
+    Ok(PrometheusBackendConfig {
+        listen,
+        format,
+        baggage_promotions,
+    })
+}
+
+/// Parse the `baggage` directive from the Prometheus config block.
+///
+/// Expected format:
+/// ```text
+/// baggage {
+///     key "tenant.id" {
+///         attribute "tenant.id"
+///         max_distinct 1000
+///     }
+/// }
+/// ```
+fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKeyPromotion> {
+    let Some(baggage_entries) = config.directives.get("baggage") else {
+        return Vec::new();
+    };
+    let Some(baggage_block) = baggage_entries.first().and_then(|e| e.children.as_ref()) else {
+        return Vec::new();
+    };
+
+    let Some(key_entries) = baggage_block.directives.get("key") else {
+        return Vec::new();
+    };
+
+    let mut promotions = Vec::new();
+    for key_entry in key_entries {
+        let Some(baggage_key) = key_entry.args.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+
+        let children = key_entry.children.as_ref();
+
+        let attribute_name = children
+            .and_then(|c| c.get_value("attribute"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Prometheus only handles metrics, so signals default to metrics-only
+        let signals = children
+            .and_then(parse_signal_set)
+            .or(Some(SignalSet::METRICS));
+
+        let max_distinct = children
+            .and_then(|c| c.get_value("max_distinct"))
+            .and_then(|v| v.as_number())
+            .map(|n| n as usize);
+
+        promotions.push(BaggageKeyPromotion {
+            baggage_key: baggage_key.to_string(),
+            attribute_name,
+            signals,
+            max_distinct,
+        });
+    }
+
+    promotions
+}
+
+/// Parse a `signals` directive value into a SignalSet.
+fn parse_signal_set(children: &ServerConfigurationBlock) -> Option<SignalSet> {
+    let entries = children.directives.get("signals")?;
+    let entry = entries.first()?;
+    if entry.args.is_empty() {
+        return None;
+    }
+    let mut set = SignalSet::empty();
+    for arg in &entry.args {
+        if let Some(name) = arg.as_str() {
+            match name {
+                "traces" => set = set.insert(SignalSet::TRACES),
+                "logs" => set = set.insert(SignalSet::LOGS),
+                "metrics" => set = set.insert(SignalSet::METRICS),
+                _ => {}
+            }
+        }
+    }
+    if set == SignalSet::empty() {
+        None
+    } else {
+        Some(set)
+    }
 }
 
 struct PrometheusObservabilityModule {
@@ -175,6 +265,8 @@ impl Module for PrometheusObservabilityModule {
                         &entry.registry,
                         metric_event,
                         &mut entry.metrics_instruments,
+                        &entry.baggage_promotions,
+                        &mut entry.baggage_tracker,
                     );
                 }
             }
@@ -188,6 +280,8 @@ impl Module for PrometheusObservabilityModule {
 struct PrometheusProviderCache {
     registry: prometheus::Registry,
     metrics_instruments: PrometheusInstrumentCache,
+    baggage_promotions: Vec<BaggageKeyPromotion>,
+    baggage_tracker: DistinctValueTracker,
 }
 
 enum CachedInstrument {
@@ -211,22 +305,25 @@ fn init_provider(
     config: &PrometheusBackendConfig,
     reload_token: CancellationToken,
 ) -> PrometheusProviderCache {
-    let config = config.clone();
+    let config_clone = config.clone();
     let registry = prometheus::Registry::new();
     let registry_clone = registry.clone();
+    let baggage_promotions = config.baggage_promotions.clone();
     // Note: Prometheus endpoint listener is spawned on demand when the first event
     // with a given config is received. This allows us to avoid starting unnecessary listeners
     // for configs that are never used, but also means that the first event may be delayed
     // while the listener is starting up.
     tokio::spawn(async move {
-        let socket_addr = config.listen;
-        if let Err(err) = endpoint_listener_fn(config, reload_token, registry_clone).await {
+        let socket_addr = config_clone.listen;
+        if let Err(err) = endpoint_listener_fn(config_clone, reload_token, registry_clone).await {
             ferron_core::log_warn!("Prometheus endpoint listener at {socket_addr} failed: {err}");
         }
     });
     PrometheusProviderCache {
         registry,
         metrics_instruments: HashMap::new(),
+        baggage_promotions,
+        baggage_tracker: DistinctValueTracker::new(),
     }
 }
 
@@ -234,6 +331,8 @@ fn emit_metric(
     registry: &prometheus::Registry,
     event: &MetricEvent,
     instruments: &mut PrometheusInstrumentCache,
+    promotions: &[BaggageKeyPromotion],
+    tracker: &mut DistinctValueTracker,
 ) {
     // Sanitize label values to avoid high-cardinality or invalid label contents.
     fn sanitize_label_value(s: &str) -> String {
@@ -251,7 +350,7 @@ fn emit_metric(
         }
     }
 
-    let attrs: Vec<(&'static str, String)> = event
+    let mut attrs: Vec<(&'static str, String)> = event
         .attributes
         .iter()
         .map(|(k, v)| {
@@ -271,6 +370,26 @@ fn emit_metric(
             (*k, sanitize_label_value(&raw))
         })
         .collect();
+
+    // Promote configured baggage keys into metric attributes
+    if let Some(baggage_str) = event
+        .trace_context
+        .as_ref()
+        .and_then(|c| c.baggage.as_deref())
+    {
+        let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::METRICS);
+        for attr in extracted {
+            let value = tracker.canonicalize(
+                &attr.attribute_name,
+                &attr.value,
+                promotions
+                    .iter()
+                    .find(|p| p.effective_attribute_name() == attr.attribute_name)
+                    .and_then(|p| p.max_distinct),
+            );
+            attrs.push((Box::leak(attr.attribute_name.into_boxed_str()), value));
+        }
+    }
 
     match (&event.ty, event.value) {
         (MetricType::Counter, MetricValue::F64(val)) => {
