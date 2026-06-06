@@ -6,7 +6,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, LogEvent, LogLevel};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::Request;
 use http_body_util::{BodyExt, Empty};
 
@@ -187,7 +187,9 @@ impl ForwardedAuthenticationStage {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!("fauth: failed to build auth request: {}", e),
+                    summary: "Forwarded auth failed to build request".into(),
                     target: "ferron-http-fauth",
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
@@ -218,7 +220,9 @@ impl ForwardedAuthenticationStage {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!("fauth: failed to get connection: {}", e),
+                    summary: "Forwarded auth failed to get connection".into(),
                     target: "ferron-http-fauth",
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
@@ -240,7 +244,9 @@ impl ForwardedAuthenticationStage {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!("fauth: auth request failed: {}", e),
+                    summary: "Forwarded auth request failed".into(),
                     target: "ferron-http-fauth",
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 // Return connection to pool even on error
@@ -279,7 +285,9 @@ impl ForwardedAuthenticationStage {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
                 message: "fauth: authentication successful".to_string(),
+                summary: "Forwarded auth succeeded".into(),
                 target: "ferron-http-fauth",
+                attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
 
@@ -300,7 +308,12 @@ impl ForwardedAuthenticationStage {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Info,
                 message: format!("fauth: authentication failed with status {}", auth_status),
+                summary: "Forwarded auth failed".into(),
                 target: "ferron-http-fauth",
+                attributes: vec![(
+                    "http.response.status_code",
+                    LogAttributeValue::I64(auth_status.as_u16() as i64),
+                )],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
 
@@ -339,7 +352,9 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!("fauth: configuration error: {}", e),
+                    summary: "Forwarded auth configuration error".into(),
                     target: "ferron-http-fauth",
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));

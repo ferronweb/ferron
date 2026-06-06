@@ -219,6 +219,10 @@ For Prometheus-specific metrics export, see [Prometheus metrics](/docs/v3/config
 
 For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
 
+#### Structured log style
+
+When exporting through OTLP, the `log_style` directive in the OTLP observability block selects between two log record shapes. The default `legacy` mode keeps the existing human-readable `message` body and is unaffected by this option. The `modern` mode publishes each log record as a short OTEL-friendly `summary` body plus typed per-event attributes, and remaps access-log fields to OTEL semantic-convention attribute names (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, and so on). Console and file log sinks are unchanged regardless of the selected log style. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the full mapping and examples.
+
 ## Notes and troubleshooting
 
 - If log files are not being written, verify the file paths are accessible and the Ferron process has write permissions.

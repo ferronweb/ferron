@@ -27,7 +27,7 @@ use crate::types::upstream::{MtlsCredentials, ProxyHeader, Upstream, UpstreamCon
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
 /// mTLS file cache
 pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
-    LazyLock::new(|| DashMap::new());
+    LazyLock::new(DashMap::new);
 
 /// A header action: currently only append is supported for `request_header +Name`.
 /// The value is stored as a raw `String` with potential interpolation

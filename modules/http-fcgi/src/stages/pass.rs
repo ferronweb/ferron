@@ -5,7 +5,7 @@ use ferron_core::{
     pipeline::{PipelineError, Stage},
 };
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogEvent};
+use ferron_observability::{Event, LogAttributeValue, LogEvent};
 use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
@@ -162,7 +162,12 @@ impl Stage<HttpContext> for FcgiPassStage {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: ferron_observability::LogLevel::Error,
                     message: format!("Service unavailable: {err}"),
+                    summary: "FastCGI service unavailable".into(),
                     target: "ferron-http-scgi",
+                    attributes: vec![(
+                        "upstream.address",
+                        LogAttributeValue::String(scgi_to_fixed.to_string()),
+                    )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(HttpResponse::BuiltinError(503, None));
@@ -194,7 +199,12 @@ impl Stage<HttpContext> for FcgiPassStage {
                 events.emit(Event::Log(LogEvent {
                     level: ferron_observability::LogLevel::Warn,
                     message: format!("There were FastCGI errors: {stderr_string_trimmed}"),
+                    summary: "FastCGI errors on stderr".into(),
                     target: "ferron-http-fcgi",
+                    attributes: vec![(
+                        "error.message",
+                        LogAttributeValue::String(stderr_string_trimmed.to_string()),
+                    )],
                     trace_context: None,
                 }));
             }

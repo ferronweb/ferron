@@ -16,12 +16,44 @@ pub enum Event {
     Trace(TraceEvent),
 }
 
+/// A traditional full-text log message (used by `console` and `file` sinks, and by
+/// OTLP `log_style legacy`).
+///
+/// In OTLP `log_style modern`, the `summary` field is used as the log body and
+/// `attributes` are emitted as typed OpenTelemetry attributes instead.
 #[derive(Clone)]
 pub struct LogEvent {
     pub level: LogLevel,
+    /// Traditional full-text message. Always rendered by `console` and `file`
+    /// sinks and by OTLP `log_style legacy`.
     pub message: String,
+    /// Short summary used by OTLP `log_style modern` as the log body.
+    pub summary: Cow<'static, str>,
     pub target: &'static str, // "where this log came from"
+    /// Typed structured attributes. Emitted as OpenTelemetry log record
+    /// attributes in OTLP `log_style modern`. Ignored by other sinks.
+    pub attributes: Vec<(&'static str, LogAttributeValue)>,
     pub trace_context: Option<EventTraceContext>,
+}
+
+/// Represents an attribute value for a log record.
+/// Mirrors OTEL semantic convention attribute types.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LogAttributeValue {
+    /// String value
+    String(String),
+
+    /// Static string value (zero allocation)
+    StaticStr(&'static str),
+
+    /// Boolean value
+    Bool(bool),
+
+    /// Integer value
+    I64(i64),
+
+    /// Floating-point value
+    F64(f64),
 }
 
 #[derive(Copy, Clone)]
@@ -155,4 +187,54 @@ pub enum TraceEvent {
         error: Option<String>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn log_attribute_value_partial_eq() {
+        assert_eq!(LogAttributeValue::Bool(true), LogAttributeValue::Bool(true));
+        assert_ne!(
+            LogAttributeValue::Bool(true),
+            LogAttributeValue::Bool(false)
+        );
+        assert_eq!(LogAttributeValue::I64(42), LogAttributeValue::I64(42));
+        assert_eq!(
+            LogAttributeValue::String("x".to_string()),
+            LogAttributeValue::String("x".to_string())
+        );
+        assert_eq!(
+            LogAttributeValue::StaticStr("x"),
+            LogAttributeValue::StaticStr("x")
+        );
+        assert_eq!(LogAttributeValue::F64(1.5), LogAttributeValue::F64(1.5));
+    }
+
+    #[test]
+    fn log_event_round_trip_struct_literal() {
+        let event = LogEvent {
+            level: LogLevel::Info,
+            message: "full text message".to_string(),
+            summary: "short".into(),
+            target: "ferron-test",
+            attributes: vec![(
+                "client.address",
+                LogAttributeValue::String("127.0.0.1".to_string()),
+            )],
+            trace_context: None,
+        };
+        assert_eq!(event.message, "full text message");
+        assert_eq!(event.summary, "short");
+        assert_eq!(event.target, "ferron-test");
+        assert_eq!(event.attributes.len(), 1);
+        assert_eq!(
+            event.attributes[0],
+            (
+                "client.address",
+                LogAttributeValue::String("127.0.0.1".to_string())
+            )
+        );
+    }
 }

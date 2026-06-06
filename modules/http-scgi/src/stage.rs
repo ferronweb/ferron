@@ -1,6 +1,6 @@
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogEvent};
+use ferron_observability::{Event, LogAttributeValue, LogEvent};
 use http::Response;
 use http_body_util::BodyExt;
 use vibeio_cegla::VibeioScgiRuntime;
@@ -140,7 +140,12 @@ impl Stage<HttpContext> for ScgiStage {
                             ctx.events.emit(Event::Log(LogEvent {
                                 level: ferron_observability::LogLevel::Error,
                                 message: format!("Service unavailable: {err}"),
+                                summary: "SCGI service unavailable".into(),
                                 target: "ferron-http-scgi",
+                                attributes: vec![(
+                                    "upstream.address",
+                                    LogAttributeValue::String(addr.clone()),
+                                )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
@@ -162,7 +167,12 @@ impl Stage<HttpContext> for ScgiStage {
                             ctx.events.emit(Event::Log(LogEvent {
                                 level: ferron_observability::LogLevel::Error,
                                 message: format!("Service unavailable: {err}"),
+                                summary: "SCGI service unavailable".into(),
                                 target: "ferron-http-scgi",
+                                attributes: vec![(
+                                    "upstream.address",
+                                    LogAttributeValue::String(path.to_string()),
+                                )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             }));

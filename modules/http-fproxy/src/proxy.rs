@@ -6,8 +6,8 @@ use std::str::FromStr;
 use bytes::Bytes;
 use ferron_http::HttpContext;
 use ferron_observability::{
-    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue,
 };
 use http::header;
 use http::{Request, Response, StatusCode, Uri};
@@ -158,7 +158,12 @@ async fn handle_connect(
                         message: format!(
                             "Forward proxy: HTTP CONNECT upgrade failed for {connect_address}"
                         ),
+                        summary: "Forward proxy CONNECT upgrade failed".into(),
                         target: LOG_TARGET,
+                        attributes: vec![(
+                            "forward_proxy.target",
+                            LogAttributeValue::String(connect_address.to_string()),
+                        )],
                         trace_context: trace_context.clone(),
                     }));
                     emit_forward_proxy_metric_to_events(
@@ -178,7 +183,12 @@ async fn handle_connect(
                     message: format!(
                         "Forward proxy: no upgrade future for CONNECT {connect_address}"
                     ),
+                    summary: "Forward proxy CONNECT no upgrade future".into(),
                     target: LOG_TARGET,
+                    attributes: vec![(
+                        "forward_proxy.target",
+                        LogAttributeValue::String(connect_address.to_string()),
+                    )],
                     trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
@@ -200,7 +210,15 @@ async fn handle_connect(
                 error_logger.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!("Forward proxy: cannot connect to {connect_address}: {err}"),
+                    summary: "Forward proxy CONNECT cannot connect to target".into(),
                     target: LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "forward_proxy.target",
+                            LogAttributeValue::String(connect_address.to_string()),
+                        ),
+                        ("error.message", LogAttributeValue::String(err.to_string())),
+                    ],
                     trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
@@ -221,7 +239,15 @@ async fn handle_connect(
                 message: format!(
                     "Forward proxy: cannot set TCP_NODELAY for {connect_address}: {err}"
                 ),
+                summary: "Forward proxy CONNECT cannot set TCP_NODELAY".into(),
                 target: LOG_TARGET,
+                attributes: vec![
+                    (
+                        "forward_proxy.target",
+                        LogAttributeValue::String(connect_address.to_string()),
+                    ),
+                    ("error.message", LogAttributeValue::String(err.to_string())),
+                ],
                 trace_context: trace_context.clone(),
             }));
         }
@@ -234,7 +260,18 @@ async fn handle_connect(
                     message: format!(
                         "Forward proxy: cannot convert TCP stream to poll I/O for {connect_address}: {err}"
                     ),
+                    summary: "Forward proxy CONNECT cannot convert to poll I/O".into(),
                     target: LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "forward_proxy.target",
+                            LogAttributeValue::String(connect_address.to_string()),
+                        ),
+                        (
+                            "error.message",
+                            LogAttributeValue::String(err.to_string()),
+                        ),
+                    ],
                     trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
@@ -261,7 +298,22 @@ async fn handle_connect(
                          (client→backend: {client_to_backend} bytes, \
                          backend→client: {backend_to_client} bytes)"
                     ),
+                    summary: "Forward proxy CONNECT tunnel closed".into(),
                     target: LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "forward_proxy.target",
+                            LogAttributeValue::String(connect_address.to_string()),
+                        ),
+                        (
+                            "forward_proxy.bytes.client_to_backend",
+                            LogAttributeValue::I64(client_to_backend as i64),
+                        ),
+                        (
+                            "forward_proxy.bytes.backend_to_client",
+                            LogAttributeValue::I64(backend_to_client as i64),
+                        ),
+                    ],
                     trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
@@ -279,7 +331,15 @@ async fn handle_connect(
                     message: format!(
                         "Forward proxy: CONNECT tunnel error for {connect_address}: {err}"
                     ),
+                    summary: "Forward proxy CONNECT tunnel error".into(),
                     target: LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "forward_proxy.target",
+                            LogAttributeValue::String(connect_address.to_string()),
+                        ),
+                        ("error.message", LogAttributeValue::String(err.to_string())),
+                    ],
                     trace_context: trace_context.clone(),
                 }));
                 emit_forward_proxy_metric_to_events(
@@ -647,7 +707,9 @@ fn emit_log(ctx: &HttpContext, level: LogLevel, message: &str) {
     ctx.events.emit(Event::Log(LogEvent {
         level,
         message: message.to_string(),
+        summary: "Forward proxy log".into(),
         target: LOG_TARGET,
+        attributes: Vec::new(),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
     }));
 }

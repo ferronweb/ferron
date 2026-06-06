@@ -12,7 +12,8 @@ use ferron_core::StageConstraint;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
-    Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
 };
 use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
@@ -364,6 +365,8 @@ impl Stage<HttpContext> for EarlyHintsStage {
                     level: LogLevel::Warn,
                     target: LOG_TARGET,
                     message: format!("Failed to send 103 Early Hints: {e}"),
+                    summary: "Failed to send 103 Early Hints".into(),
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
             }

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogEvent, LogLevel};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::StatusCode;
 use parking_lot::RwLock;
 
@@ -81,7 +81,9 @@ pub async fn execute_proxy(
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Error,
             message: "Reverse proxy: no healthy upstream backends available".to_string(),
+            summary: "Reverse proxy: no healthy upstream backends available".into(),
             target: LOG_TARGET,
+            attributes: Vec::new(),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
         // Collect active health check unhealthy metrics
@@ -121,7 +123,9 @@ pub async fn execute_proxy(
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
                 message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
+                summary: "Reverse proxy: all upstream backends are unhealthy".into(),
                 target: LOG_TARGET,
+                attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             // Collect active health check unhealthy metrics
@@ -240,7 +244,12 @@ pub async fn execute_proxy(
                                 url = selected.upstream.proxy_to,
                                 err = e
                             ),
+                            summary: "Reverse proxy: retrying with another backend".into(),
                             target: LOG_TARGET,
+                            attributes: vec![(
+                                "upstream.address",
+                                LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                            )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
                         continue; // Loop back to select next backend
@@ -262,7 +271,18 @@ pub async fn execute_proxy(
                         url = selected.upstream.proxy_to,
                         err = e
                     ),
+                    summary: "Reverse proxy: backend error".into(),
                     target: LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "upstream.address",
+                            LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                        ),
+                        (
+                            "http.response.status_code",
+                            LogAttributeValue::I64(status.as_u16() as i64),
+                        ),
+                    ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 // Collect active health check unhealthy metrics

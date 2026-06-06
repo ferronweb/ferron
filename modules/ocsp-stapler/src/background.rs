@@ -523,7 +523,9 @@ fn emit_log(
         sink.emit(Event::Log(LogEvent {
             level,
             message: message.to_string(),
+            summary: "OCSP log".into(),
             target,
+            attributes: Vec::new(),
             trace_context: None,
         }));
     }

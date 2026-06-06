@@ -634,7 +634,9 @@ pub fn emit_log(
     event_sink.emit(Event::Log(LogEvent {
         level,
         message: message.to_string(),
+        summary: "ACME log".into(),
         target,
+        attributes: Vec::new(),
         trace_context: None,
     }));
 }

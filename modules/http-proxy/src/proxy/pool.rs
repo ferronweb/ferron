@@ -278,7 +278,15 @@ pub async fn establish_and_send(
                                 message: format!(
                                     "Reverse proxy: TLS handshake with {unix_path} failed: {e}"
                                 ),
+                                summary: "Reverse proxy: TLS handshake with Unix socket failed"
+                                    .into(),
                                 target: "ferron-http-proxy",
+                                attributes: vec![(
+                                    "upstream.address",
+                                    ferron_observability::LogAttributeValue::String(
+                                        unix_path.to_string(),
+                                    ),
+                                )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             },
@@ -319,7 +327,12 @@ pub async fn establish_and_send(
                     ferron_observability::LogEvent {
                         level: ferron_observability::LogLevel::Warn,
                         message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
+                        summary: "Reverse proxy: TCP connect to backend failed".into(),
                         target: "ferron-http-proxy",
+                        attributes: vec![(
+                            "upstream.address",
+                            ferron_observability::LogAttributeValue::String(addr.clone()),
+                        )],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
@@ -370,7 +383,12 @@ pub async fn establish_and_send(
                             message: format!(
                                 "Reverse proxy: TLS handshake with {addr} failed: {e}"
                             ),
+                            summary: "Reverse proxy: TLS handshake with backend failed".into(),
                             target: "ferron-http-proxy",
+                            attributes: vec![(
+                                "upstream.address",
+                                ferron_observability::LogAttributeValue::String(addr.clone()),
+                            )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 ctx,
                             ),
@@ -537,7 +555,9 @@ pub async fn handle_upgrade(
                                     level: ferron_observability::LogLevel::Warn,
                                     message: "Reverse proxy: backend HTTP upgrade failed"
                                         .to_string(),
+                                    summary: "Reverse proxy: backend HTTP upgrade failed".into(),
                                     target: "ferron-http-proxy",
+                                    attributes: Vec::new(),
                                     trace_context: None,
                                 },
                             ));
@@ -550,7 +570,9 @@ pub async fn handle_upgrade(
                     ferron_observability::LogEvent {
                         level: ferron_observability::LogLevel::Warn,
                         message: "Reverse proxy: frontend HTTP upgrade failed".to_string(),
+                        summary: "Reverse proxy: frontend HTTP upgrade failed".into(),
                         target: "ferron-http-proxy",
+                        attributes: Vec::new(),
                         trace_context: None,
                     },
                 ));

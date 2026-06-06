@@ -11,7 +11,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogEvent, LogLevel};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Method};
 use rustc_hash::FxBuildHasher;
 use tokio::sync::Semaphore;
@@ -197,7 +197,9 @@ impl Stage<HttpContext> for BasicAuthStage {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!("basicauth: IP '{ip}' locked (brute-force protection)"),
+                summary: "Basic auth client locked".into(),
                 target: "ferron-http-basicauth",
+                attributes: vec![("client.address", LogAttributeValue::String(ip.to_string()))],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_lockout_response(ctx, &engine));
@@ -228,7 +230,9 @@ impl Stage<HttpContext> for BasicAuthStage {
                         "basicauth: authentication failed for unknown user '{}'",
                         username
                     ),
+                    summary: "Basic auth failed for unknown user".into(),
                     target: "ferron-http-basicauth",
+                    attributes: vec![("user.name", LogAttributeValue::String(username.clone()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
@@ -241,7 +245,9 @@ impl Stage<HttpContext> for BasicAuthStage {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
                 message: format!("basicauth: user '{}' authenticated successfully", username),
+                summary: "Basic auth succeeded".into(),
                 target: "ferron-http-basicauth",
+                attributes: vec![("user.name", LogAttributeValue::String(username.clone()))],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.auth_user = Some(username);
@@ -269,7 +275,13 @@ impl Stage<HttpContext> for BasicAuthStage {
                         "".to_string()
                     }
                 ),
+                summary: "Basic auth failed".into(),
                 target: "ferron-http-basicauth",
+                attributes: vec![
+                    ("user.name", LogAttributeValue::String(username.clone())),
+                    ("client.address", LogAttributeValue::String(ip.to_string())),
+                    ("ferron.basicauth.locked", LogAttributeValue::Bool(locked)),
+                ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));

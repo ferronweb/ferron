@@ -534,7 +534,9 @@ impl Module for ReverseProxyModule {
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
                 message: "Reverse proxy module initialized".to_string(),
+                summary: "Reverse proxy module initialized".into(),
                 target: LOG_TARGET,
+                attributes: Vec::new(),
                 trace_context: None,
             },
         ));
@@ -592,6 +594,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         target: "ferron-proxy",
                         level: ferron_observability::LogLevel::Error,
                         message: format!("Proxy config error: {e}"),
+                        summary: "Reverse proxy config error".into(),
+                        attributes: vec![(
+                            "error.message",
+                            ferron_observability::LogAttributeValue::String(e.to_string()),
+                        )],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
@@ -675,6 +682,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         target: "ferron-proxy",
                         level: ferron_observability::LogLevel::Error,
                         message: format!("Proxy error: {e}"),
+                        summary: "Reverse proxy error".into(),
+                        attributes: vec![(
+                            "error.message",
+                            ferron_observability::LogAttributeValue::String(e.to_string()),
+                        )],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));

@@ -373,6 +373,8 @@ example.com {
 }
 ```
 
+Ferron 3 also introduces a `log_style modern` directive in the OTLP observability block. It is optional and defaults to `legacy` (the previous behavior). Use `modern` to publish OTEL-style structured log records (short summary plus typed attributes) and remap access-log fields to OTEL semantic conventions. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the field mapping.
+
 ### Reverse proxying
 
 The `proxy` directive syntax changed slightly. In Ferron 2, backends were specified as positional arguments. In Ferron 3, upstreams use the `upstream` directive inside a `proxy` block:

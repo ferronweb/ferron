@@ -207,7 +207,9 @@ pub(super) fn emit_error_with_trace(
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
+        summary: "Request error".into(),
         target: LOG_TARGET,
+        attributes: Vec::new(),
         trace_context,
     }));
 }
@@ -221,7 +223,9 @@ pub(super) fn emit_warn_with_trace(
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Warn,
         message: message.into(),
+        summary: "Request warning".into(),
         target: LOG_TARGET,
+        attributes: Vec::new(),
         trace_context,
     }));
 }

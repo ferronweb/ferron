@@ -27,7 +27,9 @@ pub fn emit_log(
     event_sink.emit(ferron_observability::Event::Log(LogEvent {
         level,
         message: message.to_string(),
+        summary: "TLS HTTP provider log".into(),
         target,
+        attributes: Vec::new(),
         trace_context: None,
     }));
 }

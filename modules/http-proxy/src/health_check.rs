@@ -392,7 +392,14 @@ fn process_probe_result(
                             "Upstream {} recovered after {} consecutive successes",
                             upstream_url, config.consecutive_passes
                         ),
+                        summary: "Upstream recovered".into(),
                         target: super::LOG_TARGET,
+                        attributes: vec![(
+                            "upstream.address",
+                            ferron_observability::LogAttributeValue::String(
+                                upstream_url.to_string(),
+                            ),
+                        )],
                         trace_context: None,
                     },
                 ));
@@ -428,7 +435,12 @@ fn process_probe_result(
                         state.consecutive_fail_count,
                         config.consecutive_fails
                     ),
+                    summary: "Upstream marked unhealthy".into(),
                     target: super::LOG_TARGET,
+                    attributes: vec![(
+                        "upstream.address",
+                        ferron_observability::LogAttributeValue::String(upstream_url.to_string()),
+                    )],
                     trace_context: None,
                 },
             ));
@@ -539,7 +551,14 @@ pub fn spawn_health_check_task(
                                         "Timeout (5s) while resolving SRV record for upstream {}",
                                         srv_name
                                     ),
+                                    summary: "Timeout while resolving SRV record".into(),
                                     target: super::LOG_TARGET,
+                                    attributes: vec![(
+                                        "dns.name",
+                                        ferron_observability::LogAttributeValue::String(
+                                            srv_name.to_string(),
+                                        ),
+                                    )],
                                     trace_context: None,
                                 },
                             ));

@@ -6,6 +6,14 @@ pub trait AccessEvent: Send + Sync {
     fn trace_context(&self) -> Option<&crate::EventTraceContext> {
         None
     }
+
+    /// The time at which the event occurred. Used by OTLP `log_style modern` to
+    /// set the log record timestamp. Defaults to `None` (the SDK uses the
+    /// current time when unset).
+    #[inline]
+    fn event_time(&self) -> Option<std::time::SystemTime> {
+        None
+    }
 }
 
 pub trait AccessVisitor {

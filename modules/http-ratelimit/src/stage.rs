@@ -13,7 +13,8 @@ use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
-    Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
 };
 use http::{HeaderMap, HeaderValue};
 use parking_lot::Mutex;
@@ -120,7 +121,15 @@ impl RateLimitEngine {
                         key,
                         key_type_label(&config.key)
                     ),
+                    summary: "Rate limit bucket exhausted".into(),
                     target: "ferron-ratelimit",
+                    attributes: vec![
+                        ("ferron.ratelimit.key", LogAttributeValue::String(key)),
+                        (
+                            "ferron.ratelimit.key_type",
+                            LogAttributeValue::String(key_type_label(&config.key).to_string()),
+                        ),
+                    ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {

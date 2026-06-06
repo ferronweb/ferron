@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpFileContext, HttpResponse};
-use ferron_observability::{Event, LogEvent};
+use ferron_observability::{Event, LogAttributeValue, LogEvent};
 use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
@@ -221,7 +221,12 @@ impl Stage<HttpFileContext> for CgiStage {
                         ctx.http.events.emit(Event::Log(LogEvent {
                             level: ferron_observability::LogLevel::Warn,
                             message: format!("There were CGI errors: {stderr_string_trimmed}"),
+                            summary: "CGI errors on stderr".into(),
                             target: "ferron-http-cgi",
+                            attributes: vec![(
+                                "error.message",
+                                LogAttributeValue::String(stderr_string_trimmed.to_string()),
+                            )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 &ctx.http,
                             ),
@@ -246,7 +251,12 @@ impl Stage<HttpFileContext> for CgiStage {
                     events.emit(Event::Log(LogEvent {
                         level: ferron_observability::LogLevel::Warn,
                         message: format!("There were CGI errors: {stderr_string_trimmed}"),
+                        summary: "CGI errors on stderr".into(),
                         target: "ferron-http-cgi",
+                        attributes: vec![(
+                            "error.message",
+                            LogAttributeValue::String(stderr_string_trimmed.to_string()),
+                        )],
                         trace_context: None,
                     }));
                 }

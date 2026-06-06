@@ -10,7 +10,8 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
-    Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
 };
 use futures_util::stream::{self, StreamExt};
 use http::header::{self, HeaderName, HeaderValue};
@@ -323,6 +324,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                     level: LogLevel::Debug,
                     target: LOG_TARGET,
                     message: format!("Purged {} cache entries via PURGE method", purged),
+                    summary: "Cache purged via PURGE method".into(),
+                    attributes: vec![("cache.purged.count", LogAttributeValue::I64(purged as i64))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
 
@@ -503,6 +506,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                 message:
                     "Ignoring unsupported LSCache stale purge marker and performing a hard purge"
                         .to_string(),
+                summary: "LSCache stale purge marker ignored".into(),
+                attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
@@ -520,6 +525,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                         "Purged {} cache entrie(s) via LSCache controls",
                         stats.purged
                     ),
+                    summary: "Cache purged via LSCache controls".into(),
+                    attributes: vec![(
+                        "cache.purged.count",
+                        LogAttributeValue::I64(stats.purged as i64),
+                    )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
             }
@@ -539,6 +549,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                 message:
                     "Skipping cache store because X-LiteSpeed-Vary: value=... is not supported yet"
                         .to_string(),
+                summary: "Skipping cache store because X-LiteSpeed-Vary is not supported yet"
+                    .into(),
+                attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
@@ -652,6 +665,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         level: LogLevel::Debug,
                         target: LOG_TARGET,
                         message: "Skipping cache store because the response body exceeded cache.max_response_size".to_string(),
+                        summary: "Skipping cache store because response body exceeded maximum size".into(),
+                        attributes: Vec::new(),
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
                     let mut response = response_from_streaming_parts(parts, prefix, remainder)?;

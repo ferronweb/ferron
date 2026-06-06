@@ -143,7 +143,12 @@ impl Module for OtlpObservabilityModule {
                 match &msg.event {
                     Event::Log(log_event) => {
                         if let Some(ref provider) = entry.logs_provider {
-                            emit_log(provider, log_event, &entry.baggage_promotions);
+                            emit_log(
+                                provider,
+                                log_event,
+                                &entry.baggage_promotions,
+                                config.log_style,
+                            );
                         }
                     }
                     Event::Metric(metric_event) => {
@@ -175,6 +180,7 @@ impl Module for OtlpObservabilityModule {
                                 &msg.log_config,
                                 &registry,
                                 &entry.baggage_promotions,
+                                config.log_style,
                             );
                         }
                     }
@@ -248,8 +254,15 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         })
         .unwrap_or_default();
     format!(
-        "{}|{}|{}|{}",
-        config.service_name, logs_key, metrics_key, traces_key
+        "{}|{}|{}|{}|{}",
+        config.service_name,
+        logs_key,
+        metrics_key,
+        traces_key,
+        match config.log_style {
+            crate::config::LogStyle::Legacy => "legacy",
+            crate::config::LogStyle::Modern => "modern",
+        }
     )
 }
 

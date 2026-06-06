@@ -53,6 +53,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Unified certificate expiration gauge** - a single `ferron.tls.certificate_not_after` gauge is emitted by every TLS provider (`manual`, `acme`, `http`, `local`) whenever a certificate is mounted into the in-memory rustls context. The value is the certificate `notAfter` field as Unix epoch seconds; attributes are `ferron.host` (SNI hostname or IP), `ferron.tls.provider` (provider name), and `crypto.certificate.serial_number` (lowercase hex). Replaces the previous provider-specific expiration gauges.
 - **Baggage promotion** - new `baggage` sub-directive in observability backend blocks (`otlp`, `prometheus`) to promote specific W3C Baggage keys into telemetry attributes for logs, metrics, and traces. Supports per-signal filtering and a `max_distinct` cap to prevent high-cardinality metric label explosion.
 - **Baggage propagation** - Baggage is now propagated from incoming requests to outgoing ones, allowing distributed tracing context to be preserved across service boundaries.
+- **`log_style` directive** - new `log_style legacy|modern` directive in the OTLP observability backend block to opt into OTEL-style structured logs. In `modern` mode, each log record publishes a short `summary` body plus typed per-event attributes (string, bool, integer, float) instead of the human-readable message. Access logs are remapped to OTEL semantic conventions (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, etc.). The default `legacy` mode preserves existing behavior.
 
 #### Admin API
 
@@ -95,6 +96,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Log correlation** - OTLP request and access logs now include the active request span context out of the box.
 - **Backend exporting** - admin API metrics are now also pushed directly to configured observability backends, not just the local admin endpoint.
 - **Cardinality control** - Prometheus label values are now sanitized to heavily reduce high-cardinality label inflation.
+- **Structured log events** - every log emission site now carries a short OTEL-friendly `summary` plus typed `attributes`, enabling downstream OTLP consumers to receive structured events without changing existing console or file log output.
 
 #### Core runtime
 

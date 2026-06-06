@@ -129,6 +129,26 @@ example.com {
 }
 ```
 
+### Structured (OTEL-style) logs over OTLP
+
+If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record's body is a short summary (e.g. `"Upstream circuit opened"`) and per-event attributes are published as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"` and are remapped to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks are unaffected.
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+        log_style modern
+        service_name "ferron-prod"
+
+        logs "https://otel.example.net/v1/logs" {
+            protocol "http/protobuf"
+        }
+    }
+
+    root /var/www/html
+}
+```
+
 ## Prometheus metrics monitoring
 
 Use this when you want to expose metrics for Prometheus scraping:

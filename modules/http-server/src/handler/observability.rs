@@ -150,6 +150,11 @@ impl AccessEvent for HttpAccessLog {
     }
 
     #[inline]
+    fn event_time(&self) -> Option<std::time::SystemTime> {
+        Some(self.timestamp.into())
+    }
+
+    #[inline]
     fn visit(&self, visitor: &mut dyn AccessVisitor) {
         visitor.field_string("path", &self.path);
         visitor.field_string("path_and_query", &self.path_and_query);

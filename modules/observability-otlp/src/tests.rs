@@ -412,7 +412,9 @@ fn emit_log_promotes_baggage_to_log_attributes() {
     let event = ferron_observability::LogEvent {
         level: ferron_observability::LogLevel::Info,
         message: "test message".to_string(),
+        summary: "Test log message".into(),
         target: "test",
+        attributes: Vec::new(),
         trace_context: Some(ferron_observability::EventTraceContext {
             trace_id: [b'0'; 32],
             span_id: [b'0'; 16],
@@ -422,7 +424,12 @@ fn emit_log_promotes_baggage_to_log_attributes() {
     };
 
     // Should not panic
-    emit_log(&provider, &event, &promotions);
+    emit_log(
+        &provider,
+        &event,
+        &promotions,
+        crate::config::LogStyle::Legacy,
+    );
 }
 
 #[tokio::test]
@@ -526,5 +533,192 @@ async fn emit_metric_baggage_cardinality_cap() {
         &mut instruments,
         &promotions,
         &mut tracker,
+    );
+}
+
+#[test]
+fn parse_log_style_recognizes_values() {
+    use crate::config::parse_log_style;
+    use crate::config::LogStyle;
+
+    assert_eq!(parse_log_style("legacy"), Some(LogStyle::Legacy));
+    assert_eq!(parse_log_style("modern"), Some(LogStyle::Modern));
+    assert_eq!(parse_log_style("LEGACY"), Some(LogStyle::Legacy));
+    assert_eq!(parse_log_style("Modern"), Some(LogStyle::Modern));
+    assert_eq!(parse_log_style("otlp"), None);
+    assert_eq!(parse_log_style(""), None);
+}
+
+#[test]
+fn parse_config_log_style_defaults_to_legacy() {
+    use crate::config::LogStyle;
+    use ferron_core::config::ServerConfigurationBlock;
+
+    let config = ServerConfigurationBlock::default();
+    let parsed = super::OtlpBackendConfig::parse_config(&config);
+    assert_eq!(parsed.log_style, LogStyle::Legacy);
+}
+
+#[test]
+fn parse_config_log_style_modern() {
+    use crate::config::LogStyle;
+    use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let mut directives = HashMap::new();
+    directives.insert(
+        "log_style".to_string(),
+        vec![ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValue::String("modern".to_string(), None)],
+            children: None,
+            span: None,
+        }],
+    );
+    let config = ServerConfigurationBlock {
+        directives: Arc::new(directives),
+        matchers: HashMap::new(),
+        span: None,
+    };
+    let parsed = super::OtlpBackendConfig::parse_config(&config);
+    assert_eq!(parsed.log_style, LogStyle::Modern);
+}
+
+#[test]
+fn emit_log_modern_uses_summary_as_body() {
+    use crate::config::LogStyle;
+    use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
+
+    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
+    let event = LogEvent {
+        level: LogLevel::Info,
+        message: "Legacy message that should be ignored in modern mode".to_string(),
+        summary: "Upstream circuit opened".into(),
+        target: "ferron-http-proxy",
+        attributes: vec![
+            (
+                "upstream.address",
+                LogAttributeValue::String("backend.example:8080".to_string()),
+            ),
+            ("http.response.status_code", LogAttributeValue::I64(502)),
+        ],
+        trace_context: None,
+    };
+
+    // Should not panic.
+    emit_log(&provider, &event, &[], LogStyle::Modern);
+}
+
+#[test]
+fn emit_log_modern_preserves_attribute_types() {
+    use crate::config::LogStyle;
+    use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
+
+    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
+    let event = LogEvent {
+        level: LogLevel::Warn,
+        message: "Should not appear in modern body".to_string(),
+        summary: "Test summary".into(),
+        target: "test",
+        attributes: vec![
+            (
+                "attr.string",
+                LogAttributeValue::String("value".to_string()),
+            ),
+            ("attr.str", LogAttributeValue::StaticStr("static")),
+            ("attr.bool", LogAttributeValue::Bool(true)),
+            ("attr.i64", LogAttributeValue::I64(42)),
+            ("attr.f64", LogAttributeValue::F64(1.5)),
+        ],
+        trace_context: None,
+    };
+
+    // Smoke test: must not panic and must accept all attribute variants.
+    emit_log(&provider, &event, &[], LogStyle::Modern);
+}
+
+#[test]
+fn otel_access_attribute_visitor_maps_to_otel_semantic_conventions() {
+    use crate::providers::OtelAccessAttributeVisitor;
+    use ferron_observability::AccessVisitor;
+
+    let mut visitor = OtelAccessAttributeVisitor::default();
+    visitor.field_string("path", "/api/v1/users");
+    visitor.field_string("path_and_query", "/api/v1/users?id=42");
+    visitor.field_string("method", "GET");
+    visitor.field_string("version", "1.1");
+    visitor.field_string("scheme", "https");
+    visitor.field_string("client_ip", "203.0.113.1");
+    visitor.field_string("server_ip", "198.51.100.1");
+    visitor.field_string("auth_user", "alice");
+    visitor.field_u64("client_port", 54321);
+    visitor.field_u64("server_port", 443);
+    visitor.field_u64("status", 200);
+    visitor.field_u64("content_length", 1024);
+    visitor.field_f64("duration_secs", 0.123);
+    visitor.field_string("header_user_agent", "Mozilla/5.0");
+    // Legacy-only fields, should be dropped in modern mode.
+    visitor.field_string("timestamp", "01/Jan/2026:00:00:00 +0000");
+    visitor.field_string("trace_id", &"0".repeat(32));
+    visitor.field_string("client_ip_canonical", "203.0.113.1");
+    visitor.field_string("server_ip_canonical", "198.51.100.1");
+
+    let attrs: std::collections::HashMap<String, ()> = visitor
+        .attributes
+        .iter()
+        .map(|(k, _)| (k.clone(), ()))
+        .collect();
+    assert!(attrs.contains_key("url.path"));
+    assert!(attrs.contains_key("url.full"));
+    assert!(attrs.contains_key("http.request.method"));
+    assert!(attrs.contains_key("network.protocol.version"));
+    assert!(attrs.contains_key("url.scheme"));
+    assert!(attrs.contains_key("client.address"));
+    assert!(attrs.contains_key("server.address"));
+    assert!(attrs.contains_key("user.name"));
+    assert!(attrs.contains_key("client.port"));
+    assert!(attrs.contains_key("server.port"));
+    assert!(attrs.contains_key("http.response.status_code"));
+    assert!(attrs.contains_key("http.response.body.size"));
+    assert!(attrs.contains_key("http.server.request.duration"));
+    assert!(attrs.contains_key("http.request.header.user_agent"));
+    // Dropped in modern mode.
+    assert!(!attrs.contains_key("timestamp"));
+    assert!(!attrs.contains_key("trace_id"));
+    assert!(!attrs.contains_key("client_ip_canonical"));
+    assert!(!attrs.contains_key("server_ip_canonical"));
+}
+
+#[test]
+fn emit_access_log_modern_smoke() {
+    use crate::config::LogStyle;
+    use std::sync::Arc;
+
+    struct DummyAccess {
+        proto: &'static str,
+    }
+    impl ferron_observability::AccessEvent for DummyAccess {
+        fn protocol(&self) -> &'static str {
+            self.proto
+        }
+        fn visit(&self, visitor: &mut dyn ferron_observability::AccessVisitor) {
+            visitor.field_string("path", "/");
+            visitor.field_string("method", "GET");
+            visitor.field_u64("status", 200);
+        }
+    }
+
+    let registry = Registry::new();
+    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
+    let event: Arc<dyn ferron_observability::AccessEvent> = Arc::new(DummyAccess { proto: "http" });
+    let log_config = Arc::new(ferron_core::config::ServerConfigurationBlock::default());
+    // Should not panic.
+    emit_access_log(
+        &provider,
+        &event,
+        &log_config,
+        &registry,
+        &[],
+        LogStyle::Modern,
     );
 }

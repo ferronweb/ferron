@@ -17,7 +17,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{Event, LogAttributeValue, MetricEvent, MetricType, MetricValue};
 use rustc_hash::FxBuildHasher;
 
 use crate::config::{
@@ -185,6 +185,14 @@ impl Stage<HttpContext> for RewriteStage {
                     target: "ferron-rewrite",
                     level: ferron_observability::LogLevel::Info,
                     message: format!("URL rewritten from \"{original_url}\" to \"{rewritten}\""),
+                    summary: "URL rewritten".into(),
+                    attributes: vec![
+                        (
+                            "ferron.rewrite.from",
+                            LogAttributeValue::String(original_url),
+                        ),
+                        ("ferron.rewrite.to", LogAttributeValue::String(rewritten)),
+                    ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 },
             ));

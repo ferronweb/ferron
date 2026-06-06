@@ -166,7 +166,12 @@ pub fn try_acquire_circuit_breaker_slot(
                         "Upstream {} circuit transitioned to half-open",
                         upstream.proxy_to
                     ),
+                    summary: "Upstream circuit transitioned to half-open".into(),
                     target: crate::LOG_TARGET,
+                    attributes: vec![(
+                        "upstream.address",
+                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
+                    )],
                     trace_context: event_trace_context.clone(),
                 },
             ));
@@ -262,7 +267,12 @@ fn record_circuit_breaker_failure(
                         "Upstream {} circuit reopened after a half-open trial failure",
                         upstream.proxy_to
                     ),
+                    summary: "Upstream circuit reopened after half-open trial failure".into(),
                     target: crate::LOG_TARGET,
+                    attributes: vec![(
+                        "upstream.address",
+                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
+                    )],
                     trace_context: event_trace_context.clone(),
                 },
             ));
@@ -311,7 +321,12 @@ fn record_circuit_breaker_failure(
                         "Upstream {} circuit opened after {} failures within {:?}",
                         upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
                     ),
+                    summary: "Upstream circuit opened".into(),
                     target: crate::LOG_TARGET,
+                    attributes: vec![(
+                        "upstream.address",
+                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
+                    )],
                     trace_context: event_trace_context.clone(),
                 },
             ));
@@ -383,7 +398,12 @@ fn record_circuit_breaker_success(
                     "Upstream {} circuit closed after {} successful half-open request(s)",
                     upstream.proxy_to, circuit_breaker.consecutive_passes
                 ),
+                summary: "Upstream circuit closed".into(),
                 target: crate::LOG_TARGET,
+                attributes: vec![(
+                    "upstream.address",
+                    ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
+                )],
                 trace_context: event_trace_context.clone(),
             },
         ));

@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::config::parse_abuse_protection_config;
 use crate::registry::{AbuseRegistry, AbuseRegistryConfig};
+use ferron_observability::LogAttributeValue;
 
 /// HTTP pipeline stage that checks for IP bans and rejects banned clients.
 pub struct AbuseProtectionStage {
@@ -81,7 +82,22 @@ impl Stage<HttpContext> for AbuseProtectionStage {
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Debug,
                     message: format!("Ban rejection: IP {} - {}", client_ip, reason),
+                    summary: "Ban rejection".into(),
                     target: "ferron-http-abuseban",
+                    attributes: vec![
+                        (
+                            "client.address",
+                            LogAttributeValue::String(client_ip.to_string()),
+                        ),
+                        (
+                            "ferron.abuseban.reason",
+                            LogAttributeValue::String(reason.clone()),
+                        ),
+                        (
+                            "ferron.abuseban.remaining_secs",
+                            LogAttributeValue::I64(remaining_secs as i64),
+                        ),
+                    ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(context),
                 },
             ));

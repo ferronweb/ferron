@@ -4,8 +4,9 @@ use dashmap::DashMap;
 use ferron_core::{config::ServerConfigurationBlock, registry::Registry};
 use ferron_observability::{
     baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet},
-    AccessEvent, LogEvent, LogFormatterContext, LogLevel, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, Parent, TraceAttributeValue, TraceEvent,
+    AccessEvent, AccessVisitor, LogAttributeValue, LogEvent, LogFormatterContext, LogLevel,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
+    TraceEvent,
 };
 use opentelemetry::{baggage::BaggageExt, logs::AnyValue, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
@@ -13,7 +14,7 @@ use opentelemetry_sdk::Resource;
 
 use crate::{
     client::{build_tonic_channel, HyperOtelClient},
-    config::{OtlpBackendConfig, SignalConfig},
+    config::{LogStyle, OtlpBackendConfig, SignalConfig},
 };
 
 /// Correlation context: tracks active spans per host sink instance.
@@ -440,15 +441,36 @@ pub fn emit_access_log(
     log_config: &Arc<ServerConfigurationBlock>,
     registry: &Registry,
     promotions: &[BaggageKeyPromotion],
+    log_style: LogStyle,
 ) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 
     let logger = provider.logger("ferron.access");
     let mut record = logger.create_log_record();
-    if let Some(body) = format_access_event(event, log_config, registry) {
-        record.set_body(AnyValue::String(body.into()));
-    } else {
-        record.set_body(AnyValue::String("<unknown access log>".into()));
+    match log_style {
+        LogStyle::Legacy => {
+            if let Some(body) = format_access_event(event, log_config, registry) {
+                record.set_body(AnyValue::String(body.into()));
+            } else {
+                record.set_body(AnyValue::String("<unknown access log>".into()));
+            }
+        }
+        LogStyle::Modern => {
+            record.set_body(AnyValue::String(
+                format!("Access log ({})", event.protocol()).into(),
+            ));
+            // Set timestamp from the access event when available
+            if let Some(time) = event.event_time() {
+                record.set_timestamp(time);
+            }
+            // Map traditional access-log fields onto OTEL semantic-convention
+            // attributes. Header fields become `http.request.header.<name>`.
+            let mut visitor = OtelAccessAttributeVisitor::default();
+            event.visit(&mut visitor);
+            for (key, value) in visitor.attributes {
+                record.add_attribute(key, value);
+            }
+        }
     }
     if let Some(trace_context) = event.trace_context() {
         if let (Ok(trace_id_str), Ok(span_id_str)) = (
@@ -473,6 +495,108 @@ pub fn emit_access_log(
     }
 
     logger.emit(record);
+}
+
+/// Captures access-log fields as typed OTEL semantic-convention attributes.
+///
+/// This visitor drives [`AccessEvent::visit`] and translates the legacy
+/// field names (e.g. `client_ip`, `status`, `header_user_agent`) into their
+/// OTEL semantic-convention equivalents (e.g. `client.address`,
+/// `http.response.status_code`, `http.request.header.user_agent`).
+#[derive(Default)]
+pub struct OtelAccessAttributeVisitor {
+    pub attributes: Vec<(String, AnyValue)>,
+}
+
+impl OtelAccessAttributeVisitor {
+    fn push(&mut self, key: impl Into<String>, value: AnyValue) {
+        self.attributes.push((key.into(), value));
+    }
+}
+
+impl AccessVisitor for OtelAccessAttributeVisitor {
+    fn field_string(&mut self, name: &str, value: &str) {
+        match name {
+            "path" => self.push("url.path", AnyValue::String(value.to_string().into())),
+            "path_and_query" => self.push("url.full", AnyValue::String(value.to_string().into())),
+            "method" => self.push(
+                "http.request.method",
+                AnyValue::String(value.to_string().into()),
+            ),
+            "version" => self.push(
+                "network.protocol.version",
+                AnyValue::String(value.to_string().into()),
+            ),
+            "scheme" => self.push("url.scheme", AnyValue::String(value.to_string().into())),
+            "client_ip" => self.push("client.address", AnyValue::String(value.to_string().into())),
+            "server_ip" => self.push("server.address", AnyValue::String(value.to_string().into())),
+            "auth_user" => self.push("user.name", AnyValue::String(value.to_string().into())),
+            "timestamp"
+            | "trace_id"
+            | "span_id"
+            | "client_ip_canonical"
+            | "server_ip_canonical" => {
+                // Drop legacy-only fields; modern telemetry consumers prefer the
+                // standard attributes and the record timestamp.
+            }
+            _ => {
+                if let Some(header) = name.strip_prefix("header_") {
+                    self.push(
+                        format!("http.request.header.{}", header),
+                        AnyValue::String(value.to_string().into()),
+                    );
+                } else {
+                    self.push(
+                        format!("ferron.legacy_field.{name}"),
+                        AnyValue::String(value.to_string().into()),
+                    );
+                }
+            }
+        }
+    }
+
+    fn field_u64(&mut self, name: &str, value: u64) {
+        match name {
+            "status" => self.push(
+                "http.response.status_code",
+                AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
+            ),
+            "client_port" => self.push(
+                "client.port",
+                AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
+            ),
+            "server_port" => self.push(
+                "server.port",
+                AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
+            ),
+            "content_length" => self.push(
+                "http.response.body.size",
+                AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
+            ),
+            s => self.push(
+                format!("ferron.legacy_field.{s}"),
+                AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
+            ),
+        }
+    }
+
+    fn field_f64(&mut self, name: &str, value: f64) {
+        if name == "duration_secs" {
+            self.push("http.server.request.duration", AnyValue::Double(value));
+        } else {
+            self.push(
+                format!("ferron.legacy_field.{name}"),
+                AnyValue::Double(value),
+            );
+        }
+    }
+
+    fn field_bool(&mut self, name: &str, value: bool) {
+        self.push(
+            format!("ferron.legacy_field.{name}"),
+            AnyValue::Boolean(value),
+        );
+    }
 }
 
 /// Maximum length for a metric label value before it is hashed to prevent cardinality explosion.
@@ -781,13 +905,30 @@ pub fn emit_log(
     provider: &opentelemetry_sdk::logs::SdkLoggerProvider,
     event: &LogEvent,
     promotions: &[BaggageKeyPromotion],
+    log_style: LogStyle,
 ) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider, Severity};
 
     let logger = provider.logger("ferron");
     let mut record = logger.create_log_record();
 
-    record.set_body(AnyValue::String(event.message.clone().into()));
+    // In modern mode the log body is the short OTEL summary and per-event
+    // attributes are published as typed AnyValues. In legacy mode the body is
+    // the human-readable message and attributes are not exposed.
+    match log_style {
+        LogStyle::Legacy => {
+            record.set_body(AnyValue::String(event.message.clone().into()));
+            record.add_attribute("log.target", event.target);
+        }
+        LogStyle::Modern => {
+            record.set_body(AnyValue::String(event.summary.as_ref().to_string().into()));
+            record.add_attribute("log.target", event.target);
+            for (key, value) in &event.attributes {
+                record.add_attribute(*key, log_attribute_to_anyvalue(value));
+            }
+        }
+    }
+
     record.set_severity_number(match event.level {
         LogLevel::Error => Severity::Error,
         LogLevel::Warn => Severity::Warn,
@@ -800,7 +941,6 @@ pub fn emit_log(
         LogLevel::Info => "INFO",
         LogLevel::Debug => "DEBUG",
     });
-    record.add_attribute("log.target", event.target);
     if let Some(trace_context) = &event.trace_context {
         if let (Ok(trace_id_str), Ok(span_id_str)) = (
             std::str::from_utf8(&trace_context.trace_id),
@@ -828,6 +968,18 @@ pub fn emit_log(
     }
 
     logger.emit(record);
+}
+
+/// Convert a [`LogAttributeValue`] into an OTEL [`AnyValue`] preserving its
+/// underlying type (string, bool, integer, float).
+fn log_attribute_to_anyvalue(value: &LogAttributeValue) -> AnyValue {
+    match value {
+        LogAttributeValue::String(s) => AnyValue::String(s.clone().into()),
+        LogAttributeValue::StaticStr(s) => AnyValue::String((*s).into()),
+        LogAttributeValue::Bool(b) => AnyValue::Boolean(*b),
+        LogAttributeValue::I64(i) => AnyValue::Int(*i),
+        LogAttributeValue::F64(f) => AnyValue::Double(*f),
+    }
 }
 
 fn build_parent_context(

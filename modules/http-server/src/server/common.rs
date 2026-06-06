@@ -249,7 +249,9 @@ pub fn emit_error(observability: &CompositeEventSink, message: impl Into<String>
     observability.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
+        summary: "Server error".into(),
         target: LOG_TARGET,
+        attributes: Vec::new(),
         trace_context: None,
     }));
 }

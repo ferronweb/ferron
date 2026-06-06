@@ -1,6 +1,30 @@
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
 
+/// Log style for OTLP log records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LogStyle {
+    /// Legacy behavior: emit `event.message` as the log body verbatim and do not
+    /// publish per-event attributes to the OTLP record. The configured `format`
+    /// directive (if any) is honored as before.
+    #[default]
+    Legacy,
+    /// Modern (OTEL-friendly) behavior: emit a short `summary` plus typed
+    /// `attributes` instead of the human-readable `message`. The `format`
+    /// directive is ignored for log records in this mode.
+    Modern,
+}
+
+/// Parse a `log_style` directive value into a [`LogStyle`]. Returns `None` if
+/// the value is not a recognized log style.
+pub fn parse_log_style(value: &str) -> Option<LogStyle> {
+    match value.to_ascii_lowercase().as_str() {
+        "legacy" => Some(LogStyle::Legacy),
+        "modern" => Some(LogStyle::Modern),
+        _ => None,
+    }
+}
+
 /// Per-host configuration for a single OTLP signal (logs, metrics, or traces)
 pub struct SignalConfig {
     pub endpoint: String,
@@ -16,6 +40,7 @@ pub struct OtlpBackendConfig {
     pub metrics: Option<SignalConfig>,
     pub traces: Option<SignalConfig>,
     pub baggage_promotions: Vec<BaggageKeyPromotion>,
+    pub log_style: LogStyle,
 }
 
 impl OtlpBackendConfig {
@@ -33,6 +58,11 @@ impl OtlpBackendConfig {
         let metrics = SignalConfig::parse_config(config, "metrics");
         let traces = SignalConfig::parse_config(config, "traces");
         let baggage_promotions = parse_baggage_promotions(config);
+        let log_style = config
+            .get_value("log_style")
+            .and_then(|v| v.as_str())
+            .and_then(parse_log_style)
+            .unwrap_or_default();
 
         Self {
             service_name,
@@ -41,6 +71,7 @@ impl OtlpBackendConfig {
             metrics,
             traces,
             baggage_promotions,
+            log_style,
         }
     }
 }
