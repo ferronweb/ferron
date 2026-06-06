@@ -259,6 +259,7 @@ pub async fn establish_and_send(
                     config.http2,
                     config.http2_only,
                     config.no_verification,
+                    upstream.mtls.clone(),
                 ));
                 let host = proxy_url.host().ok_or("upstream URL has no host")?;
                 let domain = ServerName::try_from(host.to_string())
@@ -351,6 +352,7 @@ pub async fn establish_and_send(
                 config.http2,
                 config.http2_only,
                 config.no_verification,
+                upstream.mtls.clone(),
             ));
             let domain = ServerName::try_from(host.to_string())
                 .map_err(|e| format!("Invalid server name: {e}"))?;

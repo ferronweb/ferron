@@ -6,14 +6,21 @@ use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, Server
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
 
+use crate::types::upstream::MtlsCredentials;
+
 #[allow(clippy::type_complexity)]
 static TLS_CLIENT_CONFIG_CACHE: LazyLock<
-    parking_lot::RwLock<HashMap<(bool, bool, bool), Arc<ClientConfig>>>,
+    parking_lot::RwLock<HashMap<(bool, bool, bool, Option<usize>), Arc<ClientConfig>>>,
 > = LazyLock::new(|| parking_lot::RwLock::new(HashMap::new()));
 
-fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> ClientConfig {
+fn build_tls_config(
+    http2: bool,
+    http2_only: bool,
+    no_verification: bool,
+    mtls_credentials: Option<Arc<MtlsCredentials>>,
+) -> ClientConfig {
     let builder = rustls::ClientConfig::builder();
-    let mut tls_client_config = if no_verification {
+    let builder = if no_verification {
         builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
@@ -33,8 +40,15 @@ fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Cli
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
         builder.with_root_certificates(root_store)
-    }
-    .with_no_client_auth();
+    };
+    let mut tls_client_config = if let Some(client_auth) = mtls_credentials {
+        builder
+            .clone()
+            .with_client_auth_cert(client_auth.certs.clone(), client_auth.key.clone_key())
+            .unwrap_or_else(|_| builder.with_no_client_auth())
+    } else {
+        builder.with_no_client_auth()
+    };
 
     if http2_only {
         tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
@@ -51,8 +65,14 @@ pub(super) fn cached_tls_config(
     http2: bool,
     http2_only: bool,
     no_verification: bool,
+    mtls_credentials: Option<Arc<MtlsCredentials>>,
 ) -> Arc<ClientConfig> {
-    let cache_key = (http2, http2_only, no_verification);
+    let cache_key = (
+        http2,
+        http2_only,
+        no_verification,
+        mtls_credentials.as_ref().map(|c| Arc::as_ptr(c) as usize),
+    );
     {
         let cache_read = TLS_CLIENT_CONFIG_CACHE.read();
         if let Some(config) = cache_read.get(&cache_key).cloned() {
@@ -60,7 +80,12 @@ pub(super) fn cached_tls_config(
         }
     }
 
-    let config = Arc::new(build_tls_config(http2, http2_only, no_verification));
+    let config = Arc::new(build_tls_config(
+        http2,
+        http2_only,
+        no_verification,
+        mtls_credentials,
+    ));
     let mut cache_write = TLS_CLIENT_CONFIG_CACHE.write();
     Arc::clone(cache_write.entry(cache_key).or_insert(config))
 }

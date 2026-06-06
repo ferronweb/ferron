@@ -1,9 +1,12 @@
 ---
 title: mTLS (mutual TLS)
-description: "Require client TLS certificates in Ferron for internal/admin traffic and service-to-service access."
+description: "Require client TLS certificates in Ferron for internal/admin traffic and service-to-service access, and present client certificates to upstream backends."
 ---
 
-Mutual TLS (mTLS) adds client certificate verification on top of normal server TLS. This is useful for internal admin panels, partner integrations, and service-to-service traffic.
+Mutual TLS (mTLS) adds client certificate verification on top of normal server TLS. Ferron supports mTLS in two directions:
+
+- **Inbound** — require clients connecting to Ferron to present a valid certificate (server-side mTLS).
+- **Outbound** — present a client certificate when Ferron connects to an upstream backend via the reverse proxy (client-side mTLS).
 
 ## Require client certificates
 
@@ -95,6 +98,61 @@ admin.example.com:443 {
 }
 ```
 
+## Presenting client certificates to upstream backends
+
+When the reverse proxy connects to an HTTPS upstream, Ferron can present a client certificate to authenticate itself to the backend. Configure `cert` and `key` on the upstream block:
+
+```ferron
+example.com {
+    proxy {
+        upstream https://backend.internal:443 {
+            cert "/etc/ferron/client-cert.pem"
+            key "/etc/ferron/client-key.pem"
+        }
+    }
+}
+```
+
+Both `cert` and `key` must be provided for mTLS to activate. The certificate chain and private key must be PEM-encoded.
+
+### Per-upstream credentials
+
+mTLS credentials are scoped per-upstream, so different backends can require different client certificates:
+
+```ferron
+example.com {
+    proxy {
+        upstream https://service-a.internal:443 {
+            cert "/etc/ferron/service-a-client.crt"
+            key "/etc/ferron/service-a-client.key"
+        }
+        upstream https://service-b.internal:443 {
+            cert "/etc/ferron/service-b-client.crt"
+            key "/etc/ferron/service-b-client.key"
+        }
+    }
+}
+```
+
+### mTLS with SRV upstreams
+
+When using SRV-record-based upstreams, the same mTLS credentials are applied to all backends resolved from that SRV record:
+
+```ferron
+example.com {
+    proxy {
+        srv _https._tcp.backend.internal {
+            cert "/etc/ferron/client-cert.pem"
+            key "/etc/ferron/client-key.pem"
+        }
+    }
+}
+```
+
+### Health checks and mTLS
+
+Active health check probes use the same mTLS credentials configured on the upstream, ensuring probes accurately reflect backend reachability with client authentication.
+
 ## Notes and troubleshooting
 
 - Ensure the client certificate chain is issued by the CA you configured in `client_auth_ca`.
@@ -103,4 +161,5 @@ admin.example.com:443 {
 - Keep private internal CA material protected and rotate client certificates regularly.
 - If requests fail during TLS handshake, verify certificate validity dates and CA chain.
 - If you get `"native-certs feature not enabled"` or `"webpki-roots feature not enabled"`, the corresponding `client_auth_ca` mode requires a feature that is not compiled in.
-- For directive details, see [Configuration: security and TLS](/docs/v3/configuration/security/tls#client-certificate-authentication-mtls).
+- For inbound mTLS directive details, see [Configuration: security and TLS](/docs/v3/configuration/security/tls#client-certificate-authentication-mtls).
+- For outbound mTLS directive details, see [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy#client-certificate-authentication-mtls).

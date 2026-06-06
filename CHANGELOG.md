@@ -27,6 +27,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Session affinity (sticky sessions)** - native support for `cookie`, `header`, `ip`, and `hash` types utilizing a Ketama-style hash ring for deterministic backend routing.
 - **String interpolation** - upstream URLs and Unix socket paths now support interpolated strings.
 - **SRV routing** - added active health check support for SRV upstream URLs.
+- **Outbound mTLS** - reverse proxy upstreams now support presenting client certificates (`cert` and `key` subdirectives) for mutual TLS authentication with HTTPS backends, including per-upstream credential scoping and SRV upstream support.
 
 #### DNS & ACME
 

@@ -79,6 +79,7 @@ pub async fn resolve_srv_inner(
     let srv_name = srv_data.srv_name.clone();
     let dns_servers = srv_data.dns_servers.clone();
     let weight = srv_data.weight;
+    let mtls = srv_data.mtls.clone();
 
     // Get the secondary runtime handle (captured globally during Module::start)
     let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
@@ -162,6 +163,7 @@ pub async fn resolve_srv_inner(
                             proxy_to,
                             proxy_unix: None,
                             weight,
+                            mtls: mtls.clone(),
                         });
                         let priority = srv.priority;
 

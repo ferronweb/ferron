@@ -131,6 +131,7 @@ mod tests {
             proxy_to: url.to_string(),
             proxy_unix: None,
             weight: 1,
+            mtls: None,
         })
     }
 
@@ -139,6 +140,7 @@ mod tests {
             proxy_to: url.to_string(),
             proxy_unix: None,
             weight,
+            mtls: None,
         })
     }
 

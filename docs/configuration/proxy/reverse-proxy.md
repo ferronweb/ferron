@@ -140,6 +140,23 @@ example.com {
 
 **Warning:** Only use `no_verification true` in testing or trusted internal networks.
 
+### Client certificate authentication (mTLS)
+
+When connecting to an upstream over HTTPS, Ferron can present a client certificate to authenticate itself. Configure the `cert` and `key` subdirectives on the upstream:
+
+```ferron
+example.com {
+    proxy {
+        upstream https://backend.internal:443 {
+            cert "/etc/ferron/client-cert.pem"
+            key "/etc/ferron/client-key.pem"
+        }
+    }
+}
+```
+
+Both `cert` and `key` must be provided for mTLS to activate. The certificate chain and private key must be PEM-encoded. mTLS credentials are scoped per-upstream, so different backends can require different client certificates. Active health check probes also use the configured mTLS credentials. mTLS credentials are cached in memory until configuration reload or server shutdown.
+
 ### PROXY protocol
 
 - `proxy_header <version: string>` (`http-proxy`)
@@ -207,6 +224,8 @@ example.com {
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
 | `weight` | `<number>` | Weight for weighted load balancing algorithms. Higher values receive more requests. Used with `round_robin`, `least_conn`, and affinity-based routing. | 1 |
+| `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to the upstream server for mTLS. Must be used together with `key`. | disabled |
+| `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
 
 ### `srv` (feature-gated)
 
@@ -228,6 +247,8 @@ example.com {
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
 | `weight` | `<number>` | Weight for weighted load balancing algorithms. Applied to all backends resolved from this SRV record. Used with `round_robin`, `least_conn`, and affinity-based routing. | 1 |
+| `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to resolved backends for mTLS. Must be used together with `key`. | disabled |
+| `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
 
 ## Load balancing algorithms
 

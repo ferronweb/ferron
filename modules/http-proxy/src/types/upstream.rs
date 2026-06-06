@@ -16,6 +16,8 @@ pub struct UpstreamInner {
     pub proxy_unix: Option<String>,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
+    /// mTLS credentials for an upstream
+    pub mtls: Option<Arc<MtlsCredentials>>,
 }
 
 /// Proxy protocol version to send to backends.
@@ -40,6 +42,8 @@ pub struct UpstreamConfig {
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
+    /// Optional mTLS credentials for this upstream.
+    pub mtls: Option<Arc<MtlsCredentials>>,
 }
 
 /// Data for an SRV-based upstream.
@@ -59,6 +63,8 @@ pub struct SrvUpstreamData {
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
+    /// Optional mTLS credentials for the upstreams.
+    pub mtls: Option<Arc<MtlsCredentials>>,
 }
 
 /// An upstream backend — either a static URL or an SRV record.
@@ -90,6 +96,7 @@ impl Upstream {
                 proxy_to: cfg.url.clone(),
                 proxy_unix: cfg.unix_socket.clone(),
                 weight: cfg.weight,
+                mtls: cfg.mtls.clone(),
             })],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
@@ -103,5 +110,31 @@ impl Upstream {
                 .await
             }
         }
+    }
+}
+
+/// mTLS credentials for a peer.
+#[derive(Eq, PartialEq, Debug)]
+pub struct MtlsCredentials {
+    /// The client certificate chains, with each certificate encoded as DER.
+    pub certs: Vec<rustls::pki_types::CertificateDer<'static>>,
+    /// The private key, encoded as DER.
+    pub key: rustls::pki_types::PrivateKeyDer<'static>,
+}
+
+impl Clone for MtlsCredentials {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            certs: self.certs.clone(),
+            key: self.key.clone_key(),
+        }
+    }
+}
+
+impl std::hash::Hash for MtlsCredentials {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.certs.hash(state);
     }
 }

@@ -9,20 +9,17 @@ use tokio::time::sleep;
 use crate::types::health::{
     ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
 };
-use crate::types::upstream::{SrvUpstreamData, Upstream};
+use crate::types::upstream::{MtlsCredentials, SrvUpstreamData, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use std::sync::LazyLock;
 
 /// Concrete HTTPS connector type used for health check probes.
 type HttpsConnector =
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
 
-/// Cached HTTPS connectors for health check probes.
-/// Built once at first use, cloned for each request.
-static DEFAULT_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
+fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
 
@@ -55,14 +52,18 @@ static DEFAULT_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
         );
     }
 
-    let tls_config = if root_store.is_empty() {
-        rustls::ClientConfig::builder()
-            .with_root_certificates(rustls::RootCertStore::empty())
-            .with_no_client_auth()
+    let builder = if root_store.is_empty() {
+        rustls::ClientConfig::builder().with_root_certificates(rustls::RootCertStore::empty())
     } else {
-        rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
+        rustls::ClientConfig::builder().with_root_certificates(root_store)
+    };
+    let tls_config = if let Some(mtls) = mtls {
+        builder
+            .clone()
+            .with_client_auth_cert(mtls.certs.clone(), mtls.key.clone_key())
+            .unwrap_or_else(|_| builder.with_no_client_auth())
+    } else {
+        builder.with_no_client_auth()
     };
 
     HttpsConnectorBuilder::new()
@@ -71,9 +72,9 @@ static DEFAULT_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
         .enable_http1()
         .enable_http2()
         .build()
-});
+}
 
-static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
+fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
     #[derive(Debug)]
     struct NoServerVerifier;
     impl ServerCertVerifier for NoServerVerifier {
@@ -119,10 +120,17 @@ static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
         }
     }
 
-    let tls_config = rustls::ClientConfig::builder()
+    let builder = rustls::ClientConfig::builder()
         .dangerous()
-        .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier))
-        .with_no_client_auth();
+        .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier));
+    let tls_config = if let Some(mtls) = mtls {
+        builder
+            .clone()
+            .with_client_auth_cert(mtls.certs.clone(), mtls.key.clone_key())
+            .unwrap_or_else(|_| builder.with_no_client_auth())
+    } else {
+        builder.with_no_client_auth()
+    };
 
     HttpsConnectorBuilder::new()
         .with_tls_config(tls_config)
@@ -130,7 +138,7 @@ static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<HttpsConnector> = LazyLock::new(|| {
         .enable_http1()
         .enable_http2()
         .build()
-});
+}
 
 /// Callback invoked when a backend is marked unhealthy by active health check.
 /// Arguments: (backend_url, is_active_health_check=true)
@@ -156,7 +164,11 @@ struct ProbeResult {
 ///
 /// Returns a `ProbeResult` containing the HTTP status, response time, optional body,
 /// and any error that occurred.
-async fn probe_upstream(upstream_url: &str, config: &UpstreamHealthCheckConfig) -> ProbeResult {
+async fn probe_upstream(
+    upstream_url: &str,
+    config: &UpstreamHealthCheckConfig,
+    mtls: Option<Arc<MtlsCredentials>>,
+) -> ProbeResult {
     let start = SystemTime::now();
     let method = config.method.as_str();
     let uri = &config.uri;
@@ -171,6 +183,7 @@ async fn probe_upstream(upstream_url: &str, config: &UpstreamHealthCheckConfig) 
         timeout,
         no_verification,
         config.body_match.as_deref(),
+        mtls,
     )
     .await;
 
@@ -204,6 +217,7 @@ async fn execute_probe_request(
     timeout: Duration,
     no_verification: bool,
     body_match: Option<&str>,
+    mtls: Option<Arc<MtlsCredentials>>,
 ) -> Result<(u16, Option<Vec<u8>>), String> {
     use bytes::Bytes;
     use http_body_util::Full;
@@ -226,7 +240,7 @@ async fn execute_probe_request(
     };
 
     // Use cached client — the underlying connector supports both HTTP and HTTPS
-    let client = health_check_client(no_verification);
+    let client = health_check_client(no_verification, mtls);
     let req = Request::builder()
         .method(method.to_uppercase().as_str())
         .uri(url_parsed)
@@ -266,33 +280,17 @@ async fn execute_probe_request(
     Ok((status_code, body))
 }
 
-/// Cached health check HTTP clients to avoid rebuilding on every probe.
-/// The underlying `HttpsConnector` supports both HTTP and HTTPS schemes.
 fn health_check_client(
     no_verification: bool,
-) -> &'static hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>>
-{
-    use http_body_util::Full;
+    mtls: Option<Arc<MtlsCredentials>>,
+) -> hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>> {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
-    use std::sync::LazyLock;
-
-    static DEFAULT_CLIENT: LazyLock<Client<HttpsConnector, Full<bytes::Bytes>>> =
-        LazyLock::new(|| {
-            let connector = DEFAULT_HTTPS_CONNECTOR.clone();
-            Client::builder(TokioExecutor::new()).build(connector)
-        });
-
-    static NO_VERIFY_CLIENT: LazyLock<Client<HttpsConnector, Full<bytes::Bytes>>> =
-        LazyLock::new(|| {
-            let connector = NO_VERIFY_HTTPS_CONNECTOR.clone();
-            Client::builder(TokioExecutor::new()).build(connector)
-        });
 
     if no_verification {
-        &NO_VERIFY_CLIENT
+        Client::builder(TokioExecutor::new()).build(build_no_verify_https_connector(mtls))
     } else {
-        &DEFAULT_CLIENT
+        Client::builder(TokioExecutor::new()).build(build_default_https_connector(mtls))
     }
 }
 
@@ -468,8 +466,11 @@ pub fn spawn_health_check_task(
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
-        let mut probe_configs: Vec<(UpstreamHealthCheckType, UpstreamHealthCheckConfig)> =
-            Vec::new();
+        let mut probe_configs: Vec<(
+            UpstreamHealthCheckType,
+            UpstreamHealthCheckConfig,
+            Option<Arc<MtlsCredentials>>,
+        )> = Vec::new();
 
         for upstream in &upstreams {
             match upstream {
@@ -478,6 +479,7 @@ pub fn spawn_health_check_task(
                         probe_configs.push((
                             UpstreamHealthCheckType::Static(cfg.url.clone()),
                             cfg.health_check_config.clone(),
+                            cfg.mtls.clone(),
                         ));
                     }
                 }
@@ -491,6 +493,7 @@ pub fn spawn_health_check_task(
                                 cfg.weight,
                             )),
                             cfg.health_check_config.clone(),
+                            cfg.mtls.clone(),
                         ));
                     }
                 }
@@ -510,7 +513,7 @@ pub fn spawn_health_check_task(
 
             let mut probes_due = Vec::new();
 
-            for (upstream_url, config) in &probe_configs {
+            for (upstream_url, config, mtls) in &probe_configs {
                 let upstreams = match upstream_url {
                     UpstreamHealthCheckType::Static(url) => vec![url.clone()],
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
@@ -523,6 +526,8 @@ pub fn spawn_health_check_task(
                                 limit: None,
                                 // Use default health check config (SrvUpstreamData is only used for resolving SRV records)
                                 health_check_config: UpstreamHealthCheckConfig::default(),
+                                // mTLS isn't applicable for resolution only
+                                mtls: None,
                             }),
                         )
                         .await;
@@ -552,7 +557,7 @@ pub fn spawn_health_check_task(
                     let elapsed = last_probe.map_or(Duration::MAX, |t| t.elapsed());
 
                     if elapsed >= config.interval {
-                        probes_due.push((upstream_url.clone(), config.clone()));
+                        probes_due.push((upstream_url.clone(), config.clone(), mtls.clone()));
                         next_wake = now;
                     } else {
                         let time_until_due = config.interval - elapsed;
@@ -566,7 +571,7 @@ pub fn spawn_health_check_task(
             if !probes_due.is_empty() {
                 let mut probe_tasks = Vec::new();
 
-                for (upstream_url, config) in probes_due {
+                for (upstream_url, config, mtls) in probes_due {
                     let state_map = Arc::clone(&state_map);
                     let on_unhealthy_clone = on_unhealthy.clone();
                     let probe_url = upstream_url.clone();
@@ -575,7 +580,7 @@ pub fn spawn_health_check_task(
 
                     let event_sink = event_sink.clone();
                     probe_tasks.push(tokio::spawn(async move {
-                        let result = probe_upstream(&probe_url, &config).await;
+                        let result = probe_upstream(&probe_url, &config, mtls).await;
                         process_probe_result(
                             &probe_url,
                             &config,

@@ -5,12 +5,15 @@ use std::error::Error;
 #[cfg(feature = "srv-lookup")]
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use std::time::Duration;
 
+use dashmap::DashMap;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use http::header::HeaderName;
+use rustls::pki_types::pem::PemObject;
 
 pub use crate::types::affinity::{AffinityConfig, AffinityType};
 use crate::types::affinity::{CookieAffinityConfig, SameSiteMode};
@@ -18,10 +21,13 @@ use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealt
 use crate::types::lb::LoadBalancerAlgorithm;
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::SrvUpstreamData;
-use crate::types::upstream::{ProxyHeader, Upstream, UpstreamConfig};
+use crate::types::upstream::{MtlsCredentials, ProxyHeader, Upstream, UpstreamConfig};
 
 /// Default keep-alive idle timeout in milliseconds.
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
+/// mTLS file cache
+pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
+    LazyLock::new(|| DashMap::new());
 
 /// A header action: currently only append is supported for `request_header +Name`.
 /// The value is stored as a raw `String` with potential interpolation
@@ -194,6 +200,7 @@ pub fn parse_proxy_config(
                 limit: None,
                 health_check_config: UpstreamHealthCheckConfig::default(),
                 weight: 1,
+                mtls: None,
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -566,10 +573,61 @@ fn parse_upstream_entry(
     let mut unix_socket: Option<String> = None;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
     let mut weight: u32 = 1;
+    let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
+    let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
             match name.as_str() {
+                "cert" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_string_with_interpolations(ctx))
+                    {
+                        mtls_cert = Some(
+                            rustls::pki_types::CertificateDer::pem_slice_iter(
+                                &read_mtls_data(&val).map_err(|e| {
+                                    let e: Box<dyn Error + Send + Sync> = format!(
+                                        "Can't read mTLS certificate for reverse proxy: {e}"
+                                    )
+                                    .into();
+                                    e
+                                })?,
+                            )
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|e| {
+                                let e: Box<dyn Error + Send + Sync> =
+                                    format!("Can't read mTLS certificate for reverse proxy: {e}")
+                                        .into();
+                                e
+                            })?,
+                        );
+                    }
+                }
+                "key" => {
+                    if let Some(val) = entries.first().and_then(|e| e.args.first()).and_then(
+                        |v: &ServerConfigurationValue| v.as_string_with_interpolations(ctx),
+                    ) {
+                        mtls_key = Some(
+                            rustls::pki_types::PrivateKeyDer::from_pem_slice(
+                                &read_mtls_data(&val).map_err(|e| {
+                                    let e: Box<dyn Error + Send + Sync> = format!(
+                                        "Can't read mTLS private key for reverse proxy: {e}"
+                                    )
+                                    .into();
+                                    e
+                                })?,
+                            )
+                            .map_err(|e| {
+                                let e: Box<dyn Error + Send + Sync> =
+                                    format!("Can't read mTLS private key for reverse proxy: {e}")
+                                        .into();
+                                e
+                            })?,
+                        );
+                    }
+                }
                 "limit" => {
                     if let Some(val) = entries
                         .first()
@@ -631,12 +689,18 @@ fn parse_upstream_entry(
         idle_timeout = Some(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS));
     }
 
+    let mtls = if let (Some(certs), Some(key)) = (mtls_cert, mtls_key) {
+        Some(std::sync::Arc::new(MtlsCredentials { certs, key }))
+    } else {
+        None
+    };
     cfg.upstreams.push(Upstream::Static(UpstreamConfig {
         url: url.clone(),
         unix_socket,
         limit,
         health_check_config,
         weight,
+        mtls,
     }));
 
     // Populate the O(1) lookup map
@@ -666,10 +730,61 @@ fn parse_srv_entry(
     let mut dns_servers: Vec<IpAddr> = Vec::new();
     let mut weight: u32 = 1;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
+    let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
+    let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
             match name.as_str() {
+                "cert" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_string_with_interpolations(ctx))
+                    {
+                        mtls_cert = Some(
+                            rustls::pki_types::CertificateDer::pem_slice_iter(
+                                &read_mtls_data(&val).map_err(|e| {
+                                    let e: Box<dyn Error + Send + Sync> = format!(
+                                        "Can't read mTLS certificate for reverse proxy: {e}"
+                                    )
+                                    .into();
+                                    e
+                                })?,
+                            )
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|e| {
+                                let e: Box<dyn Error + Send + Sync> =
+                                    format!("Can't read mTLS certificate for reverse proxy: {e}")
+                                        .into();
+                                e
+                            })?,
+                        );
+                    }
+                }
+                "key" => {
+                    if let Some(val) = entries.first().and_then(|e| e.args.first()).and_then(
+                        |v: &ServerConfigurationValue| v.as_string_with_interpolations(ctx),
+                    ) {
+                        mtls_key = Some(
+                            rustls::pki_types::PrivateKeyDer::from_pem_slice(
+                                &read_mtls_data(&val).map_err(|e| {
+                                    let e: Box<dyn Error + Send + Sync> = format!(
+                                        "Can't read mTLS private key for reverse proxy: {e}"
+                                    )
+                                    .into();
+                                    e
+                                })?,
+                            )
+                            .map_err(|e| {
+                                let e: Box<dyn Error + Send + Sync> =
+                                    format!("Can't read mTLS private key for reverse proxy: {e}")
+                                        .into();
+                                e
+                            })?,
+                        );
+                    }
+                }
                 "limit" => {
                     if let Some(val) = entries
                         .first()
@@ -734,12 +849,18 @@ fn parse_srv_entry(
         idle_timeout = Some(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS));
     }
 
+    let mtls = if let (Some(certs), Some(key)) = (mtls_cert, mtls_key) {
+        Some(std::sync::Arc::new(MtlsCredentials { certs, key }))
+    } else {
+        None
+    };
     cfg.upstreams.push(Upstream::Srv(SrvUpstreamData {
         srv_name: srv_name.to_string(),
         dns_servers,
         limit,
         weight,
         health_check_config,
+        mtls,
     }));
 
     // Populate the O(1) lookup map
@@ -923,4 +1044,16 @@ fn parse_affinity_entry(
     };
 
     Ok(AffinityConfig { affinity_type })
+}
+
+fn read_mtls_data(path: &str) -> Result<std::sync::Arc<Vec<u8>>, std::io::Error> {
+    if let Some(cached) = MTLS_FILE_CACHE.get(path) {
+        return Ok(cached.clone());
+    }
+
+    Ok(MTLS_FILE_CACHE
+        .entry(path.to_string())
+        .or_try_insert_with(|| std::fs::read(path).map(std::sync::Arc::new))?
+        .downgrade()
+        .clone())
 }

@@ -448,6 +448,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             }
         }
 
+        // Clear mTLS cache
+        self::config::MTLS_FILE_CACHE.clear();
+
         modules.push(Arc::new(ReverseProxyModule {
             sink: build_composite_sink(&registry, &config.global_config)?,
         }));

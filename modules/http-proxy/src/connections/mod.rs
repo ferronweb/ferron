@@ -498,6 +498,7 @@ mod tests {
             proxy_to: "http://backend".to_string(),
             proxy_unix: None,
             weight: 1,
+            mtls: None,
         });
 
         // Record some pulls and returns
