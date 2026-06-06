@@ -119,6 +119,8 @@ pub enum TraceAttributeValue {
 pub struct EventTraceContext {
     pub trace_id: [u8; TRACE_ID_LEN],
     pub span_id: [u8; SPAN_ID_LEN],
+    /// Baggage associated with the event.
+    pub baggage: Option<String>,
     pub sampled: Option<bool>,
 }
 
@@ -130,6 +132,7 @@ pub enum Parent {
         trace_id: String,
         span_id: String,
         sampled: Option<bool>,
+        baggage: Option<String>,
     },
 }
 

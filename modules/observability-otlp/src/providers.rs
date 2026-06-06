@@ -6,7 +6,7 @@ use ferron_observability::{
     AccessEvent, LogEvent, LogFormatterContext, LogLevel, MetricAttributeValue, MetricEvent,
     MetricType, MetricValue, Parent, TraceAttributeValue, TraceEvent,
 };
-use opentelemetry::{logs::AnyValue, trace::TracerProvider, KeyValue};
+use opentelemetry::{baggage::BaggageExt, logs::AnyValue, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
 use opentelemetry_sdk::Resource;
 
@@ -26,6 +26,7 @@ struct ActiveSpan {
     span_id_hex: String,
     sampled: bool,
     span: opentelemetry_sdk::trace::Span,
+    baggage: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -55,6 +56,7 @@ impl CorrelationContext {
         span_id_hex: String,
         sampled: bool,
         span: opentelemetry_sdk::trace::Span,
+        baggage: Option<String>,
     ) {
         self.active_spans.insert(
             key.into(),
@@ -63,6 +65,7 @@ impl CorrelationContext {
                 span_id_hex,
                 sampled,
                 span,
+                baggage,
             },
         );
     }
@@ -72,13 +75,14 @@ impl CorrelationContext {
     }
 
     /// Look up an active span's trace and span ID for use as a parent.
-    pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool)> {
+    pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool, Option<String>)> {
         self.active_spans.get(key).map(|entry| {
             let span = entry.value();
             (
                 span.trace_id_hex.clone(),
                 span.span_id_hex.clone(),
                 span.sampled,
+                span.baggage.clone(),
             )
         })
     }
@@ -695,7 +699,15 @@ pub fn emit_trace(
             let trace_id_hex = span.span_context().trace_id().to_string();
             let span_id_hex = span.span_context().span_id().to_string();
             let sampled = span.span_context().trace_flags().is_sampled();
-            correlation.insert_span(key.clone(), trace_id_hex, span_id_hex, sampled, span);
+            let baggage = trace_context.as_ref().and_then(|c| c.baggage.clone());
+            correlation.insert_span(
+                key.clone(),
+                trace_id_hex,
+                span_id_hex,
+                sampled,
+                span,
+                baggage,
+            );
         }
         TraceEvent::EndSpan {
             key,
@@ -762,16 +774,18 @@ fn build_parent_context(
 ) -> Option<opentelemetry::Context> {
     use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceId, TraceState};
 
-    let (trace_id_hex, span_id_hex, sampled) = match parent {
+    let (trace_id_hex, span_id_hex, sampled, baggage) = match parent {
         Parent::ByKey(parent_key) => {
-            let (trace_id_hex, span_id_hex, sampled) = correlation.get_parent_ids(parent_key)?;
-            (trace_id_hex, span_id_hex, Some(sampled))
+            let (trace_id_hex, span_id_hex, sampled, baggage) =
+                correlation.get_parent_ids(parent_key)?;
+            (trace_id_hex, span_id_hex, Some(sampled), baggage)
         }
         Parent::ById {
             trace_id,
             span_id,
             sampled,
-        } => (trace_id.clone(), span_id.clone(), *sampled),
+            baggage,
+        } => (trace_id.clone(), span_id.clone(), *sampled, baggage.clone()),
     };
 
     let (trace_id, span_id) = (
@@ -785,7 +799,39 @@ fn build_parent_context(
         true,
         TraceState::default(),
     );
-    Some(opentelemetry::Context::new().with_remote_span_context(parent_ctx))
+    let mut context = opentelemetry::Context::new().with_remote_span_context(parent_ctx);
+    if let Some(baggage) = baggage {
+        // Parse baggage values
+        let mut baggage_vec = Vec::new();
+        for item in baggage.split(',') {
+            let item = item.trim();
+            if !item.is_empty() {
+                let (kv, metadata) = if let Some(idx) = item.find(';') {
+                    (&item[..idx], Some(&item[idx + 1..]))
+                } else {
+                    (item, None)
+                };
+                let Some((key, value)) = kv.split_once("=") else {
+                    continue;
+                };
+                let metadata = if let Some(metadata) = metadata {
+                    opentelemetry::baggage::BaggageMetadata::from(metadata)
+                } else {
+                    opentelemetry::baggage::BaggageMetadata::default()
+                };
+                let key = opentelemetry::Key::from(key.trim_end().to_owned());
+                let Some(value) = urlencoding::decode(value.trim_start())
+                    .ok()
+                    .map(|v| opentelemetry::StringValue::from(v.to_string()))
+                else {
+                    continue;
+                };
+                baggage_vec.push((key, (value, metadata)));
+            }
+        }
+        context = context.with_baggage(opentelemetry::baggage::Baggage::from_iter(baggage_vec));
+    }
+    Some(context)
 }
 
 fn trace_flags(sampled: Option<bool>) -> Option<opentelemetry::TraceFlags> {

@@ -149,7 +149,7 @@ Ferron supports three OTLP protocols for exporting signals:
 
 ## Signal correlation
 
-Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. This enables correlated queries like "show me all logs for trace `abc123`" in your observability backend.
+Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. Baggage from the incoming `baggage` header is attached to the span context, making it available for correlated queries like "show me all logs for trace `abc123`" or "filter by baggage key `userId`" in your observability backend.
 
 ### Trace context propagation
 
@@ -157,8 +157,11 @@ Ferron automatically:
 
 1. **Generates trace IDs** for incoming requests without trace context
 2. **Propagates trace context** via W3C Trace Context headers (`traceparent`, `tracestate`)
-3. **Creates one local request span** per request and nests pipeline, stage, and error-pipeline spans under it
-4. **Adds request span context** to OTLP logs and access logs for correlation
+3. **Propagates baggage** via the W3C Baggage header (`baggage`)
+4. **Creates one local request span** per request and nests pipeline, stage, and error-pipeline spans under it
+5. **Adds request span context** to OTLP logs and access logs for correlation
+
+When a request carries a `baggage` header, Ferron parses it and attaches the key-value pairs to the OpenTelemetry span context. This makes baggage available to downstream spans and visible in your observability backend as span baggage attributes.
 
 Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate metrics using their semantic attributes, resource attributes, and timestamps instead of expecting a metric data point to join directly to a single trace.
 
@@ -234,11 +237,13 @@ Most commercial APM solutions support OTLP:
 - **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
 - **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
+- **Baggage** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
 ## See also
 
 - [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
+- [Trace context](/docs/v3/configuration/observability/trace) for W3C Trace Context and Baggage propagation details
 - [Prometheus metrics](/docs/v3/configuration/observability/prometheus) for native Prometheus metrics export
 - [Core directives](/docs/v3/configuration/server/core-directives#observability) for global observability settings

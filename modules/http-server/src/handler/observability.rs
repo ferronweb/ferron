@@ -9,6 +9,8 @@ use ferron_observability::{
     Parent, TraceAttributeValue, TraceEvent,
 };
 
+pub use ferron_http::trace_context::to_event_trace_context;
+
 static SPAN_KEY_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
@@ -204,25 +206,6 @@ pub(super) fn next_span_key(prefix: &str) -> String {
 }
 
 #[inline]
-pub(super) fn to_event_trace_context(
-    trace_context: &trace_context::TraceContext,
-) -> EventTraceContext {
-    EventTraceContext {
-        trace_id: trace_context
-            .trace_id
-            .as_bytes()
-            .try_into()
-            .expect("trace_id must be 32 hex chars"),
-        span_id: trace_context
-            .span_id
-            .as_bytes()
-            .try_into()
-            .expect("span_id must be 16 hex chars"),
-        sampled: Some(trace_context.sampled),
-    }
-}
-
-#[inline]
 pub fn resolve_request_trace_context(
     request: &HttpRequest,
     generate_enabled: bool,
@@ -242,28 +225,37 @@ pub fn resolve_request_trace_context(
             trace_context
         });
 
-    if let Some(parent_context) = incoming {
-        let request_context = trace_context::TraceContext {
-            trace_id: parent_context.trace_id.clone(),
-            span_id: trace_context::generate_span_id(),
-            sampled: parent_context.sampled,
-            tracestate: parent_context.tracestate.clone(),
-        };
+    if let Some(mut context) = incoming {
+        context.baggage = request
+            .headers()
+            .get("baggage")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+
+        let parent_trace_id = context.trace_id.clone();
+        let parent_span_id = context.span_id;
+        let parent_sampled = context.sampled;
+        let baggage = context.baggage.clone();
+        context.span_id = trace_context::generate_span_id();
         return (
-            Some(request_context),
+            Some(context),
             Some(Parent::ById {
-                trace_id: parent_context.trace_id,
-                span_id: parent_context.span_id,
-                sampled: Some(parent_context.sampled),
+                trace_id: parent_trace_id,
+                span_id: parent_span_id,
+                sampled: Some(parent_sampled),
+                baggage,
             }),
         );
     }
 
     if generate_enabled {
-        return (
-            Some(trace_context::generate_traceparent(default_sampled)),
-            None,
-        );
+        let mut context = trace_context::generate_traceparent(default_sampled);
+        context.baggage = request
+            .headers()
+            .get("baggage")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        return (Some(context), None);
     }
 
     (None, None)

@@ -16,6 +16,7 @@ fn correlation_context_tracks_active_spans() {
     let trace_id_hex = span.span_context().trace_id().to_string();
     let span_id_hex = span.span_context().span_id().to_string();
     let sampled = span.span_context().trace_flags().is_sampled();
+    let baggage = Some("a=b".to_string());
 
     ctx.insert_span(
         "ferron.request_handler".to_string(),
@@ -23,14 +24,16 @@ fn correlation_context_tracks_active_spans() {
         span_id_hex.clone(),
         sampled,
         span,
+        baggage.clone(),
     );
 
-    let (t_id, s_id, is_sampled) = ctx
+    let (t_id, s_id, is_sampled, baggage2) = ctx
         .get_parent_ids("ferron.request_handler")
         .expect("should have active span");
     assert_eq!(t_id, trace_id_hex);
     assert_eq!(s_id, span_id_hex);
     assert_eq!(is_sampled, sampled);
+    assert_eq!(baggage2, baggage);
 }
 
 #[test]
@@ -279,8 +282,16 @@ async fn otlp_correlation_context_concurrent_insert_remove() {
             let trace_id_hex = span.span_context().trace_id().to_string();
             let span_id_hex = span.span_context().span_id().to_string();
             let sampled = span.span_context().trace_flags().is_sampled();
+            let baggage = None;
 
-            ctx.insert_span(key.clone(), trace_id_hex, span_id_hex, sampled, span);
+            ctx.insert_span(
+                key.clone(),
+                trace_id_hex,
+                span_id_hex,
+                sampled,
+                span,
+                baggage,
+            );
             // Immediately try to read — should succeed
             assert!(ctx.get_parent_ids(&key).is_some());
         }));

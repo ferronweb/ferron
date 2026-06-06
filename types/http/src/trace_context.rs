@@ -8,6 +8,7 @@ pub struct TraceContext {
     pub trace_id: String, // 32 hex chars
     pub span_id: String,  // 16 hex chars
     pub sampled: bool,
+    pub baggage: Option<String>,
     pub tracestate: Option<String>,
 }
 
@@ -35,6 +36,7 @@ pub fn parse_traceparent(s: &str) -> Option<TraceContext> {
         trace_id: trace_id.to_lowercase(),
         span_id: parent_id.to_lowercase(),
         sampled,
+        baggage: None,
         tracestate: None,
     })
 }
@@ -63,6 +65,7 @@ pub fn generate_traceparent(sampled: bool) -> TraceContext {
     TraceContext {
         trace_id: bytes_to_hex(&trace_bytes),
         span_id: generate_span_id(),
+        baggage: None,
         sampled,
         tracestate: None,
     }
@@ -83,6 +86,11 @@ pub fn inject_trace_headers(headers: &mut HeaderMap, tc: &TraceContext) {
     if let Some(ts) = &tc.tracestate {
         if let Ok(v) = HeaderValue::from_str(ts) {
             headers.insert("tracestate", v);
+        }
+    }
+    if let Some(b) = &tc.baggage {
+        if let Ok(v) = HeaderValue::from_str(b) {
+            headers.insert("baggage", v);
         }
     }
 }
@@ -109,9 +117,11 @@ pub fn to_event_trace_context(
         .as_bytes()
         .try_into()
         .expect("span_id must be 16 hex chars");
+    let baggage = trace_context.baggage.clone();
     ferron_observability::EventTraceContext {
         trace_id,
         span_id,
+        baggage,
         sampled: Some(trace_context.sampled),
     }
 }
@@ -152,6 +162,7 @@ mod tests {
             trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".to_string(),
             span_id: "00f067aa0ba902b7".to_string(),
             sampled: true,
+            baggage: None,
             tracestate: None,
         };
         let formatted = format_traceparent(&tc);
@@ -178,6 +189,7 @@ mod tests {
             trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".to_string(),
             span_id: "00f067aa0ba902b7".to_string(),
             sampled: false,
+            baggage: Some("key=value".to_string()),
             tracestate: Some("conntype=1".to_string()),
         };
         inject_trace_headers(&mut headers, &tc);
@@ -188,6 +200,10 @@ mod tests {
         assert_eq!(
             headers.get("tracestate").unwrap().to_str().unwrap(),
             "conntype=1"
+        );
+        assert_eq!(
+            headers.get("baggage").unwrap().to_str().unwrap(),
+            "key=value"
         );
     }
 }

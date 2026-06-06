@@ -50,7 +50,11 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Health check instrumentation** - new `ferron.proxy.health.success`, `ferron.proxy.health.failure`, and `ferron.proxy.health.duration` metrics for active health probe outcomes.
 - **Circuit breaker metrics** - new `ferron.proxy.circuit.state` gauge (0/1/2 for Closed/HalfOpen/Open) and `ferron.proxy.circuit.open_total` counter tracking circuit breaker state transitions.
 - **Unified certificate expiration gauge** - a single `ferron.tls.certificate_not_after` gauge is emitted by every TLS provider (`manual`, `acme`, `http`, `local`) whenever a certificate is mounted into the in-memory rustls context. The value is the certificate `notAfter` field as Unix epoch seconds; attributes are `ferron.host` (SNI hostname or IP), `ferron.tls.provider` (provider name), and `crypto.certificate.serial_number` (lowercase hex). Replaces the previous provider-specific expiration gauges.
-- **Admin API** - added `GET /reload` and `GET /runtime` endpoints to the admin listener.
+- **Baggage propagation** - Baggage is now propagated from incoming requests to outgoing ones, allowing distributed tracing context to be preserved across service boundaries.
+
+#### Admin API
+
+- Added `GET /reload` and `GET /runtime` endpoints to the admin listener.
 
 #### Configuration validation
 

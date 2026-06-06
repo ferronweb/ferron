@@ -1,11 +1,13 @@
 ---
 title: Trace context
-description: Propagation and generation of W3C Trace Context (traceparent / tracestate).
+description: "Propagation and generation of W3C Trace Context (traceparent, tracestate) and W3C Baggage."
 ---
 
-Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) propagation and generation. This enables end-to-end observability by carrying trace identifiers across service boundaries.
+Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) and W3C Baggage (`baggage`) propagation and generation. This enables end-to-end observability by carrying trace identifiers and application-defined context across service boundaries.
 
 Incoming `traceparent` and `tracestate` headers are parsed and used as the parent for Ferron's internal `ferron.request` span. Ferron creates a local request span with the same trace ID and a new span ID, then reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can generate a new one (default behavior).
+
+The incoming `baggage` header is parsed and attached to the local request span context. Baggage is then propagated to upstream services and included in OTLP span exports, allowing application-defined key-value pairs to flow through the entire request path.
 
 ## Trace configuration
 
@@ -30,9 +32,51 @@ example.com {
 }
 ```
 
+## W3C Baggage
+
+Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (e.g. tenant ID, user segment, request flags) across service boundaries without requiring explicit configuration.
+
+### How baggage propagation works
+
+1. Ferron reads the incoming `baggage` header from the request.
+2. The baggage string is stored in the request's trace context.
+3. When forwarding the request to an upstream service, the `baggage` header is included alongside `traceparent` and `tracestate`.
+4. When exporting via OTLP, baggage is parsed and attached to the OpenTelemetry span context as OpenTelemetry baggage.
+
+### Baggage header format
+
+The `baggage` header follows the [W3C Baggage specification](https://www.w3.org/TR/baggage/). Multiple items are comma-separated:
+
+```text
+baggage: userId=alice,serverNode=5;props;otherKey=otherValue
+```
+
+Each item is a `key=value` pair with optional semicolon-separated properties. Values are URL-encoded.
+
+### Example
+
+A client sends:
+
+```http
+GET /api/data HTTP/1.1
+Host: example.com
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+baggage: userId=alice,tenantId=acme
+```
+
+Ferron stores the baggage in the request trace context and propagates both `traceparent` and `baggage` to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
+
 ## Notes and troubleshooting
 
-- The `http-proxy` and `http-fproxy` modules automatically propagate the current trace context to upstream services.
+- The `http-proxy` and `http-fproxy` modules automatically propagate the current trace context and baggage to upstream services.
 - Generating and propagating trace headers carries unique identifiers. Ensure this complies with your privacy requirements.
 - Ferron 3 preserves the incoming `tracestate` header and propagates it as-is.
+- Baggage values are propagated as-is; Ferron does not validate or modify them. Ensure baggage content complies with your privacy and security requirements.
+- Baggage items are attached to OpenTelemetry spans when using the OTLP provider. High-cardinality baggage keys may increase span storage costs in your observability backend.
 - To export these traces to an external system, configure an observability sink such as `observability-otlp`.
+
+## See also
+
+- [OTLP observability](/docs/v3/configuration/observability/otlp) for exporting traces and baggage to OpenTelemetry collectors
+- [Prometheus metrics](/docs/v3/configuration/observability/prometheus) for native Prometheus metrics export
+- [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
