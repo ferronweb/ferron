@@ -681,12 +681,18 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     ferron_observability::LogEvent {
                         target: "ferron-proxy",
                         level: ferron_observability::LogLevel::Error,
-                        message: format!("Proxy error: {e}"),
-                        summary: "Reverse proxy error".into(),
-                        attributes: vec![(
-                            "error.message",
-                            ferron_observability::LogAttributeValue::String(e.to_string()),
-                        )],
+                        message: format!("Proxy error: {}", e),
+                        summary: e.summary().into(),
+                        attributes: vec![
+                            (
+                                "error.type",
+                                ferron_observability::LogAttributeValue::String(e.error_type().to_string()),
+                            ),
+                            (
+                                "error.message",
+                                ferron_observability::LogAttributeValue::String(e.to_string()),
+                            ),
+                        ],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));

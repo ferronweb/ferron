@@ -10,6 +10,7 @@ pub mod health;
 pub mod lb;
 pub mod srv;
 pub mod upstream;
+pub mod error;
 
 /// Shared connection tracking state for least-conn and two-random algorithms.
 ///

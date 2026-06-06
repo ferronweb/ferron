@@ -7,6 +7,7 @@ use http::{Request, Uri};
 
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
+use crate::types::error::ProxyError;
 
 /// Check whether `client_ip_from_header` is configured.
 #[inline]
@@ -21,7 +22,7 @@ pub(super) fn construct_proxy_request(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     proxy_request_url: &Uri,
-) -> Result<Request<ProxyBody>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Request<ProxyBody>, ProxyError> {
     let req_ref = ctx.req.as_ref().ok_or("no request in context")?;
 
     let request_path = req_ref.uri().path();

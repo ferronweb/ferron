@@ -15,6 +15,7 @@ use vibeio_hyper::VibeioIo;
 
 use crate::connections::{PoolKey, PooledConnection};
 use crate::types::upstream::UpstreamInner;
+use crate::types::error::ProxyError;
 
 /// Body type used for proxied requests.
 pub type ProxyBody = UnsyncBoxBody<Bytes, std::io::Error>;
@@ -125,7 +126,7 @@ impl SendRequestWrapper {
     pub async fn send_request(
         &mut self,
         req: Request<ProxyBody>,
-    ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Response<Incoming>, ProxyError> {
         self.last_used = std::time::Instant::now();
         match self.inner.take() {
             Some(SendRequestInner::Http1(mut inner)) => {
@@ -147,7 +148,7 @@ impl SendRequestWrapper {
 pub async fn http1_handshake<I>(
     io: I,
     drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
@@ -166,7 +167,7 @@ where
 pub async fn http1_handshake_unix<I>(
     io: I,
     drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
@@ -184,7 +185,7 @@ where
 pub async fn http2_handshake<I>(
     io: I,
     drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
@@ -203,7 +204,7 @@ where
 pub async fn http2_handshake_unix<I>(
     io: I,
     drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {

@@ -21,6 +21,7 @@ use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, 
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::types::upstream::UpstreamInner;
+use crate::types::error::ProxyError;
 use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
 use ferron_http::HttpContext;
@@ -45,7 +46,7 @@ pub async fn try_send_with_pool(
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
-) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ferron_http::HttpResponse, ProxyError> {
     // Collect non-ready-but-alive connections for racing
     let mut pending_items: Vec<PooledConnection> = Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
@@ -202,7 +203,7 @@ pub async fn establish_and_send(
     tracked_connection: Option<Arc<()>>,
     existing_item: Option<PooledConnection>,
     metrics: &mut ProxyMetrics,
-) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ferron_http::HttpResponse, ProxyError> {
     metrics.pool_miss = true;
     let mut item: PooledConnection = if let Some(it) = existing_item {
         it
@@ -443,7 +444,7 @@ pub async fn send_via_wrapper(
     is_unix: bool,
     _local_limit: Option<usize>,
     metrics: &mut ProxyMetrics,
-) -> Result<ferron_http::HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ferron_http::HttpResponse, ProxyError> {
     let request = crate::proxy::request::construct_proxy_request(ctx, config, proxy_url)?;
     let extensions = request.extensions().clone();
 

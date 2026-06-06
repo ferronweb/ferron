@@ -23,6 +23,7 @@ use crate::proxy::affinity::extract_affinity_key;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
+use crate::types::error::ProxyError;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::upstream::FailureCache;
@@ -64,7 +65,7 @@ pub async fn execute_proxy(
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
     config_key: &[usize],
-) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();
 
     // Resolve upstreams (SRV records are resolved here, static ones pass through)
@@ -257,13 +258,31 @@ pub async fn execute_proxy(
                 }
 
                 // No retry or no more backends — return error
-                let (status, reason) = e.downcast_ref::<std::io::Error>().map_or(
-                    (StatusCode::BAD_GATEWAY, "Bad gateway"),
-                    |io_err| {
+                let (status, reason) = match &e {
+                    ProxyError::Io(io_err) => {
                         let (st, r) = io_error_status(io_err);
                         (st, r)
-                    },
-                );
+                    }
+                    _ => (StatusCode::BAD_GATEWAY, "Bad gateway"),
+                };
+                let mut attrs = vec![
+                    (
+                        "upstream.address",
+                        LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                    ),
+                    (
+                        "http.response.status_code",
+                        LogAttributeValue::I64(status.as_u16() as i64),
+                    ),
+                    (
+                        "error.type",
+                        LogAttributeValue::String(e.error_type().to_string()),
+                    ),
+                    (
+                        "error.message",
+                        LogAttributeValue::String(e.to_string()),
+                    ),
+                ];
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
                     message: format!(
@@ -271,18 +290,9 @@ pub async fn execute_proxy(
                         url = selected.upstream.proxy_to,
                         err = e
                     ),
-                    summary: "Reverse proxy: backend error".into(),
+                    summary: e.summary().into(),
                     target: LOG_TARGET,
-                    attributes: vec![
-                        (
-                            "upstream.address",
-                            LogAttributeValue::String(selected.upstream.proxy_to.clone()),
-                        ),
-                        (
-                            "http.response.status_code",
-                            LogAttributeValue::I64(status.as_u16() as i64),
-                        ),
-                    ],
+                    attributes: attrs,
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 // Collect active health check unhealthy metrics
