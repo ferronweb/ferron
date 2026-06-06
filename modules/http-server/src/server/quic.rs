@@ -351,6 +351,17 @@ impl QuicListenerHandle {
                             data.downcast_ref::<quinn::crypto::rustls::HandshakeData>()
                                 .and_then(|data| data.server_name.to_owned())
                         });
+                        let peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>> =
+                            connection.peer_identity().and_then(|data| {
+                                data.downcast_ref::<Vec<rustls::pki_types::CertificateDer>>()
+                                    .and_then(|v| {
+                                        if v.is_empty() {
+                                            None
+                                        } else {
+                                            Some(v.to_owned())
+                                        }
+                                    })
+                            });
                         let hinted_hostname = sni.as_deref().and_then(normalize_host_for_lookup);
 
                         let tls_observability = resolve_observability_sink(
@@ -382,6 +393,7 @@ impl QuicListenerHandle {
                             (*connection_cancel_token).clone(),
                             server_config.reload_token.clone(),
                             timeout_duration,
+                            peer_identity,
                         )
                         .await;
                     });
@@ -457,6 +469,7 @@ async fn handle_http3_connection(
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
     timeout_duration: Option<std::time::Duration>,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) {
     let graceful_shutdown = CancellationToken::new();
     let handler_state = Arc::new(RequestHandlerState {
@@ -473,6 +486,7 @@ async fn handle_http3_connection(
         https_port,
         http3_alt_svc: false,
         timeout_duration,
+        peer_identity,
     });
     let mut connection_future = Box::pin(
         Http3::new(h3_quinn::Connection::new(conn), Http3Options::default())

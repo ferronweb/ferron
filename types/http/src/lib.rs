@@ -3,6 +3,8 @@
 #[cfg(feature = "abuse")]
 pub mod abuse;
 pub mod client_ip;
+#[cfg(feature = "mtls")]
+pub mod mtls;
 pub mod trace_context;
 #[cfg(feature = "util")]
 pub mod util;

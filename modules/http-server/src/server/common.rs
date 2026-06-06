@@ -51,6 +51,7 @@ pub struct RequestHandlerState {
     pub http3_alt_svc: bool,
     pub https_port: Option<u16>,
     pub timeout_duration: Option<std::time::Duration>,
+    pub peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 }
 
 // Type alias for the config ArcSwap
@@ -318,6 +319,7 @@ pub fn build_request_handler(
                 state.https_port,
                 request_observability,
                 state.timeout_duration,
+                state.peer_identity.clone(),
             )
             .await
         })

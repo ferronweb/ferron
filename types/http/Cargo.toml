@@ -12,6 +12,7 @@ typemap_rev = "0.4"
 rustc-hash = "2"
 rand = "0.10"
 cidr = "0.3"
+rustls-pki-types = { version = "1.14.1", optional = true }
 
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
@@ -19,3 +20,4 @@ ferron-core = { path = "../../core" }
 [features]
 util = []
 abuse = []
+mtls = ["rustls-pki-types"]

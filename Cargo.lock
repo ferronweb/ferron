@@ -1327,6 +1327,7 @@ dependencies = [
  "http-body-util",
  "rand 0.10.1",
  "rustc-hash",
+ "rustls-pki-types",
  "typemap_rev",
  "vibeio",
 ]

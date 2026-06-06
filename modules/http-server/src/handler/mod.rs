@@ -13,6 +13,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
+use ferron_http::mtls::MtlsCertificates;
 use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
@@ -149,6 +150,7 @@ pub async fn request_handler(
     https_port: Option<u16>,
     events: CompositeEventSink,
     timeout_duration: Option<std::time::Duration>,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     let has_events = !events.is_empty();
     let has_traces = events.has_trace_sinks();
@@ -299,6 +301,7 @@ pub async fn request_handler(
         request_span_key.clone(),
         events.clone(),
         timeout_duration,
+        peer_identity,
     )
     .await;
 
@@ -477,6 +480,7 @@ async fn request_handler_inner(
     request_span_key: Option<String>,
     events: CompositeEventSink,
     timeout_duration: Option<std::time::Duration>,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) -> (
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
@@ -731,6 +735,11 @@ async fn request_handler_inner(
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
     if let Some(ref tc) = request_trace_context {
         ctx.insert::<trace_context::TraceContextKey>(tc.clone());
+    }
+
+    // Attach mTLS certificates so stages/modules can access them.
+    if let Some(peer_identity) = peer_identity {
+        ctx.insert::<MtlsCertificates>(MtlsCertificates(peer_identity));
     }
 
     // When starting the top-level request span later, prefer external_parent if available

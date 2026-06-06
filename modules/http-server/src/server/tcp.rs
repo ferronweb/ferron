@@ -267,6 +267,12 @@ impl TcpListenerHandle {
                                     &ip_observability,
                                 );
                                 if let Some(tls_stream) = tls_stream_option {
+                                    let peer_identity = tls_stream
+                                        .get_ref()
+                                        .1
+                                        .peer_certificates()
+                                        .filter(|c| !c.is_empty())
+                                        .map(|c| c.to_vec());
                                     let negotiated_protocol = tls_stream
                                         .get_ref()
                                         .1
@@ -289,7 +295,8 @@ impl TcpListenerHandle {
                                             tls_observability,
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
-                                            http3_alt_svc
+                                            http3_alt_svc,
+                                            peer_identity
                                         )
                                         .await;
                                     } else if connection_options.protocols.http1 {
@@ -309,7 +316,8 @@ impl TcpListenerHandle {
                                             tls_observability,
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
-                                            http3_alt_svc
+                                            http3_alt_svc,
+                                            peer_identity
                                         )
                                         .await;
                                     } else {
@@ -366,7 +374,8 @@ impl TcpListenerHandle {
                                 ip_observability,
                                 (*connection_cancel_token).clone(),
                                 server_config.reload_token.clone(),
-                                http3_alt_svc
+                                http3_alt_svc,
+                                None
                             )
                             .await;
                         }
@@ -441,6 +450,7 @@ async fn handle_http1_connection_zerocopy<S>(
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
     http3_alt_svc: bool,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
@@ -461,6 +471,7 @@ async fn handle_http1_connection_zerocopy<S>(
         shutdown_token,
         reload_token,
         http3_alt_svc,
+        peer_identity,
     )
     .await
 }
@@ -485,6 +496,7 @@ async fn handle_http1_connection_zerocopy<S>(
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
     http3_alt_svc: bool,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) where
     for<'a> S: tokio::io::AsyncRead
         + tokio::io::AsyncWrite
@@ -507,6 +519,7 @@ async fn handle_http1_connection_zerocopy<S>(
         https_port,
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
+        peer_identity,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -556,6 +569,7 @@ async fn handle_http1_connection<S>(
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
     http3_alt_svc: bool,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
@@ -574,6 +588,7 @@ async fn handle_http1_connection<S>(
         https_port,
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
+        peer_identity,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -622,6 +637,7 @@ async fn handle_http2_connection<S>(
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
     http3_alt_svc: bool,
+    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
@@ -640,6 +656,7 @@ async fn handle_http2_connection<S>(
         https_port,
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
+        peer_identity,
     });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
