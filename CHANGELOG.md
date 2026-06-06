@@ -113,6 +113,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Auth bypass closed** - fixed a critical flaw where a misconfigured forwarded authentication block could result in bypassing authentication entirely.
 - **Cache thundering herd fixed** - implemented request coalescing for cache misses to prevent thundering herd scenarios when multiple requests hit the same uncached resource simultaneously.
+- **Several HTTP/1.x protocol handling bugs fixed** - fixed chunked-length encoding DoS vulnerability and other protocol-related issues (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-032)).
 - Fixed a `500 Internal Server Error` when using the `auth_to { ... }` syntax inside forwarded authentication blocks.
 - Fixed a bug where case-insensitive HTTP cache control directives were not recognized correctly.
 - Fixed a bug where CONNECT requests with authority-form URIs were erroneously blocked by the URL canonicalizer.
