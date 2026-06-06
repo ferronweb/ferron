@@ -98,22 +98,6 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Docker**: three variants — `Dockerfile` (distroless + musl), `Dockerfile.alpine` (musl), `Dockerfile.debian` (glibc).
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
 
-### Hash map conventions
-
-Three hashers, each with a specific use case:
-
-| Hasher | When to use | Why |
-|--------|-------------|-----|
-| **SipHash** (`std::collections::HashMap`) | Config-time / setup-only maps, or maps where keys come from user input | DOS-resistant, safe default |
-| **FxBuildHasher** (`rustc_hash::FxBuildHasher`) | Hot-path `DashMap` instances (proxy state, rate limit buckets, abuse tracking, brute force protection, regex caches, template caches) | Fastest for controlled-key concurrent maps; keys are server-internal (upstream names, IPs, config keys) |
-| **AHash** (`ahash::AHashMap` / `ahash::RandomState`) | Per-request single-threaded maps where hash quality matters (e.g., cookie parsing in cache store) | Better distribution than FxHash with competitive speed |
-
-Rules:
-- **`DashMap::new()` is never correct** for hot paths — it defaults to SipHash. Always use `DashMap::with_hasher(FxBuildHasher)` for performance-sensitive concurrent maps.
-- **Config-only maps** (validators, builders, registries) keep the default SipHash — not performance-sensitive.
-- When adding a new `DashMap` on a request path, default to `FxBuildHasher`. Add `rustc-hash` to the crate's `[dependencies]` if not already present.
-- `AHashMap`/`AHashSet` is preferred over `FxHashMap`/`FxHashSet` for single-threaded maps where distribution quality matters (cache cookies, vary rules, etc.). Add `ahash` to the crate's `[dependencies]` if not already present.
-
 ## Documentation principles
 
 - **Describe behavior, not labels**: When documenting features, limitations, or configurations, explain what the system actually does. Prefer explicit, functional descriptions over terminology.
