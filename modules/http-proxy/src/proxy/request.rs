@@ -23,7 +23,9 @@ pub(super) fn construct_proxy_request(
     config: &ProxyConfig,
     proxy_request_url: &Uri,
 ) -> Result<Request<ProxyBody>, ProxyError> {
-    let req_ref = ctx.req.as_ref().ok_or(ProxyError::RequestConstructError("no request in context".to_string()))?;
+    let req_ref = ctx.req.as_ref().ok_or(ProxyError::RequestConstructError(
+        "no request in context".to_string(),
+    ))?;
 
     let request_path = req_ref.uri().path();
     let path = if request_path.as_bytes().first() == Some(&b'/') {
@@ -64,7 +66,9 @@ pub(super) fn construct_proxy_request(
         add_values.push((name.clone(), hv));
     }
 
-    let req = ctx.req.take().ok_or(ProxyError::RequestConstructError("no request in context".to_string()))?;
+    let req = ctx.req.take().ok_or(ProxyError::RequestConstructError(
+        "no request in context".to_string(),
+    ))?;
     let (mut parts, body) = req.into_parts();
 
     parts.uri = Uri::from_str(&final_uri)?;

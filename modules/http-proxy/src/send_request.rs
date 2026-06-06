@@ -14,8 +14,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use vibeio_hyper::VibeioIo;
 
 use crate::connections::{PoolKey, PooledConnection};
-use crate::types::upstream::UpstreamInner;
 use crate::types::error::ProxyError;
+use crate::types::upstream::UpstreamInner;
 
 /// Body type used for proxied requests.
 pub type ProxyBody = UnsyncBoxBody<Bytes, std::io::Error>;
@@ -139,7 +139,9 @@ impl SendRequestWrapper {
                 self.inner = Some(SendRequestInner::Http2(inner));
                 Ok(resp)
             }
-            None => Err(ProxyError::SendRequestError("send_request wrapper empty".into())),
+            None => Err(ProxyError::SendRequestError(
+                "send_request wrapper empty".into(),
+            )),
         }
     }
 }

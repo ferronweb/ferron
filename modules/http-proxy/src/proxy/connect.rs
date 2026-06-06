@@ -2,8 +2,8 @@
 
 use std::net::IpAddr;
 
-use crate::types::upstream::ProxyHeader;
 use crate::types::error::ProxyError;
+use crate::types::upstream::ProxyHeader;
 
 /// Build a PROXY protocol header for the given version and connection details.
 #[inline]

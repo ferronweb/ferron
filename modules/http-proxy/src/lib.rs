@@ -686,7 +686,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         attributes: vec![
                             (
                                 "error.type",
-                                ferron_observability::LogAttributeValue::String(e.error_type().to_string()),
+                                ferron_observability::LogAttributeValue::String(
+                                    e.error_type().to_string(),
+                                ),
                             ),
                             (
                                 "error.message",

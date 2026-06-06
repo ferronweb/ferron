@@ -21,9 +21,9 @@ use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
 use crate::proxy::affinity::extract_affinity_key;
 use crate::types::circuit::CircuitBreakerStateMap;
+use crate::types::error::ProxyError;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
-use crate::types::error::ProxyError;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::upstream::FailureCache;
@@ -141,10 +141,11 @@ pub async fn execute_proxy(
         metrics.selected_backends.insert(selected.upstream.clone());
         metrics.final_selected_backend = Some(selected.upstream.clone());
 
-        let proxy_request_url: http::Uri =
-            selected.upstream.proxy_to.parse().map_err(|_| {
-                ProxyError::InvalidUpstreamUrl(selected.upstream.proxy_to.clone())
-            })?;
+        let proxy_request_url: http::Uri = selected
+            .upstream
+            .proxy_to
+            .parse()
+            .map_err(|_| ProxyError::InvalidUpstreamUrl(selected.upstream.proxy_to.clone()))?;
         let is_https = proxy_request_url.scheme_str() == Some("https");
         let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
         let local_limit = cm.get_local_limit(selected.upstream.clone());
@@ -279,10 +280,7 @@ pub async fn execute_proxy(
                         "error.type",
                         LogAttributeValue::String(e.error_type().to_string()),
                     ),
-                    (
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    ),
+                    ("error.message", LogAttributeValue::String(e.to_string())),
                 ];
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
