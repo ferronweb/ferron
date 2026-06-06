@@ -18,8 +18,8 @@ use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
-    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
-    TraceAttributeValue, TraceEvent,
+    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::Empty;
@@ -68,6 +68,7 @@ pub async fn bad_request_handler(
             )],
         }));
     }
+    let error_type = if is_timeout { "timeout" } else { "bad_request" };
     emit_error(
         &events,
         format!(
@@ -79,6 +80,10 @@ pub async fn bad_request_handler(
                 "bad request"
             }
         ),
+        vec![(
+            "error.type",
+            LogAttributeValue::String(error_type.to_string()),
+        )],
     );
     events.emit(Event::Metric(MetricEvent {
         name: "ferron.http.server.pre_handler_request_count",
@@ -503,6 +508,10 @@ async fn request_handler_inner(
             &events,
             format!("Host header normalization error: {}", e),
             request_log_trace_context.clone(),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("host_header_error".into()),
+            )],
         );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
@@ -540,6 +549,10 @@ async fn request_handler_inner(
             &events,
             "CONNECT requests must use authority-form URI",
             request_log_trace_context.clone(),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("connect_path_error".into()),
+            )],
         );
         return (
             Ok(builtin_error_response(
@@ -568,6 +581,10 @@ async fn request_handler_inner(
                     &events,
                     format!("Invalid request URL pathname: {}", e),
                     request_log_trace_context.clone(),
+                    vec![(
+                        "error.type",
+                        LogAttributeValue::String("url_path_error".into()),
+                    )],
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -608,6 +625,10 @@ async fn request_handler_inner(
                 &events,
                 format!("Invalid request URL: {}", e),
                 request_log_trace_context.clone(),
+                vec![(
+                    "error.type",
+                    LogAttributeValue::String("url_backslash_error".into()),
+                )],
             );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -650,6 +671,10 @@ async fn request_handler_inner(
                         &events,
                         format!("URL sanitization error: {}", e),
                         request_log_trace_context.clone(),
+                        vec![(
+                            "error.type",
+                            LogAttributeValue::String("url_sanitize_error".into()),
+                        )],
                     );
                     if let Some(response) = execute_error_pipeline(
                         error_pipeline.as_ref(),
@@ -682,6 +707,10 @@ async fn request_handler_inner(
                     &events,
                     format!("Invalid request URL percent-encoding: {}", e),
                     request_log_trace_context.clone(),
+                    vec![(
+                        "error.type",
+                        LogAttributeValue::String("url_encoding_error".into()),
+                    )],
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),

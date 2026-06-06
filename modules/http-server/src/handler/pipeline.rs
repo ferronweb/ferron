@@ -4,7 +4,9 @@ use std::time::Duration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::trace_context;
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
-use ferron_observability::{CompositeEventSink, Event, Parent, TraceAttributeValue, TraceEvent};
+use ferron_observability::{
+    CompositeEventSink, Event, LogAttributeValue, Parent, TraceAttributeValue, TraceEvent,
+};
 
 use super::observability::PerStageSpanHooks;
 
@@ -98,6 +100,10 @@ pub async fn execute_pipeline_stages(
                 events,
                 format!("{log_prefix}Pipeline execution error: {error}"),
                 log_trace_context.clone(),
+                vec![(
+                    "error.type",
+                    LogAttributeValue::String("pipeline_error".into()),
+                )],
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
@@ -107,6 +113,10 @@ pub async fn execute_pipeline_stages(
                 events,
                 format!("{log_prefix}Pipeline execution timeout"),
                 log_trace_context.clone(),
+                vec![(
+                    "error.type",
+                    LogAttributeValue::String("pipeline_timeout".into()),
+                )],
             );
             ctx.res = Some(HttpResponse::BuiltinError(408, None));
             None
@@ -138,6 +148,10 @@ pub async fn execute_pipeline_stages(
                         events,
                         format!("{log_prefix}HTTP file resolution error: {error}"),
                         log_trace_context.clone(),
+                        vec![(
+                            "error.type",
+                            LogAttributeValue::String("file_resolution_error".into()),
+                        )],
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -146,6 +160,10 @@ pub async fn execute_pipeline_stages(
                         events,
                         format!("{log_prefix}Pipeline execution error: {error}"),
                         log_trace_context.clone(),
+                        vec![(
+                            "error.type",
+                            LogAttributeValue::String("pipeline_error".into()),
+                        )],
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -159,6 +177,10 @@ pub async fn execute_pipeline_stages(
                             events,
                             format!("{log_prefix}Webroot not found: {webroot}"),
                             log_trace_context.clone(),
+                            vec![(
+                                "error.type",
+                                LogAttributeValue::String("webroot_not_found".into()),
+                            )],
                         );
                     }
                     ctx.res = Some(HttpResponse::BuiltinError(404, None));
@@ -174,6 +196,10 @@ pub async fn execute_pipeline_stages(
                 events,
                 format!("{log_prefix}Pipeline inverse execution error: {error}"),
                 log_trace_context,
+                vec![(
+                    "error.type",
+                    LogAttributeValue::String("pipeline_inverse_error".into()),
+                )],
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }

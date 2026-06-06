@@ -10,7 +10,8 @@ use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
-    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
 };
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
@@ -121,6 +122,7 @@ impl TcpListenerHandle {
                             emit_error(
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
+                                vec![("error.type", LogAttributeValue::String("tcp_accept_error".into()))],
                             );
                             emit_connection_error_metric(&global_observability, "tcp", "accept");
                             #[cfg(unix)]
@@ -143,6 +145,10 @@ impl TcpListenerHandle {
                         emit_error(
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
+                            vec![(
+                                "error.type",
+                                LogAttributeValue::String("tcp_socket_setup_error".into()),
+                            )],
                         );
                         emit_connection_error_metric(
                             &global_observability,
@@ -178,6 +184,10 @@ impl TcpListenerHandle {
                                     emit_error(
                                         &global_observability,
                                         format!("Failed to read PROXY protocol header: {e}"),
+                                        vec![(
+                                            "error.type",
+                                            LogAttributeValue::String("tcp_proxy_protocol_error".into()),
+                                        )],
                                     );
                                     emit_connection_error_metric(
                                         &global_observability,
@@ -200,13 +210,27 @@ impl TcpListenerHandle {
                             let Ok(remote_addr) = socket.peer_addr() else {
                                 let global_observability =
                                     resolve_root_observability_sink(&server_config.observability_resolver);
-                                emit_error(&global_observability, "Failed to get remote address");
+                                emit_error(
+                                    &global_observability,
+                                    "Failed to get remote address",
+                                    vec![(
+                                        "error.type",
+                                        LogAttributeValue::String("tcp_remote_addr_error".into()),
+                                    )],
+                                );
                                 return;
                             };
                             let Ok(local_addr) = socket.local_addr() else {
                                 let global_observability =
                                     resolve_root_observability_sink(&server_config.observability_resolver);
-                                emit_error(&global_observability, "Failed to get local address");
+                                emit_error(
+                                    &global_observability,
+                                    "Failed to get local address",
+                                    vec![(
+                                        "error.type",
+                                        LogAttributeValue::String("tcp_local_addr_error".into()),
+                                    )],
+                                );
                                 return;
                             };
                             (remote_addr, local_addr)
@@ -222,7 +246,14 @@ impl TcpListenerHandle {
                             let start_handshake = match tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket).await {
                                 Ok(start_handshake) => start_handshake,
                                 Err(e) => {
-                                  emit_error(&ip_observability, format!("Failed to start TLS handshake {e}"));
+                                  emit_error(
+                                      &ip_observability,
+                                      format!("Failed to start TLS handshake {e}"),
+                                      vec![(
+                                          "error.type",
+                                          LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                      )],
+                                  );
                                   emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
                                   return;
                                 }
@@ -255,7 +286,14 @@ impl TcpListenerHandle {
                                         hinted_hostname.as_deref(),
                                         &ip_observability,
                                     );
-                                    emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
+                                    emit_error(
+                                        &tls_observability,
+                                        format!("Failed to start TLS handshake: {e}"),
+                                        vec![(
+                                            "error.type",
+                                            LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                        )],
+                                    );
                                     emit_connection_error_metric(&tls_observability, "tcp", "tls_handshake");
                                     return;
                                     }
@@ -324,6 +362,10 @@ impl TcpListenerHandle {
                                         emit_error(
                                             &tls_observability,
                                             "TLS connection did not negotiate a supported HTTP protocol",
+                                            vec![(
+                                                "error.type",
+                                                LogAttributeValue::String("tcp_tls_protocol_error".into()),
+                                            )],
                                         );
                                     }
                                 }
@@ -335,14 +377,21 @@ impl TcpListenerHandle {
                                     .with_safe_default_protocol_versions() {
                                         let tls_config = b.with_no_client_auth().with_cert_resolver(Arc::new(NoCertResolver));
                                         if let Err(e) = start_handshake.into_stream(Arc::new(tls_config)).await {
-                                            let tls_observability = resolve_observability_sink(
-                                                &server_config.observability_resolver,
-                                                Some(local_addr.ip()),
-                                                hinted_hostname.as_deref(),
-                                                &ip_observability,
-                                            );
-                                            emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
-                                        }
+                                                                let tls_observability = resolve_observability_sink(
+                                                                    &server_config.observability_resolver,
+                                                                    Some(local_addr.ip()),
+                                                                    hinted_hostname.as_deref(),
+                                                                    &ip_observability,
+                                                                );
+                                                                emit_error(
+                                                                    &tls_observability,
+                                                                    format!("Failed to start TLS handshake: {e}"),
+                                                                    vec![(
+                                                                        "error.type",
+                                                                        LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                                                    )],
+                                                                );
+                                                            }
                                     }
                             }
                         } else {
@@ -355,6 +404,10 @@ impl TcpListenerHandle {
                                 emit_error(
                                     &ip_observability,
                                     "Plain TCP listener requires HTTP/1.x support",
+                                    vec![(
+                                        "error.type",
+                                        LogAttributeValue::String("tcp_http1_required".into()),
+                                    )],
                                 );
                                 return;
                             }
@@ -546,6 +599,10 @@ async fn handle_http1_connection_zerocopy<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/1 connection error: {error}"),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("tcp_connection_error".into()),
+            )],
         );
     }
 }
@@ -614,6 +671,10 @@ async fn handle_http1_connection<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/1 connection error: {error}"),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("tcp_connection_error".into()),
+            )],
         );
     }
 }
@@ -682,6 +743,10 @@ async fn handle_http2_connection<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/2 connection error: {error}"),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("tcp_connection_error".into()),
+            )],
         );
     }
 }

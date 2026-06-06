@@ -9,7 +9,8 @@ use ferron_core::pipeline::Pipeline;
 use ferron_core::providers::Provider;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
-    CompositeEventSink, Event, EventSink, LogEvent, LogLevel, ObservabilityContext,
+    CompositeEventSink, Event, EventSink, LogAttributeValue, LogEvent, LogLevel,
+    ObservabilityContext,
 };
 use http::Request;
 use http_body_util::combinators::UnsyncBoxBody;
@@ -245,13 +246,17 @@ fn request_hostname_for_lookup<B>(
 }
 
 #[inline]
-pub fn emit_error(observability: &CompositeEventSink, message: impl Into<String>) {
+pub fn emit_error(
+    observability: &CompositeEventSink,
+    message: impl Into<String>,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
+) {
     observability.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
         summary: "Server error".into(),
         target: LOG_TARGET,
-        attributes: Vec::new(),
+        attributes,
         trace_context: None,
     }));
 }

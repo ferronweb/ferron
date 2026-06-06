@@ -3,8 +3,8 @@ use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpErrorContext, HttpRequest};
 use ferron_observability::{
-    CompositeEventSink, Event, EventTraceContext, LogEvent, LogLevel, Parent, TraceAttributeValue,
-    TraceEvent,
+    CompositeEventSink, Event, EventTraceContext, LogAttributeValue, LogEvent, LogLevel, Parent,
+    TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
@@ -194,8 +194,12 @@ pub(super) fn builtin_error_response(
 }
 
 #[inline]
-pub(super) fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {
-    emit_error_with_trace(events, message, None);
+pub(super) fn emit_error(
+    events: &CompositeEventSink,
+    message: impl Into<String>,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
+) {
+    emit_error_with_trace(events, message, None, attributes);
 }
 
 #[inline]
@@ -203,13 +207,14 @@ pub(super) fn emit_error_with_trace(
     events: &CompositeEventSink,
     message: impl Into<String>,
     trace_context: Option<EventTraceContext>,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
 ) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
         summary: "Request error".into(),
         target: LOG_TARGET,
-        attributes: Vec::new(),
+        attributes,
         trace_context,
     }));
 }
@@ -219,13 +224,14 @@ pub(super) fn emit_warn_with_trace(
     events: &CompositeEventSink,
     message: impl Into<String>,
     trace_context: Option<EventTraceContext>,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
 ) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Warn,
         message: message.into(),
         summary: "Request warning".into(),
         target: LOG_TARGET,
-        attributes: Vec::new(),
+        attributes,
         trace_context,
     }));
 }
@@ -267,7 +273,14 @@ pub(super) async fn execute_error_pipeline(
     };
 
     if let Err(error) = error_pipeline.execute_without_inverse(&mut error_ctx).await {
-        emit_error(events, format!("Error pipeline execution error: {error}"));
+        emit_error(
+            events,
+            format!("Error pipeline execution error: {error}"),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("error_pipeline_error".into()),
+            )],
+        );
     }
 
     if let Some(span_key) = span_key {

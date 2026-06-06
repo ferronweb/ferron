@@ -12,7 +12,8 @@ use std::time::Instant;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
-    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
 };
 use quinn::{AsyncTimer, AsyncUdpSocket, Incoming, Runtime};
 use send_wrapper::SendWrapper;
@@ -335,6 +336,10 @@ impl QuicListenerHandle {
                                 emit_error(
                                     &ip_observability,
                                     format!("Failed to accept HTTP/3 connection: {error}"),
+                                    vec![(
+                                        "error.type",
+                                        LogAttributeValue::String("quic_accept_error".into()),
+                                    )],
                                 );
                                 emit_connection_error_metric(
                                     &ip_observability,
@@ -509,6 +514,10 @@ async fn handle_http3_connection(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/3 connection error: {error}"),
+            vec![(
+                "error.type",
+                LogAttributeValue::String("quic_connection_error".into()),
+            )],
         );
     }
 }
