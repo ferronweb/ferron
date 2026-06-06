@@ -1,10 +1,14 @@
 use std::error::Error as StdError;
 use std::fmt;
 
+use http::StatusCode;
+
 /// Typed errors for the HTTP reverse proxy.
 #[derive(Debug)]
 pub enum ProxyError {
     InvalidUpstreamUrl(String),
+    ConnectFailed(String),
+    ConnectFailedUnavailable(String),
     Io(std::io::Error),
     Hyper(hyper::Error),
     Http(http::Error),
@@ -12,9 +16,7 @@ pub enum ProxyError {
     ProxyProtocolWriteFailed(String),
     RequestConstructError(String),
     SendRequestError(String),
-    HttpUpgradeFailed(String),
     Timeout(String),
-    PoolError(String),
     Other(String),
 }
 
@@ -22,16 +24,18 @@ impl fmt::Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ProxyError::InvalidUpstreamUrl(u) => write!(f, "Invalid upstream URL: {u}"),
+            ProxyError::ConnectFailed(s) => write!(f, "Connect failed: {s}"),
+            ProxyError::ConnectFailedUnavailable(s) => write!(f, "Connect failed: {s}"),
             ProxyError::Io(e) => write!(f, "IO error: {e}"),
             ProxyError::Hyper(e) => write!(f, "Hyper error: {e}"),
             ProxyError::Http(e) => write!(f, "HTTP error: {e}"),
             ProxyError::TlsHandshakeFailed(s) => write!(f, "TLS handshake failed: {s}"),
-            ProxyError::ProxyProtocolWriteFailed(s) => write!(f, "PROXY protocol write failed: {s}"),
+            ProxyError::ProxyProtocolWriteFailed(s) => {
+                write!(f, "PROXY protocol write failed: {s}")
+            }
             ProxyError::RequestConstructError(s) => write!(f, "Request construct failed: {s}"),
             ProxyError::SendRequestError(s) => write!(f, "Send request failed: {s}"),
-            ProxyError::HttpUpgradeFailed(s) => write!(f, "HTTP upgrade failed: {s}"),
             ProxyError::Timeout(s) => write!(f, "Timeout: {s}"),
-            ProxyError::PoolError(s) => write!(f, "Pool error: {s}"),
             ProxyError::Other(s) => write!(f, "{s}"),
         }
     }
@@ -68,13 +72,13 @@ impl From<http::Error> for ProxyError {
 
 impl From<http::uri::InvalidUri> for ProxyError {
     fn from(e: http::uri::InvalidUri) -> Self {
-        ProxyError::Other(e.to_string())
+        ProxyError::RequestConstructError(e.to_string())
     }
 }
 
 impl From<http::header::InvalidHeaderValue> for ProxyError {
     fn from(e: http::header::InvalidHeaderValue) -> Self {
-        ProxyError::Other(e.to_string())
+        ProxyError::RequestConstructError(e.to_string())
     }
 }
 
@@ -101,6 +105,8 @@ impl ProxyError {
     pub fn error_type(&self) -> &'static str {
         match self {
             ProxyError::InvalidUpstreamUrl(_) => "invalid_upstream_url",
+            ProxyError::ConnectFailed(_) => "connect_failed",
+            ProxyError::ConnectFailedUnavailable(_) => "connect_failed",
             ProxyError::Io(_) => "io_error",
             ProxyError::Hyper(_) => "hyper_error",
             ProxyError::Http(_) => "http_error",
@@ -108,9 +114,7 @@ impl ProxyError {
             ProxyError::ProxyProtocolWriteFailed(_) => "proxy_protocol_write_failed",
             ProxyError::RequestConstructError(_) => "request_construct_error",
             ProxyError::SendRequestError(_) => "send_request_error",
-            ProxyError::HttpUpgradeFailed(_) => "http_upgrade_failed",
             ProxyError::Timeout(_) => "timeout",
-            ProxyError::PoolError(_) => "pool_error",
             ProxyError::Other(_) => "other",
         }
     }
@@ -118,19 +122,38 @@ impl ProxyError {
     /// Short human-readable summary suitable for log.summary.
     pub fn summary(&self) -> String {
         match self {
-            ProxyError::InvalidUpstreamUrl(u) => format!("Reverse proxy: invalid upstream URL: {u}"),
+            ProxyError::InvalidUpstreamUrl(u) => {
+                format!("Reverse proxy: invalid upstream URL: {u}")
+            }
+            ProxyError::ConnectFailed(s) => format!("Reverse proxy: connect failed: {s}"),
+            ProxyError::ConnectFailedUnavailable(s) => {
+                format!("Reverse proxy: connect failed: {s}")
+            }
             ProxyError::Io(_) => "Reverse proxy: backend IO error".to_string(),
             ProxyError::Hyper(_) => "Reverse proxy: hyper client error".to_string(),
             ProxyError::Http(_) => "Reverse proxy: HTTP error".to_string(),
             ProxyError::TlsHandshakeFailed(_) => "Reverse proxy: TLS handshake failed".to_string(),
-            ProxyError::ProxyProtocolWriteFailed(_) =>
-                "Reverse proxy: PROXY protocol write failed".to_string(),
-            ProxyError::RequestConstructError(_) => "Reverse proxy: request construction failed".to_string(),
+            ProxyError::ProxyProtocolWriteFailed(_) => {
+                "Reverse proxy: PROXY protocol write failed".to_string()
+            }
+            ProxyError::RequestConstructError(_) => {
+                "Reverse proxy: request construction failed".to_string()
+            }
             ProxyError::SendRequestError(_) => "Reverse proxy: sending request failed".to_string(),
-            ProxyError::HttpUpgradeFailed(_) => "Reverse proxy: HTTP upgrade failed".to_string(),
             ProxyError::Timeout(_) => "Reverse proxy: timeout".to_string(),
-            ProxyError::PoolError(_) => "Reverse proxy: pool error".to_string(),
             ProxyError::Other(s) => format!("Reverse proxy: {s}"),
+        }
+    }
+
+    /// Optional HTTP status hint for mapping errors to builtin responses.
+    pub fn http_status_hint(&self) -> Option<StatusCode> {
+        match self {
+            ProxyError::ConnectFailedUnavailable(_) => Some(StatusCode::SERVICE_UNAVAILABLE),
+            ProxyError::Timeout(_) => Some(StatusCode::GATEWAY_TIMEOUT),
+            // For Io errors, prefer the existing io_error_status() helper in proxy::tls
+            ProxyError::Io(_) | ProxyError::Other(_) => None,
+            // 502 Bad Gateway by default
+            _ => Some(StatusCode::BAD_GATEWAY),
         }
     }
 }

@@ -20,8 +20,8 @@ use crate::send_net_io::SendUnixStreamPoll;
 use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, TrackedBody};
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
-use crate::types::upstream::UpstreamInner;
 use crate::types::error::ProxyError;
+use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
 use ferron_http::HttpContext;
@@ -230,9 +230,30 @@ pub async fn establish_and_send(
                 .proxy_unix
                 .as_ref()
                 .ok_or("Unix socket path not set")?;
-            let unix = vibeio::net::PollUnixStream::connect(unix_path)
-                .await
-                .map_err(|e| std::io::Error::other(format!("Unix connect failed: {e}")))?;
+            let unix = match vibeio::net::PollUnixStream::connect(unix_path).await {
+                Ok(s) => s,
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    return Err(ProxyError::Timeout(format!("Unix connect failed: {e}")));
+                }
+
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::ConnectionAborted
+                            | std::io::ErrorKind::NotFound
+                            | std::io::ErrorKind::HostUnreachable
+                    ) =>
+                {
+                    return Err(ProxyError::ConnectFailedUnavailable(format!(
+                        "Unix connect failed: {e}"
+                    )));
+                }
+                Err(e) => {
+                    return Err(ProxyError::ConnectFailed(format!(
+                        "Unix connect failed: {e}"
+                    )));
+                }
+            };
             let mut stream = SendUnixStreamPoll::new(unix);
 
             let drop_guard = unsafe { stream.get_drop_guard() };
@@ -250,7 +271,9 @@ pub async fn establish_and_send(
                     )?;
                     use tokio::io::AsyncWriteExt;
                     stream.write_all(&header_bytes).await.map_err(|e| {
-                        std::io::Error::other(format!("PROXY header write failed: {e}"))
+                        ProxyError::ProxyProtocolWriteFailed(format!(
+                            "PROXY header write failed: {e}"
+                        ))
                     })?;
                 }
             }
@@ -292,9 +315,9 @@ pub async fn establish_and_send(
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             },
                         ));
-                        return Err(
-                            std::io::Error::other(format!("TLS handshake failed: {e}")).into()
-                        );
+                        return Err(ProxyError::TlsHandshakeFailed(format!(
+                            "TLS handshake failed: {e}"
+                        )));
                     }
                 };
 
@@ -321,7 +344,7 @@ pub async fn establish_and_send(
             .unwrap_or(if is_https { 443 } else { 80 });
         let addr = format!("{host}:{port}");
 
-        let tcp = vibeio::net::PollTcpStream::connect(&addr)
+        let tcp = match vibeio::net::PollTcpStream::connect(&addr)
             .await
             .map_err(|e| {
                 ctx.events.emit(ferron_observability::Event::Log(
@@ -337,8 +360,30 @@ pub async fn establish_and_send(
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
-                std::io::Error::other(format!("Connect failed: {e}"))
-            })?;
+                e
+            }) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                return Err(ProxyError::Timeout(format!("TCP connect failed: {e}")));
+            }
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::NotFound
+                        | std::io::ErrorKind::HostUnreachable
+                ) =>
+            {
+                return Err(ProxyError::ConnectFailedUnavailable(format!(
+                    "TCP connect failed: {e}"
+                )));
+            }
+            Err(e) => {
+                return Err(ProxyError::ConnectFailed(format!(
+                    "TCP connect failed: {e}"
+                )));
+            }
+        };
         let mut stream = SendTcpStreamPoll::new(tcp);
 
         let drop_guard = unsafe { stream.get_drop_guard() };
@@ -356,7 +401,7 @@ pub async fn establish_and_send(
                 )?;
                 use tokio::io::AsyncWriteExt;
                 stream.write_all(&header_bytes).await.map_err(|e| {
-                    std::io::Error::other(format!("PROXY header write failed: {e}"))
+                    ProxyError::ProxyProtocolWriteFailed(format!("PROXY header write failed: {e}"))
                 })?;
             }
         }
@@ -395,7 +440,9 @@ pub async fn establish_and_send(
                             ),
                         },
                     ));
-                    return Err(std::io::Error::other(format!("TLS handshake failed: {e}")).into());
+                    return Err(ProxyError::TlsHandshakeFailed(format!(
+                        "TLS handshake failed: {e}"
+                    )));
                 }
             };
 
@@ -457,7 +504,7 @@ pub async fn send_via_wrapper(
             resp
         }
         Err(e) => {
-            return Err(format!("Bad gateway: {e}").into());
+            return Err(ProxyError::SendRequestError(format!("Bad gateway: {e}")));
         }
     };
 
@@ -523,7 +570,7 @@ pub async fn handle_upgrade(
     req_extensions: http::Extensions,
     ctx: &mut HttpContext,
     mut item: PooledConnection,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), ProxyError> {
     let mut upgrade_request = http::Request::new(http_body_util::Empty::<bytes::Bytes>::new());
     *upgrade_request.extensions_mut() = req_extensions;
 

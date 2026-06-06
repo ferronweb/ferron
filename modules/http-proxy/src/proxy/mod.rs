@@ -142,8 +142,8 @@ pub async fn execute_proxy(
         metrics.final_selected_backend = Some(selected.upstream.clone());
 
         let proxy_request_url: http::Uri =
-            selected.upstream.proxy_to.parse().map_err(|e| {
-                format!("Invalid upstream URL '{}': {e}", selected.upstream.proxy_to)
+            selected.upstream.proxy_to.parse().map_err(|_| {
+                ProxyError::InvalidUpstreamUrl(selected.upstream.proxy_to.clone())
             })?;
         let is_https = proxy_request_url.scheme_str() == Some("https");
         let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
@@ -258,14 +258,15 @@ pub async fn execute_proxy(
                 }
 
                 // No retry or no more backends — return error
-                let (status, reason) = match &e {
-                    ProxyError::Io(io_err) => {
-                        let (st, r) = io_error_status(io_err);
-                        (st, r)
-                    }
-                    _ => (StatusCode::BAD_GATEWAY, "Bad gateway"),
+                let (status, reason) = if let ProxyError::Io(io_err) = &e {
+                    io_error_status(io_err)
+                } else {
+                    (
+                        e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY),
+                        "Bad gateway",
+                    )
                 };
-                let mut attrs = vec![
+                let attrs = vec![
                     (
                         "upstream.address",
                         LogAttributeValue::String(selected.upstream.proxy_to.clone()),

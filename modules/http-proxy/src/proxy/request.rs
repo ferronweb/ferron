@@ -23,7 +23,7 @@ pub(super) fn construct_proxy_request(
     config: &ProxyConfig,
     proxy_request_url: &Uri,
 ) -> Result<Request<ProxyBody>, ProxyError> {
-    let req_ref = ctx.req.as_ref().ok_or("no request in context")?;
+    let req_ref = ctx.req.as_ref().ok_or(ProxyError::RequestConstructError("no request in context".to_string()))?;
 
     let request_path = req_ref.uri().path();
     let path = if request_path.as_bytes().first() == Some(&b'/') {
@@ -52,12 +52,7 @@ pub(super) fn construct_proxy_request(
     let mut replace_values: Vec<(HeaderName, HeaderValue)> =
         Vec::with_capacity(config.headers_to_replace.len());
     for (name, value) in &config.headers_to_replace {
-        let hv = HeaderValue::from_str(value).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid header value: {e}"),
-            )
-        })?;
+        let hv = HeaderValue::from_str(value)?;
         replace_values.push((name.clone(), hv));
     }
 
@@ -65,16 +60,11 @@ pub(super) fn construct_proxy_request(
         Vec::with_capacity(config.headers_to_add.len());
     for action in &config.headers_to_add {
         let HeaderAction::Append(name, v) = action;
-        let hv = HeaderValue::from_str(v).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid header value: {e}"),
-            )
-        })?;
+        let hv = HeaderValue::from_str(v)?;
         add_values.push((name.clone(), hv));
     }
 
-    let req = ctx.req.take().ok_or("no request in context")?;
+    let req = ctx.req.take().ok_or(ProxyError::RequestConstructError("no request in context".to_string()))?;
     let (mut parts, body) = req.into_parts();
 
     parts.uri = Uri::from_str(&final_uri)?;

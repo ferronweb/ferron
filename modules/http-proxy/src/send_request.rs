@@ -139,7 +139,7 @@ impl SendRequestWrapper {
                 self.inner = Some(SendRequestInner::Http2(inner));
                 Ok(resp)
             }
-            None => Err("send_request wrapper empty".into()),
+            None => Err(ProxyError::SendRequestError("send_request wrapper empty".into())),
         }
     }
 }

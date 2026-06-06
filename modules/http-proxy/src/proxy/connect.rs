@@ -30,11 +30,19 @@ pub fn build_proxy_protocol_header(
             let addresses = if is_ipv4 {
                 let client_v4 = match client_ip {
                     IpAddr::V4(addr) => addr,
-                    _ => return Err("Client IP is not IPv4".into()),
+                    _ => {
+                        return Err(ProxyError::ProxyProtocolWriteFailed(
+                            "Client IP is not IPv4".to_string(),
+                        ))
+                    }
                 };
                 let local_v4 = match local_ip {
                     IpAddr::V4(addr) => addr,
-                    _ => return Err("Local IP is not IPv4".into()),
+                    _ => {
+                        return Err(ProxyError::ProxyProtocolWriteFailed(
+                            "Local IP is not IPv4".to_string(),
+                        ))
+                    }
                 };
                 ppp::v2::Addresses::IPv4(ppp::v2::IPv4::new(
                     client_v4,
@@ -45,11 +53,19 @@ pub fn build_proxy_protocol_header(
             } else {
                 let client_v6 = match client_ip {
                     IpAddr::V6(addr) => addr,
-                    _ => return Err("Client IP is not IPv6".into()),
+                    _ => {
+                        return Err(ProxyError::ProxyProtocolWriteFailed(
+                            "Client IP is not IPv6".to_string(),
+                        ))
+                    }
                 };
                 let local_v6 = match local_ip {
                     IpAddr::V6(addr) => addr,
-                    _ => return Err("Local IP is not IPv6".into()),
+                    _ => {
+                        return Err(ProxyError::ProxyProtocolWriteFailed(
+                            "Local IP is not IPv6".to_string(),
+                        ))
+                    }
                 };
                 ppp::v2::Addresses::IPv6(ppp::v2::IPv6::new(
                     client_v6,
@@ -63,7 +79,8 @@ pub fn build_proxy_protocol_header(
                 ppp::v2::Protocol::Stream,
                 addresses,
             )
-            .build()?;
+            .build()
+            .map_err(|e| ProxyError::ProxyProtocolWriteFailed(e.to_string()))?;
             Ok(header)
         }
     }
