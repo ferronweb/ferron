@@ -21,6 +21,7 @@ pub enum ProxyError {
 }
 
 impl fmt::Display for ProxyError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ProxyError::InvalidUpstreamUrl(u) => write!(f, "Invalid upstream URL: {u}"),
@@ -42,6 +43,7 @@ impl fmt::Display for ProxyError {
 }
 
 impl StdError for ProxyError {
+    #[inline]
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             ProxyError::Io(e) => Some(e),
@@ -53,48 +55,56 @@ impl StdError for ProxyError {
 }
 
 impl From<std::io::Error> for ProxyError {
+    #[inline]
     fn from(e: std::io::Error) -> Self {
         ProxyError::Io(e)
     }
 }
 
 impl From<hyper::Error> for ProxyError {
+    #[inline]
     fn from(e: hyper::Error) -> Self {
         ProxyError::Hyper(e)
     }
 }
 
 impl From<http::Error> for ProxyError {
+    #[inline]
     fn from(e: http::Error) -> Self {
         ProxyError::Http(e)
     }
 }
 
 impl From<http::uri::InvalidUri> for ProxyError {
+    #[inline]
     fn from(e: http::uri::InvalidUri) -> Self {
         ProxyError::RequestConstructError(e.to_string())
     }
 }
 
 impl From<http::header::InvalidHeaderValue> for ProxyError {
+    #[inline]
     fn from(e: http::header::InvalidHeaderValue) -> Self {
         ProxyError::RequestConstructError(e.to_string())
     }
 }
 
 impl From<String> for ProxyError {
+    #[inline]
     fn from(s: String) -> Self {
         ProxyError::Other(s)
     }
 }
 
 impl From<&str> for ProxyError {
+    #[inline]
     fn from(s: &str) -> Self {
         ProxyError::Other(s.to_string())
     }
 }
 
 impl From<Box<dyn StdError + Send + Sync>> for ProxyError {
+    #[inline]
     fn from(e: Box<dyn StdError + Send + Sync>) -> Self {
         ProxyError::Other(e.to_string())
     }
@@ -102,6 +112,7 @@ impl From<Box<dyn StdError + Send + Sync>> for ProxyError {
 
 impl ProxyError {
     /// Machine-friendly error type identifier.
+    #[inline]
     pub fn error_type(&self) -> &'static str {
         match self {
             ProxyError::InvalidUpstreamUrl(_) => "invalid_upstream_url",
@@ -120,6 +131,7 @@ impl ProxyError {
     }
 
     /// Short human-readable summary suitable for log.summary.
+    #[inline]
     pub fn summary(&self) -> String {
         match self {
             ProxyError::InvalidUpstreamUrl(u) => {
@@ -146,6 +158,7 @@ impl ProxyError {
     }
 
     /// Optional HTTP status hint for mapping errors to builtin responses.
+    #[inline]
     pub fn http_status_hint(&self) -> Option<StatusCode> {
         match self {
             ProxyError::ConnectFailedUnavailable(_) => Some(StatusCode::SERVICE_UNAVAILABLE),
