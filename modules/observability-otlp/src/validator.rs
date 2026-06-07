@@ -263,7 +263,9 @@ fn validate_sampling_directive(
                                         Err(err)?;
                                     }
                                     // First arg must be a recognized match type
-                                    if let Some(match_type) = rule_entry.args.first().and_then(|v| v.as_str()) {
+                                    if let Some(match_type) =
+                                        rule_entry.args.first().and_then(|v| v.as_str())
+                                    {
                                         match match_type {
                                             "exact" | "prefix" => {
                                                 // Must have 3 args (match_type, attribute, value)
@@ -315,7 +317,9 @@ fn validate_sampling_directive(
         }
         None => {
             let err: Box<dyn std::error::Error> =
-                "The `sampling` directive requires a mode argument".to_string().into();
+                "The `sampling` directive requires a mode argument"
+                    .to_string()
+                    .into();
             Err(err)?;
         }
     }

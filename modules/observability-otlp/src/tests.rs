@@ -691,12 +691,14 @@ mod sampling_tests {
     use ferron_core::config::{
         ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
     };
-    use opentelemetry::{KeyValue, trace::TraceId};
+    use opentelemetry::{trace::TraceId, KeyValue};
     use opentelemetry_sdk::trace::SamplingDecision;
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    fn make_config(directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>) -> ServerConfigurationBlock {
+    fn make_config(
+        directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    ) -> ServerConfigurationBlock {
         ServerConfigurationBlock {
             directives: Arc::new(directives),
             matchers: HashMap::new(),
@@ -926,14 +928,7 @@ mod sampling_tests {
         assert!(matches!(result.decision, SamplingDecision::Drop));
 
         // Test with no attributes
-        let result = sampler.should_sample(
-            None,
-            trace_id,
-            "test",
-            &SpanKind::Server,
-            &[],
-            &[],
-        );
+        let result = sampler.should_sample(None, trace_id, "test", &SpanKind::Server, &[], &[]);
         assert!(matches!(result.decision, SamplingDecision::Drop));
     }
 

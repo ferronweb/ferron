@@ -216,7 +216,9 @@ fn parse_trace_sampling(children: &ServerConfigurationBlock) -> TraceSamplingCon
 }
 
 /// Parse attribute sampling rules from a `rules { ... }` block.
-fn parse_attribute_sampling_rules(children: &ServerConfigurationBlock) -> Vec<AttributeSamplingRule> {
+fn parse_attribute_sampling_rules(
+    children: &ServerConfigurationBlock,
+) -> Vec<AttributeSamplingRule> {
     let Some(rules_entries) = children.directives.get("rules") else {
         return Vec::new();
     };

@@ -233,27 +233,34 @@ pub async fn request_handler(
                     Cow::Borrowed("http.request.method"),
                     TraceAttributeValue::String(method.as_str().to_string()),
                 ),
-                (Cow::Borrowed("url.path"), TraceAttributeValue::String(path.clone())),
-                (Cow::Borrowed("url.scheme"), TraceAttributeValue::StaticStr(scheme)),
+                (
+                    Cow::Borrowed("url.path"),
+                    TraceAttributeValue::String(path.clone()),
+                ),
+                (
+                    Cow::Borrowed("url.scheme"),
+                    TraceAttributeValue::StaticStr(scheme),
+                ),
                 (
                     Cow::Borrowed("server.address"),
                     TraceAttributeValue::String(server_ip.clone()),
                 ),
-                (Cow::Borrowed("server.port"), TraceAttributeValue::I64(server_port as i64)),
+                (
+                    Cow::Borrowed("server.port"),
+                    TraceAttributeValue::I64(server_port as i64),
+                ),
                 (
                     Cow::Borrowed("client.address"),
                     TraceAttributeValue::String(initial_client_ip_canonical.clone()),
                 ),
             ],
-            attributes: vec![
-                (
-                    "url.full",
-                    TraceAttributeValue::String(request.uri().path_and_query().map_or_else(
-                        || request.uri().path().to_string(),
-                        |path_and_query| path_and_query.to_string(),
-                    )),
-                ),
-            ],
+            attributes: vec![(
+                "url.full",
+                TraceAttributeValue::String(request.uri().path_and_query().map_or_else(
+                    || request.uri().path().to_string(),
+                    |path_and_query| path_and_query.to_string(),
+                )),
+            )],
         }));
     }
 
