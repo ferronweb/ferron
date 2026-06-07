@@ -609,7 +609,7 @@ const MAX_LABEL_VALUE_LEN: usize = 128;
 
 /// Sanitize a metric label value to prevent high-cardinality telemetry poisoning.
 ///
-/// Values longer than 128 characters are replaced with a deterministic hash.
+/// Values longer than 128 characters are replaced with its hash.
 /// Control characters are replaced with `?` to avoid log injection.
 pub(crate) fn sanitize_label_value(s: &str) -> String {
     let s = s.trim();
