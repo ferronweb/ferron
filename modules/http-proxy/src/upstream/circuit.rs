@@ -144,8 +144,23 @@ pub fn try_acquire_circuit_breaker_slot(
         CIRCUIT_BREAKER_STATUS_CLOSED => true,
         CIRCUIT_BREAKER_STATUS_OPEN => {
             {
-                let Some(opened_at) = &*state.opened_at.read() else {
-                    return false;
+                let mut opened_at_ref = state.opened_at.upgradable_read();
+                let opened_at = if let Some(opened_at) = &*opened_at_ref {
+                    opened_at
+                } else {
+                    // This might be a rare edge case, reset the opened_at counter...
+                    opened_at_ref.with_upgraded(|r| {
+                        if r.is_some() {
+                            // Double check, to not overwrite the instant
+                            return;
+                        }
+                        *r = Some(std::time::Instant::now());
+                    });
+                    let Some(opened_at) = &*opened_at_ref else {
+                        // At this point, something else has overwriten the value, so return `false`
+                        return false;
+                    };
+                    opened_at
                 };
 
                 if opened_at.elapsed() < circuit_breaker.open_duration {
