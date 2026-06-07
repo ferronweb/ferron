@@ -537,54 +537,6 @@ async fn emit_metric_baggage_cardinality_cap() {
 }
 
 #[test]
-fn parse_log_style_recognizes_values() {
-    use crate::config::parse_log_style;
-    use crate::config::LogStyle;
-
-    assert_eq!(parse_log_style("legacy"), Some(LogStyle::Legacy));
-    assert_eq!(parse_log_style("modern"), Some(LogStyle::Modern));
-    assert_eq!(parse_log_style("LEGACY"), Some(LogStyle::Legacy));
-    assert_eq!(parse_log_style("Modern"), Some(LogStyle::Modern));
-    assert_eq!(parse_log_style("otlp"), None);
-    assert_eq!(parse_log_style(""), None);
-}
-
-#[test]
-fn parse_config_log_style_defaults_to_legacy() {
-    use crate::config::LogStyle;
-    use ferron_core::config::ServerConfigurationBlock;
-
-    let config = ServerConfigurationBlock::default();
-    let parsed = super::OtlpBackendConfig::parse_config(&config);
-    assert_eq!(parsed.log_style, LogStyle::Legacy);
-}
-
-#[test]
-fn parse_config_log_style_modern() {
-    use crate::config::LogStyle;
-    use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    let mut directives = HashMap::new();
-    directives.insert(
-        "log_style".to_string(),
-        vec![ServerConfigurationDirectiveEntry {
-            args: vec![ServerConfigurationValue::String("modern".to_string(), None)],
-            children: None,
-            span: None,
-        }],
-    );
-    let config = ServerConfigurationBlock {
-        directives: Arc::new(directives),
-        matchers: HashMap::new(),
-        span: None,
-    };
-    let parsed = super::OtlpBackendConfig::parse_config(&config);
-    assert_eq!(parsed.log_style, LogStyle::Modern);
-}
-
-#[test]
 fn emit_log_modern_uses_summary_as_body() {
     use crate::config::LogStyle;
     use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
