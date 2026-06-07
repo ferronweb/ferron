@@ -258,6 +258,7 @@ pub(super) async fn execute_error_pipeline(
             name: Cow::Borrowed("ferron.pipeline.execute_error"),
             parent: parent_span_key.map(|key| Parent::ByKey(key.to_string())),
             trace_context: None,
+            builder_attributes: vec![],
             attributes: vec![(
                 "http.response.status_code",
                 TraceAttributeValue::I64(error_code as i64),

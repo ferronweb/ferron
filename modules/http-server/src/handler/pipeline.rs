@@ -42,6 +42,7 @@ pub async fn execute_pipeline_stages(
             name: Cow::Borrowed("ferron.pipeline.execute"),
             parent: Some(Parent::ByKey(request_span_key.to_string())),
             trace_context: None,
+            builder_attributes: vec![],
             attributes: vec![(
                 "ferron.pipeline.log_prefix",
                 TraceAttributeValue::String(log_prefix.to_string()),

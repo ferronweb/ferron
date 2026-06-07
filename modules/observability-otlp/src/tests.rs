@@ -52,6 +52,7 @@ fn emit_trace_start_span_stores_span_object() {
         name: Cow::Borrowed("test.span"),
         parent: None,
         trace_context: None,
+        builder_attributes: vec![],
         attributes: vec![
             (
                 "http.request.method",
@@ -82,6 +83,7 @@ fn emit_trace_end_span_ends_properly() {
         name: Cow::Borrowed("test.span"),
         parent: None,
         trace_context: None,
+        builder_attributes: vec![],
         attributes: vec![(
             "http.request.method",
             TraceAttributeValue::String("POST".to_string()),
@@ -112,6 +114,7 @@ fn emit_trace_end_span_without_error() {
         name: Cow::Borrowed("test.span"),
         parent: None,
         trace_context: None,
+        builder_attributes: vec![],
         attributes: vec![],
     };
     emit_trace(&provider, &start_event, &correlation, &[]);
@@ -352,6 +355,7 @@ fn emit_trace_promotes_baggage_to_span_attributes() {
             baggage: Some("tenant.id=acme,user.role=admin,other=skip".to_string()),
             sampled: Some(true),
         }),
+        builder_attributes: vec![],
         attributes: vec![],
     };
 
@@ -390,6 +394,7 @@ fn emit_trace_respects_signal_filter_for_baggage() {
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
         }),
+        builder_attributes: vec![],
         attributes: vec![],
     };
 
@@ -673,4 +678,340 @@ fn emit_access_log_modern_smoke() {
         &[],
         LogStyle::Modern,
     );
+}
+
+// ===== Sampling config tests =====
+
+#[cfg(test)]
+mod sampling_tests {
+    use super::*;
+    use crate::config::{
+        AttributeMatcher, AttributeSamplingRule, TraceSamplingConfig, TraceSamplingMode,
+    };
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
+    use opentelemetry::{KeyValue, trace::TraceId};
+    use opentelemetry_sdk::trace::SamplingDecision;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    fn make_config(directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>) -> ServerConfigurationBlock {
+        ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: None,
+        }
+    }
+
+    #[test]
+    fn parse_sampling_default() {
+        let config = ServerConfigurationBlock::default();
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        assert!(parsed.traces.is_none());
+    }
+
+    #[test]
+    fn parse_sampling_always_on() {
+        let mut traces_children = HashMap::new();
+        traces_children.insert(
+            "sampling".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "always_on".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        let traces_block = ServerConfigurationBlock {
+            directives: Arc::new(traces_children),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut top_directives = HashMap::new();
+        top_directives.insert(
+            "traces".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "grpc://localhost:4317".to_string(),
+                    None,
+                )],
+                children: Some(traces_block),
+                span: None,
+            }],
+        );
+        let config = make_config(top_directives);
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        let traces = parsed.traces.unwrap();
+        assert!(matches!(traces.sampling.mode, TraceSamplingMode::AlwaysOn));
+    }
+
+    #[test]
+    fn parse_sampling_parentbased_traceidratio_with_ratio() {
+        let mut ratio_directives = HashMap::new();
+        ratio_directives.insert(
+            "ratio".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Float(0.25, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let ratio_block = ServerConfigurationBlock {
+            directives: Arc::new(ratio_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut traces_children = HashMap::new();
+        traces_children.insert(
+            "sampling".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "parentbased_traceidratio".to_string(),
+                    None,
+                )],
+                children: Some(ratio_block),
+                span: None,
+            }],
+        );
+        let traces_block = ServerConfigurationBlock {
+            directives: Arc::new(traces_children),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut top_directives = HashMap::new();
+        top_directives.insert(
+            "traces".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "grpc://localhost:4317".to_string(),
+                    None,
+                )],
+                children: Some(traces_block),
+                span: None,
+            }],
+        );
+        let config = make_config(top_directives);
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        let traces = parsed.traces.unwrap();
+        assert!(matches!(
+            traces.sampling.mode,
+            TraceSamplingMode::ParentBasedTraceIdRatio { ratio } if (ratio - 0.25).abs() < f64::EPSILON
+        ));
+    }
+
+    #[test]
+    fn parse_sampling_attribute_based() {
+        let mut rule_directives = HashMap::new();
+        rule_directives.insert(
+            "rule".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![
+                    ServerConfigurationValue::String("exact".to_string(), None),
+                    ServerConfigurationValue::String("http.request.method".to_string(), None),
+                    ServerConfigurationValue::String("GET".to_string(), None),
+                ],
+                children: None,
+                span: None,
+            }],
+        );
+        let rules_block = ServerConfigurationBlock {
+            directives: Arc::new(rule_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut rules_directives = HashMap::new();
+        rules_directives.insert(
+            "rules".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(rules_block),
+                span: None,
+            }],
+        );
+        let rules_outer = ServerConfigurationBlock {
+            directives: Arc::new(rules_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut traces_children = HashMap::new();
+        traces_children.insert(
+            "sampling".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "attribute_based".to_string(),
+                    None,
+                )],
+                children: Some(rules_outer),
+                span: None,
+            }],
+        );
+        let traces_block = ServerConfigurationBlock {
+            directives: Arc::new(traces_children),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut top_directives = HashMap::new();
+        top_directives.insert(
+            "traces".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "grpc://localhost:4317".to_string(),
+                    None,
+                )],
+                children: Some(traces_block),
+                span: None,
+            }],
+        );
+        let config = make_config(top_directives);
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        let traces = parsed.traces.unwrap();
+        match traces.sampling.mode {
+            TraceSamplingMode::AttributeBased { rules } => {
+                assert_eq!(rules.len(), 1);
+                assert_eq!(rules[0].attribute, "http.request.method");
+                assert!(matches!(rules[0].matcher, AttributeMatcher::Exact(ref v) if v == "GET"));
+            }
+            _ => panic!("Expected AttributeBased sampling mode"),
+        }
+    }
+
+    #[test]
+    fn build_sampler_always_on() {
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AlwaysOn,
+        };
+        let _sampler = crate::providers::build_sampler(&config);
+        // Just verify it doesn't panic
+    }
+
+    #[test]
+    fn build_sampler_attribute_based() {
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AttributeBased {
+                rules: vec![AttributeSamplingRule {
+                    attribute: "http.request.method".to_string(),
+                    matcher: AttributeMatcher::Exact("GET".to_string()),
+                }],
+            },
+        };
+        let sampler = crate::providers::build_sampler(&config);
+
+        use opentelemetry::trace::SpanKind;
+
+        let trace_id = TraceId::from_bytes([1u8; 16]);
+
+        // Test with matching attribute
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("http.request.method", "GET")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
+
+        // Test with non-matching attribute
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("http.request.method", "POST")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::Drop));
+
+        // Test with no attributes
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::Drop));
+    }
+
+    #[test]
+    fn build_sampler_attribute_based_exists() {
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AttributeBased {
+                rules: vec![AttributeSamplingRule {
+                    attribute: "error.type".to_string(),
+                    matcher: AttributeMatcher::Exists,
+                }],
+            },
+        };
+        let sampler = crate::providers::build_sampler(&config);
+
+        use opentelemetry::trace::SpanKind;
+
+        let trace_id = TraceId::from_bytes([1u8; 16]);
+
+        // Test with attribute present
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("error.type", "500")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
+
+        // Test with attribute absent
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("other.key", "value")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::Drop));
+    }
+
+    #[test]
+    fn build_sampler_attribute_based_prefix() {
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AttributeBased {
+                rules: vec![AttributeSamplingRule {
+                    attribute: "url.path".to_string(),
+                    matcher: AttributeMatcher::Prefix("/api/".to_string()),
+                }],
+            },
+        };
+        let sampler = crate::providers::build_sampler(&config);
+
+        use opentelemetry::trace::SpanKind;
+
+        let trace_id = TraceId::from_bytes([1u8; 16]);
+
+        // Test with matching prefix
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("url.path", "/api/users")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
+
+        // Test with non-matching prefix
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("url.path", "/health")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::Drop));
+    }
 }

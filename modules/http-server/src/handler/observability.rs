@@ -58,6 +58,7 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
             parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
             trace_context: None,
+            builder_attributes: vec![],
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
@@ -90,6 +91,7 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
             parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
             trace_context: None,
+            builder_attributes: vec![],
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),

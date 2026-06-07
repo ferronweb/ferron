@@ -245,11 +245,13 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .traces
         .as_ref()
         .map(|s| {
+            let sampling_key = format!("{:?}", s.sampling.mode);
             format!(
-                "{}|{}|{}",
+                "{}|{}|{}|{}",
                 s.endpoint,
                 s.protocol,
-                s.authorization.as_deref().unwrap_or("")
+                s.authorization.as_deref().unwrap_or(""),
+                sampling_key,
             )
         })
         .unwrap_or_default();

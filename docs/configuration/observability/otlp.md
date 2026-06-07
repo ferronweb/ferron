@@ -47,6 +47,7 @@ Each signal sub-block supports these nested directives:
 | --- | --- | --- | --- |
 | `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
+| `sampling` | `<string>` | Trace sampling mode. Only applicable to `traces` blocks. See [Trace sampling](#trace-sampling). | `parentbased_always_on` |
 
 ### Global options
 
@@ -61,18 +62,20 @@ Each signal sub-block supports these nested directives:
 The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry attributes for logs, metrics, and traces. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your telemetry signals without custom instrumentation.
 
 ```ferron
-observability {
-    provider otlp
+{
+    observability {
+        provider otlp
 
-    traces "https://collector:4317/v1/traces" {
-        protocol "grpc"
-    }
+        traces "https://collector:4317/v1/traces" {
+            protocol "grpc"
+        }
 
-    baggage {
-        key "tenant.id" {
-            attribute "tenant.id"
-            signals traces logs
-            max_distinct 1000
+        baggage {
+            key "tenant.id" {
+                attribute "tenant.id"
+                signals traces logs
+                max_distinct 1000
+            }
         }
     }
 }
@@ -86,6 +89,97 @@ Each `key` entry configures one baggage key to promote:
 | `attribute` | `<string>` | The OpenTelemetry attribute name to use. | same as the baggage key |
 | `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
 | `max_distinct` | `<number>` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | no cap |
+
+### Trace sampling
+
+The `sampling` sub-directive inside a `traces` block controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
+
+| Mode | Description |
+| --- | --- |
+| `always_on` | Sample every trace. Useful for development. |
+| `always_off` | Sample no traces. Effectively disables trace export. |
+| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
+| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
+| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
+| `attribute_based` | Sample based on span attributes set at creation time. |
+
+```ferron
+{
+    observability {
+        provider otlp
+
+        traces "https://collector:4317/v1/traces" {
+            protocol "grpc"
+
+            # Sample 10% of root spans, respect parent for child spans
+            sampling "parentbased_traceidratio" {
+                ratio 0.1
+            }
+        }
+    }
+}
+```
+
+#### Ratio-based sampling
+
+The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-directive (a float between `0.0` and `1.0`):
+
+```ferron
+{
+    observability {
+        provider otlp
+
+        traces "https://collector:4317/v1/traces" {
+            sampling "parentbased_traceidratio" {
+                ratio 0.05   # 5% of root spans
+            }
+        }
+    }
+}
+```
+
+Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
+
+#### Attribute-based sampling
+
+The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
+
+```ferron
+{
+    observability {
+        provider otlp
+
+        traces "https://collector:4317/v1/traces" {
+            sampling "attribute_based" {
+                rules {
+                    # Always sample spans with http.request.method == "POST"
+                    rule "exact" "http.request.method" "POST"
+
+                    # Sample spans where url.path starts with "/api/"
+                    rule "prefix" "url.path" "/api/"
+
+                    # Sample spans that have an "error.type" attribute (any value)
+                    rule "exists" "error.type"
+                }
+            }
+        }
+    }
+}
+```
+
+Each `rule` takes 2 or 3 arguments:
+
+| Argument | Description |
+| --- | --- |
+| `<match_type>` | One of `exact`, `prefix`, or `exists`. |
+| `<attribute>` | The span attribute key to match. |
+| `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
+
+A span is sampled if **any** rule matches. If no rules match, the span is dropped.
+
+:::note
+Attribute-based sampling inspects attributes set on the `SpanBuilder` before the span is built. In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions.
+:::
 
 ### Log style
 
@@ -212,6 +306,49 @@ example.com {
 
         traces "https://localhost:4317/v1/traces" {
             protocol "grpc"
+        }
+    }
+}
+```
+
+### Production trace sampling
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+        service_name "ferron-production"
+
+        traces "https://collector:4317/v1/traces" {
+            protocol "grpc"
+
+            # Sample 10% of root spans, respect parent for child spans
+            sampling "parentbased_traceidratio" {
+                ratio 0.1
+            }
+        }
+    }
+}
+```
+
+### Attribute-based trace sampling
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+        service_name "ferron-production"
+
+        traces "https://collector:4317/v1/traces" {
+            protocol "grpc"
+
+            # Always sample POST requests and /api/ routes
+            sampling "attribute_based" {
+                rules {
+                    rule "exact" "http.request.method" "POST"
+                    rule "prefix" "url.path" "/api/"
+                }
+            }
         }
     }
 }
@@ -346,6 +483,7 @@ Most commercial APM solutions support OTLP:
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
 - **Baggage propagation** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
 - **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into telemetry attributes. For metrics, always set `max_distinct` on keys with unbounded values to prevent high-cardinality label explosion. Values exceeding the distinct cap are automatically hashed.
+- **Trace sampling** - the default sampling mode (`parentbased_always_on`) samples all traces. In production, use `parentbased_traceidratio` with an appropriate ratio to control trace volume. For attribute-based sampling, ensure the attributes you match on are set in the `traces` block's builder attributes (HTTP request method, URL path, scheme, server address/port, client address are available).
 - **Log style** - the `log_style modern` directive changes the body and attribute shape of OTLP log records, including how access logs are mapped onto OTEL semantic conventions. Existing file and console log output is unchanged. The `format` directive is ignored for log records in modern mode.
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.

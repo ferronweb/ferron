@@ -171,11 +171,16 @@ pub enum Parent {
 #[derive(Clone)]
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
+    ///
+    /// `builder_attributes` are set on the `SpanBuilder` **before** the span is
+    /// built, making them visible to the sampler. `attributes` are set **after**
+    /// the span is built and are not visible to the sampler.
     StartSpan {
         key: Cow<'static, str>,
         name: Cow<'static, str>,
         parent: Option<Parent>,
         trace_context: Option<EventTraceContext>,
+        builder_attributes: Vec<(Cow<'static, str>, TraceAttributeValue)>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },
     /// End the span with the given name, optional error description, and final attributes.

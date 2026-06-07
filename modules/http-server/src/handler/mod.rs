@@ -62,6 +62,7 @@ pub async fn bad_request_handler(
             name: Cow::Borrowed("ferron.request"),
             parent: None,
             trace_context: None,
+            builder_attributes: vec![],
             attributes: vec![(
                 "ferron.http.request.stage",
                 TraceAttributeValue::StaticStr("pre_handler"),
@@ -227,22 +228,24 @@ pub async fn request_handler(
             name: Cow::Borrowed("ferron.request"),
             parent: external_parent.clone(),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            attributes: vec![
+            builder_attributes: vec![
                 (
-                    "http.request.method",
+                    Cow::Borrowed("http.request.method"),
                     TraceAttributeValue::String(method.as_str().to_string()),
                 ),
-                ("url.path", TraceAttributeValue::String(path.clone())),
-                ("url.scheme", TraceAttributeValue::StaticStr(scheme)),
+                (Cow::Borrowed("url.path"), TraceAttributeValue::String(path.clone())),
+                (Cow::Borrowed("url.scheme"), TraceAttributeValue::StaticStr(scheme)),
                 (
-                    "server.address",
+                    Cow::Borrowed("server.address"),
                     TraceAttributeValue::String(server_ip.clone()),
                 ),
-                ("server.port", TraceAttributeValue::I64(server_port as i64)),
+                (Cow::Borrowed("server.port"), TraceAttributeValue::I64(server_port as i64)),
                 (
-                    "client.address",
+                    Cow::Borrowed("client.address"),
                     TraceAttributeValue::String(initial_client_ip_canonical.clone()),
                 ),
+            ],
+            attributes: vec![
                 (
                     "url.full",
                     TraceAttributeValue::String(request.uri().path_and_query().map_or_else(

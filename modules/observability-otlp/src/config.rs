@@ -25,11 +25,63 @@ pub fn parse_log_style(value: &str) -> Option<LogStyle> {
     }
 }
 
+/// Sampling mode for traces.
+#[derive(Debug, Clone)]
+pub enum TraceSamplingMode {
+    /// Sample every trace.
+    AlwaysOn,
+    /// Sample no traces.
+    AlwaysOff,
+    /// Respect the parent span's sampling decision; AlwaysOn for root spans.
+    ParentBasedAlwaysOn,
+    /// Sample a fixed ratio of traces based on trace ID.
+    TraceIdRatioBased { ratio: f64 },
+    /// Parent-based with TraceIdRatioBased for root spans.
+    ParentBasedTraceIdRatio { ratio: f64 },
+    /// Sample based on span attributes set before the span is built.
+    AttributeBased { rules: Vec<AttributeSamplingRule> },
+}
+
+/// A rule for attribute-based sampling.
+#[derive(Debug, Clone)]
+pub struct AttributeSamplingRule {
+    /// The attribute key to match against.
+    pub attribute: String,
+    /// How to match the attribute value.
+    pub matcher: AttributeMatcher,
+}
+
+/// Matcher for attribute-based sampling rules.
+#[derive(Debug, Clone)]
+pub enum AttributeMatcher {
+    /// Exact string match.
+    Exact(String),
+    /// Prefix match.
+    Prefix(String),
+    /// Match if the attribute exists (any value).
+    Exists,
+}
+
+/// Trace sampling configuration.
+#[derive(Debug, Clone)]
+pub struct TraceSamplingConfig {
+    pub mode: TraceSamplingMode,
+}
+
+impl Default for TraceSamplingConfig {
+    fn default() -> Self {
+        Self {
+            mode: TraceSamplingMode::ParentBasedAlwaysOn,
+        }
+    }
+}
+
 /// Per-host configuration for a single OTLP signal (logs, metrics, or traces)
 pub struct SignalConfig {
     pub endpoint: String,
     pub protocol: String,
     pub authorization: Option<String>,
+    pub sampling: TraceSamplingConfig,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -96,12 +148,119 @@ impl SignalConfig {
             .and_then(|v| v.as_str())
             .map(|s: &str| s.to_string());
 
+        let sampling = if name == "traces" {
+            parse_trace_sampling(children)
+        } else {
+            TraceSamplingConfig::default()
+        };
+
         Some(Self {
             endpoint,
             protocol,
             authorization,
+            sampling,
         })
     }
+}
+
+/// Parse the `sampling` directive from a traces signal block.
+///
+/// Expected format:
+/// ```text
+/// sampling "parentbased_traceidratio" {
+///     ratio 0.1
+/// }
+/// ```
+fn parse_trace_sampling(children: &ServerConfigurationBlock) -> TraceSamplingConfig {
+    let Some(sampling_entries) = children.directives.get("sampling") else {
+        return TraceSamplingConfig::default();
+    };
+    let Some(entry) = sampling_entries.first() else {
+        return TraceSamplingConfig::default();
+    };
+
+    let mode = match entry.args.first().and_then(|v| v.as_str()) {
+        Some("always_on") => TraceSamplingMode::AlwaysOn,
+        Some("always_off") => TraceSamplingMode::AlwaysOff,
+        Some("parentbased_always_on") => TraceSamplingMode::ParentBasedAlwaysOn,
+        Some("traceidratio") => {
+            let ratio = entry
+                .children
+                .as_ref()
+                .and_then(|c| c.get_value("ratio"))
+                .and_then(|v| v.as_float())
+                .unwrap_or(1.0);
+            TraceSamplingMode::TraceIdRatioBased { ratio }
+        }
+        Some("parentbased_traceidratio") => {
+            let ratio = entry
+                .children
+                .as_ref()
+                .and_then(|c| c.get_value("ratio"))
+                .and_then(|v| v.as_float())
+                .unwrap_or(1.0);
+            TraceSamplingMode::ParentBasedTraceIdRatio { ratio }
+        }
+        Some("attribute_based") => {
+            let rules = entry
+                .children
+                .as_ref()
+                .map(parse_attribute_sampling_rules)
+                .unwrap_or_default();
+            TraceSamplingMode::AttributeBased { rules }
+        }
+        _ => return TraceSamplingConfig::default(),
+    };
+
+    TraceSamplingConfig { mode }
+}
+
+/// Parse attribute sampling rules from a `rules { ... }` block.
+fn parse_attribute_sampling_rules(children: &ServerConfigurationBlock) -> Vec<AttributeSamplingRule> {
+    let Some(rules_entries) = children.directives.get("rules") else {
+        return Vec::new();
+    };
+    let Some(rules_block) = rules_entries.first().and_then(|e| e.children.as_ref()) else {
+        return Vec::new();
+    };
+
+    let Some(rule_entries) = rules_block.directives.get("rule") else {
+        return Vec::new();
+    };
+
+    let mut rules = Vec::new();
+    for entry in rule_entries {
+        let Some(match_type) = entry.args.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(attribute) = entry.args.get(1).and_then(|v| v.as_str()) else {
+            continue;
+        };
+
+        let matcher = match match_type {
+            "exact" => {
+                let Some(value) = entry.args.get(2).and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                AttributeMatcher::Exact(value.to_string())
+            }
+            "prefix" => {
+                let Some(value) = entry.args.get(2).and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                AttributeMatcher::Prefix(value.to_string())
+            }
+            "exists" => AttributeMatcher::Exists,
+            _ => continue,
+        };
+
+        rules.push(AttributeSamplingRule {
+            attribute: attribute.to_string(),
+            matcher,
+        });
+    }
+
+    rules
 }
 
 /// Parse the `baggage` directive from the OTLP config block.

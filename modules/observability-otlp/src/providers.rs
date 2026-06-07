@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use dashmap::DashMap;
@@ -8,14 +9,100 @@ use ferron_observability::{
     MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
     TraceEvent,
 };
-use opentelemetry::{baggage::BaggageExt, logs::AnyValue, trace::TracerProvider, KeyValue};
+use opentelemetry::{
+    baggage::BaggageExt,
+    logs::AnyValue,
+    trace::{Link, SpanKind, TraceContextExt, TraceId, TracerProvider},
+    KeyValue,
+};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
-use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::{
+    trace::{Sampler, SamplingDecision, SamplingResult, ShouldSample, SdkTracerProvider},
+    Resource,
+};
 
 use crate::{
     client::{build_tonic_channel, HyperOtelClient},
-    config::{LogStyle, OtlpBackendConfig, SignalConfig},
+    config::{AttributeMatcher, AttributeSamplingRule, LogStyle, OtlpBackendConfig, SignalConfig, TraceSamplingConfig, TraceSamplingMode},
 };
+
+/// An attribute-based sampler that makes sampling decisions based on span
+/// attributes provided at span creation time (via `builder_attributes`).
+#[derive(Debug, Clone)]
+struct AttributeBasedSampler {
+    rules: Vec<AttributeSamplingRule>,
+}
+
+impl ShouldSample for AttributeBasedSampler {
+    fn should_sample(
+        &self,
+        parent_context: Option<&opentelemetry::Context>,
+        _trace_id: TraceId,
+        _name: &str,
+        _span_kind: &SpanKind,
+        attributes: &[KeyValue],
+        _links: &[Link],
+    ) -> SamplingResult {
+        let decision = if self.rules.iter().any(|rule| {
+            match &rule.matcher {
+                AttributeMatcher::Exact(expected) => attributes.iter().any(|kv| {
+                    if kv.key.as_str() != rule.attribute.as_str() {
+                        return false;
+                    }
+                    match &kv.value {
+                        opentelemetry::Value::String(s) => s.as_ref() == expected.as_str(),
+                        _ => false,
+                    }
+                }),
+                AttributeMatcher::Prefix(prefix) => attributes.iter().any(|kv| {
+                    if kv.key.as_str() != rule.attribute.as_str() {
+                        return false;
+                    }
+                    match &kv.value {
+                        opentelemetry::Value::String(s) => s.as_ref().starts_with(prefix.as_str()),
+                        _ => false,
+                    }
+                }),
+                AttributeMatcher::Exists => {
+                    attributes.iter().any(|kv| kv.key.as_str() == rule.attribute.as_str())
+                }
+            }
+        }) {
+            SamplingDecision::RecordAndSample
+        } else {
+            SamplingDecision::Drop
+        };
+
+        SamplingResult {
+            decision,
+            attributes: vec![],
+                trace_state: parent_context
+                    .map(|cx| cx.span().span_context().trace_state().clone())
+                    .unwrap_or_default(),
+        }
+    }
+}
+
+/// Build an OpenTelemetry `ShouldSample` implementation from the sampling config.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn build_sampler(config: &TraceSamplingConfig) -> Box<dyn ShouldSample> {
+    match &config.mode {
+        TraceSamplingMode::AlwaysOn => Box::new(Sampler::AlwaysOn),
+        TraceSamplingMode::AlwaysOff => Box::new(Sampler::AlwaysOff),
+        TraceSamplingMode::ParentBasedAlwaysOn => {
+            Box::new(Sampler::ParentBased(Box::new(Sampler::AlwaysOn)))
+        }
+        TraceSamplingMode::TraceIdRatioBased { ratio } => {
+            Box::new(Sampler::TraceIdRatioBased(*ratio))
+        }
+        TraceSamplingMode::ParentBasedTraceIdRatio { ratio } => Box::new(Sampler::ParentBased(
+            Box::new(Sampler::TraceIdRatioBased(*ratio)),
+        )),
+        TraceSamplingMode::AttributeBased { rules } => {
+            Box::new(AttributeBasedSampler { rules: rules.clone() })
+        }
+    }
+}
 
 /// Correlation context: tracks active spans per host sink instance.
 pub struct CorrelationContext {
@@ -322,7 +409,7 @@ fn build_traces_provider(
     no_verify: &bool,
     resource: &Resource,
     authorization: &Option<String>,
-) -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
+) -> Option<SdkTracerProvider> {
     use opentelemetry_otlp::SpanExporter;
     use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 
@@ -383,13 +470,16 @@ fn build_traces_provider(
             .ok()?,
     };
 
+    let sampler = build_sampler(&sig.sampling);
+
     Some(
-        opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        SdkTracerProvider::builder()
             .with_span_processor(
                 BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
             )
             .with_id_generator(RequestedIdGenerator)
             .with_resource(resource.clone())
+            .with_sampler(sampler)
             .build(),
     )
 }
@@ -826,7 +916,7 @@ pub fn emit_metric(
 }
 
 pub fn emit_trace(
-    provider: &opentelemetry_sdk::trace::SdkTracerProvider,
+    provider: &SdkTracerProvider,
     event: &TraceEvent,
     correlation: &CorrelationContext,
     promotions: &[BaggageKeyPromotion],
@@ -841,9 +931,31 @@ pub fn emit_trace(
             name,
             parent,
             trace_context,
+            builder_attributes,
             attributes,
         } => {
-            let builder = SpanBuilder::from_name(name.clone());
+            let mut builder = SpanBuilder::from_name(name.clone());
+
+            // Set SpanKind::Server for HTTP request spans
+            if name.as_ref() == "ferron.request" {
+                builder = builder.with_kind(SpanKind::Server);
+            }
+
+            // Set builder-level attributes (visible to the sampler)
+            if !builder_attributes.is_empty() {
+                let otel_attrs: Vec<KeyValue> = builder_attributes
+                    .iter()
+                    .map(|(k, v)| {
+                        let key: &'static str = match k {
+                            Cow::Borrowed(s) => s,
+                            Cow::Owned(s) => leak_string(s.clone()),
+                        };
+                        trace_kv(key, v)
+                    })
+                    .collect();
+                builder = builder.with_attributes(otel_attrs);
+            }
+
             let requested_ids = trace_context.as_ref().and_then(parse_requested_ids);
             let mut span = with_requested_ids(requested_ids, || {
                 if let Some(parent_val) = parent {
@@ -857,7 +969,7 @@ pub fn emit_trace(
                 }
             });
 
-            // Set semantic convention attributes
+            // Set semantic convention attributes (post-build, not visible to sampler)
             for (key, value) in attributes {
                 span.set_attribute(trace_kv(key, value));
             }
@@ -1092,4 +1204,11 @@ fn trace_kv(key: &'static str, value: &TraceAttributeValue) -> KeyValue {
         TraceAttributeValue::I64(i) => KeyValue::new(key, *i),
         TraceAttributeValue::F64(f) => KeyValue::new(key, *f),
     }
+}
+
+/// Leak a String to get a `&'static str`. Used for converting owned Cow keys
+/// to static str for `trace_kv`. The leaked memory is acceptable because
+/// provider caches live for the lifetime of the server.
+fn leak_string(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
 }
