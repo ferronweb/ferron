@@ -13,7 +13,7 @@ anyhow = "1.0.98"
 arc-swap = "1.8.0"
 send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
 backtrace = "0.3.76"
-hashlink = "0.11.0"
+hashlink = "0.12.0"
 chrono = "0.4.41"
 fancy-regex = "0.18.0"
 glob = "0.3.2"
