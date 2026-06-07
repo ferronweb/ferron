@@ -350,6 +350,14 @@ Most commercial APM solutions support OTLP:
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### `max_distinct` high cardinality prevention
+
+- **No `max_distinct` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
+
 ## See also
 
 - [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration

@@ -165,6 +165,12 @@ fn validate_baggage_block(
                             Err(err)?;
                         }
                     }
+                } else {
+                    // `max_distinct` not explicitly set, emit best practice violation warning
+                    validator_ctx.add_best_practice_violation(
+                        "`max_distinct` not explicitly set, high cardinality might be allowed.",
+                        children.span.clone(),
+                    );
                 }
 
                 ferron_core::check_unused_subdirectives!(
