@@ -498,6 +498,22 @@ example.com {
 | `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open |
 | `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
 
+### Logs
+
+- **`ERROR`**: logged when a proxy configuration error occurs during parsing. The message includes the error details.
+- **`ERROR`**: logged when a proxy execution error occurs (e.g., connection failure, transport error). The message includes the error type and details.
+- **`WARN`**: logged when an upstream is marked unhealthy by active health checks. The message includes the upstream address and failure reason.
+- **`INFO`**: logged when an upstream recovers after consecutive successful health check probes.
+
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Reverse proxy config error | ERROR | `error.message` (string) — configuration error details |
+| Proxy error             | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details |
+| Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
+| Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
+
 ## Notes and troubleshooting
 
 - If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).

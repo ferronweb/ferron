@@ -180,7 +180,18 @@ The cache module emits the following metrics:
 - `DEBUG` — logged when Ferron skips cache storage because `X-LiteSpeed-Vary: value=...` is not supported yet.
 - `DEBUG` — logged when Ferron skips cache storage because the response body exceeds `cache.max_response_size`.
 - `DEBUG` — logged when Ferron performs a purge through `X-LiteSpeed-Purge`.
+- `DEBUG` — logged when Ferron performs a purge through `PURGE` HTTP method.
 - `DEBUG` — logged when Ferron receives an LSCache `stale` purge marker and falls back to a hard purge.
+
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Skipping cache store because response body exceeded maximum size | DEBUG | - |
+| Skipping cache store because X-LiteSpeed-Vary is not supported yet | DEBUG | - |
+| Cache purged via LSCache controls | DEBUG | `cache.purged.count` (purged cache entries) |
+| Cache purged via PURGE method | DEBUG | `cache.purged.count` (purged cache entries) |
+| LSCache stale purge marker ignored | DEBUG | - |
 
 ## Notes and troubleshooting
 

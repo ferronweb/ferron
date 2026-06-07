@@ -112,6 +112,12 @@ When used alongside an authentication module (e.g., `http-basicauth`), Ferron au
 
 - **`ERROR`**: logged when a connection to the SCGI backend fails. The message includes the connection error details.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| SCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
+
 ## Examples
 
 ### Basic SCGI backend

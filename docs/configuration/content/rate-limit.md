@@ -135,6 +135,12 @@ The rate limiting module emits the following metrics:
 - **`DEBUG`**: logged when a rate limit bucket is exhausted for a key.
 - **`WARN`**: logged when the registry reaches `max_buckets` capacity and backpressure is applied.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |
+
 ## Notes and troubleshooting
 
 - Requests where the key cannot be extracted (e.g. missing header) skip that rule.

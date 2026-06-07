@@ -178,6 +178,12 @@ The abuse protection module emits the following metrics:
 
 - **`DEBUG`**: logged when a ban rejection occurs, including the banned IP address and reason.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
+
 ## Notes and troubleshooting
 
 - Bans are stored in memory and are **not** preserved across server restarts.

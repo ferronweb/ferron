@@ -120,6 +120,12 @@ Rewrite rules are applied after client IP resolution and before reverse proxying
 
 When `rewrite_log` is enabled, each rewrite operation is logged to the error log at `INFO` level.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| URL rewritten         | INFO  | `ferron.rewrite.from` (string) — original request path + query string, `ferron.rewrite.to` (string) — rewritten path + query string |
+
 ## Notes and troubleshooting
 
 - If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect. Rules with `last true` stop further processing.

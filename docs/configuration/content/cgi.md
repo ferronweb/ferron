@@ -174,6 +174,12 @@ Additional variables set by `environment` directives override any automatically 
 
 - **`WARN`**: logged when a CGI script exits with a non-zero status and produces output on stderr. The message includes the trimmed stderr content.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| CGI errors on stderr  | WARN  | `error.message` (string) — trimmed stderr output from the CGI process |
+
 ## Examples
 
 ### PHP with a custom PHP-CGI binary

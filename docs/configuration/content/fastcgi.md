@@ -270,6 +270,13 @@ When used alongside an authentication module (e.g., `http-basicauth`), Ferron au
 - **`ERROR`**: logged when a connection to the FastCGI backend fails. The message includes the connection error details.
 - **`WARN`**: logged when a FastCGI backend produces output on stderr. The message includes the trimmed stderr content.
 
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| FastCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
+| FastCGI errors on stderr  | WARN  | `error.message` (string) — trimmed stderr output from the FastCGI process |
+
 ## Examples
 
 ### PHP with PHP-FPM over a Unix socket
