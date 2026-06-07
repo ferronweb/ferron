@@ -1,9 +1,6 @@
 use ferron_core::{
     config::{
-        validator::{
-            validate_scoped_block_flat, ConfigurationValidator,
-            ConfigurationValidatorDiagnosticKind,
-        },
+        validator::{validate_scoped_block_flat, ConfigurationValidator},
         ServerConfigurationValue,
     },
     validate_directive, validate_nested,
@@ -64,20 +61,16 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
         });
 
         // When `log_style modern` is set, the `format` directive is ignored.
-        // Emit a best-practice warning so the operator knows.
+        // Error out, so the operator knows.
         let log_style_is_modern = config
             .get_value("log_style")
             .and_then(|v| v.as_str())
             .and_then(crate::config::parse_log_style)
             == Some(crate::config::LogStyle::Modern);
         if log_style_is_modern && config.directives.contains_key("format") {
-            validator_ctx
-                .diagnostics
-                .push(validator_ctx.create_diagnostic(
-                    ConfigurationValidatorDiagnosticKind::BestPracticeViolation,
-                    "The `format` directive is ignored when `log_style` is `modern`".to_string(),
-                    None,
-                ));
+            let err: Box<dyn std::error::Error> =
+                "The `format` directive would be ignored when `log_style` is `modern`".into();
+            Err(err)?;
         }
 
         // Validate `baggage { key "..." { ... } }` block
