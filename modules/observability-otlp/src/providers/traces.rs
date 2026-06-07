@@ -40,13 +40,7 @@ pub(crate) fn emit_trace(
             if !builder_attributes.is_empty() {
                 let otel_attrs: Vec<KeyValue> = builder_attributes
                     .iter()
-                    .map(|(k, v)| {
-                        let key: &'static str = match k {
-                            Cow::Borrowed(s) => s,
-                            Cow::Owned(s) => leak_string(s.clone()),
-                        };
-                        trace_kv(key, v)
-                    })
+                    .map(|(k, v)| trace_kv(k.clone(), v))
                     .collect();
                 builder = builder.with_attributes(otel_attrs);
             }
@@ -68,7 +62,7 @@ pub(crate) fn emit_trace(
 
             // Set semantic convention attributes (post-build, not visible to sampler)
             for (key, value) in attributes {
-                span.set_attribute(trace_kv(key, value));
+                span.set_attribute(trace_kv((*key).into(), value));
             }
 
             // Promote configured baggage keys into span attributes
@@ -102,7 +96,9 @@ pub(crate) fn emit_trace(
             if let Some(mut active_span) = correlation.remove_span(key) {
                 // Apply any final attributes (e.g. http.response.status_code)
                 for (key, value) in attributes {
-                    active_span.span.set_attribute(trace_kv(key, value));
+                    active_span
+                        .span
+                        .set_attribute(trace_kv((*key).into(), value));
                 }
                 if let Some(error_desc) = error {
                     active_span
@@ -116,7 +112,7 @@ pub(crate) fn emit_trace(
 }
 
 /// Convert a TraceAttributeValue into an OTEL KeyValue.
-fn trace_kv(key: &'static str, value: &TraceAttributeValue) -> KeyValue {
+fn trace_kv(key: Cow<'static, str>, value: &TraceAttributeValue) -> KeyValue {
     match value {
         TraceAttributeValue::String(s) => KeyValue::new(key, s.clone()),
         TraceAttributeValue::StaticStr(s) => KeyValue::new(key, *s),
@@ -124,11 +120,4 @@ fn trace_kv(key: &'static str, value: &TraceAttributeValue) -> KeyValue {
         TraceAttributeValue::I64(i) => KeyValue::new(key, *i),
         TraceAttributeValue::F64(f) => KeyValue::new(key, *f),
     }
-}
-
-/// Leak a String to get a `&'static str`. Used for converting owned Cow keys
-/// to static str for `trace_kv`. The leaked memory is acceptable because
-/// provider caches live for the lifetime of the server.
-fn leak_string(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
 }

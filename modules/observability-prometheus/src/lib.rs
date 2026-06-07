@@ -1,6 +1,7 @@
 mod endpoint;
 mod validator;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -26,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use crate::endpoint::endpoint_listener_fn;
 
 type PrometheusInstrumentCache =
-    HashMap<(&'static str, Vec<(&'static str, String)>), CachedInstrument>;
+    HashMap<(&'static str, Vec<(Cow<'static, str>, String)>), CachedInstrument>;
 static DROPPED_EVENT: Once = Once::new();
 
 /// Shared configuration for an Prometheus backend instance
@@ -350,7 +351,7 @@ fn emit_metric(
         }
     }
 
-    let mut attrs: Vec<(&'static str, String)> = event
+    let mut attrs: Vec<(Cow<'static, str>, String)> = event
         .attributes
         .iter()
         .map(|(k, v)| {
@@ -367,7 +368,7 @@ fn emit_metric(
                     }
                 }
             };
-            (*k, sanitize_label_value(&raw))
+            ((*k).into(), sanitize_label_value(&raw))
         })
         .collect();
 
@@ -387,7 +388,7 @@ fn emit_metric(
                     .find(|p| p.effective_attribute_name() == attr.attribute_name)
                     .and_then(|p| p.max_distinct),
             );
-            attrs.push((Box::leak(attr.attribute_name.into_boxed_str()), value));
+            attrs.push((attr.attribute_name.into(), value));
         }
     }
 
