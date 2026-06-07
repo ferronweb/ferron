@@ -54,6 +54,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Baggage promotion** - new `baggage` sub-directive in observability backend blocks (`otlp`, `prometheus`) to promote specific W3C Baggage keys into telemetry attributes for logs, metrics, and traces. Supports per-signal filtering and a `max_distinct` cap to prevent high-cardinality metric label explosion.
 - **Baggage propagation** - Baggage is now propagated from incoming requests to outgoing ones, allowing distributed tracing context to be preserved across service boundaries.
 - **`log_style` directive** - new `log_style legacy|modern` directive in the OTLP observability backend block to opt into OTEL-style structured logs. In `modern` mode, each log record publishes a short `summary` body plus typed per-event attributes (string, bool, integer, float) instead of the human-readable message. Access logs are remapped to OTEL semantic conventions (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, etc.). The default `legacy` mode preserves existing behavior.
+- **Logs for OTLP errors** - Errors with the logs, metrics and traces providers are now logged.
 
 #### Admin API
 
