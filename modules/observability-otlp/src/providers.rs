@@ -9,6 +9,7 @@ use ferron_observability::{
     MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
     TraceEvent,
 };
+use ferron_observability::{CompositeEventSink, Event};
 use opentelemetry::{
     baggage::BaggageExt,
     logs::AnyValue,
@@ -17,13 +18,16 @@ use opentelemetry::{
 };
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
 use opentelemetry_sdk::{
-    trace::{Sampler, SamplingDecision, SamplingResult, ShouldSample, SdkTracerProvider},
+    trace::{Sampler, SamplingDecision, SamplingResult, SdkTracerProvider, ShouldSample},
     Resource,
 };
 
 use crate::{
     client::{build_tonic_channel, HyperOtelClient},
-    config::{AttributeMatcher, AttributeSamplingRule, LogStyle, OtlpBackendConfig, SignalConfig, TraceSamplingConfig, TraceSamplingMode},
+    config::{
+        AttributeMatcher, AttributeSamplingRule, LogStyle, OtlpBackendConfig, SignalConfig,
+        TraceSamplingConfig, TraceSamplingMode,
+    },
 };
 
 /// An attribute-based sampler that makes sampling decisions based on span
@@ -43,30 +47,28 @@ impl ShouldSample for AttributeBasedSampler {
         attributes: &[KeyValue],
         _links: &[Link],
     ) -> SamplingResult {
-        let decision = if self.rules.iter().any(|rule| {
-            match &rule.matcher {
-                AttributeMatcher::Exact(expected) => attributes.iter().any(|kv| {
-                    if kv.key.as_str() != rule.attribute.as_str() {
-                        return false;
-                    }
-                    match &kv.value {
-                        opentelemetry::Value::String(s) => s.as_ref() == expected.as_str(),
-                        _ => false,
-                    }
-                }),
-                AttributeMatcher::Prefix(prefix) => attributes.iter().any(|kv| {
-                    if kv.key.as_str() != rule.attribute.as_str() {
-                        return false;
-                    }
-                    match &kv.value {
-                        opentelemetry::Value::String(s) => s.as_ref().starts_with(prefix.as_str()),
-                        _ => false,
-                    }
-                }),
-                AttributeMatcher::Exists => {
-                    attributes.iter().any(|kv| kv.key.as_str() == rule.attribute.as_str())
+        let decision = if self.rules.iter().any(|rule| match &rule.matcher {
+            AttributeMatcher::Exact(expected) => attributes.iter().any(|kv| {
+                if kv.key.as_str() != rule.attribute.as_str() {
+                    return false;
                 }
-            }
+                match &kv.value {
+                    opentelemetry::Value::String(s) => s.as_ref() == expected.as_str(),
+                    _ => false,
+                }
+            }),
+            AttributeMatcher::Prefix(prefix) => attributes.iter().any(|kv| {
+                if kv.key.as_str() != rule.attribute.as_str() {
+                    return false;
+                }
+                match &kv.value {
+                    opentelemetry::Value::String(s) => s.as_ref().starts_with(prefix.as_str()),
+                    _ => false,
+                }
+            }),
+            AttributeMatcher::Exists => attributes
+                .iter()
+                .any(|kv| kv.key.as_str() == rule.attribute.as_str()),
         }) {
             SamplingDecision::RecordAndSample
         } else {
@@ -76,9 +78,9 @@ impl ShouldSample for AttributeBasedSampler {
         SamplingResult {
             decision,
             attributes: vec![],
-                trace_state: parent_context
-                    .map(|cx| cx.span().span_context().trace_state().clone())
-                    .unwrap_or_default(),
+            trace_state: parent_context
+                .map(|cx| cx.span().span_context().trace_state().clone())
+                .unwrap_or_default(),
         }
     }
 }
@@ -98,9 +100,9 @@ pub(crate) fn build_sampler(config: &TraceSamplingConfig) -> Box<dyn ShouldSampl
         TraceSamplingMode::ParentBasedTraceIdRatio { ratio } => Box::new(Sampler::ParentBased(
             Box::new(Sampler::TraceIdRatioBased(*ratio)),
         )),
-        TraceSamplingMode::AttributeBased { rules } => {
-            Box::new(AttributeBasedSampler { rules: rules.clone() })
-        }
+        TraceSamplingMode::AttributeBased { rules } => Box::new(AttributeBasedSampler {
+            rules: rules.clone(),
+        }),
     }
 }
 
@@ -222,20 +224,58 @@ pub struct OtlpProviderCache {
 }
 
 impl OtlpProviderCache {
-    pub fn init(config: &OtlpBackendConfig) -> OtlpProviderCache {
+    pub fn init(
+        config: &OtlpBackendConfig,
+        event_sink: Option<&CompositeEventSink>,
+    ) -> OtlpProviderCache {
         let resource = build_resource(config.service_name.clone());
         let correlation = Arc::new(CorrelationContext::new());
 
         let logs_provider = config.logs.as_ref().and_then(|sig| {
-            build_logs_provider(sig, &config.no_verify, &resource, &sig.authorization)
+            let result = build_logs_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            if let (Err(err), Some(sink)) = (&result, event_sink) {
+                sink.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    message: format!("Error with logs provider: {err}"),
+                    summary: "Error with logs provider".into(),
+                    target: "ferron-observability-otlp",
+                    attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
+                    trace_context: None,
+                }));
+            }
+            result.ok()
         });
 
         let metrics_provider = config.metrics.as_ref().and_then(|sig| {
-            build_metrics_provider(sig, &config.no_verify, &resource, &sig.authorization)
+            let result =
+                build_metrics_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            if let (Err(err), Some(sink)) = (&result, event_sink) {
+                sink.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    message: format!("Error with metrics provider: {err}"),
+                    summary: "Error with metrics provider".into(),
+                    target: "ferron-observability-otlp",
+                    attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
+                    trace_context: None,
+                }));
+            }
+            result.ok()
         });
 
         let traces_provider = config.traces.as_ref().and_then(|sig| {
-            build_traces_provider(sig, &config.no_verify, &resource, &sig.authorization)
+            let result =
+                build_traces_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            if let (Err(err), Some(sink)) = (&result, event_sink) {
+                sink.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    message: format!("Error with traces provider: {err}"),
+                    summary: "Error with traces provider".into(),
+                    target: "ferron-observability-otlp",
+                    attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
+                    trace_context: None,
+                }));
+            }
+            result.ok()
         });
 
         OtlpProviderCache {
@@ -255,7 +295,7 @@ fn build_logs_provider(
     no_verify: &bool,
     resource: &Resource,
     authorization: &Option<String>,
-) -> Option<opentelemetry_sdk::logs::SdkLoggerProvider> {
+) -> Result<opentelemetry_sdk::logs::SdkLoggerProvider, Box<dyn std::error::Error + Send + Sync>> {
     use opentelemetry_otlp::LogExporter;
     use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
 
@@ -263,14 +303,14 @@ fn build_logs_provider(
     if let Some(auth) = authorization {
         headers.insert(
             http::header::AUTHORIZATION,
-            http::HeaderValue::from_str(auth).ok()?,
+            http::HeaderValue::from_str(auth)?,
         );
     }
 
     let exporter: LogExporter = match sig.protocol.as_str() {
         "http/protobuf" => LogExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
             .with_headers(
                 headers
@@ -286,11 +326,10 @@ fn build_logs_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
         "http/json" => LogExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
             .with_headers(
                 headers
@@ -306,24 +345,20 @@ fn build_logs_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
         _ => LogExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
             .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
-            .build()
-            .ok()?,
+            .build()?,
     };
 
-    Some(
-        opentelemetry_sdk::logs::SdkLoggerProvider::builder()
-            .with_log_processor(
-                BatchLogProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
-            )
-            .with_resource(resource.clone())
-            .build(),
-    )
+    Ok(opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        .with_log_processor(
+            BatchLogProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
+        )
+        .with_resource(resource.clone())
+        .build())
 }
 
 fn build_metrics_provider(
@@ -331,7 +366,8 @@ fn build_metrics_provider(
     no_verify: &bool,
     resource: &Resource,
     authorization: &Option<String>,
-) -> Option<opentelemetry_sdk::metrics::SdkMeterProvider> {
+) -> Result<opentelemetry_sdk::metrics::SdkMeterProvider, Box<dyn std::error::Error + Send + Sync>>
+{
     use opentelemetry_otlp::MetricExporter;
     use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 
@@ -339,14 +375,14 @@ fn build_metrics_provider(
     if let Some(auth) = authorization {
         headers.insert(
             http::header::AUTHORIZATION,
-            http::HeaderValue::from_str(auth).ok()?,
+            http::HeaderValue::from_str(auth)?,
         );
     }
 
     let exporter: MetricExporter = match sig.protocol.as_str() {
         "http/protobuf" => MetricExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
             .with_headers(
                 headers
@@ -362,11 +398,10 @@ fn build_metrics_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
         "http/json" => MetricExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
             .with_headers(
                 headers
@@ -382,26 +417,22 @@ fn build_metrics_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
         _ => MetricExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
             .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
-            .build()
-            .ok()?,
+            .build()?,
     };
 
-    Some(
-        opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-            .with_reader(
-                PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
-                    .with_interval(std::time::Duration::from_secs(30))
-                    .build(),
-            )
-            .with_resource(resource.clone())
-            .build(),
-    )
+    Ok(opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+        .with_reader(
+            PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
+                .with_interval(std::time::Duration::from_secs(30))
+                .build(),
+        )
+        .with_resource(resource.clone())
+        .build())
 }
 
 fn build_traces_provider(
@@ -409,7 +440,7 @@ fn build_traces_provider(
     no_verify: &bool,
     resource: &Resource,
     authorization: &Option<String>,
-) -> Option<SdkTracerProvider> {
+) -> Result<SdkTracerProvider, Box<dyn std::error::Error + Send + Sync>> {
     use opentelemetry_otlp::SpanExporter;
     use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 
@@ -417,14 +448,14 @@ fn build_traces_provider(
     if let Some(auth) = authorization {
         headers.insert(
             http::header::AUTHORIZATION,
-            http::HeaderValue::from_str(auth).ok()?,
+            http::HeaderValue::from_str(auth)?,
         );
     }
 
     let exporter: SpanExporter = match sig.protocol.as_str() {
         "http/protobuf" => SpanExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
             .with_headers(
                 headers
@@ -440,11 +471,11 @@ fn build_traces_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
+
         "http/json" => SpanExporter::builder()
             .with_http()
-            .with_http_client(HyperOtelClient::new(*no_verify).ok()?)
+            .with_http_client(HyperOtelClient::new(*no_verify)?)
             .with_protocol(opentelemetry_otlp::Protocol::HttpJson)
             .with_headers(
                 headers
@@ -460,28 +491,24 @@ fn build_traces_provider(
                     .collect(),
             )
             .with_endpoint(&sig.endpoint)
-            .build()
-            .ok()?,
+            .build()?,
         _ => SpanExporter::builder()
             .with_tonic()
             .with_channel(build_tonic_channel(&sig.endpoint, *no_verify)?)
             .with_metadata(tonic::metadata::MetadataMap::from_headers(headers))
-            .build()
-            .ok()?,
+            .build()?,
     };
 
     let sampler = build_sampler(&sig.sampling);
 
-    Some(
-        SdkTracerProvider::builder()
-            .with_span_processor(
-                BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
-            )
-            .with_id_generator(RequestedIdGenerator)
-            .with_resource(resource.clone())
-            .with_sampler(sampler)
-            .build(),
-    )
+    Ok(SdkTracerProvider::builder()
+        .with_span_processor(
+            BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
+        )
+        .with_id_generator(RequestedIdGenerator)
+        .with_resource(resource.clone())
+        .with_sampler(sampler)
+        .build())
 }
 
 pub enum CachedInstrument {

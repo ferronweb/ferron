@@ -6,7 +6,7 @@ use hyper_util::client::legacy::{connect::HttpConnector, Client};
 
 /// Build a `RootCertStore` with native system certificates, falling back to
 /// embedded `webpki-roots` if native certs cannot be loaded.
-fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error>> {
+fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error + Send + Sync>> {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
 
@@ -59,7 +59,7 @@ pub struct HyperOtelClient {
 impl HyperOtelClient {
     /// Build an HTTP client using hyper-util + hyper-rustls with the appropriate TLS config
     /// for OTLP HTTP exporters. Uses native certificate store with webpki-roots fallback.
-    pub fn new(no_verify: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(no_verify: bool) -> Result<Self, Box<dyn Error + Send + Sync>> {
         use hyper_rustls::HttpsConnectorBuilder;
         use rustls::client::danger::ServerCertVerifier;
         use rustls::crypto::CryptoProvider;
@@ -192,7 +192,10 @@ impl opentelemetry_http::HttpClient for HyperOtelClient {
 
 /// Build a tonic Channel with matching TLS config for use with OTLP gRPC exporters.
 /// Uses native certificate store with webpki-roots fallback.
-pub fn build_tonic_channel(endpoint: &str, no_verify: bool) -> Option<tonic::transport::Channel> {
+pub fn build_tonic_channel(
+    endpoint: &str,
+    no_verify: bool,
+) -> Result<tonic::transport::Channel, Box<dyn std::error::Error + Send + Sync>> {
     use hyper::Uri;
     use hyper_rustls::HttpsConnectorBuilder;
     use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -239,16 +242,14 @@ pub fn build_tonic_channel(endpoint: &str, no_verify: bool) -> Option<tonic::tra
             }
         }
         rustls::ClientConfig::builder_with_provider(crypto)
-            .with_safe_default_protocol_versions()
-            .ok()?
+            .with_safe_default_protocol_versions()?
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
             .with_no_client_auth()
     } else {
-        let root_store = build_root_cert_store().ok()?;
+        let root_store = build_root_cert_store()?;
         rustls::ClientConfig::builder_with_provider(crypto)
-            .with_safe_default_protocol_versions()
-            .ok()?
+            .with_safe_default_protocol_versions()?
             .with_root_certificates(root_store)
             .with_no_client_auth()
     };
@@ -260,6 +261,6 @@ pub fn build_tonic_channel(endpoint: &str, no_verify: bool) -> Option<tonic::tra
         .enable_http2()
         .build();
 
-    let uri: Uri = endpoint.parse().ok()?;
-    Some(Endpoint::from(uri).connect_with_connector_lazy(https))
+    let uri: Uri = endpoint.parse()?;
+    Ok(Endpoint::from(uri).connect_with_connector_lazy(https))
 }

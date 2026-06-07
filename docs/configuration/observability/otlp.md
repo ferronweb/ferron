@@ -475,6 +475,22 @@ Most commercial APM solutions support OTLP:
 - **Honeycomb** - OTLP-compatible endpoint
 - **Grafana Cloud** - OTLP-compatible endpoint
 
+## Observability
+
+### Logs
+
+- `WARN` — logged when an error occurred with logs provider.
+- `WARN` — logged when an error occurred with metrics provider.
+- `WARN` — logged when an error occurred with traces provider.
+
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Error with logs provider | WARN  | `error.message` (string) — error details |
+| Error with metrics provider | WARN  | `error.message` (string) — error details |
+| Error with traces provider | WARN  | `error.message` (string) — error details |
+
 ## Notes and troubleshooting
 
 - **TLS certificate verification** - disabling with `no_verification` should only be used for development or testing with self-signed certificates.

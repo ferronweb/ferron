@@ -17,7 +17,9 @@ use ferron_core::{
     registry::{Registry, RegistryBuilder},
     Module,
 };
-use ferron_observability::{Event, EventSink, ObservabilityContext};
+use ferron_observability::{
+    build_composite_sink, CompositeEventSink, Event, EventSink, ObservabilityContext,
+};
 
 use crate::config::OtlpBackendConfig;
 use crate::providers::{emit_access_log, emit_log, emit_metric, emit_trace, OtlpProviderCache};
@@ -102,6 +104,7 @@ struct OtlpObservabilityModule {
     inner: async_channel::Receiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
     registry: Arc<Registry>,
+    event_sink: Option<Arc<CompositeEventSink>>,
 }
 
 impl Module for OtlpObservabilityModule {
@@ -120,6 +123,7 @@ impl Module for OtlpObservabilityModule {
         let cancel_token = self.cancel_token.clone();
         let rx = self.inner.clone();
         let registry = self.registry.clone();
+        let event_sink = self.event_sink.clone();
 
         runtime.spawn_secondary_task(async move {
             // Per-config exporter cache
@@ -138,7 +142,7 @@ impl Module for OtlpObservabilityModule {
                 let cache_key = config_cache_key(&config);
                 let entry = providers
                     .entry(cache_key)
-                    .or_insert_with(|| OtlpProviderCache::init(&config));
+                    .or_insert_with(|| OtlpProviderCache::init(&config, event_sink.as_deref()));
 
                 match &msg.event {
                     Event::Log(log_event) => {
@@ -318,13 +322,16 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
         &mut self,
         registry: Arc<Registry>,
         modules: &mut Vec<Arc<dyn Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
         if self.cache.is_none() {
+            let event_sink = build_composite_sink(&registry, &config.global_config).ok();
+
             let module = Arc::new(OtlpObservabilityModule {
                 inner: self.channel.1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
                 registry: registry.clone(),
+                event_sink,
             });
 
             self.cache = Some(module.clone());
