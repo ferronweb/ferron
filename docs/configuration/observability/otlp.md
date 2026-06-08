@@ -95,6 +95,8 @@ Each `key` entry configures one baggage key to promote:
 
 The `sampling` sub-directive inside a `traces` block controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
 
+Ferron's `http > trace > sampled` directive sets the sampling flag in the `traceparent` header forwarded to upstream services. This flag does not affect OTLP export: when Ferron generates a trace (no incoming `traceparent`), it creates a root span that is always sampled by `parentbased_always_on`. The OTLP sampler only sees the sampling flag when an **incoming** `traceparent` from an external caller provides a parent context. See [Trace context](/docs/v3/configuration/observability/trace) for more details on the `sampled` flag.
+
 | Mode | Description |
 | --- | --- |
 | `always_on` | Sample every trace. Useful for development. |
@@ -500,7 +502,7 @@ Most commercial APM solutions support OTLP:
 - **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
 - **Baggage propagation** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
 - **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into telemetry attributes. For metrics, always set `max_distinct` on keys with unbounded values to prevent high-cardinality label explosion. Values exceeding the distinct cap are automatically hashed.
-- **Trace sampling** - the default sampling mode (`parentbased_always_on`) samples all traces. In production, use `parentbased_traceidratio` with an appropriate ratio to control trace volume. For attribute-based sampling, ensure the attributes you match on are set in the `traces` block's builder attributes (HTTP request method, URL path, scheme, server address/port, client address are available).
+- **Trace sampling** - the default sampling mode (`parentbased_always_on`) samples all traces. When Ferron generates a trace (no incoming `traceparent`), it creates a root span that is always sampled regardless of the `http > trace > sampled` flag. The `sampled` flag in the `traceparent` header only affects propagation to upstream services and does not control OTLP export. In production, use `parentbased_traceidratio` with an appropriate ratio to control trace volume. For attribute-based sampling, ensure the attributes you match on are set in the `traces` block's builder attributes (HTTP request method, URL path, scheme, server address/port, client address are available).
 - **Log style** - the `log_style modern` directive changes the body and attribute shape of OTLP log records, including how access logs are mapped onto OTEL semantic conventions. Existing file and console log output is unchanged. The `format` directive is ignored for log records in modern mode.
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.

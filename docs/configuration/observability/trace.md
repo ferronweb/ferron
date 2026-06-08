@@ -17,7 +17,7 @@ These directives are configured within the `http` block.
 |-----------|-----------|-------------|---------|
 | `trace` | none | Opens a block for trace-related configuration. | - |
 | `generate` | boolean | Specifies whether a new trace context should be generated if the incoming request lacks one. | `true` |
-| `sampled` | boolean | Specifies the default sampling flag for generated trace contexts. | `false` |
+| `sampled` | boolean | Sampling flag set in the `traceparent` header propagated to upstream services. Does not affect Ferron's own OTLP trace export. | `false` |
 
 **Configuration example:**
 
@@ -97,6 +97,7 @@ Ferron stores the baggage in the request trace context and propagates both `trac
 - Ferron 3 preserves the incoming `tracestate` header and propagates it as-is.
 - Baggage values are propagated as-is; Ferron does not validate or modify them. Ensure baggage content complies with your privacy and security requirements.
 - Baggage items are attached to OpenTelemetry spans when using the OTLP provider. High-cardinality baggage keys may increase span storage costs in your observability backend.
+- The `sampled` flag controls only the `traceparent` header propagated to upstream services. It does not influence the OTLP `sampling` mode or whether Ferron exports its own spans. See [OTLP trace sampling](/docs/v3/configuration/observability/otlp#trace-sampling) for how OTLP export sampling works.
 - To export these traces to an external system, configure an observability sink such as `observability-otlp`.
 
 ## See also
