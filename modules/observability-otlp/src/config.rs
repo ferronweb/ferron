@@ -7,11 +7,11 @@ pub enum LogStyle {
     /// Legacy behavior: emit `event.message` as the log body verbatim and do not
     /// publish per-event attributes to the OTLP record. The configured `format`
     /// directive (if any) is honored as before.
-    #[default]
     Legacy,
     /// Modern (OTEL-friendly) behavior: emit a short `summary` plus typed
     /// `attributes` instead of the human-readable `message`. The `format`
     /// directive is ignored for log records in this mode.
+    #[default]
     Modern,
 }
 

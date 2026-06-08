@@ -82,17 +82,30 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             }
         });
 
-        // When `log_style modern` is set, the `format` directive is ignored.
-        // Error out, so the operator knows.
-        let log_style_is_modern = config
+        let log_style = config
             .get_value("log_style")
             .and_then(|v| v.as_str())
             .and_then(crate::config::parse_log_style)
-            == Some(crate::config::LogStyle::Modern);
-        if log_style_is_modern && config.directives.contains_key("format") {
+            .unwrap_or_default();
+
+        if log_style == crate::config::LogStyle::Modern && config.directives.contains_key("format")
+        {
+            // When `log_style modern` is set, the `format` directive is ignored.
+            // Error out, so the operator knows.
             let err: Box<dyn std::error::Error> =
                 "The `format` directive would be ignored when `log_style` is `modern`".into();
             Err(err)?;
+        } else if log_style == crate::config::LogStyle::Legacy {
+            // Emit a best-practice violation warning about `log_style legacy`
+            let log_style_span = config
+                .directives
+                .get("log_style")
+                .and_then(|s| s.first())
+                .and_then(|s| s.span.clone());
+            validator_ctx.add_best_practice_violation(
+                "`log_style legacy` detected - OpenTelemetry logs may be harder to filter or aggregate",
+                log_style_span
+            );
         }
 
         // Validate `baggage { key "..." { ... } }` block

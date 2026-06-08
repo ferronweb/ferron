@@ -55,7 +55,7 @@ Each signal sub-block supports these nested directives:
 | --- | --- | --- | --- |
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
 | `no_verification` | `[bool]` | Disable TLS certificate verification. Use with caution. | `false` |
-| `log_style` | `<string>` | Log style for log records. `legacy` (default) preserves the existing human-readable `message` body. `modern` publishes a short `summary` plus typed per-event attributes and remaps access-log fields to OTEL semantic conventions. | `"legacy"` |
+| `log_style` | `<string>` | Log style for log records. `legacy` preserves the existing human-readable `message` body. `modern` (default) publishes a short `summary` plus typed per-event attributes and remaps access-log fields to OTEL semantic conventions. | `"modern"` |
 | `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one isn't configured. | none |
 
 ### Baggage promotion
@@ -198,8 +198,8 @@ A span is sampled if **any** rule matches. When no rules match, the `default_act
 
 The `log_style` directive selects how log records are emitted over OTLP:
 
-- `legacy` (default) - each log record's body is the human-readable `message` text. The `format` directive (when set) continues to apply to log records. This is the existing behavior.
-- `modern` - each log record's body is a short OTEL-friendly `summary` (e.g. `"Upstream circuit opened"`) and per-event attributes are published as typed OpenTelemetry attributes (string, boolean, integer, float). The `format` directive is ignored for log records in this mode. Access logs in modern mode use a body of `"Access log (<protocol>)"`, set the record timestamp from the access event, and remap access-log fields onto OTEL semantic-convention attribute names.
+- `legacy` - each log record's body is the human-readable `message` text. The `format` directive (when set) continues to apply to log records. This is the existing behavior.
+- `modern` (default) - each log record's body is a short OTEL-friendly `summary` (e.g. `"Upstream circuit opened"`) and per-event attributes are published as typed OpenTelemetry attributes (string, boolean, integer, float). The `format` directive is ignored for log records in this mode. Access logs in modern mode use a body of `"Access log (<protocol>)"`, set the record timestamp from the access event, and remap access-log fields onto OTEL semantic-convention attribute names.
 
 The most common access-log field remappings in modern mode are:
 
@@ -514,7 +514,7 @@ Most commercial APM solutions support OTLP:
 - **Baggage propagation** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
 - **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into telemetry attributes. For metrics, always set `max_distinct` on keys with unbounded values to prevent high-cardinality label explosion. Values exceeding the distinct cap are automatically hashed.
 - **Trace sampling** - the default sampling mode (`parentbased_always_on`) samples all traces. When Ferron generates a trace (no incoming `traceparent`), it creates a root span that is always sampled regardless of the `http > trace > sampled` flag. The `sampled` flag in the `traceparent` header only affects propagation to upstream services and does not control OTLP export. In production, use `parentbased_traceidratio` with an appropriate ratio to control trace volume. For attribute-based sampling, ensure the attributes you match on are set in the `traces` block's builder attributes (HTTP request method, URL path, scheme, server address/port, client address are available).
-- **Log style** - the `log_style modern` directive changes the body and attribute shape of OTLP log records, including how access logs are mapped onto OTEL semantic conventions. Existing file and console log output is unchanged. The `format` directive is ignored for log records in modern mode.
+- **Log style** - the `log_style modern` directive changes the body and attribute shape of OTLP log records, including how access logs are mapped onto OTEL semantic conventions. Existing file and console log output is unchanged.
 - **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
 - **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
@@ -522,13 +522,9 @@ Most commercial APM solutions support OTLP:
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.
 
-### `max_distinct` high cardinality prevention
-
 - **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
-
-### Default service name
-
 - **Service name not explicitly set** - when no explicit `service_name` is configured, the default value `"ferron"` will be used, which might cause data to be attributed incorrectly.
+- **"Legacy" log style** - when using `log_style legacy`, OpenTelemetry log reports may be harder to filter or aggregate.
 
 ## See also
 

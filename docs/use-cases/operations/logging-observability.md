@@ -149,6 +149,26 @@ example.com {
 }
 ```
 
+### "Traditional" logs over OTLP
+
+If you want to send traditional, human-readable log records via OTLP (e.g., for compatibility with existing logging systems), set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+        log_style legacy
+        service_name "ferron-prod"
+
+        logs "https://otel.example.net/v1/logs" {
+            protocol "http/protobuf"
+        }
+    }
+
+    root /var/www/html
+}
+```
+
 ## Prometheus metrics monitoring
 
 Use this when you want to expose metrics for Prometheus scraping:
