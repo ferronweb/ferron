@@ -34,7 +34,7 @@ impl TraceIdConfig {
         if trace_id_header_block
             .children
             .as_ref()
-            .map_or(false, |tih| tih.get_flag("reflect_request"))
+            .is_some_and(|tih| tih.get_flag("reflect_request"))
         {
             config.reflect_request = true;
         }
