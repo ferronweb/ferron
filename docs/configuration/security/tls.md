@@ -38,7 +38,8 @@ tls {
 | `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` | TLS 1.2 | ECDHE + RSA | RSA certificate |
 | `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` | TLS 1.2 | ECDHE + RSA | RSA certificate |
 
-**Note:** TLS 1.2 cipher suites are only effective when `min_version` allows TLS 1.2.
+> [!note]
+> TLS 1.2 cipher suites are only effective when `min_version` allows TLS 1.2.
 
 ### ECDH curves
 

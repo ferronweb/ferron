@@ -358,16 +358,16 @@ For OTLP (OpenTelemetry) export:
 ```ferron
 example.com {
     observability {
-        provider otlp {
-            logs "http://localhost:4317" {
-                protocol grpc
-            }
-            metrics "http://localhost:4317" {
-                protocol grpc
-            }
-            traces "http://localhost:4317" {
-                protocol grpc
-            }
+        provider otlp
+        
+        logs "http://localhost:4317" {
+            protocol grpc
+        }
+        metrics "http://localhost:4317" {
+            protocol grpc
+        }
+        traces "http://localhost:4317" {
+            protocol grpc
         }
     }
 }

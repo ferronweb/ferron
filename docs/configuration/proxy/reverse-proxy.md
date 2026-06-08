@@ -138,7 +138,8 @@ example.com {
 - `no_verification [bool: boolean]` (`http-proxy`)
   - This directive specifies whether TLS certificate verification is disabled for HTTPS upstreams. Default: `no_verification false`
 
-**Warning:** Only use `no_verification true` in testing or trusted internal networks.
+> [!warning]
+> Only use `no_verification true` in testing or trusted internal networks.
 
 ### Client certificate authentication (mTLS)
 

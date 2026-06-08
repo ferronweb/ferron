@@ -82,7 +82,8 @@ openssl rand 80 >> session_tickets.keys
 openssl rand 80 >> session_tickets.keys
 ```
 
-**Important:** Keys must be generated using cryptographically secure randomness.
+> [!important]
+> Keys must be generated using cryptographically secure randomness.
 
 #### Rotating key files
 

@@ -1164,7 +1164,8 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 | `username` | `<string>` | Joker username (alternative to api_key). | — (optional) |
 | `password` | `<string>` | Joker password (alternative to api_key). | — (optional) |
 
-> **Note:** Either `api_key` **or** the pair `username` + `password` is required.
+> [!note]
+> Either `api_key` **or** the pair `username` + `password` is required.
 
 **Configuration example:**
 

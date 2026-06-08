@@ -162,7 +162,8 @@ example.com {
 }
 ```
 
-> **Note:** If compression is enabled and a response is compressed, the replacement is silently skipped and a `ferron.replace.skipped_compressed` metric is emitted.
+> [!note]
+> If compression is enabled and a response is compressed, the replacement is silently skipped and a `ferron.replace.skipped_compressed` metric is emitted.
 
 ## Pipeline position
 

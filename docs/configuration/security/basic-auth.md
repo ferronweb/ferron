@@ -104,7 +104,8 @@ users {
 | `$pbkdf2-sha256$` | PBKDF2-SHA256 |
 | `$scrypt$` | scrypt |
 
-**Note:** it's recommended to use `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
+> [!note]
+> It's recommended to use `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
 
 ### `brute_force_protection` block
 
@@ -211,7 +212,8 @@ example.com {
 }
 ```
 
-> **Warning:** Disabling brute-force protection exposes your users to credential-guessing attacks. Only do this if you have equivalent protection at another layer.
+> [!warning]
+> Disabling brute-force protection exposes your users to credential-guessing attacks. Only do this if you have equivalent protection at another layer.
 
 ## Security considerations
 
