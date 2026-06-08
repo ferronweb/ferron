@@ -225,7 +225,7 @@ example.com {
 }
 ```
 
-Setting `log_style modern` together with a `format` directive is allowed but the format is ignored for log records in modern mode; the validator errors out when both are set.
+Setting `log_style modern` together with a `format` directive is not allowed (the validator errors out when both are set).
 
 ## Configuration examples
 
