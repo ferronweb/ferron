@@ -154,6 +154,9 @@ The `attribute_based` mode samples spans based on attributes visible at span cre
 
         traces "https://collector:4317/v1/traces" {
             sampling "attribute_based" {
+                # What to do with spans that don't match any rule
+                default_action "sample"
+
                 rules {
                     # Always sample spans with http.request.method == "POST"
                     rule "exact" "http.request.method" "POST"
@@ -178,7 +181,16 @@ Each `rule` takes 2 or 3 arguments:
 | `<attribute>` | The span attribute key to match. |
 | `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
 
-A span is sampled if **any** rule matches. If no rules match, the span is dropped.
+A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
+
+| Value | Behavior |
+| --- | --- |
+| `drop` | Spans not matching any rule are dropped. **This is the default.** |
+| `sample` | Spans not matching any rule are still sampled. |
+
+:::warning
+Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
+:::
 
 :::note
 Attribute-based sampling inspects attributes set on the `SpanBuilder` before the span is built. In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions.
@@ -345,8 +357,9 @@ example.com {
         traces "https://collector:4317/v1/traces" {
             protocol "grpc"
 
-            # Always sample POST requests and /api/ routes
+            # Sample POST requests and /api/ routes, keep everything else
             sampling "attribute_based" {
+                default_action "sample"
                 rules {
                     rule "exact" "http.request.method" "POST"
                     rule "prefix" "url.path" "/api/"

@@ -212,7 +212,7 @@ fn validate_baggage_block(
 /// Validate a `sampling` directive inside a `traces` block.
 fn validate_sampling_directive(
     entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
-    _validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // First arg must be a recognized sampling mode
     let mode = entry.args.first().and_then(|v| v.as_str());
@@ -254,6 +254,45 @@ fn validate_sampling_directive(
             }
         }
         Some("attribute_based") => {
+            // Validate `default_action` sub-directive (if present)
+            if let Some(children) = &entry.children {
+                if let Some(da_entries) = children.directives.get("default_action") {
+                    for da_entry in da_entries {
+                        if da_entry.args.len() != 1 {
+                            let err: Box<dyn std::error::Error> =
+                                "Invalid `default_action` directive: expected exactly 1 argument ('sample' or 'drop')"
+                                    .to_string()
+                                    .into();
+                            Err(err)?;
+                        } else if let Some(value) = da_entry.args[0].as_str() {
+                            if value != "sample" && value != "drop" {
+                                let err: Box<dyn std::error::Error> = format!(
+                                    "Invalid `default_action` value '{}': must be 'sample' or 'drop'",
+                                    value
+                                )
+                                .into();
+                                Err(err)?;
+                            }
+                        } else {
+                            let err: Box<dyn std::error::Error> =
+                                "Invalid `default_action` value: must be a string ('sample' or 'drop')"
+                                    .to_string()
+                                    .into();
+                            Err(err)?;
+                        }
+                    }
+                }
+
+                // Best-practice warning when `default_action` is not set
+                if children.directives.get("default_action").is_none() {
+                    validator_ctx.add_best_practice_violation(
+                        "`attribute_based` sampling without explicit `default_action`; \
+                         spans not matching any rule are silently dropped",
+                        entry.span.clone(),
+                    );
+                }
+            }
+
             // Validate `rules { rule ... }` block
             if let Some(children) = &entry.children {
                 if let Some(rules_entries) = children.directives.get("rules") {

@@ -5,7 +5,8 @@ use opentelemetry::{
 use opentelemetry_sdk::trace::{Sampler, SamplingDecision, SamplingResult, ShouldSample};
 
 use crate::config::{
-    AttributeMatcher, AttributeSamplingRule, TraceSamplingConfig, TraceSamplingMode,
+    AttributeBasedDefaultAction, AttributeMatcher, AttributeSamplingRule, TraceSamplingConfig,
+    TraceSamplingMode,
 };
 
 /// An attribute-based sampler that makes sampling decisions based on span
@@ -13,6 +14,7 @@ use crate::config::{
 #[derive(Debug, Clone)]
 struct AttributeBasedSampler {
     rules: Vec<AttributeSamplingRule>,
+    default_action: AttributeBasedDefaultAction,
 }
 
 impl ShouldSample for AttributeBasedSampler {
@@ -50,7 +52,10 @@ impl ShouldSample for AttributeBasedSampler {
         }) {
             SamplingDecision::RecordAndSample
         } else {
-            SamplingDecision::Drop
+            match self.default_action {
+                AttributeBasedDefaultAction::Sample => SamplingDecision::RecordAndSample,
+                AttributeBasedDefaultAction::Drop => SamplingDecision::Drop,
+            }
         };
 
         SamplingResult {
@@ -78,8 +83,12 @@ pub(crate) fn build_sampler(config: &TraceSamplingConfig) -> Box<dyn ShouldSampl
         TraceSamplingMode::ParentBasedTraceIdRatio { ratio } => Box::new(Sampler::ParentBased(
             Box::new(Sampler::TraceIdRatioBased(*ratio)),
         )),
-        TraceSamplingMode::AttributeBased { rules } => Box::new(AttributeBasedSampler {
+        TraceSamplingMode::AttributeBased {
+            rules,
+            default_action,
+        } => Box::new(AttributeBasedSampler {
             rules: rules.clone(),
+            default_action: *default_action,
         }),
     }
 }

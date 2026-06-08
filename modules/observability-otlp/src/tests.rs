@@ -686,7 +686,8 @@ fn emit_access_log_modern_smoke() {
 mod sampling_tests {
     use super::*;
     use crate::config::{
-        AttributeMatcher, AttributeSamplingRule, TraceSamplingConfig, TraceSamplingMode,
+        AttributeBasedDefaultAction, AttributeMatcher, AttributeSamplingRule, TraceSamplingConfig,
+        TraceSamplingMode,
     };
     use ferron_core::config::{
         ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
@@ -871,10 +872,14 @@ mod sampling_tests {
         let parsed = OtlpBackendConfig::parse_config(&config);
         let traces = parsed.traces.unwrap();
         match traces.sampling.mode {
-            TraceSamplingMode::AttributeBased { rules } => {
+            TraceSamplingMode::AttributeBased {
+                rules,
+                default_action,
+            } => {
                 assert_eq!(rules.len(), 1);
                 assert_eq!(rules[0].attribute, "http.request.method");
                 assert!(matches!(rules[0].matcher, AttributeMatcher::Exact(ref v) if v == "GET"));
+                assert_eq!(default_action, AttributeBasedDefaultAction::Drop);
             }
             _ => panic!("Expected AttributeBased sampling mode"),
         }
@@ -897,6 +902,7 @@ mod sampling_tests {
                     attribute: "http.request.method".to_string(),
                     matcher: AttributeMatcher::Exact("GET".to_string()),
                 }],
+                default_action: AttributeBasedDefaultAction::Drop,
             },
         };
         let sampler = crate::providers::build_sampler(&config);
@@ -940,6 +946,7 @@ mod sampling_tests {
                     attribute: "error.type".to_string(),
                     matcher: AttributeMatcher::Exists,
                 }],
+                default_action: AttributeBasedDefaultAction::Drop,
             },
         };
         let sampler = crate::providers::build_sampler(&config);
@@ -979,6 +986,7 @@ mod sampling_tests {
                     attribute: "url.path".to_string(),
                     matcher: AttributeMatcher::Prefix("/api/".to_string()),
                 }],
+                default_action: AttributeBasedDefaultAction::Drop,
             },
         };
         let sampler = crate::providers::build_sampler(&config);
@@ -1008,5 +1016,139 @@ mod sampling_tests {
             &[],
         );
         assert!(matches!(result.decision, SamplingDecision::Drop));
+    }
+
+    #[test]
+    fn parse_sampling_attribute_based_with_default_action() {
+        let mut rule_directives = HashMap::new();
+        rule_directives.insert(
+            "rule".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![
+                    ServerConfigurationValue::String("prefix".to_string(), None),
+                    ServerConfigurationValue::String("url.path".to_string(), None),
+                    ServerConfigurationValue::String("/api/".to_string(), None),
+                ],
+                children: None,
+                span: None,
+            }],
+        );
+        let rules_block = ServerConfigurationBlock {
+            directives: Arc::new(rule_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut rules_directives = HashMap::new();
+        rules_directives.insert(
+            "rules".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(rules_block),
+                span: None,
+            }],
+        );
+        rules_directives.insert(
+            "default_action".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("sample".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let rules_outer = ServerConfigurationBlock {
+            directives: Arc::new(rules_directives),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut traces_children = HashMap::new();
+        traces_children.insert(
+            "sampling".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "attribute_based".to_string(),
+                    None,
+                )],
+                children: Some(rules_outer),
+                span: None,
+            }],
+        );
+        let traces_block = ServerConfigurationBlock {
+            directives: Arc::new(traces_children),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let mut top_directives = HashMap::new();
+        top_directives.insert(
+            "traces".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "grpc://localhost:4317".to_string(),
+                    None,
+                )],
+                children: Some(traces_block),
+                span: None,
+            }],
+        );
+        let config = make_config(top_directives);
+        let parsed = OtlpBackendConfig::parse_config(&config);
+        let traces = parsed.traces.unwrap();
+        match traces.sampling.mode {
+            TraceSamplingMode::AttributeBased {
+                rules,
+                default_action,
+            } => {
+                assert_eq!(rules.len(), 1);
+                assert!(matches!(
+                    rules[0].matcher,
+                    AttributeMatcher::Prefix(ref v) if v == "/api/"
+                ));
+                assert_eq!(default_action, AttributeBasedDefaultAction::Sample);
+            }
+            _ => panic!("Expected AttributeBased sampling mode"),
+        }
+    }
+
+    #[test]
+    fn build_sampler_attribute_based_default_sample() {
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AttributeBased {
+                rules: vec![AttributeSamplingRule {
+                    attribute: "url.path".to_string(),
+                    matcher: AttributeMatcher::Prefix("/api/".to_string()),
+                }],
+                default_action: AttributeBasedDefaultAction::Sample,
+            },
+        };
+        let sampler = crate::providers::build_sampler(&config);
+
+        use opentelemetry::trace::SpanKind;
+
+        let trace_id = TraceId::from_bytes([1u8; 16]);
+
+        // Test with matching attribute
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("url.path", "/api/users")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
+
+        // Test with non-matching attribute — should still sample (default_action: sample)
+        let result = sampler.should_sample(
+            None,
+            trace_id,
+            "test",
+            &SpanKind::Server,
+            &[KeyValue::new("url.path", "/health")],
+            &[],
+        );
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
+
+        // Test with no attributes — should still sample (default_action: sample)
+        let result = sampler.should_sample(None, trace_id, "test", &SpanKind::Server, &[], &[]);
+        assert!(matches!(result.decision, SamplingDecision::RecordAndSample));
     }
 }

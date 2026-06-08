@@ -39,7 +39,10 @@ pub enum TraceSamplingMode {
     /// Parent-based with TraceIdRatioBased for root spans.
     ParentBasedTraceIdRatio { ratio: f64 },
     /// Sample based on span attributes set before the span is built.
-    AttributeBased { rules: Vec<AttributeSamplingRule> },
+    AttributeBased {
+        rules: Vec<AttributeSamplingRule>,
+        default_action: AttributeBasedDefaultAction,
+    },
 }
 
 /// A rule for attribute-based sampling.
@@ -60,6 +63,16 @@ pub enum AttributeMatcher {
     Prefix(String),
     /// Match if the attribute exists (any value).
     Exists,
+}
+
+/// Default action when no attribute-based sampling rules match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AttributeBasedDefaultAction {
+    /// Sample spans that don't match any rule.
+    Sample,
+    /// Drop spans that don't match any rule.
+    #[default]
+    Drop,
 }
 
 /// Trace sampling configuration.
@@ -208,12 +221,22 @@ fn parse_trace_sampling(children: &ServerConfigurationBlock) -> TraceSamplingCon
             TraceSamplingMode::ParentBasedTraceIdRatio { ratio }
         }
         Some("attribute_based") => {
+            let default_action = entry
+                .children
+                .as_ref()
+                .and_then(|c| c.get_value("default_action"))
+                .and_then(|v| v.as_str())
+                .and_then(parse_attribute_based_default_action)
+                .unwrap_or_default();
             let rules = entry
                 .children
                 .as_ref()
                 .map(parse_attribute_sampling_rules)
                 .unwrap_or_default();
-            TraceSamplingMode::AttributeBased { rules }
+            TraceSamplingMode::AttributeBased {
+                rules,
+                default_action,
+            }
         }
         _ => return TraceSamplingConfig::default(),
     };
@@ -269,6 +292,15 @@ fn parse_attribute_sampling_rules(
     }
 
     rules
+}
+
+/// Parse a `default_action` directive value for attribute-based sampling.
+fn parse_attribute_based_default_action(value: &str) -> Option<AttributeBasedDefaultAction> {
+    match value {
+        "sample" => Some(AttributeBasedDefaultAction::Sample),
+        "drop" => Some(AttributeBasedDefaultAction::Drop),
+        _ => None,
+    }
 }
 
 /// Parse the `baggage` directive from the OTLP config block.
