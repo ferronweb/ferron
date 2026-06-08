@@ -35,6 +35,9 @@ example.com {
 }
 ```
 
+> [!important]
+> Keep `cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
+
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
 Ferron uses HTTP-01 ACME challenge by default, which requires the server to be reachable on port 80. If your website is behind a proxy that terminates TLS (like Cloudflare's proxy mode), the HTTP-01 challenge may not work unless port 80 is accessible.
@@ -120,7 +123,11 @@ Below is an example configuration for DNS-01 with Cloudflare:
 }
 ```
 
-For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).
+> [!important]
+> Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
+
+> [!info]
+> For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).
 
 ## Certificate caching
 
@@ -136,14 +143,3 @@ example.com {
     }
 }
 ```
-
-## Notes and troubleshooting
-
-- The default HTTP-01 challenge requires port 80 to be reachable. TLS-ALPN-01 only needs port 443.
-- Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
-- If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), use `challenge tls-alpn-01` (or DNS-01) because HTTP-01 may not work through TLS termination unless port 80 is also accessible.
-- If you need wildcard certificates, use DNS-01 challenge; HTTP-01 and TLS-ALPN-01 do not support wildcard domains.
-- Keep `cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
-- For DNS-01 failures, verify provider credentials and allow time for DNS propagation before retrying.
-- For cipher suites, ECDH curves, and mTLS, see [Security and TLS](/docs/v3/configuration/security/tls).
-- For TLS session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/security/session-tickets).

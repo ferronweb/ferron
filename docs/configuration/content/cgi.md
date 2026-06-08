@@ -43,11 +43,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Extensions are matched case-insensitively.
-- Files with these extensions are treated as CGI scripts regardless of their location in the file tree.
-- This is complementary to `cgi-bin` directory matching — files inside `cgi-bin` are always treated as CGI scripts.
+> [!note]
+>
+> - Extensions are matched case-insensitively.
+> - Files with these extensions are treated as CGI scripts regardless of their location in the file tree.
+> - This is complementary to `cgi-bin` directory matching — files inside `cgi-bin` are always treated as CGI scripts.
 
 ### `interpreter`
 
@@ -68,13 +68,13 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- The file path is automatically appended as the final argument.
-- When `false` is used as the second argument, the interpreter list is cleared, meaning the file must be directly executable (e.g., via a shebang line or native executable).
-- For Unix systems, files without a matching interpreter must have the executable permission bit set.
-- On Unix systems, scripts with a shebang line (e.g., `#!/usr/bin/env python3`) are parsed and the interpreter is derived from the shebang.
-- On Windows, `.exe` files are executed directly, `.bat`/`.cmd` files use `cmd /c`, and scripts with shebangs are parsed similarly to Unix.
+> [!note]
+>
+> - The file path is automatically appended as the final argument.
+> - When `false` is used as the second argument, the interpreter list is cleared, meaning the file must be directly executable (e.g., via a shebang line or native executable).
+> - For Unix systems, files without a matching interpreter must have the executable permission bit set.
+> - On Unix systems, scripts with a shebang line (e.g., `#!/usr/bin/env python3`) are parsed and the interpreter is derived from the shebang.
+> - On Windows, `.exe` files are executed directly, `.bat`/`.cmd` files use `cmd /c`, and scripts with shebangs are parsed similarly to Unix.
 
 ### `environment`
 
@@ -94,11 +94,17 @@ example.com {
 }
 ```
 
-**Notes:**
+> [!note]
+>
+> - Environment variables take precedence over any existing variables with the same name.
+> - The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
 
-- Environment variables take precedence over any existing variables with the same name.
-- The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
+> [!note]
+>
+> - The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response — stderr output is logged as a warning (trimmed before logging).
+> - The working directory is set to the directory containing the script file.
 
 ## Default interpreters
 
@@ -132,6 +138,9 @@ For example, with `extension ".php"` configured, the injection order becomes: `i
 
 This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron will use that instead.
 
+> [!important]
+> CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive. On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, shebang lines are supported for `.bat`, `.cmd`, and other script files — native `.exe` files are executed directly.
+
 ## CGI script locations
 
 A request is handled as a CGI script when:
@@ -145,6 +154,9 @@ When a matching file is found, Ferron checks for an interpreter using the follow
 2. Built-in default interpreter for the extension.
 3. If the file is directly executable (has the executable bit on Unix, or is a native `.exe` on Windows), it is run directly.
 4. If the file has a shebang line, the interpreter is parsed from the shebang.
+
+> [!tip]
+> CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
 
 ## Environment variables
 
@@ -238,17 +250,3 @@ example.com {
     # (because of the ".php" extension directive)
 }
 ```
-
-## Notes and troubleshooting
-
-- CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive.
-- On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`).
-- On Windows, shebang lines are supported for `.bat`, `.cmd`, and other script files. Native `.exe` files are executed directly.
-- The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response.
-- For CGI stderr output, Ferron logs warnings when the script produces output on stderr. The output is trimmed before logging.
-- The working directory for a CGI script is set to the directory containing the script file.
-- For authentication integration, CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside a module like `http-basicauth` that sets `ctx.auth_user`.
-- For static file serving alongside CGI, see [Static file serving](/docs/v3/configuration/content/static-files).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
-- For response headers and CORS, see [HTTP headers and CORS](/docs/v3/configuration/content/headers).

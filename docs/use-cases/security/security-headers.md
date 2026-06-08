@@ -20,6 +20,12 @@ example.com {
 }
 ```
 
+> [!warning]
+> Keep `Strict-Transport-Security` only on HTTPS hosts you intend to keep on HTTPS permanently.
+
+> [!tip]
+> Treat `Content-Security-Policy` as application-specific; start simple, then tighten based on real asset/script needs.
+
 ## Remove or replace unwanted headers
 
 ```ferron
@@ -85,6 +91,9 @@ api.example.com {
 }
 ```
 
+> [!warning]
+> Allowing all origins is risky for public APIs. Restrict `origins` to specific trusted domains when possible.
+
 ## Header interpolation
 
 Header values support interpolation with `{{...}}` syntax:
@@ -99,11 +108,3 @@ example.com {
 ```
 
 Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}` for environment variables. For the complete reference, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
-
-## Notes and troubleshooting
-
-- Keep `Strict-Transport-Security` only on HTTPS hosts you intend to keep on HTTPS permanently.
-- Treat `Content-Security-Policy` as application-specific; start simple, then tighten based on real asset/script needs.
-- If a header appears multiple times, use `header -Name` to remove all instances, then `header Name "value"` to set a single value.
-- If CORS headers are not appearing, verify that `origins` is configured — CORS is disabled by default if `origins` is empty.
-- For directive details, see [Configuration: HTTP headers and CORS](/docs/v3/configuration/content/headers).

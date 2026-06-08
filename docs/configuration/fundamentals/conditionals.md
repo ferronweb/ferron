@@ -5,6 +5,9 @@ description: "Named matchers, conditional operators, built-in variables, and int
 
 This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the `http-server` module's request resolution pipeline.
 
+> [!info]
+> For URL rewriting with regex, see [URL rewriting](/docs/v3/configuration/routing/rewrite). For HTTP response control with regex matching, see [HTTP response control](/docs/v3/configuration/routing/response).
+
 ## Named matchers
 
 Named matchers are declared with `match <name> { ... }` and referenced by `if <name> { ... }` or `if_not <name> { ... }` inside host blocks.
@@ -47,11 +50,14 @@ The following operators are available inside `match` blocks:
 | `!~` | Negated regex match |
 | `in` | Left value must equal one of the comma-separated items in the right value, or match a language in an `Accept-Language` header |
 
-Notes:
+> [!note]
+>
+> - `in` splits the right-hand string on commas and trims each item.
+> - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` performs language matching with support for base language codes (e.g. `en` matches `en-US`).
+> - All expressions inside a single `match` block must pass (AND semantics).
 
-- `in` splits the right-hand string on commas and trims each item.
-- When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` performs language matching with support for base language codes (e.g. `en` matches `en-US`).
-- All expressions inside a single `match` block must pass (AND semantics).
+> [!note]
+> All expressions inside a single `match` block must pass (AND semantics). If a variable cannot be resolved, the placeholder is kept as `{{name}}`.
 
 ## Built-in variables
 
@@ -94,10 +100,3 @@ For startup-only TLS settings such as `cert` and `key`, the bundled `manual` TLS
 - [`if`](/docs/v3/configuration/routing/url-processing#if) — applies a block when a named matcher evaluates to true
 - [`if_not`](/docs/v3/configuration/routing/url-processing#if_not) — applies a block when a named matcher evaluates to false
 - [`location`](/docs/v3/configuration/routing/url-processing#path-matching) — path-based matching
-
-## Notes and troubleshooting
-
-- All expressions inside a single `match` block must pass (AND semantics).
-- If a variable cannot be resolved, the placeholder is kept as `{{name}}`.
-- For URL rewriting with regex, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
-- For HTTP response control with regex matching, see [HTTP response control](/docs/v3/configuration/routing/response).

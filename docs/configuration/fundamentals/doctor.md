@@ -15,6 +15,14 @@ ferron doctor -c ferron.conf
 
 If the configuration is valid and contains no best-practice violations, the command exits with code 0. If violations are found, it still exits with code 0 (they are advisory, not errors). If structural errors are found, it exits with code 1.
 
+> [!note]
+>
+> - Best-practice violations are advisory — they do not prevent the server from starting. Treat the findings as opinionated guidance, not absolute truth.
+> - The `ferron validate` command suppresses doctor diagnostics — use `ferron doctor` to see them.
+
+> [!tip]
+> Some checks are contextual and only fire when specific directive combinations are detected. Not all security-relevant patterns can be detected at configuration time — runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
+
 ### Log output
 
 By default, diagnostics are printed as log messages:
@@ -46,6 +54,9 @@ ferron doctor -c ferron.conf --json
 }
 ```
 
+> [!note]
+> The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
+
 ## How it differs from validate
 
 | Feature | `ferron validate` | `ferron doctor` |
@@ -60,17 +71,7 @@ The `validate` command strips `BestPracticeViolation` diagnostics from its outpu
 
 Best-practice violations use the `"Best practice violation"` diagnostic kind. They are advisory: the server can start with these patterns, but they may indicate security risks or operational issues.
 
-## Notes and troubleshooting
-
-- Best-practice violations are advisory. They do not prevent the server from starting.
-- Treat the `ferron doctor`'s findings as opinionated guidance, not absolute truth.
-- The `ferron validate` command suppresses these diagnostics. Use `ferron doctor` to see them.
-- The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
-- Some checks are contextual — they only fire when specific directive combinations are detected.
-- Not all security-relevant patterns can be detected at configuration time. Runtime monitoring and network controls remain important.
-- For list of detected best-practice violations, see respective documentation pages in the "Configuration" category.
-
-### See also
+## See also
 
 - [Configuration validation](/docs/v3/configuration/fundamentals/validation)
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)

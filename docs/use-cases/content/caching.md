@@ -19,6 +19,13 @@ example.com {
 
 This configuration caches responses up to 1MB in size. The default `max_response_size` is 2MB, and the global default `max_entries` is 1024.
 
+> [!important]
+>
+> - Only `GET` and `HEAD` requests are cached. `HEAD` requests reuse cached `GET` representations.
+> - Responses with `Vary: *` are never stored.
+> - Public responses containing `Set-Cookie` are not stored.
+> - The cache is in-memory and will be cleared on server restart — for persistent caching, consider using an external cache like Redis.
+
 ## Caching with Vary headers
 
 The `vary` directive ensures responses are cached separately based on request headers. This is crucial for content that varies by `Accept-Encoding`, `Accept-Language`, or other headers:
@@ -32,6 +39,9 @@ example.com {
 ```
 
 Without `vary`, responses with different headers would be incorrectly cached together, potentially serving the wrong content to clients.
+
+> [!tip]
+> If you see unexpected cache misses, check that `vary` headers are configured correctly for your use case. If cache size is growing unbounded, check for frequently accessed large responses and consider reducing `max_response_size`.
 
 ## Excluding sensitive responses from cache
 
@@ -159,15 +169,3 @@ Enable verbose logging to see detailed cache operations:
     console_log
 }
 ```
-
-## Notes and troubleshooting
-
-- Only `GET` and `HEAD` requests are cached. `HEAD` requests reuse cached `GET` representations.
-- Responses with `Vary: *` are never stored in the cache.
-- Public responses containing `Set-Cookie` are not stored.
-- The cache is in-memory and will be cleared on server restart. For persistent caching, consider using an external cache like Redis.
-- If you see unexpected cache misses, check that `vary` headers are configured correctly for your use case.
-- For static file cache headers like `file_cache_control` and `etag`, see [Static file serving](/docs/v3/use-cases/content/static-files).
-- For the full HTTP response cache module configuration, see [HTTP cache](/docs/v3/configuration/content/cache).
-- If cache size is growing unbounded, check for frequently accessed large responses and consider reducing `max_response_size`.
-- For private responses, the cache is partitioned by client context. If you want truly shared private caching, use public `Cache-Control: max-age` headers instead.

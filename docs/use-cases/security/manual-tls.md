@@ -47,7 +47,13 @@ manual-tls.example.com {
 }
 ```
 
-The certificate and private key must match. If they do not match, TLS handshakes will fail.
+> [!important]
+>
+> - Make sure Ferron can read both the certificate and key files. Ensure the certificate file includes any required intermediate certificates when needed by your CA.
+> - The certificate and private key must match. If they do not match, TLS handshakes will fail.
+
+> [!note]
+> If you rotate certificates externally, reload or restart Ferron so updated files are used.
 
 ## Manual TLS with multiple hosts
 
@@ -90,12 +96,3 @@ api.example.com {
     proxy http://localhost:3000
 }
 ```
-
-## Notes and troubleshooting
-
-- Make sure Ferron can read both the certificate and key files.
-- Ensure the certificate file includes any required intermediate certificates when needed by your CA.
-- If you rotate certificates externally, reload or restart Ferron so updated files are used.
-- If you do not want automatic TLS on a host, do not use `provider acme` — use `provider manual` instead.
-- For all TLS-related directives (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`), see [Security and TLS](/docs/v3/configuration/security/tls).
-- For ACME automatic TLS, see [ACME automatic TLS](/docs/v3/configuration/security/acme).

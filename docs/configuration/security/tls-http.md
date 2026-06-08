@@ -172,7 +172,7 @@ The certificate expiration gauge is shared across all TLS providers (manual, ACM
 - The private key is loaded into memory and used only for TLS — it is never written to disk by this module.
 - If the certificate endpoint returns a valid but untrusted certificate chain, Ferron will still use it. Ensure your endpoint only returns certificates from trusted CAs.
 
-## Notes and troubleshooting
+## Troubleshooting
 
 ### "Failed to parse the HTTP response from TLS certificate endpoint: ..."
 

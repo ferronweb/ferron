@@ -5,6 +5,9 @@ description: "Quick checks for Ferron 3 when a site, listener, proxy, TLS setup,
 
 When something goes wrong with Ferron or your site, start here. The fastest way to find the cause is to separate service state, networking, TLS, routing, permissions, and configuration.
 
+> [!tip]
+> If you are asking for help, include the Ferron version, your deployment type, a minimal config snippet, and the relevant error-log lines. If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
+
 ## Quick diagnostic checklist
 
 1. Check the logs.
@@ -83,7 +86,8 @@ For HTTPS upstreams with private or self-signed certs:
 - `connection refused` - wrong port or host, or the service is down.
 - timeout - route, firewall, DNS, or upstream responsiveness problem.
 
-See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy) and [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy).
+> [!info]
+> See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy) and [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy).
 
 ## TLS issues
 
@@ -123,7 +127,8 @@ Ferron must be able to read files and traverse directories.
 
 For SPAs, route fallback rewrites are commonly required. If rewrites are involved, enable `rewrite_log` while diagnosing.
 
-See [Static file serving](/docs/v3/use-cases/content/static-files), [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/v3/configuration/routing/url-processing).
+> [!info]
+> See [Static file serving](/docs/v3/use-cases/content/static-files), [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/v3/configuration/routing/url-processing).
 
 ## Rate limiting and access control
 
@@ -139,7 +144,8 @@ If Ferron is behind a proxy or load balancer and client IP handling is wrong, ac
 
 Set `client_ip_from_header` only when the trusted proxy path supplies forwarded client IP headers. Use `trusted_proxy` to restrict who can provide them. For PROXY protocol frontends, use `protocol_proxy`.
 
-See [HTTP host directives](/docs/v3/configuration/server/host), [Rate limiting](/docs/v3/use-cases/security/rate-limiting), [Access control](/docs/v3/use-cases/security/access-control), and [Configuration: conditionals](/docs/v3/configuration/fundamentals/conditionals).
+> [!info]
+> See [HTTP host directives](/docs/v3/configuration/server/host), [Rate limiting](/docs/v3/use-cases/security/rate-limiting), [Access control](/docs/v3/use-cases/security/access-control), and [Configuration: conditionals](/docs/v3/configuration/fundamentals/conditionals).
 
 ## Configuration mistakes
 
@@ -163,7 +169,8 @@ All subconditions in one `condition` block must pass. If one fails, the conditio
 
 Start with a minimal known-good config, validate it with `ferron validate -c ferron.conf`, then add one change at a time.
 
-See [Getting started](/docs/v3/getting-started), [Configuration syntax](/docs/v3/configuration/fundamentals/syntax), and [Core directives](/docs/v3/configuration/server/core-directives).
+> [!info]
+> See [Getting started](/docs/v3/getting-started), [Configuration syntax](/docs/v3/configuration/fundamentals/syntax), and [Core directives](/docs/v3/configuration/server/core-directives).
 
 ## Observability and logs
 
@@ -188,9 +195,3 @@ Ferron does not have a single global debug mode. For troubleshooting visibility:
 - `403 Forbidden` - often an access-control rule or filesystem permission issue.
 - `502 Bad Gateway` - upstream connection or handshake failure.
 - `504 Gateway Timeout` - upstream reachable but too slow or unresponsive.
-
-## Notes and troubleshooting
-
-- If you are asking for help, include the Ferron version, your deployment type, a minimal config snippet, and the relevant error-log lines.
-- If the logs show unrelated random paths or scanners, compare them against the access log before changing your config.
-- If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).

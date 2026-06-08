@@ -108,12 +108,12 @@ api.example.com {
 }
 ```
 
-Notes:
-
-- Client certificate verification uses the same trust model as server-side TLS: the client cert chain must validate against the configured CA roots.
-- When `client_auth_ca` points to a file containing multiple CA certificates (a bundle), all of them are loaded into the trust store.
-- The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
-- For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
+> [!note]
+>
+> - Client certificate verification uses the same trust model as server-side TLS: the client cert chain must validate against the configured CA roots.
+> - When `client_auth_ca` points to a file containing multiple CA certificates (a bundle), all of them are loaded into the trust store.
+> - The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
+> - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
 ## Observability
 
@@ -129,7 +129,7 @@ Notes:
 - `x25519` is the recommended default for ECDH curves: fast, secure, and widely supported.
 - Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental — use only in testing environments.
 
-## Notes and troubleshooting
+## Troubleshooting
 
 ### "Invalid minimum/maximum TLS version"
 

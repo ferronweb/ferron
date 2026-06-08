@@ -22,10 +22,10 @@ example.com {
 }
 ```
 
-Notes:
-
-- Matching is path-prefix based.
-- If this block matches, the URL is automatically rewritten to remove the base URL.
+> [!note]
+>
+> - Matching is prefix-based — `/api` matches `/api` and `/api/users`. More specific locations win over less specific ones.
+> - If this block matches, the URL is automatically rewritten to remove the base URL.
 
 ### Conditional matching
 
@@ -48,7 +48,8 @@ example.com {
 }
 ```
 
-For named matcher syntax and available variables, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
+> [!info]
+> For named matcher syntax and available variables, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
 
 ### Error handling
 
@@ -78,10 +79,10 @@ example.com {
 }
 ```
 
-Notes:
-
-- If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
-- Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/configuration/content/static-files).
+> [!note]
+>
+> - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
+> - Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/configuration/content/static-files).
 
 ### URL redirects
 
@@ -97,16 +98,9 @@ example.com {
 }
 ```
 
-Notes for `trailing_slash_redirect`:
-
-- Only applies when the resolved request path maps to a directory on the filesystem.
-- Query strings are preserved in the redirect (e.g. `/blog?foo=bar` → `/blog/?foo=bar`).
-- This is useful for SEO consistency and ensuring relative links within directory-served pages resolve correctly.
-
-## Notes and troubleshooting
-
-- `location` is prefix-based. `/api` matches `/api` and `/api/users`.
-- More specific locations win over less specific ones.
-- For [conditionals and variables](/docs/v3/configuration/fundamentals/conditionals), see the dedicated page.
-- For static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
+> [!note]
+> Notes for `trailing_slash_redirect`:
+>
+> - Only applies when the resolved request path maps to a directory on the filesystem.
+> - Query strings are preserved in the redirect (e.g. `/blog?foo=bar` → `/blog/?foo=bar`).
+> - This is useful for SEO consistency and ensuring relative links within directory-served pages resolve correctly.

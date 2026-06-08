@@ -13,6 +13,9 @@ example.com {
 
 The WebSocket protocol is supported out of the box in this configuration — no additional configuration is required.
 
+> [!tip]
+> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `passive_check` or `circuit_breaker` settings.
+
 ## Reverse proxy with static file serving support
 
 Ferron supports serving static files and reverse proxying at once. You can use separate `location` blocks for this:
@@ -31,6 +34,9 @@ example.com {
     }
 }
 ```
+
+> [!tip]
+> If only some paths fail, review `location` matching order — more specific locations win over less specific ones.
 
 ## Reverse proxy with a single-page application
 
@@ -244,7 +250,11 @@ example.com {
 }
 ```
 
-For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy#circuit-breaking).
+> [!important]
+> Circuit breaking counts transport failures and upstream `5xx` responses — it does not automatically retry upstream `5xx` responses.
+
+> [!info]
+> For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy#circuit-breaking).
 
 ## Active health checks
 
@@ -267,7 +277,8 @@ example.com {
 }
 ```
 
-For active health check configuration, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy).
+> [!info]
+> For active health check configuration, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy).
 
 ## Reverse proxy to backends listening on Unix sockets
 
@@ -388,13 +399,3 @@ example.com {
     }
 }
 ```
-
-## Notes and troubleshooting
-
-- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `passive_check` or `circuit_breaker` settings.
-- Circuit breaking counts transport failures and upstream `5xx` responses. It does not automatically retry upstream `5xx` responses.
-- If only some paths fail, review `location` matching order — more specific locations win over less specific ones.
-- For mixed static + API setups, keep API routes in a dedicated prefix like `/api` and use a catch-all `/` location for static files or SPA fallback.
-- For gRPC upstreams, enable `http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.
-- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/v3/use-cases/security/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
-- For upstream header forwarding details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy).

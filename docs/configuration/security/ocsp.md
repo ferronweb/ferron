@@ -153,7 +153,7 @@ If no OCSP URL is found in the certificate, OCSP stapling is silently skipped fo
 
 - If the OCSP responder is unreachable, the last cached response is kept and used until a new one is fetched. However, the service does not serve responses past their `nextUpdate` time — it will keep retrying until a fresh response is obtained.
 
-## Notes and troubleshooting
+## Troubleshooting
 
 ### "OCSP fetch failed: ..."
 
@@ -163,7 +163,17 @@ The OCSP responder returned an error or was unreachable. The service will retry 
 - CA's OCSP responder is down
 - Certificate has no OCSP URL in AIA extension
 
-### Observability
+### Verifying stapling
+
+Use OpenSSL to verify that OCSP stapling is working:
+
+```bash
+openssl s_client -connect example.com:443 -status -servername example.com </dev/null 2>/dev/null | grep -A 20 "OCSP response"
+```
+
+You should see a `OCSP Response Status: successful` in the output.
+
+## Observability
 
 The OCSP background task emits log events and metrics through the configured observability pipeline:
 
@@ -186,16 +196,6 @@ The OCSP background task emits log events and metrics through the configured obs
 | `ferron.ocsp.fetch_duration_seconds` | Histogram | — | Time to fetch OCSP response |
 | `ferron.ocsp.cached_certificates` | Gauge | — | Number of certificates tracked |
 | `ferron.ocsp.certificates_with_stapling` | Gauge | — | Certificates with valid stapled responses |
-
-### Verifying stapling
-
-Use OpenSSL to verify that OCSP stapling is working:
-
-```bash
-openssl s_client -connect example.com:443 -status -servername example.com </dev/null 2>/dev/null | grep -A 20 "OCSP response"
-```
-
-You should see a `OCSP Response Status: successful` in the output.
 
 ## See also
 

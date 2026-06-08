@@ -15,6 +15,9 @@ ferron validate -c ferron.conf
 
 If the configuration is valid, the command exits with code 0. If there are errors, it exits with code 1.
 
+> [!note]
+> Validation is module-aware: a directive recognized by a loaded module is valid; an unrecognized one is flagged as unknown. Validation does not guarantee runtime correctness — some issues can only be detected at runtime.
+
 ### Log output
 
 By default, validation prints diagnostics as log messages:
@@ -203,7 +206,8 @@ The `doctor` command extends validation with best-practice checks for security, 
 ferron doctor -c ferron.conf
 ```
 
-See [Configuration doctor](/docs/v3/configuration/fundamentals/doctor) for the full list of checks.
+> [!info]
+> See [Configuration doctor](/docs/v3/configuration/fundamentals/doctor) for the full list of checks.
 
 ### ferron adapt
 
@@ -213,21 +217,20 @@ The `adapt` command outputs the parsed configuration as JSON without running val
 ferron adapt -c ferron.conf
 ```
 
-See [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config) for details.
+> [!tip]
+> The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
+
+> [!info]
+> See [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config) for details.
 
 ### ferron run
 
 The `run` command performs the same validation during startup. If validation fails, the server exits with an error.
 
-## Notes and troubleshooting
+> [!note]
+> Unknown directives produce warnings, not errors — the server can start, but the directive is silently ignored. Invalid configurations produce errors — the server will not start.
 
-- **Unknown directives produce warnings, not errors.** The server can start, but the directive is silently ignored.
-- **Invalid configurations produce errors.** The server will not start.
-- **Validation is module-aware.** A directive recognized by a loaded module is valid; an unrecognized one is flagged as unknown.
-- **Validation does not guarantee runtime correctness.** Some issues (e.g., unresolvable upstream hosts, permission errors) can only be detected at runtime.
-- The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
-
-### See also
+## See also
 
 - [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config)
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)

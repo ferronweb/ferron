@@ -12,6 +12,9 @@ This page documents the `map` directive, which creates variables whose values ar
 - `map <source: string> <destination: string>`
   - This directive specifies a source variable to match and a destination variable name to create. The nested block defines the mapping rules. Default: none
 
+> [!note]
+> The destination variable name can be any identifier — it is stored in the request's variable map and accessed via `{{name}}` interpolation.
+
 #### Block sub-directives
 
 | Sub-directive | Arguments | Description | Default |
@@ -19,6 +22,9 @@ This page documents the `map` directive, which creates variables whose values ar
 | `default` | `<value: string>` | The fallback value when no entry matches the source. | Empty string |
 | `exact` | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`. | None |
 | `regex` | `<pattern: string> <result: string>` | Regular expression match. Capture groups can be referenced in the result as `$1`, `$2`, etc. | None |
+
+> [!note]
+> If the source variable cannot be resolved, the source value is treated as an empty string and the `default` value is used. Regex patterns are compiled at parse time — invalid patterns are rejected during validation. Wildcard patterns (`*`) are converted to regex internally.
 
 #### Block options (inside `regex { ... }`)
 
@@ -135,10 +141,5 @@ When a `map` with the same destination variable is defined at multiple levels, t
 
 Map evaluation runs after client IP resolution and before URL rewriting. This means mapped variables are available for use in `rewrite` patterns, proxy configuration, and other downstream directives.
 
-## Notes and troubleshooting
-
-- If the source variable cannot be resolved, the source value is treated as an empty string, and the `default` value (or empty string) is used.
-- Regex patterns are compiled at configuration parse time, not at request time. Invalid patterns are rejected during validation.
-- Wildcard patterns (`*`) are converted to regex under the hood and are slightly more expensive than exact matches, but cheaper than general regex patterns.
-- For `map` interaction with rewriting, see [URL rewriting](./rewrite.md). Rewrites receive the mapped variables since `map` runs first in the pipeline.
-- The destination variable name can be any identifier — it is stored in the request's variable map and accessed via `{{name}}` interpolation.
+> [!info]
+> For `map` interaction with rewriting, see [URL rewriting](./rewrite.md).

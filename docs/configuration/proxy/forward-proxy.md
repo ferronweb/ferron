@@ -53,6 +53,9 @@ The forward proxy uses a **deny-by-default** model:
 2. **Port control**: Only explicitly allowed ports are permitted (defaults to 80 and 443).
 3. **IP blocking**: After DNS resolution, the final IP is checked against the deny list.
 
+> [!note]
+> DNS resolution happens at connect time — the resolved IP is validated against the deny list to prevent DNS rebinding attacks.
+
 ## Request handling
 
 ### CONNECT tunneling
@@ -113,14 +116,8 @@ proxy.example.com {
 }
 ```
 
-## Notes and troubleshooting
-
-- The `forward_proxy` directive is scoped to individual HTTP host blocks.
-- Domain patterns support `*` wildcards (e.g. `*.example.com` matches `api.example.com`).
-- DNS resolution happens at connect time. The resolved IP is validated against the deny list to prevent DNS rebinding attacks.
-- For HTTPS forwarding, clients must use CONNECT tunneling — direct `https://` URLs in HTTP requests are not supported.
-- For reverse proxy configuration, see [Reverse proxy](/docs/v3/configuration/proxy/reverse-proxy).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/server/host).
+> [!note]
+> For HTTPS forwarding, clients must use CONNECT tunneling. Direct `https://` URLs in HTTP requests are not supported.
 
 ## Best practices
 

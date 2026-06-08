@@ -51,6 +51,9 @@ The `key` directive determines what each bucket is keyed on:
 
 ## Behavior
 
+> [!important]
+> Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (e.g. Redis) — this is not supported by the rate limiting module.
+
 ### Token bucket algorithm
 
 Each key gets its own token bucket:
@@ -103,6 +106,9 @@ api.example.com {
 
 Each unique API key gets 150 requests burst, then 50/second.
 
+> [!note]
+> Requests where the key cannot be extracted (e.g. missing header) skip that rule.
+
 ### Strict endpoint with custom status
 
 ```ferron
@@ -140,12 +146,3 @@ The rate limiting module emits the following metrics:
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |
-
-## Notes and troubleshooting
-
-- Requests where the key cannot be extracted (e.g. missing header) skip that rule.
-- The `Retry-After` header value is rounded up to the nearest whole second.
-- Bucket memory usage is approximately 128 bytes per unique key.
-- Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (e.g. Redis) — this is not currently supported.
-- For `location` syntax, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/server/host).

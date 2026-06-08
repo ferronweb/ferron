@@ -7,6 +7,13 @@ Ferron's `abuse_protection` directive provides lightweight, Fail2ban-style IP ba
 
 This page covers common deployment patterns. For full configuration details, see [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban).
 
+> [!important]
+>
+> - Bans are in-memory only — they are not preserved across server restarts. There is no admin API for manual unban — you must wait for the ban to expire naturally.
+> - If your IP is banned immediately, check your thresholds — you may have `events 1` or very short `window` values that are too aggressive.
+> - If legitimate clients are being banned, add their IP or CIDR range to the `allowlist`.
+> - If Ferron is behind a reverse proxy, configure `client_ip_from_header` so Ferron sees the real client IP, not the proxy's IP. See [HTTP host directives](/docs/v3/configuration/server/host).
+
 ## Basic abuse protection
 
 Enable abuse protection with default thresholds on a host:
@@ -153,14 +160,3 @@ example.com {
     root /var/www/html
 }
 ```
-
-## Notes and troubleshooting
-
-- **Bans are in-memory only** — they are not preserved across server restarts.
-- **No admin API for manual unban** — you must wait for the ban to expire naturally.
-- **If your IP is banned immediately**, check your thresholds — you may have `events 1` or very short `window` values that are too aggressive.
-- **If Ferron is behind a reverse proxy**, configure `client_ip_from_header` so Ferron sees the real client IP, not the proxy's IP. See [HTTP host directives](/docs/v3/configuration/server/host).
-- **If legitimate clients are being banned**, add their IP or CIDR range to the `allowlist`.
-- **If you see high ban counts**, consider increasing the `events` threshold or the `window` duration to reduce false positives.
-- **For multiple event types**, each IP is tracked independently per event type. A client can be banned for rate limiting while their brute force count remains below threshold.
-- **For directive details**, see [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban).

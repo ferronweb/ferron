@@ -11,6 +11,14 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
+> [!note]
+>
+> - These directives affect startup and listener construction, not per-request routing.
+> - Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or `config-json` module (for `.json` files).
+
+> [!info]
+> For observability-specific configuration, see [Observability and logging](/docs/v3/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/server/host). For admin API security hardening, see [Security considerations](#security-considerations).
+
 ## Directives
 
 ### Default ports
@@ -29,13 +37,13 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
-Notes:
-
-- When no explicit port is specified for a host, Ferron starts both an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
-- The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
-- Setting `default_http_port false` disables the automatic HTTP listener for hosts without explicit ports.
-- Setting `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects for hosts without explicit ports.
-- If **both** directives are set to `false`, host blocks without explicit ports will not create any listeners and a warning is logged.
+> [!note]
+>
+> - When no explicit port is specified for a host, Ferron starts both an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
+> - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
+> - Setting `default_http_port false` disables the automatic HTTP listener for hosts without explicit ports.
+> - Setting `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects for hosts without explicit ports.
+> - If **both** directives are set to `false`, host blocks without explicit ports will not create any listeners and a warning is logged.
 
 **Disable default HTTP listener (HTTPS only):**
 
@@ -94,14 +102,11 @@ Notes:
 
 ### PROXY protocol
 
-- `protocol_proxy <bool>`
+- `protocol_proxy [bool]`
   - This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses for the duration of the connection. Default: `protocol_proxy false`
 
-Notes:
-
-- Supports both PROXY protocol v1 (text-based) and v2 (binary).
-- If parsing fails, the connection is rejected with an error logged.
-- This is a global directive and applies to all TCP listeners.
+> [!note]
+> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, the connection is rejected with an error logged.
 
 ### Reverse proxy connection limits
 
@@ -116,28 +121,23 @@ Notes:
 }
 ```
 
-Notes:
-
-- The connection pool is created lazily on the first request that needs it, reading this value at creation time.
-- Per-upstream `limit` directives inside `proxy` blocks further restrict connections to individual backends.
-
 ### Admin API
 
 The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, the admin API is **disabled** entirely.
 
 - `listen <address: string>` (`admin-api`)
   - This directive specifies the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
-- `health <bool>` (`admin-api`)
+- `health [bool]` (`admin-api`)
   - This directive specifies whether the `GET /health` endpoint is enabled. Returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
-- `status <bool>` (`admin-api`)
+- `status [bool]` (`admin-api`)
   - This directive specifies whether the `GET /status` endpoint is enabled. Returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
-- `config <bool>` (`admin-api`)
+- `config [bool]` (`admin-api`)
   - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
-- `reload <bool>` (`admin-api`)
+- `reload [bool]` (`admin-api`)
   - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
-- `reload_get <bool>` (`admin-api`)
+- `reload_get [bool]` (`admin-api`)
   - This directive specifies whether the `GET /reload` endpoint is enabled. Returns the current reload status. Default: `reload_get true`
-- `runtime <bool>` (`admin-api`)
+- `runtime [bool]` (`admin-api`)
   - This directive specifies whether the `GET /runtime` endpoint is enabled. Returns runtime information such as thread count and io_uring status. Default: `runtime true`
 
 **Configuration example:**
@@ -157,11 +157,8 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 }
 ```
 
-Notes:
-
-- All endpoint flags accept `true` or `false`. A bare directive without a value (e.g. `health`) counts as enabled.
-- The admin listener runs on a separate secondary Tokio runtime, isolated from the primary data-plane runtime.
-- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, `htpasswd`.
+> [!note]
+> The `/config` endpoint redacts sensitive directive names, such as: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, `htpasswd`.
 
 ### Observability
 
@@ -212,13 +209,13 @@ example.com {
 }
 ```
 
-Notes:
-
-- Log files are created if they don't exist and opened in append mode.
-- Writes are buffered and flushed periodically (every 1 second) and on shutdown.
-- If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
-- When rotation is enabled, the current log file is renamed to `<filename>.1`, existing rotated files are shifted up, and a new empty log file is created.
-- If `access_log_rotate_keep` (or `error_log_rotate_keep`) is set to `0`, the log file is deleted on rotation instead of being renamed.
+> [!note]
+>
+> - Log files are created if they don't exist and opened in append mode.
+> - Writes are buffered and flushed periodically (every 1 second) and on shutdown.
+> - If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
+> - When rotation is enabled, the current log file is renamed to `<filename>.1`, existing rotated files are shifted up, and a new empty log file is created.
+> - If `access_log_rotate_keep` (or `error_log_rotate_keep`) is set to `0`, the log file is deleted on rotation instead of being renamed.
 
 ## Observability aliases
 
@@ -469,16 +466,6 @@ Returns the runtime status as JSON:
 | `primary_threads` | Number of primary threads (typically equal to CPU count). |
 | `io_uring_supported` | Whether `io_uring` is supported on the current system. |
 | `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime. |
-
-## Notes and troubleshooting
-
-- These directives affect startup and listener construction, not per-request routing.
-- The built-in blank configuration enables `runtime.io_uring true`.
-- During configuration reload (SIGHUP), the existing admin listener is gracefully shut down and a new one is started if the `admin` block is still present.
-- Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or `config-json` module (for `.json` files).
-- For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability/logging).
-- For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/server/host).
-- For admin API security hardening, see [Security considerations](#security-considerations) under the Admin API section.
 
 ## Best practices
 

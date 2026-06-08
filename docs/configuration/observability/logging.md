@@ -5,6 +5,11 @@ description: "Access logging, log formatters, metrics, tracing, and OTLP export 
 
 This page documents the observability configuration surface for Ferron, including access logs, log formatters, metrics, tracing, and OTLP export.
 
+> [!info]
+>
+> - For Prometheus-specific metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
+> - For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
+
 ## Directives
 
 ### Access logging
@@ -110,9 +115,12 @@ The `access_pattern` directive supports the following tokens:
 
 Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
 
-### Metrics
+> [!tip]
+> If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability). For log format details, see the `json` and `text` formatter sections above.
 
-Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics:
+## Metrics
+
+Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics, such as:
 
 - **Core HTTP server metrics** — active requests, request duration, and request count. See [HTTP host directives](/docs/v3/configuration/server/host#metrics).
 - **Rate limiting metrics** — allowed and rejected requests. See [Rate limiting](/docs/v3/configuration/content/rate-limit#metrics).
@@ -123,7 +131,10 @@ Ferron emits OpenTelemetry-style metrics through the observability event system.
 - **Process metrics** — CPU time, CPU utilization, and memory usage from the operating system. See [Process metrics](#process-metrics) below.
 - **Admin API metrics** — uptime, active connections, request count, configuration reloads, observability event backpressure, and runtime status. See [Admin API metrics](#admin-api-metrics) below.
 
-#### Process metrics
+> [!note]
+> Observability sinks may drop events under high load. Ferron exposes an admin metric `observability_events_dropped` and a status field to help detect and tune exporter queues.
+
+### Process metrics
 
 The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
 
@@ -137,7 +148,7 @@ The `metrics-process` module collects process-level metrics automatically when a
 | `process.memory.virtual` | UpDownCounter | — | The change in committed virtual memory (VMS) since the last measurement |
 | `process.unix.file_descriptor.count` | UpDownCounter | — | The change in number of unix file descriptors since the last measurement (Linux only) |
 
-#### Admin API metrics
+### Admin API metrics
 
 The `metrics-admin` module collects metrics exposed via admin API automatically when an observability backend is configured.
 
@@ -150,7 +161,7 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 | `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
 | `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
 
-#### Admin API runtime metrics
+### Admin API runtime metrics
 
 The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
 
@@ -160,7 +171,7 @@ The `metrics-admin` module also collects runtime status metrics when an observab
 
 These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 
-#### HTTP and proxy metrics
+### HTTP and proxy metrics
 
 Ferron also emits request-path metrics for common observability gaps:
 
@@ -175,22 +186,22 @@ Ferron also emits request-path metrics for common observability gaps:
 | `ferron.forward_proxy.requests` | Counter | mode (`"connect"` or `"request"`), outcome | Forward-proxy requests |
 | `ferron.static.responses` | Counter | — | Static-file responses across normal, conditional, range, and error paths |
 
-### Tracing
+## Tracing
 
 Each HTTP request generates a root trace span and multiple nested spans for pipeline execution:
 
-#### Root request span
+### Root request span
 
 - **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
   - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
 - **`EndSpan("ferron.request", error)`** — emitted when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 
-#### Pipeline execution span
+### Pipeline execution span
 
 - **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages. This span is a child of `ferron.request`.
 
-#### Per-stage spans
+### Per-stage spans
 
 Each pipeline and file-serving stage generates its own forward and inverse span as a child of `ferron.pipeline.execute`, enabling flame graph analysis:
 
@@ -204,28 +215,13 @@ Each pipeline and file-serving stage generates its own forward and inverse span 
 | `ferron.stage.http_response` | `http-response` | Response control stage |
 | `ferron.stage.<name>.inverse` | (any) | Inverse (cleanup) operation for a stage |
 
-#### Error pipeline span
+### Error pipeline span
 
 - **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
   - Attributes: `http.response.status_code`
 
 Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
 
-### Prometheus export
-
-For Prometheus-specific metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
-
-### OTLP export
-
-For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
-
-#### Structured log style
+## Structured log style
 
 When exporting through OTLP, the `log_style` directive in the OTLP observability block selects between two log record shapes. The `legacy` mode keeps the existing human-readable `message` body and is unaffected by this option. The default `modern` mode publishes each log record as a short OTEL-friendly `summary` body plus typed per-event attributes, and remaps access-log fields to OTEL semantic-convention attribute names (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, and so on). Console and file log sinks are unchanged regardless of the selected log style. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the full mapping and examples.
-
-## Notes and troubleshooting
-
-- If log files are not being written, verify the file paths are accessible and the Ferron process has write permissions.
-- For global observability configuration (`console_log`, `log`, `error_log` shorthand directives), see [Core directives](/docs/v3/configuration/server/core-directives#observability).
-- For log format details, see the `json` and `text` formatter sections above.
-- Observability sinks may drop events when under high load; Ferron exposes an admin metric `observability_events_dropped` and a status field to help detect and tune exporter queues.

@@ -99,8 +99,5 @@ Ferron 3 strips the matched `location` prefix before the next stage runs, so the
 - Forgetting that `location` strips the matched prefix in Ferron 3.
 - Copying a complex configuration before verifying a minimal working setup.
 
-## Notes and troubleshooting
-
-- If you are testing locally, start with a single host block and one directive at a time.
-- If a mixed setup behaves oddly, confirm which `location` block matches first and remember that Ferron strips the matched prefix.
-- If validation fails, fix the reported config error before trying to restart the server.
+> [!tip]
+> If you are testing locally, start with a single host block and one directive at a time. If validation fails, fix the reported config error before trying to restart the server.

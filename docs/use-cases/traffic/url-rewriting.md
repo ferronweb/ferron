@@ -9,6 +9,12 @@ Rewrites are applied early in the request pipeline, before proxying or static fi
 
 For many applications behind reverse proxy, rewriting is not required. Those apps usually handle routing themselves, and Ferron only forwards requests with `proxy` (often using `location` blocks).
 
+> [!tip]
+> Use `rewrite_log true` while debugging to verify which rules match. Each rewrite operation is logged to the error log.
+
+> [!info]
+> For directive reference, see [Configuration: URL rewriting](/docs/v3/configuration/routing/rewrite).
+
 ## Single-page application fallback
 
 A common pattern is rewriting unknown routes to `/` so client-side routing works:
@@ -71,13 +77,3 @@ example.com {
 ```
 
 A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second rule rewrites it to `/current/foo`.
-
-## Notes and troubleshooting
-
-- Use `rewrite_log true` while debugging to verify which rules match. Each rewrite operation is logged to the error log.
-- Prefer specific rules before broad catch-all rules.
-- Use `file false` and `directory false` for front-controller/SPA rewrites so existing files/directories are still served directly.
-- Rules with `last true` stop further processing.
-- When URL sanitization is enabled (the default), dangerous path sequences are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false`.
-- For reverse-proxy routing patterns, see [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
-- For directive reference, see [Configuration: URL rewriting](/docs/v3/configuration/routing/rewrite).

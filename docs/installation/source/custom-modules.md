@@ -60,6 +60,12 @@ fn main() {
 }
 ```
 
+> [!tip]
+> If you want a minimal binary, disable `profile-default` for `ferron-entrypoint` and add only the specific modules you need to your `Cargo.toml`.
+
+> [!note]
+> Ensure your custom modules are compatible with the version of `ferron-core` and `ferron-entrypoint` you are using. Ferron modules are statically linked — any change to your module list requires a recompilation of the binary.
+
 ## Building and running
 
 Build your custom binary using Cargo:
@@ -81,9 +87,3 @@ Ferron uses a **module profile** system. The `ferron-entrypoint` crate provides 
 - `ferron_entrypoint::init()`: Sets up `malloc-best-effort` and crash reporting.
 - `ferron_entrypoint::default_profile()`: Returns a list of all loaders for modules bundled with Ferron.
 - `ferron_entrypoint::main(profile)`: Parses command-line arguments (like `run`, `validate`, `adapt`), loads the configuration, and starts the lifecycle for all modules in the profile.
-
-## Notes and troubleshooting
-
-- **Dependency versions** - ensure your custom modules are compatible with the version of `ferron-core` and `ferron-entrypoint` you are using.
-- **Feature flags** - if you want a minimal binary, disable `profile-default` for `ferron-entrypoint` and add only the specific modules you need to your `Cargo.toml`.
-- **Static linking** - Ferron modules are statically linked. Any change to your module list requires a recompilation of the binary.

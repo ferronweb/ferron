@@ -33,11 +33,17 @@ To install Ferron 3, run the following command:
 sudo apt install ferron3
 ```
 
+> [!tip]
+> Keep Ferron up to date by running `sudo apt update && sudo apt upgrade ferron3`.
+
 ### 3. Access the web server
 
 By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
 
 If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
+
+> [!tip]
+> If you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 
@@ -78,10 +84,3 @@ To reload the configuration without restarting the service:
 ```sh
 sudo systemctl reload ferron
 ```
-
-## Notes and troubleshooting
-
-- **Configuration file location** — the default configuration is at `/etc/ferron/ferron.conf`. After editing, reload the service with `sudo systemctl reload ferron`.
-- **Firewall settings** — if you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured).
-- **Port conflicts** — if port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
-- **Package updates** — keep Ferron up to date by running `sudo apt update && sudo apt upgrade ferron3`.

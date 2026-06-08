@@ -29,6 +29,9 @@ cargo build -r --workspace
 
 This compiles all crates in the workspace, including the `ferron` binary and all module crates.
 
+> [!note]
+> The first build will take longer as Cargo downloads and compiles all dependencies. Subsequent builds are faster.
+
 ## Running the server
 
 Once the build completes, you can run Ferron directly with `cargo run`:
@@ -75,7 +78,3 @@ cargo test --workspace                              # run all workspace tests
 cargo fmt --all --check                             # verify code formatting
 cargo clippy --workspace --all-targets -- -D warnings  # run linter with warnings as errors
 ```
-
-## Notes and troubleshooting
-
-- **Build times** — the first build will take longer as Cargo downloads and compiles all dependencies. Subsequent builds are faster.

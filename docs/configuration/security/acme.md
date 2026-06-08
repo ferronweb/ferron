@@ -226,7 +226,7 @@ If only one path is given, the key path defaults to the certificate path with a 
 - When saved to disk, keys are written with `0600` permissions on Unix.
 - When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate issuance for arbitrary hostnames.
 
-## Notes and troubleshooting
+## Troubleshooting
 
 ### "ACME certificate provisioning error: ..."
 
@@ -238,7 +238,17 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 - Check that the provider has permission to create TXT records for the domain.
 - DNS propagation may take longer than 60 seconds for some providers — the ACME CA will retry validation.
 
-### Observability
+### Verifying certificates
+
+```bash
+# Check the certificate served by Ferron
+echo | openssl s_client -connect example.com -servername example.com 2>/dev/null | openssl x509 -noout -subject -dates -issuer
+
+# Verify OCSP stapling
+openssl s_client -connect example.com -status -servername example.com </dev/null 2>/dev/null | grep -A 5 "OCSP response"
+```
+
+## Observability
 
 The ACME background task emits log events and metrics through the configured observability pipeline:
 
@@ -271,16 +281,6 @@ The ACME background task emits log events and metrics through the configured obs
 | `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
 | `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
-
-### Verifying certificates
-
-```bash
-# Check the certificate served by Ferron
-echo | openssl s_client -connect example.com -servername example.com 2>/dev/null | openssl x509 -noout -subject -dates -issuer
-
-# Verify OCSP stapling
-openssl s_client -connect example.com -status -servername example.com </dev/null 2>/dev/null | grep -A 5 "OCSP response"
-```
 
 ## See also
 

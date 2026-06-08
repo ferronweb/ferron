@@ -1997,7 +1997,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 }
 ```
 
-## Notes and troubleshooting
+## Usage notes
 
 ### Using environment variables for credentials
 

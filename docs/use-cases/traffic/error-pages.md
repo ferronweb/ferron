@@ -36,10 +36,5 @@ app.example.com {
 }
 ```
 
-## Notes and troubleshooting
-
-- Without `intercept_errors true` inside the `proxy` block, backend error responses are passed through from the upstream service as-is.
-- The file path is absolute or relative to the current working directory.
-- If the specified error page file does not exist, the directive is skipped and the built-in error page is used instead.
-- Only applies when an error response is being generated and no custom response has already been set.
-- For directive details, see [Configuration: static file serving](/docs/v3/configuration/content/static-files#error-pages) and [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy).
+> [!note]
+> The file path is absolute or relative to the current working directory. If the specified error page file does not exist, the directive is skipped and the built-in error page is used instead.

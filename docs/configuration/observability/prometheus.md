@@ -5,6 +5,9 @@ description: "Prometheus metrics export configuration for monitoring Ferron serv
 
 This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports Ferron's internal metrics in Prometheus format, enabling integration with Prometheus servers, Grafana dashboards, and other monitoring systems.
 
+> [!warning]
+> The Prometheus endpoint does not currently support authentication. For secure deployments, place Ferron behind a reverse proxy with authentication or use network-level access controls.
+
 ## Directives
 
 Prometheus metrics are configured via `observability` blocks with `provider prometheus`:
@@ -35,11 +38,12 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 - IPv6: `"[::1]:8889"`, `"[::]:8889"`
 - Port-only: `":8889"` (binds to all interfaces)
 
-**Security note:** Binding to `0.0.0.0` or `[::]` exposes the metrics endpoint to all network interfaces. For production deployments, consider:
-
-- Binding to localhost only (`127.0.0.1` or `::1`)
-- Using firewall rules to restrict access
-- Placing Ferron behind a reverse proxy with authentication
+> [!warning]
+> Binding to `0.0.0.0` or `[::]` exposes the metrics endpoint to all network interfaces. For production deployments, consider:
+>
+> - Binding to localhost only (`127.0.0.1` or `::1`)
+> - Using firewall rules to restrict access
+> - Placing Ferron behind a reverse proxy with authentication
 
 ### Format options
 
@@ -71,7 +75,8 @@ Each `key` entry configures one baggage key to promote:
 | `attribute` | `<string>` | The Prometheus label name to use. | same as the baggage key |
 | `max_distinct` | `<number> \| false` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | 100 |
 
-**Cardinality warning:** Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
+> [!warning]
+> Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
 
 ## Metrics endpoint
 
@@ -105,6 +110,11 @@ http_server_request_duration_seconds_bucket{http_request_method="GET",le="+Inf"}
 http_server_request_duration_seconds_sum{http_request_method="GET"} 12.345
 http_server_request_duration_seconds_count{http_request_method="GET"} 195
 ```
+
+> [!tip]
+>
+> - If the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.
+> - Ensure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
 
 ### Metric naming
 
@@ -204,6 +214,9 @@ example.com {
 }
 ```
 
+> [!tip]
+> Be aware of high-cardinality labels that could cause performance issues in Prometheus. Use `max_distinct` on `baggage` keys to cap distinct label values and prevent label explosion.
+
 ## Prometheus server configuration
 
 Add the following to your `prometheus.yml` to scrape Ferron metrics:
@@ -216,15 +229,6 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
 ```
-
-## Notes and troubleshooting
-
-- **Metric cardinality** - be aware of high-cardinality labels that could cause performance issues in Prometheus. Ferron limits label values to reasonable cardinality. Use `max_distinct` on `baggage` keys to cap distinct label values.
-- **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into metric labels. Always set `max_distinct` for keys with unbounded values to prevent label explosion.
-- **Port conflicts** - if the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.
-- **Firewall rules** - ensure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
-- **Authentication** - the Prometheus endpoint does not currently support authentication. For secure deployments, place Ferron behind a reverse proxy with authentication or use network-level access controls.
-- **Multiple configurations** - each unique combination of `endpoint_listen` and `endpoint_format` creates a separate metrics endpoint. This allows different hosts to export metrics to different ports or formats.
 
 ## Best practices
 

@@ -41,7 +41,15 @@ example.com {
 }
 ```
 
+> [!note]
+> Disabled by default: Both `buffer_request` and `buffer_response` are disabled unless explicitly configured — this avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes; typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit; setting it too large increases memory consumption per request.
+
 ## Behavior
+
+> [!tip]
+>
+> - Each active connection uses memory proportional to the buffer size when buffering is enabled. Under high concurrency, large buffer sizes can increase memory pressure — monitor memory usage and adjust accordingly.
+> - To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes) or remove the directive entirely if no parent scope configures it.
 
 ### Request buffering
 
@@ -51,6 +59,9 @@ When `buffer_request` is configured:
 - If the request body is smaller than the buffer limit, the entire body is collected before downstream stages (like reverse proxy or authentication) process it.
 - If the request body exceeds the buffer limit, the buffered portion is collected and the remaining body stream is preserved. Downstream stages receive a chained stream consisting of the buffered frames followed by the remaining body.
 - Non-data frames (such as trailing headers) are preserved and stop further collection.
+
+> [!important]
+> Slowloris protection: Request buffering is one layer of defense against Slowloris attacks. You should also configure the `timeout` directive to enforce connection timeouts. See [Core directives](../server/core-directives.md) for the `timeout` directive.
 
 ### Response buffering
 
@@ -64,11 +75,3 @@ When `buffer_response` is configured:
 ### Buffering and pipeline stages
 
 The buffer stage runs early in the HTTP pipeline, after URL rewriting but before rate limiting, authentication, caching, reverse proxy, and static file stages. This ordering ensures that request bodies are buffered before they reach backend handlers.
-
-## Notes and troubleshooting
-
-- **Disabled by default**: Both `buffer_request` and `buffer_response` are disabled unless explicitly configured. This avoids unnecessary memory overhead when buffering is not needed.
-- **Choosing buffer sizes**: Set buffer sizes based on your expected request/response payload sizes. Typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit; setting it too large increases memory consumption per request.
-- **Slowloris protection**: Request buffering is one layer of defense against Slowloris attacks. You should also configure the `timeout` directive to enforce connection timeouts. See [Core directives](../server/core-directives.md) for the `timeout` directive.
-- **Memory considerations**: Each active connection uses memory proportional to the buffer size when buffering is enabled. Under high concurrency, large buffer sizes can increase memory pressure. Monitor memory usage and adjust buffer sizes accordingly.
-- **Disabling buffering**: To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes) or remove the directive entirely if no parent scope configures it.

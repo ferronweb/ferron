@@ -124,11 +124,11 @@ When a hostname is specified (e.g. `example.com`) and no explicit port is given,
 - `snippet <name> { ... }` defines a reusable block of directives.
 - `use <snippet-name>` inside a block expands that snippet in place.
 
-Notes:
-
-- Top-level file includes and snippet expansion are different features.
-- Include cycles and snippet cycles are rejected.
-- Snippets can be reused across multiple host blocks.
+> [!note]
+>
+> - Top-level file includes and snippet expansion are different features.
+> - Include cycles and snippet cycles are rejected.
+> - Snippets can be reused across multiple host blocks.
 
 ## Resolution model
 
@@ -139,12 +139,12 @@ Configuration is resolved in layers:
 3. Matching `location` blocks are layered in.
 4. Matching `if` and `if_not` blocks are layered in.
 
-Important behavior:
-
-- `location` is prefix-based. `/api` matches `/api` and `/api/users`.
-- More specific locations win over less specific ones.
-- All expressions inside a `match` block are combined with AND semantics.
-- Duplicate `location`, `if`, `if_not`, and `handle_error` blocks with the same selector are merged during preparation.
+> [!important]
+>
+> - `location` is prefix-based. `/api` matches `/api` and `/api/users`.
+> - More specific locations win over less specific ones.
+> - All expressions inside a `match` block are combined with AND semantics.
+> - Duplicate `location`, `if`, `if_not`, and `handle_error` blocks with the same selector are merged during preparation.
 
 ## Inheritance and override behavior
 
@@ -153,6 +153,12 @@ Ferron applies inheritance by block context:
 - Location blocks inherit parent directives unless the child block defines directives with the same name.
 - When a child block defines a directive with the same name as one in the parent, the child's directives take precedence in that block.
 - For conditional branches, it is often clearer to explicitly `use` shared snippets inside each `if`/`if_not` branch.
+
+> [!note]
+> Where validation and runtime behavior differ, the directive pages call that out explicitly.
+
+> [!note]
+> Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d` — plain numbers without a suffix are treated as seconds. Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
 
 ### Hot-reload support
 
@@ -164,13 +170,7 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf
 ```
 
-## Notes and troubleshooting
-
-- Where validation and runtime behavior differ, the directive pages call that out explicitly.
-- Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Plain numbers without a suffix are treated as seconds.
-- Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
-
-### See also
+## See also
 
 - [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals)
 - [Routing and URL processing](/docs/v3/configuration/routing/url-processing) (`location`, `if`, `if_not`)

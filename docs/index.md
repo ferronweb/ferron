@@ -30,8 +30,5 @@ If you are new to Ferron, follow this path:
 - [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy)
 - [Automatic TLS](/docs/v3/use-cases/security/automatic-tls)
 
-## Notes and troubleshooting
-
-- If a link in the sidebar looks unfamiliar, start with [Getting started](/docs/v3/getting-started) and return to the deeper pages later.
-- If a guide references a directive you have not seen yet, open the related configuration reference page from the links above.
-- For help or bug reports, use the [support page](/support) or open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
+> [!tip]
+> If a guide references a directive you have not seen yet, open the related configuration reference page from the links above.

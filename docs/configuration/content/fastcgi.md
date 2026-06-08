@@ -53,11 +53,12 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:9000`).
-- Unix socket paths must be absolute paths.
-- When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
+> [!note]
+>
+> - TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:9000`).
+> - Unix socket paths must be absolute paths.
+> - When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
+> - If a FastCGI server returns a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response — stderr output is logged as a warning (trimmed before logging).
 
 ### `extension`
 
@@ -77,11 +78,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Extensions are matched case-insensitively.
-- Files with these extensions are processed by the FastCGI backend regardless of their location in the document root.
-- When `fcgi_php` is used instead, `.php` is registered automatically.
+> [!note]
+>
+> - Extensions are matched case-insensitively.
+> - Files with these extensions are processed by the FastCGI backend regardless of their location in the document root.
+> - When `fcgi_php` is used instead, `.php` is registered automatically.
 
 ### `environment`
 
@@ -102,11 +103,12 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Environment variables take precedence over any existing variables with the same name.
-- The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_ADDR`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
+> [!note]
+>
+> - Environment variables take precedence over any existing variables with the same name.
+> - The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_ADDR`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
+> - The working directory is set to the directory containing the script file.
 
 ### `pass`
 
@@ -126,10 +128,10 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- When `pass` is `false`, the FastCGI backend is only invoked for files matching a registered extension.
-- This is useful for routing specific file types to the FastCGI backend while serving other files statically.
+> [!note]
+>
+> - When `pass` is `false`, the FastCGI backend is only invoked for files matching a registered extension.
+> - This is useful for routing specific file types to the FastCGI backend while serving other files statically.
 
 ### `keepalive`
 
@@ -148,11 +150,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Keepalive connections are managed in a connection pool.
-- When combined with the `limit` directive, each upstream can have its own pool limit.
-- Useful for high-traffic sites where connection setup overhead is significant.
+> [!note]
+>
+> - Keepalive connections are managed in a connection pool.
+> - When combined with the `limit` directive, each upstream can have its own pool limit.
+> - Useful for high-traffic sites where connection setup overhead is significant.
 
 ## `fcgi_php`
 
@@ -187,11 +189,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- `fcgi_php` automatically registers `.php` as a file extension.
-- `fcgi_php false` can be used to disable PHP FastCGI for a specific scope.
-- For PHP-FPM over Unix sockets, ensure the socket is accessible by the Ferron process (check owner/group/mode in your PHP-FPM pool configuration).
+> [!note]
+>
+> - `fcgi_php` automatically registers `.php` as a file extension.
+> - `fcgi_php false` can be used to disable PHP FastCGI for a specific scope.
+> - For PHP-FPM over Unix sockets, ensure the socket is accessible by the Ferron process (check owner/group/mode in your PHP-FPM pool configuration).
 
 ## Connection pooling
 
@@ -215,12 +217,12 @@ fcgi_concurrent_conns 8192
 fcgi_concurrent_conns false
 ```
 
-**Notes:**
-
-- This is a global setting that applies to all FastCGI backends.
-- Individual backends can also have their own per-upstream limits via the `limit` nested directive inside `fcgi`.
-- When the pool is exhausted, new requests wait for a connection to become available.
-- Setting to `false` disables the global limit (unlimited concurrent connections).
+> [!note]
+>
+> - This is a global setting that applies to all FastCGI backends.
+> - Individual backends can also have their own per-upstream limits via the `limit` nested directive inside `fcgi`.
+> - When the pool is exhausted, new requests wait for a connection to become available.
+> - Setting to `false` disables the global limit (unlimited concurrent connections).
 
 ### Per-upstream connection limits
 
@@ -258,6 +260,9 @@ Ferron automatically sets the following FastCGI environment variables:
 | `HTTPS` | Set to `on` when the connection is encrypted. |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
+
+> [!tip]
+> FastCGI applications receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
 
 ## Authentication
 
@@ -338,17 +343,3 @@ example.com {
     # Other files are served statically
 }
 ```
-
-## Notes and troubleshooting
-
-- When a connection to the FastCGI backend fails, Ferron returns a `503 Service Unavailable` response and logs an error message.
-- For TCP backends, ensure the host and port are specified in the URL (e.g., `tcp://127.0.0.1:9000`).
-- For Unix socket backends, the path must be absolute (e.g., `unix:///run/php/php8.4-fpm.sock`).
-- The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- Ferron sets `SERVER_SOFTWARE` to `Ferron` automatically.
-- For authentication integration, FastCGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside a module like `http-basicauth` that sets `ctx.auth_user`.
-- For static file serving alongside FastCGI, see [Static file serving](/docs/v3/configuration/content/static-files).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
-- For response headers and CORS, see [HTTP headers and CORS](/docs/v3/configuration/content/headers).
-- For PHP hosting use cases, see [PHP hosting](/docs/v3/use-cases/content/php).
-- For the complete `fcgi` directive reference, see [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).

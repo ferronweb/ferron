@@ -151,7 +151,7 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 - **Don't rotate all keys at once** — keep old keys for overlap during rotation
 - **Don't commit keys to version control** — add to `.gitignore`
 
-## Notes and troubleshooting
+## Troubleshooting
 
 ### "Ticket keys file not found"
 

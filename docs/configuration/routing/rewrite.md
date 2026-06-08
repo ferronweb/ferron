@@ -5,6 +5,9 @@ description: "The `rewrite` directive for transforming request URLs using regula
 
 This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early fin the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
 
+> [!info]
+> For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects); for static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).
+
 ## Directives
 
 ### `rewrite`
@@ -38,6 +41,9 @@ example.com {
 ```
 
 All requests to `/old-path/anything` are internally rewritten to `/new-path/anything`. The client sees no redirect — the rewrite is transparent.
+
+> [!tip]
+> If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect — rules with `last` stop further processing.
 
 #### Stop processing with `last`
 
@@ -125,9 +131,3 @@ When `rewrite_log` is enabled, each rewrite operation is logged to the error log
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | URL rewritten         | INFO  | `ferron.rewrite.from` (string) — original request path + query string, `ferron.rewrite.to` (string) — rewritten path + query string |
-
-## Notes and troubleshooting
-
-- If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect. Rules with `last true` stop further processing.
-- For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects).
-- For static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).

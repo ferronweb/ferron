@@ -91,7 +91,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Branch**: all work targets `develop-3.x` (CI workflows filter on it; the 3.x docs site syncs from it).
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (e.g., `Modules`, `Reverse proxy & load balancing`, `DNS & ACME`, `HTTP server core`, `Observability & metrics`, `Core runtime`). Use bold inline headers for each bullet to aid scanning.
-- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, relative links, and a `## Notes and troubleshooting` section.
+- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links.
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
 - **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
@@ -105,4 +105,5 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
   - **Don't:** Use vague mechanism-focused phrasing (e.g. referring only to allow/block lists).
 - **Consistency > novelty**: If a term is required by an upstream API, legacy config, or widely adopted standard, keep it. Do not auto-replace terminology across the codebase unless explicitly instructed.
 - **Clarity hierarchy**: Functional precision → internal consistency → audience familiarity → terminology trends.
+- **Inline callouts over separate notes sections**: Use GFM alert syntax (`> [!note]`, `> [!warning]`, `> [!important]`, `> [!tip]`) for brief callouts inline with the relevant content. Do not use a separate `## Notes and troubleshooting` section at the end of a page.
 - **Linters as guidance**: Treat terminology linters (e.g., `woke`) as soft suggestions. Do not let them override clarity, break consistency, or trigger unnecessary diffs.

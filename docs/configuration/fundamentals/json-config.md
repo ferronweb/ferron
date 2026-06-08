@@ -5,6 +5,9 @@ description: "Using ferron adapt to output configuration as JSON, and working wi
 
 This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files).
 
+> [!info]
+> For configuration format details, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax), [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals), and [Core directives](/docs/v3/configuration/server/core-directives).
+
 ## The adapt command
 
 The `adapt` command converts `.conf` configuration files into their JSON representation. This is useful for debugging, programmatic configuration generation, or understanding how Ferron parses your configuration.
@@ -136,6 +139,9 @@ Running `ferron adapt -c ferron.conf` outputs:
   }
 }
 ```
+
+> [!note]
+> The JSON output from `ferron adapt` is a faithful representation of the parsed configuration. Boolean directives can be represented as `"args": []` (flag-style, treated as `true`) or with explicit booleans. When spans are `null`, the configuration was likely constructed programmatically.
 
 ## JSON configuration structure
 
@@ -421,14 +427,3 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ```bash
 ferron run --config-params 'watch=1;file=ferron.json' --config-adapter json
 ```
-
-## Notes and troubleshooting
-
-- The JSON output from `ferron adapt` is a faithful representation of the parsed configuration, including all span metadata for error reporting.
-- Boolean directives can be represented as `"args": []` (flag-style, treated as `true`) or `"args": [{"Boolean": [true, null]}]` (explicit boolean).
-- When spans are `null`, the configuration was likely constructed programmatically rather than parsed from a file.
-- The `ports` map is organized by protocol name (e.g., "http", "https", "tcp"). Each protocol can have multiple ports.
-- Host configurations are stored as tuples of `(filters, block)`. The filters control which hosts the configuration applies to.
-- For the `.conf` file format and syntax details, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax).
-- For conditional matchers and variables, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
-- For how configuration is processed at runtime, see [Core directives](/docs/v3/configuration/server/core-directives).

@@ -32,6 +32,10 @@ example.com {
 }
 ```
 
+> [!note]
+>
+> - Multiple `replace` directives are applied in order — later replacements operate on the output of earlier ones. > - The `once` option defaults to `false` (replace all occurrences); use `once true` to replace only the first.
+
 #### Simple replacement
 
 ```ferron
@@ -41,6 +45,9 @@ example.com {
 ```
 
 All occurrences of `foo` in the response body are replaced with `bar`.
+
+> [!tip]
+> If replacements are not being applied, verify that HTTP compression is disabled for the affected responses. For JSON replacement, add `application/json` to `replace_filter_types`.
 
 #### Replace only first occurrence
 
@@ -183,12 +190,3 @@ This ordering ensures that string replacement operates on raw, uncompressed resp
 | `ferron.replace.replacements_applied` | Counter | — | Responses successfully modified by replacement rules |
 | `ferron.replace.skipped_compressed` | Counter | — | Responses skipped due to `Content-Encoding` header (compressed data) |
 | `ferron.replace.skipped_mime` | Counter | — | Responses skipped due to MIME type mismatch |
-
-## Notes and troubleshooting
-
-- If replacements are not being applied, verify that HTTP compression is disabled for the affected responses. Compressed responses are always skipped.
-- If you need to replace strings in JSON responses, add `application/json` to `replace_filter_types`.
-- Multiple `replace` directives are applied in order — later replacements operate on the output of earlier ones.
-- The `once` option defaults to `false` (replace all occurrences). Use `once true` to replace only the first occurrence.
-- For compression configuration, see [Static content](/docs/v3/configuration/content/static-files).
-- For caching interaction, see [HTTP cache](/docs/v3/configuration/content/cache).

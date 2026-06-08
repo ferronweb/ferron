@@ -69,17 +69,18 @@ Open the `ferron.conf` file in a text editor and modify it to suit your server's
 
 - **macOS**:
 
-  On macOS, you may need to remove the quarantine attribute first:
-
-  ```sh
-  xattr -d com.apple.quarantine ferron
-  ```
-
-  Then run:
+  Run:
 
   ```sh
   ./ferron
   ```
+
+  > [!tip]
+  > On macOS, you may need to remove the quarantine attribute first:
+  >
+  > ```sh
+  > xattr -d com.apple.quarantine ferron
+  > ```
 
 - **Linux**:
 
@@ -95,6 +96,9 @@ Open the `ferron.conf` file in a text editor and modify it to suit your server's
 By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server is running.
 
 If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
+
+> [!tip]
+> If you cannot access the server from another machine, ensure your firewall allows incoming connections on the configured port (default: 80). If port 80 is already in use, you can change the listen port in `ferron.conf` and update your firewall rules accordingly.
 
 ## Reloading the configuration (Unix)
 
@@ -136,10 +140,3 @@ Ferron also provides several commands for working with configuration files:
 ./ferron validate -c ferron.conf   # validate configuration without starting
 ./ferron adapt -c ferron.conf      # output configuration as JSON
 ```
-
-## Notes and troubleshooting
-
-- **File permissions on Linux/macOS** — if you encounter permission errors, ensure the `ferron` binary is executable: `chmod +x ferron`.
-- **macOS quarantine** — macOS may block the binary with a quarantine warning. Use `xattr -d com.apple.quarantine ferron` to remove it.
-- **Firewall settings** — if you cannot access the server from another machine, ensure your firewall allows incoming connections on the configured port (default: 80).
-- **Port conflicts** — if port 80 is already in use, you can change the listen port in `ferron.conf` and update your firewall rules accordingly.

@@ -5,6 +5,9 @@ description: "Static file serving, directory listings, compression, caching head
 
 This page documents directives that configure static file serving, directory listings, compression, caching behavior, and custom error pages for requests resolved to the filesystem (via `root`).
 
+> [!info]
+> Static file serving is handled by the `http-static` module. For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing), [HTTP cache](/docs/v3/configuration/content/cache.md), [HTTP response control](/docs/v3/configuration/routing/response), and [URL rewriting](/docs/v3/configuration/routing/rewrite).
+
 ## Directives
 
 ### Index and directory listings
@@ -24,11 +27,11 @@ example.com {
 }
 ```
 
-Notes:
-
-- Only generates a listing if no `index` file was found for the directory.
-- Dotfiles (names starting with `.`) are excluded from the listing, except `.maindesc` which is read as a description.
-- A `.maindesc` file in the directory, if present, is displayed as a `<pre>` block below the file table.
+> [!note]
+>
+> - Only generates a listing if no `index` file was found for the directory.
+> - Dotfiles (names starting with `.`) are excluded from the listing, except `.maindesc` which is read as a description.
+> - A `.maindesc` file in the directory, if present, is displayed as a `<pre>` block below the file table.
 
 ### Compression
 
@@ -49,11 +52,11 @@ example.com {
 }
 ```
 
-Notes:
-
-- `compressed`: applied to files larger than 256 bytes with compressible extensions. A `Vary: Accept-Encoding` header is added when compression is possible.
-- `precompressed`: when enabled, the server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference.
-- `dynamic_compressed`: compression is only applied to responses with compressible MIME types. A suffix is appended to the ETag (e.g. `W/"abc123-dynamic-br"`) to distinguish compressed variants.
+> [!note]
+>
+> - `compressed`: applied to files larger than 256 bytes with compressible extensions. A `Vary: Accept-Encoding` header is added when compression is possible.
+> - `precompressed`: when enabled, the server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference.
+> - `dynamic_compressed`: compression is only applied to responses with compressible MIME types. A suffix is appended to the ETag (e.g. `W/"abc123-dynamic-br"`) to distinguish compressed variants.
 
 ### Caching headers
 
@@ -72,11 +75,11 @@ example.com {
 }
 ```
 
-Notes:
-
-- When compression is used, a suffix is appended to the ETag (e.g. `W/"abc123-br"` for Brotli).
-- `If-None-Match` requests that match the current ETag return `304 Not Modified`.
-- Pre-compressed sidecar files receive their own ETag based on the sidecar file's own metadata.
+> [!note]
+>
+> - When compression is used, a suffix is appended to the ETag (e.g. `W/"abc123-br"` for Brotli).
+> - `If-None-Match` requests that match the current ETag return `304 Not Modified`.
+> - Pre-compressed sidecar files receive their own ETag based on the sidecar file's own metadata.
 
 ### MIME types
 
@@ -93,10 +96,10 @@ example.com {
 }
 ```
 
-Notes:
-
-- If the extension is not found in custom mappings, the built-in database is used as a fallback.
-- If neither custom nor built-in mappings match, the response is sent with no `Content-Type` header.
+> [!note]
+>
+> - If the extension is not found in custom mappings, the built-in database is used as a fallback.
+> - If neither custom nor built-in mappings match, the response is sent with no `Content-Type` header.
 
 ### Error pages
 
@@ -113,12 +116,12 @@ example.com {
 }
 ```
 
-Notes:
-
-- Only applies when an error response is being generated and no custom response has already been set.
-- The file path is absolute or relative to the current working directory.
-- If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
-- Multiple status codes can be mapped to the same error page in a single directive.
+> [!note]
+>
+> - Only applies when an error response is being generated and no custom response has already been set.
+> - The file path is absolute or relative to the current working directory.
+> - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
+> - Multiple status codes can be mapped to the same error page in a single directive.
 
 ## Observability
 
@@ -134,16 +137,6 @@ Notes:
 ### Logs
 
 - **`WARN`**: logged when an `error_page` file cannot be opened. The directive is skipped and the built-in error page is used instead.
-
-## Notes and troubleshooting
-
-- The `root` directive is defined in [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
-- Static file serving is handled by the `http-static` module, which includes MIME type detection, directory listings, and ETag generation.
-- For response body compression (gzip, brotli, deflate, zstd), see the `http-compression` module documentation.
-- For the full HTTP response cache module, see [/docs/v3/configuration/content/cache.md](/docs/v3/configuration/content/cache.md).
-- For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects).
-- For response control (`status`, `abort`), see [HTTP response control](/docs/v3/configuration/routing/response).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
 
 ## Best practices
 

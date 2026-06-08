@@ -30,6 +30,12 @@ Example directory structure:
     └── script.py
 ```
 
+> [!note]
+>
+> - The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response — stderr output from the script is logged as a warning (trimmed before logging).
+> - The working directory is set to the directory containing the script file.
+
 ## Executing scripts by extension
 
 You can also execute CGI scripts outside `cgi-bin` by registering additional file extensions:
@@ -50,11 +56,11 @@ With this configuration:
 - `/var/www/html/scripts/convert.py` is treated as a CGI script
 - `/var/www/html/static/style.css` is served as a static file
 
-**Notes:**
-
-- Extensions are matched case-insensitively (`.PHP` matches `.php`).
-- Files with registered extensions are executed as CGI scripts regardless of their location.
-- This is complementary to `cgi-bin` directory matching — a file can be CGI either by being in `cgi-bin` or by having a registered extension.
+> [!note]
+>
+> - Extensions are matched case-insensitively (`.PHP` matches `.php`).
+> - Files with registered extensions are executed as CGI scripts regardless of their location.
+> - This is complementary to `cgi-bin` directory matching — a file can be CGI either by being in `cgi-bin` or by having a registered extension.
 
 ## Custom CGI interpreters
 
@@ -123,11 +129,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Environment variables take precedence over any existing variables with the same name.
-- Values support interpolation (e.g., `{{env.VAR}}` for environment variable substitution).
-- Ferron always sets the following CGI environment variables automatically:
+> [!note]
+>
+> - Environment variables take precedence over any existing variables with the same name.
+> - Values support interpolation (e.g., `{{env.VAR}}` for environment variable substitution).
+> - Ferron always sets the following CGI environment variables automatically:
 
 | Variable | Description |
 | --- | --- |
@@ -246,18 +252,3 @@ example.com {
     # (because of the ".php" extension directive)
 }
 ```
-
-## Notes and troubleshooting
-
-- CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive.
-- On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`).
-- On Windows, shebang lines are supported for `.bat`, `.cmd`, and other script files. Native `.exe` files are executed directly.
-- The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response.
-- For CGI stderr output, Ferron logs warnings when the script produces output on stderr. The output is trimmed before logging.
-- The working directory for a CGI script is set to the directory containing the script file.
-- For authentication integration, CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside a module like `http-basicauth` that sets `ctx.auth_user`.
-- For static file serving alongside CGI, see [Static file serving](/docs/v3/configuration/content/static-files).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
-- For response headers and CORS, see [HTTP headers and CORS](/docs/v3/configuration/content/headers).
-- For the complete `cgi` directive reference, see [Configuration: CGI support](/docs/v3/configuration/content/cgi).

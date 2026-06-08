@@ -32,6 +32,9 @@ example.com {
 }
 ```
 
+> [!note]
+> The `sampled` flag controls only the `traceparent` header propagated to upstream services — it does not influence the OTLP sampling mode. To export traces to an external system, configure an observability sink such as `observability-otlp`.
+
 ## W3C Baggage
 
 Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (e.g. tenant ID, user segment, request flags) across service boundaries without requiring explicit configuration.
@@ -75,7 +78,8 @@ observability {
 }
 ```
 
-See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for full documentation of the `baggage` directive.
+> [!info]
+> See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for full documentation of the `baggage` directive.
 
 ### Example
 
@@ -90,15 +94,14 @@ baggage: userId=alice,tenantId=acme
 
 Ferron stores the baggage in the request trace context and propagates both `traceparent` and `baggage` to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
 
-## Notes and troubleshooting
+> [!note]
+> The `http-proxy` and `http-fproxy` modules automatically propagate the current trace context and baggage to upstream services. Ferron 3 preserves the incoming `tracestate` header and propagates it as-is.
 
-- The `http-proxy` and `http-fproxy` modules automatically propagate the current trace context and baggage to upstream services.
-- Generating and propagating trace headers carries unique identifiers. Ensure this complies with your privacy requirements.
-- Ferron 3 preserves the incoming `tracestate` header and propagates it as-is.
-- Baggage values are propagated as-is; Ferron does not validate or modify them. Ensure baggage content complies with your privacy and security requirements.
-- Baggage items are attached to OpenTelemetry spans when using the OTLP provider. High-cardinality baggage keys may increase span storage costs in your observability backend.
-- The `sampled` flag controls only the `traceparent` header propagated to upstream services. It does not influence the OTLP `sampling` mode or whether Ferron exports its own spans. See [OTLP trace sampling](/docs/v3/configuration/observability/otlp#trace-sampling) for how OTLP export sampling works.
-- To export these traces to an external system, configure an observability sink such as `observability-otlp`.
+> [!note]
+>
+> - Generating and propagating trace headers carries unique identifiers — ensure this complies with your privacy requirements.
+> - Baggage values are propagated as-is; Ferron does not validate or modify them by default.
+> - Baggage items are attached to OpenTelemetry spans when using the OTLP provider — high-cardinality baggage keys may increase span storage costs.
 
 ## See also
 

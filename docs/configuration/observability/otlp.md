@@ -41,6 +41,12 @@ Each signal sub-block supports these nested directives:
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
 | `sampling` | `<string>` | Trace sampling mode. Only applicable to `traces` blocks. See [Trace sampling](#trace-sampling). | `parentbased_always_on` |
 
+> [!tip]
+> If you are having connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
+
+> [!note]
+> Ferron does not currently support OTLP metric exemplars.
+
 ### Global options
 
 | Directive | Arguments | Description | Default |
@@ -81,6 +87,9 @@ Each `key` entry configures one baggage key to promote:
 | `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
 | `max_distinct` | `<number> \| false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100 |
 
+> [!tip]
+> The `baggage` header is parsed and attached to spans automatically — use the `baggage` sub-directive to promote specific keys into telemetry attributes.
+
 ### Trace sampling
 
 The `sampling` sub-directive inside a `traces` block controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
@@ -110,6 +119,9 @@ Ferron's `http > trace > sampled` directive sets the sampling flag in the `trace
     }
 }
 ```
+
+> [!note]
+> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
 
 #### Ratio-based sampling
 
@@ -306,6 +318,9 @@ example.com {
 }
 ```
 
+> [!warning]
+> TLS certificate verification should only be disabled with `no_verification` for development or testing with self-signed certificates.
+
 ### Production trace sampling
 
 ```ferron
@@ -381,9 +396,15 @@ Ferron supports three OTLP protocols for exporting signals:
 - `http/protobuf` - HTTP with Protocol Buffers encoding, recommended for compatibility with HTTP-based collectors
 - `http/json` - HTTP with JSON encoding, recommended for debugging and development
 
+> [!note]
+> Not all collectors support all protocols — check your collector's documentation.
+
 ## Signal correlation
 
 Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. Baggage from the incoming `baggage` header is attached to the span context, making it available for correlated queries like "show me all logs for trace `abc123`" or "filter by baggage key `userId`" in your observability backend.
+
+> [!note]
+> All signals from the same request share the same trace context.
 
 ### Trace context propagation
 
@@ -414,19 +435,6 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 | Error with logs provider | WARN  | `error.message` (string) — error details |
 | Error with metrics provider | WARN  | `error.message` (string) — error details |
 | Error with traces provider | WARN  | `error.message` (string) — error details |
-
-## Notes and troubleshooting
-
-- **TLS certificate verification** - disabling with `no_verification` should only be used for development or testing with self-signed certificates.
-- **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
-- **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
-- **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
-- **Baggage propagation** - the `baggage` header is parsed and attached to OpenTelemetry spans automatically. Baggage values are not validated; ensure they comply with the W3C Baggage specification and your privacy requirements. High-cardinality baggage keys may increase span storage costs.
-- **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into telemetry attributes. For metrics, always set `max_distinct` on keys with unbounded values to prevent high-cardinality label explosion. Values exceeding the distinct cap are automatically hashed.
-- **Trace sampling** - the default sampling mode (`parentbased_always_on`) samples all traces. When Ferron generates a trace (no incoming `traceparent`), it creates a root span that is always sampled regardless of the `http > trace > sampled` flag. The `sampled` flag in the `traceparent` header only affects propagation to upstream services and does not control OTLP export. In production, use `parentbased_traceidratio` with an appropriate ratio to control trace volume. For attribute-based sampling, ensure the attributes you match on are set in the `traces` block's builder attributes (HTTP request method, URL path, scheme, server address/port, client address are available).
-- **Log style** - the `log_style modern` directive changes the body and attribute shape of OTLP log records, including how access logs are mapped onto OTEL semantic conventions. Existing file and console log output is unchanged.
-- **Metric exemplars** - Ferron does not currently support OTLP metric exemplars, so high-cardinality metrics may be less effective for correlation.
-- **Troubleshooting connection issues** - if you're having connection issues, verify collector endpoints are reachable: `curl -v https://collector:4317` and check your firewall rules.
 
 ## Best practices
 

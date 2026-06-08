@@ -45,6 +45,12 @@ admin.example.com:443 {
 }
 ```
 
+> [!warning]
+> When `client_auth_ca system` is used, the OS trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
+
+> [!important]
+> For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path. Keep private internal CA material protected and rotate client certificates regularly.
+
 ## mTLS with TLS 1.3 only
 
 For maximum security, combine mTLS with TLS 1.3-only settings:
@@ -152,14 +158,3 @@ example.com {
 ### Health checks and mTLS
 
 Active health check probes use the same mTLS credentials configured on the upstream, ensuring probes accurately reflect backend reachability with client authentication.
-
-## Notes and troubleshooting
-
-- Ensure the client certificate chain is issued by the CA you configured in `client_auth_ca`.
-- When `client_auth_ca system` is used, the OS trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
-- For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
-- Keep private internal CA material protected and rotate client certificates regularly.
-- If requests fail during TLS handshake, verify certificate validity dates and CA chain.
-- If you get `"native-certs feature not enabled"` or `"webpki-roots feature not enabled"`, the corresponding `client_auth_ca` mode requires a feature that is not compiled in.
-- For inbound mTLS directive details, see [Configuration: security and TLS](/docs/v3/configuration/security/tls#client-certificate-authentication-mtls).
-- For outbound mTLS directive details, see [Configuration: reverse proxying](/docs/v3/configuration/proxy/reverse-proxy#client-certificate-authentication-mtls).

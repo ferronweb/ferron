@@ -12,6 +12,9 @@ For specific backend configurations:
 - [Prometheus metrics](/docs/v3/configuration/observability/prometheus)
 - [OTLP observability](/docs/v3/configuration/observability/otlp)
 
+> [!tip]
+> Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability. All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
+
 ## Basic production logs to files
 
 Use this when running Ferron directly on a VM or bare metal and collecting logs from disk:
@@ -264,14 +267,3 @@ example.com {
     root /var/www/html
 }
 ```
-
-## Notes and troubleshooting
-
-- Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability.
-- Keep `no_verification false` unless you are in a controlled test environment.
-- If logs are missing, verify the formatter modules are loaded in your Ferron build and check endpoint/protocol pairing.
-- All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
-- If Ferron is behind a reverse proxy, configure `client_ip_from_header` so Ferron can see real client IPs. See [HTTP host directives](/docs/v3/configuration/server/host).
-- For available access log fields, see [Configuration: observability and logging](/docs/v3/configuration/observability/logging#access-log-fields).
-- For Prometheus metrics configuration, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
-- For OTLP configuration details, see [OTLP observability](/docs/v3/configuration/observability/otlp).

@@ -41,7 +41,11 @@ example.com {
 | `{{request.scheme}}` | `http` or `https` |
 | `{{env.NAME}}` | Environment variable `NAME` |
 
-For the complete variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).
+> [!note]
+> For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/v3/configuration/server/host) for details.
+
+> [!info]
+> For the complete variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).
 
 Unresolved variables are left as `{{name}}` in the output.
 
@@ -111,11 +115,8 @@ api.example.com {
 }
 ```
 
-## Notes and troubleshooting
-
-- If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
-- For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) for details.
-- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/server/host).
+> [!note]
+> If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
 
 ## Best practices
 

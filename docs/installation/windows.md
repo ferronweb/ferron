@@ -20,11 +20,17 @@ Visit the [Ferron downloads page](/download) and download the installer that mat
 - **x64**: `ferron-<version>-x86_64-pc-windows-msvc-setup.exe`
 - **ARM64**: `ferron-<version>-aarch64-pc-windows-msvc-setup.exe`
 
+> [!note]
+> The x64 installer is compatible with x64 emulated mode on Windows ARM devices, but for best performance use the native ARM64 installer on ARM64 hardware.
+
 ## Installation steps
 
 ### 1. Run the installer
 
-Double-click the downloaded `.exe` installer to launch the setup wizard. If Windows SmartScreen shows a warning, click **"More info"** and then **"Run anyway"**.
+Double-click the downloaded `.exe` installer to launch the setup wizard.
+
+> [!tip]
+> If Windows SmartScreen shows a warning, click **"More info"** and then **"Run anyway"**.
 
 ### 2. Follow the setup wizard
 
@@ -54,6 +60,9 @@ After installing Ferron, start a Windows service by following these steps:
 By default, Ferron serves content from its `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server is running.
 
 If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
+
+> [!tip]
+> If you cannot access the server from another machine, ensure Windows Defender Firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use (e.g., by IIS), change the listen port in `C:\ProgramData\Ferron\ferron.conf` and restart the service.
 
 ## File structure
 
@@ -129,12 +138,3 @@ ferron validate -c C:\ProgramData\Ferron\ferron.conf
 ```cmd
 ferron adapt -c C:\ProgramData\Ferron\ferron.conf
 ```
-
-## Notes and troubleshooting
-
-- **Configuration file location** — the default configuration is at `C:\ProgramData\Ferron\ferron.conf`. After editing, restart the service with `Restart-Service Ferron`.
-- **Administrator privileges** — installing as a Windows service and adding to the system PATH require administrator rights. Run PowerShell as administrator when managing the service.
-- **Firewall settings** — if you cannot access the server from another machine, ensure Windows Defender Firewall allows incoming connections on port 80 (or whichever port you configured).
-- **Port conflicts** — if port 80 is already in use (e.g., by IIS), change the listen port in `C:\ProgramData\Ferron\ferron.conf` and restart the service.
-- **PATH updates** — if you chose to add Ferron to the system PATH during installation, you may need to close and reopen your terminal for the changes to take effect.
-- **ARM64 support** — the ARM64 installer is compatible with x64 emulated mode on Windows ARM devices, but for best performance use the native ARM64 installer on ARM64 hardware.

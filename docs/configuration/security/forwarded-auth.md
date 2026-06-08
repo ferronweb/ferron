@@ -32,6 +32,9 @@ example.com {
 | `no_verification` | `<bool>` | Skip TLS certificate verification for HTTPS backends. | `false` |
 | `copy` | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers. | none |
 
+> [!note]
+> When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. Upgrade and Connection headers are removed from auth requests.
+
 #### Backend URL
 
 The `auth_to` directive requires a backend URL, specified either as a direct argument or via a nested `url` directive:
@@ -47,6 +50,9 @@ example.com {
     }
 }
 ```
+
+> [!note]
+> The forwarded auth request uses the **same path and query string** as the original request. If the backend is unreachable or returns a non-2xx status, the request is **blocked** and the backend's response is returned to the client.
 
 #### Unix socket connections
 
@@ -194,6 +200,9 @@ internal.example.com {
 }
 ```
 
+> [!tip]
+> For authentication backends behind TLS, ensure the backend's certificate is valid or use `no_verification true` for development/testing.
+
 ### Disabling the global connection limit
 
 ```ferron
@@ -205,17 +214,6 @@ example.com {
     auth_to http://auth.example.com
 }
 ```
-
-## Notes and troubleshooting
-
-- The forwarded auth request uses the **same path and query string** as the original request. The backend URL provides the base address.
-- If the backend is unreachable or returns a non-2xx status, the request is **blocked** and the backend's response is returned to the client.
-- Connection pooling is used for authenticated backends to reduce latency. Connections are reused across requests.
-- When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. The `Forwarded` header (RFC 7239) is also managed accordingly.
-- Upgrade and Connection headers are removed from auth requests since HTTP upgrades are not supported for authentication.
-- For authentication backends behind TLS, ensure the backend's certificate is valid or use `no_verification true` for development/testing.
-- For Basic Auth configuration, see [HTTP basic authentication](/docs/v3/configuration/security/basic-auth).
-- For reverse proxy configuration, see [Reverse proxy](/docs/v3/configuration/proxy/reverse-proxy).
 
 ## Best practices
 

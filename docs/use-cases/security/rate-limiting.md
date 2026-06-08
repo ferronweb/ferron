@@ -39,6 +39,14 @@ example.com {
 }
 ```
 
+> [!note]
+>
+> - Rate limiting uses a token bucket algorithm: capacity = `rate + burst` tokens, refilled at `rate` tokens per second.
+> - Rate limit buckets are stored in memory and are not preserved across configuration reloads.
+
+> [!important]
+> If Ferron is behind another proxy/load balancer, ensure the client IP is correctly resolved. See [HTTP host directives](/docs/v3/configuration/server/host) for `client_ip_from_header` configuration.
+
 ## Protect APIs with tiered limits
 
 Use host-level and location-level limits together:
@@ -75,6 +83,9 @@ api.example.com {
 }
 ```
 
+> [!tip]
+> Start with permissive values and tighten after observing production traffic patterns — keep login and token endpoints on stricter limits than read-only API endpoints.
+
 ## API key rate limiting
 
 You can also key rate limits off request headers (for example, API keys):
@@ -92,12 +103,3 @@ api.example.com {
 ```
 
 Each unique API key gets its own token bucket, independent of the client IP.
-
-## Notes and troubleshooting
-
-- Rate limiting uses a token bucket algorithm: capacity = `rate + burst` tokens, refilled at `rate` tokens per second.
-- If Ferron is behind another proxy/load balancer, ensure the client IP is correctly resolved. See [HTTP host directives](/docs/v3/configuration/server/host) for `client_ip_from_header` configuration.
-- Start with permissive values and tighten after observing production traffic patterns.
-- Keep login and token endpoints on stricter limits than read-only API endpoints.
-- Rate limit buckets are stored in memory and are not preserved across configuration reloads.
-- For directive details, see [Configuration: rate limiting](/docs/v3/configuration/content/rate-limit).

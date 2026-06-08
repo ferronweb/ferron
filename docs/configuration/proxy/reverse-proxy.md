@@ -375,6 +375,9 @@ Ferron maintains a keep-alive connection pool for upstream backends. Key behavio
 - **Idle eviction** - connections idle longer than `idle_timeout` are evicted from the pool.
 - **HTTP/2 multiplexing** - HTTP/2 connections share a single TCP connection for multiple concurrent requests.
 
+> [!tip]
+> If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).
+
 ## Health checking
 
 ### Passive health checking
@@ -397,6 +400,14 @@ Circuit breaking tracks request-time backend failures and temporarily ejects uns
 5. If the half-open trial request fails, Ferron reopens the circuit immediately.
 
 Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
+
+> [!note]
+>
+> - Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
+> - Passive health checks, circuit breaking, and active health checks work together — any of them can make a backend temporarily ineligible.
+
+> [!tip]
+> If a backend is flapping, circuit breaking can protect the rest of the pool by temporarily ejecting it after repeated transport failures or upstream `5xx` responses.
 
 **Configuration example:**
 
@@ -468,6 +479,9 @@ example.com {
 }
 ```
 
+> [!tip]
+> For active health checks: ensure the probe endpoint is reachable on all backends, keep probes lightweight, and use HEAD requests when the response body is not needed. If upstreams are incorrectly marked unhealthy, check logs and verify `expect_status`.
+
 ## Observability
 
 ### Metrics
@@ -514,22 +528,6 @@ example.com {
 | Proxy error             | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details |
 | Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
-
-## Notes and troubleshooting
-
-- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).
-- If a backend is flapping, circuit breaking can protect the rest of the pool by temporarily ejecting it after repeated transport failures or upstream `5xx` responses.
-- Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
-- For active health checks:
-  - Ensure the probe endpoint is configured and reachable on all backends (e.g., `/health` must return 2xx by default).
-  - If upstreams are incorrectly marked unhealthy, check logs for "marked unhealthy" messages and verify the `expect_status` and response times.
-  - Probe endpoints should be lightweight and low-latency to avoid impacting performance.
-  - Use HEAD requests when the response body is not needed for faster probes.
-  - Optional: Use `body_match` to ensure critical responses contain expected content (e.g., `"ok"` or `"healthy"`).
-  - For HTTPS probes with self-signed certificates, use `no_verification true` to skip TLS certificate validation.
-  - Passive health checks, circuit breaking, and active health checks work together: any of them can make a backend temporarily ineligible.
-- For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/server/core-directives#reverse-proxy-connection-limits).
-- For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/proxy/forward-proxy).
 
 ## Best practices
 

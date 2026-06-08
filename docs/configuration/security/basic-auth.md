@@ -46,12 +46,12 @@ This is a **global-only** directive that limits the number of concurrent passwor
 }
 ```
 
-Notes:
-
-- Values less than `1` are treated as `1`.
-- Setting this too low may cause authentication requests to queue under load, increasing latency.
-- Setting this to `false` removes the limit entirely — use only if you understand the resource implications.
-- When the limit is reached, additional authentication requests will wait until a slot becomes available rather than being rejected.
+> [!note]
+>
+> - Values less than `1` are treated as `1`.
+> - Setting this too low may cause authentication requests to queue under load, increasing latency.
+> - Setting this to `false` removes the limit entirely — use only if you understand the resource implications.
+> - When the limit is reached, additional authentication requests will wait until a slot becomes available rather than being rejected.
 
 ## `basic_auth`
 
@@ -105,7 +105,10 @@ users {
 | `$scrypt$` | scrypt |
 
 > [!note]
-> It's recommended to use `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
+>
+> - It's recommended to use `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
+> - The `realm` value is shown in the browser's authentication dialog.
+> - Configuration validation fails if any password value is not a recognized hash format.
 
 ### `brute_force_protection` block
 
@@ -223,15 +226,6 @@ example.com {
 - **Plaintext passwords are rejected.** This module does not support plaintext passwords at all.
 - **Brute-force protection is enabled by default.** This provides a reasonable baseline of protection without requiring additional configuration.
 - **Tune `basic_auth_concurrency` to your workload.** Setting it too low may cause authentication queuing under high load; setting it too high may allow a flood of expensive hash operations to exhaust resources.
-
-## Notes and troubleshooting
-
-- The `realm` value is shown in the browser's authentication dialog.
-- Configuration validation fails if any password value is not a recognized hash format.
-- This module does not currently support session-based authentication — credentials are checked on every request.
-- The `basic_auth_concurrency` directive is **global-only** and must be placed in the top-level block, not inside a host block.
-- For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/proxy/forward-proxy).
-- For routing and URL processing, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
 
 ## Best practices
 

@@ -5,6 +5,12 @@ description: "Custom status codes, connection aborting, IP-based access control,
 
 This page documents directives for returning custom status codes, aborting connections, IP-based access control, and 103 Early Hints responses.
 
+> [!info]
+>
+> - For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
+> - For conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
+> - For HTTP host directives including `h1_enable_early_hints`, see [HTTP host directives](/docs/v3/configuration/server/host).
+
 ## Directives
 
 ### Custom status codes
@@ -138,6 +144,9 @@ By default, 103 Early Hints is supported natively on HTTP/2 and HTTP/3 connectio
 
 Without this option, 103 Early Hints is silently skipped on HTTP/1.1 connections (a warning is logged).
 
+> [!note]
+> 103 Early Hints is only effective on HTTP/2+ connections by default. For HTTP/1.1, enable `h1_enable_early_hints true` in your `http` block. If `send_early_hints` fails, a warning is logged and the request continues normally.
+
 #### Scoping
 
 The `early_hints` directive can be placed at different configuration levels:
@@ -163,12 +172,3 @@ All directives (`status`, `abort`, `block`, `allow`, `early_hints`) can be place
 | `ferron.response.aborted` | Counter | — | Connections aborted via the `abort` directive |
 | `ferron.response.ip_blocked` | Counter | — | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
 | `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives |
-
-## Notes and troubleshooting
-
-- For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
-- For conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
-- For HTTP host directives including `h1_enable_early_hints`, see [HTTP host directives](/docs/v3/configuration/server/host).
-- 103 Early Hints is only effective on HTTP/2+ connections by default. Most browsers restrict 103 to HTTP/2 or later for security reasons. See [RFC 8297 Section 3](https://www.rfc-editor.org/rfc/rfc8297#section-3).
-- If 103 Early Hints is not being sent on HTTP/1.1, ensure `h1_enable_early_hints true` is set in your `http` block.
-- If `send_early_hints` fails (e.g., connection already closing), a warning is logged and the request continues normally.

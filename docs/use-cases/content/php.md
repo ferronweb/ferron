@@ -40,12 +40,10 @@ example.com {
 
 CGI is functional but usually slower than FastCGI for production workloads because a PHP process is started per request. For more control, see [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).
 
-## Notes and troubleshooting
+> [!tip]
+>
+> - If using PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`; otherwise requests can fail with a force-cgi-redirect warning.
+> - If PHP files download instead of executing, verify you enabled either `fcgi_php` or `cgi` + `extension ".php"` in the correct domain/location block.
 
-- If PHP files download instead of executing, verify you enabled either `fcgi_php` or `cgi` + `extension ".php"` in the correct domain/location block.
-- If using PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`; otherwise requests can fail with a force-cgi-redirect warning.
-- If you get `500 Internal Server Error` with `fcgi_php`, verify the socket or TCP endpoint exists and your PHP FastCGI daemon (PHP-FPM or PHP-CGI in FastCGI mode) is running.
-- If using Unix sockets, ensure Ferron can access the socket file (owner/group/mode in PHP-FPM pool config).
-- Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
-- For "pretty URLs" and front controller patterns (common in PHP CMS/framework stacks), see [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting).
-- For directive details (`cgi`, `extension`, `fcgi_php`), see [Configuration: CGI support](/docs/v3/configuration/content/cgi) and [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).
+> [!important]
+> Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.

@@ -7,6 +7,9 @@ If you simply need to serve files on the local filesystem, you can use the `ferr
 
 By default, `ferron-serve` listens on `127.0.0.1:3000` and serves files from the current directory (`.`).
 
+> [!tip]
+> For production deployments, use a proper configuration file for better control and reproducibility. If you need more control over your server configuration, consider writing a custom Ferron configuration file instead. See [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax) for details.
+
 ## Quick start
 
 Serve the current directory on the default address:
@@ -105,13 +108,3 @@ When you run `ferron-serve`, the utility:
 4. Exits when the Ferron process terminates.
 
 This means the `ferron-serve` command is essentially a convenient wrapper around Ferron's configuration system, allowing you to quickly serve files without writing a configuration file.
-
-## Notes and troubleshooting
-
-- If you need more control over your server configuration, consider writing a custom Ferron configuration file instead. See [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax) for details.
-- If you get permission errors when binding to a port below 1024, you may need to run with elevated privileges or use a different port.
-- If the server doesn't start, check that the port is available and not blocked by a firewall.
-- The `ferron-serve` command generates temporary configuration files in your system's temporary directory.
-- For production deployments, use a proper configuration file for better control and reproducibility.
-- If you need persistent basic authentication, consider using [HTTP basic authentication](/docs/v3/configuration/security/basic-auth) in a configuration file.
-- For more on reverse proxying, see [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).

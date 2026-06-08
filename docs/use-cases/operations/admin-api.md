@@ -5,7 +5,8 @@ description: "Securely configure, access, and harden the Ferron admin API for se
 
 The admin API is a built-in control plane that provides health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server and should be treated with the same security as a root shell on your server.
 
-The admin API is **not encrypted**, has **no authentication**, and **no access control** by default. All security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
+> [!warning]
+> The admin API is **not encrypted**, has **no authentication**, and **no access control** by default. All security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
 
 ## Secure default configuration
 

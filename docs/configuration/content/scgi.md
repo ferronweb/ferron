@@ -49,11 +49,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:4000`).
-- Unix socket paths must be absolute paths.
-- When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
+> [!note]
+>
+> - TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:4000`).
+> - Unix socket paths must be absolute paths.
+> - When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
 
 ### `environment`
 
@@ -74,11 +74,11 @@ example.com {
 }
 ```
 
-**Notes:**
-
-- Environment variables take precedence over any existing variables with the same name.
-- The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_ADDR`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
+> [!note]
+>
+> - Environment variables take precedence over any existing variables with the same name.
+> - The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_ADDR`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
 
 ## Environment variables
 
@@ -101,6 +101,9 @@ Ferron automatically sets the following SCGI environment variables:
 | `HTTPS` | Set to `on` when the connection is encrypted. |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
+
+> [!tip]
+> For authentication integration, SCGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside a module like `http-basicauth` that sets `ctx.auth_user`.
 
 ## Authentication
 
@@ -164,16 +167,3 @@ example.com {
     scgi tcp://127.0.0.1:4000
 }
 ```
-
-## Notes and troubleshooting
-
-- When a connection to the SCGI backend fails, Ferron returns a `503 Service Unavailable` response and logs an error message.
-- For TCP backends, ensure the host and port are specified in the URL (e.g., `tcp://127.0.0.1:4000`).
-- For Unix socket backends, the path must be absolute (e.g., `unix:///var/run/app.sock`).
-- The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-- Ferron sets `SERVER_SOFTWARE` to `Ferron` automatically.
-- For CGI stderr output, Ferron logs warnings when the script produces output on stderr. The output is trimmed before logging.
-- For authentication integration, SCGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside a module like `http-basicauth` that sets `ctx.auth_user`.
-- For static file serving alongside SCGI, see [Static file serving](/docs/v3/configuration/content/static-files).
-- For URL rewriting, see [URL rewriting](/docs/v3/configuration/routing/rewrite).
-- For response headers and CORS, see [HTTP headers and CORS](/docs/v3/configuration/content/headers).

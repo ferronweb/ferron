@@ -7,6 +7,11 @@ This page documents the `cache` directive for configuring Ferron's in-memory HTT
 
 The cache applies to final HTTP responses produced by static file serving, reverse proxying, and other response stages.
 
+> [!info]
+>
+> - For static file cache headers such as `file_cache_control` and `etag`, see [Static file serving](/docs/v3/configuration/content/static-files.md).
+> - For response headers and reverse proxy configuration, see [HTTP headers and CORS](/docs/v3/configuration/content/headers.md) and [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy.md).
+
 ## `cache`
 
 ```ferron
@@ -50,6 +55,9 @@ Use the global `cache { ... }` block to configure shared cache capacity.
 }
 ```
 
+> [!tip]
+> Global `cache { ... }` blocks are only for shared cache sizing — they do not enable caching for HTTP hosts by themselves.
+
 ### HTTP host `cache` block
 
 Use the HTTP host `cache { ... }` block to enable caching and tune how responses are stored for that host or matching `location`.
@@ -77,6 +85,9 @@ example.com {
     }
 }
 ```
+
+> [!important]
+> `litespeed_override_cache_control` makes Ferron treat `X-LiteSpeed-Cache-Control` as overriding standard HTTP caching rules. It is intentionally non-compliant with RFC 9111 — enable it only when the upstream is written for LiteSpeed-style cache semantics. Request-side directives such as `Cache-Control: no-cache` and `Pragma: no-cache` still affect cache lookup behavior normally.
 
 ### Boolean `cache` form
 
@@ -161,6 +172,9 @@ When the cache module is enabled, Ferron understands the following response head
 | `LSC-Cookie` | Adds cache-safe cookie replay metadata. | Ferron converts this header to `Set-Cookie` before sending the response. |
 | `X-LiteSpeed-Cache` | Exposes cache hit, miss, or bypass status on outgoing responses. | Ferron sets this header itself (if enabled). Origin-provided values are ignored. |
 
+> [!note]
+> `X-LiteSpeed-Vary: value=...` is not supported yet because Ferron does not currently have a request-time equivalent of LiteSpeed's rewrite-rule vary environment values. The `ignore` directive affects only the stored representation — the live response sent to the client still includes those headers unless another module removes them.
+
 ## Observability
 
 ### Metrics
@@ -192,18 +206,6 @@ The cache module emits the following metrics:
 | Cache purged via LSCache controls | DEBUG | `cache.purged.count` (purged cache entries) |
 | Cache purged via PURGE method | DEBUG | `cache.purged.count` (purged cache entries) |
 | LSCache stale purge marker ignored | DEBUG | - |
-
-## Notes and troubleshooting
-
-- By default, Ferron treats LSCache response headers as additional cache controls, not as a way to weaken standard HTTP caching rules. `Cache-Control`, `Authorization`, `Vary`, and `Set-Cookie` constraints still apply.
-- `litespeed_override_cache_control` changes only response-side store policy and TTL selection. Request-side directives such as `Cache-Control: no-cache` and `Pragma: no-cache` still affect cache lookup behavior normally.
-- `litespeed_override_cache_control` is intentionally non-compliant with RFC 9111 behavior when `X-LiteSpeed-Cache-Control` is present. Enable it only when the upstream application is written for LiteSpeed-style server cache semantics.
-- `X-LiteSpeed-Vary: value=...` is not supported yet because Ferron does not currently have a request-time equivalent of LiteSpeed's rewrite-rule vary environment values.
-- `ignore` affects only the stored representation. The live response sent to the client still includes those headers unless another module removes them.
-- Global `cache { ... }` blocks are only for shared cache sizing. They do not enable caching for HTTP hosts by themselves.
-- For static file cache headers such as `file_cache_control` and `etag`, see [Static file serving](/docs/v3/configuration/content/static-files.md).
-- For response header mutation and CORS handling, see [HTTP headers and CORS](/docs/v3/configuration/content/headers.md).
-- For reverse proxy configuration, see [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy.md).
 
 ## Best practices
 

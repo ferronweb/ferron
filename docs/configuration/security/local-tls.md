@@ -121,7 +121,8 @@ localhost:443 {
 }
 ```
 
-For details on TLS crypto options, see [Security and TLS](/docs/v3/configuration/security/tls).
+> [!info]
+> For details on TLS crypto options, see [Security and TLS](/docs/v3/configuration/security/tls).
 
 ## Migration from manual certificates
 
@@ -141,7 +142,8 @@ localhost {
 
 The local provider offers the same security with less manual certificate management.
 
-## Notes and troubleshooting
+> [!warning]
+> Never use the local provider in production — local certificates are not publicly trusted and will cause security warnings for all visitors. Use the ACME provider for public-facing websites.
 
 ### Certificate trust requirements
 
@@ -173,10 +175,6 @@ If you see security warnings in your browser:
 2. **Import the CA certificate** — add the CA to your OS or browser trust store
 3. **Clear browser cache** — some browsers cache certificate trust decisions
 4. **Restart your browser** — changes to certificate trust may require a restart
-
-### Development vs production
-
-Never use the local provider in production — local certificates are not publicly trusted and will cause security warnings for all visitors. Use the ACME provider for public-facing websites.
 
 ### Multiple loopback addresses
 

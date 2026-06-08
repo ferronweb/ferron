@@ -127,6 +127,12 @@ Events are stored in a sliding time window. When the number of events within the
 - **Per-IP tracking** — each IP address is tracked independently. Different event types are tracked separately for the same IP.
 - **No persistence** — bans are stored in memory and are **not** preserved across server restarts.
 
+> [!tip]
+> If your IP is banned immediately, check configured thresholds — you may have `events 1` or `events 2`, or very short `window` values (e.g., 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
+
+> [!warning]
+> For manual unbanning, you must wait for the ban to expire naturally.
+
 ### Request flow
 
 1. Client sends a request.
@@ -183,15 +189,6 @@ The abuse protection module emits the following metrics:
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
-
-## Notes and troubleshooting
-
-- Bans are stored in memory and are **not** preserved across server restarts.
-- A legitimate client's IP can be added to the `allowlist` to prevent accidental bans.
-- If your IP is banned immediately, check configured thresholds — you may have `events 1` or `events 2`, or very short `window` values (e.g., 10s) that are too aggressive.
-- Verify requests aren't hitting different rate limit rules stacked together.
-- Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
-- For manual unbanning, you must wait for the ban to expire naturally — there is no admin API for manual unban.
 
 ## See also
 

@@ -17,11 +17,17 @@ sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 
 You will be prompted to choose the installation type. If packages are available for your distribution, the installer will offer to install Ferron via your package manager. Otherwise, it installs the archive version directly.
 
+> [!note]
+> On RHEL/Fedora systems, the installer automatically configures SELinux contexts and booleans for Ferron. If you encounter permission issues, verify that SELinux is properly configured.
+
 ### 2. Access the web server
 
 By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
 
 If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
+
+> [!tip]
+> If you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 
@@ -111,11 +117,3 @@ sudo FERRON_VERSION=3.0.0 \
 sudo FERRON_INSTALL_MODE=update \
     bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
-
-## Notes and troubleshooting
-
-- **Configuration file location** — the default configuration is at `/etc/ferron/ferron.conf`. After editing, reload the service with `sudo systemctl reload ferron` (or the equivalent for your init system).
-- **Firewall settings** — if you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured).
-- **Port conflicts** — if port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
-- **SELinux** — on RHEL/Fedora systems, the installer automatically configures SELinux contexts and booleans for Ferron. If you encounter permission issues, verify that SELinux is properly configured.
-- **Non-interactive mode** — the installer can run without user interaction by setting environment variables before executing the script.
