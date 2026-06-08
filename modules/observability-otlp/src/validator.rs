@@ -68,6 +68,18 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             optional,
             {}
         );
+        if config.get_flag("no_verification") {
+            let span = config
+                .directives
+                .get("no_verification")
+                .and_then(|s| s.first())
+                .and_then(|s| s.span.clone());
+            validator_ctx.add_best_practice_violation(
+                "`no_verification` disables TLS certificate verification for OTLP endpoints; \
+                use it only for testing or tightly controlled internal OpenTelemetry services",
+                span,
+            );
+        }
 
         validate_directive!(config, validator_ctx.used_directives, log_style, optional args(1) => [ServerConfigurationValue::String(_, _)], {
             // Check the value is recognized

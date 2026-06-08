@@ -525,6 +525,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 - **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
 - **Service name not explicitly set** - when no explicit `service_name` is configured, the default value `"ferron"` will be used, which might cause data to be attributed incorrectly.
 - **"Legacy" log style** - when using `log_style legacy`, OpenTelemetry log reports may be harder to filter or aggregate.
+- **`no_verification` enabled** — Disabling TLS verification for OTLP endpoints should only be used for testing.
 
 ## See also
 
