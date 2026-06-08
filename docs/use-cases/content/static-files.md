@@ -34,7 +34,7 @@ example.com {
 ```
 
 > [!tip]
-> If you get `404 Not Found` for files that should exist, verify the `root` path is correct and readable by the user running Ferron. If SPA routes (for example `/dashboard/settings`) return `404 Not Found`, add the rewrite rule from the SPA section so unknown paths fall back to `/`.
+> If you get `404 Not Found` for files that should exist, verify the `root` path is correct and readable by the user running Ferron.
 
 ## Single-page applications
 
@@ -51,6 +51,9 @@ example.com {
 }
 ```
 
+> [!tip]
+> If SPA routes (for example `/dashboard/settings`) return `404 Not Found`, add the rewrite rule from the SPA section so unknown paths fall back to `/`.
+
 ## Static file serving with caching headers
 
 Ferron supports setting `Cache-Control` headers for static files. To enable caching headers for static files, you can use this configuration:
@@ -62,6 +65,9 @@ example.com {
     file_cache_control "public, max-age=3600"
 }
 ```
+
+> [!tip]
+> If responses look stale while using `file_cache_control`, reduce cache lifetime or temporarily disable caching while debugging.
 
 ## Serving precompressed static files
 
@@ -77,4 +83,4 @@ example.com {
 In this configuration, Ferron will serve precompressed versions of static files if they exist. The precompressed static files would additionally have `.gz` extension for gzip, `.br` for Brotli, `.deflate` for Deflate, or `.zst` for Zstandard.
 
 > [!tip]
-> If precompressed assets are not served, check that matching files exist (for example `app.js.br` or `app.js.gz`) and regenerate them after changing source assets. If responses look stale while using `file_cache_control`, reduce cache lifetime or temporarily disable caching while debugging.
+> If precompressed assets are not served, check that matching files exist (for example `app.js.br` or `app.js.gz`) and regenerate them after changing source assets.
