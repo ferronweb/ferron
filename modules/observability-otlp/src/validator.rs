@@ -53,6 +53,13 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
         });
 
         validate_directive!(config, validator_ctx.used_directives, service_name, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
+        if !validator_ctx.used_directives.contains("service_name") {
+            validator_ctx.add_best_practice_violation(
+                "OTLP configured without an explicit `service_name`; \
+                data might be attributed incorrectly for multi-service environments",
+                config.span.clone(),
+            );
+        }
 
         validate_directive!(
             config,

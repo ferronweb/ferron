@@ -512,6 +512,10 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 - **No `max_distinct` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
 
+### Default service name
+
+- **Service name not explicitly set** - when no explicit `service_name` is configured, the default value `"ferron"` will be used, which might cause data to be attributed incorrectly.
+
 ## See also
 
 - [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
