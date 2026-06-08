@@ -79,7 +79,7 @@ Each `key` entry configures one baggage key to promote:
 | `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
 | `attribute` | `<string>` | The OpenTelemetry attribute name to use. | same as the baggage key |
 | `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
-| `max_distinct` | `<number> | false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100 |
+| `max_distinct` | `<number> \| false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100 |
 
 ### Trace sampling
 
