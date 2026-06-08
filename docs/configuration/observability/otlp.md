@@ -355,7 +355,7 @@ example.com {
         service_name "my-service"
 
         traces https://collector:4317/v1/traces
-    
+
         baggage {
             # Promote tenant ID to traces and logs
             key "tenant.id" {

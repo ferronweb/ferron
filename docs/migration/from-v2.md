@@ -359,7 +359,7 @@ For OTLP (OpenTelemetry) export:
 example.com {
     observability {
         provider otlp
-        
+
         logs "http://localhost:4317" {
             protocol grpc
         }
