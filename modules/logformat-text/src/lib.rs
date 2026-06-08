@@ -95,11 +95,6 @@ impl FormatPattern {
                             }
                         }
                     }
-                    Some(&'t') => {
-                        // Timestamp without format: %t
-                        chars.next();
-                        tokens.push(FormatToken::Timestamp(None));
-                    }
                     Some(&c) if c.is_alphabetic() || c == '_' => {
                         // Field name: %field_name
                         let mut field_name = String::new();
@@ -113,7 +108,12 @@ impl FormatPattern {
                                 break;
                             }
                         }
-                        tokens.push(FormatToken::Field(field_name));
+                        if field_name == "t" {
+                            // Timestamp without format: %t
+                            tokens.push(FormatToken::Timestamp(None));
+                        } else {
+                            tokens.push(FormatToken::Field(field_name));
+                        }
                     }
                     _ => {
                         // Unknown or end, treat as literal
