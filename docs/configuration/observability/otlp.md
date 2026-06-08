@@ -14,17 +14,9 @@ example.com {
     observability {
         provider otlp
 
-        logs "https://collector:4318/v1/logs" {
-            protocol "http/protobuf"
-        }
-
-        metrics "https://collector:4318/v1/metrics" {
-            protocol "http/protobuf"
-        }
-
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-        }
+        logs https://collector:4318/v1/logs
+        metrics https://collector:4318/v1/metrics
+        traces https://collector:4317/v1/traces
 
         service_name "my-service"
     }
@@ -45,7 +37,7 @@ Each signal sub-block supports these nested directives:
 
 | Directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` |
+| `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
 | `sampling` | `<string>` | Trace sampling mode. Only applicable to `traces` blocks. See [Trace sampling](#trace-sampling). | `parentbased_always_on` |
 
@@ -67,9 +59,7 @@ The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry at
     observability {
         provider otlp
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-        }
+        traces https://collector:4317/v1/traces
 
         baggage {
             key "tenant.id" {
@@ -111,9 +101,7 @@ Ferron's `http > trace > sampled` directive sets the sampling flag in the `trace
     observability {
         provider otlp
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-
+        traces https://collector:4317/v1/traces {
             # Sample 10% of root spans, respect parent for child spans
             sampling "parentbased_traceidratio" {
                 ratio 0.1
@@ -132,7 +120,7 @@ The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-dir
     observability {
         provider otlp
 
-        traces "https://collector:4317/v1/traces" {
+        traces https://collector:4317/v1/traces {
             sampling "parentbased_traceidratio" {
                 ratio 0.05   # 5% of root spans
             }
@@ -152,7 +140,7 @@ The `attribute_based` mode samples spans based on attributes visible at span cre
     observability {
         provider otlp
 
-        traces "https://collector:4317/v1/traces" {
+        traces https://collector:4317/v1/traces {
             sampling "attribute_based" {
                 # What to do with spans that don't match any rule
                 default_action "sample"
@@ -231,7 +219,7 @@ example.com {
         log_style modern
         service_name "my-service"
 
-        logs "https://collector:4318/v1/logs" {
+        logs https://collector:4318/v1/logs {
             protocol "http/protobuf"
         }
     }
@@ -250,9 +238,7 @@ example.com {
         provider otlp
         service_name "my-ferron-instance"
 
-        traces "https://otlp-collector:4317/v1/traces" {
-            protocol "grpc"
-        }
+        traces https://otlp-collector:4317/v1/traces
     }
     root /var/www/html
 }
@@ -271,13 +257,11 @@ example.com {
             authorization "Bearer my-secret-token"
         }
 
-        metrics "https://metrics-collector:4318/v1/metrics" {
+        metrics https://metrics-collector:4318/v1/metrics {
             protocol "http/json"
         }
 
-        traces "https://traces-collector:4317/v1/traces" {
-            protocol "grpc"
-        }
+        traces "https://traces-collector:4317/v1/traces"
     }
     root /var/www/html
 }
@@ -292,15 +276,15 @@ example.com {
         provider otlp
         service_name "ferron-mixed"
 
-        logs "http://localhost:4318/v1/logs" {
+        logs http://localhost:4318/v1/logs {
             protocol "http/json"
         }
 
-        metrics "http://localhost:4318/v1/metrics" {
+        metrics http://localhost:4318/v1/metrics {
             protocol "http/protobuf"
         }
 
-        traces "http://localhost:4317/v1/traces" {
+        traces http://localhost:4317/v1/traces {
             protocol "grpc"
         }
     }
@@ -317,9 +301,7 @@ example.com {
         service_name "ferron-dev"
         no_verification
 
-        traces "https://localhost:4317/v1/traces" {
-            protocol "grpc"
-        }
+        traces https://localhost:4317/v1/traces
     }
 }
 ```
@@ -332,9 +314,7 @@ example.com {
         provider otlp
         service_name "ferron-production"
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-
+        traces https://collector:4317/v1/traces {
             # Sample 10% of root spans, respect parent for child spans
             sampling "parentbased_traceidratio" {
                 ratio 0.1
@@ -352,9 +332,7 @@ example.com {
         provider otlp
         service_name "ferron-production"
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-
+        traces https://collector:4317/v1/traces {
             # Sample POST requests and /api/ routes, keep everything else
             sampling "attribute_based" {
                 default_action "sample"
@@ -376,10 +354,8 @@ example.com {
         provider otlp
         service_name "my-service"
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
-        }
-
+        traces https://collector:4317/v1/traces
+    
         baggage {
             # Promote tenant ID to traces and logs
             key "tenant.id" {

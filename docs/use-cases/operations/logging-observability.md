@@ -83,17 +83,9 @@ example.com {
     observability {
         provider otlp
 
-        logs "http://otel-collector.internal:4318/v1/Logs" {
-            protocol "http/protobuf"
-        }
-
-        metrics "http://otel-collector.internal:4318/v1/Metrics" {
-            protocol "http/protobuf"
-        }
-
-        traces "http://otel-collector.internal:4317" {
-            protocol "grpc"
-        }
+        logs http://otel-collector.internal:4318/v1/logs
+        metrics http://otel-collector.internal:4318/v1/metrics
+        traces http://otel-collector.internal:4317/v1/traces
 
         service_name "ferron-prod"
     }
@@ -109,17 +101,17 @@ example.com {
     observability {
         provider otlp
 
-        logs "https://otel.example.net/v1/logs" {
+        logs https://otel.example.net/v1/logs {
             protocol "grpc"
             authorization "Bearer YOUR_TOKEN"
         }
 
-        metrics "https://otel.example.net/v1/metrics" {
+        metrics https://otel.example.net/v1/metrics {
             protocol "grpc"
             authorization "Bearer YOUR_TOKEN"
         }
 
-        traces "https://otel.example.net/v1/traces" {
+        traces https://otel.example.net/v1/traces {
             protocol "grpc"
             authorization "Bearer YOUR_TOKEN"
         }
@@ -140,7 +132,7 @@ example.com {
         log_style modern
         service_name "ferron-prod"
 
-        logs "https://otel.example.net/v1/logs" {
+        logs https://otel.example.net/v1/logs {
             protocol "http/protobuf"
         }
     }
@@ -160,7 +152,7 @@ example.com {
         log_style legacy
         service_name "ferron-prod"
 
-        logs "https://otel.example.net/v1/logs" {
+        logs https://otel.example.net/v1/logs {
             protocol "http/protobuf"
         }
     }
@@ -236,17 +228,9 @@ example.com {
     observability {
         provider otlp
 
-        logs "http://otel-collector.internal:4318/v1/Logs" {
-            protocol "http/protobuf"
-        }
-
-        metrics "http://otel-collector.internal:4318/v1/Metrics" {
-            protocol "http/protobuf"
-        }
-
-        traces "http://otel-collector.internal:4317" {
-            protocol "grpc"
-        }
+        logs http://otel-collector.internal:4318/v1/logs
+        metrics http://otel-collector.internal:4318/v1/metrics
+        traces http://otel-collector.internal:4317/v1/traces
 
         service_name "ferron-prod"
     }
@@ -272,17 +256,9 @@ example.com {
         provider otlp
         service_name "ferron-prod"
 
-        logs "http://otel-collector.internal:4318/v1/Logs" {
-            protocol "http/protobuf"
-        }
-
-        metrics "http://otel-collector.internal:4318/v1/Metrics" {
-            protocol "http/protobuf"
-        }
-
-        traces "http://otel-collector.internal:4317" {
-            protocol "grpc"
-        }
+        logs http://otel-collector.internal:4318/v1/logs
+        metrics http://otel-collector.internal:4318/v1/metrics
+        traces http://otel-collector.internal:4317/v1/traces
     }
 
     root /var/www/html

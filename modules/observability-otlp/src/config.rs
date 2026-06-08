@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
 
@@ -159,7 +161,13 @@ impl SignalConfig {
         let protocol = children
             .get_value("protocol")
             .and_then(|v| v.as_str())
-            .unwrap_or("grpc")
+            .unwrap_or(
+                if hyper::Uri::from_str(&endpoint).is_ok_and(|uri| uri.port_u16() == Some(4317)) {
+                    "grpc"
+                } else {
+                    "http/protobuf"
+                },
+            )
             .to_string();
 
         let authorization = children
