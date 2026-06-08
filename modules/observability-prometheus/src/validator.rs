@@ -150,7 +150,7 @@ fn validate_baggage_block(
                         if max_entry.args[0].as_boolean().is_some_and(|v| !v) {
                             validator_ctx.add_best_practice_violation(
                                 "`max_distinct` set to `false`, high cardinality might be allowed.",
-                                    max_entry.span.clone()
+                                max_entry.span.clone(),
                             );
                         }
                     }
