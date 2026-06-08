@@ -93,6 +93,7 @@ pub struct OtlpBackendConfig {
     pub traces: Option<SignalConfig>,
     pub baggage_promotions: Vec<BaggageKeyPromotion>,
     pub log_style: LogStyle,
+    pub authorization: Option<String>,
 }
 
 impl OtlpBackendConfig {
@@ -115,6 +116,10 @@ impl OtlpBackendConfig {
             .and_then(|v| v.as_str())
             .and_then(parse_log_style)
             .unwrap_or_default();
+        let authorization = config
+            .get_value("authorization")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string());
 
         Self {
             service_name,
@@ -124,6 +129,7 @@ impl OtlpBackendConfig {
             traces,
             baggage_promotions,
             log_style,
+            authorization,
         }
     }
 }

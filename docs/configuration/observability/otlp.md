@@ -56,6 +56,7 @@ Each signal sub-block supports these nested directives:
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
 | `no_verification` | `[bool]` | Disable TLS certificate verification. Use with caution. | `false` |
 | `log_style` | `<string>` | Log style for log records. `legacy` (default) preserves the existing human-readable `message` body. `modern` publishes a short `summary` plus typed per-event attributes and remaps access-log fields to OTEL semantic conventions. | `"legacy"` |
+| `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one isn't configured. | none |
 
 ### Baggage promotion
 

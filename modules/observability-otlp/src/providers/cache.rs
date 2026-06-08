@@ -33,7 +33,14 @@ impl OtlpProviderCache {
         let correlation = Arc::new(CorrelationContext::new());
 
         let logs_provider = config.logs.as_ref().and_then(|sig| {
-            let result = build_logs_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            let result = build_logs_provider(
+                sig,
+                &config.no_verify,
+                &resource,
+                sig.authorization
+                    .as_deref()
+                    .or(config.authorization.as_deref()),
+            );
             if let (Err(err), Some(sink)) = (&result, event_sink) {
                 sink.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
@@ -48,8 +55,14 @@ impl OtlpProviderCache {
         });
 
         let metrics_provider = config.metrics.as_ref().and_then(|sig| {
-            let result =
-                build_metrics_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            let result = build_metrics_provider(
+                sig,
+                &config.no_verify,
+                &resource,
+                sig.authorization
+                    .as_deref()
+                    .or(config.authorization.as_deref()),
+            );
             if let (Err(err), Some(sink)) = (&result, event_sink) {
                 sink.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
@@ -64,8 +77,14 @@ impl OtlpProviderCache {
         });
 
         let traces_provider = config.traces.as_ref().and_then(|sig| {
-            let result =
-                build_traces_provider(sig, &config.no_verify, &resource, &sig.authorization);
+            let result = build_traces_provider(
+                sig,
+                &config.no_verify,
+                &resource,
+                sig.authorization
+                    .as_deref()
+                    .or(config.authorization.as_deref()),
+            );
             if let (Err(err), Some(sink)) = (&result, event_sink) {
                 sink.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
@@ -95,7 +114,7 @@ fn build_logs_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &opentelemetry_sdk::Resource,
-    authorization: &Option<String>,
+    authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::logs::SdkLoggerProvider, Box<dyn std::error::Error + Send + Sync>> {
     use opentelemetry_otlp::LogExporter;
     use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
@@ -167,7 +186,7 @@ fn build_metrics_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &opentelemetry_sdk::Resource,
-    authorization: &Option<String>,
+    authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::metrics::SdkMeterProvider, Box<dyn std::error::Error + Send + Sync>>
 {
     use opentelemetry_otlp::MetricExporter;
@@ -242,7 +261,7 @@ fn build_traces_provider(
     sig: &SignalConfig,
     no_verify: &bool,
     resource: &opentelemetry_sdk::Resource,
-    authorization: &Option<String>,
+    authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::trace::SdkTracerProvider, Box<dyn std::error::Error + Send + Sync>> {
     use opentelemetry_otlp::SpanExporter;
     use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
