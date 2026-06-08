@@ -330,7 +330,7 @@ export default [
     label: "Local development TLS",
   },
   {
-    href: "/docs/v3/configuration/security/acme-http",
+    href: "/docs/v3/configuration/security/tls-http",
     target: "_self",
     sub: true,
     label: "HTTP TLS provider",
