@@ -219,7 +219,6 @@ scrape_configs:
 
 ## Notes and troubleshooting
 
-- **Endpoint availability** - the Prometheus endpoint is started lazily when the first metric event is received for a given configuration. This means there may be a slight delay for the first request.
 - **Metric cardinality** - be aware of high-cardinality labels that could cause performance issues in Prometheus. Ferron limits label values to reasonable cardinality. Use `max_distinct` on `baggage` keys to cap distinct label values.
 - **Baggage promotion** - use the `baggage` sub-directive to promote specific baggage keys into metric labels. Always set `max_distinct` for keys with unbounded values to prevent label explosion.
 - **Port conflicts** - if the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.

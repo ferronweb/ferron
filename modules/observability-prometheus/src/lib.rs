@@ -40,7 +40,7 @@ struct PrometheusBackendConfig {
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
-    event: Event,
+    event: Option<Event>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -54,7 +54,7 @@ impl EventSink for PrometheusEventSink {
     fn emit(&self, event: Event) {
         if matches!(event, Event::Metric(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event,
+                event: Some(event),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -82,7 +82,7 @@ impl EventSink for PrometheusEventSink {
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Metric(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event: Arc::unwrap_or_clone(event),
+                event: Some(Arc::unwrap_or_clone(event)),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -261,7 +261,7 @@ impl Module for PrometheusObservabilityModule {
                     .entry(cache_key)
                     .or_insert_with(|| init_provider(&config, cancel_token.clone()));
 
-                if let Event::Metric(metric_event) = &msg.event {
+                if let Some(Event::Metric(metric_event)) = &msg.event {
                     emit_metric(
                         &entry.registry,
                         metric_event,
@@ -733,6 +733,11 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
+        // Eagerly initialize the Prometheus endpoint
+        let _ = self.inner.try_send(ConfiguredEvent {
+            event: None,
+            log_config: ctx.log_config.clone(),
+        });
         ctx.sink = Some(Arc::new(PrometheusEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
