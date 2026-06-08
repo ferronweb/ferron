@@ -1291,6 +1291,7 @@ dependencies = [
  "ferron-http-scgi",
  "ferron-http-server",
  "ferron-http-static",
+ "ferron-http-traceid",
  "ferron-logformat-json",
  "ferron-logformat-text",
  "ferron-metrics-admin",
@@ -1740,6 +1741,22 @@ dependencies = [
  "urlencoding",
  "vibeio",
  "vibeio-http",
+]
+
+[[package]]
+name = "ferron-http-traceid"
+version = "3.0.0-beta.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "typemap_rev",
 ]
 
 [[package]]

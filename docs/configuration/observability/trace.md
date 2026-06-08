@@ -103,6 +103,80 @@ Ferron stores the baggage in the request trace context and propagates both `trac
 > - Baggage values are propagated as-is; Ferron does not validate or modify them by default.
 > - Baggage items are attached to OpenTelemetry spans when using the OTLP provider — high-cardinality baggage keys may increase span storage costs.
 
+## Trace ID response header
+
+Ferron can inject the current request's trace ID into HTTP response headers, making it easy for clients to correlate their requests with server-side traces and logs.
+
+### `trace_id_header`
+
+The `trace_id_header` directive configures whether and how the trace ID is injected into response headers.
+
+```ferron
+example.com {
+    trace_id_header {
+        header_name "X-Trace-Id"
+    }
+}
+```
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `header_name` | `<string>` | Name of the response header to inject the trace ID into. | `X-Ferron-Trace-Id` |
+| `reflect_request` | `[bool]` | Only inject the trace ID when the incoming request contains `X-Ferron-Trace-Reflect: 1`. | `false` |
+
+**Configuration example — default behavior:**
+
+```ferron
+example.com {
+    trace_id_header
+}
+```
+
+Injects the current request's trace ID into the `X-Ferron-Trace-Id` response header for every response (including error responses).
+
+**Configuration example — custom header name:**
+
+```ferron
+example.com {
+    trace_id_header {
+        header_name "X-Request-Trace-Id"
+    }
+}
+```
+
+Injects the trace ID into a custom `X-Request-Trace-Id` header.
+
+**Configuration example — conditional injection:**
+
+```ferron
+example.com {
+    trace_id_header {
+        reflect_request
+    }
+}
+```
+
+Only injects the trace ID when the incoming request includes `X-Ferron-Trace-Reflect: 1`. This is useful for development or debugging scenarios where you only want trace IDs on demand.
+
+**Configuration example — disable:**
+
+```ferron
+example.com {
+    trace_id_header false
+}
+```
+
+Explicitly disables trace ID injection.
+
+### Behavior
+
+- The trace ID is taken from the current request's trace context (W3C `traceparent` if present, or the generated trace ID).
+- The header is injected into both custom responses (e.g., from reverse proxy, static file serving) and built-in error responses (e.g., 404, 500).
+- When `reflect_request` is enabled, the trace ID is only injected if the request carries the `X-Ferron-Trace-Reflect: 1` header.
+
+> [!note]
+> If no trace context exists for the request, the header is not injected. This can happen when `trace { generate false }` is configured and the incoming request lacks a `traceparent` header.
+
 ## See also
 
 - [OTLP observability](/docs/v3/configuration/observability/otlp) for exporting traces and baggage to OpenTelemetry collectors

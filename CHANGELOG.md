@@ -16,7 +16,8 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 #### Modules
 
-- **`abuse_protection`** - a new module for lightweight, native Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
+- **`http-abuseban`** - a new module for lightweight, native Fail2ban-like IP banning with temporary lockouts based on rate limit breaches and brute-force failures.
+- **`http-traceid`** - a new module that injects the current request's trace ID into HTTP response headers (configurable header name, optional on-demand reflection via `X-Ferron-Trace-Reflect`).
 - **`tls-http`** - support for obtaining TLS certificates from a remote HTTP endpoint, featuring automatic refresh cycles and dedicated observability metrics.
 - **OS metrics** - added Windows support for native process metrics in the `metrics-process` module.
 

@@ -36,6 +36,7 @@ ferron-http-fauth = { path = "../modules/http-fauth", optional = true }
 ferron-http-cgi = { path = "../modules/http-cgi", optional = true }
 ferron-http-scgi = { path = "../modules/http-scgi", optional = true }
 ferron-http-fcgi = { path = "../modules/http-fcgi", optional = true }
+ferron-http-traceid = { path = "../modules/http-traceid", optional = true }
 ferron-admin-api = { path = "../modules/admin-api", optional = true }
 ferron-config-json = { path = "../modules/config-json", optional = true }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf", optional = true }
@@ -87,6 +88,7 @@ profile-default = [
     "ferron-http-cgi",
     "ferron-http-scgi",
     "ferron-http-fcgi",
+    "ferron-http-traceid",
     "ferron-admin-api",
     "ferron-config-json",
     "ferron-config-ferronconf",

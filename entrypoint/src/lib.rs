@@ -58,6 +58,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_http_proxy::ReverseProxyModuleLoader::default()),
         Box::new(ferron_http_fproxy::ForwardProxyModuleLoader),
         Box::new(ferron_http_basicauth::HttpBasicAuthModuleLoader),
+        Box::new(ferron_http_traceid::HttpTraceIdModuleLoader),
         Box::new(ferron_admin_api::AdminApiModuleLoader::default()),
         Box::new(ferron_config_json::JsonConfigurationAdapterModuleLoader),
         Box::new(ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader),
