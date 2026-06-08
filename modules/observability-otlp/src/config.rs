@@ -312,7 +312,13 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
 
         let max_distinct = children
             .and_then(|c| c.get_value("max_distinct"))
-            .and_then(|v| v.as_number())
+            .and_then(|v| {
+                if v.as_boolean().is_some_and(|v| !v) {
+                    None
+                } else {
+                    Some(v.as_number().unwrap_or(100))
+                }
+            })
             .map(|n| n as usize);
 
         promotions.push(BaggageKeyPromotion {

@@ -179,20 +179,21 @@ fn validate_baggage_block(
                         } else if !matches!(
                             &max_entry.args[0],
                             ServerConfigurationValue::Number(_, _)
+                                | ServerConfigurationValue::Boolean(false, _)
                         ) {
                             let err: Box<dyn std::error::Error> =
-                                "Invalid `max_distinct` value: must be a number"
+                                "Invalid `max_distinct` value: must be a number or `false`"
                                     .to_string()
                                     .into();
                             Err(err)?;
                         }
+                        if max_entry.args[0].as_boolean().is_some_and(|v| !v) {
+                            validator_ctx.add_best_practice_violation(
+                                "`max_distinct` set to `false`, high cardinality might be allowed.",
+                                max_entry.span.clone(),
+                            );
+                        }
                     }
-                } else {
-                    // `max_distinct` not explicitly set, emit best practice violation warning
-                    validator_ctx.add_best_practice_violation(
-                        "`max_distinct` not explicitly set, high cardinality might be allowed.",
-                        children.span.clone(),
-                    );
                 }
 
                 ferron_core::check_unused_subdirectives!(

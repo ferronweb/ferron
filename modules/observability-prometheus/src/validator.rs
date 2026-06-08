@@ -136,14 +136,22 @@ fn validate_baggage_block(
                         } else if !matches!(
                             &max_entry.args[0],
                             ServerConfigurationValue::Number(_, _)
+                                | ServerConfigurationValue::Boolean(false, _)
                         ) {
-                            validator_ctx
-                                .diagnostics
-                                .push(validator_ctx.create_diagnostic(
+                            validator_ctx.diagnostics.push(
+                                validator_ctx.create_diagnostic(
                                     ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
-                                    "Invalid `max_distinct` value: must be a number".to_string(),
+                                    "Invalid `max_distinct` value: must be a number or `false`"
+                                        .to_string(),
                                     max_entry.span.clone(),
-                                ));
+                                ),
+                            );
+                        }
+                        if max_entry.args[0].as_boolean().is_some_and(|v| !v) {
+                            validator_ctx.add_best_practice_violation(
+                                "`max_distinct` set to `false`, high cardinality might be allowed.",
+                                    max_entry.span.clone()
+                            );
                         }
                     }
                 }

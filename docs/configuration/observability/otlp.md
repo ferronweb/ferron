@@ -89,7 +89,7 @@ Each `key` entry configures one baggage key to promote:
 | `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
 | `attribute` | `<string>` | The OpenTelemetry attribute name to use. | same as the baggage key |
 | `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
-| `max_distinct` | `<number>` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | no cap |
+| `max_distinct` | `<number> | false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100 |
 
 ### Trace sampling
 
@@ -511,7 +511,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### `max_distinct` high cardinality prevention
 
-- **No `max_distinct` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
+- **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
 
 ### Default service name
 

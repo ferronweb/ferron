@@ -69,7 +69,7 @@ Each `key` entry configures one baggage key to promote:
 | --- | --- | --- | --- |
 | `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
 | `attribute` | `<string>` | The Prometheus label name to use. | same as the baggage key |
-| `max_distinct` | `<number>` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | no cap |
+| `max_distinct` | `<number> | false` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | 100 |
 
 **Cardinality warning:** Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
 
@@ -225,6 +225,14 @@ scrape_configs:
 - **Firewall rules** - ensure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
 - **Authentication** - the Prometheus endpoint does not currently support authentication. For secure deployments, place Ferron behind a reverse proxy with authentication or use network-level access controls.
 - **Multiple configurations** - each unique combination of `endpoint_listen` and `endpoint_format` creates a separate metrics endpoint. This allows different hosts to export metrics to different ports or formats.
+
+## Best practices
+
+The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### `max_distinct` high cardinality prevention
+
+- **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
 
 ## See also
 
