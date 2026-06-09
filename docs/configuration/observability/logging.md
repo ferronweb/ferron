@@ -56,6 +56,9 @@ Each access log entry contains the following fields:
 | `span_id` | Optional trace span ID for the request (if W3C trace context is available) |
 | `trace_id` | Optional trace ID for the request (if W3C trace context is available) |
 
+> [!important]
+> Access logs don't contain sensitive fields (such as `header_cookie`, `header_authorization`). This is to ensure sensitive data is not exposed in log output.
+
 ### Log formatters
 
 #### `json`

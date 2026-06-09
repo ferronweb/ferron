@@ -153,6 +153,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Log injection fixed** - implemented strict sanitization of log fields to prevent potential log injection attacks for plain-text logs via malicious header values or other user input.
 - Fixed a data blind spot where malformed and timed-out requests rejected before normal handler completion went uncounted by the observability pipeline.
+- The server now removes sensitive HTTP headers from access logs (such as `cookie`, `authorization`), to prevent sensitive data exposure in log output.
 - Corrected inaccurate memory metrics that were calculating values relative to initial memory usage instead of absolute usage.
 
 #### Security

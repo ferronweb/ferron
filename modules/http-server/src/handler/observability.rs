@@ -12,6 +12,15 @@ use ferron_observability::{
 pub use ferron_http::trace_context::to_event_trace_context;
 
 static SPAN_KEY_COUNTER: AtomicU64 = AtomicU64::new(1);
+/// List of sensitive fields to redact from log output by default (lower-case).
+pub const SENSITIVE_FIELDS_REDACTED: &[&str] = &[
+    "password",
+    "secret", // Credentials
+    "cookie", // HTTP cookies
+    "key",
+    "token",         // API keys and tokens
+    "authorization", // HTTP auth headers
+];
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
 pub(super) struct PerStageSpanHooks<'a> {
@@ -186,6 +195,13 @@ impl AccessEvent for HttpAccessLog {
             &self.timestamp.format("%d/%b/%Y:%H:%M:%S %z").to_string(),
         );
         for (name, value) in &self.request_headers {
+            if SENSITIVE_FIELDS_REDACTED
+                .iter()
+                .any(|sfr| name.to_ascii_lowercase().contains(sfr))
+            {
+                // Don't add sensitive HTTP headers to protect the clients.
+                continue;
+            }
             visitor.field_string(
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
                 value,
