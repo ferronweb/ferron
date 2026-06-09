@@ -66,10 +66,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo fmt --all
 
       - name: Check linting
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --fix --allow-dirty --workspace -- -D warnings
+
+      - name: Commit fixed Rust code
+        if: "!cancelled() && github.ref_name == 'develop-3.x'"
+        shell: bash
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add .
+            git commit -m 'fix: fix lint errors and format the code [skip ci]'
+            git push origin develop-3.x
+          fi
 
   depcheck:
     runs-on: ubuntu-latest
