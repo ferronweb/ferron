@@ -40,7 +40,7 @@ struct PrometheusBackendConfig {
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
-    event: Option<Event>,
+    event: Option<Arc<Event>>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -55,7 +55,7 @@ impl EventSink for PrometheusEventSink {
     fn emit(&self, event: Event) {
         if matches!(event, Event::Metric(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event: Some(event),
+                event: Some(Arc::new(event)),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -84,7 +84,7 @@ impl EventSink for PrometheusEventSink {
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Metric(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event: Some(Arc::unwrap_or_clone(event)),
+                event: Some(event),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -269,7 +269,7 @@ impl Module for PrometheusObservabilityModule {
                     .entry(cache_key)
                     .or_insert_with(|| init_provider(&config, cancel_token.clone()));
 
-                if let Some(Event::Metric(metric_event)) = &msg.event {
+                if let Some(Event::Metric(metric_event)) = msg.event.as_deref() {
                     emit_metric(
                         &entry.registry,
                         metric_event,

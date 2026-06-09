@@ -28,7 +28,7 @@ static DROPPED_EVENT: Once = Once::new();
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
-    event: Event,
+    event: Arc<Event>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -51,7 +51,7 @@ impl EventSink for OtlpEventSink {
         };
         if emit {
             match self.inner.try_send(ConfiguredEvent {
-                event,
+                event: Arc::new(event),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -85,7 +85,7 @@ impl EventSink for OtlpEventSink {
         };
         if emit {
             match self.inner.try_send(ConfiguredEvent {
-                event: Arc::unwrap_or_clone(event),
+                event,
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -165,7 +165,7 @@ impl Module for OtlpObservabilityModule {
                     .entry(cache_key)
                     .or_insert_with(|| OtlpProviderCache::init(&config, event_sink.as_deref()));
 
-                match &msg.event {
+                match &*msg.event {
                     Event::Log(log_event) => {
                         if let Some(ref provider) = entry.logs_provider {
                             emit_log(

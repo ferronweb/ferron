@@ -15,7 +15,7 @@ static DROPPED_EVENT: Once = Once::new();
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
-    event: Event,
+    event: Arc<Event>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -30,7 +30,7 @@ impl EventSink for ConsoleEventSink {
     fn emit(&self, event: Event) {
         if matches!(event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event,
+                event: Arc::new(event),
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -59,7 +59,7 @@ impl EventSink for ConsoleEventSink {
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
-                event: Arc::unwrap_or_clone(event),
+                event,
                 log_config: self.log_config.clone(),
             }) {
                 Ok(_) => {
@@ -132,7 +132,7 @@ impl Module for ConsoleObservabilityModule {
                             .observability_event_queue_len
                             .fetch_sub(1, Ordering::Relaxed);
 
-                        match msg.event {
+                        match &*msg.event {
                             ferron_observability::Event::Access(ae) => {
                                 let message = format_access_event(&ae, &msg.log_config, &registry);
                                 if let Some(message) = message {
