@@ -53,7 +53,7 @@ A configuration file can contain the following at the top level:
 - **Host blocks** — `<host-pattern> { ... }` for virtual host configuration
 - **Match blocks** — `match <name> { ... }` for reusable conditional matchers
 - **Snippet blocks** — `snippet <name> { ... }` for reusable directive groups
-- **Include directives** — `include "path.conf"` to load additional configuration files
+- **Include directives** — `include "path.conf"` to load additional configuration files (globs are supported)
 
 ## Value types
 

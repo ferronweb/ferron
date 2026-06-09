@@ -62,6 +62,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - Added `GET /reload` and `GET /runtime` endpoints to the admin listener.
 
+#### Configuration syntax
+
+- **Globs in `include` directives** - `include "path.conf"` now supports glob patterns, e.g. `include "/etc/ferron/conf.d/**/*.conf"`.
+
 #### Configuration validation
 
 - **Best-practice enforcement** - `ferron doctor` subcommand for validating best practices across the configuration.

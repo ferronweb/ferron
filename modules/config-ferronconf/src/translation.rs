@@ -162,26 +162,30 @@ pub(super) fn load_top_level_statements(
     for statement in config.statements {
         match statement {
             Statement::Directive(directive) if directive.name == "include" => {
-                let include_path = extract_top_level_include_path(&directive, &path)?;
-                let include_path = if include_path.is_absolute() {
-                    include_path
-                } else {
-                    path.parent()
-                        .unwrap_or_else(|| Path::new("."))
-                        .join(include_path)
-                };
+                let include_glob = extract_top_level_include_path(&directive, &path)?;
+                for include_path in glob::glob(&include_glob).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to expand top-level include path \"{include_glob}\": {e}"
+                    )
+                })? {
+                    let include_pathbuf = include_path.map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to expand top-level include path \"{include_glob}\": {e}"
+                        )
+                    })?;
 
-                statements.extend(load_top_level_statements(
-                    &include_path,
-                    include_stack,
-                    loaded_files,
-                )?);
+                    statements.extend(load_top_level_statements(
+                        include_pathbuf.as_path(),
+                        include_stack,
+                        loaded_files,
+                    )?);
 
-                if let Some(block) = directive.block {
-                    statements.push(SourceStatement {
-                        statement: Statement::GlobalBlock(block),
-                        file: path.clone(),
-                    });
+                    if let Some(block) = directive.block.clone() {
+                        statements.push(SourceStatement {
+                            statement: Statement::GlobalBlock(block),
+                            file: path.clone(),
+                        });
+                    }
                 }
             }
             statement => statements.push(SourceStatement {
@@ -195,7 +199,7 @@ pub(super) fn load_top_level_statements(
     Ok(statements)
 }
 
-fn extract_top_level_include_path(directive: &Directive, file: &Path) -> anyhow::Result<PathBuf> {
+fn extract_top_level_include_path(directive: &Directive, file: &Path) -> anyhow::Result<String> {
     if directive.args.len() != 1 {
         anyhow::bail!(
             "Top-level include directives require exactly one string argument ({})",
@@ -203,11 +207,11 @@ fn extract_top_level_include_path(directive: &Directive, file: &Path) -> anyhow:
         );
     }
 
-    Ok(PathBuf::from(value_to_plain_string(
+    Ok(value_to_plain_string(
         &directive.args[0],
         file,
         "Top-level include directives",
-    )?))
+    )?)
 }
 
 pub(super) fn translate_configuration(

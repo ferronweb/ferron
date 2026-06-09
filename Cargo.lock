@@ -1202,6 +1202,7 @@ dependencies = [
  "async-trait",
  "ferron-core",
  "ferronconf",
+ "glob",
  "notify",
  "notify-debouncer-mini",
  "tokio",
