@@ -96,8 +96,7 @@ pub(super) fn get_http_nested_boolean(
                 .directives
                 .get(directive)
                 .and_then(|entries| entries.first())
-                .and_then(|entry| entry.args.first())
-                .and_then(|value| value.as_boolean())
+                .map(|v| v.get_flag())
         })
 }
 
