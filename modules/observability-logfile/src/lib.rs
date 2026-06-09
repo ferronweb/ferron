@@ -34,6 +34,7 @@ struct LogFileEventSink {
 }
 
 impl EventSink for LogFileEventSink {
+    #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
@@ -62,6 +63,7 @@ impl EventSink for LogFileEventSink {
         }
     }
 
+    #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
@@ -90,6 +92,7 @@ impl EventSink for LogFileEventSink {
         }
     }
 
+    #[inline]
     fn processes_access(&self) -> bool {
         true
     }

@@ -39,6 +39,7 @@ struct OtlpEventSink {
 }
 
 impl EventSink for OtlpEventSink {
+    #[inline]
     fn emit(&self, event: Event) {
         match self.inner.try_send(ConfiguredEvent {
             event,
@@ -65,6 +66,7 @@ impl EventSink for OtlpEventSink {
         }
     }
 
+    #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         match self.inner.try_send(ConfiguredEvent {
             event: Arc::unwrap_or_clone(event),
@@ -91,10 +93,12 @@ impl EventSink for OtlpEventSink {
         }
     }
 
+    #[inline]
     fn processes_traces(&self) -> bool {
         true
     }
 
+    #[inline]
     fn processes_access(&self) -> bool {
         true
     }

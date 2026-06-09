@@ -26,6 +26,7 @@ struct ConsoleEventSink {
 }
 
 impl EventSink for ConsoleEventSink {
+    #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
@@ -54,6 +55,7 @@ impl EventSink for ConsoleEventSink {
         }
     }
 
+    #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Access(_) | Event::Log(_)) {
             match self.inner.try_send(ConfiguredEvent {
