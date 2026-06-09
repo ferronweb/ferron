@@ -207,11 +207,7 @@ fn extract_top_level_include_path(directive: &Directive, file: &Path) -> anyhow:
         );
     }
 
-    value_to_plain_string(
-        &directive.args[0],
-        file,
-        "Top-level include directives",
-    )
+    value_to_plain_string(&directive.args[0], file, "Top-level include directives")
 }
 
 pub(super) fn translate_configuration(
