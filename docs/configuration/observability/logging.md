@@ -118,7 +118,6 @@ Request headers are available via the `%{Header-Name}i` syntax. The header name 
 > [!tip]
 > If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability). For log format details, see the `json` and `text` formatter sections above.
 
-
 ## Trace ID in console and file logs
 
 Console and file loggers prefix log messages with `[trace=<span_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.
