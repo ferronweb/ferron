@@ -162,7 +162,15 @@ pub(super) fn load_top_level_statements(
     for statement in config.statements {
         match statement {
             Statement::Directive(directive) if directive.name == "include" => {
-                let include_glob = extract_top_level_include_path(&directive, &path)?;
+                let mut include_glob = extract_top_level_include_path(&directive, &path)?;
+                if PathBuf::from_str(&include_glob).is_ok_and(|s| s.is_relative()) {
+                    include_glob = path
+                        .parent()
+                        .unwrap_or_else(|| Path::new("."))
+                        .join(include_glob)
+                        .to_string_lossy()
+                        .to_string();
+                }
                 for include_path in glob::glob(&include_glob).map_err(|e| {
                     anyhow::anyhow!(
                         "Failed to expand top-level include path \"{include_glob}\": {e}"
