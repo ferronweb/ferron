@@ -77,6 +77,63 @@ example.com {
 }
 ```
 
+## Log rotation
+
+To prevent log files from growing too large, you can configure Ferron to rotate them automatically:
+
+```ferron
+example.com {
+    log "access.log" {
+        access_log_rotate_size 10485760
+        access_log_rotate_keep 7
+    }
+
+    error_log "error.log" {
+        error_log_rotate_size 10485760
+        error_log_rotate_keep 7
+    }
+}
+```
+
+## Trace ID logging for debugging
+
+Use this when you need to correlate log messages across requests without setting up a full OTLP backend. The `force_trace` directive enables trace context for every request, and console/file loggers automatically prefix messages with `[trace=<span_id>]`:
+
+```ferron
+{
+    http {
+        force_trace true
+    }
+}
+
+example.com {
+    # HTTP access logs
+    log "access.log" {
+        format text
+        access_pattern ">>> %trace_id <<< %client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
+    }
+
+    # "Error" logs, also with trace IDs
+    error_log "error.log"
+
+    root /var/www/html
+}
+```
+
+Example log output:
+
+```text
+[2026-04-05 14:32:01.123 INFO] [trace=abc123def456] Request processed successfully
+[2026-04-05 14:32:01.124 DEBUG] [trace=abc123def456] Cache miss for key: user:123
+```
+
+You can then use `grep` to filter logs by a specific trace ID:
+
+```bash
+grep "trace=abc123def456" /var/log/ferron/access.log
+grep "trace=abc123def456" /var/log/ferron/error.log
+```
+
 ## Centralized observability with OTLP
 
 Use this when shipping logs, metrics, and traces to an OpenTelemetry collector:
@@ -216,45 +273,6 @@ api.example.com {
     }
     proxy http://backend:3000
 }
-```
-
-## Trace ID logging for debugging
-
-Use this when you need to correlate log messages across requests without setting up a full OTLP backend. The `force_trace` directive enables trace context for every request, and console/file loggers automatically prefix messages with `[trace=<span_id>]`:
-
-```ferron
-{
-    http {
-        force_trace true
-    }
-}
-
-example.com {
-    # HTTP access logs
-    log "access.log" {
-        format text
-        access_pattern ">>> %trace_id <<< %client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
-    }
-
-    # "Error" logs, also with trace IDs
-    error_log "error.log"
-
-    root /var/www/html
-}
-```
-
-Example log output:
-
-```text
-[2026-04-05 14:32:01.123 INFO] [trace=abc123def456] Request processed successfully
-[2026-04-05 14:32:01.124 DEBUG] [trace=abc123def456] Cache miss for key: user:123
-```
-
-You can then use `grep` to filter logs by a specific trace ID:
-
-```bash
-grep "trace=abc123def456" /var/log/ferron/access.log
-grep "trace=abc123def456" /var/log/ferron/error.log
 ```
 
 ## Hybrid setup: local fallback + OTLP
