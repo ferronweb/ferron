@@ -132,12 +132,28 @@ impl Module for ConsoleObservabilityModule {
                                 log_info!("{}", message);
                             }
                         }
-                        ferron_observability::Event::Log(le) => match le.level {
-                            ferron_observability::LogLevel::Error => log_error!("{}", le.message),
-                            ferron_observability::LogLevel::Warn => log_warn!("{}", le.message),
-                            ferron_observability::LogLevel::Info => log_info!("{}", le.message),
-                            ferron_observability::LogLevel::Debug => log_debug!("{}", le.message),
-                        },
+                        ferron_observability::Event::Log(le) => {
+                            let trace_id_part = le
+                                .trace_context
+                                .as_ref()
+                                .and_then(|t| str::from_utf8(&t.span_id).ok())
+                                .map(|sid| format!("[trace={}] ", sid))
+                                .unwrap_or_default();
+                            match le.level {
+                                ferron_observability::LogLevel::Error => {
+                                    log_error!("{}{}", trace_id_part, le.message)
+                                }
+                                ferron_observability::LogLevel::Warn => {
+                                    log_warn!("{}{}", trace_id_part, le.message)
+                                }
+                                ferron_observability::LogLevel::Info => {
+                                    log_info!("{}{}", trace_id_part, le.message)
+                                }
+                                ferron_observability::LogLevel::Debug => {
+                                    log_debug!("{}{}", trace_id_part, le.message)
+                                }
+                            }
+                        }
                         _ => (), // Ignore unsupported event types
                     }
                 });

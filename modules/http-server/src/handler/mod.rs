@@ -178,7 +178,11 @@ pub async fn request_handler(
     let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
     let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
 
-    let (request_trace_context, external_parent) = if has_traces {
+    let (request_trace_context, external_parent) = if has_traces
+        || config_resolver
+            .global()
+            .is_some_and(|c| get_http_nested_boolean(&c, "force_trace").unwrap_or(false))
+    {
         let global_config = config_resolver.global();
         let trace_config_node = global_config.as_ref().and_then(|g| {
             g.directives

@@ -39,6 +39,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **`basic_auth_concurrency`** - global directive to limit concurrent, resource-heavy password verification tasks across all `basic_auth` blocks.
 - **Cache purging** - native `PURGE` HTTP method support for targeted cache invalidation via the `purge_method` and `purge_allowed_ips` subdirectives.
+- **`force_trace`** - global directive to force trace context creation for every request even when tracing is not explicitly enabled by a module, useful for debugging or log correlation.
 
 #### Observability & metrics
 
@@ -99,6 +100,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Backend exporting** - admin API metrics are now also pushed directly to configured observability backends, not just the local admin endpoint.
 - **Cardinality control** - Prometheus label values are now sanitized to heavily reduce high-cardinality label inflation.
 - **Structured log events** - every log emission site now carries a short OTEL-friendly `summary` plus typed `attributes`, enabling downstream OTLP consumers to receive structured events without changing existing console or file log output.
+- **Trace ID in console and file logs** - console and file loggers now prefix log messages with `[trace=<span_id>]` when a trace context is available, enabling grep-based filtering by trace ID.
 
 #### Core runtime
 

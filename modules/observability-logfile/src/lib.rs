@@ -297,14 +297,20 @@ impl Module for LogFileObservabilityModule {
 
                                     if let Some(log_path) = log_path {
                                         let message = le.message.to_string().replace("\n", "\n  ");
-                                        let line = format!("[{} {}] {}\n",
+                                        let trace_id_part = le
+                                            .trace_context
+                                            .as_ref()
+                                            .and_then(|t| str::from_utf8(&t.span_id).ok())
+                                            .map(|sid| format!("[trace={}] ", sid))
+                                            .unwrap_or_default();
+                                        let line = format!("[{} {}] {}{}\n",
                                             chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                                             match le.level {
                                             LogLevel::Error => "ERROR",
                                             LogLevel::Warn => "WARN",
                                             LogLevel::Info => "INFO",
                                             LogLevel::Debug => "DEBUG",
-                                        },  message.trim());
+                                        },  trace_id_part, message.trim());
 
                                         // Read rotation config for error log
                                         let rotation = RotationConfig::read_from_config(

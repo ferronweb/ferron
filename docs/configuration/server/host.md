@@ -151,6 +151,8 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
   - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. This directive is applicable only for global scope. Default: `url_sanitize true`
 - `url_reject_backslash [bool: boolean]`
   - This directive specifies whether URLs containing backslashes are rejected. When enabled (the default), requests with literal `\` or percent-encoded backslashes (`%5C`) in the path are rejected with a 400 Bad Request response. This prevents path interpretation issues on Windows backends where backslashes may be treated as path separators. This directive is applicable only for global scope. Default: `url_reject_backslash true`
+- `force_trace [bool]`
+  - This directive forces trace context creation for every request even when tracing is not explicitly enabled by a module. When enabled, a trace span is generated for every HTTP request regardless of whether an observability backend is configured. This is useful for debugging, log correlation, or when trace IDs are needed in console/file logs without full OTLP tracing. This directive is applicable only for global scope. Default: `force_trace false`
 
 **Configuration example:**
 
@@ -190,6 +192,9 @@ example.com {
 
 > [!warning]
 > Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs, but this can expose backends to path interpretation vulnerabilities.
+
+> [!note] Note for "force_trace"
+> When `force_trace` is enabled, trace context is available in console and file log messages as a `[trace=<span_id>]` prefix, enabling grep-based filtering by trace ID. This does not require an OTLP backend to be configured.
 
 ### TLS
 
