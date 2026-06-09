@@ -36,71 +36,88 @@ struct ConfiguredEvent {
 struct OtlpEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
+    has_logs: bool,
+    has_metrics: bool,
+    has_traces: bool,
 }
 
 impl EventSink for OtlpEventSink {
     #[inline]
     fn emit(&self, event: Event) {
-        match self.inner.try_send(ConfiguredEvent {
-            event,
-            log_config: self.log_config.clone(),
-        }) {
-            Ok(_) => {
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_event_queue_len
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-            Err(_) => {
-                // Increment global dropped-events metric
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_events_dropped
-                    .fetch_add(1, Ordering::Relaxed);
+        let emit = match event {
+            Event::Access(_) | Event::Log(_) => self.has_logs,
+            Event::Metric(_) => self.has_metrics,
+            Event::Trace(_) => self.has_traces,
+        };
+        if emit {
+            match self.inner.try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment global dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-                DROPPED_EVENT.call_once(|| {
-                    log_warn!(
-                        "Observability event dropped (`otlp` observability backend). \
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`otlp` observability backend). \
                         This may be caused by high server load."
-                    );
-                });
+                        );
+                    });
+                }
             }
         }
     }
 
     #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        match self.inner.try_send(ConfiguredEvent {
-            event: Arc::unwrap_or_clone(event),
-            log_config: self.log_config.clone(),
-        }) {
-            Ok(_) => {
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_event_queue_len
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-            Err(_) => {
-                // Increment global dropped-events metric
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_events_dropped
-                    .fetch_add(1, Ordering::Relaxed);
+        let emit = match &*event {
+            Event::Access(_) | Event::Log(_) => self.has_logs,
+            Event::Metric(_) => self.has_metrics,
+            Event::Trace(_) => self.has_traces,
+        };
+        if emit {
+            match self.inner.try_send(ConfiguredEvent {
+                event: Arc::unwrap_or_clone(event),
+                log_config: self.log_config.clone(),
+            }) {
+                Ok(_) => {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    // Increment global dropped-events metric
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_events_dropped
+                        .fetch_add(1, Ordering::Relaxed);
 
-                DROPPED_EVENT.call_once(|| {
-                    log_warn!(
-                        "Observability event dropped (`otlp` observability backend). \
+                    DROPPED_EVENT.call_once(|| {
+                        log_warn!(
+                            "Observability event dropped (`otlp` observability backend). \
                         This may be caused by high server load."
-                    );
-                });
+                        );
+                    });
+                }
             }
         }
     }
 
     #[inline]
     fn processes_traces(&self) -> bool {
-        true
+        self.has_traces
     }
 
     #[inline]
     fn processes_access(&self) -> bool {
-        true
+        self.has_logs
     }
 }
 
@@ -286,9 +303,17 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
+        // Heuristics based on configuration directives
+        let has_logs = ctx.log_config.has_directive("logs");
+        let has_metrics = ctx.log_config.has_directive("metrics");
+        let has_traces = ctx.log_config.has_directive("traces");
+
         ctx.sink = Some(Arc::new(OtlpEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
+            has_logs,
+            has_metrics,
+            has_traces,
         }));
         Ok(())
     }
