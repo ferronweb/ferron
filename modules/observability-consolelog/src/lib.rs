@@ -134,7 +134,7 @@ impl Module for ConsoleObservabilityModule {
 
                         match &*msg.event {
                             ferron_observability::Event::Access(ae) => {
-                                let message = format_access_event(&ae, &msg.log_config, &registry);
+                                let message = format_access_event(ae, &msg.log_config, &registry);
                                 if let Some(message) = message {
                                     log_info!("{}", message);
                                 }
