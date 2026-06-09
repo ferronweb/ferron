@@ -104,61 +104,69 @@ impl Module for ConsoleObservabilityModule {
 
     fn start(
         &self,
-        runtime: &mut ferron_core::runtime::Runtime,
+        _runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let cancel_token = self.cancel_token.clone();
         let registry = self.registry.clone();
 
         let rx = self.inner.clone();
-        runtime.spawn_secondary_task(async move {
-            while let Some(msg) = tokio::select! {
-                result = rx.recv() => {
-                    result.ok()
-                }
-                _ = cancel_token.cancelled() => {
-                    None
-                }
-            } {
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_event_queue_len
-                    .fetch_sub(1, Ordering::Relaxed);
+        // Offload logging to a separate thread
+        let thread_result = std::thread::Builder::new()
+            .name("Console logging".to_string())
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .expect("Failed to create current-thread runtime for console logging");
+                rt.block_on(async move {
+                    while let Some(msg) = tokio::select! {
+                        result = rx.recv() => {
+                            result.ok()
+                        }
+                        _ = cancel_token.cancelled() => {
+                            None
+                        }
+                    } {
+                        ferron_core::admin::ADMIN_METRICS
+                            .observability_event_queue_len
+                            .fetch_sub(1, Ordering::Relaxed);
 
-                let registry = registry.clone();
-                tokio::task::spawn_blocking(move || {
-                    match msg.event {
-                        ferron_observability::Event::Access(ae) => {
-                            let message = format_access_event(&ae, &msg.log_config, &registry);
-                            if let Some(message) = message {
-                                log_info!("{}", message);
-                            }
-                        }
-                        ferron_observability::Event::Log(le) => {
-                            let trace_id_part = le
-                                .trace_context
-                                .as_ref()
-                                .and_then(|t| str::from_utf8(&t.span_id).ok())
-                                .map(|sid| format!("[trace={}] ", sid))
-                                .unwrap_or_default();
-                            match le.level {
-                                ferron_observability::LogLevel::Error => {
-                                    log_error!("{}{}", trace_id_part, le.message)
-                                }
-                                ferron_observability::LogLevel::Warn => {
-                                    log_warn!("{}{}", trace_id_part, le.message)
-                                }
-                                ferron_observability::LogLevel::Info => {
-                                    log_info!("{}{}", trace_id_part, le.message)
-                                }
-                                ferron_observability::LogLevel::Debug => {
-                                    log_debug!("{}{}", trace_id_part, le.message)
+                        match msg.event {
+                            ferron_observability::Event::Access(ae) => {
+                                let message = format_access_event(&ae, &msg.log_config, &registry);
+                                if let Some(message) = message {
+                                    log_info!("{}", message);
                                 }
                             }
+                            ferron_observability::Event::Log(le) => {
+                                let trace_id_part = le
+                                    .trace_context
+                                    .as_ref()
+                                    .and_then(|t| str::from_utf8(&t.span_id).ok())
+                                    .map(|sid| format!("[trace={}] ", sid))
+                                    .unwrap_or_default();
+                                match le.level {
+                                    ferron_observability::LogLevel::Error => {
+                                        log_error!("{}{}", trace_id_part, le.message)
+                                    }
+                                    ferron_observability::LogLevel::Warn => {
+                                        log_warn!("{}{}", trace_id_part, le.message)
+                                    }
+                                    ferron_observability::LogLevel::Info => {
+                                        log_info!("{}{}", trace_id_part, le.message)
+                                    }
+                                    ferron_observability::LogLevel::Debug => {
+                                        log_debug!("{}{}", trace_id_part, le.message)
+                                    }
+                                }
+                            }
+                            _ => (), // Ignore unsupported event types
                         }
-                        _ => (), // Ignore unsupported event types
                     }
                 });
-            }
-        });
+            });
+        if let Err(err) = thread_result {
+            log_warn!("Failed to start console logging thread: {}", err)
+        }
 
         Ok(())
     }
