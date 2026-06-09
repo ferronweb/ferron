@@ -9,7 +9,7 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-  use std::path::Path;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
