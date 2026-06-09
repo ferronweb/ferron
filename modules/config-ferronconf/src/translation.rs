@@ -163,7 +163,7 @@ pub(super) fn load_top_level_statements(
         match statement {
             Statement::Directive(directive) if directive.name == "include" => {
                 let mut include_glob = extract_top_level_include_path(&directive, &path)?;
-                if PathBuf::from_str(&include_glob).is_ok_and(|s| s.is_relative()) {
+                if PathBuf::from_str(&include_glob).is_ok_and(|s| !s.has_root()) {
                     include_glob = path
                         .parent()
                         .unwrap_or_else(|| Path::new("."))
