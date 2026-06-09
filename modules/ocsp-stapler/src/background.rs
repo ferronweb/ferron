@@ -338,7 +338,7 @@ pub async fn background_ocsp_task(
 
     emit_log(
         &event_sink,
-        LogLevel::Info,
+        LogLevel::Debug,
         "OCSP background task started",
         "ferron_ocsp",
     );

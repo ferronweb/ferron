@@ -102,7 +102,6 @@ impl Module for ForwardProxyModule {
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         // Capture the secondary runtime handle for DNS resolution
         let _handle = get_secondary_runtime_handle(runtime);
-        ferron_core::log_debug!("Forward proxy module initialized");
         Ok(())
     }
 }

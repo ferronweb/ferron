@@ -532,7 +532,7 @@ impl Module for ReverseProxyModule {
 
         self.sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
-                level: ferron_observability::LogLevel::Info,
+                level: ferron_observability::LogLevel::Debug,
                 message: "Reverse proxy module initialized".to_string(),
                 summary: "Reverse proxy module initialized".into(),
                 target: LOG_TARGET,
