@@ -122,11 +122,13 @@ USER nobody
 # - a directory where Ferron logs are stored
 # - a configuration directory
 WORKDIR /etc/ferron
+WORKDIR /etc/ferron/conf.d
 WORKDIR /var/cache/ferron-acme
 WORKDIR /var/log/ferron
 
 # Copy the web server configuration
-COPY --chown=nobody configs/ferron.docker.conf /etc/ferron/ferron.conf
+COPY --chown=nobody configs/ferron.docker-entrypoint.conf /etc/ferron/ferron.conf
+COPY --chown=nobody configs/ferron.docker.conf /etc/ferron/conf.d/00-default.conf
 
 # Copy the web root contents
 COPY --chown=nobody wwwroot /var/www/ferron/

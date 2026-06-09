@@ -41,6 +41,7 @@ Dockerfile*
 /configs/
 # except
 !/configs/ferron.docker.conf
+!/configs/ferron.docker-entrypoint.conf
 
 # GitHub-related files
 /.github/

@@ -69,6 +69,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 - JSON configuration validation results are now printed to stdout when `--json` is specified, improving observability for automated tools and CI/CD pipelines.
 - Unused subdirectives are now reported as well as directives.
 
+#### Docker
+
+- **Entrypoint configuration** - Docker images now include a dedicated entrypoint config with JSON console logging, trace ID forcing, and an `include /etc/ferron/conf.d/**/*.conf` directive for user-provided split configurations.
+
 ### Changed
 
 #### Reverse proxy
@@ -107,6 +111,14 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Unified durations** - improved configuration-wide consistency for duration formatting values.
 - **Graceful shutdown** - the server process now handles standard Unix `SIGTERM` signals for seamless graceful shutdowns.
 - **Frictionless local TLS** - the server now issues a clean warning if local automatic TLS is configured but the cache directory isn't writable, instead of refusing to boot.
+
+#### Docker
+
+- **Split configuration layout** - Docker images now use a two-file layout: `/etc/ferron/ferron.conf` as the entrypoint config and `/etc/ferron/conf.d/` for user configuration files. Docker Compose bind mounts now target the `conf.d/` directory.
+
+#### Package configuration
+
+- **Log rotation and structured logging** - Default package configurations now include log rotation settings and commented-out structured logging and trace ID format options.
 
 ### Fixed
 

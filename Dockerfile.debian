@@ -87,13 +87,15 @@ COPY --from=builder /usr/src/ferron/.dist /usr/local/bin
 # - a configuration directory
 RUN mkdir -p /var/cache/ferron-acme && chown -R nobody:nogroup /var/cache/ferron-acme && \
     mkdir -p /var/log/ferron && chown -R nobody:nogroup /var/log/ferron && \
-    mkdir -p /etc/ferron && chown -R nobody:nogroup /etc/ferron
+    mkdir -p /etc/ferron && chown -R nobody:nogroup /etc/ferron && \
+    mkdir -p /etc/ferron/conf.d && chown -R nobody:nogroup /etc/ferron/conf.d
 
 # Switch to "nobody" user to make commands like WORKDIR use the correct owner
 USER nobody
 
 # Copy the web server configuration
-COPY --chown=nobody configs/ferron.docker.conf /etc/ferron/ferron.conf
+COPY --chown=nobody configs/ferron.docker-entrypoint.conf /etc/ferron/ferron.conf
+COPY --chown=nobody configs/ferron.docker.conf /etc/ferron/conf.d/00-default.conf
 
 # Copy the web root contents
 COPY --chown=nobody wwwroot /var/www/ferron/

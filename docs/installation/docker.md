@@ -65,10 +65,9 @@ Ferron on Docker has the following file structure:
 - `/usr/local/bin/ferron-precompress` - Ferron static files precompression tool
 - `/usr/local/bin/ferron-serve` - command for serving static files with Ferron with zero configuration
 - `/var/cache/ferron-acme` - Ferron's ACME cache directory (if not explicitly specified in the server configuration)
-- `/var/log/ferron/access.log` - Ferron access log in Combined Log Format (default configuration)
-- `/var/log/ferron/error.log` - Ferron error log (default configuration)
-- `/var/www/ferron` - Ferron's web root
-- `/etc/ferron/ferron.conf` - Ferron configuration
+- `/var/www/ferron` - Ferron's default web root
+- `/etc/ferron/conf.d` - Directory for split Ferron configuration files
+- `/etc/ferron/conf.d/00-default.conf` - Default Ferron configuration
 
 ## Managing the Ferron container
 
@@ -95,6 +94,17 @@ If you need to remove the Ferron container:
 ```sh
 docker rm -f myferron
 ```
+
+### Viewing the logs
+
+To view the Ferron access and error logs, use Docker's `logs` command with the container name or ID:
+
+```sh
+docker logs myferron
+```
+
+> [!tip]
+> Ferron's Docker image is configured to output structured, JSON-format access logs with `grep`-able trace ID correlation to error logs by default.
 
 ## Using Ferron with Docker Compose
 
@@ -128,7 +138,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - "./ferron.conf:/etc/ferron/ferron.conf" # Ferron configuration file
+      - "./ferron-conf.d:/etc/ferron/conf.d" # Ferron configuration file
       - "ferron-acme:/var/cache/ferron-acme" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
     restart: always
 
@@ -136,7 +146,7 @@ volumes:
   ferron-acme:
 ```
 
-You might also configure Ferron in a `ferron.conf` file like this:
+You might also configure Ferron in a `ferron-conf.d/ferron.conf` file like this:
 
 ```ferron
 # Replace "example.com" with your website's domain name
