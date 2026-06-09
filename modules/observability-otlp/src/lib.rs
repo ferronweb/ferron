@@ -192,7 +192,7 @@ impl Module for OtlpObservabilityModule {
                             emit_trace(
                                 provider,
                                 trace_event,
-                                &entry.correlation,
+                                &mut entry.correlation,
                                 &entry.baggage_promotions,
                             );
                         }

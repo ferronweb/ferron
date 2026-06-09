@@ -1,6 +1,5 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
-use dashmap::DashMap;
 use ferron_observability::Parent;
 use opentelemetry::{
     baggage::BaggageExt,
@@ -12,7 +11,7 @@ use opentelemetry_sdk::Resource;
 /// Correlation context: tracks active spans per host sink instance.
 pub struct CorrelationContext {
     /// Active spans: span_key -> active span entry
-    active_spans: DashMap<String, ActiveSpan>,
+    active_spans: HashMap<String, ActiveSpan>,
 }
 
 pub(crate) struct ActiveSpan {
@@ -39,12 +38,12 @@ thread_local! {
 impl CorrelationContext {
     pub fn new() -> Self {
         Self {
-            active_spans: DashMap::new(),
+            active_spans: HashMap::new(),
         }
     }
 
     pub fn insert_span(
-        &self,
+        &mut self,
         key: impl Into<String>,
         trace_id_hex: String,
         span_id_hex: String,
@@ -64,14 +63,13 @@ impl CorrelationContext {
         );
     }
 
-    pub(crate) fn remove_span(&self, key: &str) -> Option<ActiveSpan> {
-        self.active_spans.remove(key).map(|(_, v)| v)
+    pub(crate) fn remove_span(&mut self, key: &str) -> Option<ActiveSpan> {
+        self.active_spans.remove(key)
     }
 
     /// Look up an active span's trace and span ID for use as a parent.
     pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool, Option<String>)> {
-        self.active_spans.get(key).map(|entry| {
-            let span = entry.value();
+        self.active_spans.get(key).map(|span| {
             (
                 span.trace_id_hex.clone(),
                 span.span_id_hex.clone(),

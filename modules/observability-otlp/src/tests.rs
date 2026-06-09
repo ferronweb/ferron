@@ -11,7 +11,7 @@ use ferron_observability::{
 fn correlation_context_tracks_active_spans() {
     use opentelemetry::trace::{Span, Tracer, TracerProvider};
 
-    let ctx = CorrelationContext::new();
+    let mut ctx = CorrelationContext::new();
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
     let tracer = provider.tracer("test");
 
@@ -45,7 +45,7 @@ fn emit_trace_start_span_stores_span_object() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     let event = TraceEvent::StartSpan {
         key: Cow::Borrowed("test.span"),
@@ -65,7 +65,7 @@ fn emit_trace_start_span_stores_span_object() {
         ],
     };
 
-    emit_trace(&provider, &event, &correlation, &[]);
+    emit_trace(&provider, &event, &mut correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_some());
 }
@@ -76,7 +76,7 @@ fn emit_trace_end_span_ends_properly() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     let start_event = TraceEvent::StartSpan {
         key: Cow::Borrowed("test.span"),
@@ -89,7 +89,7 @@ fn emit_trace_end_span_ends_properly() {
             TraceAttributeValue::String("POST".to_string()),
         )],
     };
-    emit_trace(&provider, &start_event, &correlation, &[]);
+    emit_trace(&provider, &start_event, &mut correlation, &[]);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -97,7 +97,7 @@ fn emit_trace_end_span_ends_properly() {
         error: Some("test error".to_string()),
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
     };
-    emit_trace(&provider, &end_event, &correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -107,7 +107,7 @@ fn emit_trace_end_span_without_error() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     let start_event = TraceEvent::StartSpan {
         key: Cow::Borrowed("test.span"),
@@ -117,7 +117,7 @@ fn emit_trace_end_span_without_error() {
         builder_attributes: vec![],
         attributes: vec![],
     };
-    emit_trace(&provider, &start_event, &correlation, &[]);
+    emit_trace(&provider, &start_event, &mut correlation, &[]);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -125,7 +125,7 @@ fn emit_trace_end_span_without_error() {
         error: None,
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
     };
-    emit_trace(&provider, &end_event, &correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[]);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -135,7 +135,7 @@ fn emit_trace_end_span_on_unknown_name_does_nothing() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("unknown.span"),
@@ -143,7 +143,7 @@ fn emit_trace_end_span_on_unknown_name_does_nothing() {
         error: Some("should be ignored".to_string()),
         attributes: vec![],
     };
-    emit_trace(&provider, &end_event, &correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[]);
     assert!(correlation.get_parent_ids("unknown.span").is_none());
 }
 
@@ -279,56 +279,12 @@ async fn emit_metric_with_long_label_value_is_hashed() {
     assert!(sanitized.starts_with("hash_"));
 }
 
-#[tokio::test]
-async fn otlp_correlation_context_concurrent_insert_remove() {
-    use opentelemetry::trace::{Span, Tracer, TracerProvider};
-    use std::sync::Arc;
-    use std::thread;
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let tracer = provider.tracer("test");
-
-    let ctx = Arc::new(CorrelationContext::new());
-    let mut handles = vec![];
-
-    for i in 0..100 {
-        let ctx = ctx.clone();
-        let tracer = tracer.clone();
-        handles.push(thread::spawn(move || {
-            let key = format!("span.{i}");
-            let span = tracer.start(format!("test_span_{i}"));
-            let trace_id_hex = span.span_context().trace_id().to_string();
-            let span_id_hex = span.span_context().span_id().to_string();
-            let sampled = span.span_context().trace_flags().is_sampled();
-            let baggage = None;
-
-            ctx.insert_span(
-                key.clone(),
-                trace_id_hex,
-                span_id_hex,
-                sampled,
-                span,
-                baggage,
-            );
-            // Immediately try to read — should succeed
-            assert!(ctx.get_parent_ids(&key).is_some());
-        }));
-    }
-
-    for h in handles {
-        h.join().unwrap();
-    }
-
-    // All spans should be cleaned up via EndSpan in the next step
-    // (In this test we only verify concurrent insert + read works without panics)
-}
-
 #[test]
 fn emit_trace_promotes_baggage_to_span_attributes() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     let promotions = vec![
         BaggageKeyPromotion {
@@ -359,7 +315,7 @@ fn emit_trace_promotes_baggage_to_span_attributes() {
         attributes: vec![],
     };
 
-    emit_trace(&provider, &event, &correlation, &promotions);
+    emit_trace(&provider, &event, &mut correlation, &promotions);
 
     // Verify span was created with baggage attributes
     let entry = correlation
@@ -374,7 +330,7 @@ fn emit_trace_respects_signal_filter_for_baggage() {
     use std::borrow::Cow;
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let correlation = CorrelationContext::new();
+    let mut correlation = CorrelationContext::new();
 
     // Only promote to logs, not traces
     let promotions = vec![BaggageKeyPromotion {
@@ -399,7 +355,7 @@ fn emit_trace_respects_signal_filter_for_baggage() {
     };
 
     // Should not panic, and the baggage should not be promoted to traces
-    emit_trace(&provider, &event, &correlation, &promotions);
+    emit_trace(&provider, &event, &mut correlation, &promotions);
     assert!(correlation.get_parent_ids("test.span").is_some());
 }
 

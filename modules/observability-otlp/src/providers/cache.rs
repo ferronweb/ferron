@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use ferron_observability::{
     baggage::{BaggageKeyPromotion, DistinctValueTracker},
@@ -18,7 +17,7 @@ pub struct OtlpProviderCache {
     pub logs_provider: Option<opentelemetry_sdk::logs::SdkLoggerProvider>,
     pub metrics_provider: Option<opentelemetry_sdk::metrics::SdkMeterProvider>,
     pub traces_provider: Option<opentelemetry_sdk::trace::SdkTracerProvider>,
-    pub correlation: Arc<CorrelationContext>,
+    pub correlation: CorrelationContext,
     pub metrics_instruments: HashMap<&'static str, CachedInstrument>,
     pub baggage_promotions: Vec<BaggageKeyPromotion>,
     pub baggage_tracker: DistinctValueTracker,
@@ -30,7 +29,7 @@ impl OtlpProviderCache {
         event_sink: Option<&CompositeEventSink>,
     ) -> OtlpProviderCache {
         let resource = build_resource(config.service_name.clone());
-        let correlation = Arc::new(CorrelationContext::new());
+        let correlation = CorrelationContext::new();
 
         let logs_provider = config.logs.as_ref().and_then(|sig| {
             let result = build_logs_provider(

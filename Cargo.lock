@@ -1852,7 +1852,6 @@ dependencies = [
  "async-channel",
  "async-trait",
  "bytes",
- "dashmap",
  "ferron-core",
  "ferron-observability",
  "http",

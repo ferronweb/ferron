@@ -15,7 +15,7 @@ use super::context::{build_parent_context, CorrelationContext};
 pub(crate) fn emit_trace(
     provider: &SdkTracerProvider,
     event: &TraceEvent,
-    correlation: &CorrelationContext,
+    correlation: &mut CorrelationContext,
     promotions: &[BaggageKeyPromotion],
 ) {
     let tracer = provider.tracer("ferron");
