@@ -207,7 +207,7 @@ pub async fn execute_pipeline_stages(
     }
 
     // Flush any remaining stage spans before ending the pipeline execution span.
-    stage_hooks.flush();
+    drop(stage_hooks);
 
     // End pipeline execution span
     if let Some(pipeline_span_key) = pipeline_span_key {

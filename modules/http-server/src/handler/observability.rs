@@ -74,6 +74,13 @@ impl<'a> PerStageSpanHooks<'a> {
     }
 }
 
+impl Drop for PerStageSpanHooks<'_> {
+    #[inline]
+    fn drop(&mut self) {
+        self.flush();
+    }
+}
+
 #[async_trait::async_trait(?Send)]
 impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
     #[inline]

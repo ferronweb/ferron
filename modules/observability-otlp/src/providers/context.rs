@@ -36,12 +36,14 @@ thread_local! {
 }
 
 impl CorrelationContext {
+    #[inline]
     pub fn new() -> Self {
         Self {
             active_spans: HashMap::new(),
         }
     }
 
+    #[inline]
     pub fn insert_span(
         &mut self,
         key: impl Into<String>,
@@ -63,11 +65,13 @@ impl CorrelationContext {
         );
     }
 
+    #[inline]
     pub(crate) fn remove_span(&mut self, key: &str) -> Option<ActiveSpan> {
         self.active_spans.remove(key)
     }
 
     /// Look up an active span's trace and span ID for use as a parent.
+    #[inline]
     pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool, Option<String>)> {
         self.active_spans.get(key).map(|span| {
             (

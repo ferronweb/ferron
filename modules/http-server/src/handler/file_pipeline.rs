@@ -341,7 +341,7 @@ async fn apply_resolved_file_to_context(
         Ok(file_pipeline.execute(&mut file_ctx).await)
     };
 
-    stage_hooks.flush();
+    drop(stage_hooks);
 
     *ctx = file_ctx.http;
 

@@ -156,18 +156,26 @@ impl SignalConfig {
         let entry = entries.first()?;
         let endpoint = entry.args.first().and_then(|v| v.as_str())?.to_string();
 
-        let children = entry.children.as_ref()?;
+        let default_protocol =
+            if hyper::Uri::from_str(&endpoint).is_ok_and(|uri| uri.port_u16() == Some(4317)) {
+                "grpc"
+            } else {
+                "http/protobuf"
+            };
+
+        let Some(children) = entry.children.as_ref() else {
+            return Some(Self {
+                endpoint,
+                protocol: default_protocol.to_string(),
+                authorization: None,
+                sampling: TraceSamplingConfig::default(),
+            });
+        };
 
         let protocol = children
             .get_value("protocol")
             .and_then(|v| v.as_str())
-            .unwrap_or(
-                if hyper::Uri::from_str(&endpoint).is_ok_and(|uri| uri.port_u16() == Some(4317)) {
-                    "grpc"
-                } else {
-                    "http/protobuf"
-                },
-            )
+            .unwrap_or(default_protocol)
             .to_string();
 
         let authorization = children

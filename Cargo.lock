@@ -1863,6 +1863,7 @@ dependencies = [
  "opentelemetry-http",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "parking_lot",
  "rustls",
  "rustls-native-certs",
  "tokio",
