@@ -239,6 +239,102 @@ Each pipeline and file-serving stage generates its own forward and inverse span 
 
 Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
 
+### Trace sampling
+
+The `trace_sampling` directive (in `http` block) controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
+
+| Mode | Description |
+| --- | --- |
+| `always_on` | Sample every trace. Useful for development. |
+| `always_off` | Sample no traces. Effectively disables trace export. |
+| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
+| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
+| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
+| `attribute_based` | Sample based on span attributes set at creation time. |
+
+**Configuration example:**
+
+```ferron
+example.com {
+    http {
+        trace {
+            generate true
+        }
+
+        # Sample 10% of root spans, respect parent for child spans
+        trace_sampling "parentbased_traceidratio" {
+            ratio 0.1
+        }
+    }
+}
+```
+
+> [!note]
+> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
+
+#### Ratio-based sampling
+
+The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-directive (a float between `0.0` and `1.0`):
+
+```ferron
+example.com {
+    http {
+        trace_sampling "parentbased_traceidratio" {
+            ratio 0.05   # 5% of root spans
+        }
+    }
+}
+```
+
+Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
+
+#### Attribute-based sampling
+
+The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
+
+```ferron
+example.com {
+    http {
+        trace_sampling "attribute_based" {
+            # What to do with spans that don't match any rule
+            default_action "sample"
+
+            rules {
+                # Always sample spans with http.request.method == "POST"
+                rule "exact" "http.request.method" "POST"
+
+                # Sample spans where url.path starts with "/api/"
+                rule "prefix" "url.path" "/api/"
+
+                # Sample spans that have an "error.type" attribute (any value)
+                rule "exists" "error.type"
+            }
+        }
+    }
+}
+```
+
+Each `rule` takes 2 or 3 arguments:
+
+| Argument | Description |
+| --- | --- |
+| `<match_type>` | One of `exact`, `prefix`, or `exists`. |
+| `<attribute>` | The span attribute key to match. |
+| `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
+
+A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
+
+| Value | Behavior |
+| --- | --- |
+| `drop` | Spans not matching any rule are dropped. **This is the default.** |
+| `sample` | Spans not matching any rule are still sampled. |
+
+> [!warning]
+> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
+
+> [!note]
+> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions for attribute-based sampling.
+
 ## Structured log style
 
 When exporting through OTLP, the `log_style` directive in the OTLP observability block selects between two log record shapes. The `legacy` mode keeps the existing human-readable `message` body and is unaffected by this option. The default `modern` mode publishes each log record as a short OTEL-friendly `summary` body plus typed per-event attributes, and remaps access-log fields to OTEL semantic-convention attribute names (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, and so on). Console and file log sinks are unchanged regardless of the selected log style. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the full mapping and examples.
