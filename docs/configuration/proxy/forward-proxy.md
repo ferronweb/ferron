@@ -119,6 +119,41 @@ proxy.example.com {
 > [!note]
 > For HTTPS forwarding, clients must use CONNECT tunneling. Direct `https://` URLs in HTTP requests are not supported.
 
+## Observability
+
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.forward_proxy.requests` | Counter | `ferron.forward_proxy.mode` (`"connect"` or `"request"`), `ferron.forward_proxy.result` (outcome), `http.response.status_code`, `error.type` (optional) | Forward-proxy requests by mode and outcome |
+
+### Logs
+
+- **`ERROR`**: logged when a CONNECT upgrade fails, no upgrade future is produced, the backend TCP connection fails, the HTTP/1 handshake fails, or the request to the backend fails. The message includes the target address and error details.
+- **`WARN`**: logged when a CONNECT or HTTP request is denied by ACL (port or domain), when CONNECT method is disabled, when the request is malformed, when an unsupported scheme is used, when TCP_NODELAY cannot be set, when DNS resolution fails, or when a CONNECT tunnel encounters an error.
+- **`INFO`**: logged when a CONNECT tunnel closes normally. The message includes byte counts for each direction.
+
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Forward proxy config error | ERROR | `error.message` (string) — configuration error details |
+| Forward proxy CONNECT upgrade failed | ERROR | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
+| Forward proxy connection to target failed | ERROR | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
+| Forward proxy CONNECT tunnel error | WARN | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
+| Forward proxy CONNECT tunnel closed | INFO | `forward_proxy.target` (string) — target address, `forward_proxy.bytes.client_to_backend` (int) — bytes sent, `forward_proxy.bytes.backend_to_client` (int) — bytes received |
+| Forward proxy: upstream connect failed | ERROR | `upstream.address` (string) — target address, `error.type` (string), `error.message` (string) |
+| Forward proxy: HTTP/1 handshake failed | ERROR | `error.type` (string), `error.message` (string) |
+| Forward proxy: request to backend failed | ERROR | `error.type` (string), `error.message` (string) |
+| Forward proxy: port denied by ACL | WARN | `network.destination.port` (int) — denied port, `error.type` (string) |
+| Forward proxy: domain denied by ACL | WARN | `network.destination.name` (string) — denied domain, `error.type` (string) |
+| Forward proxy: DNS resolution failed | WARN | `dns.name` (string) — hostname that failed resolution, `error.type` (string) |
+| Forward proxy: resolved IP denied | WARN | `dns.name` (string) — hostname, `error.type` (string) |
+| Forward proxy: CONNECT disabled | WARN | `error.type` (string) |
+| Forward proxy: bad CONNECT request | WARN | `error.type` (string) |
+| Forward proxy: unsupported scheme | WARN | `url.scheme` (string) — the unsupported scheme, `error.type` (string) |
+| Forward proxy: missing host | WARN | `error.type` (string) |
+
 ## Best practices
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.

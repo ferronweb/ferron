@@ -18,6 +18,7 @@ use vibeio::net::TcpStream;
 use vibeio_hyper::VibeioIo;
 
 use crate::config::{domain_matches, ip_denied, port_allowed, ForwardProxyConfig};
+use crate::error::{ConnectErrorKind, ForwardErrorKind, ForwardProxyError};
 
 const LOG_TARGET: &str = "ferron-http-fproxy";
 
@@ -41,7 +42,7 @@ pub enum ForwardProxyResult {
 pub async fn execute_forward_proxy(
     ctx: &mut HttpContext,
     config: &ForwardProxyConfig,
-) -> Result<ForwardProxyResult, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ForwardProxyResult, ForwardProxyError> {
     let req = match ctx.req.take() {
         Some(req) => req,
         None => return Ok(ForwardProxyResult::PassThrough),
@@ -58,11 +59,7 @@ pub async fn execute_forward_proxy(
     // CONNECT handling
     if is_connect {
         if !config.connect_method {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                "CONNECT method is disabled for forward proxy",
-            );
+            emit_error_log(ctx, &ForwardProxyError::ConnectDisabled);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
             emit_forward_proxy_metric(ctx, "connect", "connect_disabled", 403, None);
             return Ok(ForwardProxyResult::Handled);
@@ -84,11 +81,11 @@ async fn handle_connect(
     ctx: &mut HttpContext,
     request: Request<HttpBody>,
     config: &ForwardProxyConfig,
-) -> Result<ForwardProxyResult, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ForwardProxyResult, ForwardProxyError> {
     let connect_address = match request.uri().authority() {
         Some(auth) => auth.to_string(),
         None => {
-            emit_log(ctx, LogLevel::Warn, "CONNECT request missing authority");
+            emit_error_log(ctx, &ForwardProxyError::BadConnectRequest);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
             emit_forward_proxy_metric(ctx, "connect", "bad_request", 400, None);
             return Ok(ForwardProxyResult::Handled);
@@ -100,11 +97,8 @@ async fn handle_connect(
 
     // ACL: check port
     if !port_allowed(&config.allow_ports, port) {
-        emit_log(
-            ctx,
-            LogLevel::Warn,
-            &format!("CONNECT to port {port} denied by ACL"),
-        );
+        let err = ForwardProxyError::PortDenied { port };
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "connect", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -112,11 +106,10 @@ async fn handle_connect(
 
     // ACL: check domain
     if !domain_matches(&config.allow_domains, &host) {
-        emit_log(
-            ctx,
-            LogLevel::Warn,
-            &format!("CONNECT to {host} denied by domain ACL"),
-        );
+        let err = ForwardProxyError::DomainDenied {
+            domain: host.clone(),
+        };
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "connect", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -124,7 +117,8 @@ async fn handle_connect(
 
     // Resolve DNS and validate IP (fail if IP is denied)
     let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
-        emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
+        let err = ForwardProxyError::DnsUnresolved(host.clone());
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "connect", "dns_unresolved", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -153,19 +147,11 @@ async fn handle_connect(
             Some(future) => match future.await {
                 Some(upgraded) => upgraded,
                 None => {
-                    error_logger.emit(Event::Log(LogEvent {
-                        level: LogLevel::Error,
-                        message: format!(
-                            "Forward proxy: HTTP CONNECT upgrade failed for {connect_address}"
-                        ),
-                        summary: "Forward proxy CONNECT upgrade failed".into(),
-                        target: LOG_TARGET,
-                        attributes: vec![(
-                            "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.to_string()),
-                        )],
-                        trace_context: trace_context.clone(),
-                    }));
+                    let err = ForwardProxyError::ConnectError {
+                        target: connect_address.clone(),
+                        kind: ConnectErrorKind::UpgradeFailed { detail: None },
+                    };
+                    emit_error_log_to_events(&error_logger, &err, trace_context.clone());
                     emit_forward_proxy_metric_to_events(
                         &error_logger,
                         "connect",
@@ -178,19 +164,11 @@ async fn handle_connect(
                 }
             },
             None => {
-                error_logger.emit(Event::Log(LogEvent {
-                    level: LogLevel::Error,
-                    message: format!(
-                        "Forward proxy: no upgrade future for CONNECT {connect_address}"
-                    ),
-                    summary: "Forward proxy CONNECT no upgrade future".into(),
-                    target: LOG_TARGET,
-                    attributes: vec![(
-                        "forward_proxy.target",
-                        LogAttributeValue::String(connect_address.to_string()),
-                    )],
-                    trace_context: trace_context.clone(),
-                }));
+                let err = ForwardProxyError::ConnectError {
+                    target: connect_address.clone(),
+                    kind: ConnectErrorKind::UpgradeFailed { detail: None },
+                };
+                emit_error_log_to_events(&error_logger, &err, trace_context.clone());
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",
@@ -207,20 +185,13 @@ async fn handle_connect(
         let backend_stream = match TcpStream::connect(&*socket_addrs).await {
             Ok(stream) => stream,
             Err(err) => {
-                error_logger.emit(Event::Log(LogEvent {
-                    level: LogLevel::Error,
-                    message: format!("Forward proxy: cannot connect to {connect_address}: {err}"),
-                    summary: "Forward proxy CONNECT cannot connect to target".into(),
-                    target: LOG_TARGET,
-                    attributes: vec![
-                        (
-                            "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.to_string()),
-                        ),
-                        ("error.message", LogAttributeValue::String(err.to_string())),
-                    ],
-                    trace_context: trace_context.clone(),
-                }));
+                let err = ForwardProxyError::ConnectError {
+                    target: connect_address.clone(),
+                    kind: ConnectErrorKind::ConnectFailed {
+                        error: err.to_string(),
+                    },
+                };
+                emit_error_log_to_events(&error_logger, &err, trace_context.clone());
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",
@@ -234,46 +205,32 @@ async fn handle_connect(
         };
 
         if let Err(err) = backend_stream.set_nodelay(true) {
-            error_logger.emit(Event::Log(LogEvent {
-                level: LogLevel::Warn,
-                message: format!(
-                    "Forward proxy: cannot set TCP_NODELAY for {connect_address}: {err}"
-                ),
-                summary: "Forward proxy CONNECT cannot set TCP_NODELAY".into(),
-                target: LOG_TARGET,
-                attributes: vec![
+            emit_log_to_events(
+                &error_logger,
+                LogLevel::Warn,
+                "Forward proxy: cannot set TCP_NODELAY",
+                "Forward proxy: cannot set TCP_NODELAY",
+                vec![
                     (
                         "forward_proxy.target",
-                        LogAttributeValue::String(connect_address.to_string()),
+                        LogAttributeValue::String(connect_address.clone()),
                     ),
                     ("error.message", LogAttributeValue::String(err.to_string())),
                 ],
-                trace_context: trace_context.clone(),
-            }));
+                trace_context.clone(),
+            );
         }
 
         let mut backend_stream = match backend_stream.into_poll() {
             Ok(stream) => stream,
             Err(err) => {
-                error_logger.emit(Event::Log(LogEvent {
-                    level: LogLevel::Error,
-                    message: format!(
-                        "Forward proxy: cannot convert TCP stream to poll I/O for {connect_address}: {err}"
-                    ),
-                    summary: "Forward proxy CONNECT cannot convert to poll I/O".into(),
-                    target: LOG_TARGET,
-                    attributes: vec![
-                        (
-                            "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.to_string()),
-                        ),
-                        (
-                            "error.message",
-                            LogAttributeValue::String(err.to_string()),
-                        ),
-                    ],
-                    trace_context: trace_context.clone(),
-                }));
+                let err = ForwardProxyError::ConnectError {
+                    target: connect_address.clone(),
+                    kind: ConnectErrorKind::ConnectFailed {
+                        error: err.to_string(),
+                    },
+                };
+                emit_error_log_to_events(&error_logger, &err, trace_context.clone());
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",
@@ -291,19 +248,19 @@ async fn handle_connect(
         // Bidirectional copy between client and backend
         match tokio::io::copy_bidirectional(&mut upgraded, &mut backend_stream).await {
             Ok((client_to_backend, backend_to_client)) => {
-                error_logger.emit(Event::Log(LogEvent {
-                    level: LogLevel::Info,
-                    message: format!(
+                emit_log_to_events(
+                    &error_logger,
+                    LogLevel::Info,
+                    "Forward proxy: CONNECT tunnel closed",
+                    &format!(
                         "Forward proxy: CONNECT tunnel closed for {connect_address} \
                          (client→backend: {client_to_backend} bytes, \
                          backend→client: {backend_to_client} bytes)"
                     ),
-                    summary: "Forward proxy CONNECT tunnel closed".into(),
-                    target: LOG_TARGET,
-                    attributes: vec![
+                    vec![
                         (
                             "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.to_string()),
+                            LogAttributeValue::String(connect_address.clone()),
                         ),
                         (
                             "forward_proxy.bytes.client_to_backend",
@@ -314,8 +271,8 @@ async fn handle_connect(
                             LogAttributeValue::I64(backend_to_client as i64),
                         ),
                     ],
-                    trace_context: trace_context.clone(),
-                }));
+                    trace_context.clone(),
+                );
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",
@@ -326,22 +283,13 @@ async fn handle_connect(
                 );
             }
             Err(err) => {
-                error_logger.emit(Event::Log(LogEvent {
-                    level: LogLevel::Warn,
-                    message: format!(
-                        "Forward proxy: CONNECT tunnel error for {connect_address}: {err}"
-                    ),
-                    summary: "Forward proxy CONNECT tunnel error".into(),
-                    target: LOG_TARGET,
-                    attributes: vec![
-                        (
-                            "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.to_string()),
-                        ),
-                        ("error.message", LogAttributeValue::String(err.to_string())),
-                    ],
-                    trace_context: trace_context.clone(),
-                }));
+                let err = ForwardProxyError::ConnectError {
+                    target: connect_address.clone(),
+                    kind: ConnectErrorKind::CopyFailed {
+                        error: err.to_string(),
+                    },
+                };
+                emit_error_log_to_events(&error_logger, &err, trace_context.clone());
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",
@@ -373,28 +321,22 @@ async fn handle_http_forward(
     ctx: &mut HttpContext,
     request: Request<HttpBody>,
     config: &ForwardProxyConfig,
-) -> Result<ForwardProxyResult, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ForwardProxyResult, ForwardProxyError> {
     let (mut parts, body) = request.into_parts();
 
     let scheme = parts.uri.scheme_str();
     match scheme {
         Some("http") | None => {} // none means relative URI with host, still valid
         Some("https") => {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                "Forward proxy: HTTPS scheme in forward request is not supported",
-            );
+            let err = ForwardProxyError::UnsupportedScheme("https".to_string());
+            emit_error_log(ctx, &err);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
             emit_forward_proxy_metric(ctx, "request", "unsupported_scheme", 400, None);
             return Ok(ForwardProxyResult::Handled);
         }
         Some(other) => {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                &format!("Forward proxy: unsupported scheme '{other}'"),
-            );
+            let err = ForwardProxyError::UnsupportedScheme(other.to_string());
+            emit_error_log(ctx, &err);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
             emit_forward_proxy_metric(ctx, "request", "unsupported_scheme", 400, None);
             return Ok(ForwardProxyResult::Handled);
@@ -404,11 +346,7 @@ async fn handle_http_forward(
     let host = match parts.uri.host() {
         Some(h) => h.to_string(),
         None => {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                "Forward proxy: missing host in request URI",
-            );
+            emit_error_log(ctx, &ForwardProxyError::MissingHost);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
             emit_forward_proxy_metric(ctx, "request", "bad_request", 400, None);
             return Ok(ForwardProxyResult::Handled);
@@ -419,11 +357,8 @@ async fn handle_http_forward(
 
     // ACL: check port
     if !port_allowed(&config.allow_ports, port) {
-        emit_log(
-            ctx,
-            LogLevel::Warn,
-            &format!("Forward proxy: port {port} denied by ACL"),
-        );
+        let err = ForwardProxyError::PortDenied { port };
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "request", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -431,11 +366,10 @@ async fn handle_http_forward(
 
     // ACL: check domain
     if !domain_matches(&config.allow_domains, &host) {
-        emit_log(
-            ctx,
-            LogLevel::Warn,
-            &format!("Forward proxy: host '{host}' denied by domain ACL"),
-        );
+        let err = ForwardProxyError::DomainDenied {
+            domain: host.clone(),
+        };
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "request", "acl_denied", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -443,7 +377,8 @@ async fn handle_http_forward(
 
     // Resolve DNS and validate IP (fail if IP is denied)
     let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
-        emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
+        let err = ForwardProxyError::DnsUnresolved(host.clone());
+        emit_error_log(ctx, &err);
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
         emit_forward_proxy_metric(ctx, "request", "dns_unresolved", 403, None);
         return Ok(ForwardProxyResult::Handled);
@@ -465,11 +400,13 @@ async fn handle_http_forward(
                 std::io::ErrorKind::TimedOut => StatusCode::GATEWAY_TIMEOUT,
                 _ => StatusCode::BAD_GATEWAY,
             };
-            emit_log(
-                ctx,
-                LogLevel::Error,
-                &format!("Forward proxy: cannot connect to {addr}: {err}"),
-            );
+            let err = ForwardProxyError::ForwardError {
+                address: addr.clone(),
+                kind: ForwardErrorKind::ConnectFailed {
+                    error: err.to_string(),
+                },
+            };
+            emit_error_log(ctx, &err);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(
                 status.as_u16(),
                 None,
@@ -486,21 +423,28 @@ async fn handle_http_forward(
     };
 
     if let Err(err) = stream.set_nodelay(true) {
-        emit_log(
+        emit_log_with_attrs(
             ctx,
             LogLevel::Warn,
+            "Forward proxy: cannot set TCP_NODELAY",
             &format!("Forward proxy: cannot set TCP_NODELAY for {addr}: {err}"),
+            vec![
+                ("upstream.address", LogAttributeValue::String(addr.clone())),
+                ("error.message", LogAttributeValue::String(err.to_string())),
+            ],
         );
     }
 
     let stream = match stream.into_poll() {
         Ok(stream) => stream,
         Err(err) => {
-            emit_log(
-                ctx,
-                LogLevel::Error,
-                &format!("Forward proxy: cannot convert TCP stream to poll I/O: {err}"),
-            );
+            let err = ForwardProxyError::ForwardError {
+                address: addr.clone(),
+                kind: ForwardErrorKind::ConnectFailed {
+                    error: err.to_string(),
+                },
+            };
+            emit_error_log(ctx, &err);
             ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
             emit_forward_proxy_metric(
                 ctx,
@@ -562,11 +506,13 @@ async fn http_proxy_forward(
     let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
         Ok(data) => data,
         Err(err) => {
-            emit_log(
-                ctx,
-                LogLevel::Error,
-                &format!("Forward proxy: HTTP/1 handshake failed: {err}"),
-            );
+            let err = ForwardProxyError::ForwardError {
+                address: String::new(),
+                kind: ForwardErrorKind::HandshakeFailed {
+                    error: err.to_string(),
+                },
+            };
+            emit_error_log(ctx, &err);
             return error_response(StatusCode::BAD_GATEWAY);
         }
     };
@@ -581,11 +527,13 @@ async fn http_proxy_forward(
                 .boxed_unsync()
         }),
         Err(err) => {
-            emit_log(
-                ctx,
-                LogLevel::Error,
-                &format!("Forward proxy: request to backend failed: {err}"),
-            );
+            let err = ForwardProxyError::ForwardError {
+                address: String::new(),
+                kind: ForwardErrorKind::SendRequestFailed {
+                    error: err.to_string(),
+                },
+            };
+            emit_error_log(ctx, &err);
             error_response(StatusCode::BAD_GATEWAY)
         }
     }
@@ -601,10 +549,7 @@ fn error_response(status: StatusCode) -> Response<HttpBody> {
 
 /// Parse a host:port string, returning (host, port).
 /// Uses default_port if no port is specified.
-fn parse_host_port(
-    addr: &str,
-    default_port: u16,
-) -> Result<(String, u16), Box<dyn std::error::Error + Send + Sync>> {
+fn parse_host_port(addr: &str, default_port: u16) -> Result<(String, u16), ForwardProxyError> {
     // Handle IPv6: [::1]:8080 or [::1]
     if addr.starts_with('[') {
         if let Some(close_bracket) = addr.find(']') {
@@ -636,11 +581,14 @@ async fn resolve_and_validate_ip(
     ctx: &mut HttpContext,
     host: &str,
     deny_ips: &[ipnet::IpNet],
-) -> Result<Option<Vec<IpAddr>>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Option<Vec<IpAddr>>, ForwardProxyError> {
     // First check if the host is already an IP address
     if let Ok(ip) = IpAddr::from_str(host) {
         if ip_denied(deny_ips, ip) {
-            return Err(format!("IP {ip} is in the denied IP list").into());
+            return Err(ForwardProxyError::DnsDeniedIp {
+                host: host.to_string(),
+                ip,
+            });
         }
         return Ok(Some(vec![ip]));
     }
@@ -649,13 +597,8 @@ async fn resolve_and_validate_ip(
     let handle = match crate::try_get_secondary_runtime_handle() {
         Some(h) => h,
         None => {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                &format!(
-                    "Forward proxy: secondary runtime not available for DNS resolution of {host}"
-                ),
-            );
+            let err = ForwardProxyError::DnsUnavailable(host.to_string());
+            emit_error_log(ctx, &err);
             return Ok(None);
         }
     };
@@ -674,9 +617,10 @@ async fn resolve_and_validate_ip(
                         if !ips.is_empty() {
                             for ip in &ips {
                                 if ip_denied(&deny_ips, *ip) {
-                                    return Err(format!(
-                                        "Host '{host_str}' resolved to denied IP {ip}"
-                                    ));
+                                    return Err(ForwardProxyError::DnsDeniedIp {
+                                        host: host_str,
+                                        ip: *ip,
+                                    });
                                 }
                             }
                             Ok(Some(ips))
@@ -684,33 +628,185 @@ async fn resolve_and_validate_ip(
                             Ok(None)
                         }
                     }
-                    Err(e) => Err(format!("DNS lookup failed: {e}")),
+                    Err(e) => Err(ForwardProxyError::DnsUnresolved(format!(
+                        "DNS lookup failed: {e}"
+                    ))),
                 }
             }
         })
         .await
-        .map_err(|e| format!("DNS resolution task panicked: {e}"))??;
+        .map_err(|_| {
+            ForwardProxyError::DnsUnresolved(format!("DNS resolution task panicked for {host_str}"))
+        })??;
 
     if result.is_none() {
-        emit_log(
-            ctx,
-            LogLevel::Warn,
-            &format!("Forward proxy: DNS resolution returned no addresses for {host_str}"),
-        );
+        let err = ForwardProxyError::DnsUnresolved(host_str.clone());
+        emit_error_log(ctx, &err);
     }
 
     Ok(result)
 }
 
-/// Emit a log event to the context's event sink.
-fn emit_log(ctx: &HttpContext, level: LogLevel, message: &str) {
+/// Emit a structured log event for a `ForwardProxyError`, using its `summary()`
+/// and including the error type as an attribute.
+fn emit_error_log(ctx: &HttpContext, err: &ForwardProxyError) {
+    let mut attributes = vec![
+        ("error.type", LogAttributeValue::StaticStr(err.error_type())),
+        ("error.message", LogAttributeValue::String(err.to_string())),
+    ];
+    match err {
+        ForwardProxyError::PortDenied { port } => {
+            attributes.push((
+                "network.destination.port",
+                LogAttributeValue::I64(*port as i64),
+            ));
+        }
+        ForwardProxyError::DomainDenied { domain } => {
+            attributes.push((
+                "network.destination.name",
+                LogAttributeValue::String(domain.clone()),
+            ));
+        }
+        ForwardProxyError::UnsupportedScheme(scheme) => {
+            attributes.push(("url.scheme", LogAttributeValue::String(scheme.clone())));
+        }
+        ForwardProxyError::DnsUnresolved(host) | ForwardProxyError::DnsUnavailable(host) => {
+            attributes.push(("dns.name", LogAttributeValue::String(host.clone())));
+        }
+        ForwardProxyError::DnsDeniedIp { host, .. } => {
+            attributes.push(("dns.name", LogAttributeValue::String(host.clone())));
+        }
+        ForwardProxyError::ConnectError { target, .. } => {
+            attributes.push((
+                "forward_proxy.target",
+                LogAttributeValue::String(target.clone()),
+            ));
+        }
+        ForwardProxyError::ForwardError { address, .. } => {
+            attributes.push((
+                "upstream.address",
+                LogAttributeValue::String(address.clone()),
+            ));
+        }
+        _ => {}
+    }
+
+    let level = match err {
+        ForwardProxyError::ConnectDisabled
+        | ForwardProxyError::BadConnectRequest
+        | ForwardProxyError::PortDenied { .. }
+        | ForwardProxyError::DomainDenied { .. }
+        | ForwardProxyError::UnsupportedScheme(_)
+        | ForwardProxyError::MissingHost
+        | ForwardProxyError::DnsUnresolved(_)
+        | ForwardProxyError::DnsUnavailable(_)
+        | ForwardProxyError::DnsDeniedIp { .. } => LogLevel::Warn,
+        ForwardProxyError::ConnectError { kind, .. } => match kind {
+            ConnectErrorKind::UpgradeFailed { .. } | ConnectErrorKind::ConnectFailed { .. } => {
+                LogLevel::Error
+            }
+            ConnectErrorKind::CopyFailed { .. } => LogLevel::Warn,
+        },
+        ForwardProxyError::ForwardError { .. } => LogLevel::Error,
+    };
+
+    ctx.events.emit(Event::Log(LogEvent {
+        level,
+        message: err.to_string(),
+        summary: err.summary().into(),
+        target: LOG_TARGET,
+        attributes,
+        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+    }));
+}
+
+/// Emit a structured log event for a `ForwardProxyError` to a standalone event sink
+/// (used inside spawned tasks where `HttpContext` is not available).
+fn emit_error_log_to_events(
+    events: &CompositeEventSink,
+    err: &ForwardProxyError,
+    trace_context: Option<ferron_observability::EventTraceContext>,
+) {
+    let mut attributes = vec![
+        ("error.type", LogAttributeValue::StaticStr(err.error_type())),
+        ("error.message", LogAttributeValue::String(err.to_string())),
+    ];
+    match err {
+        ForwardProxyError::ConnectError { target, .. } => {
+            attributes.push((
+                "forward_proxy.target",
+                LogAttributeValue::String(target.clone()),
+            ));
+        }
+        ForwardProxyError::ForwardError { address, .. } => {
+            attributes.push((
+                "upstream.address",
+                LogAttributeValue::String(address.clone()),
+            ));
+        }
+        ForwardProxyError::DnsUnresolved(host)
+        | ForwardProxyError::DnsUnavailable(host)
+        | ForwardProxyError::DnsDeniedIp { host, .. } => {
+            attributes.push(("dns.name", LogAttributeValue::String(host.clone())));
+        }
+        _ => {}
+    }
+
+    let level = match err {
+        ForwardProxyError::ConnectError { kind, .. } => match kind {
+            ConnectErrorKind::UpgradeFailed { .. } | ConnectErrorKind::ConnectFailed { .. } => {
+                LogLevel::Error
+            }
+            ConnectErrorKind::CopyFailed { .. } => LogLevel::Warn,
+        },
+        ForwardProxyError::ForwardError { .. } => LogLevel::Error,
+        _ => LogLevel::Warn,
+    };
+
+    events.emit(Event::Log(LogEvent {
+        level,
+        message: err.to_string(),
+        summary: err.summary().into(),
+        target: LOG_TARGET,
+        attributes,
+        trace_context,
+    }));
+}
+
+/// Emit a log event with explicit summary and attributes.
+fn emit_log_with_attrs(
+    ctx: &HttpContext,
+    level: LogLevel,
+    summary: &'static str,
+    message: &str,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
+) {
     ctx.events.emit(Event::Log(LogEvent {
         level,
         message: message.to_string(),
-        summary: "Forward proxy log".into(),
+        summary: summary.into(),
         target: LOG_TARGET,
-        attributes: Vec::new(),
+        attributes,
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+    }));
+}
+
+/// Emit a log event with explicit summary and attributes to a standalone event sink.
+fn emit_log_to_events(
+    events: &CompositeEventSink,
+    level: LogLevel,
+    summary: &'static str,
+    message: &str,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
+    trace_context: Option<ferron_observability::EventTraceContext>,
+) {
+    events.emit(Event::Log(LogEvent {
+        level,
+        message: message.to_string(),
+        summary: summary.into(),
+        target: LOG_TARGET,
+        attributes,
+        trace_context,
     }));
 }
 

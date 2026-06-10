@@ -167,10 +167,10 @@ static SECONDARY_RUNTIME_HANDLE: OnceLock<(
     parking_lot::RwLock<Arc<ferron_observability::CompositeEventSink>>,
 )> = OnceLock::new();
 
+#[inline]
 fn emit_proxy_failure_metric(
     ctx: &HttpContext,
     status_code: u16,
-    result: &'static str,
     error_type: &str,
     trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
@@ -179,10 +179,6 @@ fn emit_proxy_failure_metric(
     ctx.events.emit(Event::Metric(MetricEvent {
         name: "ferron.proxy.failures",
         attributes: vec![
-            (
-                "ferron.proxy.result",
-                MetricAttributeValue::StaticStr(result),
-            ),
             (
                 "http.response.status_code",
                 MetricAttributeValue::I64(status_code as i64),
@@ -698,14 +694,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     },
                 ));
+                let status_code = e.http_status_hint().map_or(502, |sh| sh.as_u16());
                 emit_proxy_failure_metric(
                     ctx,
-                    502,
-                    "error",
-                    "backend_error",
+                    status_code,
+                    e.error_type(),
                     current_event_trace_context(ctx),
                 );
-                ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
+                ctx.res = Some(ferron_http::HttpResponse::BuiltinError(status_code, None));
                 return Ok(false);
             }
         };

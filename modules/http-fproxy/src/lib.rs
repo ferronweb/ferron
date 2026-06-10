@@ -6,6 +6,7 @@
 //! - ACL-based access control (domain allowlisting, port allowlisting, IP denylisting)
 
 mod config;
+pub mod error;
 mod proxy;
 mod validator;
 
@@ -19,9 +20,13 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::HttpContext;
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 
 pub use config::ForwardProxyConfig;
+pub use error::ForwardProxyError;
 pub use validator::ForwardProxyConfigurationValidator;
+
+const LOG_TARGET: &str = "ferron-http-fproxy";
 
 /// Global accessor for the secondary Tokio runtime handle.
 ///
@@ -134,7 +139,14 @@ impl Stage<HttpContext> for ForwardProxyStage {
             Ok(Some(cfg)) => cfg,
             Ok(None) => return Ok(true),
             Err(e) => {
-                ferron_core::log_error!("Forward proxy config error: {e}");
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Error,
+                    message: format!("Forward proxy config error: {e}"),
+                    summary: "Forward proxy config error".into(),
+                    target: LOG_TARGET,
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
                 return Ok(true);
             }
         };
@@ -143,7 +155,17 @@ impl Stage<HttpContext> for ForwardProxyStage {
             Ok(proxy::ForwardProxyResult::Handled) => Ok(false),
             Ok(proxy::ForwardProxyResult::PassThrough) => Ok(true),
             Err(e) => {
-                ferron_core::log_error!("Forward proxy error: {e}");
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Error,
+                    message: format!("Forward proxy error: {e}"),
+                    summary: e.summary().into(),
+                    target: LOG_TARGET,
+                    attributes: vec![
+                        ("error.type", LogAttributeValue::StaticStr(e.error_type())),
+                        ("error.message", LogAttributeValue::String(e.to_string())),
+                    ],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
                 // If we have a response already set, stop; otherwise continue
                 if ctx.res.is_some() {
                     Ok(false)
