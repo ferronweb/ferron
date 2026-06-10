@@ -1825,6 +1825,7 @@ version = "3.0.0-beta.1"
 dependencies = [
  "ferron-core",
  "urlencoding",
+ "xxhash-rust",
 ]
 
 [[package]]

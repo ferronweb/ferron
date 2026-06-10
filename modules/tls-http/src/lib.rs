@@ -172,7 +172,7 @@ impl ModuleLoader for TlsHttpModuleLoader {
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Build the composite event sink from observability providers
-        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
 
         if self.loaded_module.is_none() {
             let module = Arc::new(TcpTlsHttpModule {

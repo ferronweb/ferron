@@ -250,7 +250,7 @@ impl ModuleLoader for TlsManualModuleLoader {
         _modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         set_event_sink(event_sink);
         Ok(())
     }

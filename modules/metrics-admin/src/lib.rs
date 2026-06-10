@@ -20,7 +20,7 @@ impl ModuleLoader for AdminMetricsModuleLoader {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Build the composite sink from all observability providers using the
         // actual global observability configuration
-        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
 
         if self.cache.is_none() {
             let module = Arc::new(AdminMetricsModule::new(event_sink));

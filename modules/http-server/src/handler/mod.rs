@@ -55,9 +55,10 @@ pub async fn bad_request_handler(
     ferron_core::admin::ADMIN_METRICS
         .requests_total
         .fetch_add(1, Ordering::Relaxed);
-    let request_span_key = events.has_trace_sinks().then(|| next_span_key("request"));
-    if let Some(request_span_key) = request_span_key.as_ref() {
-        events.emit(Event::Trace(TraceEvent::StartSpan {
+    let request_span_key = if let Some(request_span_key) =
+        events.has_trace_sinks().then(|| next_span_key("request"))
+    {
+        let emitted = events.emit(Event::Trace(TraceEvent::StartSpan {
             key: Cow::Owned(request_span_key.clone()),
             name: Cow::Borrowed("ferron.request"),
             parent: None,
@@ -68,7 +69,10 @@ pub async fn bad_request_handler(
                 TraceAttributeValue::StaticStr("pre_handler"),
             )],
         }));
-    }
+        emitted.then_some(request_span_key)
+    } else {
+        None
+    };
     let error_type = if is_timeout { "timeout" } else { "bad_request" };
     emit_error(
         &events,
@@ -184,6 +188,8 @@ pub async fn request_handler(
             .is_some_and(|c| get_http_nested_boolean(&c, "force_trace").unwrap_or(false))
     {
         let global_config = config_resolver.global();
+
+        // Read trace { generate } toggle
         let trace_config_node = global_config.as_ref().and_then(|g| {
             g.directives
                 .get("http")
@@ -199,74 +205,91 @@ pub async fn request_handler(
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
 
-        let default_sampled = trace_config_node
-            .and_then(|c| c.get_value("sampled"))
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(false);
+        // Read trace_sampling config and derive default_sampled
+        let default_sampled = global_config
+            .as_ref()
+            .and_then(|g| {
+                g.directives
+                    .get("http")
+                    .and_then(|entries| entries.first())
+                    .and_then(|e| e.children.as_ref())
+                    .and_then(|c| c.directives.get("trace_sampling"))
+                    .and_then(|entries| entries.first())
+            })
+            .map(|entry| {
+                let config = ferron_observability::parse_trace_sampling_config(entry);
+                !matches!(
+                    config.mode,
+                    ferron_observability::TraceSamplingMode::AlwaysOff
+                )
+            })
+            .unwrap_or(true);
 
         resolve_request_trace_context(&request, generate_enabled, default_sampled)
     } else {
         (None, None)
     };
-    let request_span_key = has_traces.then(|| next_span_key("request"));
+    let request_span_key =
+        if let Some(request_span_key) = has_traces.then(|| next_span_key("request")) {
+            // Start tracing span
+            let method = method
+                .as_ref()
+                .expect("trace events require request metadata to be initialized");
+            let path = path
+                .as_ref()
+                .expect("trace events require request metadata to be initialized");
+            let server_ip = server_ip
+                .as_ref()
+                .expect("trace events require request metadata to be initialized");
+            let server_port =
+                server_port.expect("trace events require request metadata to be initialized");
+            let initial_client_ip_canonical = initial_client_ip_canonical
+                .as_ref()
+                .expect("trace events require request metadata to be initialized");
 
-    // Start tracing span
-    if let Some(request_span_key) = request_span_key.as_ref() {
-        let method = method
-            .as_ref()
-            .expect("trace events require request metadata to be initialized");
-        let path = path
-            .as_ref()
-            .expect("trace events require request metadata to be initialized");
-        let server_ip = server_ip
-            .as_ref()
-            .expect("trace events require request metadata to be initialized");
-        let server_port =
-            server_port.expect("trace events require request metadata to be initialized");
-        let initial_client_ip_canonical = initial_client_ip_canonical
-            .as_ref()
-            .expect("trace events require request metadata to be initialized");
-
-        events.emit(Event::Trace(TraceEvent::StartSpan {
-            key: Cow::Owned(request_span_key.clone()),
-            name: Cow::Borrowed("ferron.request"),
-            parent: external_parent.clone(),
-            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            builder_attributes: vec![
-                (
-                    Cow::Borrowed("http.request.method"),
-                    TraceAttributeValue::String(method.as_str().to_string()),
-                ),
-                (
-                    Cow::Borrowed("url.path"),
-                    TraceAttributeValue::String(path.clone()),
-                ),
-                (
-                    Cow::Borrowed("url.scheme"),
-                    TraceAttributeValue::StaticStr(scheme),
-                ),
-                (
-                    Cow::Borrowed("server.address"),
-                    TraceAttributeValue::String(server_ip.clone()),
-                ),
-                (
-                    Cow::Borrowed("server.port"),
-                    TraceAttributeValue::I64(server_port as i64),
-                ),
-                (
-                    Cow::Borrowed("client.address"),
-                    TraceAttributeValue::String(initial_client_ip_canonical.clone()),
-                ),
-            ],
-            attributes: vec![(
-                "url.full",
-                TraceAttributeValue::String(request.uri().path_and_query().map_or_else(
-                    || request.uri().path().to_string(),
-                    |path_and_query| path_and_query.to_string(),
-                )),
-            )],
-        }));
-    }
+            let emitted = events.emit(Event::Trace(TraceEvent::StartSpan {
+                key: Cow::Owned(request_span_key.clone()),
+                name: Cow::Borrowed("ferron.request"),
+                parent: external_parent.clone(),
+                trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+                builder_attributes: vec![
+                    (
+                        Cow::Borrowed("http.request.method"),
+                        TraceAttributeValue::String(method.as_str().to_string()),
+                    ),
+                    (
+                        Cow::Borrowed("url.path"),
+                        TraceAttributeValue::String(path.clone()),
+                    ),
+                    (
+                        Cow::Borrowed("url.scheme"),
+                        TraceAttributeValue::StaticStr(scheme),
+                    ),
+                    (
+                        Cow::Borrowed("server.address"),
+                        TraceAttributeValue::String(server_ip.clone()),
+                    ),
+                    (
+                        Cow::Borrowed("server.port"),
+                        TraceAttributeValue::I64(server_port as i64),
+                    ),
+                    (
+                        Cow::Borrowed("client.address"),
+                        TraceAttributeValue::String(initial_client_ip_canonical.clone()),
+                    ),
+                ],
+                attributes: vec![(
+                    "url.full",
+                    TraceAttributeValue::String(request.uri().path_and_query().map_or_else(
+                        || request.uri().path().to_string(),
+                        |path_and_query| path_and_query.to_string(),
+                    )),
+                )],
+            }));
+            emitted.then_some(request_span_key)
+        } else {
+            None
+        };
 
     ferron_core::admin::ADMIN_METRICS
         .requests_total

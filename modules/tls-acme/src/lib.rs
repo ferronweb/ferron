@@ -688,7 +688,7 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         GLOBAL_REGISTRY.set(registry.clone()).ok();
 
         // Build the composite event sink from observability providers
-        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         set_event_sink(event_sink);
 
         // Create the module — the actual task spawning happens in start()

@@ -10,7 +10,9 @@ use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::{ObservabilityConfigExtractor, ObservabilityContext};
+use ferron_observability::{
+    ObservabilityConfigExtractor, ObservabilityContext, TraceSamplingConfig,
+};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -47,6 +49,8 @@ pub struct HttpServerConfig {
     pub http_connection_options_resolver:
         Arc<self::tls_resolve::RadixTree<common::HttpConnectionOptions>>,
     pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
+    /// Parsed trace sampling configuration from `http { trace_sampling ... }`.
+    pub trace_sampling: ferron_observability::TraceSamplingConfig,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
     /// The canonical HTTPS port for this server (default: 443).
@@ -560,7 +564,7 @@ impl BasicHttpModule {
             global_config: global_config.clone(),
             config_resolver: Arc::new(ThreeStageResolver::from_prepared_with_global(
                 prepare_host_config(port_config.clone())?,
-                global_config,
+                global_config.clone(),
             )),
             tls_resolver: if enable_tls {
                 Some(Arc::new(tls_resolver))
@@ -574,6 +578,17 @@ impl BasicHttpModule {
             },
             http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
+            trace_sampling: global_config
+                .directives
+                .get("http")
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.children.as_ref())
+                .and_then(|c| c.directives.get("trace_sampling"))
+                .and_then(|entries| entries.first())
+                .map_or(
+                    TraceSamplingConfig::default(),
+                    ferron_observability::parse_trace_sampling_config,
+                ),
             reload_token: CancellationToken::new(),
             https_port,
         })

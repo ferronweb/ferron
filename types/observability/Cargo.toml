@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 urlencoding = "2.1.3"
+xxhash-rust = { version = "0.8.15", features = ["xxh3", "std"] }

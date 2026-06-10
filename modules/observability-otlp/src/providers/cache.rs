@@ -10,7 +10,6 @@ use crate::config::{OtlpBackendConfig, SignalConfig};
 
 use super::context::{build_resource, CorrelationContext, RequestedIdGenerator};
 use super::metrics::CachedInstrument;
-use super::sampling::build_sampler;
 
 /// Cached OTLP providers for a given config
 pub struct OtlpProviderCache {
@@ -321,14 +320,12 @@ fn build_traces_provider(
             .build()?,
     };
 
-    let sampler = build_sampler(&sig.sampling);
-
     Ok(opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_span_processor(
             BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build(),
         )
         .with_id_generator(RequestedIdGenerator)
         .with_resource(resource.clone())
-        .with_sampler(sampler)
+        .with_sampler(opentelemetry_sdk::trace::Sampler::AlwaysOn)
         .build())
 }

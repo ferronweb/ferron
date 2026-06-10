@@ -145,12 +145,13 @@ fn initialize_sinks_from_providers(
 #[inline]
 pub fn resolve_root_observability_sink(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+    trace_sampler: Option<&ferron_observability::TraceSampler>,
 ) -> CompositeEventSink {
     let sinks = observability_resolver
         .root_data()
         .map(|e| initialize_sinks_from_providers(&e))
         .unwrap_or_default();
-    CompositeEventSink::new(sinks)
+    CompositeEventSink::with_sampler(sinks, trace_sampler.cloned())
 }
 
 #[inline]
@@ -190,7 +191,10 @@ fn resolve_observability_sink_with_normalized(
             if sinks.is_empty() {
                 connection_observability.clone()
             } else {
-                CompositeEventSink::new(sinks)
+                CompositeEventSink::with_sampler(
+                    sinks,
+                    connection_observability.trace_sampler().cloned(),
+                )
             }
         }
         None => {
@@ -221,7 +225,7 @@ fn resolve_observability_sink_with_normalized_and_resolver(
     if sinks.is_empty() {
         fallback.clone()
     } else {
-        CompositeEventSink::new(sinks)
+        CompositeEventSink::with_sampler(sinks, fallback.trace_sampler().cloned())
     }
 }
 

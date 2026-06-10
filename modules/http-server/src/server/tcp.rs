@@ -11,7 +11,7 @@ use ferron_core::{log_error, log_info};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    MetricValue, TraceSampler,
 };
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
@@ -118,7 +118,7 @@ impl TcpListenerHandle {
                         }
                         Err(err) => {
                             let global_observability =
-                                resolve_root_observability_sink(&config.load().observability_resolver);
+                                resolve_root_observability_sink(&config.load().observability_resolver, Some(&ferron_observability::TraceSampler::new(&config.load().trace_sampling)));
                             emit_error(
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
@@ -141,7 +141,7 @@ impl TcpListenerHandle {
 
                     let Ok(socket) = socket.into_poll() else {
                         let global_observability =
-                            resolve_root_observability_sink(&config.load().observability_resolver);
+                            resolve_root_observability_sink(&config.load().observability_resolver, Some(&ferron_observability::TraceSampler::new(&config.load().trace_sampling)));
                         emit_error(
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
@@ -180,7 +180,7 @@ impl TcpListenerHandle {
                                 }
                                 Err(e) => {
                                     let global_observability =
-                                        resolve_root_observability_sink(&server_config.observability_resolver);
+                                        resolve_root_observability_sink(&server_config.observability_resolver, Some(&ferron_observability::TraceSampler::new(&server_config.trace_sampling)));
                                     emit_error(
                                         &global_observability,
                                         format!("Failed to read PROXY protocol header: {e}"),
@@ -209,7 +209,7 @@ impl TcpListenerHandle {
                         } else {
                             let Ok(remote_addr) = socket.peer_addr() else {
                                 let global_observability =
-                                    resolve_root_observability_sink(&server_config.observability_resolver);
+                                    resolve_root_observability_sink(&server_config.observability_resolver, Some(&ferron_observability::TraceSampler::new(&server_config.trace_sampling)));
                                 emit_error(
                                     &global_observability,
                                     "Failed to get remote address",
@@ -222,7 +222,7 @@ impl TcpListenerHandle {
                             };
                             let Ok(local_addr) = socket.local_addr() else {
                                 let global_observability =
-                                    resolve_root_observability_sink(&server_config.observability_resolver);
+                                    resolve_root_observability_sink(&server_config.observability_resolver, Some(&ferron_observability::TraceSampler::new(&server_config.trace_sampling)));
                                 emit_error(
                                     &global_observability,
                                     "Failed to get local address",
@@ -239,7 +239,7 @@ impl TcpListenerHandle {
                             &server_config.observability_resolver,
                             Some(local_addr.ip()),
                             None,
-                            &CompositeEventSink::new(vec![]),
+                            &CompositeEventSink::with_sampler(vec![], Some(TraceSampler::new(&server_config.trace_sampling)))
                         );
 
                         if let Some(tls_resolver) = &server_config.tls_resolver {

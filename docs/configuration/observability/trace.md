@@ -17,7 +17,19 @@ These directives are configured within the `http` block.
 |-----------|-----------|-------------|---------|
 | `trace` | none | Opens a block for trace-related configuration. | - |
 | `generate` | boolean | Specifies whether a new trace context should be generated if the incoming request lacks one. | `true` |
-| `sampled` | boolean | Sampling flag set in the `traceparent` header propagated to upstream services. Does not affect Ferron's own OTLP trace export. | `false` |
+
+### Trace sampling
+
+The `trace_sampling` directive controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
+
+| Mode | Description |
+| --- | --- |
+| `always_on` | Sample every trace. Useful for development. |
+| `always_off` | Sample no traces. Effectively disables trace export. |
+| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
+| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
+| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
+| `attribute_based` | Sample based on span attributes set at creation time. |
 
 **Configuration example:**
 
@@ -26,14 +38,81 @@ example.com {
     http {
         trace {
             generate true
-            sampled true
+        }
+
+        # Sample 10% of root spans, respect parent for child spans
+        trace_sampling "parentbased_traceidratio" {
+            ratio 0.1
         }
     }
 }
 ```
 
 > [!note]
-> The `sampled` flag controls only the `traceparent` header propagated to upstream services — it does not influence the OTLP sampling mode. To export traces to an external system, configure an observability sink such as `observability-otlp`.
+> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
+
+#### Ratio-based sampling
+
+The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-directive (a float between `0.0` and `1.0`):
+
+```ferron
+example.com {
+    http {
+        trace_sampling "parentbased_traceidratio" {
+            ratio 0.05   # 5% of root spans
+        }
+    }
+}
+```
+
+Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
+
+#### Attribute-based sampling
+
+The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
+
+```ferron
+example.com {
+    http {
+        trace_sampling "attribute_based" {
+            # What to do with spans that don't match any rule
+            default_action "sample"
+
+            rules {
+                # Always sample spans with http.request.method == "POST"
+                rule "exact" "http.request.method" "POST"
+
+                # Sample spans where url.path starts with "/api/"
+                rule "prefix" "url.path" "/api/"
+
+                # Sample spans that have an "error.type" attribute (any value)
+                rule "exists" "error.type"
+            }
+        }
+    }
+}
+```
+
+Each `rule` takes 2 or 3 arguments:
+
+| Argument | Description |
+| --- | --- |
+| `<match_type>` | One of `exact`, `prefix`, or `exists`. |
+| `<attribute>` | The span attribute key to match. |
+| `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
+
+A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
+
+| Value | Behavior |
+| --- | --- |
+| `drop` | Spans not matching any rule are dropped. **This is the default.** |
+| `sample` | Spans not matching any rule are still sampled. |
+
+> [!warning]
+> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
+
+> [!note]
+> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions for attribute-based sampling.
 
 ## W3C Baggage
 

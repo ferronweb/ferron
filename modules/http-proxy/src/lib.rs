@@ -452,7 +452,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         self::config::MTLS_FILE_CACHE.clear();
 
         modules.push(Arc::new(ReverseProxyModule {
-            sink: build_composite_sink(&registry, &config.global_config)?,
+            sink: build_composite_sink(&registry, &config.global_config, None)?,
         }));
         Ok(())
     }

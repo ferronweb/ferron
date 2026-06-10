@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use crate::sampler::TraceSampler;
 use crate::Event;
+use crate::TraceEvent;
 
 pub trait EventSink: Send + Sync {
     fn emit(&self, event: Event);
@@ -36,6 +38,8 @@ pub struct CompositeEventSink {
     has_trace_sinks: bool,
     /// Cached flag: whether any sink processes `Event::Access` events.
     has_access_sinks: bool,
+    /// Optional trace sampler applied before dispatching trace events.
+    trace_sampler: Option<TraceSampler>,
 }
 
 impl CompositeEventSink {
@@ -47,6 +51,24 @@ impl CompositeEventSink {
             sinks,
             has_trace_sinks,
             has_access_sinks,
+            trace_sampler: None,
+        }
+    }
+
+    /// Create a new composite sink with an optional trace sampler.
+    ///
+    /// When a sampler is provided, `Event::Trace` events are evaluated against
+    /// it before being dispatched to individual sinks. Events that are not
+    /// sampled are silently dropped.
+    #[inline]
+    pub fn with_sampler(sinks: Vec<Arc<dyn EventSink>>, sampler: Option<TraceSampler>) -> Self {
+        let has_trace_sinks = sinks.iter().any(|s| s.processes_traces());
+        let has_access_sinks = sinks.iter().any(|s| s.processes_access());
+        Self {
+            sinks,
+            has_trace_sinks,
+            has_access_sinks,
+            trace_sampler: sampler,
         }
     }
 
@@ -80,8 +102,40 @@ impl CompositeEventSink {
         self.sinks.is_empty()
     }
 
+    /// Returns a reference to the trace sampler, if one is configured.
     #[inline]
-    pub fn emit(&self, event: Event) {
+    pub fn trace_sampler(&self) -> Option<&TraceSampler> {
+        self.trace_sampler.as_ref()
+    }
+
+    #[inline]
+    pub fn emit(&self, event: Event) -> bool {
+        // Apply trace sampling before dispatching
+        if let Event::Trace(ref trace_event) = event {
+            if let Some(sampler) = &self.trace_sampler {
+                let should_sample = match trace_event {
+                    TraceEvent::StartSpan {
+                        trace_context,
+                        parent,
+                        builder_attributes,
+                        ..
+                    } => {
+                        let trace_id = trace_context.as_ref().map(|tc| &tc.trace_id);
+                        let parent_ref = parent.as_ref();
+                        let attrs: Vec<(&str, &crate::TraceAttributeValue)> = builder_attributes
+                            .iter()
+                            .map(|(k, v)| (k.as_ref(), v))
+                            .collect();
+                        sampler.should_sample(parent_ref, trace_id, &attrs)
+                    }
+                    TraceEvent::EndSpan { .. } => true, // Observability backends would discard it if StartSpan isn't sent...
+                };
+                if !should_sample {
+                    return false;
+                }
+            }
+        }
+
         match self.sinks.len() {
             0 => {}
             1 => {
@@ -94,6 +148,7 @@ impl CompositeEventSink {
                     sink.emit_arc(Arc::clone(&event));
                 }
             }
-        }
+        };
+        true
     }
 }

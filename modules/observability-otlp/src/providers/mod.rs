@@ -3,7 +3,6 @@ mod cache;
 mod context;
 mod logs;
 mod metrics;
-mod sampling;
 mod traces;
 
 pub(crate) use access_log::emit_access_log;
@@ -15,5 +14,5 @@ pub(crate) use traces::emit_trace;
 #[cfg(test)]
 pub(crate) use {
     access_log::OtelAccessAttributeVisitor, context::CorrelationContext,
-    metrics::sanitize_label_value, sampling::build_sampler,
+    metrics::sanitize_label_value,
 };

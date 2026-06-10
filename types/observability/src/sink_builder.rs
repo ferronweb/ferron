@@ -3,7 +3,10 @@ use std::sync::Arc;
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::registry::Registry;
 
-use crate::{CompositeEventSink, ObservabilityConfigExtractor, ObservabilityContext};
+use crate::{
+    CompositeEventSink, ObservabilityConfigExtractor, ObservabilityContext, TraceSampler,
+    TraceSamplingConfig,
+};
 
 /// Materializes sinks from observability providers using the global config.
 ///
@@ -11,9 +14,14 @@ use crate::{CompositeEventSink, ObservabilityConfigExtractor, ObservabilityConte
 /// `observability { }` blocks and alias directives like `log`, `error_log`,
 /// `console_log`), looks up each provider by name, and calls `provider.execute()`
 /// to materialize the sinks.
+///
+/// When `trace_sampling` is provided, a `TraceSampler` is attached to the
+/// resulting `CompositeEventSink` so that trace events are sampled before
+/// dispatching to individual sinks.
 pub fn build_composite_sink(
     registry: &Registry,
     global_config: &Arc<ServerConfigurationBlock>,
+    trace_sampling: Option<TraceSamplingConfig>,
 ) -> Result<Arc<CompositeEventSink>, Box<dyn std::error::Error>> {
     let mut sinks = Vec::new();
 
@@ -46,5 +54,6 @@ pub fn build_composite_sink(
         }
     }
 
-    Ok(Arc::new(CompositeEventSink::new(sinks)))
+    let sampler = trace_sampling.as_ref().map(TraceSampler::new);
+    Ok(Arc::new(CompositeEventSink::with_sampler(sinks, sampler)))
 }

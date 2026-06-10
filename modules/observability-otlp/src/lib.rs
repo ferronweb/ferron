@@ -270,13 +270,11 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .traces
         .as_ref()
         .map(|s| {
-            let sampling_key = format!("{:?}", s.sampling.mode);
             format!(
-                "{}|{}|{}|{}",
+                "{}|{}|{}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
-                sampling_key,
             )
         })
         .unwrap_or_default();
@@ -354,7 +352,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
         if self.cache.is_none() {
-            let event_sink = build_composite_sink(&registry, &config.global_config).ok();
+            let event_sink = build_composite_sink(&registry, &config.global_config, None).ok();
 
             let module = Arc::new(OtlpObservabilityModule {
                 inner: self.channel.1.clone(),

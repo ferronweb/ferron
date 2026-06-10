@@ -39,7 +39,6 @@ Each signal sub-block supports these nested directives:
 | --- | --- | --- | --- |
 | `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
-| `sampling` | `<string>` | Trace sampling mode. Only applicable to `traces` blocks. See [Trace sampling](#trace-sampling). | `parentbased_always_on` |
 
 > [!tip]
 > If you are having connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
@@ -90,109 +89,8 @@ Each `key` entry configures one baggage key to promote:
 > [!tip]
 > The `baggage` header is parsed and attached to spans automatically — use the `baggage` sub-directive to promote specific keys into telemetry attributes.
 
-### Trace sampling
-
-The `sampling` sub-directive inside a `traces` block controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
-
-Ferron's `http > trace > sampled` directive sets the sampling flag in the `traceparent` header forwarded to upstream services. This flag does not affect OTLP export: when Ferron generates a trace (no incoming `traceparent`), it creates a root span that is always sampled by `parentbased_always_on`. The OTLP sampler only sees the sampling flag when an **incoming** `traceparent` from an external caller provides a parent context. See [Trace context](/docs/v3/configuration/observability/trace) for more details on the `sampled` flag.
-
-| Mode | Description |
-| --- | --- |
-| `always_on` | Sample every trace. Useful for development. |
-| `always_off` | Sample no traces. Effectively disables trace export. |
-| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
-| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
-| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
-| `attribute_based` | Sample based on span attributes set at creation time. |
-
-```ferron
-{
-    observability {
-        provider otlp
-
-        traces https://collector:4317/v1/traces {
-            # Sample 10% of root spans, respect parent for child spans
-            sampling "parentbased_traceidratio" {
-                ratio 0.1
-            }
-        }
-    }
-}
-```
-
-> [!note]
-> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
-
-#### Ratio-based sampling
-
-The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-directive (a float between `0.0` and `1.0`):
-
-```ferron
-{
-    observability {
-        provider otlp
-
-        traces https://collector:4317/v1/traces {
-            sampling "parentbased_traceidratio" {
-                ratio 0.05   # 5% of root spans
-            }
-        }
-    }
-}
-```
-
-Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
-
-#### Attribute-based sampling
-
-The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
-
-```ferron
-{
-    observability {
-        provider otlp
-
-        traces https://collector:4317/v1/traces {
-            sampling "attribute_based" {
-                # What to do with spans that don't match any rule
-                default_action "sample"
-
-                rules {
-                    # Always sample spans with http.request.method == "POST"
-                    rule "exact" "http.request.method" "POST"
-
-                    # Sample spans where url.path starts with "/api/"
-                    rule "prefix" "url.path" "/api/"
-
-                    # Sample spans that have an "error.type" attribute (any value)
-                    rule "exists" "error.type"
-                }
-            }
-        }
-    }
-}
-```
-
-Each `rule` takes 2 or 3 arguments:
-
-| Argument | Description |
-| --- | --- |
-| `<match_type>` | One of `exact`, `prefix`, or `exists`. |
-| `<attribute>` | The span attribute key to match. |
-| `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
-
-A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
-
-| Value | Behavior |
-| --- | --- |
-| `drop` | Spans not matching any rule are dropped. **This is the default.** |
-| `sample` | Spans not matching any rule are still sampled. |
-
-> [!warning]
-> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
-
-> [!note]
-> Attribute-based sampling inspects attributes set on the `SpanBuilder` before the span is built. In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions.
+> [!info]
+> Trace sampling is configured in the `http` block. See [Trace context](/docs/v3/configuration/observability/trace#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
 
 ### Log style
 
@@ -325,16 +223,17 @@ example.com {
 
 ```ferron
 example.com {
+    http {
+        trace_sampling "parentbased_traceidratio" {
+            ratio 0.1
+        }
+    }
+
     observability {
         provider otlp
         service_name "ferron-production"
 
-        traces https://collector:4317/v1/traces {
-            # Sample 10% of root spans, respect parent for child spans
-            sampling "parentbased_traceidratio" {
-                ratio 0.1
-            }
-        }
+        traces https://collector:4317/v1/traces
     }
 }
 ```
@@ -343,20 +242,21 @@ example.com {
 
 ```ferron
 example.com {
+    http {
+        trace_sampling "attribute_based" {
+            default_action "sample"
+            rules {
+                rule "exact" "http.request.method" "POST"
+                rule "prefix" "url.path" "/api/"
+            }
+        }
+    }
+
     observability {
         provider otlp
         service_name "ferron-production"
 
-        traces https://collector:4317/v1/traces {
-            # Sample POST requests and /api/ routes, keep everything else
-            sampling "attribute_based" {
-                default_action "sample"
-                rules {
-                    rule "exact" "http.request.method" "POST"
-                    rule "prefix" "url.path" "/api/"
-                }
-            }
-        }
+        traces https://collector:4317/v1/traces
     }
 }
 ```

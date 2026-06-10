@@ -327,7 +327,12 @@ impl QuicListenerHandle {
                             &server_config.observability_resolver,
                             Some(local_addr.ip()),
                             None,
-                            &CompositeEventSink::new(vec![]),
+                            &CompositeEventSink::with_sampler(
+                                vec![],
+                                Some(ferron_observability::TraceSampler::new(
+                                    &server_config.trace_sampling,
+                                )),
+                            ),
                         );
 
                         let connection = match accept_quic(incoming, tls_config.clone()).await {
