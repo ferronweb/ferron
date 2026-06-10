@@ -1,8 +1,10 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock, time::Instant};
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpFileContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent};
+use ferron_observability::{
+    Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
@@ -153,6 +155,7 @@ impl Stage<HttpFileContext> for CgiStage {
         }
 
         // -- execute CGI --
+        let process_start = Instant::now();
         let executable_params = match get_executable(&ctx.file_path).await {
             Ok(params) => params,
             Err(err) => {
@@ -213,11 +216,39 @@ impl Stage<HttpFileContext> for CgiStage {
         .await
         .map_err(|e| PipelineError::custom(e.to_string()))?;
 
+        let process_duration = process_start.elapsed().as_secs_f64();
+
         let (parts, body) = response.into_parts();
         let response = Response::from_parts(parts, SendWrapBody::new(body).boxed_unsync());
 
         if let Some(exit_code) = exit_code_option {
             if !exit_code.success() {
+                let exit_code_str = exit_code
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                ctx.http.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.cgi.failures",
+                    attributes: vec![
+                        (
+                            "error.type",
+                            MetricAttributeValue::StaticStr("non_zero_exit_code"),
+                        ),
+                        (
+                            "ferron.cgi.exit_code",
+                            MetricAttributeValue::String(exit_code_str),
+                        ),
+                    ],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "Number of CGI requests that failed with a non-zero exit code.",
+                    ),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(
+                        &ctx.http,
+                    ),
+                }));
                 if let Some(mut stderr) = stderr {
                     let mut stderr_string = String::new();
                     stderr
@@ -235,6 +266,19 @@ impl Stage<HttpFileContext> for CgiStage {
                                 "error.message",
                                 LogAttributeValue::String(stderr_string_trimmed.to_string()),
                             )],
+                            trace_context: ferron_http::trace_context::current_event_trace_context(
+                                &ctx.http,
+                            ),
+                        }));
+                        ctx.http.events.emit(Event::Metric(MetricEvent {
+                            name: "ferron.cgi.stderr_errors",
+                            attributes: vec![],
+                            ty: MetricType::Counter,
+                            value: MetricValue::U64(1),
+                            unit: Some("{error}"),
+                            description: Some(
+                                "Number of CGI requests that produced non-empty stderr output.",
+                            ),
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 &ctx.http,
                             ),
@@ -267,12 +311,43 @@ impl Stage<HttpFileContext> for CgiStage {
                         )],
                         trace_context: None,
                     }));
+                    events.emit(Event::Metric(MetricEvent {
+                        name: "ferron.cgi.stderr_errors",
+                        attributes: vec![],
+                        ty: MetricType::Counter,
+                        value: MetricValue::U64(1),
+                        unit: Some("{error}"),
+                        description: Some(
+                            "Number of CGI requests that produced non-empty stderr output.",
+                        ),
+                        trace_context: None,
+                    }));
                 }
             }
         });
 
         // CGI response
         ctx.http.res = Some(HttpResponse::Custom(response));
+
+        ctx.http.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cgi.process.duration",
+            attributes: vec![],
+            ty: MetricType::Histogram(None),
+            value: MetricValue::F64(process_duration),
+            unit: Some("s"),
+            description: Some("Duration of CGI process execution."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+        }));
+        ctx.http.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cgi.requests",
+            attributes: vec![],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of CGI requests processed."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+        }));
+
         Ok(false)
     }
 }

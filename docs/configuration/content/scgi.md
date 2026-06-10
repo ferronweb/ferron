@@ -124,7 +124,6 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 > [!info]
 > No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
-
 ## Observability
 
 ### Logs
@@ -183,3 +182,11 @@ example.com {
     scgi tcp://127.0.0.1:4000
 }
 ```
+
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.scgi.requests` | Counter | — | Number of SCGI requests processed |
+| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before a backend response was returned |
+| `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |

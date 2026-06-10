@@ -11,6 +11,7 @@ This page documents the metrics emitted by Ferron. Ferron emits OpenTelemetry-st
 - **Static file metrics** — files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/content/static-files#metrics).
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/routing/rewrite#metrics).
 - **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy#metrics).
+- **CGI/FastCGI/SCGI metrics** — request counts, failures, upstream duration, and stderr errors. See [CGI](/docs/v3/configuration/content/cgi#metrics), [FastCGI](/docs/v3/configuration/content/fastcgi#metrics), [SCGI](/docs/v3/configuration/content/scgi#metrics).
 
 > [!info]
 >

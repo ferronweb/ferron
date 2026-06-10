@@ -268,8 +268,6 @@ Additional variables set by `environment` directives override any automatically 
 
 When used alongside an authentication module (e.g., `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the FastCGI request. The authentication type is extracted from the `Authorization` header (e.g., `Basic` or `Bearer`).
 
-
-
 ## Trace context injection
 
 When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the FastCGI request. These headers are mapped to standard CGI environment variables:
@@ -360,3 +358,12 @@ example.com {
     # Other files are served statically
 }
 ```
+
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.fcgi.requests` | Counter | — | Number of FastCGI requests processed |
+| `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before a backend response was returned |
+| `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
+| `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |

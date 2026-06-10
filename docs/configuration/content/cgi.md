@@ -265,3 +265,12 @@ example.com {
     # (because of the ".php" extension directive)
 }
 ```
+
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.cgi.requests` | Counter | — | Number of CGI requests processed |
+| `ferron.cgi.failures` | Counter | `error.type` (`"non_zero_exit_code"`), `ferron.cgi.exit_code` | Number of CGI requests that failed with a non-zero exit code |
+| `ferron.cgi.process.duration` | Histogram | — | Duration of CGI process execution |
+| `ferron.cgi.stderr_errors` | Counter | — | Number of CGI requests that produced non-empty stderr output |

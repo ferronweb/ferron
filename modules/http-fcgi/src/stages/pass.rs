@@ -1,11 +1,14 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use ferron_core::{
     config::ServerConfigurationBlockBuilder,
     pipeline::{PipelineError, Stage},
 };
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent};
+use ferron_observability::{
+    Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
@@ -156,6 +159,9 @@ impl Stage<HttpContext> for FcgiPassStage {
         }
         let local_limit = self.client.get_local_limit(scgi_to_fixed).await;
 
+        // -- execute FastCGI --
+        let request_start = Instant::now();
+
         // Get connection from pool
         let mut conn_item = match self
             .client
@@ -173,6 +179,26 @@ impl Stage<HttpContext> for FcgiPassStage {
                         "upstream.address",
                         LogAttributeValue::String(scgi_to_fixed.to_string()),
                     )],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.fcgi.failures",
+                    attributes: vec![
+                        (
+                            "error.type",
+                            MetricAttributeValue::StaticStr("service_unavailable"),
+                        ),
+                        (
+                            "ferron.fcgi.backend_url",
+                            MetricAttributeValue::String(scgi_to_fixed.to_string()),
+                        ),
+                    ],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "Number of FastCGI requests that failed before a backend response was returned.",
+                    ),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(HttpResponse::BuiltinError(503, None));
@@ -212,6 +238,17 @@ impl Stage<HttpContext> for FcgiPassStage {
                     )],
                     trace_context: None,
                 }));
+                events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.fcgi.stderr_errors",
+                    attributes: vec![],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{error}"),
+                    description: Some(
+                        "Number of FastCGI requests that produced non-empty stderr output.",
+                    ),
+                    trace_context: None,
+                }));
             }
         });
 
@@ -228,6 +265,30 @@ impl Stage<HttpContext> for FcgiPassStage {
 
         // FastCGI response
         ctx.res = Some(HttpResponse::Custom(response));
+
+        let upstream_duration = request_start.elapsed().as_secs_f64();
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.fcgi.upstream.duration",
+            attributes: vec![(
+                "ferron.fcgi.backend_url",
+                MetricAttributeValue::String(scgi_to_fixed.to_string()),
+            )],
+            ty: MetricType::Histogram(None),
+            value: MetricValue::F64(upstream_duration),
+            unit: Some("s"),
+            description: Some("Duration of FastCGI upstream request processing."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.fcgi.requests",
+            attributes: vec![],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of FastCGI requests processed."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+
         Ok(false)
     }
 }

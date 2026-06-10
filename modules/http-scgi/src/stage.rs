@@ -1,6 +1,10 @@
+use std::time::Instant;
+
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent};
+use ferron_observability::{
+    Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use http::Response;
 use http_body_util::BodyExt;
 use vibeio_cegla::VibeioScgiRuntime;
@@ -109,6 +113,8 @@ impl Stage<HttpContext> for ScgiStage {
             &config.backend_server
         };
 
+        let request_start = Instant::now();
+
         let scgi_to_url = scgi_to_fixed
             .parse::<http::Uri>()
             .map_err(|e| PipelineError::custom(e.to_string()))?;
@@ -154,6 +160,26 @@ impl Stage<HttpContext> for ScgiStage {
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
+                            ctx.events.emit(Event::Metric(MetricEvent {
+                                name: "ferron.scgi.failures",
+                                attributes: vec![
+                                    (
+                                        "error.type",
+                                        MetricAttributeValue::StaticStr("service_unavailable"),
+                                    ),
+                                    (
+                                        "ferron.scgi.backend_url",
+                                        MetricAttributeValue::String(scgi_to_fixed.to_string()),
+                                    ),
+                                ],
+                                ty: MetricType::Counter,
+                                value: MetricValue::U64(1),
+                                unit: Some("{request}"),
+                                description: Some(
+                                    "Number of SCGI requests that failed before a backend response was returned.",
+                                ),
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                            }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             return Ok(true);
                         }
@@ -180,6 +206,26 @@ impl Stage<HttpContext> for ScgiStage {
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
+                            }));
+                            ctx.events.emit(Event::Metric(MetricEvent {
+                                name: "ferron.scgi.failures",
+                                attributes: vec![
+                                    (
+                                        "error.type",
+                                        MetricAttributeValue::StaticStr("service_unavailable"),
+                                    ),
+                                    (
+                                        "ferron.scgi.backend_url",
+                                        MetricAttributeValue::String(scgi_to_fixed.to_string()),
+                                    ),
+                                ],
+                                ty: MetricType::Counter,
+                                value: MetricValue::U64(1),
+                                unit: Some("{request}"),
+                                description: Some(
+                                    "Number of SCGI requests that failed before a backend response was returned.",
+                                ),
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             return Ok(false);
@@ -209,6 +255,30 @@ impl Stage<HttpContext> for ScgiStage {
 
         // SCGI response
         ctx.res = Some(HttpResponse::Custom(response));
+
+        let upstream_duration = request_start.elapsed().as_secs_f64();
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.scgi.upstream.duration",
+            attributes: vec![(
+                "ferron.scgi.backend_url",
+                MetricAttributeValue::String(scgi_to_fixed.to_string()),
+            )],
+            ty: MetricType::Histogram(None),
+            value: MetricValue::F64(upstream_duration),
+            unit: Some("s"),
+            description: Some("Duration of SCGI upstream request processing."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.scgi.requests",
+            attributes: vec![],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of SCGI requests processed."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+
         Ok(false)
     }
 }
