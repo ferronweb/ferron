@@ -171,11 +171,6 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        // Prometheus only handles metrics, so signals default to metrics-only
-        let signals = children
-            .and_then(parse_signal_set)
-            .or(Some(SignalSet::METRICS));
-
         let max_distinct = children
             .and_then(|c| c.get_value("max_distinct"))
             .and_then(|v| {
@@ -190,37 +185,12 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
         promotions.push(BaggageKeyPromotion {
             baggage_key: baggage_key.to_string(),
             attribute_name,
-            signals,
+            signals: Some(SignalSet::METRICS), // Prometheus only handles metrics.
             max_distinct,
         });
     }
 
     promotions
-}
-
-/// Parse a `signals` directive value into a SignalSet.
-fn parse_signal_set(children: &ServerConfigurationBlock) -> Option<SignalSet> {
-    let entries = children.directives.get("signals")?;
-    let entry = entries.first()?;
-    if entry.args.is_empty() {
-        return None;
-    }
-    let mut set = SignalSet::empty();
-    for arg in &entry.args {
-        if let Some(name) = arg.as_str() {
-            match name {
-                "traces" => set = set.insert(SignalSet::TRACES),
-                "logs" => set = set.insert(SignalSet::LOGS),
-                "metrics" => set = set.insert(SignalSet::METRICS),
-                _ => {}
-            }
-        }
-    }
-    if set == SignalSet::empty() {
-        None
-    } else {
-        Some(set)
-    }
 }
 
 struct PrometheusObservabilityModule {

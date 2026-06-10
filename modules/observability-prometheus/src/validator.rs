@@ -91,35 +91,6 @@ fn validate_baggage_block(
                 // `attribute` — optional string
                 validate_nested!(children, used(sub), attribute, optional args(1) => [ServerConfigurationValue::String(_, _)]);
 
-                // `signals` — optional, args are signal names
-                if let Some(signal_entries) = children.directives.get("signals") {
-                    sub.insert("signals".to_string());
-                    for signal_entry in signal_entries {
-                        for arg in &signal_entry.args {
-                            if let Some(name) = arg.as_str() {
-                                if name != "traces" && name != "logs" && name != "metrics" {
-                                    validator_ctx.diagnostics.push(validator_ctx.create_diagnostic(
-                                        ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
-                                        format!(
-                                            "Invalid signal name '{}' in `baggage key` block: must be one of 'traces', 'logs', 'metrics'",
-                                            name
-                                        ),
-                                        signal_entry.span.clone(),
-                                    ));
-                                }
-                            } else {
-                                validator_ctx
-                                    .diagnostics
-                                    .push(validator_ctx.create_diagnostic(
-                                        ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
-                                        "Invalid `signals` value: must be a string".to_string(),
-                                        signal_entry.span.clone(),
-                                    ));
-                            }
-                        }
-                    }
-                }
-
                 // `max_distinct` — optional number
                 if let Some(max_entries) = children.directives.get("max_distinct") {
                     sub.insert("max_distinct".to_string());
