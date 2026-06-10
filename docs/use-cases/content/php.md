@@ -45,5 +45,14 @@ CGI is functional but usually slower than FastCGI for production workloads becau
 > - If using PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`; otherwise requests can fail with a force-cgi-redirect warning.
 > - If PHP files download instead of executing, verify you enabled either `fcgi_php` or `cgi` + `extension ".php"` in the correct domain/location block.
 
+## Distributed tracing with PHP
+
+PHP applications served through CGI or FastCGI automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) when tracing is enabled in Ferron. These headers are available as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`).
+
+With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/), these headers enable distributed tracing out of the box — the SDK automatically reads the incoming `traceparent` header and creates child spans, connecting your PHP backend traces to the rest of your infrastructure.
+
+> [!info]
+> No additional PHP-side configuration is needed beyond installing and configuring the OpenTelemetry SDK. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
+
 > [!important]
 > Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.

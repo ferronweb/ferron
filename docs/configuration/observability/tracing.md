@@ -91,7 +91,8 @@ baggage: userId=alice,tenantId=acme
 Ferron stores the baggage in the request trace context and propagates both `traceparent` and `baggage` to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
 
 > [!note]
-> The `http-proxy` and `http-fproxy` modules automatically propagate the current trace context and baggage to upstream services. Ferron 3 preserves the incoming `tracestate` header and propagates it as-is.
+> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via `http { trace { generate } }` and whether a trace sink (or `force_trace`) is configured.
+> - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`), making them accessible to application code without any special header parsing.
 
 > [!note]
 >

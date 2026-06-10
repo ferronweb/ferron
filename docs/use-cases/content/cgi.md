@@ -179,6 +179,13 @@ example.com {
 
 On Unix systems, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, `.exe` files are executed directly, and scripts with shebangs are parsed similarly to Unix.
 
+### Distributed tracing
+
+When tracing is enabled in Ferron, CGI scripts automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, `baggage`) as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This enables end-to-end distributed tracing without any CGI-side configuration.
+
+> [!info]
+> See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+
 ## Default index files
 
 When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, the following files are checked in order: `index.html`, `index.htm`, `index.xhtml`.

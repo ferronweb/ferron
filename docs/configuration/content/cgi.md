@@ -180,6 +180,21 @@ Ferron automatically sets the following CGI environment variables:
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
 
+## Trace context injection
+
+When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the CGI request. These headers are mapped to standard CGI environment variables:
+
+| Header | CGI environment variable |
+| --- | --- |
+| `traceparent` | `HTTP_TRACEPARENT` |
+| `tracestate` | `HTTP_TRACESTATE` |
+| `baggage` | `HTTP_BAGGAGE` |
+
+This enables end-to-end distributed tracing with CGI scripts. For example, a PHP script running with the official OpenTelemetry SDK for PHP can read these headers to create child spans automatically.
+
+> [!info]
+> No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+
 ## Observability
 
 ### Logs

@@ -358,6 +358,13 @@ bar.example.com {
 
 For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip `agenda/` or configure URL rewriting in Ferron.
 
+## Trace context propagation
+
+The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests when a trace context exists. This enables end-to-end distributed tracing — your backend services can read these headers to create child spans that connect to the trace initiated by Ferron.
+
+> [!info]
+> For details on trace context configuration, sampling, and header behavior, see [Tracing configuration](/docs/v3/configuration/observability/tracing) and [Reverse proxy configuration](/docs/v3/configuration/proxy/reverse-proxy#trace-context-injection).
+
 ## Security considerations
 
 ### SSRF risk with interpolated upstream URLs

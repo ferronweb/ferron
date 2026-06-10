@@ -109,6 +109,22 @@ Additional variables set by `environment` directives override any automatically 
 
 When used alongside an authentication module (e.g., `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the SCGI request. The authentication type is extracted from the `Authorization` header (e.g., `Basic` or `Bearer`).
 
+## Trace context injection
+
+When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the SCGI request. These headers are mapped to standard CGI environment variables:
+
+| Header | SCGI environment variable |
+| --- | --- |
+| `traceparent` | `HTTP_TRACEPARENT` |
+| `tracestate` | `HTTP_TRACESTATE` |
+| `baggage` | `HTTP_BAGGAGE` |
+
+This enables end-to-end distributed tracing with SCGI backend applications.
+
+> [!info]
+> No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+
+
 ## Observability
 
 ### Logs

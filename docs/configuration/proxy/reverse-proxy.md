@@ -367,6 +367,25 @@ The reverse proxy module automatically manages standard forwarding headers:
 | `X-Real-IP` | Always set to the client IP. |
 | `Forwarded` (RFC 7239) | When `client_ip_from_header` is enabled, appends a new element (`for=...;proto=...;by=...`). Otherwise, sets a single element. IPv6 addresses are quoted per RFC 7239. |
 
+## Trace context injection
+
+When a trace context exists for the request, the reverse proxy module automatically injects W3C Trace Context headers into the outgoing upstream request. This enables end-to-end distributed tracing across Ferron and your backend services.
+
+| Header | Behavior |
+| --- | --- |
+| `traceparent` | Always injected when a trace context is present. Format: `00-{trace_id}-{span_id}-{flags}`. |
+| `tracestate` | Injected only if the incoming request or Ferron's trace context carries a non-empty `tracestate` value. |
+| `baggage` | Injected only if the incoming request or Ferron's trace context carries non-empty `baggage` values. |
+
+Trace context injection happens after all `request_header` transformations are applied. This means:
+
+- You can override the injected headers using `request_header +traceparent "..."` to add a custom value.
+- You can remove injected headers using `request_header -traceparent` to suppress propagation.
+- The injected headers cannot be removed by `headers_to_remove` since injection occurs last.
+
+> [!info]
+> Trace context is created when an incoming `traceparent` header is present, or when `http { trace { generate true } }` (the default) is active and trace sinks are configured (or `force_trace` is enabled). See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
+
 ## Connection pooling
 
 Ferron maintains a keep-alive connection pool for upstream backends. Key behaviors:
