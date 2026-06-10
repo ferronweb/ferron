@@ -1,14 +1,25 @@
 ---
-title: "Configuration: observability and logging"
-description: "Access logging, log formatters, metrics, tracing, and OTLP export configuration."
+title: "Configuration: logging"
+description: "Log signals, log formatters (JSON and text), log levels, and trace ID display in logs."
 ---
 
-This page documents the observability configuration surface for Ferron, including access logs, log formatters, metrics, tracing, and OTLP export.
+This page documents logging configuration for Ferron, including log signals, log formatters, available fields, and how trace IDs appear in log output.
 
 > [!info]
 >
-> - For Prometheus-specific metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
-> - For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
+> - For trace context propagation, Baggage, and trace sampling, see [Tracing](/docs/v3/configuration/observability/tracing).
+> - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
+
+## Log signals
+
+Ferron emits two log signals: **access logs** and **application logs**.
+
+| Signal | What it captures |
+|---|---|
+| Access logs | Per-request HTTP request/response data (method, path, status, duration, etc.) |
+| Application logs | Server-level messages (startup, config reloads, errors, debug output) |
+
+Access logs are configured per-host via the `log` directive. Application logs are configured via the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal — the `error_log` directive is simply the file sink for the application log signal.
 
 ## Directives
 
@@ -118,8 +129,44 @@ The `access_pattern` directive supports the following tokens:
 
 Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
 
+### Log levels
+
+The `log_level` directive (in the `observability` block or via `console_log`/`error_log` aliases) controls the minimum severity level for application logs:
+
+| Level | When to use |
+|-------|-------------|
+| `error` | Production default. Only errors are logged. |
+| `warn` | Debugging performance issues. |
+| `info` | Request-level detail. Use for troubleshooting. |
+| `debug` | Deep debugging. High volume. |
+
+**Configuration example:**
+
+```ferron
+example.com {
+    observability {
+        provider console
+        log_level debug
+    }
+}
+```
+
+### Console vs file vs OTLP
+
+The `format` directive (json/text) applies to **file and console** sinks. OTLP also a different mechanism:
+
+| Sink | Formatting directive | Configuration |
+|------|---------------------|---------------|
+| File (`provider file`) | `format json` or `format text` | `observability { provider file }` |
+| Console (`provider console`) | `format json` or `format text` | `observability { provider console }` |
+| OTLP (`provider otlp`) | `log_style modern` or `log_style legacy` (with `format json` or `format text`) | `observability { provider otlp }` |
+| Prometheus | N/A (metrics only) | `observability { provider prometheus }` |
+
+> [!note]
+> Prometheus is metrics-only — it does not export logs. For log export, configure OTLP or use file/console sinks.
+
 > [!tip]
-> If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability). For log format details, see the `json` and `text` formatter sections above.
+> If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
 
 ## Trace ID in console and file logs
 
@@ -134,207 +181,3 @@ Console and file loggers prefix log messages with `[trace=<span_id>]` when a tra
 
 > [!tip]
 > To enable trace IDs in logs without full OTLP tracing, set `force_trace true` in the HTTP configuration. See [HTTP host directives](/docs/v3/configuration/server/host).
-
-## Metrics
-
-Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics, such as:
-
-- **Core HTTP server metrics** — active requests, request duration, and request count. See [HTTP host directives](/docs/v3/configuration/server/host#metrics).
-- **Rate limiting metrics** — allowed and rejected requests. See [Rate limiting](/docs/v3/configuration/content/rate-limit#metrics).
-- **Response control metrics** — aborted connections, IP blocks, and status rule matches. See [HTTP response control](/docs/v3/configuration/routing/response#metrics).
-- **Static file metrics** — files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/content/static-files#metrics).
-- **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/routing/rewrite#metrics).
-- **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy#metrics).
-- **Process metrics** — CPU time, CPU utilization, and memory usage from the operating system. See [Process metrics](#process-metrics) below.
-- **Admin API metrics** — uptime, active connections, request count, configuration reloads, observability event backpressure, and runtime status. See [Admin API metrics](#admin-api-metrics) below.
-
-> [!note]
-> Observability sinks may drop events under high load. Ferron exposes an admin metric `observability_events_dropped` and a status field to help detect and tune exporter queues.
-
-### Process metrics
-
-The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
-
-**Platform support:** Linux and Windows. On other platforms, the module is a no-op.
-
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `process.cpu.time` | Counter | `cpu.mode` (`"user"` or `"system"`) | Total CPU seconds broken down by different states |
-| `process.cpu.utilization` | Gauge | `cpu.mode` (`"user"` or `"system"`) | CPU utilization since the last measurement |
-| `process.memory.usage` | UpDownCounter | — | The change in physical memory (RSS) since the last measurement |
-| `process.memory.virtual` | UpDownCounter | — | The change in committed virtual memory (VMS) since the last measurement |
-| `process.unix.file_descriptor.count` | UpDownCounter | — | The change in number of unix file descriptors since the last measurement (Linux only) |
-
-### Admin API metrics
-
-The `metrics-admin` module collects metrics exposed via admin API automatically when an observability backend is configured.
-
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.admin.uptime` | Gauge | — | Time since the server started |
-| `ferron.admin.connections_active` | Gauge | — | Currently open TCP connections across all HTTP listeners |
-| `ferron.admin.requests_total` | Counter | — | Total HTTP requests served across all listeners |
-| `ferron.admin.reloads` | Counter | — | Number of configuration reloads performed |
-| `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
-| `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
-
-### Admin API runtime metrics
-
-The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
-
-- `ferron.admin.runtime.primary_threads` (Gauge) — number of primary threads (typically equal to CPU count).
-- `ferron.admin.runtime.io_uring_supported` (Gauge) — whether `io_uring` is supported on the current system (`1` = yes, `0` = no).
-- `ferron.admin.runtime.io_uring_runtime_enabled` (Gauge) — whether `io_uring` was successfully enabled at runtime (`1` = yes, `0` = no).
-
-These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
-
-### HTTP and proxy metrics
-
-Ferron also emits request-path metrics for common observability gaps:
-
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.http.server.pre_handler_request_count` | Counter | — | Malformed or timed-out requests rejected before the normal HTTP handler completes |
-| `ferron.http.server.redirects` | Counter | — | Redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects |
-| `ferron.http.server.client_ip_rewrites` | Counter | — | Requests whose client IP was rewritten from a trusted proxy header |
-| `ferron.http.server.cors_preflights` | Counter | — | CORS preflight requests handled before the main pipeline |
-| `ferron.http.server.connection_errors` | Counter | transport, lifecycle stage | Listener and handshake failures |
-| `ferron.proxy.failures` | Counter | — | Reverse-proxy failures that returned an error before a backend response was produced |
-| `ferron.forward_proxy.requests` | Counter | mode (`"connect"` or `"request"`), outcome | Forward-proxy requests |
-| `ferron.static.responses` | Counter | — | Static-file responses across normal, conditional, range, and error paths |
-
-## Tracing
-
-Each HTTP request generates a root trace span and multiple nested spans for pipeline execution:
-
-### Root request span
-
-- **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
-  - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
-- **`EndSpan("ferron.request", error)`** — emitted when the request completes.
-  - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
-
-### Pipeline execution span
-
-- **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages. This span is a child of `ferron.request`.
-
-### Per-stage spans
-
-Each pipeline and file-serving stage generates its own forward and inverse span as a child of `ferron.pipeline.execute`, enabling flame graph analysis:
-
-| Span name | Module | Description |
-| --- | --- | --- |
-| `ferron.stage.rewrite` | `http-rewrite` | URL rewrite stage |
-| `ferron.stage.rate_limit` | `http-ratelimit` | Rate limiting stage |
-| `ferron.stage.headers` | `http-headers` | Response header manipulation stage |
-| `ferron.stage.reverse_proxy` | `http-proxy` | Reverse proxy stage |
-| `ferron.stage.static_file` | `http-static` | Static file serving stage |
-| `ferron.stage.http_response` | `http-response` | Response control stage |
-| `ferron.stage.<name>.inverse` | (any) | Inverse (cleanup) operation for a stage |
-
-### Error pipeline span
-
-- **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
-  - Attributes: `http.response.status_code`
-
-Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
-
-### Trace sampling
-
-The `trace_sampling` directive (in `http` block) controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
-
-| Mode | Description |
-| --- | --- |
-| `always_on` | Sample every trace. Useful for development. |
-| `always_off` | Sample no traces. Effectively disables trace export. |
-| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
-| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
-| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
-| `attribute_based` | Sample based on span attributes set at creation time. |
-
-**Configuration example:**
-
-```ferron
-example.com {
-    http {
-        trace {
-            generate true
-        }
-
-        # Sample 10% of root spans, respect parent for child spans
-        trace_sampling "parentbased_traceidratio" {
-            ratio 0.1
-        }
-    }
-}
-```
-
-> [!note]
-> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
-
-#### Ratio-based sampling
-
-The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-directive (a float between `0.0` and `1.0`):
-
-```ferron
-example.com {
-    http {
-        trace_sampling "parentbased_traceidratio" {
-            ratio 0.05   # 5% of root spans
-        }
-    }
-}
-```
-
-Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
-
-#### Attribute-based sampling
-
-The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
-
-```ferron
-example.com {
-    http {
-        trace_sampling "attribute_based" {
-            # What to do with spans that don't match any rule
-            default_action "sample"
-
-            rules {
-                # Always sample spans with http.request.method == "POST"
-                rule "exact" "http.request.method" "POST"
-
-                # Sample spans where url.path starts with "/api/"
-                rule "prefix" "url.path" "/api/"
-
-                # Sample spans that have an "error.type" attribute (any value)
-                rule "exists" "error.type"
-            }
-        }
-    }
-}
-```
-
-Each `rule` takes 2 or 3 arguments:
-
-| Argument | Description |
-| --- | --- |
-| `<match_type>` | One of `exact`, `prefix`, or `exists`. |
-| `<attribute>` | The span attribute key to match. |
-| `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
-
-A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
-
-| Value | Behavior |
-| --- | --- |
-| `drop` | Spans not matching any rule are dropped. **This is the default.** |
-| `sample` | Spans not matching any rule are still sampled. |
-
-> [!warning]
-> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
-
-> [!note]
-> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions for attribute-based sampling.
-
-## Structured log style
-
-When exporting through OTLP, the `log_style` directive in the OTLP observability block selects between two log record shapes. The `legacy` mode keeps the existing human-readable `message` body and is unaffected by this option. The default `modern` mode publishes each log record as a short OTEL-friendly `summary` body plus typed per-event attributes, and remaps access-log fields to OTEL semantic-convention attribute names (`url.path`, `http.request.method`, `http.response.status_code`, `client.address`, `http.server.request.duration`, and so on). Console and file log sinks are unchanged regardless of the selected log style. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the full mapping and examples.

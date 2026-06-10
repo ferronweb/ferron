@@ -512,6 +512,7 @@ example.com {
 | `ferron.proxy.health.duration` | Histogram | backend URL or unix socket path | Duration of health check probes |
 | `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open |
 | `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
+| `ferron.proxy.failures` | Counter | `http.response.status_code` (HTTP response status code), `error.type` (error type classification) | Reverse-proxy failures that returned an error before a backend response was produced |
 
 ### Logs
 

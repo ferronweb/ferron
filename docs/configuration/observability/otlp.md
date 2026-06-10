@@ -90,7 +90,7 @@ Each `key` entry configures one baggage key to promote:
 > The `baggage` header is parsed and attached to spans automatically — use the `baggage` sub-directive to promote specific keys into telemetry attributes.
 
 > [!info]
-> Trace sampling is configured in the `http` block. See [Trace context](/docs/v3/configuration/observability/trace#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
+> Trace sampling is configured in the `http` block. See [Tracing](/docs/v3/configuration/observability/tracing#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
 
 ### Log style
 
@@ -348,6 +348,6 @@ The following best-practice checks are reported by `ferron doctor` for directive
 ## See also
 
 - [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
-- [Trace context](/docs/v3/configuration/observability/trace) for W3C Trace Context and Baggage propagation details
+- [Tracing](/docs/v3/configuration/observability/tracing) for W3C Trace Context and Baggage propagation details
 - [Prometheus metrics](/docs/v3/configuration/observability/prometheus) for native Prometheus metrics export
 - [Core directives](/docs/v3/configuration/server/core-directives#observability) for global observability settings

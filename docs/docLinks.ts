@@ -416,25 +416,31 @@ export default [
   {
     href: "/docs/v3/configuration/observability/logging",
     target: "_self",
+    label: "Logging",
     sub: true,
-    label: "Observability & logging",
+  },
+  {
+    href: "/docs/v3/configuration/observability/metrics",
+    target: "_self",
+    label: "Metrics",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/configuration/observability/tracing",
+    target: "_self",
+    label: "Tracing",
+    sub: true,
   },
   {
     href: "/docs/v3/configuration/observability/otlp",
     target: "_self",
-    sub: true,
     label: "OTLP observability",
+    sub: true,
   },
   {
     href: "/docs/v3/configuration/observability/prometheus",
     target: "_self",
-    sub: true,
     label: "Prometheus metrics",
-  },
-  {
-    href: "/docs/v3/configuration/observability/trace",
-    target: "_self",
     sub: true,
-    label: "Trace context",
   },
 ];
