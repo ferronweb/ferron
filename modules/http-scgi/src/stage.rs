@@ -51,6 +51,11 @@ impl Stage<HttpContext> for ScgiStage {
             .headers_mut()
             .remove(http::header::HeaderName::from_static("proxy"));
 
+        // Inject trace context into the request environment
+        if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
+            ferron_http::trace_context::inject_trace_headers(request.headers_mut(), tc);
+        }
+
         let original_request_uri = ctx.original_uri.as_ref().unwrap_or(request.uri());
         let mut env_builder = cegla_scgi::client::CgiBuilder::new();
 

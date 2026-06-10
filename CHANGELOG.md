@@ -109,6 +109,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Cardinality control** - Prometheus label values are now sanitized to heavily reduce high-cardinality label inflation.
 - **Structured log events** - every log emission site now carries a short OTEL-friendly `summary` plus typed `attributes`, enabling downstream OTLP consumers to receive structured events without changing existing console or file log output.
 - **Trace ID in console and file logs** - console and file loggers now prefix log messages with `[trace=<span_id>]` when a trace context is available, enabling grep-based filtering by trace ID.
+- **Trace context injection for CGI/FastCGI/PHP-FPM/SCGI** - trace context headers are now automatically propagated to the backend environment via CGI/FastCGI/PHP-FPM/SCGI.
 
 #### Core runtime
 
