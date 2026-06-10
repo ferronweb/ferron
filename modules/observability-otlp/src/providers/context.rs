@@ -1,9 +1,9 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::RefCell;
 
 use ferron_observability::Parent;
 use opentelemetry::{
     baggage::BaggageExt,
-    trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState},
+    trace::{Span, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState},
     Context, Key, StringValue,
 };
 use opentelemetry_sdk::Resource;
@@ -11,7 +11,7 @@ use opentelemetry_sdk::Resource;
 /// Correlation context: tracks active spans per host sink instance.
 pub struct CorrelationContext {
     /// Active spans: span_key -> active span entry
-    active_spans: HashMap<String, ActiveSpan>,
+    active_spans: lru::LruCache<String, ActiveSpan>,
 }
 
 pub(crate) struct ActiveSpan {
@@ -36,14 +36,12 @@ thread_local! {
 }
 
 impl CorrelationContext {
-    #[inline]
     pub fn new() -> Self {
         Self {
-            active_spans: HashMap::new(),
+            active_spans: lru::LruCache::new(65536.try_into().unwrap()),
         }
     }
 
-    #[inline]
     pub fn insert_span(
         &mut self,
         key: impl Into<String>,
@@ -53,7 +51,7 @@ impl CorrelationContext {
         span: opentelemetry_sdk::trace::Span,
         baggage: Option<String>,
     ) {
-        self.active_spans.insert(
+        let entry = self.active_spans.push(
             key.into(),
             ActiveSpan {
                 trace_id_hex,
@@ -63,16 +61,20 @@ impl CorrelationContext {
                 baggage,
             },
         );
+        if let Some((_, mut entry)) = entry {
+            let err: Box<dyn std::error::Error> =
+                "Span evicted to prevent unbound memory growth".into();
+            entry.span.record_error(err.as_ref());
+            entry.span.end();
+        }
     }
 
-    #[inline]
     pub(crate) fn remove_span(&mut self, key: &str) -> Option<ActiveSpan> {
-        self.active_spans.remove(key)
+        self.active_spans.pop(key)
     }
 
     /// Look up an active span's trace and span ID for use as a parent.
-    #[inline]
-    pub fn get_parent_ids(&self, key: &str) -> Option<(String, String, bool, Option<String>)> {
+    pub fn get_parent_ids(&mut self, key: &str) -> Option<(String, String, bool, Option<String>)> {
         self.active_spans.get(key).map(|span| {
             (
                 span.trace_id_hex.clone(),
@@ -118,7 +120,7 @@ pub(crate) fn build_resource(service_name: String) -> Resource {
 }
 
 pub(crate) fn build_parent_context(
-    correlation: &CorrelationContext,
+    correlation: &mut CorrelationContext,
     parent: &Parent,
 ) -> Option<Context> {
     let (trace_id_hex, span_id_hex, sampled, baggage) = match parent {
