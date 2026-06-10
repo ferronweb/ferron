@@ -8,6 +8,7 @@ use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
     Parent, TraceAttributeValue, TraceEvent,
 };
+use rustc_hash::FxHashSet;
 
 pub use ferron_http::trace_context::to_event_trace_context;
 
@@ -28,9 +29,11 @@ pub(super) struct PerStageSpanHooks<'a> {
     has_traces: bool,
     parent_span_key: &'a str,
     stage_group: &'a str,
+    keys: FxHashSet<(String, String)>,
 }
 
 impl<'a> PerStageSpanHooks<'a> {
+    #[inline]
     pub fn new(
         events: &'a CompositeEventSink,
         has_traces: bool,
@@ -42,15 +45,32 @@ impl<'a> PerStageSpanHooks<'a> {
             has_traces,
             parent_span_key,
             stage_group,
+            keys: FxHashSet::default(),
         }
     }
 
-    pub fn stage_key(&self, stage_name: &str, inverse: bool) -> String {
+    #[inline]
+    fn stage_key(&self, stage_name: &str, inverse: bool) -> String {
         let suffix = if inverse { ":inverse" } else { "" };
         format!(
             "{}:{}:{}{}",
             self.parent_span_key, self.stage_group, stage_name, suffix
         )
+    }
+
+    #[inline]
+    pub fn flush(&mut self) {
+        if !self.has_traces {
+            return;
+        }
+        for (event_key, event_name) in self.keys.drain() {
+            self.events.emit(Event::Trace(TraceEvent::EndSpan {
+                key: Cow::Owned(event_key),
+                name: Cow::Owned(event_name),
+                error: Some("Pipeline couldn't complete (timeout or error)".to_string()),
+                attributes: vec![],
+            }));
+        }
     }
 }
 
@@ -62,9 +82,13 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             return;
         }
         let stage_name = stage.name();
+        let stage_name_otel = format!("ferron.stage.{}", stage_name);
+        let stage_key = self.stage_key(stage_name, false);
+        self.keys
+            .insert((stage_key.clone(), stage_name_otel.clone()));
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
-            key: Cow::Owned(self.stage_key(stage_name, false)),
-            name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
+            key: Cow::Owned(stage_key),
+            name: Cow::Owned(stage_name_otel),
             parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
             trace_context: None,
             builder_attributes: vec![],
@@ -81,9 +105,13 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             return;
         }
         let stage_name = stage.name();
+        let stage_name_otel = format!("ferron.stage.{}", stage_name);
+        let stage_key = self.stage_key(stage_name, false);
+        self.keys
+            .remove(&(stage_key.clone(), stage_name_otel.clone()));
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            key: Cow::Owned(self.stage_key(stage_name, false)),
-            name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
+            key: Cow::Owned(stage_key),
+            name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));
@@ -95,9 +123,13 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             return;
         }
         let stage_name = stage.name();
+        let stage_name_otel = format!("ferron.stage.{}.inverse", stage_name);
+        let stage_key = self.stage_key(stage_name, true);
+        self.keys
+            .insert((stage_key.clone(), stage_name_otel.clone()));
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
-            key: Cow::Owned(self.stage_key(stage_name, true)),
-            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
+            key: Cow::Owned(stage_key),
+            name: Cow::Owned(stage_name_otel),
             parent: Some(Parent::ByKey(self.parent_span_key.to_string())),
             trace_context: None,
             builder_attributes: vec![],
@@ -118,9 +150,13 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             return;
         }
         let stage_name = stage.name();
+        let stage_name_otel = format!("ferron.stage.{}.inverse", stage_name);
+        let stage_key = self.stage_key(stage_name, true);
+        self.keys
+            .remove(&(stage_key.clone(), stage_name_otel.clone()));
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            key: Cow::Owned(self.stage_key(stage_name, true)),
-            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
+            key: Cow::Owned(stage_key),
+            name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));

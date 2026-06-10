@@ -33,23 +33,6 @@ pub async fn execute_pipeline_stages(
         .get::<trace_context::TraceContextKey>()
         .map(trace_context::to_event_trace_context);
 
-    // Start pipeline execution span
-    if let (true, Some(request_span_key), Some(pipeline_span_key)) =
-        (has_traces, request_span_key, pipeline_span_key.as_ref())
-    {
-        events.emit(Event::Trace(TraceEvent::StartSpan {
-            key: Cow::Owned(pipeline_span_key.clone()),
-            name: Cow::Borrowed("ferron.pipeline.execute"),
-            parent: Some(Parent::ByKey(request_span_key.to_string())),
-            trace_context: None,
-            builder_attributes: vec![],
-            attributes: vec![(
-                "ferron.pipeline.log_prefix",
-                TraceAttributeValue::String(log_prefix.to_string()),
-            )],
-        }));
-    }
-
     // Remove the base URL if path segments were matched
     if !path_segments.is_empty() {
         if let Some(req) = ctx.req.take() {
@@ -70,6 +53,23 @@ pub async fn execute_pipeline_stages(
             parts.uri = new_uri;
             ctx.req = Some(http::Request::from_parts(parts, body));
         }
+    }
+
+    // Start pipeline execution span
+    if let (true, Some(request_span_key), Some(pipeline_span_key)) =
+        (has_traces, request_span_key, pipeline_span_key.as_ref())
+    {
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(pipeline_span_key.clone()),
+            name: Cow::Borrowed("ferron.pipeline.execute"),
+            parent: Some(Parent::ByKey(request_span_key.to_string())),
+            trace_context: None,
+            builder_attributes: vec![],
+            attributes: vec![(
+                "ferron.pipeline.log_prefix",
+                TraceAttributeValue::String(log_prefix.to_string()),
+            )],
+        }));
     }
 
     let instant = std::time::Instant::now();
@@ -205,6 +205,9 @@ pub async fn execute_pipeline_stages(
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }
     }
+
+    // Flush any remaining stage spans before ending the pipeline execution span.
+    stage_hooks.flush();
 
     // End pipeline execution span
     if let Some(pipeline_span_key) = pipeline_span_key {
