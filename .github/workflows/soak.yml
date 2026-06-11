@@ -28,7 +28,7 @@ jobs:
         uses: docker/setup-compose-action@v2
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7.1.0
+        uses: docker/build-push-action@v7.2.0
         with:
           context: .
           file: Dockerfile.alpine
