@@ -297,6 +297,15 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 | FastCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
 | FastCGI errors on stderr  | WARN  | `error.message` (string) — trimmed stderr output from the FastCGI process |
 
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.fcgi.requests` | Counter | — | Number of FastCGI requests processed |
+| `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before a backend response was returned |
+| `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
+| `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |
+
 ## Examples
 
 ### PHP with PHP-FPM over a Unix socket
@@ -358,12 +367,3 @@ example.com {
     # Other files are served statically
 }
 ```
-
-### Metrics
-
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.fcgi.requests` | Counter | — | Number of FastCGI requests processed |
-| `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before a backend response was returned |
-| `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
-| `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |

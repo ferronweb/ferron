@@ -136,6 +136,14 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 |-----------------------|-------|------------|
 | SCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
 
+### Metrics
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.scgi.requests` | Counter | — | Number of SCGI requests processed |
+| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before a backend response was returned |
+| `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |
+
 ## Examples
 
 ### Basic SCGI backend
@@ -182,11 +190,3 @@ example.com {
     scgi tcp://127.0.0.1:4000
 }
 ```
-
-### Metrics
-
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.scgi.requests` | Counter | — | Number of SCGI requests processed |
-| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before a backend response was returned |
-| `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |
