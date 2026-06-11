@@ -345,9 +345,9 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = match parse_forwarded_auth_from_context(ctx) {
-            Ok(Some(cfg)) => cfg,
-            Ok(None) => return Ok(true), // No forwarded auth configured
+        let configs = match parse_forwarded_auth_from_context(ctx) {
+            Ok(cfgs) if cfgs.is_empty() => return Ok(true), // No forwarded auth configured
+            Ok(cfgs) => cfgs,
             Err(e) => {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Error,
@@ -362,6 +362,9 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
             }
         };
 
-        self.send_auth_request(ctx, &config).await
+        for config in &configs {
+            self.send_auth_request(ctx, config).await?;
+        }
+        Ok(true)
     }
 }

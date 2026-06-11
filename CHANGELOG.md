@@ -41,6 +41,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Cache purging** - native `PURGE` HTTP method support for targeted cache invalidation via the `purge_method` and `purge_allowed_ips` subdirectives.
 - **`force_trace`** - global directive to force trace context creation for every request even when tracing is not explicitly enabled by a module, useful for debugging or log correlation.
 
+### Authentication
+
+- **Forwarded authentication backend chaining** - the forwarded authentication module now supports chaining multiple backends together, allowing for flexible and secure multi-backend authentication scenarios.
+
 #### Observability & metrics
 
 - **Edge-case visibility** - granular HTTP observability metrics for pre-handler failures, server redirects, client-IP rewrites, CORS preflights, connection lifecycle failures, forward-proxy outcomes, reverse-proxy failures, and static-file response outcomes.

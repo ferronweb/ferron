@@ -70,6 +70,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                     no_verification_warn = first_entry_span(auth_to, "no_verification");
                 }
                 validate_nested!(auth_to, used(sub), copy, args(*) => [ServerConfigurationValue::String(_, _)]);
+                validate_nested!(auth_to, used(sub), last, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 check_unused_subdirectives!(auth_to, sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
         }

@@ -29,11 +29,14 @@ example.com {
 | `unix` | `<path>` | Connect to the backend via Unix domain socket instead of TCP. | TCP |
 | `limit` | `<number>` | Maximum concurrent connections to this backend. | No limit (per upstream) |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout for connections. Connections idle longer than this are evicted. | `60s` |
-| `no_verification` | `<bool>` | Skip TLS certificate verification for HTTPS backends. | `false` |
+| `no_verification` | `[bool]` | Skip TLS certificate verification for HTTPS backends. | `false` |
 | `copy` | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers. | none |
+| `last` | `[bool]` | Whether this is the last backend in the chain (no further verification will be performed). | `false` |
 
 > [!note]
-> When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. Upgrade and Connection headers are removed from auth requests.
+>
+> - When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. Upgrade and Connection headers are removed from auth requests.
+> - The forwarded authentication module supports chaining multiple backends together. To terminate the chain, set `last` to `true`.
 
 #### Backend URL
 
