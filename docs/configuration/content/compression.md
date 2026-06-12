@@ -19,7 +19,7 @@ When a client sends an `Accept-Encoding` header, Ferron selects the best compres
 
 The server iterates through the client's `Accept-Encoding` header values and selects the **first** algorithm that matches the preference order. For example, if a client sends:
 
-```
+```text
 Accept-Encoding: gzip, br, zstd
 ```
 
