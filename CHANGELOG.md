@@ -10,6 +10,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Rate limit windows** - syntax updated to enforce standard duration strings (e.g., `10s`, `5m`, `1h`).
 - **OTLP verification** - `no_verify` has been renamed to `no_verification` and now operates strictly as a configuration flag.
+- **OTLP defaults** - OTLP sink now uses `log_style modern` default, which may break existing configurations with custom OTLP log formats.
 - **Proxy configuration** - syntax for passive/active health checks, load balancing algorithms, and connection retries has been unified into a cleaner, more consistent format.
 
 ### Added
