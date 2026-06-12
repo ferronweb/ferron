@@ -43,21 +43,19 @@ pub fn parse_q_value_header_grouped(header: &str) -> Vec<BTreeSet<String>> {
     values.sort_by(|a, b| b.q_value.partial_cmp(&a.q_value).unwrap_or(Ordering::Equal));
 
     let mut grouped: Vec<BTreeSet<String>> = Vec::new();
-    for (previous, current) in values.windows(2).map(|w| (w[0].clone(), w[1].clone())) {
-        if grouped.is_empty() {
-            // The grouped vector is empty...
-            grouped.push(BTreeSet::from([previous.value]));
-        }
-
+    if let Some(first) = values.first() {
+        grouped.push(BTreeSet::from([first.value.clone()]));
+    }
+    for (previous, current) in values.windows(2).map(|w| (&w[0], &w[1])) {
         if current.q_value == previous.q_value {
             if let Some(last) = grouped.last_mut() {
-                last.insert(current.value);
+                last.insert(current.value.clone());
             } else {
                 // The grouped vector is empty...
-                grouped.push(BTreeSet::from([current.value]));
+                grouped.push(BTreeSet::from([current.value.clone()]));
             }
         } else {
-            grouped.push(BTreeSet::from([current.value]));
+            grouped.push(BTreeSet::from([current.value.clone()]));
         }
     }
 
@@ -91,6 +89,13 @@ mod tests {
             ]),
             BTreeSet::from(["text/xml".to_string()]),
         ];
+        assert_eq!(parse_q_value_header_grouped(header), expected);
+    }
+
+    #[test]
+    fn test_parse_q_value_header_single() {
+        let header = "text/html";
+        let expected = vec![BTreeSet::from(["text/html".to_string()])];
         assert_eq!(parse_q_value_header_grouped(header), expected);
     }
 }
