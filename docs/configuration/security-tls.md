@@ -68,7 +68,7 @@ This page covers KDL directives for TLS configuration, certificate automation, a
 - `auto_tls_save_data (<auto_tls_save_certificate_path: string> <auto_tls_save_private_key_path: string>)|<auto_tls_save_data_disabled: null>` (Ferron 2.5.0 or newer)
   - This directive specifies the path to save the obtained TLS certificate and private key when using automatic TLS. This can be useful for debugging purposes or for using the obtained TLS certificate and private key with other software. This directive isn't supported when using it alongside automatic TLS on demand. Default: `auto_tls_save_data #null`
 - `auto_tls_post_obtain_command <auto_tls_post_obtain_command: string>|<auto_tls_post_obtain_command_disabled: null>` (Ferron 2.5.0 or newer)
-  - This directive specifies the command (arguments are supported in Ferron UNRELEASED and newer) to be executed after obtaining a TLS certificate when using automatic TLS. The command will be executed with the following environment variables set: `FERRON_ACME_DOMAIN` (the domain name for which the certificate was obtained; comma-separated if multiple domain names), `FERRON_ACME_CERT_PATH` (the path to the obtained TLS certificate), `FERRON_ACME_KEY_PATH` (the path to the obtained private key). This can be useful for running custom scripts after obtaining a TLS certificate, for example for reloading other software that uses the obtained TLS certificate. This directive is effective only when `auto_tls_save_data` directive is effective. Default: `auto_tls_post_obtain_command #null`
+  - This directive specifies the command (arguments are supported in Ferron 2.8.0 and newer) to be executed after obtaining a TLS certificate when using automatic TLS. The command will be executed with the following environment variables set: `FERRON_ACME_DOMAIN` (the domain name for which the certificate was obtained; comma-separated if multiple domain names), `FERRON_ACME_CERT_PATH` (the path to the obtained TLS certificate), `FERRON_ACME_KEY_PATH` (the path to the obtained private key). This can be useful for running custom scripts after obtaining a TLS certificate, for example for reloading other software that uses the obtained TLS certificate. This directive is effective only when `auto_tls_save_data` directive is effective. Default: `auto_tls_post_obtain_command #null`
 
 **Configuration example:**
 
@@ -221,7 +221,7 @@ auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" a
 
 ### Google Cloud DNS (`googlecloud`)
 
-This DNS provider uses [Google Cloud DNS API](https://cloud.google.com/dns/docs/reference/v1) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [Google Cloud DNS API](https://cloud.google.com/dns/docs/reference/v1) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.8.0.
 
 #### Example directive specification
 
@@ -288,7 +288,7 @@ auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_n
 
 ### Spaceship (`spaceship`)
 
-This DNS provider uses [Spaceship API](https://docs.spaceship.dev/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [Spaceship API](https://docs.spaceship.dev/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.8.0.
 
 #### Example directive specification
 
