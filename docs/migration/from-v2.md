@@ -653,6 +653,66 @@ Ferron 2 used `duration 30000` syntax. Ferron 3 accepts bare duration strings:
 }
 ```
 
+### Mixing `condition` blocks with `match` blocks
+
+The most common pitfall is mixing the old `condition`/`if`/`if_not` syntax with the new `match`/`if`/`if_not` syntax. **These are not interchangeable** — they are two entirely different systems.
+
+In Ferron 2, `condition` blocks used subconditions like `is_equal`, `is_not_equal`, `is_regex`, `is_not_regex`, `is_remote_ip`, `is_forwarded_for`, and `is_language`. In Ferron 3, these are replaced by `match` blocks with expression operators (`==`, `!=`, `~`, `!~`, `in`).
+
+If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, if you use a Ferron 2 `if`/`if_not` referencing an old `condition` name while also defining a `match` block with a similar name, the two systems will not connect — the `if`/`if_not` will reference the old condition name, not the new `match` block.
+
+**Example of the pitfall** — this will **not** work:
+
+```ferron
+# INVALID: mixing condition (Ferron 2) with if (Ferron 3)
+condition "IS_API" {
+    is_regex "{path}" "^/api(/|$)"   # Ferron 2 syntax — ignored
+}
+
+example.com {
+    if "IS_API" {                     # References the old condition, not match
+        proxy http://localhost:3000
+    }
+}
+```
+
+**Correct approach** — use `match` throughout:
+
+```ferron
+# VALID: all Ferron 3
+match api_request {
+    request.uri.path ~ "/api"
+}
+
+example.com {
+    if api_request {
+        proxy http://localhost:3000
+    }
+}
+```
+
+### Placeholders in conditionals
+
+Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` etc. inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` etc. inside `match` blocks.
+
+**Example of the pitfall** — this will **not** work:
+
+```ferron
+# INVALID: match block using Ferron 2 placeholders
+match api_request {
+    request.uri.path ~ "{path}"   # "{path}" is a Ferron 2 placeholder — ignored
+}
+```
+
+**Correct approach** — use Ferron 3 variables:
+
+```ferron
+# VALID: match block using Ferron 3 variables
+match api_request {
+    request.uri.path ~ "/api"
+}
+```
+
 ## Final verification checklist
 
 Before switching to production:
