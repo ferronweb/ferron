@@ -306,7 +306,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         let mut compression_found = false;
                         for penc in PREFERRED_CONTENT_ENCODING {
                             if enc.contains(*penc) {
-                                let compression = Compression::from_header_value(*penc);
+                                let compression = Compression::from_header_value(penc);
                                 if let Some(compression) = compression {
                                     if precompressed {
                                         precompressed_exts
