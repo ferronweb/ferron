@@ -10,7 +10,7 @@ use async_compression::Level;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint as CoreStageConstraint;
-use ferron_http::util::parse_q_value_header::parse_q_value_header;
+use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
 use ferron_http::{HttpContext, HttpResponse};
 use futures_util::{StreamExt, TryStreamExt};
 use http::header;
@@ -101,6 +101,9 @@ static NON_COMPRESSIBLE_MIME_TYPES: LazyLock<BTreeSet<&'static str>> = LazyLock:
     ])
 });
 
+/// Preferred content encoding order.
+static PREFERRED_CONTENT_ENCODING: &[&str] = &["zstd", "br", "gzip", "deflate", "identity"];
+
 /// Compression algorithm selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Compression {
@@ -112,6 +115,7 @@ enum Compression {
 }
 
 impl Compression {
+    #[inline]
     fn header_value(self) -> Option<&'static str> {
         match self {
             Compression::Gzip => Some("gzip"),
@@ -122,6 +126,7 @@ impl Compression {
         }
     }
 
+    #[inline]
     fn etag_suffix(self) -> Option<&'static str> {
         match self {
             Compression::Gzip => Some("-dynamic-gzip"),
@@ -129,6 +134,18 @@ impl Compression {
             Compression::Deflate => Some("-dynamic-deflate"),
             Compression::Zstd => Some("-dynamic-zstd"),
             Compression::Identity => None,
+        }
+    }
+
+    #[inline]
+    fn from_header_value(value: &str) -> Option<Self> {
+        match value {
+            "br" => Some(Compression::Brotli),
+            "zstd" => Some(Compression::Zstd),
+            "gzip" => Some(Compression::Gzip),
+            "deflate" => Some(Compression::Deflate),
+            "identity" => Some(Compression::Identity),
+            _ => None,
         }
     }
 }
@@ -344,14 +361,13 @@ fn determine_compression(accept_encoding: Option<&str>) -> Compression {
         return Compression::Identity;
     };
 
-    for enc in parse_q_value_header(accept_encoding) {
-        match enc.as_str() {
-            "br" => return Compression::Brotli,
-            "zstd" => return Compression::Zstd,
-            "gzip" => return Compression::Gzip,
-            "deflate" => return Compression::Deflate,
-            "identity" => return Compression::Identity,
-            _ => continue,
+    for enc in parse_q_value_header_grouped(accept_encoding) {
+        for penc in PREFERRED_CONTENT_ENCODING {
+            if enc.contains(*penc) {
+                if let Some(compression) = Compression::from_header_value(penc) {
+                    return compression;
+                }
+            }
         }
     }
 

@@ -6,7 +6,7 @@ description: "Static file serving, directory listings, compression, caching head
 This page documents directives that configure static file serving, directory listings, compression, caching behavior, and custom error pages for requests resolved to the filesystem (via `root`).
 
 > [!info]
-> Static file serving is handled by the `http-static` module. For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing), [HTTP cache](/docs/v3/configuration/content/cache.md), [HTTP response control](/docs/v3/configuration/routing/response), and [URL rewriting](/docs/v3/configuration/routing/rewrite).
+> Static file serving is handled by the `http-static` module. For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing), [HTTP cache](/docs/v3/configuration/content/cache), [HTTP response control](/docs/v3/configuration/routing/response), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP compression](/docs/v3/configuration/content/compression).
 
 ## Directives
 
@@ -32,31 +32,6 @@ example.com {
 > - Only generates a listing if no `index` file was found for the directory.
 > - Dotfiles (names starting with `.`) are excluded from the listing, except `.maindesc` which is read as a description.
 > - A `.maindesc` file in the directory, if present, is displayed as a `<pre>` block below the file table.
-
-### Compression
-
-- `compressed [bool: boolean]` (`http-compression`)
-  - This directive specifies whether on-the-fly response body compression is enabled based on the `Accept-Encoding` request header. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `compressed true`
-- `precompressed [bool: boolean]` (`http-compression`)
-  - This directive specifies whether serving pre-compressed sidecar files (e.g. `style.css.gz`, `app.js.br`) instead of compressing on the fly is enabled. Default: `precompressed false`
-- `dynamic_compressed [bool: boolean]` (`http-compression`)
-  - This directive specifies whether on-the-fly compression is enabled for dynamic (non-static) response bodies, such as responses from reverse proxies or application handlers. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `dynamic_compressed false`
-
-**Configuration example:**
-
-```ferron
-example.com {
-    root /srv/www/example
-    compressed
-    precompressed
-}
-```
-
-> [!note]
->
-> - `compressed`: applied to files larger than 256 bytes with compressible extensions. A `Vary: Accept-Encoding` header is added when compression is possible.
-> - `precompressed`: when enabled, the server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference.
-> - `dynamic_compressed`: compression is only applied to responses with compressible MIME types. A suffix is appended to the ETag (e.g. `W/"abc123-dynamic-br"`) to distinguish compressed variants.
 
 ### Caching headers
 

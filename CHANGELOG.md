@@ -40,6 +40,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **`basic_auth_concurrency`** - global directive to limit concurrent, resource-heavy password verification tasks across all `basic_auth` blocks.
 - **Cache purging** - native `PURGE` HTTP method support for targeted cache invalidation via the `purge_method` and `purge_allowed_ips` subdirectives.
 - **`force_trace`** - global directive to force trace context creation for every request even when tracing is not explicitly enabled by a module, useful for debugging or log correlation.
+- **Optimal server-preferred compression algorithm** - now supports automatic detection of the optimal compression algorithm based on client preferences ([GitHub issue](https://github.com/ferronweb/ferron/issues/709)).
 
 ### Authentication
 

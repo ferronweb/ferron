@@ -8,7 +8,7 @@ use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::trace_context::current_event_trace_context;
-use ferron_http::util::parse_q_value_header::parse_q_value_header;
+use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use futures_util::TryStreamExt;
@@ -30,6 +30,7 @@ static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
 use crate::util::compression::{
     compress_streaming_brotli, compress_streaming_deflate, compress_streaming_gzip,
     compress_streaming_zstd, Compression, NON_COMPRESSIBLE_FILE_EXTENSIONS,
+    PREFERRED_CONTENT_ENCODING,
 };
 use crate::util::etag::{
     build_etag_header_map, construct_etag, extract_etag_inner, split_etag_request,
@@ -266,7 +267,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         // Determine compression method
         let mut used_compression = Compression::Identity;
-        let mut precompressed_ext: Option<&str> = None;
+        let mut precompressed_exts: Vec<&str> = Vec::new();
 
         if compression_possible {
             // Check for browsers with known compression bugs
@@ -301,15 +302,24 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     .get(header::ACCEPT_ENCODING)
                     .and_then(|h| h.to_str().ok())
                 {
-                    for enc in parse_q_value_header(accept_enc) {
-                        let compression = Compression::from_header_value(enc.as_str());
-                        if let Some(compression) = compression {
-                            if precompressed {
-                                precompressed_ext =
-                                    Some(compression.precompressed_ext().unwrap_or(""));
-                            } else {
-                                used_compression = compression;
+                    for enc in parse_q_value_header_grouped(accept_enc) {
+                        let mut compression_found = false;
+                        for penc in PREFERRED_CONTENT_ENCODING {
+                            if enc.contains(*penc) {
+                                let compression = Compression::from_header_value(*penc);
+                                if let Some(compression) = compression {
+                                    if precompressed {
+                                        precompressed_exts
+                                            .push(compression.precompressed_ext().unwrap_or(""));
+                                    } else {
+                                        used_compression = compression;
+                                        compression_found = true;
+                                        break;
+                                    }
+                                }
                             }
+                        }
+                        if !precompressed && compression_found {
                             break;
                         }
                     }
@@ -322,8 +332,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let mut file_length = ctx.metadata.len();
         let mut is_precompressed_file = false;
 
-        if precompressed && precompressed_ext.is_some() {
-            if let Some(ext) = precompressed_ext {
+        if precompressed {
+            for ext in precompressed_exts {
                 if !ext.is_empty() {
                     let mut precomp_path = ctx.file_path.clone();
                     // If the original file has an extension (e.g. file.txt) produce file.txt.br
@@ -342,10 +352,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             file_length = meta.len();
                             is_precompressed_file = true;
                             used_compression = Compression::from_precompressed_ext(ext);
+                            break;
                         }
                     }
                 } else {
                     used_compression = Compression::Identity;
+                    break;
                 }
             }
         }

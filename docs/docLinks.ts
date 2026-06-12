@@ -357,6 +357,12 @@ export default [
     label: "Static file serving",
   },
   {
+    href: "/docs/v3/configuration/content/compression",
+    target: "_self",
+    sub: true,
+    label: "HTTP compression",
+  },
+  {
     href: "/docs/v3/configuration/content/cache",
     target: "_self",
     sub: true,
