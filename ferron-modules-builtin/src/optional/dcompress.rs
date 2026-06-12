@@ -18,7 +18,7 @@ use hyper::{header, Request, Response};
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
-use ferron_common::util::{parse_q_value_header, ModuleCache};
+use ferron_common::util::{parse_q_value_header_grouped, ModuleCache};
 use ferron_common::{get_entries_for_validation, get_value};
 use tokio_util::io::{ReaderStream, StreamReader};
 
@@ -278,34 +278,28 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
       {
         // Get Accept-Encoding header to determine supported compression algorithms
         if let Some(accept_encoding) = &self.accept_encoding {
+          let preferred_accepted_encodings = vec!["zstd", "br", "gzip", "deflate", "identity"];
+
           // Parse Accept-Encoding header to select the best compression method
           // Check for supported compression algorithms in order of preference
-          for accepted_encoding in parse_q_value_header(accept_encoding) {
-            match &*accepted_encoding {
-              "br" => {
-                used_compression = Compression::Brotli;
+          for accepted_encoding in parse_q_value_header_grouped(accept_encoding) {
+            let mut compression_found = false;
+            for preferred_encoding in &preferred_accepted_encodings {
+              if accepted_encoding.contains(*preferred_encoding) {
+                used_compression = match *preferred_encoding {
+                  "zstd" => Compression::Zstd,
+                  "br" => Compression::Brotli,
+                  "gzip" => Compression::Gzip,
+                  "deflate" => Compression::Deflate,
+                  "identity" => Compression::Identity,
+                  _ => continue,
+                };
+                compression_found = true;
                 break;
               }
-              "zstd" => {
-                used_compression = Compression::Zstd;
-                break;
-              }
-              "gzip" => {
-                used_compression = Compression::Gzip;
-                break;
-              }
-              "deflate" => {
-                used_compression = Compression::Deflate;
-                break;
-              }
-              "identity" => {
-                // "identity" HTTP compression is basically no compression
-                used_compression = Compression::Identity;
-                break;
-              }
-              _ => {
-                // Ignore unknown compression methods
-              }
+            }
+            if compression_found {
+              break;
             }
           }
         }

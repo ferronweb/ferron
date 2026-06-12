@@ -29,17 +29,17 @@ This page describes KDL directives for serving static assets, tuning response ca
 - `etag [enable_etag: bool]` (_static_ module)
   - This directive specifies whether the ETag header is enabled. Default: `etag #true`
 - `compressed [enable_compression: bool]` (_static_ module)
-  - This directive specifies whether the HTTP compression for static files is enabled. Default: `compressed #true`
+  - This directive specifies whether the HTTP compression for static files is enabled. Preferred compression algorithms by the server are: `zstd`, `br`, `gzip`, `deflate`, `identity` (Ferron UNRELEASED or newer). Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]` (_static_ module)
   - This directive specifies whether the directory listings are enabled. Default: `directory_listing #false`
 - `precompressed [enable_precompression: bool]` (_static_ module)
-  - This directive specifies whether serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
+  - This directive specifies whether serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Preferred compression algorithms by the server are: `zstd`, `br`, `gzip`, `deflate`, `identity` (Ferron UNRELEASED or newer). Default: `precompressed #false`
 - `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron 2.1.0 or newer)
   - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
 - `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron 2.1.0 or newer)
   - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
 - `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
-  - This directive specifies whether the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
+  - This directive specifies whether the HTTP compression for dynamic content is enabled. Preferred compression algorithms by the server are: `zstd`, `br`, `gzip`, `deflate`, `identity` (Ferron UNRELEASED or newer). Default: `dynamic_compressed #false`
 
 **Configuration example:**
 

@@ -41,7 +41,7 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, 
 use ferron_common::util::FileStream;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStreamNoSpawn;
-use ferron_common::util::{anti_xss, parse_q_value_header, sizify, ModuleCache, TtlCache};
+use ferron_common::util::{anti_xss, parse_q_value_header_grouped, sizify, ModuleCache, TtlCache};
 use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
@@ -1391,54 +1391,39 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     .get(header::ACCEPT_ENCODING)
                     .map(|header_value| header_value.to_str().unwrap_or_default())
                   {
+                    let preferred_accepted_encodings = vec!["zstd", "br", "gzip", "deflate", "identity"];
+
                     // Parse Accept-Encoding header to select the best compression method
                     // Check for supported compression algorithms in order of preference
-                    for accepted_encoding in parse_q_value_header(accept_encoding) {
-                      match &*accepted_encoding {
-                        "br" => {
+                    for accepted_encoding in parse_q_value_header_grouped(accept_encoding) {
+                      let mut compression_found = false;
+                      for preferred_encoding in &preferred_accepted_encodings {
+                        if accepted_encoding.contains(*preferred_encoding) {
                           if enable_precompression {
-                            precompressed_extensions.push("br");
+                            precompressed_extensions.push(match *preferred_encoding {
+                              "zstd" => "zst",
+                              "br" => "br",
+                              "gzip" => "gz",
+                              "deflate" => "deflate",
+                              "identity" => "",
+                              ext => ext,
+                            });
                           } else {
-                            used_compression = Compression::Brotli;
+                            used_compression = match *preferred_encoding {
+                              "zstd" => Compression::Zstd,
+                              "br" => Compression::Brotli,
+                              "gzip" => Compression::Gzip,
+                              "deflate" => Compression::Deflate,
+                              "identity" => Compression::Identity,
+                              _ => continue,
+                            };
+                            compression_found = true;
                             break;
                           }
                         }
-                        "zstd" => {
-                          if enable_precompression {
-                            precompressed_extensions.push("zst");
-                          } else {
-                            used_compression = Compression::Zstd;
-                            break;
-                          }
-                        }
-                        "gzip" => {
-                          if enable_precompression {
-                            precompressed_extensions.push("gz");
-                          } else {
-                            used_compression = Compression::Gzip;
-                            break;
-                          }
-                        }
-                        "deflate" => {
-                          if enable_precompression {
-                            precompressed_extensions.push("deflate");
-                          } else {
-                            used_compression = Compression::Deflate;
-                            break;
-                          }
-                        }
-                        "identity" => {
-                          // "identity" HTTP compression is basically no compression
-                          if enable_precompression {
-                            precompressed_extensions.push(""); // No extension for "identity"
-                          } else {
-                            used_compression = Compression::Identity;
-                            break;
-                          }
-                        }
-                        _ => {
-                          // Ignore unknown compression methods
-                        }
+                      }
+                      if !enable_precompression && compression_found {
+                        break;
                       }
                     }
                   }

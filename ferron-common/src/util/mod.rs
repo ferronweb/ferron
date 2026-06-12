@@ -16,6 +16,7 @@ mod monoio_file_stream;
 mod monoio_file_stream_no_spawn;
 mod no_server_verifier;
 mod parse_q_value_header;
+mod parse_q_value_header_grouped;
 #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
 mod send_async_io;
 #[cfg(feature = "runtime-monoio")]
@@ -39,6 +40,7 @@ pub use monoio_file_stream::*;
 pub use monoio_file_stream_no_spawn::*;
 pub use no_server_verifier::*;
 pub use parse_q_value_header::*;
+pub use parse_q_value_header_grouped::*;
 #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
 pub use send_async_io::*;
 #[cfg(feature = "runtime-monoio")]
