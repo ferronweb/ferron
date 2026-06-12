@@ -95,10 +95,21 @@ impl TcpListenerHandle {
                     log_error!("Failed to clone listener");
                     return;
                 };
+
+                // On Windows, `from_std` would fail with cloned sockets due to IOCP not
+                // allowing multiple completion ports for the same socket, so `from_std_poll`
+                // is used instead (it uses \Device\Afd, used in vibeio async runtime)
+                #[cfg(not(windows))]
                 let Ok(listener) = vibeio::net::TcpListener::from_std(new_listener) else {
                     log_error!("Failed to convert listener to vibeio");
                     return;
                 };
+                #[cfg(windows)]
+                let Ok(listener) = vibeio::net::TcpListener::from_std_poll(new_listener) else {
+                    log_error!("Failed to convert listener to vibeio");
+                    return;
+                };
+
                 #[cfg(unix)]
                 let mut handle_exhaustion_backoff = Duration::from_millis(10);
                 loop {

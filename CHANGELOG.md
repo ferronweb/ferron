@@ -153,6 +153,8 @@ If you are upgrading to this beta version, you must update your configuration fi
 - Fixed a `500 Internal Server Error` when using the `auth_to { ... }` syntax inside forwarded authentication blocks.
 - Fixed a bug where case-insensitive HTTP cache control directives were not recognized correctly.
 - Fixed a bug where CONNECT requests with authority-form URIs were erroneously blocked by the URL canonicalizer.
+- Fixed a bug where HTTP connections couldn't be accepted on 32-bit Windows (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0213); [GitHub issue](https://github.com/ferronweb/ferron/issues/662)).
+- Fixed a bug where HTTP connections were accepted by only one OS thread on Windows.
 - Fixed a bug where HTTP timeout durations were not being respected correctly.
 - Fixed a bug where TLS certificate resolver from domain name level higher (non-wildcard) was incorrectly used for TLS handshakes if the one from the domain name level matching the requested SNI isn't present.
 - Fixed HTTP-to-HTTPS redirects to correctly target the original requested URL rather than internal rewritten URLs.
