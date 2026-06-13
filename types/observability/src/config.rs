@@ -22,7 +22,10 @@ pub fn transform_observability_alias(
         return Ok(None);
     }
 
-    let mut directives = HashMap::new();
+    let mut directives = directive
+        .children
+        .as_ref()
+        .map_or(HashMap::new(), |ch| ch.directives.as_ref().clone());
 
     match directive_name {
         "log" => {
