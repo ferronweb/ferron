@@ -75,7 +75,7 @@ Oh no... Your Ferron web server just crashed...
     eprintln!();
     eprintln!("If you believe it's a bug, please report it at https://github.com/ferronweb/ferron/issues/new");
     eprintln!(
-    "Also, consider sharing the backtrace above, and the version information (you can get it by running `ferron -V`)."
+    "Also, consider sharing the backtrace above, and the version information (you can get it by running `ferron version`)."
   )
 }
 
