@@ -170,7 +170,7 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 
 ## Trace ID in console and file logs
 
-Console and file loggers prefix log messages with `[trace=<span_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.
+Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.
 
 **Example log output:**
 

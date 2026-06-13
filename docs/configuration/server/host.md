@@ -194,7 +194,7 @@ example.com {
 > Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs, but this can expose backends to path interpretation vulnerabilities.
 
 > [!note] Note for "force_trace"
-> When `force_trace` is enabled, trace context is available in console and file log messages as a `[trace=<span_id>]` prefix, enabling grep-based filtering by trace ID. This does not require an OTLP backend to be configured.
+> When `force_trace` is enabled, trace context is available in console and file log messages as a `[trace=<trace_id>]` prefix, enabling grep-based filtering by trace ID. This does not require an OTLP backend to be configured.
 
 ### TLS
 

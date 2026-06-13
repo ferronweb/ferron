@@ -303,8 +303,8 @@ impl Module for LogFileObservabilityModule {
                                         let trace_id_part = le
                                             .trace_context
                                             .as_ref()
-                                            .and_then(|t| str::from_utf8(&t.span_id).ok())
-                                            .map(|sid| format!("[trace={}] ", sid))
+                                            .and_then(|t| str::from_utf8(&t.trace_id).ok())
+                                            .map(|tid| format!("[trace={}] ", tid))
                                             .unwrap_or_default();
                                         let line = format!("[{} {}] {}{}\n",
                                             chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),

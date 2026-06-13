@@ -143,8 +143,8 @@ impl Module for ConsoleObservabilityModule {
                                 let trace_id_part = le
                                     .trace_context
                                     .as_ref()
-                                    .and_then(|t| str::from_utf8(&t.span_id).ok())
-                                    .map(|sid| format!("[trace={}] ", sid))
+                                    .and_then(|t| str::from_utf8(&t.trace_id).ok())
+                                    .map(|tid| format!("[trace={}] ", tid))
                                     .unwrap_or_default();
                                 match le.level {
                                     ferron_observability::LogLevel::Error => {
