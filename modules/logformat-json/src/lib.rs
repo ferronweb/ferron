@@ -121,8 +121,17 @@ impl Provider<ApplicationLogFormatterContext<'static>>
 
         let mut json_map = serde_json::Map::new();
         json_map.insert(
-            "attributes".to_string(),
-            serde_json::Value::Object(json_attributes_map),
+            "timestamp".to_string(),
+            serde_json::json!(&std::time::UNIX_EPOCH.elapsed().map(|d| d.as_millis()).ok()),
+        );
+        json_map.insert(
+            "level".to_string(),
+            serde_json::json!(match ctx.log_event.level {
+                LogLevel::Error => "ERROR",
+                LogLevel::Warn => "WARN",
+                LogLevel::Info => "INFO",
+                LogLevel::Debug => "DEBUG",
+            }),
         );
         json_map.insert(
             "summary".to_string(),
@@ -133,13 +142,8 @@ impl Provider<ApplicationLogFormatterContext<'static>>
             serde_json::json!(&ctx.log_event.target),
         );
         json_map.insert(
-            "level".to_string(),
-            serde_json::json!(match ctx.log_event.level {
-                LogLevel::Error => "ERROR",
-                LogLevel::Warn => "WARN",
-                LogLevel::Info => "INFO",
-                LogLevel::Debug => "DEBUG",
-            }),
+            "attributes".to_string(),
+            serde_json::Value::Object(json_attributes_map),
         );
 
         if let Some(trace_context) = &ctx.log_event.trace_context {

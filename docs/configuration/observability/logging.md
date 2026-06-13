@@ -158,6 +158,7 @@ The `json` formatter produces structured JSON records:
 
 | Field | Description |
 |-------|-------------|
+| `timestamp` | The Unix timestamp in milliseconds when the log event occurred |
 | `summary` | The log message summary |
 | `level` | Log severity level (`ERROR`, `WARN`, `INFO`, `DEBUG`) |
 | `target` | The web server module target that emitted the log |
