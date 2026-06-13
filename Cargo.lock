@@ -1844,7 +1844,6 @@ name = "ferron-observability-logfile"
 version = "3.0.0-beta.1"
 dependencies = [
  "async-channel",
- "chrono",
  "ferron-core",
  "ferron-observability",
  "tempfile",
