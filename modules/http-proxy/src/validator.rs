@@ -297,56 +297,53 @@ fn validate_active_check_directives(
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(active_block) = block
-        .directives
-        .get("active_check")
-        .and_then(|d| d.first())
-        .and_then(|d| d.children.as_ref())
-    {
+    if let Some(ac_entry) = block.directives.get("active_check").and_then(|d| d.first()) {
         parent_used.insert("active_check".to_string());
-        let mut sub = std::collections::HashSet::new();
+        if let Some(active_block) = ac_entry.children.as_ref() {
+            let mut sub = std::collections::HashSet::new();
 
-        ferron_core::validate_nested!(active_block, used(sub), uri, args(1) => [ServerConfigurationValue::String(_, _)]);
-        ferron_core::validate_nested!(active_block, used(sub), method, args(1) => [ServerConfigurationValue::String(_, _)]);
-        if active_block.directives.contains_key("interval") {
-            sub.insert("interval".to_string());
-        }
-        validate_duration(active_block, "interval")?;
-        if active_block.directives.contains_key("timeout") {
-            sub.insert("timeout".to_string());
-        }
-        validate_duration(active_block, "timeout")?;
-        ferron_core::validate_nested!(active_block, used(sub), expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
-        if active_block
-            .directives
-            .contains_key("response_time_threshold")
-        {
-            sub.insert("response_time_threshold".to_string());
-        }
-        validate_duration(active_block, "response_time_threshold")?;
-        ferron_core::validate_nested!(active_block, used(sub), body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
-        if active_block.directives.contains_key("consecutive_fails") {
-            sub.insert("consecutive_fails".to_string());
-        }
-        validate_number(active_block, "consecutive_fails", 1)?;
-        if active_block.directives.contains_key("consecutive_passes") {
-            sub.insert("consecutive_passes".to_string());
-        }
-        validate_number(active_block, "consecutive_passes", 1)?;
-        ferron_core::validate_nested!(active_block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-        if block_flag(active_block, "no_verification") == Some(true) {
-            ctx.add_best_practice_violation(
+            ferron_core::validate_nested!(active_block, used(sub), uri, args(1) => [ServerConfigurationValue::String(_, _)]);
+            ferron_core::validate_nested!(active_block, used(sub), method, args(1) => [ServerConfigurationValue::String(_, _)]);
+            if active_block.directives.contains_key("interval") {
+                sub.insert("interval".to_string());
+            }
+            validate_duration(active_block, "interval")?;
+            if active_block.directives.contains_key("timeout") {
+                sub.insert("timeout".to_string());
+            }
+            validate_duration(active_block, "timeout")?;
+            ferron_core::validate_nested!(active_block, used(sub), expect_status, args(1) => [ServerConfigurationValue::String(_, _)]);
+            if active_block
+                .directives
+                .contains_key("response_time_threshold")
+            {
+                sub.insert("response_time_threshold".to_string());
+            }
+            validate_duration(active_block, "response_time_threshold")?;
+            ferron_core::validate_nested!(active_block, used(sub), body_match, args(1) => [ServerConfigurationValue::String(_, _)]);
+            if active_block.directives.contains_key("consecutive_fails") {
+                sub.insert("consecutive_fails".to_string());
+            }
+            validate_number(active_block, "consecutive_fails", 1)?;
+            if active_block.directives.contains_key("consecutive_passes") {
+                sub.insert("consecutive_passes".to_string());
+            }
+            validate_number(active_block, "consecutive_passes", 1)?;
+            ferron_core::validate_nested!(active_block, used(sub), no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            if block_flag(active_block, "no_verification") == Some(true) {
+                ctx.add_best_practice_violation(
                 "`active_check.no_verification` disables TLS certificate verification for health checks; keep verification enabled unless probes target a strictly internal endpoint",
                 first_entry_span(active_block, "no_verification"),
             );
-        }
+            }
 
-        ferron_core::check_unused_subdirectives!(
-            active_block,
-            sub,
-            &mut ctx.diagnostics,
-            ctx.scope.clone()
-        );
+            ferron_core::check_unused_subdirectives!(
+                active_block,
+                sub,
+                &mut ctx.diagnostics,
+                ctx.scope.clone()
+            );
+        }
     }
 
     Ok(())
@@ -357,38 +354,39 @@ fn validate_circuit_breaker_directives(
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(cb_block) = block
+    if let Some(cb_entry) = block
         .directives
         .get("circuit_breaker")
         .and_then(|d| d.first())
-        .and_then(|d| d.children.as_ref())
     {
         parent_used.insert("circuit_breaker".to_string());
-        let mut sub = std::collections::HashSet::new();
+        if let Some(cb_block) = cb_entry.children.as_ref() {
+            let mut sub = std::collections::HashSet::new();
 
-        if cb_block.directives.contains_key("max_fails") {
-            sub.insert("max_fails".to_string());
-        }
-        validate_number(cb_block, "max_fails", 1)?;
-        if cb_block.directives.contains_key("window") {
-            sub.insert("window".to_string());
-        }
-        validate_duration(cb_block, "window")?;
-        if cb_block.directives.contains_key("open_duration") {
-            sub.insert("open_duration".to_string());
-        }
-        validate_duration(cb_block, "open_duration")?;
-        if cb_block.directives.contains_key("consecutive_passes") {
-            sub.insert("consecutive_passes".to_string());
-        }
-        validate_number(cb_block, "consecutive_passes", 1)?;
+            if cb_block.directives.contains_key("max_fails") {
+                sub.insert("max_fails".to_string());
+            }
+            validate_number(cb_block, "max_fails", 1)?;
+            if cb_block.directives.contains_key("window") {
+                sub.insert("window".to_string());
+            }
+            validate_duration(cb_block, "window")?;
+            if cb_block.directives.contains_key("open_duration") {
+                sub.insert("open_duration".to_string());
+            }
+            validate_duration(cb_block, "open_duration")?;
+            if cb_block.directives.contains_key("consecutive_passes") {
+                sub.insert("consecutive_passes".to_string());
+            }
+            validate_number(cb_block, "consecutive_passes", 1)?;
 
-        ferron_core::check_unused_subdirectives!(
-            cb_block,
-            sub,
-            &mut ctx.diagnostics,
-            ctx.scope.clone()
-        );
+            ferron_core::check_unused_subdirectives!(
+                cb_block,
+                sub,
+                &mut ctx.diagnostics,
+                ctx.scope.clone()
+            );
+        }
     }
 
     Ok(())
