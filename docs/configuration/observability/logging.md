@@ -152,8 +152,8 @@ The `text` formatter produces human-readable lines:
 The `json` formatter produces structured JSON records:
 
 ```json
-{"summary":"Request processed successfully","level":"INFO","target":"ferron::http","attributes":{},"trace_context":null}
-{"summary":"Upstream connection refused","level":"ERROR","target":"ferron::proxy","attributes":{"upstream":"http://10.0.0.1:3000"},"trace_context":{"trace_id":"abc123def456","span_id":"789012345678","sampled":true}}
+{"timestamp":1781327817042,"summary":"Request processed successfully","level":"INFO","target":"ferron::http","attributes":{},"trace_context":null}
+{"timestamp":1781327818364,"summary":"Upstream connection refused","level":"ERROR","target":"ferron::proxy","attributes":{"upstream":"http://10.0.0.1:3000"},"trace_context":{"trace_id":"abc123def456","span_id":"789012345678","sampled":true}}
 ```
 
 | Field | Description |
