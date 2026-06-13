@@ -16,6 +16,13 @@ impl ConfigurationValidator for LogFileObservabilityConfigurationValidator {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Log format
         validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
+        validate_scoped_block_flat(
+            config,
+            validator_ctx,
+            "error_format",
+            "logformat_application",
+            Some("text"),
+        )?;
 
         // Access log
         validate_directive!(config, validator_ctx.used_directives, access_log, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});

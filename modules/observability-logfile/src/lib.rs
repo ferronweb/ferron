@@ -11,7 +11,8 @@ use ferron_core::{
     registry::Registry, Module,
 };
 use ferron_observability::{
-    AccessEvent, Event, EventSink, LogFormatterContext, LogLevel, ObservabilityContext,
+    AccessEvent, ApplicationLogFormatterContext, Event, EventSink, LogEvent, LogFormatterContext,
+    ObservabilityContext,
 };
 
 use crate::rotate::{rotate_log_file, RotationConfig};
@@ -299,21 +300,10 @@ impl Module for LogFileObservabilityModule {
                                             .as_string_with_interpolations(&HashMap::new()));
 
                                     if let Some(log_path) = log_path {
-                                        let message = le.message.to_string().replace("\n", "\n  ");
-                                        let trace_id_part = le
-                                            .trace_context
-                                            .as_ref()
-                                            .and_then(|t| str::from_utf8(&t.trace_id).ok())
-                                            .map(|tid| format!("[trace={}] ", tid))
-                                            .unwrap_or_default();
-                                        let line = format!("[{} {}] {}{}\n",
-                                            chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                                            match le.level {
-                                            LogLevel::Error => "ERROR",
-                                            LogLevel::Warn => "WARN",
-                                            LogLevel::Info => "INFO",
-                                            LogLevel::Debug => "DEBUG",
-                                        },  trace_id_part, message.trim());
+                                        if let Some(message) =
+                                          format_log_event(le, &msg.log_config, &registry) {
+                                        let mut message = message.to_string().replace("\n", "\n  ");
+                                        message.push('\n');
 
                                         // Read rotation config for error log
                                         let rotation = RotationConfig::read_from_config(
@@ -323,8 +313,9 @@ impl Module for LogFileObservabilityModule {
                                         );
 
                                         let _ = file_writer
-                                            .write_to_file(&log_path, line.as_bytes(), rotation)
+                                            .write_to_file(&log_path, message.as_bytes(), rotation)
                                             .await;
+                                        }
                                     }
                                 }
                                 _ => {
@@ -373,6 +364,43 @@ fn format_access_event(
         if let Some(formatter) = formatter_registry.get(formatter_name) {
             let mut ctx = LogFormatterContext {
                 access_event: access_event.clone(),
+                log_config: log_config.clone(),
+                output: None,
+            };
+            if formatter.execute(&mut ctx).is_ok() {
+                if let Some(output) = ctx.output {
+                    return Some(output);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn format_log_event(
+    log_event: &LogEvent,
+    log_config: &Arc<ServerConfigurationBlock>,
+    registry: &Registry,
+) -> Option<String> {
+    let formatter_name = log_config
+        .get_value("error_format")
+        .and_then(|v| v.as_str())
+        .unwrap_or("text");
+
+    // Try to resolve the formatter from the registry
+    if let Some(formatter_registry) =
+        registry.get_provider_registry::<ApplicationLogFormatterContext<'static>>()
+    {
+        if let Some(formatter) = formatter_registry.get(formatter_name) {
+            // SAFETY: We know that the lifetime of the log event is longer
+            //         than the lifetime of the resolver. but "'static"
+            //         is the only lifetime we can use here. This
+            //         constraint is enforced by the provider registry.
+            let log_event =
+                unsafe { std::mem::transmute::<&LogEvent, &'static LogEvent>(log_event) };
+            let mut ctx = ApplicationLogFormatterContext {
+                log_event,
                 log_config: log_config.clone(),
                 output: None,
             };

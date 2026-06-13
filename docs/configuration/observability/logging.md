@@ -129,6 +129,44 @@ The `access_pattern` directive supports the following tokens:
 
 Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
 
+### Application log formats
+
+The `error_format` directive (in the `observability { provider file ... }` block or the `error_log` shorthand block) controls how application log messages are formatted. It supports the same formatters as access logs: `text` (default) and `json`.
+
+```ferron
+example.com {
+    error_log /var/log/ferron/error.log {
+        error_format json
+    }
+}
+```
+
+The `text` formatter produces human-readable lines:
+
+```text
+[2026-04-05 14:32:01.123 INFO] Request processed successfully
+[2026-04-05 14:32:01.124 DEBUG] Cache miss for key: user:123
+[2026-04-05 14:32:01.125 ERROR] [trace=abc123def456] Upstream connection refused
+```
+
+The `json` formatter produces structured JSON records:
+
+```json
+{"summary":"Request processed successfully","level":"INFO","target":"ferron::http","attributes":{},"trace_context":null}
+{"summary":"Upstream connection refused","level":"ERROR","target":"ferron::proxy","attributes":{"upstream":"http://10.0.0.1:3000"},"trace_context":{"trace_id":"abc123def456","span_id":"789012345678","sampled":true}}
+```
+
+| Field | Description |
+|-------|-------------|
+| `summary` | The log message summary |
+| `level` | Log severity level (`ERROR`, `WARN`, `INFO`, `DEBUG`) |
+| `target` | The web server module target that emitted the log |
+| `attributes` | Typed key-value pairs attached to the log event |
+| `trace_context` | W3C trace context (`trace_id`, `span_id`, `sampled`), or `null` |
+
+> [!note]
+> The `error_format` directive is available for the `file` observability provider and the `error_log` shorthand. Console logs always use their native formatting based on the log level.
+
 ### Log levels
 
 The `log_level` directive (in the `observability` block or via `console_log`/`error_log` aliases) controls the minimum severity level for application logs:
@@ -157,8 +195,8 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 
 | Sink | Formatting directive | Configuration |
 |------|---------------------|---------------|
-| File (`provider file`) | `format json` or `format text` | `observability { provider file }` |
-| Console (`provider console`) | `format json` or `format text` | `observability { provider console }` |
+| File (`provider file`) | `format` (access) / `error_format` (application) | `observability { provider file }` |
+| Console (`provider console`) | `format` (access only) | `observability { provider console }` |
 | OTLP (`provider otlp`) | `log_style modern` or `log_style legacy` (with `format json` or `format text`) | `observability { provider otlp }` |
 | Prometheus | N/A (metrics only) | `observability { provider prometheus }` |
 

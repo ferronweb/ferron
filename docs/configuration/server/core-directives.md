@@ -185,11 +185,12 @@ The bundled `console` provider (`observability-consolelog`) takes no additional 
 
 The bundled `file` provider (`observability-logfile`) writes observability events to specified log files.
 
-| Addtional subdirective | Arguments | Description | Default |
+| Additional subdirective | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `access_log` | `<string>` | File path for access log output. | none |
 | `error_log` | `<string>` | File path for error log output. | none |
-| `format` | `<string>` | Optional log formatter name. | none (default formatting) |
+| `format` | `<string>` | Access log formatter name (`text` or `json`). | `text` |
+| `error_format` | `<string>` | Application log formatter name (`text` or `json`). | `text` |
 | `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled |
 | `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep. | none (no limit) |
 | `error_log_rotate_size` | `<number>` | Maximum error log file size in bytes before rotation. | disabled |
@@ -205,6 +206,7 @@ example.com {
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
         format text
+        error_format json
     }
 }
 ```
@@ -292,6 +294,11 @@ example.com {
     error_log /var/log/error.log {
         error_log_rotate_size 52428800
         error_log_rotate_keep 3
+    }
+
+    # Enable with JSON application log formatting
+    error_log /var/log/error.log {
+        error_format json
     }
 
     # Disable error logging

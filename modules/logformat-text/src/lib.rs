@@ -9,7 +9,9 @@ use ferron_core::{
     providers::Provider,
     validate_directive,
 };
-use ferron_observability::{AccessVisitor, LogFormatterContext};
+use ferron_observability::{
+    AccessVisitor, ApplicationLogFormatterContext, LogFormatterContext, LogLevel,
+};
 use once_cell::sync::Lazy;
 
 // Default Combined Log Format pattern
@@ -290,6 +292,42 @@ impl Provider<LogFormatterContext> for TextFormatObservabilityProvider {
     }
 }
 
+struct TextFormatApplicationObservabilityProvider;
+
+impl Provider<ApplicationLogFormatterContext<'_>> for TextFormatApplicationObservabilityProvider {
+    fn name(&self) -> &str {
+        "text"
+    }
+
+    fn execute(
+        &self,
+        ctx: &mut ApplicationLogFormatterContext<'_>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let trace_id_part = ctx
+            .log_event
+            .trace_context
+            .as_ref()
+            .and_then(|t| str::from_utf8(&t.trace_id).ok())
+            .map(|tid| format!("[trace={}] ", tid))
+            .unwrap_or_default();
+        let line = format!(
+            "[{} {}] {}{}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+            match ctx.log_event.level {
+                LogLevel::Error => "ERROR",
+                LogLevel::Warn => "WARN",
+                LogLevel::Info => "INFO",
+                LogLevel::Debug => "DEBUG",
+            },
+            trace_id_part,
+            ctx.log_event.message.trim()
+        );
+        ctx.output = Some(line);
+
+        Ok(())
+    }
+}
+
 pub struct TextFormatObservabilityModuleLoader;
 
 impl ModuleLoader for TextFormatObservabilityModuleLoader {
@@ -299,6 +337,9 @@ impl ModuleLoader for TextFormatObservabilityModuleLoader {
     ) -> ferron_core::registry::RegistryBuilder {
         registry
             .with_provider::<LogFormatterContext, _>(|| Arc::new(TextFormatObservabilityProvider))
+            .with_provider::<ApplicationLogFormatterContext<'static>, _>(|| {
+                Arc::new(TextFormatApplicationObservabilityProvider)
+            })
     }
 
     fn register_scoped_configuration_validators(
@@ -311,6 +352,10 @@ impl ModuleLoader for TextFormatObservabilityModuleLoader {
         registry.insert(
             config_validator_scoped_key!("logformat", "text"),
             Box::new(TextFormatLogFormatConfigurationValidator),
+        );
+        registry.insert(
+            config_validator_scoped_key!("logformat_application", "text"),
+            Box::new(TextFormatApplicationLogFormatConfigurationValidator),
         );
     }
 }
@@ -327,6 +372,18 @@ impl ConfigurationValidator for TextFormatLogFormatConfigurationValidator {
         validate_directive!(config, validator_ctx.used_directives, access_pattern, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, timestamp_format, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
+        Ok(())
+    }
+}
+
+struct TextFormatApplicationLogFormatConfigurationValidator;
+
+impl ConfigurationValidator for TextFormatApplicationLogFormatConfigurationValidator {
+    fn validate_block(
+        &self,
+        _config: &ferron_core::config::ServerConfigurationBlock,
+        _validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }

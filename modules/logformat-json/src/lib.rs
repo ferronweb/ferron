@@ -7,7 +7,9 @@ use ferron_core::{
     providers::Provider,
     validate_directive,
 };
-use ferron_observability::{AccessVisitor, LogFormatterContext};
+use ferron_observability::{
+    AccessVisitor, ApplicationLogFormatterContext, LogAttributeValue, LogFormatterContext, LogLevel,
+};
 use serde_json::{Map, Value};
 
 struct JsonVisitor {
@@ -90,6 +92,75 @@ impl Provider<LogFormatterContext> for JsonFormatObservabilityProvider {
     }
 }
 
+struct JsonApplicationFormatObservabilityProvider;
+
+impl Provider<ApplicationLogFormatterContext<'static>>
+    for JsonApplicationFormatObservabilityProvider
+{
+    fn name(&self) -> &str {
+        "json"
+    }
+
+    fn execute(
+        &self,
+        ctx: &mut ApplicationLogFormatterContext<'static>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut json_attributes_map = serde_json::Map::new();
+        ctx.log_event.attributes.iter().for_each(|(k, v)| {
+            json_attributes_map.insert(
+                k.to_string(),
+                match v {
+                    LogAttributeValue::Bool(b) => serde_json::json!(b),
+                    LogAttributeValue::String(s) => serde_json::json!(s),
+                    LogAttributeValue::StaticStr(s) => serde_json::json!(s),
+                    LogAttributeValue::I64(i) => serde_json::json!(i),
+                    LogAttributeValue::F64(f) => serde_json::json!(f),
+                },
+            );
+        });
+
+        let mut json_map = serde_json::Map::new();
+        json_map.insert(
+            "attributes".to_string(),
+            serde_json::Value::Object(json_attributes_map),
+        );
+        json_map.insert(
+            "summary".to_string(),
+            serde_json::json!(&ctx.log_event.summary),
+        );
+        json_map.insert(
+            "target".to_string(),
+            serde_json::json!(&ctx.log_event.target),
+        );
+        json_map.insert(
+            "level".to_string(),
+            serde_json::json!(match ctx.log_event.level {
+                LogLevel::Error => "ERROR",
+                LogLevel::Warn => "WARN",
+                LogLevel::Info => "INFO",
+                LogLevel::Debug => "DEBUG",
+            }),
+        );
+
+        if let Some(trace_context) = &ctx.log_event.trace_context {
+            json_map.insert(
+                "trace_context".to_string(),
+                serde_json::json!({
+                    "trace_id": std::str::from_utf8(&trace_context.trace_id).ok(),
+                    "span_id": std::str::from_utf8(&trace_context.span_id).ok(),
+                    "sampled": trace_context.sampled
+                }),
+            );
+        } else {
+            json_map.insert("trace_context".to_string(), serde_json::Value::Null);
+        }
+
+        ctx.output = Some(serde_json::Value::Object(json_map).to_string());
+
+        Ok(())
+    }
+}
+
 pub struct JsonFormatObservabilityModuleLoader;
 
 impl ModuleLoader for JsonFormatObservabilityModuleLoader {
@@ -99,6 +170,9 @@ impl ModuleLoader for JsonFormatObservabilityModuleLoader {
     ) -> ferron_core::registry::RegistryBuilder {
         registry
             .with_provider::<LogFormatterContext, _>(|| Arc::new(JsonFormatObservabilityProvider))
+            .with_provider::<ApplicationLogFormatterContext<'static>, _>(|| {
+                Arc::new(JsonApplicationFormatObservabilityProvider)
+            })
     }
 
     fn register_scoped_configuration_validators(
@@ -111,6 +185,10 @@ impl ModuleLoader for JsonFormatObservabilityModuleLoader {
         registry.insert(
             config_validator_scoped_key!("logformat", "json"),
             Box::new(JsonFormatLogFormatConfigurationValidator),
+        );
+        registry.insert(
+            config_validator_scoped_key!("logformat_application", "json"),
+            Box::new(JsonFormatLogApplicationFormatConfigurationValidator),
         );
     }
 }
@@ -125,6 +203,18 @@ impl ConfigurationValidator for JsonFormatLogFormatConfigurationValidator {
     ) -> Result<(), Box<dyn std::error::Error>> {
         validate_directive!(config, validator_ctx.used_directives, fields, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
+        Ok(())
+    }
+}
+
+struct JsonFormatLogApplicationFormatConfigurationValidator;
+
+impl ConfigurationValidator for JsonFormatLogApplicationFormatConfigurationValidator {
+    fn validate_block(
+        &self,
+        _config: &ferron_core::config::ServerConfigurationBlock,
+        _validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }
