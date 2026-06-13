@@ -16,9 +16,11 @@ Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) and W3C Bag
 
 ### Incoming trace context
 
-Incoming `traceparent` and `tracestate` headers are parsed and used as the parent for Ferron's internal `ferron.request` span. Ferron creates a local request span with the same trace ID and a new span ID, then reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can generate a new one (default behavior).
+By default, Ferron discards any incoming `traceparent`, `tracestate`, and `baggage` headers and generates a new trace ID for each request. This ensures that each request within Ferron's boundary starts with a fresh, server-generated trace identity.
 
-The incoming `baggage` header is parsed and attached to the local request span context. Baggage is then propagated to upstream services and included in OTLP span exports, allowing application-defined key-value pairs to flow through the entire request path.
+When the `trust_request` directive is enabled in the `trace` block, incoming `traceparent` and `tracestate` headers are parsed and used as the parent for Ferron's internal `ferron.request` span. In this mode, Ferron creates a local request span with the same trace ID and a new span ID, then reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can still generate a new one when `generate` is enabled.
+
+When `trust_request` is enabled, the incoming `baggage` header is also parsed and attached to the local request span context. Baggage is then propagated to upstream services and included in OTLP span exports, allowing application-defined key-value pairs to flow through the entire request path.
 
 ### Trace configuration
 
@@ -27,7 +29,8 @@ These directives are configured within the `http` block.
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
 | `trace` | none | Opens a block for trace-related configuration. | - |
-| `generate` | boolean | Specifies whether a new trace context should be generated if the incoming request lacks one. | `true` |
+| `generate` | boolean | Specifies whether a new trace context should be generated if no context exists (either from trust or generation). | `true` |
+| `trust_request` | boolean | When enabled, incoming `traceparent`, `tracestate`, and `baggage` headers are parsed and used as the parent trace context. When disabled (default), incoming trace headers are discarded and a new trace ID is generated. | `false` |
 
 ### W3C Baggage
 
@@ -35,9 +38,9 @@ Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context h
 
 #### How baggage propagation works
 
-1. Ferron reads the incoming `baggage` header from the request.
-2. The baggage string is stored in the request's trace context.
-3. When forwarding the request to an upstream service, the `baggage` header is included alongside `traceparent` and `tracestate`.
+1. By default, incoming `baggage` headers are discarded (unless `trust_request` is enabled). When `trust_request` is enabled, Ferron reads the incoming `baggage` header from the request.
+2. The baggage string (when available) is stored in the request's trace context.
+3. When forwarding the request to an upstream service, the `baggage` header is included alongside `traceparent` and `tracestate` only if the trace context carries non-empty baggage values.
 4. When exporting via OTLP, baggage is parsed and attached to the OpenTelemetry span context as OpenTelemetry baggage.
 
 #### Baggage header format
@@ -77,9 +80,11 @@ In addition to propagating baggage to upstream services, you can promote specifi
 > [!info]
 > See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for full documentation of the `baggage` directive.
 
-#### Example
+#### Examples
 
-A client sends:
+**With default settings (`trust_request false`):**
+
+A client sends trace headers, but Ferron discards them and generates a new trace ID:
 
 ```http
 GET /api/data HTTP/1.1
@@ -88,17 +93,30 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 baggage: userId=alice,tenantId=acme
 ```
 
-Ferron stores the baggage in the request trace context and propagates both `traceparent` and `baggage` to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
+The incoming `traceparent` and `baggage` are ignored. Ferron generates a fresh trace ID and new span ID. No baggage is propagated upstream unless a module explicitly adds it.
+
+**With `trust_request true`:**
+
+```ferron
+http {
+    trace {
+        generate true
+        trust_request true
+    }
+}
+```
+
+When `trust_request` is enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers, stores the baggage in the request trace context, and propagates them to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
 
 > [!note]
 >
-> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via `http { trace { generate } }` and whether a trace sink (or `force_trace`) is configured.
+> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via the `trace` block (directives `generate` and `trust_request`) and whether a trace sink (or `force_trace`) is configured.
 > - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`), making them accessible to application code without any special header parsing.
 
 > [!note]
 >
 > - Generating and propagating trace headers carries unique identifiers — ensure this complies with your privacy requirements.
-> - Baggage values are propagated as-is; Ferron does not validate or modify them by default.
+> - By default, incoming baggage values are discarded. When `trust_request` is enabled, baggage values are propagated as-is and Ferron does not validate or modify them.
 > - Baggage items are attached to OpenTelemetry spans when using the OTLP provider — high-cardinality baggage keys may increase span storage costs.
 
 ### Trace ID response header

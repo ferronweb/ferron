@@ -79,6 +79,11 @@ pub fn format_traceparent(tc: &TraceContext) -> String {
 
 /// Inject trace headers into an http HeaderMap
 pub fn inject_trace_headers(headers: &mut HeaderMap, tc: &TraceContext) {
+    // Sanitize existing traceparent/tracestate/baggage headers before injecting new ones.
+    headers.remove("traceparent");
+    headers.remove("tracestate");
+    headers.remove("baggage");
+
     let tp = format_traceparent(tc);
     if let Ok(v) = HeaderValue::from_str(&tp) {
         headers.insert("traceparent", v);

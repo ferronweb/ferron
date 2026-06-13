@@ -384,7 +384,7 @@ Trace context injection happens after all `request_header` transformations are a
 - The injected headers cannot be removed by `headers_to_remove` since injection occurs last.
 
 > [!info]
-> Trace context is created when an incoming `traceparent` header is present, or when `http { trace { generate true } }` (the default) is active and trace sinks are configured (or `force_trace` is enabled). See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
+> By default, incoming `traceparent` headers are discarded. Trace context is created when `http { trace { generate true } }` (the default) is active and trace sinks are configured (or `force_trace` is enabled). To trust incoming trace context, enable `trust_request true` inside the `trace` block. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
 
 ## Connection pooling
 

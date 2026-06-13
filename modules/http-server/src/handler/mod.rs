@@ -201,9 +201,13 @@ pub async fn request_handler(
         });
 
         let generate_enabled = trace_config_node
-            .and_then(|c| c.get_value("generate"))
-            .and_then(|v| v.as_boolean())
-            .unwrap_or(true);
+            .and_then(|c| c.directives.get("generate"))
+            .and_then(|e| e.first())
+            .is_none_or(|e| e.get_flag());
+        let trust_request_enabled = trace_config_node
+            .and_then(|c| c.directives.get("trust_request"))
+            .and_then(|e| e.first())
+            .is_some_and(|e| e.get_flag());
 
         // Read trace_sampling config and derive default_sampled
         let default_sampled = global_config
@@ -225,7 +229,12 @@ pub async fn request_handler(
             })
             .unwrap_or(true);
 
-        resolve_request_trace_context(&request, generate_enabled, default_sampled)
+        resolve_request_trace_context(
+            &request,
+            generate_enabled,
+            default_sampled,
+            trust_request_enabled,
+        )
     } else {
         (None, None)
     };

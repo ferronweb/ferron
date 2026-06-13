@@ -276,42 +276,45 @@ pub fn resolve_request_trace_context(
     request: &HttpRequest,
     generate_enabled: bool,
     default_sampled: bool,
+    trust_request: bool,
 ) -> (Option<trace_context::TraceContext>, Option<Parent>) {
-    let incoming = request
-        .headers()
-        .get("traceparent")
-        .and_then(|tp_val| tp_val.to_str().ok())
-        .and_then(trace_context::parse_traceparent)
-        .map(|mut trace_context| {
-            trace_context.tracestate = request
+    if trust_request {
+        let incoming = request
+            .headers()
+            .get("traceparent")
+            .and_then(|tp_val| tp_val.to_str().ok())
+            .and_then(trace_context::parse_traceparent)
+            .map(|mut trace_context| {
+                trace_context.tracestate = request
+                    .headers()
+                    .get("tracestate")
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned);
+                trace_context
+            });
+
+        if let Some(mut context) = incoming {
+            context.baggage = request
                 .headers()
-                .get("tracestate")
+                .get("baggage")
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_owned);
-            trace_context
-        });
 
-    if let Some(mut context) = incoming {
-        context.baggage = request
-            .headers()
-            .get("baggage")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_owned);
-
-        let parent_trace_id = context.trace_id.clone();
-        let parent_span_id = context.span_id;
-        let parent_sampled = context.sampled;
-        let baggage = context.baggage.clone();
-        context.span_id = trace_context::generate_span_id();
-        return (
-            Some(context),
-            Some(Parent::ById {
-                trace_id: parent_trace_id,
-                span_id: parent_span_id,
-                sampled: Some(parent_sampled),
-                baggage,
-            }),
-        );
+            let parent_trace_id = context.trace_id.clone();
+            let parent_span_id = context.span_id;
+            let parent_sampled = context.sampled;
+            let baggage = context.baggage.clone();
+            context.span_id = trace_context::generate_span_id();
+            return (
+                Some(context),
+                Some(Parent::ById {
+                    trace_id: parent_trace_id,
+                    span_id: parent_span_id,
+                    sampled: Some(parent_sampled),
+                    baggage,
+                }),
+            );
+        }
     }
 
     if generate_enabled {

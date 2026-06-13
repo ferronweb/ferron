@@ -106,6 +106,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, used(sub), trace, {
                 let mut trace_sub = std::collections::HashSet::new();
                 validate_nested!(trace, used(trace_sub), generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, used(trace_sub), trust_request, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 check_unused_subdirectives!(
                     trace,
                     trace_sub,

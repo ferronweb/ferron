@@ -12,6 +12,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **OTLP verification** - `no_verify` has been renamed to `no_verification` and now operates strictly as a configuration flag.
 - **OTLP defaults** - OTLP sink now uses `log_style modern` default, which may break existing configurations with custom OTLP log formats.
 - **Proxy configuration** - syntax for passive/active health checks, load balancing algorithms, and connection retries has been unified into a cleaner, more consistent format.
+- **Incoming trace context discarded by default** - Ferron no longer trusts incoming `traceparent`, `tracestate`, or `baggage` headers unless `trust_request true` is explicitly set in the `trace` block. Previously, incoming trace context was always parsed and used as the parent span. To restore the old behavior, add `trust_request true` to your `http { trace { ... } }` block.
 
 ### Added
 
@@ -41,6 +42,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **`basic_auth_concurrency`** - global directive to limit concurrent, resource-heavy password verification tasks across all `basic_auth` blocks.
 - **Cache purging** - native `PURGE` HTTP method support for targeted cache invalidation via the `purge_method` and `purge_allowed_ips` subdirectives.
 - **`force_trace`** - global directive to force trace context creation for every request even when tracing is not explicitly enabled by a module, useful for debugging or log correlation.
+- **`trust_request`** - new directive in the `trace` block to accept incoming `traceparent`, `tracestate`, and `baggage` headers as the parent trace context. Default: `false`. When disabled (default), incoming trace headers are discarded and Ferron generates a fresh trace ID for each request.
 - **Optimal server-preferred compression algorithm** - now supports automatic detection of the optimal compression algorithm based on client preferences ([GitHub issue](https://github.com/ferronweb/ferron/issues/709)).
 
 ### Authentication
@@ -118,6 +120,8 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Structured log events** - every log emission site now carries a short OTEL-friendly `summary` plus typed `attributes`, enabling downstream OTLP consumers to receive structured events without changing existing console or file log output.
 - **Trace ID in console and file logs** - console and file loggers now prefix log messages with `[trace=<span_id>]` when a trace context is available, enabling grep-based filtering by trace ID.
 - **Trace context injection for CGI/FastCGI/PHP-FPM/SCGI** - trace context headers are now automatically propagated to the backend environment via CGI/FastCGI/PHP-FPM/SCGI.
+- **Incoming trace context discarded by default** - Ferron now generates a fresh trace ID for every request by default, discarding incoming `traceparent`/`tracestate`/`baggage` headers unless `trust_request true` is configured. Existing deployments relying on incoming trace context must add `trust_request true` to the `trace` block.
+- **Sanitized trace header injection** - `inject_trace_headers` now removes any existing `traceparent`, `tracestate`, and `baggage` headers before injecting new values, preventing header duplication or conflicts.
 
 #### Core runtime
 
