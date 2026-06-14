@@ -1,6 +1,6 @@
 [package]
 name = "ferron-observability"
-version = "3.0.0-beta.1"
+version = "3.0.0-beta.2"
 edition = "2021"
 
 [dependencies]
