@@ -214,30 +214,38 @@ pub fn resolve_cache_path(config: &ServerConfigurationBlock) -> Option<PathBuf> 
         return Some(PathBuf::from(&path_str));
     }
 
-    // Default to platform data directory (if writable)
-    let fallback_path = dirs::data_local_dir().and_then(|mut p| {
-        let metadata = std::fs::metadata(&p);
-        if let Ok(metadata) = metadata {
-            if !metadata.is_dir() || metadata.permissions().readonly() {
-                return None;
-            }
-
-            p.push("ferron-acme");
-            Some(p)
-        } else {
-            None
-        }
-    });
-
     // /var/cache/ferron-acme heuristic for the Docker image
+    #[cfg(not(unix))]
+    let mut fallback_path = None;
     #[cfg(unix)]
-    let fallback_path = fallback_path.or_else(|| {
-        if matches!(std::fs::exists("/var/cache/ferron-acme"), Ok(true)) {
+    let mut fallback_path = {
+        use nix::{
+            fcntl::{AtFlags, AT_FDCWD},
+            unistd::{faccessat, AccessFlags},
+        };
+
+        if std::fs::metadata("/var/cache/ferron-acme").is_ok_and(|m| m.is_dir())
+            && faccessat(
+                AT_FDCWD,
+                "/var/cache/ferron-acme",
+                AccessFlags::R_OK | AccessFlags::W_OK,
+                AtFlags::empty(),
+            )
+            .is_ok()
+        {
             Some(PathBuf::from("/var/cache/ferron-acme"))
         } else {
             None
         }
-    });
+    };
+
+    // Default to platform data directory (if writable)
+    if fallback_path.is_none() {
+        fallback_path = dirs::data_local_dir().map(|mut p| {
+            p.push("ferron-acme");
+            p
+        });
+    }
 
     fallback_path
 }

@@ -98,6 +98,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Early OCSP verification** - OCSP responses are now strictly verified before being cached and stapled.
 - **Verbose errors** - significantly improved error reporting layouts for local automatic TLS and specific TLS handshake failures.
+- **`/var/cache/ferron-acme` prioritized over user's cache dir** - for Docker images with Ferron running as `root`, the ACME cache directory is now `/var/cache/ferron-acme`, which takes precedence over user's ACME cache directory.
 
 #### HTTP server core
 

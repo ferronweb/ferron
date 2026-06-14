@@ -85,7 +85,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `directory` | `<string>` | LE Production | ACME directory URL |
 | `profile` | `<string>` | — | ACME profile name (optional) |
 | `eab` | `"<key-id>" "<hmac>"` | — | External Account Binding |
-| `cache` | `<string>` | platform data dir | Path for file-based certificate caching |
+| `cache` | `<string>` | `/var/cache/ferron-acme` if on Unix and writable, otherwise platform data dir | Path for file-based certificate caching |
 | `save` | `<cert> [key]` | — | Save cert (and optionally key) to disk |
 | `post_obtain_command` | `<string>` | — | Command to run after certificate issuance |
 | `no_verification` | `<bool>` | `false` | Skip ACME directory TLS verification |
@@ -251,6 +251,9 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 ## Observability
 
 The ACME background task emits log events and metrics through the configured observability pipeline:
+
+> [!note]
+> The ACME log events are global-only, that means they won't be emitted via per-host observability sinks.
 
 ### Logs
 

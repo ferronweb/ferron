@@ -64,5 +64,8 @@ tokio-util = "0.7.18"
 tld = "2.37.0"
 shlex = "2.0.1"
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["dir"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
