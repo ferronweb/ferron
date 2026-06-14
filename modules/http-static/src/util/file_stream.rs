@@ -34,6 +34,7 @@ pub struct FileStream {
 impl FileStream {
     /// Create a new `FileStream` reading from `start` to `end` (exclusive).
     /// If `end` is `None`, reads until EOF.
+    #[inline]
     pub fn new(file: vibeio::fs::File, start: u64, end: Option<u64>) -> Self {
         let remaining = remaining_from_bounds(start, end);
         let finished = matches!(remaining, Some(0));
@@ -46,11 +47,27 @@ impl FileStream {
             read_future: None,
         }
     }
+
+    /// Clones the stream from `start` to `end`, preserving the remaining bytes and read future.
+    #[inline]
+    pub fn clone_stream(&self, start: u64, end: Option<u64>) -> Self {
+        let remaining = remaining_from_bounds(start, end);
+        let finished = matches!(remaining, Some(0));
+
+        Self {
+            file: self.file.clone(),
+            current_pos: start,
+            remaining,
+            finished,
+            read_future: None,
+        }
+    }
 }
 
 impl Stream for FileStream {
     type Item = Result<Bytes, io::Error>;
 
+    #[inline]
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.finished {
             return Poll::Ready(None);

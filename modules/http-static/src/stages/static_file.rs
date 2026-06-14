@@ -13,7 +13,7 @@ use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use futures_util::TryStreamExt;
 use http::header::{self, HeaderValue};
-use http::{Method, Response, StatusCode};
+use http::{HeaderMap, Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, StreamBody};
@@ -37,6 +37,7 @@ use crate::util::etag::{
 };
 use crate::util::file_stream::FileStream;
 use crate::util::mime::get_content_type;
+use crate::util::multipart_byterange::MultipartByterangeBody;
 use crate::util::range::parse_range_header;
 
 pub struct StaticFileStage;
@@ -365,99 +366,170 @@ impl Stage<HttpFileContext> for StaticFileStage {
         // Handle Range requests
         if let Some(range_val) = request.headers().get(header::RANGE) {
             if let Ok(range_str) = range_val.to_str() {
-                if let Some((start, end)) =
-                    parse_range_header(range_str, file_length.saturating_sub(1))
-                {
-                    if file_length == 0 || end >= file_length || start >= file_length || start > end
+                if let Some(ranges) = parse_range_header(range_str, file_length.saturating_sub(1)) {
+                    if file_length == 0
+                        || ranges.iter().any(|(start, end)| {
+                            *end >= file_length || *start >= file_length || *start > *end
+                        })
                     {
                         let vary = vary_header.as_deref().unwrap_or("Range");
-                        let res = Response::builder()
-                            .status(StatusCode::RANGE_NOT_SATISFIABLE)
-                            .header(
-                                header::CONTENT_RANGE,
-                                HeaderValue::from_str(&format!("bytes */{file_length}")).unwrap(),
-                            )
-                            .header(
-                                header::VARY,
-                                HeaderValue::from_str(vary).expect("invalid vary header"),
-                            )
-                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                            .expect("failed to build 416 response");
+                        let mut header_map = HeaderMap::new();
+                        header_map.insert(
+                            header::CONTENT_RANGE,
+                            HeaderValue::from_str(&format!("bytes */{file_length}"))
+                                .expect("invalid content range header"),
+                        );
+                        header_map.insert(
+                            header::VARY,
+                            HeaderValue::from_str(vary).expect("invalid vary header"),
+                        );
                         ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(res));
+                        ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
                         emit_static_response_metric(ctx, 416, "range_not_satisfiable");
                         return Ok(false);
                     }
 
-                    let content_len = end - start + 1;
-                    let vary = vary_header.as_deref().unwrap_or("Range");
+                    if ranges.len() > 1 {
+                        // Randomly generated multipart boundary string
+                        let multipart_boundary = hex::encode(rand::random::<[u8; 12]>());
+                        let vary = vary_header.as_deref().unwrap_or("Range");
 
-                    let mut builder = Response::builder()
-                        .status(StatusCode::PARTIAL_CONTENT)
-                        .header(header::CONTENT_LENGTH, content_len)
-                        .header(
-                            header::CONTENT_RANGE,
-                            format!("bytes {start}-{end}/{file_length}"),
-                        );
+                        let mut builder = Response::builder()
+                            .status(StatusCode::PARTIAL_CONTENT)
+                            .header(
+                                header::CONTENT_TYPE,
+                                format!("multipart/byteranges; boundary={multipart_boundary}"),
+                            );
 
-                    if let Some(ref etag) = etag_value {
-                        builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
-                    }
-                    if let Some(ref ct) = content_type {
-                        builder = builder.header(header::CONTENT_TYPE, ct);
-                    }
-                    if let Some(cc) = cache_control {
+                        if let Some(ref etag) = etag_value {
+                            builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
+                        }
+                        if let Some(cc) = cache_control {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc).expect("invalid cache-control header"),
+                            );
+                        }
                         builder = builder.header(
-                            header::CACHE_CONTROL,
-                            HeaderValue::from_str(cc).expect("invalid cache-control header"),
+                            header::VARY,
+                            HeaderValue::from_str(vary).expect("invalid vary header"),
                         );
+
+                        if method == Method::HEAD {
+                            let response = builder
+                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                                .expect("failed to build 206 HEAD response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric(ctx, 206, "partial_content");
+                        } else {
+                            // Stream the range using FileStream with offset/limit
+                            let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
+                                PipelineError::custom(format!("failed to open file: {e}"))
+                            })?;
+                            let response = builder
+                                .body(
+                                    MultipartByterangeBody::new(
+                                        multipart_boundary,
+                                        file_length,
+                                        content_type,
+                                        ranges,
+                                        FileStream::new(file, 0, Some(file_length)),
+                                    )
+                                    .boxed_unsync(),
+                                )
+                                .expect("failed to build 206 response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric(ctx, 206, "partial_content");
+                        }
+                        return Ok(false);
+                    } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e)) {
+                        let content_len = end - start + 1;
+                        let vary = vary_header.as_deref().unwrap_or("Range");
+
+                        let mut builder = Response::builder()
+                            .status(StatusCode::PARTIAL_CONTENT)
+                            .header(header::CONTENT_LENGTH, content_len)
+                            .header(
+                                header::CONTENT_RANGE,
+                                format!("bytes {start}-{end}/{file_length}"),
+                            );
+
+                        if let Some(ref etag) = etag_value {
+                            builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
+                        }
+                        if let Some(ref ct) = content_type {
+                            builder = builder.header(header::CONTENT_TYPE, ct);
+                        }
+                        if let Some(cc) = cache_control {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc).expect("invalid cache-control header"),
+                            );
+                        }
+                        builder = builder.header(
+                            header::VARY,
+                            HeaderValue::from_str(vary).expect("invalid vary header"),
+                        );
+
+                        if method == Method::HEAD {
+                            let response = builder
+                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                                .expect("failed to build 206 HEAD response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric(ctx, 206, "partial_content");
+                        } else {
+                            // Stream the range using FileStream with offset/limit
+                            let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
+                                PipelineError::custom(format!("failed to open file: {e}"))
+                            })?;
+                            let response = builder
+                                .body(
+                                    StreamBody::new(
+                                        FileStream::new(file, start, Some(end + 1))
+                                            .map_ok(Frame::data),
+                                    )
+                                    .boxed_unsync(),
+                                )
+                                .expect("failed to build 206 response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric(ctx, 206, "partial_content");
+                        }
+                        return Ok(false);
+                    } else {
+                        let vary = vary_header.as_deref().unwrap_or("Range");
+                        let mut header_map = HeaderMap::new();
+                        header_map.insert(
+                            header::CONTENT_RANGE,
+                            HeaderValue::from_str(&format!("bytes */{file_length}"))
+                                .expect("invalid content range header"),
+                        );
+                        header_map.insert(
+                            header::VARY,
+                            HeaderValue::from_str(vary).expect("invalid vary header"),
+                        );
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
+                        emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                        return Ok(false);
                     }
-                    builder = builder.header(
+                } else {
+                    let vary = vary_header.as_deref().unwrap_or("Range");
+                    let mut header_map = HeaderMap::new();
+                    header_map.insert(
+                        header::CONTENT_RANGE,
+                        HeaderValue::from_str(&format!("bytes */{file_length}"))
+                            .expect("invalid content range header"),
+                    );
+                    header_map.insert(
                         header::VARY,
                         HeaderValue::from_str(vary).expect("invalid vary header"),
                     );
-
-                    if method == Method::HEAD {
-                        let response = builder
-                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                            .expect("failed to build 206 HEAD response");
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(response));
-                        emit_static_response_metric(ctx, 206, "partial_content");
-                    } else {
-                        // Stream the range using FileStream with offset/limit
-                        let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
-                            PipelineError::custom(format!("failed to open file: {e}"))
-                        })?;
-                        let response = builder
-                            .body(
-                                StreamBody::new(
-                                    FileStream::new(file, start, Some(end + 1)).map_ok(Frame::data),
-                                )
-                                .boxed_unsync(),
-                            )
-                            .expect("failed to build 206 response");
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(response));
-                        emit_static_response_metric(ctx, 206, "partial_content");
-                    }
-                    return Ok(false);
-                } else {
-                    let vary = vary_header.as_deref().unwrap_or("Range");
-                    let res = Response::builder()
-                        .status(StatusCode::RANGE_NOT_SATISFIABLE)
-                        .header(
-                            header::CONTENT_RANGE,
-                            HeaderValue::from_str(&format!("bytes */{file_length}")).unwrap(),
-                        )
-                        .header(
-                            header::VARY,
-                            HeaderValue::from_str(vary).expect("invalid vary header"),
-                        )
-                        .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                        .expect("failed to build 416 response");
                     ctx.http.req = Some(request);
-                    ctx.http.res = Some(HttpResponse::Custom(res));
+                    ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
                     emit_static_response_metric(ctx, 416, "range_not_satisfiable");
                     return Ok(false);
                 }

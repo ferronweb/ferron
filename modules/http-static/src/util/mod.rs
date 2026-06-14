@@ -4,4 +4,5 @@ pub mod compression;
 pub mod etag;
 pub mod file_stream;
 pub mod mime;
+pub mod multipart_byterange;
 pub mod range;

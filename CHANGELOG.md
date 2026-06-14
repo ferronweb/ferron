@@ -45,7 +45,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **`trust_request`** - new directive in the `trace` block to accept incoming `traceparent`, `tracestate`, and `baggage` headers as the parent trace context. Default: `false`. When disabled (default), incoming trace headers are discarded and Ferron generates a fresh trace ID for each request.
 - **Optimal server-preferred compression algorithm** - now supports automatic detection of the optimal compression algorithm based on client preferences ([GitHub issue](https://github.com/ferronweb/ferron/issues/709)).
 
-### Authentication
+#### Authentication
 
 - **Forwarded authentication backend chaining** - the forwarded authentication module now supports chaining multiple backends together, allowing for flexible and secure multi-backend authentication scenarios.
 
@@ -107,6 +107,7 @@ If you are upgrading to this beta version, you must update your configuration fi
   - File pipeline returns `408 Request Timeout` if a request takes too long (instead of `404`).
   - Basic Auth returns `429 Too Many Requests` when max failed attempts are reached.
   - File serving errors return `403 Forbidden` (permissions) or `400 Bad Request` (invalid filenames) instead of `500`.
+- **Support for multi-range partial static file serving** - now supports serving multiple ranges from a single request, improving efficiency and reducing latency.
 - **String interpolation** - forwarded authentication now supports interpolated string values for backend URLs.
 - **Security tightening** - URL canonicalization now strictly rejects paths containing null bytes (`\0` or `%00`).
 - **Cache cleanliness** - `X-LiteSpeed-Cache` headers are no longer emitted by default; can be re-enabled via the `emit_litespeed_headers` subdirective.
