@@ -8,16 +8,16 @@
 use std::sync::Arc;
 
 use ferron_tls::TcpTlsResolver;
-use rustls::{
-    server::{ResolvesServerCert, ServerConfig},
-    sign::CertifiedKey,
-};
+use rustls::server::{ResolvesServerCert, ServerConfig};
+use rustls::sign::CertifiedKey;
 use tokio::sync::RwLock;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
 
-use crate::{challenge::ACME_TLS_ALPN_NAME, config::SniResolverLock, on_demand::OnDemandRequest};
+use crate::challenge::ACME_TLS_ALPN_NAME;
+use crate::config::SniResolverLock;
+use crate::on_demand::OnDemandRequest;
 
 /// The inner resolver for `AcmeResolver`.
 ///

@@ -9,10 +9,8 @@ use http::Response;
 use http_body_util::BodyExt;
 use vibeio_cegla::VibeioScgiRuntime;
 
-use crate::{
-    config::ScgiConfiguration,
-    util::{ConnectedSocket, SendWrapBody},
-};
+use crate::config::ScgiConfiguration;
+use crate::util::{ConnectedSocket, SendWrapBody};
 
 pub struct ScgiStage;
 

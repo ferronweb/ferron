@@ -1,10 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use ferron_core::{
-    config::ServerConfigurationBlockBuilder,
-    pipeline::{PipelineError, Stage},
-};
+use ferron_core::config::ServerConfigurationBlockBuilder;
+use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
@@ -13,11 +11,9 @@ use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
 
-use crate::{
-    client::{ClientError, FcgiClient},
-    config::FcgiConfiguration,
-    util::{SendWrapBody, TrackedBody},
-};
+use crate::client::{ClientError, FcgiClient};
+use crate::config::FcgiConfiguration;
+use crate::util::{SendWrapBody, TrackedBody};
 
 pub struct FcgiPassStage {
     client: Arc<FcgiClient>,

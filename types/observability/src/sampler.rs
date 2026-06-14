@@ -1,7 +1,7 @@
 use ferron_core::config::validator::ConfigurationValidatorContext;
-use ferron_core::config::ServerConfigurationBlock;
-use ferron_core::config::ServerConfigurationDirectiveEntry;
-use ferron_core::config::ServerConfigurationValue;
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+};
 
 use crate::{Parent, TraceAttributeValue};
 

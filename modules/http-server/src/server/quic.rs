@@ -6,8 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};

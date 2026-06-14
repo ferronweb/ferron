@@ -1,11 +1,11 @@
-use ferron_core::{
-    config::{
-        validator::{validate_scoped_block, ConfigurationValidator, ConfigurationValidatorContext},
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-        ServerConfigurationValue,
-    },
-    validate_directive,
+use ferron_core::config::validator::{
+    validate_scoped_block, ConfigurationValidator, ConfigurationValidatorContext,
 };
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
+use ferron_core::validate_directive;
 use ferron_tls::validate_tls_common;
 
 pub struct TlsAcmeConfigurationValidator;

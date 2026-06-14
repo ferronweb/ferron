@@ -227,10 +227,8 @@ pub fn resolve_cache_path(config: &ServerConfigurationBlock) -> Option<PathBuf> 
     let mut fallback_path = None;
     #[cfg(unix)]
     let mut fallback_path = {
-        use nix::{
-            fcntl::{AtFlags, AT_FDCWD},
-            unistd::{faccessat, AccessFlags},
-        };
+        use nix::fcntl::{AtFlags, AT_FDCWD};
+        use nix::unistd::{faccessat, AccessFlags};
 
         if std::fs::metadata("/var/cache/ferron-acme").is_ok_and(|m| m.is_dir())
             && faccessat(

@@ -1,4 +1,5 @@
-use std::{collections::VecDeque, task::Poll};
+use std::collections::VecDeque;
+use std::task::Poll;
 
 use bytes::Bytes;
 use futures_core::Stream;

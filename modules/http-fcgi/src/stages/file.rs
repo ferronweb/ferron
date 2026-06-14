@@ -10,11 +10,9 @@ use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
 
-use crate::{
-    client::{ClientError, FcgiClient},
-    config::FcgiConfiguration,
-    util::{SendWrapBody, TrackedBody},
-};
+use crate::client::{ClientError, FcgiClient};
+use crate::config::FcgiConfiguration;
+use crate::util::{SendWrapBody, TrackedBody};
 
 pub struct FcgiFileStage {
     client: Arc<FcgiClient>,

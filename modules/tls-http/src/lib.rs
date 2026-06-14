@@ -1,19 +1,19 @@
-use std::{any::Any, ops::Deref, sync::Arc};
+use std::any::Any;
+use std::ops::Deref;
+use std::sync::Arc;
 
+use ferron_core::config_validator_scoped_key;
+use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
-use ferron_core::{config_validator_scoped_key, loader::ModuleLoader};
 use ferron_observability::{build_composite_sink, CompositeEventSink};
-use ferron_tls::{
-    builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
-};
+use ferron_tls::builder::build_server_config_builder;
+use ferron_tls::config::TlsServerConfig;
+use ferron_tls::{TcpTlsContext, TcpTlsResolver};
 use rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;
 
-use crate::fetch::ErrorMessageLock;
-use crate::{
-    config::TlsHttpConfig,
-    fetch::{fetch_tls_cert_loop, CertifiedKeyLock, TlsHttpResolver},
-};
+use crate::config::TlsHttpConfig;
+use crate::fetch::{fetch_tls_cert_loop, CertifiedKeyLock, ErrorMessageLock, TlsHttpResolver};
 
 mod config;
 mod fetch;

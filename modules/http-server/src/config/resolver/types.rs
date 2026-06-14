@@ -1,6 +1,8 @@
-use std::{fmt, net::IpAddr};
+use std::fmt;
+use std::net::IpAddr;
 
-use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationMatcherExpr};
+use ferron_core::config::layer::LayeredConfiguration;
+use ferron_core::config::ServerConfigurationMatcherExpr;
 
 /// Represents a resolved location path through the configuration tree
 #[derive(Debug, Clone, Default)]

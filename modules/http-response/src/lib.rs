@@ -15,9 +15,7 @@ mod config;
 mod stage;
 mod validator;
 
-pub use stage::EarlyHintsStage;
-pub use stage::HttpResponseStage;
-pub use stage::ResponseEngine;
+pub use stage::{EarlyHintsStage, HttpResponseStage, ResponseEngine};
 pub use validator::HttpResponseValidator;
 
 use std::collections::HashMap;

@@ -1,11 +1,9 @@
-use ferron_core::{
-    check_unused_subdirectives,
-    config::{
-        validator::ConfigurationValidator, ServerConfigurationBlock,
-        ServerConfigurationDirectiveEntry, ServerConfigurationSpan, ServerConfigurationValue,
-    },
-    validate_directive, validate_nested,
+use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
+use ferron_core::{check_unused_subdirectives, validate_directive, validate_nested};
 
 pub struct ForwardedAuthenticationConfigurationValidator;
 

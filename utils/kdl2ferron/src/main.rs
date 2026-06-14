@@ -2,8 +2,9 @@ mod read_kdl;
 mod translate;
 
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::str::FromStr;
-use std::{fs, path::PathBuf};
 
 use clap::{crate_name, crate_version, Arg, ArgAction, ArgMatches, Command};
 use mimalloc::MiMalloc;

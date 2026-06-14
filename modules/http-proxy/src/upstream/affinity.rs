@@ -5,7 +5,8 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 
-use crate::{types::upstream::UpstreamInner, upstream::lb::ConsistentHashRing};
+use crate::types::upstream::UpstreamInner;
+use crate::upstream::lb::ConsistentHashRing;
 
 /// Resolve an affinity key to a backend index.
 ///

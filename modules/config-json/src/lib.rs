@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use ferron_core::{config::adapter::ConfigurationAdapter, loader::ModuleLoader};
+use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::loader::ModuleLoader;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
 use tokio::sync::mpsc;

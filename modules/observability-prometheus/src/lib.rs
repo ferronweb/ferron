@@ -8,17 +8,13 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
-use ferron_core::config_validator_scoped_key;
-use ferron_core::{
-    config::ServerConfigurationBlock,
-    loader::ModuleLoader,
-    log_warn,
-    providers::Provider,
-    registry::{Registry, RegistryBuilder},
-    Module,
-};
+use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::loader::ModuleLoader;
+use ferron_core::providers::Provider;
+use ferron_core::registry::{Registry, RegistryBuilder};
+use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
 use ferron_observability::{
-    baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet},
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
 };

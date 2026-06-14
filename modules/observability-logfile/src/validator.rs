@@ -1,10 +1,6 @@
-use ferron_core::{
-    config::{
-        validator::{validate_scoped_block_flat, ConfigurationValidator},
-        ServerConfigurationValue,
-    },
-    validate_directive,
-};
+use ferron_core::config::validator::{validate_scoped_block_flat, ConfigurationValidator};
+use ferron_core::config::ServerConfigurationValue;
+use ferron_core::validate_directive;
 
 pub struct LogFileObservabilityConfigurationValidator;
 

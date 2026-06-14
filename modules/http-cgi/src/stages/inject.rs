@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use ferron_core::{
-    config::ServerConfigurationBlockBuilder,
-    pipeline::{PipelineError, Stage},
-};
+use ferron_core::config::ServerConfigurationBlockBuilder;
+use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::HttpContext;
 
 use crate::config::CgiConfiguration;

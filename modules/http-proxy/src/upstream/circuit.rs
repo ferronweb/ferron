@@ -455,14 +455,12 @@ mod tests {
     use parking_lot::RwLock;
     use rustc_hash::FxBuildHasher;
 
-    use crate::{
-        types::{circuit::CircuitBreakerState, upstream::UpstreamInner},
-        upstream::{
-            determine_proxy_to,
-            lb::{ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState},
-            ConcurrentTtlCache,
-        },
+    use crate::types::circuit::CircuitBreakerState;
+    use crate::types::upstream::UpstreamInner;
+    use crate::upstream::lb::{
+        ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
     };
+    use crate::upstream::{determine_proxy_to, ConcurrentTtlCache};
 
     use super::*;
 

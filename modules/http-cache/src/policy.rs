@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use http::header;
-use http::{HeaderMap, StatusCode};
+use http::{header, HeaderMap, StatusCode};
 
 use crate::config::DEFAULT_MAX_CACHE_AGE_SECS;
 use crate::lscache::LiteSpeedCacheControl;

@@ -160,7 +160,8 @@ pub fn resolve_matcher_operand(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationMatcherExpr};
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_core::config::ServerConfigurationMatcherExpr;
     use ferron_http::HttpRequest;
     use ferron_observability::CompositeEventSink;
     use rustc_hash::FxHashMap;

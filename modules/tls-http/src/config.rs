@@ -1,4 +1,6 @@
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::time::Duration;
 
 use ferron_core::config::ServerConfigurationBlock;
 

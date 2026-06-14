@@ -9,11 +9,9 @@ use bytes::Bytes;
 use chrono::{DateTime, Local};
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
-use ferron_http::format_page;
 use ferron_http::util::anti_xss::anti_xss;
-use ferron_http::{HttpFileContext, HttpResponse};
-use http::{header, HeaderValue};
-use http::{Method, Response, StatusCode};
+use ferron_http::{format_page, HttpFileContext, HttpResponse};
+use http::{header, HeaderValue, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 
 pub struct DirectoryListingStage;

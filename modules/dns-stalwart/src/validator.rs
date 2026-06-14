@@ -1,5 +1,5 @@
+use ferron_core::config::validator::{ConfigurationValidator, ConfigurationValidatorContext};
 use ferron_core::config::{
-    validator::{ConfigurationValidator, ConfigurationValidatorContext},
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
     ServerConfigurationValue,
 };

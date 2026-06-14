@@ -9,7 +9,8 @@ use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, IsCa, KeyIdMethod, KeyPair, SanType,
 };
 use rustls::sign::CertifiedKey;
-use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use time::{Duration, OffsetDateTime};
 use x509_parser::prelude::{FromDer, X509Certificate};
 

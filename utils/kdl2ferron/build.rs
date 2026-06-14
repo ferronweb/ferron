@@ -1,7 +1,5 @@
-use {
-    std::{env, io},
-    winresource::WindowsResource,
-};
+use std::{env, io};
+use winresource::WindowsResource;
 
 fn main() -> io::Result<()> {
     if env::var_os("CARGO_CFG_WINDOWS").is_some() {

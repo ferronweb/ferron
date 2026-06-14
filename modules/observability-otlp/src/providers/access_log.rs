@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use ferron_core::{config::ServerConfigurationBlock, registry::Registry};
-use ferron_observability::{
-    baggage::{self, BaggageKeyPromotion, SignalSet},
-    AccessEvent, AccessVisitor, LogFormatterContext,
-};
+use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::registry::Registry;
+use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
+use ferron_observability::{AccessEvent, AccessVisitor, LogFormatterContext};
 use opentelemetry::logs::AnyValue;
 
 use crate::config::LogStyle;

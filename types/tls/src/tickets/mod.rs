@@ -44,12 +44,11 @@ use aws_lc_rs::iv::FixedLength;
 use rustls::server::ProducesTickets;
 use rustls_pki_types::UnixTime;
 use std::collections::HashMap;
-use std::fmt;
-use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::sync::RwLock;
 use std::time::Duration;
+use std::{fmt, fs};
 
 use ferron_core::config::ServerConfigurationBlock;
 

@@ -1,16 +1,16 @@
 use std::sync::{Arc, OnceLock};
 
+use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config_validator_scoped_key;
+use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
-use ferron_core::{config::validator::ConfigurationValidator, loader::ModuleLoader};
 use ferron_observability::{build_composite_sink, CompositeEventSink};
-use ferron_tls::validate_tls_common;
-use ferron_tls::{
-    builder::build_server_config_builder, config::TlsServerConfig, observability, TcpTlsContext,
-    TcpTlsResolver,
-};
+use ferron_tls::builder::build_server_config_builder;
+use ferron_tls::config::TlsServerConfig;
+use ferron_tls::{observability, validate_tls_common, TcpTlsContext, TcpTlsResolver};
 use rustls::ServerConfig;
-use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 /// Global event sink for the `tls-manual` module, populated from
 /// [`TlsManualModuleLoader::register_modules`] and read by

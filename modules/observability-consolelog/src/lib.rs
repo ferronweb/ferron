@@ -2,11 +2,11 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
 use ferron_core::config::validator::{validate_scoped_block_flat, ConfigurationValidator};
-use ferron_core::config_validator_scoped_key;
-use ferron_core::{
-    config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,
-    log_warn, providers::Provider, registry::Registry, Module,
-};
+use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::loader::ModuleLoader;
+use ferron_core::providers::Provider;
+use ferron_core::registry::Registry;
+use ferron_core::{config_validator_scoped_key, log_debug, log_error, log_info, log_warn, Module};
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogFormatterContext, ObservabilityContext,
 };

@@ -1,4 +1,5 @@
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 use ferron_core::config::ServerConfigurationMatcherExpr;
 use ferron_http::HttpContext;

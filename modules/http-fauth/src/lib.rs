@@ -1,4 +1,5 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 
 use ferron_http::HttpContext;
 use http_body_util::combinators::UnsyncBoxBody;

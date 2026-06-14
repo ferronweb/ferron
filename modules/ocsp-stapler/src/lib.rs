@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 mod background;
 
-use ferron_core::{loader::ModuleLoader, log_debug, registry::Registry, Module};
+use ferron_core::loader::ModuleLoader;
+use ferron_core::registry::Registry;
+use ferron_core::{log_debug, Module};
 use ferron_observability::build_composite_sink;
 
 struct OcspStaplerModule {

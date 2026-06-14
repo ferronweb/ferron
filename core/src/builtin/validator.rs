@@ -1,10 +1,9 @@
-use crate::{
-    config::{
-        validator::validate_scoped_block, ServerConfigurationBlock,
-        ServerConfigurationDirectiveEntry, ServerConfigurationSpan, ServerConfigurationValue,
-    },
-    validate_directive, validate_nested,
+use crate::config::validator::validate_scoped_block;
+use crate::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
+use crate::{validate_directive, validate_nested};
 
 pub struct BuiltinConfigurationValidator;
 

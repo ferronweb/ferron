@@ -6,11 +6,12 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use ferron_core::config::{
-    ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters, ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters,
+    ServerConfigurationValue,
 };
+use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
-use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
     ObservabilityConfigExtractor, ObservabilityContext, TraceSamplingConfig,
@@ -19,13 +20,10 @@ use ferron_tls::{TcpTlsContext, TcpTlsResolver};
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use crate::config::{prepare_host_config, ThreeStageResolver};
 use crate::server::quic::{QuicTlsResolver, QuicTlsSniResolvers};
 use crate::server::sni::CustomSniResolver;
-use crate::server::tls_resolve::RadixTree;
-use crate::{
-    config::{prepare_host_config, ThreeStageResolver},
-    server::tls_resolve::TlsResolverRadixTree,
-};
+use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
 
 mod common;
 mod quic;

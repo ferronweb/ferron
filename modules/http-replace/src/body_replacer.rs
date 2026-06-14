@@ -8,8 +8,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use http_body::Body;
-use http_body::Frame;
+use http_body::{Body, Frame};
 use memchr::memmem::Finder;
 use pin_project_lite::pin_project;
 

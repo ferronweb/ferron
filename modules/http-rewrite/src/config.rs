@@ -8,9 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fancy_regex::{Regex, RegexBuilder};
-use ferron_core::config::{
-    layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationValue,
-};
+use ferron_core::config::layer::LayeredConfiguration;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 use crate::RewriteEngine;
 

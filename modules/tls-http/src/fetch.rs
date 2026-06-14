@@ -1,4 +1,5 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
+use std::time::Instant;
 
 use ferron_observability::{
     LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
@@ -6,8 +7,9 @@ use ferron_observability::{
 };
 use ferron_tls::observability;
 use http_body_util::{BodyExt, Empty};
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client as HyperClient;
-use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
+use hyper_util::rt::TokioExecutor;
 use parking_lot::RwLock;
 use rustls::server::ResolvesServerCert;
 use rustls::ClientConfig;

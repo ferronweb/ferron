@@ -1,4 +1,5 @@
-use std::{borrow::Cow, collections::BTreeMap};
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 /// A multi-key for the hostname lookup
 #[derive(Clone, Debug, Eq, PartialEq)]

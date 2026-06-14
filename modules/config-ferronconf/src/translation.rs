@@ -1,11 +1,9 @@
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    fs,
-    net::IpAddr,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs;
+use std::net::IpAddr;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Context;
 use ferron_core::config::{

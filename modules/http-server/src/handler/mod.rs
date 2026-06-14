@@ -14,16 +14,17 @@ use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::mtls::MtlsCertificates;
-use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
-use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
+use ferron_http::{
+    trace_context, HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse,
+};
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
-use http_body_util::Empty;
-use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
+use http_body_util::combinators::UnsyncBoxBody;
+use http_body_util::{BodyExt, Empty};
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 

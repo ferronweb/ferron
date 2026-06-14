@@ -11,8 +11,7 @@ mod proxy;
 mod validator;
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};

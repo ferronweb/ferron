@@ -1,7 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
+use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::{
-    layer::LayeredConfiguration, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
+    ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
     ServerConfigurationValue,
 };

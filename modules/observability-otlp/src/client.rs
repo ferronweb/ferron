@@ -1,8 +1,11 @@
-use std::{error::Error, sync::Arc, time::Duration};
+use std::error::Error;
+use std::sync::Arc;
+use std::time::Duration;
 
 use bytes::Bytes;
 use http::{HeaderValue, Response};
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 
 /// Build a `RootCertStore` with native system certificates, falling back to
 /// embedded `webpki-roots` if native certs cannot be loaded.

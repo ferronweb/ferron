@@ -24,8 +24,7 @@ use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::crypto::CryptoProvider;
 use rustls::server::danger::ClientCertVerifier;
-use rustls::server::ProducesTickets;
-use rustls::server::WebPkiClientVerifier;
+use rustls::server::{ProducesTickets, WebPkiClientVerifier};
 use rustls::version::{TLS12, TLS13};
 
 /// Static protocol version arrays for returning from `resolve_protocol_versions`.

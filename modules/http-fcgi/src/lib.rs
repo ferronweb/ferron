@@ -1,4 +1,5 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 
 use cegla_fcgi::client::SendRequest;
 use ferron_http::{HttpContext, HttpFileContext};

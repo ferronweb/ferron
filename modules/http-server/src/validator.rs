@@ -1,16 +1,13 @@
 use std::collections::HashMap;
 
 use cidr::IpCidr;
-use ferron_core::{
-    builtin::validate_observability_directives,
-    check_unused_subdirectives,
-    config::{
-        validator::{validate_scoped_block, ConfigurationValidatorContext},
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-        ServerConfigurationValue,
-    },
-    validate_directive, validate_nested,
+use ferron_core::builtin::validate_observability_directives;
+use ferron_core::config::validator::{validate_scoped_block, ConfigurationValidatorContext};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
 };
+use ferron_core::{check_unused_subdirectives, validate_directive, validate_nested};
 
 pub struct HttpConfigurationValidator;
 

@@ -9,8 +9,7 @@ use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue,
     MetricEvent, MetricType, MetricValue,
 };
-use http::header;
-use http::{Request, Response, StatusCode, Uri};
+use http::{header, Request, Response, StatusCode, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty};
 use tokio::io::{AsyncRead, AsyncWrite};

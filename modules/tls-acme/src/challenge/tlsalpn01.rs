@@ -7,10 +7,8 @@ use std::sync::Arc;
 
 use instant_acme::KeyAuthorization;
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
-use rustls::{
-    server::{ClientHello, ResolvesServerCert},
-    sign::CertifiedKey,
-};
+use rustls::server::{ClientHello, ResolvesServerCert};
+use rustls::sign::CertifiedKey;
 use rustls_pki_types::PrivateKeyDer;
 
 use super::{TlsAlpn01DataLock, ACME_TLS_ALPN_NAME};

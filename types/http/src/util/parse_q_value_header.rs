@@ -1,4 +1,5 @@
-use std::{cmp::Ordering, str::FromStr};
+use std::cmp::Ordering;
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
 struct HeaderValue {

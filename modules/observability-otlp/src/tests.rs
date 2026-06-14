@@ -1,11 +1,8 @@
-use crate::providers::sanitize_label_value;
-use crate::providers::CorrelationContext;
+use crate::providers::{sanitize_label_value, CorrelationContext};
 
 use super::*;
-use ferron_observability::{
-    baggage::{BaggageKeyPromotion, DistinctValueTracker, SignalSet},
-    MetricAttributeValue, TraceAttributeValue, TraceEvent,
-};
+use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker, SignalSet};
+use ferron_observability::{MetricAttributeValue, TraceAttributeValue, TraceEvent};
 
 #[test]
 fn correlation_context_tracks_active_spans() {

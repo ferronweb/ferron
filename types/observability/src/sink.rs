@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::sampler::TraceSampler;
-use crate::Event;
-use crate::TraceEvent;
+use crate::{Event, TraceEvent};
 
 pub trait EventSink: Send + Sync {
     fn emit(&self, event: Event);

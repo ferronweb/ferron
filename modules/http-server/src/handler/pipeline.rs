@@ -2,8 +2,7 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 use ferron_core::pipeline::Pipeline;
-use ferron_http::trace_context;
-use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
+use ferron_http::{trace_context, HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, Parent, TraceAttributeValue, TraceEvent,
 };

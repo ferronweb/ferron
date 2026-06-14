@@ -4,11 +4,9 @@
 //! - Primary tasks: Executed on dedicated threads using vibeio with optional io_uring
 //! - Secondary tasks: Executed on a tokio multi-threaded runtime
 
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{Arc, LazyLock},
-};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, LazyLock};
 
 use vibeio::blocking::DefaultBlockingThreadPool;
 

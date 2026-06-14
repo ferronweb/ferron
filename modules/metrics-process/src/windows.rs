@@ -1,6 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ferron_observability::{
     CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,

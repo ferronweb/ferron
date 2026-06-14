@@ -5,7 +5,8 @@
 //! stdout/stderr when running as a regular console application.
 
 use std::io::IsTerminal;
-use std::sync::{atomic::AtomicUsize, atomic::Ordering, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 
 #[cfg(windows)]
 use std::sync::Mutex;

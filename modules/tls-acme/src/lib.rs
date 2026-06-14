@@ -33,11 +33,11 @@ mod validator;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ferron_core::config_validator_scoped_key;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{ProviderRegistry, RegistryBuilder, GLOBAL_REGISTRY};
-use ferron_core::{runtime::Runtime, Module};
+use ferron_core::runtime::Runtime;
+use ferron_core::{config_validator_scoped_key, Module};
 use ferron_dns::{DnsClient, DnsContext};
 use ferron_observability::{
     build_composite_sink, CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel,

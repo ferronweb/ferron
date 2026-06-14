@@ -20,8 +20,7 @@ pub use circuit::{
 };
 pub use failure_cache::ConcurrentTtlCache;
 pub(crate) use failure_cache::FailureCache;
-pub use resolution::determine_proxy_to;
-pub use resolution::resolve_upstreams;
+pub use resolution::{determine_proxy_to, resolve_upstreams};
 
 /// Returns an [`ahash::AHasher`] with a consistent seed.
 ///

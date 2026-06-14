@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 
 use ferron_observability::Parent;
-use opentelemetry::{
-    baggage::BaggageExt,
-    trace::{Span, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState},
-    Context, Key, StringValue,
+use opentelemetry::baggage::BaggageExt;
+use opentelemetry::trace::{
+    Span, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState,
 };
+use opentelemetry::{Context, Key, StringValue};
 use opentelemetry_sdk::Resource;
 
 /// Correlation context: tracks active spans per host sink instance.

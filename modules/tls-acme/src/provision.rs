@@ -3,34 +3,34 @@
 //! Handles account creation/loading, order placement, challenge solving,
 //! certificate finalization, and caching.
 
-use std::{
-    future::Future,
-    net::IpAddr,
-    ops::Sub,
-    pin::Pin,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::future::Future;
+use std::net::IpAddr;
+use std::ops::Sub;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
 use hyper::Request;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client as HyperClient;
-use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
+use hyper_util::rt::TokioExecutor;
 use instant_acme::{
     Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse,
     CertificateIdentifier, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
-use rustls::{sign::CertifiedKey, ClientConfig};
-use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+use rustls::sign::CertifiedKey;
+use rustls::ClientConfig;
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::io::AsyncWriteExt;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
+use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
+use crate::challenge::tlsalpn01::TlsAlpn01Resolver;
 use crate::config::AcmeConfig;
-use crate::{
-    cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData},
-    errors::acme_error_to_string,
-};
-use crate::{challenge::tlsalpn01::TlsAlpn01Resolver, emit_log};
+use crate::emit_log;
+use crate::errors::acme_error_to_string;
 
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
 

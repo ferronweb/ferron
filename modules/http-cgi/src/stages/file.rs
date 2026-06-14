@@ -1,4 +1,6 @@
-use std::{collections::HashMap, sync::LazyLock, time::Instant};
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::{HttpFileContext, HttpResponse};
@@ -10,10 +12,8 @@ use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
 use vibeio_cegla::VibeioCgiRuntime;
 
-use crate::{
-    config::CgiConfiguration,
-    util::{get_executable, SendWrapBody},
-};
+use crate::config::CgiConfiguration;
+use crate::util::{get_executable, SendWrapBody};
 
 static DEFAULT_CGI_INTERPRETERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
     let mut cgi_interpreters = HashMap::new();

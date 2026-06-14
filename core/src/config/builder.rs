@@ -11,7 +11,9 @@ use super::{
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator, ServerConfigurationPort,
     ServerConfigurationSpan, ServerConfigurationValue,
 };
-use std::{collections::BTreeMap, net::IpAddr, sync::Arc};
+use std::collections::BTreeMap;
+use std::net::IpAddr;
+use std::sync::Arc;
 
 /// Builder for constructing [`ServerConfiguration`] instances.
 ///

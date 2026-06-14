@@ -31,12 +31,10 @@ pub mod validator;
 pub use builder::*;
 
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    net::IpAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::collections::{BTreeMap, HashMap};
+use std::net::IpAddr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::util::parse_duration;
 

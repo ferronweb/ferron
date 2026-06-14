@@ -1,8 +1,9 @@
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::Arc;
 
-use ferron_core::config::{
-    layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationMatcherExpr,
-};
+use ferron_core::config::layer::LayeredConfiguration;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationMatcherExpr};
 use ferron_http::HttpContext;
 
 use super::super::prepare::{

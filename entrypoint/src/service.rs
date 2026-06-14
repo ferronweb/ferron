@@ -184,10 +184,8 @@ pub fn run_service() -> Result<(), Box<dyn std::error::Error>> {
 /// Install the service on Windows with optional command-line arguments
 #[cfg(windows)]
 pub fn install_service(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    use windows_service::{
-        service::{ServiceAccess, ServiceInfo, ServiceStartType},
-        service_manager::{ServiceManager, ServiceManagerAccess},
-    };
+    use windows_service::service::{ServiceAccess, ServiceInfo, ServiceStartType};
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
     let manager_access = ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE;
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
@@ -233,10 +231,8 @@ pub fn install_service(args: Vec<String>) -> Result<(), Box<dyn std::error::Erro
 /// Uninstall the service on Windows
 #[cfg(windows)]
 pub fn uninstall_service() -> Result<(), Box<dyn std::error::Error>> {
-    use windows_service::{
-        service::ServiceAccess,
-        service_manager::{ServiceManager, ServiceManagerAccess},
-    };
+    use windows_service::service::ServiceAccess;
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
     let manager_access = ServiceManagerAccess::CONNECT;
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;

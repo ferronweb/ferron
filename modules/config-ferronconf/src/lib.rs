@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
-use ferron_core::{
-    config::{adapter::ConfigurationAdapter, ServerConfiguration},
-    loader::ModuleLoader,
-};
+use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::config::ServerConfiguration;
+use ferron_core::loader::ModuleLoader;
 
 mod translation;
 mod watcher;

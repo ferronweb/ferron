@@ -1,13 +1,9 @@
 use std::borrow::Cow;
 
-use ferron_observability::{
-    baggage::{self, BaggageKeyPromotion, SignalSet},
-    TraceAttributeValue, TraceEvent,
-};
-use opentelemetry::{
-    trace::{Span, SpanBuilder, SpanKind, Tracer, TracerProvider},
-    KeyValue,
-};
+use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
+use ferron_observability::{TraceAttributeValue, TraceEvent};
+use opentelemetry::trace::{Span, SpanBuilder, SpanKind, Tracer, TracerProvider};
+use opentelemetry::KeyValue;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
 use super::context::{build_parent_context, CorrelationContext};

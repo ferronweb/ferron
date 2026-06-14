@@ -1,7 +1,5 @@
-use ferron_observability::{
-    baggage::{self, BaggageKeyPromotion, SignalSet},
-    LogAttributeValue, LogEvent, LogLevel,
-};
+use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
+use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
 use opentelemetry::logs::AnyValue;
 
 use crate::config::LogStyle;

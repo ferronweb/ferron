@@ -2,8 +2,7 @@ use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ferron_core::pipeline::{PipelineError, Stage, StageHooks};
-use ferron_http::trace_context;
-use ferron_http::HttpRequest;
+use ferron_http::{trace_context, HttpRequest};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
     Parent, TraceAttributeValue, TraceEvent,

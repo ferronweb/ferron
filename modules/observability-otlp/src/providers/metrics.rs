@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use ferron_observability::{
-    baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet},
-    MetricAttributeValue, MetricEvent, MetricType, MetricValue,
-};
+use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
+use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use opentelemetry::KeyValue;
 
 /// Maximum length for a metric label value before it is hashed to prevent cardinality explosion.

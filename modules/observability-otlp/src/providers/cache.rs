@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use ferron_observability::{
-    baggage::{BaggageKeyPromotion, DistinctValueTracker},
-    CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel,
-};
+use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker};
+use ferron_observability::{CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel};
 
 use crate::client::{build_tonic_channel, HyperOtelClient};
 use crate::config::{OtlpBackendConfig, SignalConfig};
@@ -114,8 +112,7 @@ fn build_logs_provider(
     resource: &opentelemetry_sdk::Resource,
     authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::logs::SdkLoggerProvider, Box<dyn std::error::Error + Send + Sync>> {
-    use opentelemetry_otlp::LogExporter;
-    use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
+    use opentelemetry_otlp::{LogExporter, WithExportConfig, WithHttpConfig, WithTonicConfig};
     use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
 
     let mut headers = http::HeaderMap::new();
@@ -187,8 +184,7 @@ fn build_metrics_provider(
     authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::metrics::SdkMeterProvider, Box<dyn std::error::Error + Send + Sync>>
 {
-    use opentelemetry_otlp::MetricExporter;
-    use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
+    use opentelemetry_otlp::{MetricExporter, WithExportConfig, WithHttpConfig, WithTonicConfig};
     use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 
     let mut headers = http::HeaderMap::new();
@@ -261,8 +257,7 @@ fn build_traces_provider(
     resource: &opentelemetry_sdk::Resource,
     authorization: Option<&str>,
 ) -> Result<opentelemetry_sdk::trace::SdkTracerProvider, Box<dyn std::error::Error + Send + Sync>> {
-    use opentelemetry_otlp::SpanExporter;
-    use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
+    use opentelemetry_otlp::{SpanExporter, WithExportConfig, WithHttpConfig, WithTonicConfig};
     use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 
     let mut headers = http::HeaderMap::new();

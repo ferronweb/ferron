@@ -1,15 +1,13 @@
 //! Hyper SendRequest wrapper for connection pooling.
 
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
 use http_body_util::combinators::UnsyncBoxBody;
 use hyper::body::Incoming;
-use hyper::Request;
-use hyper::Response;
+use hyper::{Request, Response};
 use tokio::io::{AsyncRead, AsyncWrite};
 use vibeio_hyper::VibeioIo;
 

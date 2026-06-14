@@ -1,4 +1,5 @@
-use std::{error::Error, path::PathBuf};
+use std::error::Error;
+use std::path::PathBuf;
 use vibeio::fs;
 
 #[cfg(unix)]

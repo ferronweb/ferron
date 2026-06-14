@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferron_core::admin::AdminMetrics;
-use ferron_core::admin::ADMIN_METRICS;
+use ferron_core::admin::{AdminMetrics, ADMIN_METRICS};
 use ferron_observability::{CompositeEventSink, Event, MetricEvent, MetricType, MetricValue};
 
 /// Runs the background admin API metrics collection loop.

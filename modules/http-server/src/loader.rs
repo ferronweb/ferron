@@ -10,8 +10,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpContext;
 
 use crate::server::BasicHttpModule;
-use crate::stages::ClientIpFromHeaderStage;
-use crate::stages::HttpsRedirectStage;
+use crate::stages::{ClientIpFromHeaderStage, HttpsRedirectStage};
 use crate::validator::HttpConfigurationValidator;
 
 /// Default HTTP port when not explicitly configured.
@@ -315,8 +314,7 @@ mod tests {
         ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
         ServerConfigurationHostFilters, ServerConfigurationPort, ServerConfigurationValue,
     };
-    use std::collections::BTreeMap;
-    use std::collections::HashMap as StdHashMap;
+    use std::collections::{BTreeMap, HashMap as StdHashMap};
     use std::sync::Arc;
 
     fn make_config_with_directives(

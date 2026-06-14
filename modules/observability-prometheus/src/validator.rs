@@ -1,10 +1,8 @@
-use ferron_core::{
-    config::{
-        validator::{ConfigurationValidator, ConfigurationValidatorDiagnosticKind},
-        ServerConfigurationValue,
-    },
-    validate_directive, validate_nested,
+use ferron_core::config::validator::{
+    ConfigurationValidator, ConfigurationValidatorDiagnosticKind,
 };
+use ferron_core::config::ServerConfigurationValue;
+use ferron_core::{validate_directive, validate_nested};
 
 pub struct PrometheusObservabilityConfigurationValidator;
 

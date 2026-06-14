@@ -1,7 +1,8 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxBuildHasher, FxHashSet};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::types::affinity::AffinityType;
 use crate::types::health::{HealthCheckState, HealthCheckStateMap};
@@ -9,9 +10,9 @@ use crate::types::lb::LoadBalancerAlgorithm;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::affinity::resolve_affinity_index;
+use crate::upstream::lb::selector::select_backend_index;
 use crate::upstream::lb::{
-    selector::select_backend_index, ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner,
-    WeightedRoundRobinState,
+    ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
 };
 use crate::upstream::ConcurrentTtlCache;
 

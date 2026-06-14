@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use dns_update::{providers::ovh::OvhEndpoint, DnsUpdater};
+use dns_update::providers::ovh::OvhEndpoint;
+use dns_update::DnsUpdater;
 use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 

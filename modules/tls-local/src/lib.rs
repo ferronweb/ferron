@@ -7,9 +7,9 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::{build_composite_sink, CompositeEventSink};
-use ferron_tls::{
-    builder::build_server_config_builder, config::TlsServerConfig, TcpTlsContext, TcpTlsResolver,
-};
+use ferron_tls::builder::build_server_config_builder;
+use ferron_tls::config::TlsServerConfig;
+use ferron_tls::{TcpTlsContext, TcpTlsResolver};
 use rustls::server::ResolvesServerCert;
 use rustls::sign::CertifiedKey;
 use rustls::ServerConfig;

@@ -47,10 +47,9 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::HttpContext;
-pub use send_net_io::SendTcpStreamPoll;
-pub use send_net_io::SendTcpStreamPollDropGuard;
 #[cfg(unix)]
 pub use send_net_io::SendUnixStreamPoll;
+pub use send_net_io::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
 
 /// Shared counter type for tracking active health check unhealthy events.
 type ActiveUnhealthyCounters = parking_lot::RwLock<std::collections::HashMap<String, u64>>;

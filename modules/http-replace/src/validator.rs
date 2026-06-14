@@ -1,6 +1,5 @@
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::ServerConfigurationBlock;
-use ferron_core::config::ServerConfigurationValue;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 #[derive(Default)]
 pub struct ReplaceConfigurationValidator;

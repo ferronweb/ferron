@@ -7,7 +7,8 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
-use quick_cache::{sync::Cache, DefaultHashBuilder, Lifecycle, UnitWeighter};
+use quick_cache::sync::Cache;
+use quick_cache::{DefaultHashBuilder, Lifecycle, UnitWeighter};
 use rustc_hash::FxBuildHasher;
 use tokio::sync::Notify;
 

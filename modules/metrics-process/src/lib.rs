@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use ferron_core::{loader::ModuleLoader, registry::Registry, Module};
+use ferron_core::loader::ModuleLoader;
+use ferron_core::registry::Registry;
+use ferron_core::Module;
 use ferron_observability::build_composite_sink;
 
 #[cfg(target_os = "linux")]

@@ -4,10 +4,8 @@
 use std::sync::atomic::AtomicU32;
 #[cfg(target_has_atomic = "64")]
 use std::sync::atomic::AtomicU64;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU8},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, AtomicU8};
+use std::sync::Arc;
 
 pub const CIRCUIT_BREAKER_STATUS_CLOSED: u8 = 0;
 pub const CIRCUIT_BREAKER_STATUS_OPEN: u8 = 1;

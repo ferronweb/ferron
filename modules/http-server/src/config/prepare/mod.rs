@@ -1,4 +1,6 @@
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::Arc;
 
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,

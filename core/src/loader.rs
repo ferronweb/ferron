@@ -3,9 +3,11 @@
 //! The `ModuleLoader` trait defines the extension points through which modules
 //! register stages, providers, validators, and configuration adapters.
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::config::{adapter::ConfigurationAdapter, validator::ConfigurationValidatorScopedKey};
+use crate::config::adapter::ConfigurationAdapter;
+use crate::config::validator::ConfigurationValidatorScopedKey;
 
 /// Trait for modules to register their components and configuration.
 ///
