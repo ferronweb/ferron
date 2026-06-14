@@ -189,7 +189,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 ## Ferron 3.0.0-beta.1
 
-## Released in May 5, 2026
+**Released in May 5, 2026**
 
 ### Added
 
