@@ -78,10 +78,7 @@ pub async fn fetch_tls_cert_loop(
         "TLS-HTTP polling started",
         &format!("TLS-HTTP certificate polling started for {url_string}"),
         "ferron_tls_http",
-        vec![(
-            "ferron.tls_http.url",
-            LogAttributeValue::String(url_string),
-        )],
+        vec![("ferron.tls_http.url", LogAttributeValue::String(url_string))],
     );
     let Ok(tls_config) = build_rustls_client_config(config.no_verification) else {
         emit_log(
@@ -127,10 +124,7 @@ pub async fn fetch_tls_cert_loop(
                     "TLS-HTTP request build failed",
                     &format!("Failed to build HTTP request for `tls-http`: {e}"),
                     "ferron_tls_http",
-                    vec![(
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    )],
+                    vec![("error.message", LogAttributeValue::String(e.to_string()))],
                 );
                 continue;
             }
@@ -155,10 +149,7 @@ pub async fn fetch_tls_cert_loop(
                     "TLS-HTTP request failed",
                     &format!("Failed to send HTTP request for `tls-http`: {e}"),
                     "ferron_tls_http",
-                    vec![(
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    )],
+                    vec![("error.message", LogAttributeValue::String(e.to_string()))],
                 );
                 continue;
             }
@@ -212,10 +203,7 @@ pub async fn fetch_tls_cert_loop(
                     "TLS-HTTP response read failed",
                     &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
                     "ferron_tls_http",
-                    vec![(
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    )],
+                    vec![("error.message", LogAttributeValue::String(e.to_string()))],
                 );
                 continue;
             }
@@ -231,10 +219,7 @@ pub async fn fetch_tls_cert_loop(
                         "Failed to parse the HTTP response from TLS certificate endpoint: {e}"
                     ),
                     "ferron_tls_http",
-                    vec![(
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    )],
+                    vec![("error.message", LogAttributeValue::String(e.to_string()))],
                 );
                 continue;
             }
@@ -253,10 +238,7 @@ pub async fn fetch_tls_cert_loop(
                         "Failed to parse the TLS certificate chain from TLS endpoint response: {e}"
                     ),
                         "ferron_tls_http",
-                        vec![(
-                            "error.message",
-                            LogAttributeValue::String(e.to_string()),
-                        )],
+                        vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     );
                     continue;
                 }
@@ -273,10 +255,7 @@ pub async fn fetch_tls_cert_loop(
                             "Failed to parse the TLS private key from TLS endpoint response: {e}"
                         ),
                         "ferron_tls_http",
-                        vec![(
-                            "error.message",
-                            LogAttributeValue::String(e.to_string()),
-                        )],
+                        vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     );
                     continue;
                 }
@@ -293,10 +272,7 @@ pub async fn fetch_tls_cert_loop(
                     "TLS-HTTP private key load failed",
                     &format!("Failed to load the TLS private key: {e}"),
                     "ferron_tls_http",
-                    vec![(
-                        "error.message",
-                        LogAttributeValue::String(e.to_string()),
-                    )],
+                    vec![("error.message", LogAttributeValue::String(e.to_string()))],
                 );
                 continue;
             }

@@ -407,14 +407,8 @@ async fn run_acme_background_task(
                 ),
                 "ferron_tls_acme",
                 vec![
-                    (
-                        "tls.sni",
-                        LogAttributeValue::String(domain.clone()),
-                    ),
-                    (
-                        "tls.port",
-                        LogAttributeValue::I64(config.port as i64),
-                    ),
+                    ("tls.sni", LogAttributeValue::String(domain.clone())),
+                    ("tls.port", LogAttributeValue::I64(config.port as i64)),
                 ],
             );
             emit_metric(
@@ -474,14 +468,8 @@ async fn run_acme_background_task(
                     &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
                     "ferron_tls_acme",
                     vec![
-                        (
-                            "tls.sni",
-                            LogAttributeValue::String(sni_hostname.clone()),
-                        ),
-                        (
-                            "tls.port",
-                            LogAttributeValue::I64(port as i64),
-                        ),
+                        ("tls.sni", LogAttributeValue::String(sni_hostname.clone())),
+                        ("tls.port", LogAttributeValue::I64(port as i64)),
                     ],
                 );
                 emit_metric(
@@ -626,10 +614,7 @@ async fn run_acme_background_task(
                             "ACME certificate issued",
                             &format!("ACME certificate issued for domains: {domains}"),
                             "ferron_tls_acme",
-                            vec![(
-                                "ferron.acme.domains",
-                                LogAttributeValue::String(domains),
-                            )],
+                            vec![("ferron.acme.domains", LogAttributeValue::String(domains))],
                         );
                         emit_metric(
                             &event_sink,
@@ -661,14 +646,8 @@ async fn run_acme_background_task(
                             &format!("ACME certificate provisioning error for {domains}: {e}"),
                             "ferron_tls_acme",
                             vec![
-                                (
-                                    "ferron.acme.domains",
-                                    LogAttributeValue::String(domains),
-                                ),
-                                (
-                                    "error.message",
-                                    LogAttributeValue::String(e.to_string()),
-                                ),
+                                ("ferron.acme.domains", LogAttributeValue::String(domains)),
+                                ("error.message", LogAttributeValue::String(e.to_string())),
                             ],
                         );
                         emit_metric(

@@ -252,9 +252,7 @@ async fn install_certified_key(
                                 ),
                                 (
                                     "error.message",
-                                    ferron_observability::LogAttributeValue::String(
-                                        e.to_string(),
-                                    ),
+                                    ferron_observability::LogAttributeValue::String(e.to_string()),
                                 ),
                             ],
                         );
@@ -420,9 +418,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "ferron.acme.directory",
-                        ferron_observability::LogAttributeValue::String(
-                            config.directory.clone(),
-                        ),
+                        ferron_observability::LogAttributeValue::String(config.directory.clone()),
                     ),
                 ],
             );
@@ -451,9 +447,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "error.message",
-                        ferron_observability::LogAttributeValue::String(
-                            acme_error_to_string(&e),
-                        ),
+                        ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
                     ),
                 ],
             );
@@ -486,9 +480,10 @@ pub async fn provision_certificate(
                         ),
                         (
                             "ferron.acme.auth_status",
-                            ferron_observability::LogAttributeValue::String(
-                                format!("{:?}", auth.status),
-                            ),
+                            ferron_observability::LogAttributeValue::String(format!(
+                                "{:?}",
+                                auth.status
+                            )),
                         ),
                     ],
                 );
@@ -544,9 +539,10 @@ pub async fn provision_certificate(
                         ),
                         (
                             "ferron.acme.identifier_type",
-                            ferron_observability::LogAttributeValue::String(
-                                format!("{:?}", challenge.identifier().identifier),
-                            ),
+                            ferron_observability::LogAttributeValue::String(format!(
+                                "{:?}",
+                                challenge.identifier().identifier
+                            )),
                         ),
                     ],
                 );
@@ -572,9 +568,10 @@ pub async fn provision_certificate(
                 ),
                 (
                     "ferron.acme.challenge_type",
-                    ferron_observability::LogAttributeValue::String(
-                        format!("{:?}", config.challenge_type),
-                    ),
+                    ferron_observability::LogAttributeValue::String(format!(
+                        "{:?}",
+                        config.challenge_type
+                    )),
                 ),
             ],
         );
@@ -661,9 +658,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "error.message",
-                        ferron_observability::LogAttributeValue::String(
-                            acme_error_to_string(&err),
-                        ),
+                        ferron_observability::LogAttributeValue::String(acme_error_to_string(&err)),
                     ),
                 ],
             );
@@ -685,9 +680,10 @@ pub async fn provision_certificate(
                 ),
                 (
                     "ferron.acme.challenge_type",
-                    ferron_observability::LogAttributeValue::String(
-                        format!("{:?}", config.challenge_type),
-                    ),
+                    ferron_observability::LogAttributeValue::String(format!(
+                        "{:?}",
+                        config.challenge_type
+                    )),
                 ),
             ],
         );
@@ -713,9 +709,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "error.message",
-                        ferron_observability::LogAttributeValue::String(
-                            acme_error_to_string(&e),
-                        ),
+                        ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
                     ),
                 ],
             );
@@ -761,9 +755,9 @@ pub async fn provision_certificate(
                     ),
                     (
                         "ferron.acme.order_status",
-                        ferron_observability::LogAttributeValue::String(
-                            format!("{order_status:?}"),
-                        ),
+                        ferron_observability::LogAttributeValue::String(format!(
+                            "{order_status:?}"
+                        )),
                     ),
                 ],
             );
@@ -791,9 +785,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "error.message",
-                        ferron_observability::LogAttributeValue::String(
-                            acme_error_to_string(&e),
-                        ),
+                        ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
                     ),
                 ],
             );
@@ -819,9 +811,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "error.message",
-                        ferron_observability::LogAttributeValue::String(
-                            acme_error_to_string(&e),
-                        ),
+                        ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
                     ),
                 ],
             );

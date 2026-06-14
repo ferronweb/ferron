@@ -414,10 +414,7 @@ pub async fn background_ocsp_task(
                             ),
                             "ferron_ocsp",
                             vec![
-                                (
-                                    "ferron.ocsp.cert.subject",
-                                    LogAttributeValue::String(ident),
-                                ),
+                                ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
                                 (
                                     "ferron.ocsp.next_update",
                                     LogAttributeValue::I64(next_update_ts),
@@ -461,15 +458,10 @@ pub async fn background_ocsp_task(
                             ),
                             "ferron_ocsp",
                             vec![
-                                (
-                                    "ferron.ocsp.cert.subject",
-                                    LogAttributeValue::String(ident),
-                                ),
+                                ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
                                 (
                                     "ferron.ocsp.reason",
-                                    LogAttributeValue::StaticStr(
-                                        "no_ocsp_url_or_incomplete_chain",
-                                    ),
+                                    LogAttributeValue::StaticStr("no_ocsp_url_or_incomplete_chain"),
                                 ),
                             ],
                         );
@@ -499,14 +491,8 @@ pub async fn background_ocsp_task(
                             &format!("OCSP fetch failed for {ident}: {e}"),
                             "ferron_ocsp",
                             vec![
-                                (
-                                    "ferron.ocsp.cert.subject",
-                                    LogAttributeValue::String(ident),
-                                ),
-                                (
-                                    "error.message",
-                                    LogAttributeValue::String(e.to_string()),
-                                ),
+                                ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
+                                ("error.message", LogAttributeValue::String(e.to_string())),
                             ],
                         );
                         emit_metric(
