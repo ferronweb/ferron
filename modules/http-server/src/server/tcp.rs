@@ -302,7 +302,8 @@ impl TcpListenerHandle {
                                         "error.type",
                                         LogAttributeValue::String("tcp_tls_handshake_error".into()),
                                     )];
-                                    if e.to_string().to_lowercase().contains("resolve") {
+                                    if e.to_string().to_lowercase().contains("resolve")
+                                      || e.to_string().to_lowercase().contains("resolution") {
                                         if let Some(possible_cause) = resolver.get_tls_background_error() {
                                             error_message.push_str(&format!("\nPossible cause: {possible_cause}"));
                                             attrs.push((
