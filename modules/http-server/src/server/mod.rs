@@ -5,7 +5,9 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+use ferron_core::config::{
+    ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters, ServerConfigurationValue,
+};
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
@@ -13,7 +15,7 @@ use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
     ObservabilityConfigExtractor, ObservabilityContext, TraceSamplingConfig,
 };
-use ferron_tls::TcpTlsContext;
+use ferron_tls::{TcpTlsContext, TcpTlsResolver};
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -310,6 +312,58 @@ fn resolve_http_connection_options(
     })
 }
 
+#[inline]
+fn lookup_tls(
+    tls_resolver: &TlsResolverRadixTree,
+    ip: Option<IpAddr>,
+    host: Option<&str>,
+) -> Option<Arc<dyn TcpTlsResolver>> {
+    match (ip, host) {
+        (Some(ip), Some(host)) => tls_resolver.lookup_ip_and_hostname(ip, host),
+        (Some(ip), None) => tls_resolver.lookup_ip(ip),
+        (None, Some(host)) => tls_resolver.lookup_hostname(host),
+        (None, None) => tls_resolver.root_data(),
+    }
+}
+
+fn implicit_tls_applicable(
+    tls_resolver: &TlsResolverRadixTree,
+    host_config: &ServerConfigurationHostFilters,
+) -> bool {
+    let mut arc = None;
+    let ip = host_config.ip;
+    let mut host = host_config.host.as_deref();
+    let mut is_first = true;
+    while is_first || host.is_some() {
+        if is_first {
+            is_first = false;
+        }
+
+        let Some(new_arc) = lookup_tls(tls_resolver, ip, host) else {
+            return arc.is_some();
+        };
+        if let Some(arc) = &arc {
+            if !Arc::ptr_eq(arc, &new_arc) {
+                // Maybe different levels have different resolvers,
+                // like *.api.example.com and *.example.com...
+                return false;
+            }
+        } else {
+            arc = Some(new_arc);
+        }
+
+        host = if let Some(host) = host {
+            host.trim_end_matches('.')
+                .split_once('.')
+                .map(|(_, remaining)| remaining)
+        } else {
+            None
+        };
+    }
+
+    true
+}
+
 pub struct BasicHttpModule {
     config: ConfigArcSwap,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
@@ -430,51 +484,6 @@ impl BasicHttpModule {
                             &mut enable_tls,
                         )?;
                     }
-                } else if !explicit_port {
-                    // No `tls` directive present — automatically select provider (ACME or Local)
-                    let hostname = host_config.0.host.as_deref();
-                    let ip = host_config.0.ip.map(|ip| ip.to_string());
-                    let auto_selection = crate::tls_auto::select_auto_tls_provider(
-                        registry,
-                        hostname,
-                        ip.as_deref(),
-                    );
-
-                    match auto_selection {
-                        crate::tls_auto::TlsAutoSelection::Local => {
-                            let synthetic_tls_entry =
-                                crate::tls_auto::create_synthetic_tls_directive("local");
-                            let host_config_with_arc =
-                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
-                            Self::process_tls_directive(
-                                registry,
-                                &synthetic_tls_entry,
-                                &host_config_with_arc,
-                                &http_connection_options,
-                                port_config,
-                                &mut tls_resolver,
-                                &mut quic_tls_resolver,
-                                &mut enable_tls,
-                            )?;
-                        }
-                        crate::tls_auto::TlsAutoSelection::Acme => {
-                            let synthetic_tls_entry =
-                                crate::tls_auto::create_synthetic_tls_directive("acme");
-                            let host_config_with_arc =
-                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
-                            Self::process_tls_directive(
-                                registry,
-                                &synthetic_tls_entry,
-                                &host_config_with_arc,
-                                &http_connection_options,
-                                port_config,
-                                &mut tls_resolver,
-                                &mut quic_tls_resolver,
-                                &mut enable_tls,
-                            )?;
-                        }
-                        crate::tls_auto::TlsAutoSelection::None => {}
-                    }
                 }
             }
 
@@ -529,6 +538,74 @@ impl BasicHttpModule {
                 }
             }
         }
+
+        // Another loop pass, for implicit TLS
+        for host_config in &port_config.hosts {
+            if https_port.is_some()
+                && port_config.port == https_port
+                && !explicit_port
+                && host_config
+                    .1
+                    .directives
+                    .get("tls")
+                    .or_else(|| global_config.directives.get("tls"))
+                    .is_none()
+                && implicit_tls_applicable(&tls_resolver, &host_config.0)
+            {
+                // No `tls` directive present — automatically select provider (ACME or Local)
+                let http_connection_options =
+                    resolve_http_connection_options(&global_config, &host_config.1).map_err(
+                        |e| {
+                            anyhow::anyhow!(
+                                "Can't determine HTTP connection options ({}): {e}",
+                                format_location(None, host_config.1.span.as_ref())
+                            )
+                        },
+                    )?;
+
+                let hostname = host_config.0.host.as_deref();
+                let ip = host_config.0.ip.map(|ip| ip.to_string());
+                let auto_selection =
+                    crate::tls_auto::select_auto_tls_provider(registry, hostname, ip.as_deref());
+
+                match auto_selection {
+                    crate::tls_auto::TlsAutoSelection::Local => {
+                        let synthetic_tls_entry =
+                            crate::tls_auto::create_synthetic_tls_directive("local");
+                        let host_config_with_arc =
+                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                        Self::process_tls_directive(
+                            registry,
+                            &synthetic_tls_entry,
+                            &host_config_with_arc,
+                            &http_connection_options,
+                            port_config,
+                            &mut tls_resolver,
+                            &mut quic_tls_resolver,
+                            &mut enable_tls,
+                        )?;
+                    }
+                    crate::tls_auto::TlsAutoSelection::Acme => {
+                        let synthetic_tls_entry =
+                            crate::tls_auto::create_synthetic_tls_directive("acme");
+                        let host_config_with_arc =
+                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                        Self::process_tls_directive(
+                            registry,
+                            &synthetic_tls_entry,
+                            &host_config_with_arc,
+                            &http_connection_options,
+                            port_config,
+                            &mut tls_resolver,
+                            &mut quic_tls_resolver,
+                            &mut enable_tls,
+                        )?;
+                    }
+                    crate::tls_auto::TlsAutoSelection::None => {}
+                }
+            }
+        }
+
         // Build a merged config from global + all host blocks so that
         // `is_applicable` includes a stage if *any* host uses its directive.
         let port_config_merged = ferron_core::config::ServerConfigurationBlock::merge_from(
