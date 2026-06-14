@@ -252,7 +252,7 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 
 The ACME background task emits log events and metrics through the configured observability pipeline:
 
-**Log events:**
+### Logs
 
 | Level | Message | When |
 |-------|---------|------|
@@ -274,7 +274,49 @@ The ACME background task emits log events and metrics through the configured obs
 | `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>` | DNS record removed |
 | `DEBUG` | `Certificate installed for ..., chain length: N` | Certificate loaded into TLS config |
 
-**Metrics:**
+### Structured logs
+
+In OTLP `log_style modern`, the `summary` field is used as the log body and `attributes` are emitted as typed OpenTelemetry log record attributes.
+
+| Summary | Level | Attributes |
+|---------|-------|------------|
+| ACME background task started | INFO | `ferron.acme.config_count` (int), `ferron.acme.domains` (string) |
+| ACME account created | INFO | `ferron.acme.directory` (string) — ACME directory URL, `ferron.acme.contact` (string) — account email |
+| ACME certificate issued | INFO | `ferron.acme.domains` (string) |
+| ACME post-obtain command started | INFO | `ferron.acme.domains` (string) |
+| On-demand certificate pre-loaded | INFO | `tls.sni` (string), `tls.port` (int) |
+| On-demand certificate requested | INFO | `tls.sni` (string), `tls.port` (int) |
+| ACME account recreated | WARN | `ferron.acme.domains` (string), `ferron.acme.directory` (string) |
+| ACME certificate provisioning error | WARN | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME post-obtain command malformed | WARN | `ferron.acme.domains` (string) |
+| ACME post-obtain command failed | WARN | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME post-obtain command empty | WARN | `ferron.acme.domains` (string) |
+| ACME account cache save failed | WARN | `error.message` (string) |
+| ACME certificate cache save failed | WARN | `error.message` (string) |
+| ACME provisioning cycle started | DEBUG | `ferron.acme.config_count` (int) |
+| ACME certificate still valid | DEBUG | `ferron.acme.domains` (string) |
+| ACME account loaded from cache | DEBUG | `ferron.acme.domains` (string) |
+| ACME order created | DEBUG | `ferron.acme.domains` (string) |
+| ACME certificate installed | DEBUG | `ferron.acme.domains` (string), `ferron.acme.chain_length` (int) |
+| ACME challenge initiated | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
+| ACME challenge solved | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
+| ACME DNS-01 record created | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int) |
+| ACME DNS-01 record cleanup | DEBUG | `ferron.acme.dns_challenge_domain` (string) |
+| ACME account load/create failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME order creation failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME authorization failed | ERROR | `ferron.acme.domains` (string), `ferron.acme.auth_status` (string) |
+| ACME challenge type unsupported | ERROR | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
+| ACME identifier type unsupported | ERROR | `ferron.acme.domains` (string), `ferron.acme.identifier_type` (string) |
+| ACME challenge ready failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME order finalization failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME order invalid | ERROR | `ferron.acme.domains` (string) |
+| ACME order not ready | ERROR | `ferron.acme.domains` (string), `ferron.acme.order_status` (string) |
+| ACME finalize failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| ACME certificate obtain failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
+| Certificate issuance denied | ERROR | `tls.sni` (string) — hostname blocked by ask endpoint |
+| Ask endpoint error | ERROR | `tls.sni` (string), `error.message` (string) |
+
+### Metrics
 
 | Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|

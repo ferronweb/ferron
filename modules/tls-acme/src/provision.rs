@@ -162,8 +162,19 @@ async fn install_certified_key(
     emit_log(
         event_sink,
         ferron_observability::LogLevel::Debug,
+        "ACME certificate installed",
         &format!("Certificate installed for {domains}, chain length: {chain_len}"),
         "ferron-tls-acme",
+        vec![
+            (
+                "ferron.acme.domains",
+                ferron_observability::LogAttributeValue::String(domains.clone()),
+            ),
+            (
+                "ferron.acme.chain_length",
+                ferron_observability::LogAttributeValue::I64(chain_len as i64),
+            ),
+        ],
     );
 
     // Save to files if configured
@@ -185,16 +196,26 @@ async fn install_certified_key(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Info,
+                "ACME post-obtain command started",
                 &format!("Post-obtain command started for {domains}"),
                 "ferron-tls-acme",
+                vec![(
+                    "ferron.acme.domains",
+                    ferron_observability::LogAttributeValue::String(domains.clone()),
+                )],
             );
 
             let Some(parts) = shlex::split(command) else {
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Warn,
+                    "ACME post-obtain command malformed",
                     &format!("Post-obtain command has malformed quoting for {domains}"),
                     "ferron-tls-acme",
+                    vec![(
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    )],
                 );
                 return Ok(());
             };
@@ -219,8 +240,23 @@ async fn install_certified_key(
                         emit_log(
                             event_sink,
                             ferron_observability::LogLevel::Warn,
+                            "ACME post-obtain command failed",
                             &format!("Post-obtain command failed for {domains}: {e}"),
                             "ferron-tls-acme",
+                            vec![
+                                (
+                                    "ferron.acme.domains",
+                                    ferron_observability::LogAttributeValue::String(
+                                        domains.clone(),
+                                    ),
+                                ),
+                                (
+                                    "error.message",
+                                    ferron_observability::LogAttributeValue::String(
+                                        e.to_string(),
+                                    ),
+                                ),
+                            ],
                         );
                     }
                 }
@@ -228,8 +264,13 @@ async fn install_certified_key(
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Warn,
+                    "ACME post-obtain command empty",
                     &format!("Post-obtain command is empty for {domains}"),
                     "ferron-tls-acme",
+                    vec![(
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    )],
                 );
             }
         }
@@ -254,8 +295,13 @@ pub async fn provision_certificate(
         emit_log(
             event_sink,
             ferron_observability::LogLevel::Debug,
+            "ACME certificate still valid",
             &format!("ACME certificate still valid or loaded from cache for {domains}"),
             "ferron-tls-acme",
+            vec![(
+                "ferron.acme.domains",
+                ferron_observability::LogAttributeValue::String(domains.clone()),
+            )],
         );
         return Ok(false);
     }
@@ -277,8 +323,13 @@ pub async fn provision_certificate(
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Debug,
+                    "ACME account loaded from cache",
                     &format!("ACME account loaded from cache for {domains}"),
                     "ferron-tls-acme",
+                    vec![(
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    )],
                 );
                 account_builder
                     .from_credentials(credentials)
@@ -297,8 +348,19 @@ pub async fn provision_certificate(
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Error,
+                    "ACME account load/create failed",
                     &format!("Failed to load or create ACME account: {}", e),
                     "ferron-tls-acme",
+                    vec![
+                        (
+                            "ferron.acme.domains",
+                            ferron_observability::LogAttributeValue::String(domains.clone()),
+                        ),
+                        (
+                            "error.message",
+                            ferron_observability::LogAttributeValue::String(e.to_string()),
+                        ),
+                    ],
                 );
                 return Err(e);
             }
@@ -328,8 +390,13 @@ pub async fn provision_certificate(
     emit_log(
         event_sink,
         ferron_observability::LogLevel::Debug,
+        "ACME order created",
         &format!("ACME order created for domains: {domains}"),
         "ferron-tls-acme",
+        vec![(
+            "ferron.acme.domains",
+            ferron_observability::LogAttributeValue::String(domains.clone()),
+        )],
     );
     let mut order = match acme_account.new_order(&new_order).await {
         Ok(o) => o,
@@ -340,11 +407,24 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Warn,
+                "ACME account recreated",
                 &format!(
                     "ACME account not found on server for {directory}, recreating",
                     directory = config.directory
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "ferron.acme.directory",
+                        ferron_observability::LogAttributeValue::String(
+                            config.directory.clone(),
+                        ),
+                    ),
+                ],
             );
             config.account_cache.remove(&account_cache_key).await;
             let account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
@@ -358,11 +438,24 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME order creation failed",
                 &format!(
                     "Failed to create ACME order for {domains}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(
+                            acme_error_to_string(&e),
+                        ),
+                    ),
+                ],
             );
             return Err(Box::new(e));
         }
@@ -380,11 +473,24 @@ pub async fn provision_certificate(
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Error,
+                    "ACME authorization failed",
                     &format!(
                         "ACME authorization failed — status: {:?}, domains: {domains}",
                         auth.status,
                     ),
                     "ferron-tls-acme",
+                    vec![
+                        (
+                            "ferron.acme.domains",
+                            ferron_observability::LogAttributeValue::String(domains.clone()),
+                        ),
+                        (
+                            "ferron.acme.auth_status",
+                            ferron_observability::LogAttributeValue::String(
+                                format!("{:?}", auth.status),
+                            ),
+                        ),
+                    ],
                 );
                 return Err(anyhow::anyhow!("Invalid ACME authorization status").into());
             }
@@ -393,16 +499,29 @@ pub async fn provision_certificate(
         let mut challenge = auth
             .challenge(config.challenge_type.clone())
             .ok_or_else(|| {
-                emit_log(
-                    event_sink,
-                    ferron_observability::LogLevel::Error,
-                    &format!(
-                        "ACME server doesn't support the requested challenge type {:?} for {domains}",
-                        config.challenge_type
-                    ),
-                    "ferron-tls-acme",
-                );
-                anyhow::anyhow!("The ACME server doesn't support the requested challenge type")
+                    emit_log(
+                        event_sink,
+                        ferron_observability::LogLevel::Error,
+                        "ACME challenge type unsupported",
+                        &format!(
+                            "ACME server doesn't support the requested challenge type {:?} for {domains}",
+                            config.challenge_type
+                        ),
+                        "ferron-tls-acme",
+                        vec![
+                            (
+                                "ferron.acme.domains",
+                                ferron_observability::LogAttributeValue::String(domains.clone()),
+                            ),
+                            (
+                                "ferron.acme.challenge_type",
+                                ferron_observability::LogAttributeValue::String(
+                                    format!("{:?}", config.challenge_type),
+                                ),
+                            ),
+                        ],
+                    );
+                    anyhow::anyhow!("The ACME server doesn't support the requested challenge type")
             })?;
 
         let identifier = match &challenge.identifier().identifier {
@@ -412,11 +531,24 @@ pub async fn provision_certificate(
                 emit_log(
                     event_sink,
                     ferron_observability::LogLevel::Error,
+                    "ACME identifier type unsupported",
                     &format!(
                         "Unsupported ACME identifier type for {domains}: {:?}",
                         challenge.identifier().identifier
                     ),
                     "ferron-tls-acme",
+                    vec![
+                        (
+                            "ferron.acme.domains",
+                            ferron_observability::LogAttributeValue::String(domains.clone()),
+                        ),
+                        (
+                            "ferron.acme.identifier_type",
+                            ferron_observability::LogAttributeValue::String(
+                                format!("{:?}", challenge.identifier().identifier),
+                            ),
+                        ),
+                    ],
                 );
                 return Err(anyhow::anyhow!("Unsupported ACME identifier type").into());
             }
@@ -427,11 +559,24 @@ pub async fn provision_certificate(
         emit_log(
             event_sink,
             ferron_observability::LogLevel::Debug,
+            "ACME challenge initiated",
             &format!(
                 "ACME {:?} challenge initiated for {domains}",
                 config.challenge_type
             ),
             "ferron-tls-acme",
+            vec![
+                (
+                    "ferron.acme.domains",
+                    ferron_observability::LogAttributeValue::String(domains.clone()),
+                ),
+                (
+                    "ferron.acme.challenge_type",
+                    ferron_observability::LogAttributeValue::String(
+                        format!("{:?}", config.challenge_type),
+                    ),
+                ),
+            ],
         );
 
         match config.challenge_type {
@@ -470,8 +615,21 @@ pub async fn provision_certificate(
                     emit_log(
                         event_sink,
                         ferron_observability::LogLevel::Debug,
+                        "ACME DNS-01 record created",
                         &format!("DNS-01 record created for {challenge_domain_log}, TTL {ttl}"),
                         "ferron-tls-acme",
+                        vec![
+                            (
+                                "ferron.acme.dns_challenge_domain",
+                                ferron_observability::LogAttributeValue::String(
+                                    challenge_domain_log,
+                                ),
+                            ),
+                            (
+                                "ferron.acme.dns_ttl",
+                                ferron_observability::LogAttributeValue::I64(ttl as i64),
+                            ),
+                        ],
                     );
 
                     // Wait for DNS propagation
@@ -490,22 +648,48 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME challenge ready failed",
                 &format!(
                     "Failed to set ACME challenge ready for {domains}: {}",
                     acme_error_to_string(&err)
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(
+                            acme_error_to_string(&err),
+                        ),
+                    ),
+                ],
             );
             return Err(Box::new(err));
         };
         emit_log(
             event_sink,
             ferron_observability::LogLevel::Debug,
+            "ACME challenge solved",
             &format!(
                 "ACME {:?} challenge solved for {domains}",
                 config.challenge_type
             ),
             "ferron-tls-acme",
+            vec![
+                (
+                    "ferron.acme.domains",
+                    ferron_observability::LogAttributeValue::String(domains.clone()),
+                ),
+                (
+                    "ferron.acme.challenge_type",
+                    ferron_observability::LogAttributeValue::String(
+                        format!("{:?}", config.challenge_type),
+                    ),
+                ),
+            ],
         );
     }
 
@@ -516,11 +700,24 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME order finalization failed",
                 &format!(
                     "Failed to finalize ACME order for {domains}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(
+                            acme_error_to_string(&e),
+                        ),
+                    ),
+                ],
             );
             return Err(Box::new(e));
         }
@@ -531,6 +728,7 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME order invalid",
                 &format!(
                     "ACME order failed — status: invalid, domains: {domains}, reason: {}",
                     order.refresh().await.map_or_else(
@@ -542,6 +740,10 @@ pub async fn provision_certificate(
                     )
                 ),
                 "ferron-tls-acme",
+                vec![(
+                    "ferron.acme.domains",
+                    ferron_observability::LogAttributeValue::String(domains.clone()),
+                )],
             );
             return Err(anyhow::anyhow!("ACME order is invalid").into());
         }
@@ -549,8 +751,21 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME order not ready",
                 &format!("ACME order failed — status: {order_status:?}, domains: {domains}"),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "ferron.acme.order_status",
+                        ferron_observability::LogAttributeValue::String(
+                            format!("{order_status:?}"),
+                        ),
+                    ),
+                ],
             );
             return Err(anyhow::anyhow!("ACME order is not ready").into());
         }
@@ -563,11 +778,24 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME finalize failed",
                 &format!(
                     "Failed to finalize ACME order for {domains}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(
+                            acme_error_to_string(&e),
+                        ),
+                    ),
+                ],
             );
             return Err(Box::new(e));
         }
@@ -578,11 +806,24 @@ pub async fn provision_certificate(
             emit_log(
                 event_sink,
                 ferron_observability::LogLevel::Error,
+                "ACME certificate obtain failed",
                 &format!(
                     "Failed to obtain ACME certificate for {domains}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(
+                            acme_error_to_string(&e),
+                        ),
+                    ),
+                ],
             );
             return Err(Box::new(e));
         }
@@ -614,8 +855,13 @@ pub async fn provision_certificate(
         emit_log(
             event_sink,
             ferron_observability::LogLevel::Warn,
+            "ACME certificate cache save failed",
             &format!("Failed to save ACME certificate cache: {}", err),
             "ferron-tls-acme",
+            vec![(
+                "error.message",
+                ferron_observability::LogAttributeValue::String(err.to_string()),
+            )],
         );
     }
 
@@ -653,8 +899,13 @@ async fn cleanup_challenge_data(
                     emit_log(
                         event_sink,
                         ferron_observability::LogLevel::Debug,
+                        "ACME DNS-01 record cleanup",
                         &format!("DNS-01 record cleanup completed for {challenge_domain}"),
                         "ferron-tls-acme",
+                        vec![(
+                            "ferron.acme.dns_challenge_domain",
+                            ferron_observability::LogAttributeValue::String(challenge_domain),
+                        )],
                     );
                 }
             }
@@ -691,20 +942,41 @@ async fn create_new_account(
         emit_log(
             event_sink,
             ferron_observability::LogLevel::Warn,
+            "ACME account cache save failed",
             &format!("Failed to save ACME account cache: {}", err),
             "ferron-tls-acme",
+            vec![(
+                "error.message",
+                ferron_observability::LogAttributeValue::String(err.to_string()),
+            )],
         );
     }
 
+    let contact = config
+        .contact
+        .first()
+        .map(|s| s.as_str())
+        .unwrap_or("none")
+        .to_string();
     emit_log(
         event_sink,
         ferron_observability::LogLevel::Info,
+        "ACME account created",
         &format!(
             "ACME account created for directory {}, contact: {}",
-            config.directory,
-            config.contact.first().map(|s| s.as_str()).unwrap_or("none")
+            config.directory, contact,
         ),
         "ferron-tls-acme",
+        vec![
+            (
+                "ferron.acme.directory",
+                ferron_observability::LogAttributeValue::String(config.directory.clone()),
+            ),
+            (
+                "ferron.acme.contact",
+                ferron_observability::LogAttributeValue::String(contact),
+            ),
+        ],
     );
 
     Ok(account)

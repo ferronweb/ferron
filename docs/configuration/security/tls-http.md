@@ -152,6 +152,24 @@ The `tls-http` module emits log events and metrics through the configured observ
 | `WARN` | `Failed to load the TLS private key: <error>` | Key loading error |
 | `WARN` | `Can't build TLS client configuration for 'tls-http'` | Invalid TLS config |
 
+### Structured logs
+
+In OTLP `log_style modern`, the `summary` field is used as the log body and `attributes` are emitted as typed OpenTelemetry log record attributes.
+
+| Summary | Level | Attributes |
+|---------|-------|------------|
+| TLS-HTTP polling started | INFO | `ferron.tls_http.url` (string) — certificate endpoint URL |
+| TLS-HTTP client config build failed | WARN | — |
+| TLS-HTTP request build failed | WARN | `error.message` (string) |
+| TLS-HTTP request failed | WARN | `error.message` (string) |
+| TLS-HTTP endpoint error | WARN | `http.status_code` (int) — HTTP status returned by endpoint |
+| TLS-HTTP response read failed | WARN | `error.message` (string) |
+| TLS-HTTP response parse failed | WARN | `error.message` (string) |
+| TLS-HTTP certificate chain parse failed | WARN | `error.message` (string) |
+| TLS-HTTP private key parse failed | WARN | `error.message` (string) |
+| TLS-HTTP private key load failed | WARN | `error.message` (string) |
+| TLS-HTTP certificate refreshed | INFO | `ferron.tls_http.host` (string) — hostname this certificate serves |
+
 ### Metrics
 
 | Metric | Type | Attributes | Description |

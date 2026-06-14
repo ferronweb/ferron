@@ -177,7 +177,7 @@ You should see a `OCSP Response Status: successful` in the output.
 
 The OCSP background task emits log events and metrics through the configured observability pipeline:
 
-**Log events:**
+### Logs
 
 | Level | Message | When |
 |-------|---------|------|
@@ -188,7 +188,21 @@ The OCSP background task emits log events and metrics through the configured obs
 | `DEBUG` | `OCSP stapling skipped — no OCSP URL in certificate <ident>` | Certificate lacks OCSP URL |
 | `WARN` | `OCSP fetch failed for <ident>: <error>` | Fetch error (retried with jitter) |
 
-**Metrics:**
+### Structured logs
+
+In OTLP `log_style modern`, the `summary` field is used as the log body and `attributes` are emitted as typed OpenTelemetry log record attributes.
+
+| Summary | Level | Attributes |
+|---------|-------|------------|
+| OCSP HTTPS initialization failed | INFO | — |
+| OCSP background task started | DEBUG | — |
+| OCSP background task shutting down | INFO | — |
+| OCSP fetch triggered | DEBUG | `ferron.ocsp.cert.subject` (string) — certificate subject |
+| OCSP response cached | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int) — Unix timestamp of next update |
+| OCSP stapling skipped | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string) — reason for skipping |
+| OCSP fetch failed | WARN | `ferron.ocsp.cert.subject` (string), `error.message` (string) |
+
+### Metrics
 
 | Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|

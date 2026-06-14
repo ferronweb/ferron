@@ -12,8 +12,8 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
 use ferron_observability::{
-    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue,
 };
 use hyper::body::Bytes;
 use hyper::Request;
@@ -325,8 +325,10 @@ pub async fn background_ocsp_task(
         emit_log(
             &event_sink,
             LogLevel::Info,
+            "OCSP HTTPS initialization failed",
             "Failed to initialize HTTPS for OCSP background task",
             "ferron_ocsp",
+            Vec::new(),
         );
         return;
     };
@@ -340,13 +342,15 @@ pub async fn background_ocsp_task(
         &event_sink,
         LogLevel::Debug,
         "OCSP background task started",
+        "OCSP background task started",
         "ferron_ocsp",
+        Vec::new(),
     );
 
     loop {
         let received_certified_key = tokio::select! {
             _ = cancel_token.cancelled() => {
-                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "ferron_ocsp");
+                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "OCSP background task shutting down", "ferron_ocsp", Vec::new());
                 return;
             }
             _ = tokio::time::sleep(sleep_duration) => None,
@@ -365,8 +369,13 @@ pub async fn background_ocsp_task(
                     emit_log(
                         &event_sink,
                         LogLevel::Debug,
+                        "OCSP fetch triggered",
                         &format!("OCSP fetch triggered for certificate {ident}"),
                         "ferron_ocsp",
+                        vec![(
+                            "ferron.ocsp.cert.subject",
+                            LogAttributeValue::String(ident.clone()),
+                        )],
                     );
                     known_certs.insert(key.clone(), chain.clone());
                     // Trigger immediate fetch (use time in the past to ensure it is fetched immediately)
@@ -390,15 +399,30 @@ pub async fn background_ocsp_task(
                     Ok(Some((response_der, next_update_time))) => {
                         let duration = start.elapsed().as_secs_f64();
                         let ident = cert_identifier(cert);
+                        let next_update_ts = next_update_time
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as i64;
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
+                            "OCSP response cached",
                             &format!(
                                 "OCSP response cached for {ident}, valid until {}",
                                 chrono::DateTime::<chrono::Utc>::from(next_update_time)
                                     .format("%Y-%m-%d %H:%M:%S")
                             ),
                             "ferron_ocsp",
+                            vec![
+                                (
+                                    "ferron.ocsp.cert.subject",
+                                    LogAttributeValue::String(ident),
+                                ),
+                                (
+                                    "ferron.ocsp.next_update",
+                                    LogAttributeValue::I64(next_update_ts),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -430,11 +454,24 @@ pub async fn background_ocsp_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Debug,
+                            "OCSP stapling skipped",
                             &format!(
                                 "OCSP stapling skipped — \
-                                no OCSP URL or incomplete chain in certificate {ident}"
+                                 no OCSP URL or incomplete chain in certificate {ident}"
                             ),
                             "ferron_ocsp",
+                            vec![
+                                (
+                                    "ferron.ocsp.cert.subject",
+                                    LogAttributeValue::String(ident),
+                                ),
+                                (
+                                    "ferron.ocsp.reason",
+                                    LogAttributeValue::StaticStr(
+                                        "no_ocsp_url_or_incomplete_chain",
+                                    ),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -458,8 +495,19 @@ pub async fn background_ocsp_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,
+                            "OCSP fetch failed",
                             &format!("OCSP fetch failed for {ident}: {e}"),
                             "ferron_ocsp",
+                            vec![
+                                (
+                                    "ferron.ocsp.cert.subject",
+                                    LogAttributeValue::String(ident),
+                                ),
+                                (
+                                    "error.message",
+                                    LogAttributeValue::String(e.to_string()),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -516,16 +564,18 @@ pub async fn background_ocsp_task(
 fn emit_log(
     event_sink: &Option<Arc<CompositeEventSink>>,
     level: LogLevel,
+    summary: &'static str,
     message: &str,
     target: &'static str,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
 ) {
     if let Some(ref sink) = event_sink {
         sink.emit(Event::Log(LogEvent {
             level,
             message: message.to_string(),
-            summary: "OCSP log".into(),
+            summary: summary.into(),
             target,
-            attributes: Vec::new(),
+            attributes,
             trace_context: None,
         }));
     }

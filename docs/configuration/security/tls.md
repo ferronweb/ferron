@@ -117,7 +117,7 @@ api.example.com {
 
 ## Observability
 
-**Metrics:**
+### Metrics
 
 | Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|

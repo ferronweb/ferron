@@ -40,8 +40,8 @@ use ferron_core::registry::{ProviderRegistry, RegistryBuilder, GLOBAL_REGISTRY};
 use ferron_core::{runtime::Runtime, Module};
 use ferron_dns::{DnsClient, DnsContext};
 use ferron_observability::{
-    build_composite_sink, CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue,
-    MetricEvent, MetricType, MetricValue,
+    build_composite_sink, CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue,
 };
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
@@ -311,12 +311,23 @@ impl Module for TlsAcmeModule {
         emit_log(
             &event_sink,
             LogLevel::Info,
+            "ACME background task started",
             &format!(
                 "ACME background task started with {} configuration(s) for domains: {}",
                 configs_count,
                 domains.join(", ")
             ),
             "ferron_tls_acme",
+            vec![
+                (
+                    "ferron.acme.config_count",
+                    LogAttributeValue::I64(configs_count as i64),
+                ),
+                (
+                    "ferron.acme.domains",
+                    LogAttributeValue::String(domains.join(", ")),
+                ),
+            ],
         );
 
         // Clone all state needed for the background task
@@ -389,11 +400,22 @@ async fn run_acme_background_task(
             emit_log(
                 &event_sink,
                 LogLevel::Info,
+                "On-demand certificate pre-loaded",
                 &format!(
                     "On-demand certificate pre-loaded for SNI {domain}:{}",
                     config.port
                 ),
                 "ferron_tls_acme",
+                vec![
+                    (
+                        "tls.sni",
+                        LogAttributeValue::String(domain.clone()),
+                    ),
+                    (
+                        "tls.port",
+                        LogAttributeValue::I64(config.port as i64),
+                    ),
+                ],
             );
             emit_metric(
                 &event_sink,
@@ -433,7 +455,9 @@ async fn run_acme_background_task(
         &event_sink,
         LogLevel::Debug,
         "ACME provisioning cycle started",
+        "ACME provisioning cycle started",
         "ferron_tls_acme",
+        Vec::new(),
     );
 
     // Don't spawn on-demand request loop task when config struct is empty
@@ -446,8 +470,19 @@ async fn run_acme_background_task(
                 emit_log(
                     &event_sink2,
                     LogLevel::Info,
+                    "On-demand certificate requested",
                     &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
                     "ferron_tls_acme",
+                    vec![
+                        (
+                            "tls.sni",
+                            LogAttributeValue::String(sni_hostname.clone()),
+                        ),
+                        (
+                            "tls.port",
+                            LogAttributeValue::I64(port as i64),
+                        ),
+                    ],
                 );
                 emit_metric(
                     &event_sink2,
@@ -479,12 +514,17 @@ async fn run_acme_background_task(
                                             emit_log(
                                                 &event_sink2,
                                                 LogLevel::Error,
+                                                "Certificate issuance denied",
                                                 &format!(
                                                 "The TLS certificate cannot be issued for \"{}\" \
                                                 hostname",
                                                 &sni_hostname
                                             ),
                                                 "ferron_tls_acme",
+                                                vec![(
+                                                    "tls.sni",
+                                                    LogAttributeValue::String(sni_hostname.clone()),
+                                                )],
                                             );
 
                                             continue;
@@ -493,12 +533,25 @@ async fn run_acme_background_task(
                                             emit_log(
                                                 &event_sink2,
                                                 LogLevel::Error,
+                                                "Ask endpoint error",
                                                 &format!(
                                                 "Error while determining if the TLS certificate \
                                                 can be issued for \"{}\" hostname: {err}",
                                                 &sni_hostname
                                             ),
                                                 "ferron_tls_acme",
+                                                vec![
+                                                    (
+                                                        "tls.sni",
+                                                        LogAttributeValue::String(
+                                                            sni_hostname.clone(),
+                                                        ),
+                                                    ),
+                                                    (
+                                                        "error.message",
+                                                        LogAttributeValue::String(err.to_string()),
+                                                    ),
+                                                ],
                                             );
 
                                             continue;
@@ -545,11 +598,16 @@ async fn run_acme_background_task(
             emit_log(
                 &event_sink,
                 LogLevel::Debug,
+                "ACME provisioning cycle started",
                 &format!(
                     "ACME provisioning cycle started — checking {} configurations",
                     configs_guard.len()
                 ),
                 "ferron_tls_acme",
+                vec![(
+                    "ferron.acme.config_count",
+                    LogAttributeValue::I64(configs_guard.len() as i64),
+                )],
             );
 
             for config in configs_guard.iter_mut() {
@@ -565,8 +623,13 @@ async fn run_acme_background_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Info,
+                            "ACME certificate issued",
                             &format!("ACME certificate issued for domains: {domains}"),
                             "ferron_tls_acme",
+                            vec![(
+                                "ferron.acme.domains",
+                                LogAttributeValue::String(domains),
+                            )],
                         );
                         emit_metric(
                             &event_sink,
@@ -594,8 +657,19 @@ async fn run_acme_background_task(
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,
+                            "ACME certificate provisioning error",
                             &format!("ACME certificate provisioning error for {domains}: {e}"),
                             "ferron_tls_acme",
+                            vec![
+                                (
+                                    "ferron.acme.domains",
+                                    LogAttributeValue::String(domains),
+                                ),
+                                (
+                                    "error.message",
+                                    LogAttributeValue::String(e.to_string()),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -628,15 +702,17 @@ async fn run_acme_background_task(
 pub fn emit_log(
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
     level: LogLevel,
+    summary: &'static str,
     message: &str,
     target: &'static str,
+    attributes: Vec<(&'static str, LogAttributeValue)>,
 ) {
     event_sink.emit(Event::Log(LogEvent {
         level,
         message: message.to_string(),
-        summary: "ACME log".into(),
+        summary: summary.into(),
         target,
-        attributes: Vec::new(),
+        attributes,
         trace_context: None,
     }));
 }
