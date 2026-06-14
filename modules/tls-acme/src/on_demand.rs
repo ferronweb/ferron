@@ -135,6 +135,7 @@ pub async fn convert_on_demand_config(
         account: None,
         save_paths: None,
         post_obtain_command: None,
+        error_message: data.error_message.clone(),
     }
 }
 

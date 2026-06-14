@@ -9,6 +9,7 @@ use ferron_tls::{
 use rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;
 
+use crate::fetch::ErrorMessageLock;
 use crate::{
     config::TlsHttpConfig,
     fetch::{fetch_tls_cert_loop, CertifiedKeyLock, TlsHttpResolver},
@@ -21,12 +22,14 @@ mod validator;
 type TcpTlsHttpTaskData = (
     TlsHttpConfig,
     CertifiedKeyLock,
+    ErrorMessageLock,
     String,
     Arc<CancellationToken>,
 );
 
 pub struct TcpTlsHttpResolver {
     config: Arc<ServerConfig>,
+    error_message: ErrorMessageLock,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -34,6 +37,11 @@ impl TcpTlsResolver for TcpTlsHttpResolver {
     #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
+    }
+
+    #[inline]
+    fn get_tls_background_error(&self) -> Option<String> {
+        self.error_message.read().clone()
     }
 }
 
@@ -85,8 +93,12 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
         }
 
         let config = Arc::new(config_with_tickets);
+        let error_message = Arc::new(parking_lot::RwLock::new(None));
 
-        ctx.resolver = Some(Arc::new(TcpTlsHttpResolver { config }));
+        ctx.resolver = Some(Arc::new(TcpTlsHttpResolver {
+            config,
+            error_message: error_message.clone(),
+        }));
 
         let host = ctx
             .domain
@@ -98,6 +110,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
         let _ = self.tx.try_send((
             http_config,
             certified_key,
+            error_message,
             host,
             ferron_core::shutdown::RELOAD_TOKEN.load().clone(),
         ));
@@ -126,9 +139,11 @@ impl ferron_core::Module for TcpTlsHttpModule {
         let rx = self.rx.clone();
         let sink = self.event_sink.clone();
         runtime.spawn_secondary_task(async move {
-            while let Ok((config, certified_key, host, cancel_token)) = rx.recv().await {
+            while let Ok((config, certified_key, resolver_error, host, cancel_token)) =
+                rx.recv().await
+            {
                 tokio::spawn(cancel_token.deref().clone().run_until_cancelled_owned(
-                    fetch_tls_cert_loop(config, certified_key, host, sink.clone()),
+                    fetch_tls_cert_loop(config, certified_key, resolver_error, host, sink.clone()),
                 ));
             }
         });

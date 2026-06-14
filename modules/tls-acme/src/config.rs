@@ -55,6 +55,8 @@ pub struct AcmeConfig {
     pub save_paths: Option<(PathBuf, PathBuf)>,
     /// Command to run after certificate issuance.
     pub post_obtain_command: Option<String>,
+    /// Error message lock
+    pub error_message: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
 /// On-demand ACME configuration for lazy certificate issuance.
@@ -89,6 +91,8 @@ pub struct AcmeOnDemandConfig {
     pub on_demand_ask: Option<String>,
     /// Whether to skip TLS verification for the on-demand ask endpoint.
     pub on_demand_ask_no_verification: bool,
+    /// Error message lock
+    pub error_message: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
 /// A cloneable subset of on-demand config data used by the background task.
@@ -121,6 +125,8 @@ pub struct AcmeOnDemandConfigData {
     pub on_demand_ask: Option<String>,
     /// Whether to skip TLS verification for the on-demand ask endpoint.
     pub on_demand_ask_no_verification: bool,
+    /// Error message lock
+    pub error_message: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
 impl AcmeOnDemandConfig {
@@ -139,6 +145,7 @@ impl AcmeOnDemandConfig {
             port: self.port,
             on_demand_ask: self.on_demand_ask.clone(),
             on_demand_ask_no_verification: self.on_demand_ask_no_verification,
+            error_message: self.error_message.clone(),
         }
     }
 
@@ -165,6 +172,7 @@ impl AcmeOnDemandConfig {
             port: data.port,
             on_demand_ask: data.on_demand_ask,
             on_demand_ask_no_verification: data.on_demand_ask_no_verification,
+            error_message: data.error_message,
         }
     }
 }
@@ -445,6 +453,7 @@ pub fn parse_acme_config(
             port,
             on_demand_ask,
             on_demand_ask_no_verification,
+            error_message: Arc::new(parking_lot::RwLock::new(None)),
         }))
     } else {
         let certified_key_lock = Arc::new(RwLock::new(None));
@@ -497,6 +506,7 @@ pub fn parse_acme_config(
             account: None,
             save_paths,
             post_obtain_command,
+            error_message: Arc::new(parking_lot::RwLock::new(None)),
         }))
     }
 }

@@ -17,6 +17,7 @@ use serde::Deserialize;
 use crate::config::TlsHttpConfig;
 
 pub type CertifiedKeyLock = Arc<RwLock<Option<Arc<rustls::sign::CertifiedKey>>>>;
+pub type ErrorMessageLock = Arc<RwLock<Option<String>>>;
 
 /// Emit a log event through the observability sink.
 pub fn emit_log(
@@ -26,6 +27,7 @@ pub fn emit_log(
     message: &str,
     target: &'static str,
     attributes: Vec<(&'static str, LogAttributeValue)>,
+    error_message: ErrorMessageLock,
 ) {
     event_sink.emit(ferron_observability::Event::Log(LogEvent {
         level,
@@ -35,6 +37,7 @@ pub fn emit_log(
         attributes,
         trace_context: None,
     }));
+    *error_message.write() = Some(message.to_string());
 }
 
 /// Emit a metric event through the observability sink.
@@ -68,6 +71,7 @@ struct TlsHttpResponse {
 pub async fn fetch_tls_cert_loop(
     config: TlsHttpConfig,
     certified_key: CertifiedKeyLock,
+    error_message: ErrorMessageLock,
     host: String,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) {
@@ -79,6 +83,7 @@ pub async fn fetch_tls_cert_loop(
         &format!("TLS-HTTP certificate polling started for {url_string}"),
         "ferron_tls_http",
         vec![("ferron.tls_http.url", LogAttributeValue::String(url_string))],
+        error_message.clone(),
     );
     let Ok(tls_config) = build_rustls_client_config(config.no_verification) else {
         emit_log(
@@ -88,6 +93,7 @@ pub async fn fetch_tls_cert_loop(
             "Can't build TLS client configuration for `tls-http`",
             "ferron_tls_http",
             Vec::new(),
+            error_message.clone(),
         );
         return;
     };
@@ -125,6 +131,7 @@ pub async fn fetch_tls_cert_loop(
                     &format!("Failed to build HTTP request for `tls-http`: {e}"),
                     "ferron_tls_http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    error_message.clone(),
                 );
                 continue;
             }
@@ -150,6 +157,7 @@ pub async fn fetch_tls_cert_loop(
                     &format!("Failed to send HTTP request for `tls-http`: {e}"),
                     "ferron_tls_http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    error_message.clone(),
                 );
                 continue;
             }
@@ -189,6 +197,7 @@ pub async fn fetch_tls_cert_loop(
                     "http.status_code",
                     LogAttributeValue::I64(response.status().as_u16() as i64),
                 )],
+                error_message.clone(),
             );
             continue;
         }
@@ -204,6 +213,7 @@ pub async fn fetch_tls_cert_loop(
                     &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
                     "ferron_tls_http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    error_message.clone(),
                 );
                 continue;
             }
@@ -220,6 +230,7 @@ pub async fn fetch_tls_cert_loop(
                     ),
                     "ferron_tls_http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    error_message.clone(),
                 );
                 continue;
             }
@@ -239,6 +250,7 @@ pub async fn fetch_tls_cert_loop(
                     ),
                         "ferron_tls_http",
                         vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                        error_message.clone(),
                     );
                     continue;
                 }
@@ -256,6 +268,7 @@ pub async fn fetch_tls_cert_loop(
                         ),
                         "ferron_tls_http",
                         vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                        error_message.clone(),
                     );
                     continue;
                 }
@@ -273,6 +286,7 @@ pub async fn fetch_tls_cert_loop(
                     &format!("Failed to load the TLS private key: {e}"),
                     "ferron_tls_http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    error_message.clone(),
                 );
                 continue;
             }
@@ -310,6 +324,7 @@ pub async fn fetch_tls_cert_loop(
                     "ferron.tls_http.host",
                     LogAttributeValue::String(host.clone()),
                 )],
+                error_message.clone(),
             );
             emit_metric(
                 &event_sink,

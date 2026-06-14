@@ -193,6 +193,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
             AcmeConfigOrOnDemand::Eager(acme_config) => {
                 let certified_key_lock = acme_config.certified_key_lock.clone();
                 let challenge_type = acme_config.challenge_type.clone();
+                let error_message = acme_config.error_message.clone();
 
                 // Add to configs list
                 task_state.configs.blocking_write().push(acme_config);
@@ -219,6 +220,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                     ocsp_handle,
                     ticketer,
                     None,
+                    error_message,
                 );
 
                 ctx.resolver = Some(Arc::new(acme_resolver));
@@ -226,6 +228,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
             AcmeConfigOrOnDemand::OnDemand(on_demand_config) => {
                 let sni_resolver_lock = on_demand_config.sni_resolver_lock.clone();
                 let challenge_type = on_demand_config.challenge_type.clone();
+                let error_message = on_demand_config.error_message.clone();
 
                 // Store on-demand config for later use by the background task
                 task_state
@@ -254,6 +257,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                     ocsp_handle,
                     ticketer,
                     Some((task_state.on_demand_tx.clone(), on_demand_config.port)),
+                    error_message,
                 );
                 ctx.resolver = Some(Arc::new(acme_resolver));
             }
@@ -639,6 +643,9 @@ async fn run_acme_background_task(
                         // Certificate has been already provisioned, skipping
                     }
                     Err(e) => {
+                        *config.error_message.write() = Some(format!(
+                            "ACME certificate provisioning error for {domains}: {e}"
+                        ));
                         emit_log(
                             &event_sink,
                             LogLevel::Warn,

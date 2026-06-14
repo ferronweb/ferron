@@ -212,7 +212,7 @@ example.com {
 - `admin_email <email: string>`
   - This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported. Default: none
 
-### Metrics
+## Metrics
 
 The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
 

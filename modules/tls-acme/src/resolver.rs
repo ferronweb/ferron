@@ -95,6 +95,8 @@ pub struct TcpTlsAcmeResolver {
     ocsp_handle: OcspHandle,
     /// Ticket key ticketer.
     ticketer: Option<Arc<dyn rustls::server::ProducesTickets>>,
+    /// Error message lock
+    error_message: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
 /// OCSP service handle type alias.
@@ -110,6 +112,7 @@ impl TcpTlsAcmeResolver {
     /// * `ocsp_config` - OCSP stapling configuration.
     /// * `ocsp_handle` - Optional OCSP service handle for stapling.
     /// * `ticketer` - Optional ticket key ticketer.
+    /// * `error_message` - Lock for provisioning error message
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         certified_key_lock: AcmeResolverInner,
@@ -119,6 +122,7 @@ impl TcpTlsAcmeResolver {
         ocsp_handle: OcspHandle,
         ticketer: Option<Arc<dyn rustls::server::ProducesTickets>>,
         on_demand_tx: Option<(async_channel::Sender<OnDemandRequest>, u16)>,
+        error_message: Arc<parking_lot::RwLock<Option<String>>>,
     ) -> Self {
         let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock, on_demand_tx));
 
@@ -129,6 +133,7 @@ impl TcpTlsAcmeResolver {
             ocsp_config,
             ocsp_handle,
             ticketer,
+            error_message,
         }
     }
 
@@ -231,6 +236,11 @@ impl TcpTlsResolver for TcpTlsAcmeResolver {
                 Ok(None)
             }
         }
+    }
+
+    #[inline]
+    fn get_tls_background_error(&self) -> Option<String> {
+        self.error_message.read().clone()
     }
 }
 

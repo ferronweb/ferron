@@ -297,13 +297,22 @@ impl TcpListenerHandle {
                                         hinted_hostname.as_deref(),
                                         &ip_observability,
                                     );
+                                    let mut error_message = format!("Failed to start TLS handshake: {e}");
+                                    let mut attrs = vec![(
+                                        "error.type",
+                                        LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                    )];
+                                    if let Some(possible_cause) = resolver.get_tls_background_error() {
+                                        error_message.push_str(&format!("\nPossible cause: {possible_cause}"));
+                                        attrs.push((
+                                            "ferron.error.possible_cause",
+                                            LogAttributeValue::String(possible_cause.to_string())
+                                        ));
+                                    }
                                     emit_error(
                                         &tls_observability,
-                                        format!("Failed to start TLS handshake: {e}"),
-                                        vec![(
-                                            "error.type",
-                                            LogAttributeValue::String("tcp_tls_handshake_error".into()),
-                                        )],
+                                        error_message,
+                                        attrs,
                                     );
                                     emit_connection_error_metric(&tls_observability, "tcp", "tls_handshake");
                                     return;

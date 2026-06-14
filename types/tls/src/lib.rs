@@ -31,4 +31,9 @@ pub trait TcpTlsResolver: Send + Sync {
     }
 
     fn get_tls_config(&self) -> Arc<ServerConfig>;
+
+    #[inline]
+    fn get_tls_background_error(&self) -> Option<String> {
+        None
+    }
 }
