@@ -52,13 +52,26 @@ pub async fn config_handler(State(state): State<AdminState>) -> axum::Json<serde
 pub async fn reload_handler(
     State(_state): State<AdminState>,
 ) -> (StatusCode, axum::Json<serde_json::Value>) {
-    ferron_core::shutdown::RELOAD_TOKEN
-        .swap(Arc::new(CancellationToken::new()))
-        .cancel();
-    (
-        StatusCode::OK,
-        axum::Json(serde_json::json!({ "status": "reload_initiated" })),
-    )
+    {
+        let previous_state = ferron_core::shutdown::RELOAD_STATE.load();
+        ferron_core::shutdown::RELOAD_TOKEN
+            .swap(Arc::new(CancellationToken::new()))
+            .cancel();
+        previous_state.0.cancelled().await;
+    }
+    let current_state = ferron_core::shutdown::RELOAD_STATE.load();
+    let error = current_state.1.get_state().await;
+    if let Some(error) = error {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            axum::Json(serde_json::json!({ "status": "reload_failed", "error": error })),
+        )
+    } else {
+        (
+            StatusCode::OK,
+            axum::Json(serde_json::json!({ "status": "reload_initiated", "error": null })),
+        )
+    }
 }
 
 /// `GET /reload` — returns the status of the reload operation.

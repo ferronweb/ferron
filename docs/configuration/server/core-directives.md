@@ -454,7 +454,21 @@ Returns the current reload status as JSON:
 
 #### `POST /reload`
 
-Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
+Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process.
+
+Returns the reload status as JSON:
+
+```json
+{
+  "status": "reload_initiated",
+  "error": null
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `status` | `"reload_initiated"` if the reload is in progress, or `"reload_failed"` if it failed. |
+| `error` | Error message from the last reload attempt, or `null` if successful. |
 
 #### `GET /runtime`
 
