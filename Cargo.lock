@@ -1302,6 +1302,7 @@ dependencies = [
  "ferron-logformat-text",
  "ferron-metrics-admin",
  "ferron-metrics-process",
+ "ferron-metrics-reload",
  "ferron-observability-consolelog",
  "ferron-observability-logfile",
  "ferron-observability-otlp",
@@ -1819,6 +1820,16 @@ dependencies = [
  "tokio",
  "tokio-util",
  "windows",
+]
+
+[[package]]
+name = "ferron-metrics-reload"
+version = "3.0.0-beta.2"
+dependencies = [
+ "ferron-core",
+ "ferron-observability",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

@@ -54,6 +54,7 @@ ferron-logformat-json = { path = "../modules/logformat-json", optional = true }
 ferron-logformat-text = { path = "../modules/logformat-text", optional = true }
 ferron-metrics-process = { path = "../modules/metrics-process", optional = true }
 ferron-metrics-admin = { path = "../modules/metrics-admin", optional = true }
+ferron-metrics-reload = { path = "../modules/metrics-reload", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
@@ -106,4 +107,5 @@ profile-default = [
     "ferron-logformat-text",
     "ferron-metrics-process",
     "ferron-metrics-admin",
+    "ferron-metrics-reload",
 ]

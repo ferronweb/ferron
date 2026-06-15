@@ -76,6 +76,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_logformat_text::TextFormatObservabilityModuleLoader),
         Box::new(ferron_metrics_process::ProcessMetricsModuleLoader::default()),
         Box::new(ferron_metrics_admin::AdminMetricsModuleLoader::default()),
+        Box::new(ferron_metrics_reload::ReloadMetricsModuleLoader::default()),
         Box::new(ferron_dns_stalwart::StalwartDnsModuleLoader),
     ]
 }
@@ -825,10 +826,6 @@ fn load_modules(
                         let mut reload_metrics =
                             ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
                         reload_metrics.last_reload_error = Some(e.to_string());
-                        ferron_core::log_warn!(
-                            "Can't reload the server, \
-                        continuing to run with the previous configuration: {e}"
-                        );
                     }
 
                     reload_state.1.set_state(Some(e.to_string()));
@@ -873,7 +870,6 @@ fn load_modules(
                 let mut reload_metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
                 reload_metrics.last_reload_time = std::time::SystemTime::now();
             }
-            log_info!("Reloading configuration...");
         }
     }
 }

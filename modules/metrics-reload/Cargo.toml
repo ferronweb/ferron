@@ -1,0 +1,11 @@
+[package]
+name = "ferron-metrics-reload"
+version = "3.0.0-beta.2"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "time", "macros", "sync"] }
+tokio-util = "0.7.18"
+
+ferron-core = { path = "../../core" }
+ferron-observability = { path = "../../types/observability" }

@@ -66,6 +66,14 @@ The `metrics-admin` module also collects runtime status metrics when an observab
 
 These metrics correspond to the same data exposed by the admin API's `GET /status` endpoint, but are available as time-series data for monitoring and alerting.
 
+## Reload metrics
+
+The `metrics-reload` module emits a counter metric around configuration reload lifecycle events when an observability backend is configured.
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.reloads` | Counter | `ferron.reload.successful` (bool), `error.message` (string, on failure) | Number of configuration reloads performed, annotated with success or failure |
+
 ## HTTP and proxy metrics
 
 Ferron also emits common request-path metrics:

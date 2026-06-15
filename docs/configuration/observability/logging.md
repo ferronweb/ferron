@@ -207,6 +207,24 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 > [!tip]
 > If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
 
+## Reload log events
+
+The `metrics-reload` module emits application log events during configuration reloads:
+
+| Level | Message | Trigger |
+|-------|---------|---------|
+| `INFO` | `Reloading configuration...` | A reload is initiated |
+| `WARN` | `Can't reload the server, continuing to run with the previous configuration: {error}` | The reload attempt failed |
+
+These events carry the `ferron-metrics-reload` target and are emitted through the observability event system.
+
+### Structured logs
+
+| Description (summary) | Level | Attributes |
+|-----------------------|-------|------------|
+| Configuration reload | `INFO` | — |
+| Configuration reload error | `WARN` | `error.message` (string) — the reload error message |
+
 ## Trace ID in console and file logs
 
 Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.
