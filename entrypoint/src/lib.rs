@@ -17,10 +17,11 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
-use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
+use ferron_core::shutdown::{ReloadState, RELOAD_STATE, RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use malloc_best_effort::BEMalloc;
 use serde::Serialize;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(windows)]
 use crate::cli::WinServiceCommands;
@@ -769,6 +770,9 @@ fn load_modules(
         .ok();
 
     loop {
+        let reload_state: Arc<(CancellationToken, ReloadState)> = Default::default();
+        RELOAD_STATE.swap(reload_state.clone()).0.cancel();
+
         let (runtime, mut watcher_obtained) = match load_modules_config(
             config_adapter,
             config_adapter_params.clone(),
@@ -809,19 +813,26 @@ fn load_modules(
                         reload_metrics.active_generation.saturating_add(1);
                 }
 
+                reload_state.1.set_state(None);
+
                 (runtime, watcher)
             }
             Err(e) => {
                 if let (Some(runtime), Some(watcher)) =
                     (runtime.as_mut(), watcher.borrow_mut().take())
                 {
-                    let mut reload_metrics =
-                        ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
-                    reload_metrics.last_reload_error = Some(e.to_string());
-                    ferron_core::log_warn!(
-                        "Can't reload the server, \
+                    {
+                        let mut reload_metrics =
+                            ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
+                        reload_metrics.last_reload_error = Some(e.to_string());
+                        ferron_core::log_warn!(
+                            "Can't reload the server, \
                         continuing to run with the previous configuration: {e}"
-                    );
+                        );
+                    }
+
+                    reload_state.1.set_state(Some(e.to_string()));
+
                     (runtime, watcher)
                 } else {
                     return Err(e);
