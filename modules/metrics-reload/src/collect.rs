@@ -47,12 +47,10 @@ pub async fn collect_reload_metrics(
             }));
         }
 
-        let mut attributes = vec![
-            (
-                "ferron.reload.successful",
-                MetricAttributeValue::Bool(error.is_none()),
-            ),
-        ];
+        let mut attributes = vec![(
+            "ferron.reload.successful",
+            MetricAttributeValue::Bool(error.is_none()),
+        )];
         if let Some(error) = error {
             attributes.push(("error.message", MetricAttributeValue::String(error)));
         }

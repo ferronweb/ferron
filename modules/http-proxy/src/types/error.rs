@@ -135,11 +135,11 @@ impl ProxyError {
     pub fn summary(&self) -> String {
         match self {
             ProxyError::InvalidUpstreamUrl(_) => {
-                format!("Reverse proxy: invalid upstream URL")
+                "Reverse proxy: invalid upstream URL".to_string()
             }
-            ProxyError::ConnectFailed(_) => format!("Reverse proxy: connect failed"),
+            ProxyError::ConnectFailed(_) => "Reverse proxy: connect failed".to_string(),
             ProxyError::ConnectFailedUnavailable(_) => {
-                format!("Reverse proxy: connect failed")
+                "Reverse proxy: connect failed".to_string()
             }
             ProxyError::Io(_) => "Reverse proxy: backend IO error".to_string(),
             ProxyError::Hyper(_) => "Reverse proxy: hyper client error".to_string(),
