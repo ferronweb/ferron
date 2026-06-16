@@ -545,7 +545,7 @@ example.com {
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | Reverse proxy config error | ERROR | `error.message` (string) — configuration error details |
-| Proxy error             | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details |
+| Reverse proxy: `<error type>` | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details |
 | Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
 

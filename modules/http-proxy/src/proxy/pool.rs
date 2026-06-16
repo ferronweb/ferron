@@ -305,12 +305,20 @@ pub async fn establish_and_send(
                                 summary: "Reverse proxy: TLS handshake with Unix socket failed"
                                     .into(),
                                 target: "ferron-http-proxy",
-                                attributes: vec![(
-                                    "upstream.address",
-                                    ferron_observability::LogAttributeValue::String(
-                                        unix_path.to_string(),
+                                attributes: vec![
+                                    (
+                                        "upstream.address",
+                                        ferron_observability::LogAttributeValue::String(
+                                            unix_path.to_string(),
+                                        ),
                                     ),
-                                )],
+                                    (
+                                        "error.message",
+                                        ferron_observability::LogAttributeValue::String(
+                                            e.to_string(),
+                                        ),
+                                    ),
+                                ],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
                             },

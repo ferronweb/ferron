@@ -250,6 +250,9 @@ pub async fn execute_proxy(
                             attributes: vec![(
                                 "upstream.address",
                                 LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                            ), (
+                                "error.message",
+                                LogAttributeValue::String(e.to_string())
                             )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
