@@ -132,28 +132,22 @@ impl ProxyError {
 
     /// Short human-readable summary suitable for log.summary.
     #[inline]
-    pub fn summary(&self) -> String {
+    pub fn summary(&self) -> &'static str {
         match self {
-            ProxyError::InvalidUpstreamUrl(_) => {
-                "Reverse proxy: invalid upstream URL".to_string()
-            }
-            ProxyError::ConnectFailed(_) => "Reverse proxy: connect failed".to_string(),
+            ProxyError::InvalidUpstreamUrl(_) => "Reverse proxy: invalid upstream URL",
+            ProxyError::ConnectFailed(_) => "Reverse proxy: connect failed",
             ProxyError::ConnectFailedUnavailable(_) => {
-                "Reverse proxy: connect failed".to_string()
+                "Reverse proxy: connect failed (unavailable)"
             }
-            ProxyError::Io(_) => "Reverse proxy: backend IO error".to_string(),
-            ProxyError::Hyper(_) => "Reverse proxy: hyper client error".to_string(),
-            ProxyError::Http(_) => "Reverse proxy: HTTP error".to_string(),
-            ProxyError::TlsHandshakeFailed(_) => "Reverse proxy: TLS handshake failed".to_string(),
-            ProxyError::ProxyProtocolWriteFailed(_) => {
-                "Reverse proxy: PROXY protocol write failed".to_string()
-            }
-            ProxyError::RequestConstructError(_) => {
-                "Reverse proxy: request construction failed".to_string()
-            }
-            ProxyError::SendRequestError(_) => "Reverse proxy: sending request failed".to_string(),
-            ProxyError::Timeout(_) => "Reverse proxy: timeout".to_string(),
-            ProxyError::Other(_) => "Reverse proxy: other error".to_string(),
+            ProxyError::Io(_) => "Reverse proxy: backend IO error",
+            ProxyError::Hyper(_) => "Reverse proxy: hyper client error",
+            ProxyError::Http(_) => "Reverse proxy: HTTP error",
+            ProxyError::TlsHandshakeFailed(_) => "Reverse proxy: TLS handshake failed",
+            ProxyError::ProxyProtocolWriteFailed(_) => "Reverse proxy: PROXY protocol write failed",
+            ProxyError::RequestConstructError(_) => "Reverse proxy: request construction failed",
+            ProxyError::SendRequestError(_) => "Reverse proxy: sending request failed",
+            ProxyError::Timeout(_) => "Reverse proxy: timeout",
+            ProxyError::Other(_) => "Reverse proxy: other error",
         }
     }
 
