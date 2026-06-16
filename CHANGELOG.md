@@ -16,6 +16,10 @@
 
 - **Reload failure status** - the `/reload` endpoint now returns an error message in the response body when reload fails. Previously, it only indicated that reloading was initiated without any details about why it failed.
 
+#### Observability & logging
+
+- **Improved error reporting in structured logs** - reverse proxy, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
+
 ## Ferron 3.0.0-beta.2
 
 **Released in June 14, 2026**
