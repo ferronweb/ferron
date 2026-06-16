@@ -139,7 +139,7 @@ impl ProxyError {
             ProxyError::ConnectFailedUnavailable(_) => {
                 "Reverse proxy: connect failed (unavailable)"
             }
-            ProxyError::Io(_) => "Reverse proxy: backend IO error",
+            ProxyError::Io(_) => "Reverse proxy: backend I/O error",
             ProxyError::Hyper(_) => "Reverse proxy: hyper client error",
             ProxyError::Http(_) => "Reverse proxy: HTTP error",
             ProxyError::TlsHandshakeFailed(_) => "Reverse proxy: TLS handshake failed",
