@@ -133,7 +133,11 @@ impl TcpListenerHandle {
                             emit_error(
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
-                                vec![("error.type", LogAttributeValue::String("tcp_accept_error".into()))],
+                                vec![("error.type", LogAttributeValue::String("tcp_accept_error".into())),
+                                    (
+                                        "error.message",
+                                        LogAttributeValue::String(err.to_string()),
+                                    )],
                             );
                             emit_connection_error_metric(&global_observability, "tcp", "accept");
                             #[cfg(unix)]
@@ -198,6 +202,10 @@ impl TcpListenerHandle {
                                         vec![(
                                             "error.type",
                                             LogAttributeValue::String("tcp_proxy_protocol_error".into()),
+                                        ),
+                                        (
+                                            "error.message",
+                                            LogAttributeValue::String(e.to_string()),
                                         )],
                                     );
                                     emit_connection_error_metric(
@@ -263,6 +271,10 @@ impl TcpListenerHandle {
                                       vec![(
                                           "error.type",
                                           LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                      ),
+                                      (
+                                          "error.message",
+                                          LogAttributeValue::String(e.to_string()),
                                       )],
                                   );
                                   emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
@@ -301,6 +313,10 @@ impl TcpListenerHandle {
                                     let mut attrs = vec![(
                                         "error.type",
                                         LogAttributeValue::String("tcp_tls_handshake_error".into()),
+                                    ),
+                                    (
+                                        "error.message",
+                                        LogAttributeValue::String(e.to_string()),
                                     )];
                                     if e.to_string().to_lowercase().contains("resolve")
                                       || e.to_string().to_lowercase().contains("resolution") {
@@ -412,7 +428,11 @@ impl TcpListenerHandle {
                                                                     vec![(
                                                                         "error.type",
                                                                         LogAttributeValue::String("tcp_tls_handshake_error".into()),
-                                                                    )],
+                                                                    ),
+                                                                    (
+                                                                        "error.message",
+                                                                        LogAttributeValue::String(e.to_string()),
+                                                                    ),],
                                                                 );
                                                             }
                                     }
@@ -622,10 +642,16 @@ async fn handle_http1_connection_zerocopy<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/1 connection error: {error}"),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("tcp_connection_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("tcp_connection_error".into()),
+                ),
+                (
+                    "error.message",
+                    LogAttributeValue::String(error.to_string()),
+                ),
+            ],
         );
     }
 }
@@ -694,10 +720,16 @@ async fn handle_http1_connection<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/1 connection error: {error}"),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("tcp_connection_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("tcp_connection_error".into()),
+                ),
+                (
+                    "error.message",
+                    LogAttributeValue::String(error.to_string()),
+                ),
+            ],
         );
     }
 }
@@ -766,10 +798,16 @@ async fn handle_http2_connection<S>(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/2 connection error: {error}"),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("tcp_connection_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("tcp_connection_error".into()),
+                ),
+                (
+                    "error.message",
+                    LogAttributeValue::String(error.to_string()),
+                ),
+            ],
         );
     }
 }

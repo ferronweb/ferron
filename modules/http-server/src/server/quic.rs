@@ -340,10 +340,16 @@ impl QuicListenerHandle {
                                 emit_error(
                                     &ip_observability,
                                     format!("Failed to accept HTTP/3 connection: {error}"),
-                                    vec![(
-                                        "error.type",
-                                        LogAttributeValue::String("quic_accept_error".into()),
-                                    )],
+                                    vec![
+                                        (
+                                            "error.type",
+                                            LogAttributeValue::String("quic_accept_error".into()),
+                                        ),
+                                        (
+                                            "error.message",
+                                            LogAttributeValue::String(error.to_string()),
+                                        ),
+                                    ],
                                 );
                                 emit_connection_error_metric(
                                     &ip_observability,
@@ -518,10 +524,16 @@ async fn handle_http3_connection(
         emit_error(
             &handler_state.connection_observability,
             format!("HTTP/3 connection error: {error}"),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("quic_connection_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("quic_connection_error".into()),
+                ),
+                (
+                    "error.message",
+                    LogAttributeValue::String(error.to_string()),
+                ),
+            ],
         );
     }
 }
