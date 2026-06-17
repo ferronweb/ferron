@@ -1,8 +1,8 @@
 # Ferron 2 change log
 
-## Ferron UNRELEASED
+## Ferron 2.8.1
 
-**Not yet released**
+**Released in June 17, 2026**
 
 ### Fixed
 
