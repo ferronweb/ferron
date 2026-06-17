@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- Fixed a routing bug for host blocks with configurations in and outside `location "/"` blocks
+- Fixed a routing bug for host blocks with configurations in and outside `location "/"` blocks. ([GitHub issue](https://github.com/ferronweb/ferron/issues/783))
 
 ## Ferron 2.8.0
 
