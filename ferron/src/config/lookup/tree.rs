@@ -321,10 +321,10 @@ impl<T> ConfigFilterTree<T> {
         if conditional_predicate_matched {
           break;
         }
-        let have_path_start = matches!(key.0.first(), Some(&ConfigFilterTreeSingleKey::LocationSegment(_)))
-          && matches!(key.0.get(1), Some(&ConfigFilterTreeSingleKey::LocationSegment(_)));
+        let have_path_end =
+          matches!(key.0.first(), Some(&ConfigFilterTreeSingleKey::LocationSegment(_))) && key.0.get(1).is_none();
 
-        if !wildcard_matched && !have_path_start {
+        if !wildcard_matched && have_path_end {
           // No match found for this segment — stop traversal to prevent matching location
           // segments that appear later in the path.
           break;
