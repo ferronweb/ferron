@@ -1,5 +1,13 @@
 # Ferron 2 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- Fixed a routing bug for host blocks with configurations in and outside `location "/"` blocks
+
 ## Ferron 2.8.0
 
 **Released in June 12, 2026**
