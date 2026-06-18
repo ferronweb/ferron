@@ -47,7 +47,7 @@ impl<T: Clone> RadixTree<T> {
     /// Inserts data for an IP address.
     #[inline]
     pub fn insert_ip(&mut self, ip: IpAddr, data: T) {
-        self.ip_map.insert(ip, data);
+        self.ip_map.insert(ip.to_canonical(), data);
     }
 
     /// Inserts data for a hostname (with optional wildcard).
@@ -61,7 +61,7 @@ impl<T: Clone> RadixTree<T> {
     pub fn insert_ip_and_hostname(&mut self, ip: IpAddr, hostname: &str, data: T) {
         let tree = self
             .ip_host_trees
-            .entry(ip)
+            .entry(ip.to_canonical())
             .or_insert_with(HostnameRadixTree::new);
         tree.insert(hostname.to_string(), data);
     }
@@ -70,7 +70,7 @@ impl<T: Clone> RadixTree<T> {
     #[inline]
     pub fn lookup_ip(&self, ip: IpAddr) -> Option<T> {
         self.ip_map
-            .get(&ip)
+            .get(&ip.to_canonical())
             .cloned()
             .or_else(|| self.root_data.clone())
     }
@@ -94,14 +94,14 @@ impl<T: Clone> RadixTree<T> {
     #[inline]
     pub fn lookup_ip_and_hostname(&self, ip: IpAddr, hostname: &str) -> Option<T> {
         // 1) ip-specific hostname tree
-        if let Some(tree) = self.ip_host_trees.get(&ip) {
+        if let Some(tree) = self.ip_host_trees.get(&ip.to_canonical()) {
             if let Some(v) = tree.get(hostname) {
                 return Some(v.clone());
             }
         }
 
         // 2) ip-only
-        if let Some(v) = self.ip_map.get(&ip) {
+        if let Some(v) = self.ip_map.get(&ip.to_canonical()) {
             return Some(v.clone());
         }
 
