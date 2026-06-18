@@ -25,6 +25,7 @@
 ### TLS
 
 - **OCSP stapling ECDSA issuer fix** - when using ECDSA certificates for OCSP stapling, the issuer OID was not being correctly extracted from the certificate, leading to incorrect validation. This has been fixed to ensure the issuer OID is extracted correctly and used for OCSP validation.
+- **TLS certificate provider inheritance fix** - When using TLS certificates provided by a parent configuration, the certificate provider was incorrectly inherited, leading to errors when attempting to use these certificates in child configurations. This has been fixed to ensure that the certificate provider is correctly inherited and available for use in all child configurations.
 
 ## Ferron 3.0.0-beta.2
 
