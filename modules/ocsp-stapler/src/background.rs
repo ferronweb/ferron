@@ -29,6 +29,7 @@ use rasn_ocsp::{
 use rustls_pki_types::CertificateDer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use x509_parser::asn1_rs::ToDer;
 use x509_parser::prelude::*;
 
 // Type alias for the OCSP cache to reduce type complexity
@@ -126,7 +127,8 @@ fn verify_ocsp_signature(
                     .algorithm
                     .parameters
                     .as_ref()
-                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v.as_bytes()).ok());
+                    .and_then(|v| v.to_der_vec().ok())
+                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(&v).ok());
                 let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
                 match (curve_oid_u32, algo) {
                     // P-256

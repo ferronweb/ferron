@@ -20,6 +20,12 @@
 
 - **Improved error reporting in structured logs** - reverse proxy, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
 
+### Fixed
+
+### TLS
+
+- **OCSP stapling ECDSA issuer fix** - when using ECDSA certificates for OCSP stapling, the issuer OID was not being correctly extracted from the certificate, leading to incorrect validation. This has been fixed to ensure the issuer OID is extracted correctly and used for OCSP validation.
+
 ## Ferron 3.0.0-beta.2
 
 **Released in June 14, 2026**
