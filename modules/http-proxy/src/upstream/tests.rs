@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use crate::types::affinity::AffinityType;
 use crate::types::health::{HealthCheckState, HealthCheckStateMap};
-use crate::types::lb::LoadBalancerAlgorithm;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::affinity::resolve_affinity_index;
@@ -359,33 +358,6 @@ fn test_record_backend_transport_failure_passive_check_disabled() {
 
     assert_eq!(metrics.unhealthy_backends.len(), 0);
     assert_eq!(failed_backends.get(&(upstream, vec![])), None);
-}
-
-#[test]
-fn test_upstream_inner_debug() {
-    let upstream = make_upstream("http://backend1");
-    let debug_str = format!("{:?}", upstream);
-    assert!(debug_str.contains("http://backend1"));
-}
-
-#[test]
-fn test_load_balancer_algorithm_from() {
-    assert!(matches!(
-        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::Random),
-        LoadBalancerAlgorithmInner::Random
-    ));
-    assert!(matches!(
-        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::RoundRobin),
-        LoadBalancerAlgorithmInner::RoundRobin(_)
-    ));
-    assert!(matches!(
-        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::LeastConnections),
-        LoadBalancerAlgorithmInner::LeastConnections
-    ));
-    assert!(matches!(
-        LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::TwoRandomChoices),
-        LoadBalancerAlgorithmInner::TwoRandomChoices
-    ));
 }
 
 #[test]

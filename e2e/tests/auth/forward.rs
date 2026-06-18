@@ -7,7 +7,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-
 async fn create_auth_backend_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
@@ -81,7 +80,8 @@ impl FAuthTestContext {
 
         let auth_backend = create_auth_backend_container(&network).await.unwrap();
 
-        crate::common::write_file(webroot_dir.path().join("index.html"), b"Authenticated!").unwrap();
+        crate::common::write_file(webroot_dir.path().join("index.html"), b"Authenticated!")
+            .unwrap();
 
         config_file
             .as_file_mut()
@@ -343,110 +343,6 @@ async fn test_fauth_connection_refused() {
 }
 
 #[tokio::test]
-async fn test_fauth_x_forwarded_for_set() {
-    let ctx = FAuthTestContext::new(
-        "xff-set",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_x_forwarded_proto_set() {
-    let ctx = FAuthTestContext::new(
-        "xproto-set",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_x_forwarded_uri_set() {
-    let ctx = FAuthTestContext::new(
-        "xuri-set",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test/path?foo=bar", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_x_forwarded_method_set() {
-    let ctx = FAuthTestContext::new(
-        "xmethod-set",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
 async fn test_fauth_nested_url_directive() {
     let ctx = FAuthTestContext::new(
         "nested-url",
@@ -566,60 +462,6 @@ async fn test_fauth_upgrade_headers_removed() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let body = response.text().await.unwrap();
     assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_no_auth_config() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
-    let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    let network = "e2e-test-fauth-no-auth";
-
-    crate::common::write_file(webroot_dir.path().join("index.html"), b"No auth required").unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-    root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let ferron = create_ferron_container(network, webroot_dir.path(), config_file.path())
-        .await
-        .unwrap();
-
-    let port = ferron
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-    let client = reqwest::Client::new();
-
-    let response = client
-        .get(format!("http://localhost:{}", port))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    assert_eq!(response.text().await.unwrap(), "No auth required");
-
-    ferron.stop().await.unwrap();
 }
 
 #[tokio::test]

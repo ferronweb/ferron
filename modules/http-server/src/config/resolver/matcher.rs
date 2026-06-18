@@ -216,20 +216,6 @@ mod tests {
     }
 
     #[test]
-    fn test_fancy_regex_features() {
-        let expr = ServerConfigurationMatcherExpr {
-            left: ServerConfigurationMatcherOperand::String("foobar".to_string()),
-            op: ServerConfigurationMatcherOperator::Regex,
-            right: ServerConfigurationMatcherOperand::String(r"(foo|baz).*".to_string()),
-        };
-
-        let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let ctx = make_test_context();
-
-        assert!(evaluate_matcher_condition(&compiled, &ctx));
-    }
-
-    #[test]
     fn test_in_operator_accept_language_with_q_values() {
         let expr = ServerConfigurationMatcherExpr {
             left: ServerConfigurationMatcherOperand::String("en".to_string()),

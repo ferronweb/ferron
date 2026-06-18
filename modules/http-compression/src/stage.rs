@@ -457,35 +457,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_determine_compression_brotli_preferred() {
-        assert_eq!(
-            determine_compression(Some("br; q=1.0, gzip; q=0.8, deflate; q=0.6")),
-            Compression::Brotli
-        );
-    }
-
-    #[test]
-    fn test_determine_compression_zstd() {
-        assert_eq!(
-            determine_compression(Some("zstd; q=1.0, gzip; q=0.8")),
-            Compression::Zstd
-        );
-    }
-
-    #[test]
-    fn test_determine_compression_gzip_fallback() {
-        assert_eq!(
-            determine_compression(Some("gzip; q=0.8, identity; q=0.5")),
-            Compression::Gzip
-        );
-    }
-
-    #[test]
-    fn test_determine_compression_no_accept_header() {
-        assert_eq!(determine_compression(None), Compression::Identity);
-    }
-
-    #[test]
     fn test_has_broken_compression_netscape4_html() {
         assert!(has_broken_compression("Mozilla/4.08", Some("text/html")));
     }

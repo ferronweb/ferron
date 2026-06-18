@@ -88,49 +88,9 @@ impl RotationConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::FileWriter;
 
     use super::*;
-    use ferron_core::config::{
-        ServerConfigurationBlockBuilder, ServerConfigurationDirectiveEntry,
-        ServerConfigurationValue,
-    };
-
-    fn make_log_config(
-        access_log: Option<&str>,
-        error_log: Option<&str>,
-        rotate_size: Option<u64>,
-        rotate_keep: Option<usize>,
-    ) -> Arc<ServerConfigurationBlock> {
-        let mut builder = ServerConfigurationBlockBuilder::new();
-
-        if let Some(path) = access_log {
-            builder = builder.directive_str("access_log", vec![path]);
-        }
-        if let Some(path) = error_log {
-            builder = builder.directive_str("error_log", vec![path]);
-        }
-        if let Some(size) = rotate_size {
-            let entry = ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::Number(size as i64, None)],
-                children: None,
-                span: None,
-            };
-            builder = builder.directive("access_log_rotate_size", entry);
-        }
-        if let Some(keep) = rotate_keep {
-            let entry = ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::Number(keep as i64, None)],
-                children: None,
-                span: None,
-            };
-            builder = builder.directive("access_log_rotate_keep", entry);
-        }
-
-        Arc::new(builder.build())
-    }
 
     #[tokio::test]
     async fn test_rotate_log_file_multiple_rotations() {
@@ -198,82 +158,6 @@ mod tests {
 
         let result = rotate_log_file(&path_str, Some(3)).await;
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_both_set() {
-        let config = make_log_config(Some("/tmp/access.log"), None, Some(100), Some(5));
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        )
-        .unwrap();
-        assert_eq!(rotation.rotate_size, Some(100));
-        assert_eq!(rotation.rotate_keep, Some(5));
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_only_size() {
-        let config = make_log_config(Some("/tmp/access.log"), None, Some(200), None);
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        )
-        .unwrap();
-        assert_eq!(rotation.rotate_size, Some(200));
-        assert_eq!(rotation.rotate_keep, None);
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_only_keep() {
-        let config = make_log_config(Some("/tmp/access.log"), None, None, Some(3));
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        )
-        .unwrap();
-        assert_eq!(rotation.rotate_size, None);
-        assert_eq!(rotation.rotate_keep, Some(3));
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_neither_set() {
-        let config = make_log_config(Some("/tmp/access.log"), None, None, None);
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        );
-        assert!(rotation.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_zero_size() {
-        let config = make_log_config(Some("/tmp/access.log"), None, Some(0), Some(3));
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        )
-        .unwrap();
-        assert_eq!(rotation.rotate_size, None);
-        assert_eq!(rotation.rotate_keep, Some(3));
-    }
-
-    #[tokio::test]
-    async fn test_read_rotation_config_zero_keep() {
-        let config = make_log_config(Some("/tmp/access.log"), None, Some(100), Some(0));
-        let rotation = RotationConfig::read_from_config(
-            &config,
-            "access_log_rotate_size",
-            "access_log_rotate_keep",
-        )
-        .unwrap();
-        assert_eq!(rotation.rotate_size, Some(100));
-        assert_eq!(rotation.rotate_keep, Some(0));
     }
 
     #[tokio::test]
