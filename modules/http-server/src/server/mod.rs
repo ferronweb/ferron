@@ -331,14 +331,9 @@ fn implicit_tls_applicable(
     let mut arc = None;
     let ip = host_config.ip;
     let mut host = host_config.host.as_deref();
-    let mut is_first = true;
-    while is_first || host.is_some() {
-        if is_first {
-            is_first = false;
-        }
-
+    for _ in 0..2 {
         let Some(new_arc) = lookup_tls(tls_resolver, ip, host) else {
-            return arc.is_some();
+            return arc.is_none();
         };
         if let Some(arc) = &arc {
             if !Arc::ptr_eq(arc, &new_arc) {
@@ -350,16 +345,21 @@ fn implicit_tls_applicable(
             arc = Some(new_arc);
         }
 
+        if host.is_some_and(|h| h == "*" || h.starts_with("*.")) {
+            // Nested wildcards...
+            break;
+        }
+
         host = if let Some(host) = host {
             host.trim_end_matches('.')
                 .split_once('.')
                 .map(|(_, remaining)| remaining)
         } else {
-            None
+            break;
         };
     }
 
-    true
+    arc.is_some()
 }
 
 pub struct BasicHttpModule {
