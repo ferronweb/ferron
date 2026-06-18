@@ -169,17 +169,20 @@ pub(super) fn load_top_level_statements(
                         .to_string_lossy()
                         .to_string();
                 }
-                for include_path in glob::glob(&include_glob).map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to expand top-level include path \"{include_glob}\": {e}"
-                    )
-                })? {
-                    let include_pathbuf = include_path.map_err(|e| {
+                let mut include_paths = glob::glob(&include_glob)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to expand top-level include path \"{include_glob}\": {e}"
+                        )
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| {
                         anyhow::anyhow!(
                             "Failed to expand top-level include path \"{include_glob}\": {e}"
                         )
                     })?;
-
+                include_paths.sort_unstable();
+                for include_pathbuf in include_paths {
                     statements.extend(load_top_level_statements(
                         include_pathbuf.as_path(),
                         include_stack,
