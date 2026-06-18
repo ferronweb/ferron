@@ -20,9 +20,13 @@
 
 - **Improved error reporting in structured logs** - reverse proxy, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
 
+#### TLS & ACME
+
+- **ACME provisioning cycle log improvements** - ACME provisioning logs are now no longer emitted at debug level when a certificate is still valid or loaded from cache, as these messages were redundant with the `ferron.acme.domains` attribute already included in the main log message.
+
 ### Fixed
 
-### TLS
+#### TLS
 
 - **OCSP stapling ECDSA issuer fix** - when using ECDSA certificates for OCSP stapling, the issuer OID was not being correctly extracted from the certificate, leading to incorrect validation. This has been fixed to ensure the issuer OID is extracted correctly and used for OCSP validation.
 - **TLS certificate provider inheritance fix** - When using TLS certificates provided by a parent configuration, the certificate provider was incorrectly inherited, leading to errors when attempting to use these certificates in child configurations. This has been fixed to ensure that the certificate provider is correctly inherited and available for use in all child configurations.

@@ -582,25 +582,31 @@ async fn run_acme_background_task(
     // Sleep for 2ms to ensure configurations are loaded
     tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
 
+    let mut old_config_count = 0;
+
     // Main provisioning loop
     loop {
         // Provision certificates for all eager configs
         {
             let mut configs_guard = configs.write().await;
-            emit_log(
-                &event_sink,
-                LogLevel::Debug,
-                "ACME provisioning cycle started",
-                &format!(
-                    "ACME provisioning cycle started — checking {} configurations",
-                    configs_guard.len()
-                ),
-                "ferron_tls_acme",
-                vec![(
-                    "ferron.acme.config_count",
-                    LogAttributeValue::I64(configs_guard.len() as i64),
-                )],
-            );
+            if old_config_count != configs_guard.len() {
+                old_config_count = configs_guard.len();
+
+                emit_log(
+                    &event_sink,
+                    LogLevel::Debug,
+                    "ACME provisioning cycle started",
+                    &format!(
+                        "ACME provisioning cycle started — checking {} configurations",
+                        configs_guard.len()
+                    ),
+                    "ferron_tls_acme",
+                    vec![(
+                        "ferron.acme.config_count",
+                        LogAttributeValue::I64(configs_guard.len() as i64),
+                    )],
+                );
+            }
 
             for config in configs_guard.iter_mut() {
                 if config.domains.is_empty() {

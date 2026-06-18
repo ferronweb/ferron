@@ -269,7 +269,6 @@ The ACME background task emits log events and metrics through the configured obs
 | `WARN` | `Post-obtain command failed for ...: <error>` | Post-obtain hook error |
 | `DEBUG` | `ACME provisioning cycle started — checking N configurations` | Each background loop iteration |
 | `DEBUG` | `ACME account loaded from cache for ...` | Account reused from cache |
-| `DEBUG` | `ACME certificate still valid or loaded from cache for ...` | No issuance needed |
 | `DEBUG` | `ACME order created for domains: ...` | New order placed with CA |
 | `DEBUG` | `ACME <type> challenge initiated for ...` | Challenge setup started |
 | `DEBUG` | `ACME <type> challenge solved for ...` | Challenge ready for validation |
@@ -297,7 +296,6 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 | ACME account cache save failed | WARN | `error.message` (string) |
 | ACME certificate cache save failed | WARN | `error.message` (string) |
 | ACME provisioning cycle started | DEBUG | `ferron.acme.config_count` (int) |
-| ACME certificate still valid | DEBUG | `ferron.acme.domains` (string) |
 | ACME account loaded from cache | DEBUG | `ferron.acme.domains` (string) |
 | ACME order created | DEBUG | `ferron.acme.domains` (string) |
 | ACME certificate installed | DEBUG | `ferron.acme.domains` (string), `ferron.acme.chain_length` (int) |

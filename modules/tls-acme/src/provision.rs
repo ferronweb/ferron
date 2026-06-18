@@ -290,17 +290,6 @@ pub async fn provision_certificate(
 
     // Step 1: Check if current cert is still valid or cached
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
-        emit_log(
-            event_sink,
-            ferron_observability::LogLevel::Debug,
-            "ACME certificate still valid",
-            &format!("ACME certificate still valid or loaded from cache for {domains}"),
-            "ferron-tls-acme",
-            vec![(
-                "ferron.acme.domains",
-                ferron_observability::LogAttributeValue::String(domains.clone()),
-            )],
-        );
         return Ok(false);
     }
 
