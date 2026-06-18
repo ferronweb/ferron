@@ -1,5 +1,13 @@
 # Ferron 2 LTS change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- Fixed OCSP stapling not working properly for ECDSA issuer certificates.
+
 ## Ferron 2.6.4 LTS
 
 **Released in June 17, 2026**

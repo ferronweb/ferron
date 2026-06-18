@@ -21,6 +21,7 @@ use sha2::Sha256;
 use std::ops::Deref;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
+use x509_parser::asn1_rs::ToDer;
 use x509_parser::prelude::*;
 
 type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Arc<CertifiedKey>>>>>;
@@ -486,7 +487,8 @@ fn verify_ocsp_signature(basic_response: &BasicOcspResponse, issuer_cert: &X509C
           .algorithm
           .parameters
           .as_ref()
-          .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v.as_bytes()).ok());
+          .and_then(|v| v.to_der_vec().ok())
+          .and_then(|v| rasn::der::decode::<ObjectIdentifier>(&v).ok());
         let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
         match (curve_oid_u32, algo) {
           // P-256
