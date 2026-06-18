@@ -27,6 +27,7 @@ phf = { version = "0.13", features = ["macros"] }
 rand = "0.10.1"
 hex = "0.4.3"
 pin-project-lite = "0.2.17"
+httpdate = "1.0.3"
 
 [package.metadata.cargo-shear]
 ignored = ["flate2"]

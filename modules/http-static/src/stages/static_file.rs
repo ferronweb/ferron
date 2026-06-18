@@ -33,7 +33,8 @@ use crate::util::compression::{
     PREFERRED_CONTENT_ENCODING,
 };
 use crate::util::etag::{
-    build_etag_header_map, construct_etag, extract_etag_inner, split_etag_request,
+    build_etag_header_map, build_last_modified_header_map, construct_etag, extract_etag_inner,
+    split_etag_request,
 };
 use crate::util::file_stream::FileStream;
 use crate::util::mime::get_content_type;
@@ -157,69 +158,32 @@ impl Stage<HttpFileContext> for StaticFileStage {
             file_len > 256 && !NON_COMPRESSIBLE_FILE_EXTENSIONS.contains(ext.as_str())
         };
 
-        // Handle ETags
         let mut etag_value: Option<String> = None;
         #[allow(unused_assignments)]
         let mut vary_header: Option<String> = None;
 
+        let mdate = ctx.metadata.modified().ok();
+
         if etag_enabled {
-            let etag = ctx.etag.clone();
-            etag_value = Some(etag.clone());
-
+            etag_value = Some(ctx.etag.clone());
             vary_header = Some(if compression_possible {
-                "Accept-Encoding, If-Match, If-None-Match, Range".to_string()
+                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, Range".to_string()
             } else {
-                "If-Match, If-None-Match, Range".to_string()
+                "If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, Range".to_string()
             });
+        } else {
+            vary_header = Some(if compression_possible {
+                "Accept-Encoding, If-Modified-Since, If-Unmodified-Since, Range".to_string()
+            } else {
+                "If-Modified-Since, If-Unmodified-Since, Range".to_string()
+            });
+        }
 
-            // Handle If-None-Match
-            if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
-                if let Ok(val) = if_none_match.to_str() {
-                    if method != Method::GET && method != Method::HEAD {
-                        let header_map =
-                            build_etag_header_map(&etag, &vary_header, None, cache_control);
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
-                        emit_static_response_metric(ctx, 412, "precondition_failed");
-                        return Ok(false);
-                    }
-                    for tag in split_etag_request(val) {
-                        if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
-                            if extracted == etag {
-                                let suffix = suffix_opt.and_then(|s| match s.as_str() {
-                                    "gzip" | "deflate" | "br" | "zstd" => Some(s),
-                                    _ => None,
-                                });
-                                let full_etag = construct_etag(&etag, suffix.as_deref(), true);
-                                let mut builder = Response::builder()
-                                    .status(StatusCode::NOT_MODIFIED)
-                                    .header(header::ETAG, &full_etag)
-                                    .header(
-                                        header::VARY,
-                                        HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
-                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
-                                    );
-                                if let Some(cc) = cache_control {
-                                    builder = builder.header(
-                                        header::CACHE_CONTROL,
-                                        HeaderValue::from_str(cc)
-                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
-                                    );
-                                }
-                                let response = builder
-                                    .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                                    .expect("failed to build 304 response");
-                                ctx.http.req = Some(request);
-                                ctx.http.res = Some(HttpResponse::Custom(response));
-                                emit_static_response_metric(ctx, 304, "not_modified");
-                                return Ok(false);
-                            }
-                        }
-                    }
-                }
-            }
+        // If-Match -> If-Unmodified-Since -> If-None-Match -> If-Modified-Since
+        // (RFC 7232 compliant order)
 
-            // Handle If-Match (Ferron only emits weak ETags, so strong If-Match won't match)
+        // Handle If-Match (Ferron only emits weak ETags, so strong If-Match won't match)
+        if let Some(etag) = &etag_value {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
                     Ok(if_match) => {
@@ -258,12 +222,148 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     }
                 }
             }
-        } else {
-            vary_header = Some(if compression_possible {
-                "Accept-Encoding, Range".to_string()
-            } else {
-                "Range".to_string()
-            });
+        }
+
+        // Handle If-Unmodified-Since
+        if let Some(if_unmodified_since) = request.headers().get(header::IF_UNMODIFIED_SINCE) {
+            match if_unmodified_since
+                .to_str()
+                .ok()
+                .and_then(|ius| httpdate::parse_http_date(ius).ok())
+            {
+                Some(if_unmodified_since) => {
+                    if mdate
+                        .as_ref()
+                        .is_some_and(|mdate| mdate > &if_unmodified_since)
+                    {
+                        let header_map = build_last_modified_header_map(
+                            mdate.as_ref(),
+                            &vary_header,
+                            None,
+                            cache_control,
+                        );
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                        emit_static_response_metric(ctx, 412, "precondition_failed");
+                        return Ok(false);
+                    }
+                }
+                None => {
+                    let header_map = build_last_modified_header_map(
+                        mdate.as_ref(),
+                        &vary_header,
+                        None,
+                        cache_control,
+                    );
+                    ctx.http.req = Some(request);
+                    ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
+                    emit_static_response_metric(ctx, 400, "bad_request");
+                    return Ok(false);
+                }
+            }
+        }
+
+        // Handle If-None-Match
+        if let Some(etag) = &etag_value {
+            if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
+                if let Ok(val) = if_none_match.to_str() {
+                    if method != Method::GET && method != Method::HEAD {
+                        let header_map =
+                            build_etag_header_map(&etag, &vary_header, None, cache_control);
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                        emit_static_response_metric(ctx, 412, "precondition_failed");
+                        return Ok(false);
+                    }
+                    for tag in split_etag_request(val) {
+                        if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
+                            if &extracted == etag {
+                                let suffix = suffix_opt.and_then(|s| match s.as_str() {
+                                    "gzip" | "deflate" | "br" | "zstd" => Some(s),
+                                    _ => None,
+                                });
+                                let full_etag = construct_etag(&etag, suffix.as_deref(), true);
+                                let mut builder = Response::builder()
+                                    .status(StatusCode::NOT_MODIFIED)
+                                    .header(header::ETAG, &full_etag)
+                                    .header(
+                                        header::VARY,
+                                        HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                if let Some(cc) = cache_control {
+                                    builder = builder.header(
+                                        header::CACHE_CONTROL,
+                                        HeaderValue::from_str(cc)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
+                                let response = builder
+                                    .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                                    .expect("failed to build 304 response");
+                                ctx.http.req = Some(request);
+                                ctx.http.res = Some(HttpResponse::Custom(response));
+                                emit_static_response_metric(ctx, 304, "not_modified");
+                                return Ok(false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle If-Modified-Since
+        if let Some(if_modified_since) = request.headers().get(header::IF_MODIFIED_SINCE) {
+            match if_modified_since
+                .to_str()
+                .ok()
+                .and_then(|ims| httpdate::parse_http_date(ims).ok())
+            {
+                Some(if_modified_since) => {
+                    if ctx
+                        .metadata
+                        .modified()
+                        .is_ok_and(|mdate| mdate <= if_modified_since)
+                    {
+                        let mut builder =
+                            Response::builder().status(StatusCode::NOT_MODIFIED).header(
+                                header::VARY,
+                                HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
+                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                            );
+                        if let Some(mdate) = &mdate {
+                            builder = builder
+                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                        }
+                        if let Some(cc) = cache_control {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc)
+                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                            );
+                        }
+                        let response = builder
+                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                            .expect("failed to build 304 response");
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric(ctx, 304, "not_modified");
+                        return Ok(false);
+                    }
+                }
+                None => {
+                    let header_map = build_last_modified_header_map(
+                        mdate.as_ref(),
+                        &vary_header,
+                        None,
+                        cache_control,
+                    );
+                    ctx.http.req = Some(request);
+                    ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
+                    emit_static_response_metric(ctx, 400, "bad_request");
+                    return Ok(false);
+                }
+            }
         }
 
         // Determine compression method
@@ -401,6 +501,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 format!("multipart/byteranges; boundary={multipart_boundary}"),
                             );
 
+                        if let Some(ref mdate) = mdate {
+                            builder = builder
+                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                        }
                         if let Some(ref etag) = etag_value {
                             builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
                         }
@@ -456,6 +560,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 format!("bytes {start}-{end}/{file_length}"),
                             );
 
+                        if let Some(ref mdate) = mdate {
+                            builder = builder
+                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                        }
                         if let Some(ref etag) = etag_value {
                             builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
                         }
@@ -539,6 +647,11 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let mut builder = Response::builder()
             .status(StatusCode::OK)
             .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+
+        // Last-Modified
+        if let Some(ref mdate) = mdate {
+            builder = builder.header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+        }
 
         // ETag
         if let Some(ref etag) = etag_value {

@@ -10,6 +10,10 @@
 
 - **Reload metrics and logs** - the new `metrics-reload` module emits application log events and a `ferron.reloads` counter metric around configuration reloads, with a `ferron.reload.successful` attribute indicating success or failure and an `error.message` attribute on failures.
 
+#### HTTP server core
+
+- **Support for date-based caching** - the `If-Modified-Since` header is now supported for static file responses, allowing clients to cache responses and avoid unnecessary re-downloads when the file has not been modified.
+
 ### Changed
 
 #### Admin API

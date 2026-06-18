@@ -1742,6 +1742,7 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "httpdate",
  "multi-mime-guess",
  "phf 0.13.1",
  "pin-project-lite",

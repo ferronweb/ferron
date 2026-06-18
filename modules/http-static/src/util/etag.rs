@@ -1,5 +1,7 @@
 //! ETag construction, parsing, and validation utilities.
 
+use std::time::SystemTime;
+
 use http::header::{self, HeaderValue};
 
 use crate::util::compression::COMP_SUFFIXES;
@@ -16,6 +18,41 @@ pub fn build_etag_header_map(
         header::ETAG,
         HeaderValue::from_str(&construct_etag(etag, None, true)).expect("invalid etag header"),
     );
+    if let Some(v) = vary {
+        header_map.insert(
+            header::VARY,
+            HeaderValue::from_str(v).expect("invalid vary header"),
+        );
+    }
+    if let Some(ct) = content_type {
+        header_map.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(ct).expect("invalid content-type header"),
+        );
+    }
+    if let Some(cc) = cache_control {
+        header_map.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_str(cc).expect("invalid cache-control header"),
+        );
+    }
+    header_map
+}
+
+/// Build a header map with Last-Modified and Vary headers.
+pub fn build_last_modified_header_map(
+    last_modified: Option<&SystemTime>,
+    vary: &Option<String>,
+    content_type: Option<&str>,
+    cache_control: Option<&str>,
+) -> http::HeaderMap {
+    let mut header_map = http::HeaderMap::new();
+    if let Some(mdate) = last_modified {
+        header_map.insert(
+            header::LAST_MODIFIED,
+            HeaderValue::from_str(&httpdate::fmt_http_date(*mdate)).expect("invalid etag header"),
+        );
+    }
     if let Some(v) = vary {
         header_map.insert(
             header::VARY,
