@@ -190,7 +190,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         if !matches!(request.method(), &Method::GET | &Method::HEAD) {
                             // Precondition failed when method is not GET or HEAD
                             let header_map =
-                                build_etag_header_map(&etag, &vary_header, None, cache_control);
+                                build_etag_header_map(etag, &vary_header, None, cache_control);
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                             emit_static_response_metric(ctx, 412, "precondition_failed");
@@ -205,7 +205,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             .any(|if_match| if_match == "*")
                         {
                             let header_map =
-                                build_etag_header_map(&etag, &vary_header, None, cache_control);
+                                build_etag_header_map(etag, &vary_header, None, cache_control);
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                             emit_static_response_metric(ctx, 412, "precondition_failed");
@@ -214,7 +214,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     }
                     Err(_) => {
                         let header_map =
-                            build_etag_header_map(&etag, &vary_header, None, cache_control);
+                            build_etag_header_map(etag, &vary_header, None, cache_control);
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
                         emit_static_response_metric(ctx, 400, "bad_request");
@@ -269,7 +269,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 if let Ok(val) = if_none_match.to_str() {
                     if method != Method::GET && method != Method::HEAD {
                         let header_map =
-                            build_etag_header_map(&etag, &vary_header, None, cache_control);
+                            build_etag_header_map(etag, &vary_header, None, cache_control);
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                         emit_static_response_metric(ctx, 412, "precondition_failed");
@@ -282,7 +282,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     "gzip" | "deflate" | "br" | "zstd" => Some(s),
                                     _ => None,
                                 });
-                                let full_etag = construct_etag(&etag, suffix.as_deref(), true);
+                                let full_etag = construct_etag(etag, suffix.as_deref(), true);
                                 let mut builder = Response::builder()
                                     .status(StatusCode::NOT_MODIFIED)
                                     .header(header::ETAG, &full_etag)
