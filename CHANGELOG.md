@@ -1,5 +1,13 @@
 # Ferron 2 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- Fixed OCSP stapling not working properly for ECDSA issuer certificates.
+
 ## Ferron 2.8.1
 
 **Released in June 17, 2026**
