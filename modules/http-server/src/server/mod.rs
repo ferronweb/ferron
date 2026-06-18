@@ -453,12 +453,7 @@ impl BasicHttpModule {
             // The plaintext HTTP listener (port != https_port) ignores all `tls` directives,
             // including explicit configurations and automatic ACME.
             if https_port.is_some() && port_config.port == https_port {
-                if let Some(tls) = host_config
-                    .1
-                    .directives
-                    .get("tls")
-                    .or_else(|| global_config.directives.get("tls"))
-                {
+                if let Some(tls) = host_config.1.directives.get("tls") {
                     for tls1 in tls {
                         // Handle explicit `tls false` — skip TLS entirely
                         if tls1
@@ -542,15 +537,9 @@ impl BasicHttpModule {
             if https_port.is_some()
                 && port_config.port == https_port
                 && !explicit_port
-                && host_config
-                    .1
-                    .directives
-                    .get("tls")
-                    .or_else(|| global_config.directives.get("tls"))
-                    .is_none()
+                && host_config.1.directives.get("tls").is_none()
                 && implicit_tls_applicable(&tls_resolver, &host_config.0)
             {
-                // No `tls` directive present — automatically select provider (ACME or Local)
                 let http_connection_options =
                     resolve_http_connection_options(&global_config, &host_config.1).map_err(
                         |e| {
@@ -560,21 +549,23 @@ impl BasicHttpModule {
                             )
                         },
                     )?;
-
-                let hostname = host_config.0.host.as_deref();
-                let ip = host_config.0.ip.map(|ip| ip.to_string());
-                let auto_selection =
-                    crate::tls_auto::select_auto_tls_provider(registry, hostname, ip.as_deref());
-
-                match auto_selection {
-                    crate::tls_auto::TlsAutoSelection::Local => {
-                        let synthetic_tls_entry =
-                            crate::tls_auto::create_synthetic_tls_directive("local");
+                if let Some(tls) = global_config.directives.get("tls") {
+                    for tls1 in tls {
+                        // Global `tls` directive present
+                        // Handle explicit `tls false` — skip TLS entirely
+                        if tls1
+                            .args
+                            .first()
+                            .and_then(|a| a.as_boolean())
+                            .is_some_and(|v| !v)
+                        {
+                            continue;
+                        }
                         let host_config_with_arc =
                             (host_config.0.clone(), Arc::new(host_config.1.clone()));
                         Self::process_tls_directive(
                             registry,
-                            &synthetic_tls_entry,
+                            tls1,
                             &host_config_with_arc,
                             &http_connection_options,
                             port_config,
@@ -583,23 +574,52 @@ impl BasicHttpModule {
                             &mut enable_tls,
                         )?;
                     }
-                    crate::tls_auto::TlsAutoSelection::Acme => {
-                        let synthetic_tls_entry =
-                            crate::tls_auto::create_synthetic_tls_directive("acme");
-                        let host_config_with_arc =
-                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
-                        Self::process_tls_directive(
-                            registry,
-                            &synthetic_tls_entry,
-                            &host_config_with_arc,
-                            &http_connection_options,
-                            port_config,
-                            &mut tls_resolver,
-                            &mut quic_tls_resolver,
-                            &mut enable_tls,
-                        )?;
+                } else {
+                    // No `tls` directive present — automatically select provider (ACME or Local)
+
+                    let hostname = host_config.0.host.as_deref();
+                    let ip = host_config.0.ip.map(|ip| ip.to_string());
+                    let auto_selection = crate::tls_auto::select_auto_tls_provider(
+                        registry,
+                        hostname,
+                        ip.as_deref(),
+                    );
+
+                    match auto_selection {
+                        crate::tls_auto::TlsAutoSelection::Local => {
+                            let synthetic_tls_entry =
+                                crate::tls_auto::create_synthetic_tls_directive("local");
+                            let host_config_with_arc =
+                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                            Self::process_tls_directive(
+                                registry,
+                                &synthetic_tls_entry,
+                                &host_config_with_arc,
+                                &http_connection_options,
+                                port_config,
+                                &mut tls_resolver,
+                                &mut quic_tls_resolver,
+                                &mut enable_tls,
+                            )?;
+                        }
+                        crate::tls_auto::TlsAutoSelection::Acme => {
+                            let synthetic_tls_entry =
+                                crate::tls_auto::create_synthetic_tls_directive("acme");
+                            let host_config_with_arc =
+                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                            Self::process_tls_directive(
+                                registry,
+                                &synthetic_tls_entry,
+                                &host_config_with_arc,
+                                &http_connection_options,
+                                port_config,
+                                &mut tls_resolver,
+                                &mut quic_tls_resolver,
+                                &mut enable_tls,
+                            )?;
+                        }
+                        crate::tls_auto::TlsAutoSelection::None => {}
                     }
-                    crate::tls_auto::TlsAutoSelection::None => {}
                 }
             }
         }
