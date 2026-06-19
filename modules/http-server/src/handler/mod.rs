@@ -148,7 +148,7 @@ pub async fn bad_request_handler(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
-    request: HttpRequest,
+    mut request: HttpRequest,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
@@ -163,6 +163,14 @@ pub async fn request_handler(
     timeout_duration: Option<std::time::Duration>,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) -> Result<Response<ResponseBody>, io::Error> {
+    // Normalize HTTP/2 and HTTP/3 requests
+    if matches!(
+        request.version(),
+        http::Version::HTTP_2 | http::Version::HTTP_3
+    ) {
+        normalize_http2_http3_request(&mut request);
+    }
+
     let has_events = !events.is_empty();
     let has_traces = events.has_trace_sinks();
 
@@ -538,14 +546,6 @@ async fn request_handler_inner(
     Option<String>,
     Option<SocketAddr>,
 ) {
-    // Normalize HTTP/2 and HTTP/3 requests
-    if matches!(
-        request.version(),
-        http::Version::HTTP_2 | http::Version::HTTP_3
-    ) {
-        normalize_http2_http3_request(&mut request);
-    }
-
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
         .as_ref()

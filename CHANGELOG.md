@@ -30,6 +30,10 @@
 
 ### Fixed
 
+#### Observability & logging
+
+- **HTTP/2 and /3 host header log visbility fix** - HTTP/2 and HTTP/3 requests now log the `host` header correctly, ensuring visibility into the host name of the server that handled the request.
+
 #### TLS
 
 - **OCSP stapling ECDSA issuer fix** - when using ECDSA certificates for OCSP stapling, the issuer OID was not being correctly extracted from the certificate, leading to incorrect validation. This has been fixed to ensure the issuer OID is extracted correctly and used for OCSP validation.
