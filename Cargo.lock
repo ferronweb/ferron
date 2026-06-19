@@ -1331,6 +1331,7 @@ dependencies = [
  "cidr",
  "ferron-core",
  "ferron-observability",
+ "hex",
  "http",
  "http-body-util",
  "rand 0.10.1",

@@ -12,11 +12,13 @@ pub struct TraceContext {
     pub tracestate: Option<String>,
 }
 
+#[inline]
 fn is_hex(s: &str) -> bool {
     s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Parse a `traceparent` header value into TraceContext (without tracestate).
+#[inline]
 pub fn parse_traceparent(s: &str) -> Option<TraceContext> {
     // Expected format: version-traceid-parentid-flags
     let parts: Vec<&str> = s.trim().split('-').collect();
@@ -41,29 +43,23 @@ pub fn parse_traceparent(s: &str) -> Option<TraceContext> {
     })
 }
 
-fn bytes_to_hex(buf: &[u8]) -> String {
-    let mut s = String::with_capacity(buf.len() * 2);
-    for b in buf {
-        s.push_str(&format!("{:02x}", b));
-    }
-    s
-}
-
 /// Generate a new random span ID as 16 lowercase hex characters.
+#[inline]
 pub fn generate_span_id() -> String {
     let mut rng = rand::rng();
     let mut span_bytes = [0u8; 8];
     rng.fill_bytes(&mut span_bytes);
-    bytes_to_hex(&span_bytes)
+    hex::encode(span_bytes)
 }
 
 /// Generate a new traceparent TraceContext (version 00) with random ids.
+#[inline]
 pub fn generate_traceparent(sampled: bool) -> TraceContext {
     let mut rng = rand::rng();
     let mut trace_bytes = [0u8; 16];
     rng.fill_bytes(&mut trace_bytes);
     TraceContext {
-        trace_id: bytes_to_hex(&trace_bytes),
+        trace_id: hex::encode(trace_bytes),
         span_id: generate_span_id(),
         baggage: None,
         sampled,

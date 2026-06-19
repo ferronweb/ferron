@@ -16,6 +16,7 @@ rustls-pki-types = { version = "1.14.1", optional = true }
 
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
+hex = "0.4.3"
 
 [features]
 util = []
