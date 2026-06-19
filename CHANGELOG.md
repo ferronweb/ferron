@@ -22,7 +22,7 @@
 
 #### Observability & logging
 
-- **Improved error reporting in structured logs** - reverse proxy, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
+- **Improved error reporting in structured logs** - reverse proxy, HTTP, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
 
 #### TLS & ACME
 

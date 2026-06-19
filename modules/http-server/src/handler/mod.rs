@@ -555,10 +555,13 @@ async fn request_handler_inner(
             &events,
             format!("Host header normalization error: {}", e),
             request_log_trace_context.clone(),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("host_header_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("host_header_error".into()),
+                ),
+                ("error.message", LogAttributeValue::String(e.to_string())),
+            ],
         );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
@@ -628,10 +631,13 @@ async fn request_handler_inner(
                     &events,
                     format!("Invalid request URL pathname: {}", e),
                     request_log_trace_context.clone(),
-                    vec![(
-                        "error.type",
-                        LogAttributeValue::String("url_path_error".into()),
-                    )],
+                    vec![
+                        (
+                            "error.type",
+                            LogAttributeValue::String("url_path_error".into()),
+                        ),
+                        ("error.message", LogAttributeValue::String(e.to_string())),
+                    ],
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -672,10 +678,13 @@ async fn request_handler_inner(
                 &events,
                 format!("Invalid request URL: {}", e),
                 request_log_trace_context.clone(),
-                vec![(
-                    "error.type",
-                    LogAttributeValue::String("url_backslash_error".into()),
-                )],
+                vec![
+                    (
+                        "error.type",
+                        LogAttributeValue::String("url_backslash_error".into()),
+                    ),
+                    ("error.message", LogAttributeValue::String(e.to_string())),
+                ],
             );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -718,10 +727,13 @@ async fn request_handler_inner(
                         &events,
                         format!("URL sanitization error: {}", e),
                         request_log_trace_context.clone(),
-                        vec![(
-                            "error.type",
-                            LogAttributeValue::String("url_sanitize_error".into()),
-                        )],
+                        vec![
+                            (
+                                "error.type",
+                                LogAttributeValue::String("url_sanitize_error".into()),
+                            ),
+                            ("error.message", LogAttributeValue::String(e.to_string())),
+                        ],
                     );
                     if let Some(response) = execute_error_pipeline(
                         error_pipeline.as_ref(),

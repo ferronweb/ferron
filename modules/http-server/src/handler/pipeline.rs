@@ -100,10 +100,16 @@ pub async fn execute_pipeline_stages(
                 events,
                 format!("{log_prefix}Pipeline execution error: {error}"),
                 log_trace_context.clone(),
-                vec![(
-                    "error.type",
-                    LogAttributeValue::String("pipeline_error".into()),
-                )],
+                vec![
+                    (
+                        "error.type",
+                        LogAttributeValue::String("pipeline_error".into()),
+                    ),
+                    (
+                        "error.message",
+                        LogAttributeValue::String(error.to_string()),
+                    ),
+                ],
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
@@ -148,10 +154,16 @@ pub async fn execute_pipeline_stages(
                         events,
                         format!("{log_prefix}HTTP file resolution error: {error}"),
                         log_trace_context.clone(),
-                        vec![(
-                            "error.type",
-                            LogAttributeValue::String("file_resolution_error".into()),
-                        )],
+                        vec![
+                            (
+                                "error.type",
+                                LogAttributeValue::String("file_resolution_error".into()),
+                            ),
+                            (
+                                "error.message",
+                                LogAttributeValue::String(error.to_string()),
+                            ),
+                        ],
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -160,10 +172,16 @@ pub async fn execute_pipeline_stages(
                         events,
                         format!("{log_prefix}Pipeline execution error: {error}"),
                         log_trace_context.clone(),
-                        vec![(
-                            "error.type",
-                            LogAttributeValue::String("pipeline_error".into()),
-                        )],
+                        vec![
+                            (
+                                "error.type",
+                                LogAttributeValue::String("pipeline_error".into()),
+                            ),
+                            (
+                                "error.message",
+                                LogAttributeValue::String(error.to_string()),
+                            ),
+                        ],
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -177,10 +195,13 @@ pub async fn execute_pipeline_stages(
                             events,
                             format!("{log_prefix}Webroot not found: {webroot}"),
                             log_trace_context.clone(),
-                            vec![(
-                                "error.type",
-                                LogAttributeValue::String("webroot_not_found".into()),
-                            )],
+                            vec![
+                                (
+                                    "error.type",
+                                    LogAttributeValue::String("webroot_not_found".into()),
+                                ),
+                                ("ferron.webroot", LogAttributeValue::String(webroot)),
+                            ],
                         );
                     }
                     ctx.res = Some(HttpResponse::BuiltinError(404, None));
