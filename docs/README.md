@@ -4,7 +4,7 @@ User-facing documentation for Ferron 3. Synced to the documentation website on p
 
 ## Structure
 
-```
+```text
 docs/
 ├── index.md                       # Landing page
 ├── getting-started.md             # First-time user guide
