@@ -100,7 +100,9 @@ impl Stage<HttpFileContext> for CgiStage {
             .http
             .get::<ferron_http::trace_context::TraceContextKey>()
         {
-            ferron_http::trace_context::inject_trace_headers(request.headers_mut(), tc);
+            if ctx.http.events.has_trace_sinks() {
+                ferron_http::trace_context::inject_trace_headers(request.headers_mut(), tc);
+            }
         }
 
         let original_request_uri = ctx.http.original_uri.as_ref().unwrap_or(request.uri());

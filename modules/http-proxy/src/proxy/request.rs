@@ -111,7 +111,9 @@ pub(super) fn construct_proxy_request(
     parts.version = http::Version::default();
 
     if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
-        ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
+        if ctx.events.has_trace_sinks() {
+            ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
+        }
     }
 
     Ok(Request::from_parts(parts, body))
