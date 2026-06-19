@@ -183,7 +183,7 @@ The OCSP background task emits log events and metrics through the configured obs
 |-------|---------|------|
 | `INFO` | `OCSP background task started` | Service initialization |
 | `INFO` | `OCSP background task shutting down` | Graceful shutdown |
-| `INFO` | `OCSP response cached for <ident>, valid until <time>` | Successful OCSP fetch |
+| `INFO` | `OCSP response cached for <ident> (<primary_san>), valid until <time>` | Successful OCSP fetch |
 | `DEBUG` | `OCSP fetch triggered for certificate <ident>` | Certificate preloaded into service |
 | `DEBUG` | `OCSP stapling skipped — no OCSP URL in certificate <ident>` | Certificate lacks OCSP URL |
 | `WARN` | `OCSP fetch failed for <ident>: <error>` | Fetch error (retried with jitter) |
@@ -197,7 +197,7 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 | OCSP HTTPS initialization failed | INFO | — |
 | OCSP background task started | DEBUG | — |
 | OCSP background task shutting down | INFO | — |
-| OCSP response cached | INFO | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int) — Unix timestamp of next update |
+| OCSP response cached | INFO | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int) — Unix timestamp of next update, `ferron.ocsp.cert.primary_san` (string) — first SAN |
 | OCSP fetch triggered | DEBUG | `ferron.ocsp.cert.subject` (string) — certificate subject |
 | OCSP stapling skipped | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string) — reason for skipping |
 | OCSP fetch failed | WARN | `ferron.ocsp.cert.subject` (string), `error.message` (string) |

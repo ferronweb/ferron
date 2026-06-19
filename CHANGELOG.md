@@ -23,7 +23,7 @@
 #### Observability & logging
 
 - **Improved error reporting in structured logs** - reverse proxy, HTTP, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
-- **OCSP response caching log improvements** - OCSP response caching logs are now emitted at info level by default.
+- **OCSP response caching log improvements** - OCSP response caching logs are now emitted at info level by default. The `ferron.ocsp.cert.primary_san` attribute is also included in the log message when available.
 
 #### TLS & ACME
 

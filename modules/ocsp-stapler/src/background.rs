@@ -405,23 +405,50 @@ pub async fn background_ocsp_task(
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs() as i64;
+                        let primary_san = cert
+                            .first()
+                            .and_then(|leaf| X509Certificate::from_der(leaf).ok())
+                            .as_ref()
+                            .and_then(|leaf| leaf.1.subject_alternative_name().ok().flatten())
+                            .and_then(|san| san.value.general_names.first())
+                            .map(|san| san.to_string());
+                        let primary_san_formatted = if let Some(san) = &primary_san {
+                            let mut fmtd = String::new();
+                            fmtd.push_str(" (");
+                            fmtd.push_str(san);
+                            fmtd.push(')');
+                            fmtd
+                        } else {
+                            "".to_owned()
+                        };
+
+                        let mut log_attributes = vec![
+                            (
+                                "ferron.ocsp.cert.subject",
+                                LogAttributeValue::String(ident.clone()),
+                            ),
+                            (
+                                "ferron.ocsp.next_update",
+                                LogAttributeValue::I64(next_update_ts),
+                            ),
+                        ];
+                        if let Some(san) = primary_san {
+                            log_attributes.push((
+                                "ferron.ocsp.cert.primary_san",
+                                LogAttributeValue::String(san),
+                            ));
+                        }
                         emit_log(
                             &event_sink,
                             LogLevel::Info,
                             "OCSP response cached",
                             &format!(
-                                "OCSP response cached for {ident}, valid until {}",
+                                "OCSP response cached for {ident}{primary_san_formatted}, valid until {}",
                                 chrono::DateTime::<chrono::Utc>::from(next_update_time)
                                     .format("%Y-%m-%d %H:%M:%S")
                             ),
                             "ferron_ocsp",
-                            vec![
-                                ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
-                                (
-                                    "ferron.ocsp.next_update",
-                                    LogAttributeValue::I64(next_update_ts),
-                                ),
-                            ],
+                            log_attributes,
                         );
                         emit_metric(
                             &event_sink,
