@@ -41,7 +41,24 @@ Visit the [Ferron downloads page](/download) and choose the archive that matches
 
   This will create a directory containing the Ferron binaries and configuration files.
 
-### 2. Review the extracted contents
+### 2. Verify the archive (Linux, FreeBSD)
+
+Run the following command to verify the archive's integrity:
+
+```sh
+# 1. Import the signing key (if not already imported)
+wget https://dl.ferron.sh/signing.pgp
+gpg --import signing.pgp
+
+# 2. Download the .asc file corresponding to the downloaded .tar.gz archive
+# The example below assumes you have downloaded ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz
+#wget https://dl.ferron.sh/3.0.0/ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz.asc
+
+# 3. Verify the archive's integrity (using the detached signature)
+gpg --verify ferron-*.tar.gz.asc
+```
+
+### 3. Review the extracted contents
 
 After extraction, you should see the following files and directories:
 
@@ -53,11 +70,11 @@ After extraction, you should see the following files and directories:
 - `ferron.conf` — an example configuration file for Ferron.
 - `wwwroot/` — the webroot directory containing the default `index.html` file.
 
-### 3. Configure Ferron
+### 4. Configure Ferron
 
 Open the `ferron.conf` file in a text editor and modify it to suit your server's requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are available in the [server configuration reference](/docs/v3/configuration/server/core-directives).
 
-### 4. Run Ferron
+### 5. Run Ferron
 
 - **Windows**:
 
@@ -91,7 +108,7 @@ Open the `ferron.conf` file in a text editor and modify it to suit your server's
   ./ferron
   ```
 
-### 5. Access the web server
+### 6. Access the web server
 
 By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server is running.
 
