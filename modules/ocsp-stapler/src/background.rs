@@ -407,7 +407,7 @@ pub async fn background_ocsp_task(
                             .as_secs() as i64;
                         emit_log(
                             &event_sink,
-                            LogLevel::Debug,
+                            LogLevel::Info,
                             "OCSP response cached",
                             &format!(
                                 "OCSP response cached for {ident}, valid until {}",
