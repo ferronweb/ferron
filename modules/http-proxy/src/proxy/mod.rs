@@ -236,7 +236,10 @@ pub async fn execute_proxy(
                         config_key,
                     );
 
-                    if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {
+                    if healthy_count > 0
+                        && metrics.selected_backends.len() < upstreams.len()
+                        && ctx.req.is_some()
+                    {
                         metrics.retry_count += 1;
                         ctx.events.emit(Event::Log(LogEvent {
                             level: LogLevel::Warn,
