@@ -96,7 +96,7 @@ Use the `fields` directive to limit which fields appear in the JSON output. If `
 
 The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `logformat-text` module.
 
-By default, it uses the **Enhanced Combined Log Format (ECLF)** (Ferron's extended version of CLF), which extends Combined Log Format with `Host` header and trace ID fields.
+By default, it uses the **Enhanced Combined Log Format** (ECLF; Ferron's extended version of CLF), which extends Combined Log Format with `Host` header and trace ID fields.
 
 **Configuration example:**
 
