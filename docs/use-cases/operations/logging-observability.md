@@ -97,15 +97,9 @@ example.com {
 
 ## Trace ID logging for debugging
 
-Use this when you need to correlate log messages across requests without setting up a full OTLP backend. The `force_trace` directive enables trace context for every request, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`:
+Use this when you need to correlate log messages across requests. Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`:
 
 ```ferron
-{
-    http {
-        force_trace true
-    }
-}
-
 example.com {
     # HTTP access logs
     log "access.log" {

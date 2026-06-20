@@ -237,4 +237,4 @@ Console and file loggers prefix log messages with `[trace=<trace_id>]` when a tr
 ```
 
 > [!tip]
-> To enable trace IDs in logs without full OTLP tracing, set `force_trace true` in the HTTP configuration. See [HTTP host directives](/docs/v3/configuration/server/host).
+> Trace context is always enabled, so trace IDs are automatically available in console and file log messages as `[trace=<trace_id>]` prefixes. No additional configuration is needed.

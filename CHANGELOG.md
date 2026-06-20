@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Breaking changes
+
+If you are upgrading to this beta version, you must update your configuration files to accommodate the following syntax refactors:
+
+- **Removed `force_trace` directive** - the `force_trace` directive has been removed as trace context creation is now always enabled for every request. Configurations using `force_trace true` should remove the directive; configurations using `force_trace false` should also remove it since the behavior now matches the default.
+
 ### Added
 
 #### Observability & metrics
@@ -24,6 +30,7 @@
 
 - **Improved error reporting in structured logs** - reverse proxy, HTTP, TCP and QUIC error logs now include an `error.message` attribute when available. Also, some of the reverse proxy error log summaries being overly long have been fixed.
 - **OCSP response caching log improvements** - OCSP response caching logs are now emitted at info level by default. The `ferron.ocsp.cert.primary_san` attribute is also included in the log message when available.
+- **Trace context always enabled** - the `force_trace` directive has been removed, as trace context creation is now always enabled for every request. Additionally, when no tracing export is configured, Ferron will not generate a new span ID for incoming requests, avoiding unnecessary overhead.
 
 #### TLS & ACME
 

@@ -110,7 +110,7 @@ When `trust_request` is enabled, Ferron reads the incoming `traceparent`, `trace
 
 > [!note]
 >
-> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via the `trace` block (directives `generate` and `trust_request`) and whether a trace sink (or `force_trace`) is configured.
+> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via the `trace` block (directives `generate` and `trust_request`) and whether a trace sink is configured.
 > - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`), making them accessible to application code without any special header parsing.
 
 > [!note]

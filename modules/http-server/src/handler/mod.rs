@@ -191,11 +191,7 @@ pub async fn request_handler(
     let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
     let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
 
-    let (request_trace_context, external_parent) = if has_traces
-        || config_resolver
-            .global()
-            .is_some_and(|c| get_http_nested_boolean(&c, "force_trace").unwrap_or(false))
-    {
+    let (request_trace_context, external_parent) = {
         let global_config = config_resolver.global();
 
         // Read trace { generate } toggle
@@ -243,9 +239,8 @@ pub async fn request_handler(
             generate_enabled,
             default_sampled,
             trust_request_enabled,
+            has_traces,
         )
-    } else {
-        (None, None)
     };
     let request_span_key =
         if let Some(request_span_key) = has_traces.then(|| next_span_key("request")) {

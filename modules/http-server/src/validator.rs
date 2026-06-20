@@ -63,9 +63,6 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
             validate_nested!(http, used(sub), protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
-            // Force trace toggle
-            validate_nested!(http, used(sub), force_trace, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-
             // OPTIONS * allowed methods
             validate_nested!(http, used(sub), options_allowed_methods, args(1) => [
                 ServerConfigurationValue::String(_, _)

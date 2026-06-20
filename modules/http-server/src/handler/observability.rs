@@ -276,6 +276,7 @@ pub fn resolve_request_trace_context(
     generate_enabled: bool,
     default_sampled: bool,
     trust_request: bool,
+    has_traces: bool,
 ) -> (Option<trace_context::TraceContext>, Option<Parent>) {
     if trust_request {
         let incoming = request
@@ -300,10 +301,14 @@ pub fn resolve_request_trace_context(
                 .map(str::to_owned);
 
             let parent_trace_id = context.trace_id.clone();
-            let parent_span_id = context.span_id;
+            let parent_span_id = context.span_id.clone();
             let parent_sampled = context.sampled;
             let baggage = context.baggage.clone();
-            context.span_id = trace_context::generate_span_id();
+            if has_traces {
+                // Generate a new span ID for the request if tracing is enabled,
+                // so to not break the trace context
+                context.span_id = trace_context::generate_span_id();
+            }
             return (
                 Some(context),
                 Some(Parent::ById {
