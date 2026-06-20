@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferron_http::trace_context::current_event_trace_context;
 use futures_util::future::select_ok;
 use http_body_util::BodyExt;
 use rustls::pki_types::ServerName;
@@ -583,6 +584,21 @@ pub async fn handle_upgrade(
     *upgrade_request.extensions_mut() = req_extensions;
 
     let events = ctx.events.clone();
+    let upstream = item.key().map(|k| &*k.0);
+    let trace_context = current_event_trace_context(ctx);
+    let mut upstream_attrs = Vec::with_capacity(2);
+    if let Some(backend) = upstream {
+        upstream_attrs.push((
+            "ferron.proxy.backend_url",
+            ferron_observability::LogAttributeValue::String(backend.proxy_to.clone()),
+        ));
+        if let Some(ref unix_path) = backend.proxy_unix {
+            upstream_attrs.push((
+                "ferron.proxy.backend_unix_path",
+                ferron_observability::LogAttributeValue::String(unix_path.clone()),
+            ));
+        }
+    }
 
     // Take the inner value to prevent Drop from returning to pool.
     // For upgrade connections, we don't return them to the pool
@@ -601,7 +617,29 @@ pub async fn handle_upgrade(
                             let mut backend = VibeioIo::new(upgraded_backend);
                             let mut client = upgraded_client;
 
-                            let _ = tokio::io::copy_bidirectional(&mut backend, &mut client).await;
+                            if let Err(e) =
+                                tokio::io::copy_bidirectional(&mut backend, &mut client).await
+                            {
+                                let mut upstream_attrs = upstream_attrs;
+                                upstream_attrs.push((
+                                    "error.message",
+                                    ferron_observability::LogAttributeValue::String(e.to_string()),
+                                ));
+                                events.emit(ferron_observability::Event::Log(
+                                    ferron_observability::LogEvent {
+                                        level: ferron_observability::LogLevel::Warn,
+                                        message: format!(
+                                            "Reverse proxy: HTTP upgrade tunneling failed: {}",
+                                            e
+                                        ),
+                                        summary: "Reverse proxy: HTTP upgrade tunneling failed"
+                                            .into(),
+                                        target: "ferron-http-proxy",
+                                        attributes: upstream_attrs,
+                                        trace_context,
+                                    },
+                                ));
+                            }
                             // Connection not returned to pool for upgrades
                             // (upgrade connections are long-lived, not pooled)
                         }
@@ -613,23 +651,28 @@ pub async fn handle_upgrade(
                                         .to_string(),
                                     summary: "Reverse proxy: backend HTTP upgrade failed".into(),
                                     target: "ferron-http-proxy",
-                                    attributes: Vec::new(),
-                                    trace_context: None,
+                                    attributes: upstream_attrs,
+                                    trace_context,
                                 },
                             ));
                         }
                     }
                 }
             }
-            Err(_) => {
+            Err(e) => {
+                let mut upstream_attrs = upstream_attrs;
+                upstream_attrs.push((
+                    "error.message",
+                    ferron_observability::LogAttributeValue::String(e.to_string()),
+                ));
                 events.emit(ferron_observability::Event::Log(
                     ferron_observability::LogEvent {
                         level: ferron_observability::LogLevel::Warn,
-                        message: "Reverse proxy: frontend HTTP upgrade failed".to_string(),
+                        message: format!("Reverse proxy: frontend HTTP upgrade failed: {e}"),
                         summary: "Reverse proxy: frontend HTTP upgrade failed".into(),
                         target: "ferron-http-proxy",
-                        attributes: Vec::new(),
-                        trace_context: None,
+                        attributes: upstream_attrs,
+                        trace_context,
                     },
                 ));
             }
