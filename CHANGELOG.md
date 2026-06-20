@@ -37,6 +37,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **ACME provisioning cycle log improvements** - ACME provisioning logs are now no longer emitted at debug level when a certificate is still valid or loaded from cache, as these messages were redundant with the `ferron.acme.domains` attribute already included in the main log message.
 
+#### Proxying
+
+- **Forward proxying CONNECT cycle log improvements** - CONNECT connection closure logs are now no longer emitted at debug level when a tunnel is closed to reduce noise in the application logs.
+
 ### Fixed
 
 #### Observability & logging

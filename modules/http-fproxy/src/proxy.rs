@@ -246,32 +246,7 @@ async fn handle_connect(
 
         // Bidirectional copy between client and backend
         match tokio::io::copy_bidirectional(&mut upgraded, &mut backend_stream).await {
-            Ok((client_to_backend, backend_to_client)) => {
-                emit_log_to_events(
-                    &error_logger,
-                    LogLevel::Info,
-                    "Forward proxy: CONNECT tunnel closed",
-                    &format!(
-                        "Forward proxy: CONNECT tunnel closed for {connect_address} \
-                         (client→backend: {client_to_backend} bytes, \
-                         backend→client: {backend_to_client} bytes)"
-                    ),
-                    vec![
-                        (
-                            "forward_proxy.target",
-                            LogAttributeValue::String(connect_address.clone()),
-                        ),
-                        (
-                            "forward_proxy.bytes.client_to_backend",
-                            LogAttributeValue::I64(client_to_backend as i64),
-                        ),
-                        (
-                            "forward_proxy.bytes.backend_to_client",
-                            LogAttributeValue::I64(backend_to_client as i64),
-                        ),
-                    ],
-                    trace_context.clone(),
-                );
+            Ok(_) => {
                 emit_forward_proxy_metric_to_events(
                     &error_logger,
                     "connect",

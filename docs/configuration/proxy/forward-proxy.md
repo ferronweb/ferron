@@ -141,7 +141,6 @@ proxy.example.com {
 | Forward proxy CONNECT upgrade failed | ERROR | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
 | Forward proxy connection to target failed | ERROR | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
 | Forward proxy CONNECT tunnel error | WARN | `forward_proxy.target` (string) — target address, `error.type` (string), `error.message` (string) |
-| Forward proxy CONNECT tunnel closed | INFO | `forward_proxy.target` (string) — target address, `forward_proxy.bytes.client_to_backend` (int) — bytes sent, `forward_proxy.bytes.backend_to_client` (int) — bytes received |
 | Forward proxy: upstream connect failed | ERROR | `upstream.address` (string) — target address, `error.type` (string), `error.message` (string) |
 | Forward proxy: HTTP/1 handshake failed | ERROR | `error.type` (string), `error.message` (string) |
 | Forward proxy: request to backend failed | ERROR | `error.type` (string), `error.message` (string) |
