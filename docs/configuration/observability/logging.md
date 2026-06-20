@@ -96,7 +96,7 @@ Use the `fields` directive to limit which fields appear in the JSON output. If `
 
 The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `logformat-text` module.
 
-By default, it uses the **Combined Log Format (CLF)**, the same format used by Apache and Nginx.
+By default, it uses the **Enhanced Combined Log Format (ECLF)** (Ferron's extended version of CLF), which extends Combined Log Format with `Host` header and trace ID fields.
 
 **Configuration example:**
 
@@ -111,7 +111,29 @@ example.com {
 Example output:
 
 ```text
-127.0.0.1 - frank [05/Apr/2026:14:32:01 +0200] "GET /index.html HTTP/1.1" 200 1234 "http://www.example.com/start.html" "Mozilla/5.0"
+127.0.0.1 - frank [05/Apr/2026:14:32:01 +0200] "GET /index.html HTTP/1.1" 200 1234 "http://www.example.com/start.html" "Mozilla/5.0" "www.example.com" "abc123def456"
+```
+
+#### Common format string examples
+
+You can customize the text log format using the `access_pattern` directive. Here are common format strings:
+
+**Enhanced Combined Log Format (Ferron default):**
+
+```text
+%client_ip - %auth_user [%t] "%method %path_and_query %version" %status %content_length "%{Referer}i" "%{User-Agent}i" "%{Host}i" "%trace_id"
+```
+
+**Combined Log Format (Apache/Nginx standard):**
+
+```text
+%client_ip - %auth_user [%t] "%method %path_and_query %version" %status %content_length "%{Referer}i" "%{User-Agent}i"
+```
+
+**Common Log Format (CLF):**
+
+```text
+%client_ip - %auth_user [%t] "%method %path_and_query %version" %status %content_length
 ```
 
 #### Pattern syntax

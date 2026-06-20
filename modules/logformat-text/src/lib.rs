@@ -12,9 +12,9 @@ use ferron_observability::{
 };
 use once_cell::sync::Lazy;
 
-// Default Combined Log Format pattern
-const DEFAULT_CLF_PATTERN: &str =
-    "%client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\"";
+// Default Enhanced Combined Log Format pattern
+const DEFAULT_ECLF_PATTERN: &str =
+    "%client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\" \"%{Host}i\" \"%trace_id\"";
 
 /// Represents a parsed format token
 #[derive(Debug, Clone, PartialEq)]
@@ -175,14 +175,14 @@ impl FormatPattern {
 fn parse_config(
     log_config: &ferron_core::config::ServerConfigurationBlock,
 ) -> (FormatPattern, Option<String>, Arc<Vec<String>>) {
-    // Parse access_pattern or use default CLF
+    // Parse access_pattern or use default ECLF
     let pattern_str = log_config
         .directives
         .get("access_pattern")
         .and_then(|entries| entries.first())
         .and_then(|entry| entry.args.first())
         .and_then(|arg| arg.as_string_with_interpolations(&std::collections::HashMap::new()))
-        .unwrap_or_else(|| DEFAULT_CLF_PATTERN.to_string());
+        .unwrap_or_else(|| DEFAULT_ECLF_PATTERN.to_string());
 
     // Parse timestamp_format
     let timestamp_format = log_config
@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn parses_clf_default() {
-        let pattern = FormatPattern::parse(DEFAULT_CLF_PATTERN);
+        let pattern = FormatPattern::parse(DEFAULT_ECLF_PATTERN);
         // Should contain fields for client_ip, auth_user, t, method, path_and_query, version,
         // status, content_length, and headers for Referer and User-Agent
         let has_client_ip = pattern

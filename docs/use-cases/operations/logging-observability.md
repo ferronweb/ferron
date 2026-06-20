@@ -97,22 +97,7 @@ example.com {
 
 ## Trace ID logging for debugging
 
-Use this when you need to correlate log messages across requests. Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`:
-
-```ferron
-example.com {
-    # HTTP access logs
-    log "access.log" {
-        format text
-        access_pattern ">>> %trace_id <<< %client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
-    }
-
-    # "Error" logs, also with trace IDs
-    error_log "error.log"
-
-    root /var/www/html
-}
-```
+Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a variation of Combined Log Format with additional hostname and trace ID fields (Enhanced Combined Log Format) by default, so you don't need to configure it manually in most cases.
 
 Example log output:
 
@@ -124,8 +109,7 @@ Example log output:
 You can then use `grep` to filter logs by a specific trace ID:
 
 ```bash
-grep "trace=abc123def456" /var/log/ferron/access.log
-grep "trace=abc123def456" /var/log/ferron/error.log
+grep "trace=abc123def456" /var/log/ferron/access.log /var/log/ferron/error.log
 ```
 
 ## Centralized observability with OTLP

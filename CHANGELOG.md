@@ -9,6 +9,7 @@
 If you are upgrading to this beta version, you must update your configuration files to accommodate the following syntax refactors:
 
 - **Removed `force_trace` directive** - the `force_trace` directive has been removed as trace context creation is now always enabled for every request. Configurations using `force_trace true` should remove the directive; configurations using `force_trace false` should also remove it since the behavior now matches the default.
+- **Default text log format changed** - the default text access log format has been changed from Combined Log Format to Enhanced Combined Log Format, which adds `Host` header and trace ID fields. If you rely on the default text log format and want to keep the previous behavior, explicitly set the pattern to the Combined Log Format using `access_pattern "%client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""` in your `log` block.
 
 ### Added
 
