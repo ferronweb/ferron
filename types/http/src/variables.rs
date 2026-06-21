@@ -15,6 +15,7 @@ pub mod var {
     pub const SERVER_PORT: &str = "server.port";
     pub const REMOTE_IP: &str = "remote.ip";
     pub const REMOTE_PORT: &str = "remote.port";
+    pub const AUTH_USER: &str = "auth.user";
 }
 
 /// Canonicalize an IP address: convert IPv4-mapped IPv6 (`::ffff:x.x.x.x`) to IPv4.
@@ -39,6 +40,7 @@ pub fn canonicalize_ip(ip: std::net::IpAddr) -> String {
 /// - `request.header.<name>` — header values (names lowercased, `_` → `-`)
 /// - `request.host`, `request.scheme`, `request.path_info`
 /// - `server.ip`, `server.port`, `remote.ip`, `remote.port`
+/// - `auth.user`
 /// - Custom variables stored in `ctx.variables` (e.g., `request.path_info`)
 ///
 /// Unresolved variables return the variable name itself as a fallback string.
@@ -79,6 +81,7 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
         var::SERVER_PORT => Some(ctx.local_address.port().to_string()),
         var::REMOTE_IP => Some(canonicalize_ip(ctx.remote_address.ip())),
         var::REMOTE_PORT => Some(ctx.remote_address.port().to_string()),
+        var::AUTH_USER => Some(ctx.auth_user.clone().unwrap_or_default()),
         n if n.starts_with(var::REQUEST_HEADER_PREFIX) => {
             let header_name = n
                 .trim_start_matches(var::REQUEST_HEADER_PREFIX)

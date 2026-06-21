@@ -78,6 +78,7 @@ The HTTP resolver exposes these variables for use in `match` blocks and interpol
 | `server.port` | Local listener port |
 | `remote.ip` | Client IP address |
 | `remote.port` | Client port |
+| `auth.user` | Authenticated user, if any |
 
 Header names are normalized by lowercasing them and converting `_` to `-`. For example, `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
 

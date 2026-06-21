@@ -20,6 +20,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### HTTP server core
 
 - **Support for date-based caching** - the `If-Modified-Since` header is now supported for static file responses, allowing clients to cache responses and avoid unnecessary re-downloads when the file has not been modified.
+- **Auth user variable support in log variables** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 
 ### Changed
 

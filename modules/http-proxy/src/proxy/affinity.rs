@@ -1,5 +1,7 @@
 //! Session affinity (sticky session) implementation for the proxy.
 
+use ferron_http::variables::resolve_variable;
+
 use crate::types::affinity::AffinityType;
 
 /// Extract the affinity key from the request.
@@ -62,30 +64,6 @@ fn parse_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// Resolve a variable name to its value from the request context.
-fn resolve_variable(variable: &str, ctx: &ferron_http::HttpContext) -> Option<String> {
-    // Support common built-in variables
-    let req = ctx.req.as_ref()?;
-    match variable {
-        "request.uri" => Some(req.uri().to_string()),
-        "request.uri.path" => Some(req.uri().path().to_string()),
-        "request.host" => req.uri().host().map(|s| s.to_string()),
-        "request.method" => Some(req.method().as_str().to_string()),
-        "remote.ip" => Some(ctx.remote_address.ip().to_string()),
-        _ => {
-            // Try to parse as a header variable: request.header.<name>
-            if let Some(header_name) = variable.strip_prefix("request.header.") {
-                let header_name = header_name.replace('_', "-");
-                req.headers()
-                    .get(header_name.as_str())
-                    .map(|v| v.to_str().unwrap_or("").to_string())
-            } else {
-                None
-            }
-        }
-    }
 }
 
 /// Set the affinity cookie on the response if using cookie affinity
