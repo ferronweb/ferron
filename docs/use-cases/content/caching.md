@@ -141,7 +141,10 @@ Use caching alongside rate limiting to protect backend services:
 ```ferron
 example.com {
     location /api {
-        ratelimit 100 "60s"
+        ratelimit {
+            rate 100
+            burst 50
+        }
         proxy http://localhost:3000
         cache {
             max_response_size 524288
@@ -151,21 +154,3 @@ example.com {
 ```
 
 Cached responses bypass the rate limiter and backend entirely, providing maximum protection.
-
-## Observability
-
-Monitor your cache performance with these metrics:
-
-- `ferron.cache.requests` — cache hits, misses, and bypasses
-- `ferron.cache.entries` — current number of cached entries
-- `ferron.cache.stores` — responses stored in the cache
-- `ferron.cache.evictions` — entries evicted from the cache
-- `ferron.cache.purges` — entries purged through LSCache-compatible controls
-
-Enable verbose logging to see detailed cache operations:
-
-```ferron
-{
-    console_log
-}
-```

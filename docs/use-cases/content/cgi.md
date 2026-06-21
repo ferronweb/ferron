@@ -43,10 +43,11 @@ You can also execute CGI scripts outside `cgi-bin` by registering additional fil
 ```ferron
 example.com {
     root /var/www/html
-    cgi
-    extension ".php"
-    extension ".py"
-    extension ".rb"
+    cgi {
+        extension ".php"
+        extension ".py"
+        extension ".rb"
+    }
 }
 ```
 
@@ -69,10 +70,11 @@ Define explicit interpreters for specific file extensions:
 ```ferron
 example.com {
     root /var/www/html
-    cgi
-    interpreter ".php" php-cgi -c /etc/php/8.2/cgi/php.ini
-    interpreter ".pl" perl
-    interpreter ".py" python3
+    cgi {
+        interpreter ".php" php-cgi -c /etc/php/8.2/cgi/php.ini
+        interpreter ".pl" perl
+        interpreter ".py" python3
+    }
 }
 ```
 
@@ -89,8 +91,9 @@ Pass `false` as the second argument to `interpreter` to disable the default inte
 ```ferron
 example.com {
     root /var/www/html
-    cgi
-    interpreter ".php" false
+    cgi {
+        interpreter ".php" false
+    }
 }
 ```
 
@@ -122,10 +125,11 @@ Set CGI environment variables that are passed to the interpreter process:
 ```ferron
 example.com {
     root /var/www/html
-    cgi
-    environment "APP_ENV" "production"
-    environment "APP_SECRET" "{{env.APP_SECRET}}"
-    environment "RUBY_VERSION" "3.3"
+    cgi {
+        environment "APP_ENV" "production"
+        environment "APP_SECRET" "{{env.APP_SECRET}}"
+        environment "RUBY_VERSION" "3.3"
+    }
 }
 ```
 
@@ -164,8 +168,9 @@ example.com {
     root /var/www/html
 
     # CGI is only enabled for cgi-bin and .php scripts
-    cgi
-    interpreter ".php" php-cgi
+    cgi {
+        extension ".php"
+    }
 
     # Upload directory is safe (no CGI execution)
     location /uploads {
