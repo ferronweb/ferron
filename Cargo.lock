@@ -1298,6 +1298,7 @@ dependencies = [
  "ferron-http-server",
  "ferron-http-static",
  "ferron-http-traceid",
+ "ferron-http-variables",
  "ferron-logformat-json",
  "ferron-logformat-text",
  "ferron-metrics-admin",
@@ -1763,6 +1764,23 @@ dependencies = [
  "ferron-core",
  "ferron-http",
  "http",
+ "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-variables"
+version = "3.0.0-beta.2"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fancy-regex",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "rustc-hash",
+ "tokio",
  "typemap_rev",
 ]
 

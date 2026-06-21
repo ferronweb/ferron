@@ -29,6 +29,7 @@ ferron-http-abuseban = { path = "../modules/http-abuseban", optional = true }
 ferron-http-response = { path = "../modules/http-response", optional = true }
 ferron-http-rewrite = { path = "../modules/http-rewrite", optional = true }
 ferron-http-map = { path = "../modules/http-map", optional = true }
+ferron-http-variables = { path = "../modules/http-variables", optional = true }
 ferron-http-compression = { path = "../modules/http-compression", optional = true }
 ferron-http-buffer = { path = "../modules/http-buffer", optional = true }
 ferron-http-replace = { path = "../modules/http-replace", optional = true }
@@ -82,6 +83,7 @@ profile-default = [
     "ferron-http-response",
     "ferron-http-rewrite",
     "ferron-http-map",
+    "ferron-http-variables",
     "ferron-http-compression",
     "ferron-http-buffer",
     "ferron-http-replace",

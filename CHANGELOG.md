@@ -13,12 +13,18 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 ### Added
 
+#### Modules
+
+- **`http-variables`** - a new module for setting interpolation variables based on request conditions and mapping variables to custom access log fields.
+
 #### Observability & metrics
 
 - **Reload metrics and logs** - the new `metrics-reload` module emits application log events and a `ferron.reloads` counter metric around configuration reloads, with a `ferron.reload.successful` attribute indicating success or failure and an `error.message` attribute on failures.
 
 #### HTTP server core
 
+- **`set_var` directive** - new directive for setting interpolation variables based on regex matching against request attributes, with optional `value`, `case_insensitive`, and `negate` subdirectives. (`http-variables`)
+- **`log_field` directive** - new directive for mapping any resolvable variable (including interpolated strings) to custom access log field names, evaluated after the response is generated. (`http-variables`)
 - **Support for date-based caching** - the `If-Modified-Since` header is now supported for static file responses, allowing clients to cache responses and avoid unnecessary re-downloads when the file has not been modified.
 - **Auth user variable support** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 - **Trace ID and span ID variable support** - the `trace.id` and `trace.spanid` variables are now available in variable interpolations for the HTTP server.

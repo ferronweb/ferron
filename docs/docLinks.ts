@@ -276,6 +276,12 @@ export default [
     label: "HTTP map",
   },
   {
+    href: "/docs/v3/configuration/routing/variables",
+    target: "_self",
+    sub: true,
+    label: "Variable setting",
+  },
+  {
     label: "Proxying",
   },
   {
