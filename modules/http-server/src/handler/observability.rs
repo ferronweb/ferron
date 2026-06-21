@@ -1,7 +1,9 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ferron_core::pipeline::{PipelineError, Stage, StageHooks};
+use ferron_http::access_log::CustomAccessLogField;
 use ferron_http::{trace_context, HttpRequest};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
@@ -189,6 +191,7 @@ pub(super) struct HttpAccessLog {
     pub request_headers: Vec<(String, String)>,
     pub timestamp: chrono::DateTime<chrono::Local>,
     pub trace_context: Option<EventTraceContext>,
+    pub custom_fields: Option<HashMap<String, CustomAccessLogField>>,
 }
 
 impl AccessEvent for HttpAccessLog {
@@ -257,6 +260,17 @@ impl AccessEvent for HttpAccessLog {
             ) {
                 visitor.field_string("trace_id", trace_id_str);
                 visitor.field_string("span_id", span_id_str);
+            }
+        }
+        // Optionally include custom access log fields
+        if let Some(custom_fields) = &self.custom_fields {
+            for (name, value) in custom_fields.iter() {
+                match value {
+                    CustomAccessLogField::String(s) => visitor.field_string(name.as_str(), s),
+                    CustomAccessLogField::U64(u) => visitor.field_u64(name.as_str(), *u),
+                    CustomAccessLogField::F64(f) => visitor.field_f64(name.as_str(), *f),
+                    CustomAccessLogField::Bool(b) => visitor.field_bool(name.as_str(), *b),
+                }
             }
         }
     }

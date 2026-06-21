@@ -13,6 +13,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
+use ferron_http::access_log::{CustomAccessLogField, CustomAccessLogFields};
 use ferron_http::mtls::MtlsCertificates;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{
@@ -341,24 +342,25 @@ pub async fn request_handler(
         Vec::new()
     };
 
-    let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
-        request,
-        pipeline,
-        file_pipeline,
-        error_pipeline,
-        config_resolver,
-        local_address,
-        remote_address,
-        hostname.clone(),
-        encrypted,
-        https_port,
-        request_trace_context.clone(),
-        request_span_key.clone(),
-        events.clone(),
-        timeout_duration,
-        peer_identity,
-    )
-    .await;
+    let (mut response_result, auth_user, final_remote_address, custom_fields) =
+        request_handler_inner(
+            request,
+            pipeline,
+            file_pipeline,
+            error_pipeline,
+            config_resolver,
+            local_address,
+            remote_address,
+            hostname.clone(),
+            encrypted,
+            https_port,
+            request_trace_context.clone(),
+            request_span_key.clone(),
+            events.clone(),
+            timeout_duration,
+            peer_identity,
+        )
+        .await;
 
     if let Some(metric_attrs) = metric_attrs {
         // Compute duration and extract response info only when some sink may consume them.
@@ -475,6 +477,7 @@ pub async fn request_handler(
             request_headers,
             timestamp,
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+            custom_fields,
         })));
 
         if let Some(request_span_key) = request_span_key {
@@ -540,6 +543,7 @@ async fn request_handler_inner(
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
     Option<SocketAddr>,
+    Option<HashMap<String, CustomAccessLogField>>,
 ) {
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
@@ -568,7 +572,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None);
+            return (Ok(response), None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -579,6 +583,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -608,6 +613,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -644,7 +650,7 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return (Ok(response), None, None);
+                    return (Ok(response), None, None, None);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -655,6 +661,7 @@ async fn request_handler_inner(
                                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         }),
                     )),
+                    None,
                     None,
                     None,
                 );
@@ -691,7 +698,7 @@ async fn request_handler_inner(
             )
             .await
             {
-                return (Ok(response), None, None);
+                return (Ok(response), None, None, None);
             }
             return (
                 Ok(builtin_error_response(
@@ -702,6 +709,7 @@ async fn request_handler_inner(
                             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     }),
                 )),
+                None,
                 None,
                 None,
             );
@@ -740,7 +748,7 @@ async fn request_handler_inner(
                     )
                     .await
                     {
-                        return (Ok(response), None, None);
+                        return (Ok(response), None, None, None);
                     }
                     return (
                         Ok(builtin_error_response(
@@ -751,6 +759,7 @@ async fn request_handler_inner(
                                     .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                             }),
                         )),
+                        None,
                         None,
                         None,
                     );
@@ -776,7 +785,7 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return (Ok(response), None, None);
+                    return (Ok(response), None, None, None);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -787,6 +796,7 @@ async fn request_handler_inner(
                                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         }),
                     )),
+                    None,
                     None,
                     None,
                 );
@@ -844,7 +854,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None);
+            return (Ok(response), None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -855,6 +865,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
             )),
+            None,
             None,
             None,
         );
@@ -881,7 +892,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None);
+        return (Ok(response), None, None, None);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -969,6 +980,7 @@ async fn request_handler_inner(
 
     let auth_user = ctx.auth_user.clone();
     let final_remote = ctx.remote_address;
+    let custom_fields = ctx.extensions.remove::<CustomAccessLogFields>();
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -996,5 +1008,6 @@ async fn request_handler_inner(
         },
         auth_user,
         Some(final_remote),
+        custom_fields,
     )
 }

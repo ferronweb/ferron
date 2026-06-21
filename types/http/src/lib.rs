@@ -2,6 +2,7 @@
 
 #[cfg(feature = "abuse")]
 pub mod abuse;
+pub mod access_log;
 pub mod client_ip;
 #[cfg(feature = "mtls")]
 pub mod mtls;
