@@ -104,12 +104,12 @@ example.com {
     cache {
         max_response_size 1048576
     }
-}
 
-location /dashboard {
-    basic_auth
-    cache {
-        max_response_size 1048576
+    location /dashboard {
+        basic_auth
+        cache {
+            max_response_size 1048576
+        }
     }
 }
 ```
