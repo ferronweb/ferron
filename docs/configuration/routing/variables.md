@@ -143,10 +143,6 @@ http * {
     }
 
     location /admin {
-        if is_internal != "true" {
-            status 403
-        }
-
         proxy http://admin-backend {
             request_header X-Internal "{{is_internal}}"
         }
