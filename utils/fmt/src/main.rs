@@ -8,8 +8,12 @@ use std::process;
 use std::str::FromStr;
 
 use clap::Parser as ClapParser;
+use mimalloc::MiMalloc;
 
-use config::{FormatConfig, IndentStyle, QuoteStyle};
+use crate::config::{FormatConfig, IndentStyle, QuoteStyle};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(ClapParser)]
 #[command(name = "ferron-fmt", about = "A formatter for ferron.conf files")]
