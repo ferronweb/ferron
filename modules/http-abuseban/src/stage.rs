@@ -2,6 +2,7 @@
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::{HttpContext, HttpResponse};
 use http::HeaderMap;
 use std::sync::Arc;
@@ -19,31 +20,9 @@ impl AbuseProtectionStage {
     pub fn new(registry: Arc<AbuseRegistry>) -> Self {
         Self { registry }
     }
-}
 
-#[async_trait::async_trait(?Send)]
-impl Stage<HttpContext> for AbuseProtectionStage {
-    fn name(&self) -> &str {
-        "abuse_protection"
-    }
-
-    fn constraints(&self) -> Vec<StageConstraint> {
-        // Run early, after client IP is resolved but before rate limiting
-        vec![
-            StageConstraint::After("client_ip_from_header".to_string()),
-            StageConstraint::Before("rate_limit".to_string()),
-            StageConstraint::Before("basicauth".to_string()),
-        ]
-    }
-
-    fn is_applicable(
-        &self,
-        config: Option<&ferron_core::config::ServerConfigurationBlock>,
-    ) -> bool {
-        config.is_some_and(|c| c.has_directive("abuse_protection"))
-    }
-
-    async fn run(&self, context: &mut HttpContext) -> Result<bool, PipelineError> {
+    #[inline]
+    async fn run_abuse_protection(&self, context: &mut HttpContext) -> Result<bool, PipelineError> {
         let Some(config) = parse_abuse_protection_config(&context.configuration) else {
             // No abuse protection config, skip this stage
             return Ok(true);
@@ -122,6 +101,61 @@ impl Stage<HttpContext> for AbuseProtectionStage {
         }
 
         Ok(true) // Continue pipeline execution
+    }
+
+    #[inline]
+    async fn run_abuse_event(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let Some(abuse_event_type) = ctx
+            .configuration
+            .get_value("abuse_event", true)
+            .and_then(|v| v.as_str())
+        else {
+            return Ok(true);
+        };
+
+        if let Some(recorder) = get_global_abuse_recorder() {
+            let abuse_event = AbuseEvent::new(
+                AbuseEventType::Custom,
+                ctx.remote_address.ip(),
+                format!("Custom abuse event: {abuse_event_type}"),
+                40,
+            );
+            recorder.record_event(&abuse_event, ctx);
+        }
+
+        Ok(true)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl Stage<HttpContext> for AbuseProtectionStage {
+    fn name(&self) -> &str {
+        "abuse_protection"
+    }
+
+    fn constraints(&self) -> Vec<StageConstraint> {
+        // Run early, after client IP is resolved but before rate limiting
+        vec![
+            StageConstraint::After("client_ip_from_header".to_string()),
+            StageConstraint::Before("rate_limit".to_string()),
+            StageConstraint::Before("basicauth".to_string()),
+        ]
+    }
+
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("abuse_protection"))
+    }
+
+    async fn run(&self, context: &mut HttpContext) -> Result<bool, PipelineError> {
+        let to_continue = self.run_abuse_protection(context).await?;
+        if to_continue {
+            self.run_abuse_event(context).await
+        } else {
+            Ok(to_continue)
+        }
     }
 }
 

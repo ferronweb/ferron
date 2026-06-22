@@ -17,6 +17,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **`http-variables`** - a new module for setting interpolation variables based on request conditions and mapping variables to custom access log fields.
 
+#### Security
+
+- **Custom abuse event registration** - it's now possible to register custom abuse events, for example, for honeypots.
+
 #### Observability & metrics
 
 - **Reload metrics and logs** - the new `metrics-reload` module emits application log events and a `ferron.reloads` counter metric around configuration reloads, with a `ferron.reload.successful` attribute indicating success or failure and an `error.message` attribute on failures.

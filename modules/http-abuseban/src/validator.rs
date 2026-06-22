@@ -4,6 +4,7 @@ use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
     ServerConfigurationValue,
 };
+use ferron_core::validate_directive;
 
 /// Recognized directives inside an `abuse_protection { ... }` block.
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
@@ -43,6 +44,8 @@ impl ConfigurationValidator for AbuseProtectionValidator {
                 }
             }
         }
+
+        validate_directive!(config, ctx.used_directives, abuse_event, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
 
         Ok(())
     }

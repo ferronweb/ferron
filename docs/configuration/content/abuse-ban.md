@@ -3,7 +3,7 @@ title: "Configuration: abuse protection"
 description: "Lightweight Fail2ban-like IP banning with temporary lockouts for abusive behavior."
 ---
 
-This page documents the `abuse_protection` directive for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (e.g., rate limit breaches, brute-force failures), Ferron temporarily bans the IP address.
+This page documents `abuse_protection` and `abuse_event` directives for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (e.g., rate limit breaches, brute-force failures), Ferron temporarily bans the IP address.
 
 The abuse protection module works by tracking abuse events emitted by other HTTP modules (such as rate limiting and basic authentication) and temporarily banning IPs that exceed configured thresholds within time windows. Bans are stored in memory and automatically expire after the configured duration.
 
@@ -108,6 +108,33 @@ example.com {
 
 IPs added to the `allowlist` are never banned, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
 
+## `abuse_event`
+
+```ferron
+example.com {
+    abuse_protection {
+        ban_duration "15m"
+
+        custom_threshold {
+            events 5
+            window "300s"
+        }
+    }
+
+    match WORDPRESS_SCAN {
+        request.uri.path ~ "/wp-(?:admin|login)(?:.php$|/|$)"
+    }
+
+    if WORDPRESS_SCAN {
+        abuse_event "wordpress_scan" # <-- register WordPress scanning
+    }
+}
+```
+
+The `abuse_event` block can be placed inside an HTTP host block.
+
+This directive can be used to define custom abuse protection rules (for example, to protect your website from automated vulnerability scanners). This could be also useful when configuring a honeypot within Ferron.
+
 ## Behavior
 
 ### Event tracking
@@ -116,7 +143,7 @@ The module tracks events per IP address and event type:
 
 - **Rate limit events** — emitted by the rate limiting module when a client exceeds their rate limit.
 - **Brute force events** — emitted by the basic authentication module when a client has repeated failed authentication attempts.
-- **Custom events** — available for other modules to emit custom abuse events.
+- **Custom events** — available for other modules (and `abuse_event` directive) to emit custom abuse events.
 
 Events are stored in a sliding time window. When the number of events within the window reaches the configured threshold, the IP is immediately banned.
 
