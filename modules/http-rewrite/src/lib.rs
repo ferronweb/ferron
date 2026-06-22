@@ -49,6 +49,13 @@ impl Default for RewriteEngine {
 pub struct HttpRewriteModuleLoader;
 
 impl ModuleLoader for HttpRewriteModuleLoader {
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(RewriteValidator));
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<

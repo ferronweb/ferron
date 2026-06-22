@@ -29,6 +29,13 @@ use ferron_core::registry::RegistryBuilder;
 pub struct HttpResponseModuleLoader;
 
 impl ModuleLoader for HttpResponseModuleLoader {
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(HttpResponseValidator));
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<

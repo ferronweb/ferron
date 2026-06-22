@@ -13,6 +13,13 @@ use crate::validator::RateLimitValidator;
 pub struct HttpRateLimitModuleLoader;
 
 impl ModuleLoader for HttpRateLimitModuleLoader {
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(RateLimitValidator));
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<

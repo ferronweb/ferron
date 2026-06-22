@@ -63,6 +63,13 @@ pub fn get_secondary_runtime_handle(runtime: &Runtime) -> tokio::runtime::Handle
 pub struct ForwardProxyModuleLoader;
 
 impl ModuleLoader for ForwardProxyModuleLoader {
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(ForwardProxyConfigurationValidator));
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<
