@@ -4,8 +4,8 @@ mod quoting;
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::process;
+use std::str::FromStr;
 
 use clap::Parser as ClapParser;
 

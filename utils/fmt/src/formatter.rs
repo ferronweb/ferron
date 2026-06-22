@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use ferronconf::{
-    Block, Config, HostBlock, HostLabels, HostPattern, MatchBlock, Operand,
-    SnippetBlock, Statement, StringPart, Value,
+    Block, Config, HostBlock, HostLabels, HostPattern, MatchBlock, Operand, SnippetBlock,
+    Statement, StringPart, Value,
 };
 
 use crate::config::FormatConfig;
@@ -60,7 +60,9 @@ impl<'a> Formatter<'a> {
             Statement::HostBlock(h) => self.format_host_block(h, output, trailing_comments, idx),
             Statement::MatchBlock(m) => self.format_match_block(m, output, trailing_comments, idx),
             Statement::GlobalBlock(b) => self.format_global_block(b, output),
-            Statement::SnippetBlock(s) => self.format_snippet_block(s, output, trailing_comments, idx),
+            Statement::SnippetBlock(s) => {
+                self.format_snippet_block(s, output, trailing_comments, idx)
+            }
             Statement::Comment(text, _) => {
                 output.push_str(&self.indent());
                 output.push_str(text);
@@ -178,7 +180,8 @@ impl<'a> Formatter<'a> {
 
     fn format_block_contents(&mut self, block: &Block, output: &mut String) {
         let statements: Vec<(usize, &Statement)> = if self.config.sort_directives {
-            let mut indexed: Vec<(usize, &Statement)> = block.statements.iter().enumerate().collect();
+            let mut indexed: Vec<(usize, &Statement)> =
+                block.statements.iter().enumerate().collect();
             indexed.sort_by(|a, b| {
                 let name_a = Self::statement_name(a.1);
                 let name_b = Self::statement_name(b.1);
@@ -282,18 +285,16 @@ impl<'a> Formatter<'a> {
             HostLabels::Hostname(parts) => {
                 output.push_str(&parts.join("."));
             }
-            HostLabels::IpAddr(ip) => {
-                match ip {
-                    std::net::IpAddr::V4(v4) => {
-                        output.push_str(&v4.to_string());
-                    }
-                    std::net::IpAddr::V6(v6) => {
-                        output.push('[');
-                        output.push_str(&v6.to_string());
-                        output.push(']');
-                    }
+            HostLabels::IpAddr(ip) => match ip {
+                std::net::IpAddr::V4(v4) => {
+                    output.push_str(&v4.to_string());
                 }
-            }
+                std::net::IpAddr::V6(v6) => {
+                    output.push('[');
+                    output.push_str(&v6.to_string());
+                    output.push(']');
+                }
+            },
             HostLabels::Wildcard => {
                 output.push('*');
             }
@@ -363,10 +364,7 @@ mod tests {
         let input = "example.com {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "example.com {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "example.com {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -374,10 +372,7 @@ mod tests {
         let input = "{\n    default_http_port 8080\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "{\n    default_http_port 8080\n}\n"
-        );
+        assert_eq!(output, "{\n    default_http_port 8080\n}\n");
     }
 
     #[test]
@@ -408,10 +403,7 @@ mod tests {
         let input = "# This is a comment\nroot /var/www";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "# This is a comment\nroot /var/www\n"
-        );
+        assert_eq!(output, "# This is a comment\nroot /var/www\n");
     }
 
     #[test]
@@ -419,10 +411,7 @@ mod tests {
         let input = "root /var/www # main site";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "root /var/www # main site\n"
-        );
+        assert_eq!(output, "root /var/www # main site\n");
     }
 
     #[test]
@@ -441,10 +430,7 @@ mod tests {
         let input = "# Comment 1\n# Comment 2\nroot /var/www";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "# Comment 1\n# Comment 2\nroot /var/www\n"
-        );
+        assert_eq!(output, "# Comment 1\n# Comment 2\nroot /var/www\n");
     }
 
     #[test]
@@ -463,10 +449,7 @@ mod tests {
         let input = "example.com:443 {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "example.com:443 {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "example.com:443 {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -474,10 +457,7 @@ mod tests {
         let input = "http example.com {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "http example.com {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "http example.com {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -485,10 +465,7 @@ mod tests {
         let input = "[2001:db8::1]:8080 {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "[2001:db8::1]:8080 {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "[2001:db8::1]:8080 {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -496,10 +473,7 @@ mod tests {
         let input = "*.example.com {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "*.example.com {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "*.example.com {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -507,10 +481,7 @@ mod tests {
         let input = "a.com, b.com:8080 {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "a.com, b.com:8080 {\n    root /var/www\n}\n"
-        );
+        assert_eq!(output, "a.com, b.com:8080 {\n    root /var/www\n}\n");
     }
 
     #[test]
@@ -519,10 +490,7 @@ mod tests {
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
         // Auto mode: "acme" is a valid bare string, so quotes are removed
-        assert_eq!(
-            output,
-            "tls {\n    provider acme\n}\n"
-        );
+        assert_eq!(output, "tls {\n    provider acme\n}\n");
     }
 
     #[test]
@@ -530,10 +498,7 @@ mod tests {
         let input = "tls {\n    provider \"acme\" # auto TLS\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "tls {\n    provider acme # auto TLS\n}\n"
-        );
+        assert_eq!(output, "tls {\n    provider acme # auto TLS\n}\n");
     }
 
     #[test]
@@ -541,10 +506,7 @@ mod tests {
         let input = "enabled true\ndisabled false";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "enabled true\ndisabled false\n"
-        );
+        assert_eq!(output, "enabled true\ndisabled false\n");
     }
 
     #[test]
@@ -552,10 +514,7 @@ mod tests {
         let input = "port 80\nratio 3.14";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "port 80\nratio 3.14\n"
-        );
+        assert_eq!(output, "port 80\nratio 3.14\n");
     }
 
     #[test]
@@ -563,10 +522,7 @@ mod tests {
         let input = "cert \"{{env.TLS_CERT}}\"";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "cert \"{{env.TLS_CERT}}\"\n"
-        );
+        assert_eq!(output, "cert \"{{env.TLS_CERT}}\"\n");
     }
 
     #[test]
@@ -602,10 +558,7 @@ mod tests {
         let input = "example.com {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &fmt);
-        assert_eq!(
-            output,
-            "example.com {\n  root /var/www\n}\n"
-        );
+        assert_eq!(output, "example.com {\n  root /var/www\n}\n");
     }
 
     #[test]
@@ -615,10 +568,7 @@ mod tests {
         let input = "example.com {\n    root /var/www\n}";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &fmt);
-        assert_eq!(
-            output,
-            "example.com {\n\troot /var/www\n}\n"
-        );
+        assert_eq!(output, "example.com {\n\troot /var/www\n}\n");
     }
 
     #[test]
@@ -628,10 +578,7 @@ mod tests {
         let input = "root /var/www";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &fmt);
-        assert_eq!(
-            output,
-            "root \"/var/www\"\n"
-        );
+        assert_eq!(output, "root \"/var/www\"\n");
     }
 
     #[test]
@@ -640,15 +587,13 @@ mod tests {
         let input = "directive \"true\"";
         let config = Config::from_str(input).unwrap();
         let output = format_config(&config, &default_config());
-        assert_eq!(
-            output,
-            "directive \"true\"\n"
-        );
+        assert_eq!(output, "directive \"true\"\n");
     }
 
     #[test]
     fn test_format_idempotent() {
-        let input = "example.com {\n    root /var/www\n    tls {\n        provider acme\n    }\n}\n";
+        let input =
+            "example.com {\n    root /var/www\n    tls {\n        provider acme\n    }\n}\n";
         assert!(format_is_idempotent(input, &default_config()));
     }
 
