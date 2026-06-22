@@ -9,7 +9,6 @@ use testcontainers::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-
 async fn create_otlp_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
@@ -533,6 +532,7 @@ async fn test_circuit_breaker_half_open_recovery() {
       window "30s"
       open_duration "1s"
       consecutive_passes 1
+      record_5xx true
     }
   }
 }
