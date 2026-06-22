@@ -328,12 +328,59 @@ impl AbuseRegistry {
 }
 
 impl AbuseRecorder for AbuseRegistry {
+    #[inline]
     fn record_event(&self, event: &AbuseEvent, ctx: &HttpContext) -> EventResult {
-        if let Some(config) = ctx.extensions.get::<AbuseRegistryConfig>() {
+        let result = if let Some(config) = ctx.extensions.get::<AbuseRegistryConfig>() {
             self.record_event(event, config)
         } else {
             EventResult::Recorded
+        };
+
+        if result == EventResult::BanTriggered {
+            // Log ban rejection
+            ctx.events.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Ban triggered: IP {} - {}",
+                        ctx.remote_address, event.reason
+                    ),
+                    summary: "Ban triggered".into(),
+                    target: "ferron-http-abuseban",
+                    attributes: vec![
+                        (
+                            "client.address",
+                            ferron_observability::LogAttributeValue::String(
+                                ctx.remote_address.to_string(),
+                            ),
+                        ),
+                        (
+                            "ferron.abuseban.reason",
+                            ferron_observability::LogAttributeValue::String(event.reason.clone()),
+                        ),
+                    ],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                },
+            ));
+
+            // Emit metric for ban rejection
+            ctx.events.emit(ferron_observability::Event::Metric(
+                ferron_observability::MetricEvent {
+                    name: "ferron.abuseban.triggered",
+                    attributes: vec![(
+                        "ferron.abuseban.reason",
+                        ferron_observability::MetricAttributeValue::String(event.reason.clone()),
+                    )],
+                    ty: ferron_observability::MetricType::Counter,
+                    value: ferron_observability::MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("Requests that triggered an IP ban."),
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                },
+            ));
         }
+
+        result
     }
 
     fn is_banned(&self, ip: IpAddr, ctx: &HttpContext) -> bool {

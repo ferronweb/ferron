@@ -206,16 +206,19 @@ The abuse protection module emits the following metrics:
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `ferron.abuseban.rejected` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests rejected due to IP ban |
+| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests that triggered an IP ban |
 
 ### Logs
 
 - **`DEBUG`**: logged when a ban rejection occurs, including the banned IP address and reason.
+- **`WARN`**: logged when an IP is triggered for banning.
 
 ### Structured logs
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
+| Ban triggered         | WARN  | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
 
 ## See also
 

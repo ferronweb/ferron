@@ -24,6 +24,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Observability & metrics
 
 - **Reload metrics and logs** - the new `metrics-reload` module emits application log events and a `ferron.reloads` counter metric around configuration reloads, with a `ferron.reload.successful` attribute indicating success or failure and an `error.message` attribute on failures.
+- **Abuse ban logging** - the abuse ban logger now logs at the WARN level when an IP is triggered for banning, including the banned IP address and reason.
 
 #### HTTP server core
 
