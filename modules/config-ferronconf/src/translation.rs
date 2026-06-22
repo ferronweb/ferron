@@ -283,7 +283,7 @@ pub(super) fn translate_configuration(
                     }
                 }
             }
-            Statement::MatchBlock(_) | Statement::SnippetBlock(_) => {}
+            _ => {}
         }
     }
 
@@ -344,7 +344,7 @@ fn collect_global_scope_from_statement(
                 collect_global_scope_from_statement(nested, file, scope)?;
             }
         }
-        Statement::Directive(_) | Statement::HostBlock(_) => {}
+        _ => {}
     }
 
     Ok(())
@@ -359,7 +359,7 @@ fn collect_block_scope(statements: &[Statement], file: &Path) -> anyhow::Result<
             Statement::SnippetBlock(snippet_block) => {
                 register_snippet(&mut scope, snippet_block, file)?
             }
-            Statement::Directive(_) | Statement::HostBlock(_) | Statement::GlobalBlock(_) => {}
+            _ => {}
         }
     }
 
@@ -443,13 +443,13 @@ fn translate_block(
                     snippet_stack,
                 )?));
             }
-            Statement::MatchBlock(_) | Statement::SnippetBlock(_) => {}
             Statement::HostBlock(_) => {
                 anyhow::bail!(
                     "Host blocks are only supported at the top level ({})",
                     format_source_location(file, block.span.line, block.span.column)
                 );
             }
+            _ => {}
         }
     }
 

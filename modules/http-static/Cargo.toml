@@ -23,7 +23,7 @@ flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 multi-mime-guess = "0.1"
 urlencoding = "2"
 chrono = "0.4"
-phf = { version = "0.13", features = ["macros"] }
+phf = { version = "0.14", features = ["macros"] }
 rand = "0.10.1"
 hex = "0.4.3"
 pin-project-lite = "0.2.17"

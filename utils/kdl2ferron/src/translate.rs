@@ -28,7 +28,11 @@ pub fn translate(
     snippets: &mut HashMap<String, kdlite::dom::Document<'static>>,
     diagnostics: &mut MigrationDiagnostics,
 ) -> Result<ferronconf::Config, anyhow::Error> {
-    let mut config = ferronconf::Config { statements: vec![] };
+    let mut config = ferronconf::Config {
+        trailing_comments: HashMap::new(),
+        blank_lines_before: HashMap::new(),
+        statements: vec![],
+    };
 
     for node in &doc.nodes {
         match node.name() {
@@ -97,6 +101,7 @@ pub fn translate(
                     ferronconf::Statement::GlobalBlock(block)
                 } else {
                     ferronconf::Statement::HostBlock(ferronconf::HostBlock {
+                        trailing_comment: None,
                         hosts: block_scope
                             .split(",")
                             .map(|scope| {
@@ -149,16 +154,22 @@ pub fn process_block(
 
     // `log`
     let mut observability_log: ferronconf::Block = ferronconf::Block {
+        trailing_comments: HashMap::new(),
+        blank_lines_before: HashMap::new(),
         statements: vec![],
         span: ferronconf::Span { line: 0, column: 0 },
     };
     // `error_log`
     let mut observability_error_log: ferronconf::Block = ferronconf::Block {
+        trailing_comments: HashMap::new(),
+        blank_lines_before: HashMap::new(),
         statements: vec![],
         span: ferronconf::Span { line: 0, column: 0 },
     };
     // `otlp`
     let mut observability_otlp: ferronconf::Block = ferronconf::Block {
+        trailing_comments: HashMap::new(),
+        blank_lines_before: HashMap::new(),
         statements: vec![],
         span: ferronconf::Span { line: 0, column: 0 },
     };
@@ -177,12 +188,15 @@ pub fn process_block(
                 });
 
                 let mut tls_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
                 if let (Some(cert), Some(key)) = (cert, key) {
                     tls_block.statements.push(ferronconf::Statement::Directive(
                         ferronconf::Directive {
+                            trailing_comment: None,
                             name: "provider".to_string(),
                             args: vec![ferronconf::Value::String(
                                 "manual".to_string(),
@@ -194,6 +208,7 @@ pub fn process_block(
                     ));
                     tls_block.statements.push(ferronconf::Statement::Directive(
                         ferronconf::Directive {
+                            trailing_comment: None,
                             name: "cert".to_string(),
                             args: vec![ferronconf::Value::String(
                                 cert,
@@ -205,6 +220,7 @@ pub fn process_block(
                     ));
                     tls_block.statements.push(ferronconf::Statement::Directive(
                         ferronconf::Directive {
+                            trailing_comment: None,
                             name: "key".to_string(),
                             args: vec![ferronconf::Value::String(
                                 key,
@@ -216,6 +232,7 @@ pub fn process_block(
                     ));
                 }
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "tls".to_string(),
                     args: vec![],
                     block: Some(tls_block),
@@ -231,11 +248,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "provider".to_string(),
                             args: vec![ferronconf::Value::String(
                                 "acme".to_string(),
@@ -255,11 +275,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "contact".to_string(),
                             args: vec![ferronconf::Value::String(
                                 contact,
@@ -279,11 +302,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "cache".to_string(),
                             args: vec![ferronconf::Value::String(
                                 cache,
@@ -308,11 +334,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "directory".to_string(),
                             args: vec![ferronconf::Value::String(
                                 val,
@@ -332,11 +361,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "challenge".to_string(),
                             args: vec![ferronconf::Value::String(
                                 challenge,
@@ -374,11 +406,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: name.to_string(),
                             args: vec![val],
                             block: None,
@@ -399,11 +434,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "eab".to_string(),
                             args: vec![
                                 ferronconf::Value::String(
@@ -433,11 +471,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "save".to_string(),
                             args: vec![
                                 ferronconf::Value::String(
@@ -463,11 +504,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "post_obtain_command".to_string(),
                             args: vec![ferronconf::Value::String(
                                 cmd,
@@ -492,11 +536,14 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: name.to_string(),
                             args: vec![ferronconf::Value::String(
                                 val,
@@ -515,11 +562,14 @@ pub fn process_block(
                             nested_directives
                                 .entry("tls".to_string())
                                 .or_insert_with(|| ferronconf::Block {
+                                    trailing_comments: HashMap::new(),
+                                    blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 })
                                 .statements
                                 .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "client_auth".to_string(),
                                     args: vec![ferronconf::Value::Boolean(
                                         *b,
@@ -533,11 +583,14 @@ pub fn process_block(
                             nested_directives
                                 .entry("tls".to_string())
                                 .or_insert_with(|| ferronconf::Block {
+                                    trailing_comments: HashMap::new(),
+                                    blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 })
                                 .statements
                                 .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "client_auth_ca".to_string(),
                                     args: vec![ferronconf::Value::String(
                                         s.to_string(),
@@ -557,11 +610,14 @@ pub fn process_block(
                     _ => true,
                 });
                 let mut ocsp_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
                 ocsp_block.statements.push(ferronconf::Statement::Directive(
                     ferronconf::Directive {
+                        trailing_comment: None,
                         name: "enabled".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
@@ -574,11 +630,14 @@ pub fn process_block(
                 nested_directives
                     .entry("tls".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "ocsp".to_string(),
                         args: vec![],
                         block: Some(ocsp_block),
@@ -594,14 +653,19 @@ pub fn process_block(
                     nested_directives
                         .entry("tls".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "ticket_keys".to_string(),
                             args: vec![],
                             block: Some(ferronconf::Block {
+                                trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                             }),
@@ -617,10 +681,13 @@ pub fn process_block(
                 });
                 if enabled {
                     let cgi_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "cgi".to_string(),
                         args: vec![],
                         block: Some(cgi_block),
@@ -641,11 +708,14 @@ pub fn process_block(
                     nested_directives
                         .entry("cgi".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "extension".to_string(),
                             args: vec![ferronconf::Value::String(
                                 ext,
@@ -674,11 +744,14 @@ pub fn process_block(
                 nested_directives
                     .entry("cgi".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "interpreter".to_string(),
                         args,
                         block: None,
@@ -703,11 +776,14 @@ pub fn process_block(
                                 .to_string(),
                         )
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "environment".to_string(),
                             args: vec![
                                 ferronconf::Value::String(
@@ -736,6 +812,7 @@ pub fn process_block(
                 });
                 if let Some(to) = to {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "scgi".to_string(),
                         args: vec![ferronconf::Value::String(
                             to,
@@ -764,11 +841,14 @@ pub fn process_block(
                                 .to_string(),
                         )
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "environment".to_string(),
                             args: vec![
                                 ferronconf::Value::String(
@@ -805,12 +885,15 @@ pub fn process_block(
                     });
 
                 let mut fcgi_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
                 if let Some(to) = to {
                     fcgi_block.statements.push(ferronconf::Statement::Directive(
                         ferronconf::Directive {
+                            trailing_comment: None,
                             name: "backend".to_string(),
                             args: vec![ferronconf::Value::String(
                                 to,
@@ -823,6 +906,7 @@ pub fn process_block(
                 }
                 fcgi_block.statements.push(ferronconf::Statement::Directive(
                     ferronconf::Directive {
+                        trailing_comment: None,
                         name: "pass".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             pass,
@@ -834,6 +918,7 @@ pub fn process_block(
                 ));
 
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "fcgi".to_string(),
                     args: vec![],
                     block: Some(fcgi_block),
@@ -847,6 +932,7 @@ pub fn process_block(
                 });
                 if let Some(to) = to {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "fcgi_php".to_string(),
                         args: vec![ferronconf::Value::String(
                             to,
@@ -870,11 +956,14 @@ pub fn process_block(
                     nested_directives
                         .entry("fcgi".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "extension".to_string(),
                             args: vec![ferronconf::Value::String(
                                 ext,
@@ -903,11 +992,14 @@ pub fn process_block(
                                 .to_string(),
                         )
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "environment".to_string(),
                             args: vec![
                                 ferronconf::Value::String(
@@ -936,14 +1028,18 @@ pub fn process_block(
                 });
                 if enabled {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "client_ip_from_header".to_string(),
                         args: vec![ferronconf::Value::String(
                             "x-forwarded-for".to_string(),
                             ferronconf::Span { line: 0, column: 0 },
                         )],
                         block: Some(ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![ferronconf::Statement::Directive(
                                 ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "trusted_proxy".to_string(),
                                     args: vec![ferronconf::Value::String(
                                         "0.0.0.0/0".to_string(),
@@ -972,6 +1068,8 @@ pub fn process_block(
                     diagnostics.todo("Manual review recommended for 'status 401' (Basic Auth). Ferron 3 uses a different approach for authentication.");
                     diagnostics.warn("Directive 'status 401' was detected but automatic conversion is incomplete. Manual configuration is required.");
                     let mut basic_auth_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
@@ -984,6 +1082,7 @@ pub fn process_block(
                                         basic_auth_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "realm".to_string(),
                                                     args: vec![ferronconf::Value::String(
                                                         s.to_string(),
@@ -1001,6 +1100,7 @@ pub fn process_block(
                                         basic_auth_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "brute_force_protection".to_string(),
                                                     args: vec![ferronconf::Value::Boolean(
                                                         *s,
@@ -1019,6 +1119,8 @@ pub fn process_block(
                     }
                 } else {
                     let mut status_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
@@ -1031,6 +1133,7 @@ pub fn process_block(
                                         status_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "url".to_string(),
                                                     args: vec![ferronconf::Value::String(
                                                         s.to_string(),
@@ -1048,6 +1151,7 @@ pub fn process_block(
                                         status_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "regex".to_string(),
                                                     args: vec![ferronconf::Value::String(
                                                         s.to_string(),
@@ -1065,6 +1169,7 @@ pub fn process_block(
                                         status_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "body".to_string(),
                                                     args: vec![ferronconf::Value::String(
                                                         s.to_string(),
@@ -1082,6 +1187,7 @@ pub fn process_block(
                                         status_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
+                                                    trailing_comment: None,
                                                     name: "location".to_string(),
                                                     args: vec![
                                                     convert_placeholders_into_interpolated_strings(
@@ -1102,6 +1208,7 @@ pub fn process_block(
                     }
 
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "status".to_string(),
                         args: vec![ferronconf::Value::Integer(
                             code,
@@ -1125,16 +1232,22 @@ pub fn process_block(
                     nested_directives
                         .entry("basic_auth".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "users".to_string(),
                             args: vec![],
                             block: Some(ferronconf::Block {
+                                trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                 statements: vec![ferronconf::Statement::Directive(
                                     ferronconf::Directive {
+                                        trailing_comment: None,
                                         name,
                                         args: vec![ferronconf::Value::String(
                                             hash,
@@ -1161,6 +1274,7 @@ pub fn process_block(
                     .collect::<Vec<_>>();
                 for ip in ips {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "block".to_string(),
                         args: vec![ferronconf::Value::String(
                             ip,
@@ -1182,6 +1296,7 @@ pub fn process_block(
                     .collect::<Vec<_>>();
                 for ip in ips {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "allow".to_string(),
                         args: vec![ferronconf::Value::String(
                             ip,
@@ -1198,6 +1313,7 @@ pub fn process_block(
                     _ => true,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "abort".to_string(),
                     args: vec![ferronconf::Value::Boolean(
                         enabled,
@@ -1214,6 +1330,7 @@ pub fn process_block(
                 });
                 if !enabled {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "rate_limit".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             false,
@@ -1243,12 +1360,15 @@ pub fn process_block(
                         });
 
                     let mut rl_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
                     if let Some(rate) = rate {
                         rl_block.statements.push(ferronconf::Statement::Directive(
                             ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "rate".to_string(),
                                 args: vec![ferronconf::Value::Float(
                                     rate,
@@ -1262,6 +1382,7 @@ pub fn process_block(
                     if let Some(burst) = burst {
                         rl_block.statements.push(ferronconf::Statement::Directive(
                             ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "burst".to_string(),
                                 args: vec![ferronconf::Value::Float(
                                     burst,
@@ -1273,6 +1394,7 @@ pub fn process_block(
                         ));
                     }
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "rate_limit".to_string(),
                         args: vec![],
                         block: Some(rl_block),
@@ -1287,11 +1409,14 @@ pub fn process_block(
                 });
                 if let Some(path) = path {
                     let mut log_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
                     log_block.statements.push(ferronconf::Statement::Directive(
                         ferronconf::Directive {
+                            trailing_comment: None,
                             name: "access_log".to_string(),
                             args: vec![ferronconf::Value::String(
                                 path,
@@ -1303,6 +1428,7 @@ pub fn process_block(
                     ));
                     let statements = &mut observability_log.statements;
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "provider".to_string(),
                         args: vec![ferronconf::Value::String(
                             "file".to_string(),
@@ -1322,6 +1448,7 @@ pub fn process_block(
                 if let Some(path) = path {
                     let statements = &mut observability_error_log.statements;
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "provider".to_string(),
                         args: vec![ferronconf::Value::String(
                             "file".to_string(),
@@ -1331,6 +1458,7 @@ pub fn process_block(
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "error_log".to_string(),
                         args: vec![ferronconf::Value::String(
                             path,
@@ -1348,6 +1476,8 @@ pub fn process_block(
                 });
                 if let Some(endpoint) = endpoint {
                     let mut signal_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
@@ -1363,6 +1493,7 @@ pub fn process_block(
                         signal_block
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "protocol".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     proto,
@@ -1384,6 +1515,7 @@ pub fn process_block(
                         signal_block
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "authorization".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     auth,
@@ -1400,6 +1532,7 @@ pub fn process_block(
                         observability_otlp
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "provider".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     "otlp".to_string(),
@@ -1412,6 +1545,7 @@ pub fn process_block(
                     observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: node.name().replace("otlp_", ""),
                             args: vec![ferronconf::Value::String(
                                 endpoint,
@@ -1502,6 +1636,7 @@ pub fn process_block(
                     observability_log
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "format".to_string(),
                             args: vec![ferronconf::Value::String(
                                 val.clone(),
@@ -1513,6 +1648,7 @@ pub fn process_block(
                     observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "format".to_string(),
                             args: vec![ferronconf::Value::String(
                                 val,
@@ -1525,11 +1661,14 @@ pub fn process_block(
             }
             "log_json" => {
                 let mut log_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
                 log_block.statements.push(ferronconf::Statement::Directive(
                     ferronconf::Directive {
+                        trailing_comment: None,
                         name: "format".to_string(),
                         args: vec![ferronconf::Value::String(
                             "json".to_string(),
@@ -1544,6 +1683,7 @@ pub fn process_block(
                         if let kdlite::dom::Value::String(s) = &entry.value {
                             log_block.statements.push(ferronconf::Statement::Directive(
                                 ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "field".to_string(),
                                     args: vec![
                                         ferronconf::Value::String(
@@ -1589,6 +1729,7 @@ pub fn process_block(
                     observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: name.to_string(),
                             args: vec![val],
                             block: None,
@@ -1616,6 +1757,7 @@ pub fn process_block(
                         observability_error_log
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name,
                                 args: vec![ferronconf::Value::Integer(
                                     val,
@@ -1628,6 +1770,7 @@ pub fn process_block(
                         observability_log
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name,
                                 args: vec![ferronconf::Value::Integer(
                                     val,
@@ -1652,6 +1795,8 @@ pub fn process_block(
                     nested_directives
                         .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         });
@@ -1659,6 +1804,7 @@ pub fn process_block(
                     proxy_block
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "upstream".to_string(),
                             args: vec![ferronconf::Value::String(
                                 to,
@@ -1680,15 +1826,19 @@ pub fn process_block(
                                         .statements
                                         .push(ferronconf::Statement::Directive(
                                             ferronconf::Directive {
+                                                trailing_comment: None,
                                                 name: "upstream".to_string(),
                                                 args: vec![ferronconf::Value::String(
                                                     "http://backend".to_string(),
                                                     ferronconf::Span { line: 0, column: 0 },
                                                 )],
                                                 block: Some(ferronconf::Block {
+                                                    trailing_comments: HashMap::new(),
+                                                    blank_lines_before: HashMap::new(),
                                                     statements: vec![
                                                         ferronconf::Statement::Directive(
                                                             ferronconf::Directive {
+                                                                trailing_comment: None,
                                                                 name: "unix".to_string(),
                                                                 args: vec![
                                                                     ferronconf::Value::String(
@@ -1720,6 +1870,7 @@ pub fn process_block(
                                         .statements
                                         .push(ferronconf::Statement::Directive(
                                             ferronconf::Directive {
+                                                trailing_comment: None,
                                                 name: "limit".to_string(),
                                                 args: vec![ferronconf::Value::Integer(
                                                     *i as i64,
@@ -1737,6 +1888,7 @@ pub fn process_block(
                                         .statements
                                         .push(ferronconf::Statement::Directive(
                                             ferronconf::Directive {
+                                                trailing_comment: None,
                                                 name: "idle_timeout".to_string(),
                                                 args: vec![ferronconf::Value::String(
                                                     format!("{}ms", i),
@@ -1761,11 +1913,14 @@ pub fn process_block(
                 nested_directives
                     .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "circuit_breaker".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
@@ -1781,27 +1936,31 @@ pub fn process_block(
                         let proxy_statements = &mut nested_directives
                             .entry("proxy".to_string())
                             .or_insert_with(|| ferronconf::Block {
+                                trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
                             .statements;
                         let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "circuit_breaker")) {
                             match passive_check {
-                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block { trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 }).statements,
                                 _ => unreachable!(),
                             }
                         } else {
-                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive { trailing_comment: None,
                                 name: "circuit_breaker".to_string(),
                                 args: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                                 block: None,
                             }));
                             match proxy_statements.last_mut().expect("passive_check directive should be present") {
-                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block { trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 }).statements,
@@ -1810,6 +1969,7 @@ pub fn process_block(
                         };
                         passive_check_statements.push(ferronconf::Statement::Directive(
                             ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "max_fails".to_string(),
                                 args: vec![ferronconf::Value::Integer(
                                     *i as i64,
@@ -1835,11 +1995,14 @@ pub fn process_block(
                 nested_directives
                     .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         // Strip "proxy_" and "lb_" prefixes from directive names
                         name: node
                             .name()
@@ -1864,11 +2027,14 @@ pub fn process_block(
                     nested_directives
                         .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "algorithm".to_string(),
                             args: vec![ferronconf::Value::String(
                                 alg,
@@ -1885,27 +2051,31 @@ pub fn process_block(
                         let proxy_statements = &mut nested_directives
                             .entry("proxy".to_string())
                             .or_insert_with(|| ferronconf::Block {
+                                trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                 statements: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
                             .statements;
                         let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "circuit_breaker")) {
                             match passive_check {
-                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block { trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 }).statements,
                                 _ => unreachable!(),
                             }
                         } else {
-                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive { trailing_comment: None,
                                 name: "circuit_breaker".to_string(),
                                 args: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                                 block: None,
                             }));
                             match proxy_statements.last_mut().expect("passive_check directive should be present") {
-                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
+                                ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block { trailing_comments: HashMap::new(),
+                                blank_lines_before: HashMap::new(),
                                     statements: vec![],
                                     span: ferronconf::Span { line: 0, column: 0 },
                                 }).statements,
@@ -1914,6 +2084,7 @@ pub fn process_block(
                         };
                         passive_check_statements.push(ferronconf::Statement::Directive(
                             ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "window".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     format!("{}ms", i),
@@ -1935,11 +2106,14 @@ pub fn process_block(
                     nested_directives
                         .entry("proxy".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "proxy_header".to_string(),
                             args: vec![ferronconf::Value::String(
                                 ver,
@@ -1957,11 +2131,15 @@ pub fn process_block(
                 });
                 if let Some(to) = to {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "proxy".to_string(),
                         args: vec![],
                         block: Some(ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![ferronconf::Statement::Directive(
                                 ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "srv".to_string(),
                                     args: vec![ferronconf::Value::String(
                                         to,
@@ -1983,6 +2161,8 @@ pub fn process_block(
                     _ => true,
                 });
                 let mut fp_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
@@ -2005,6 +2185,7 @@ pub fn process_block(
                                     .collect::<Vec<_>>();
                                 fp_block.statements.push(ferronconf::Statement::Directive(
                                     ferronconf::Directive {
+                                        trailing_comment: None,
                                         name: "allow_domains".to_string(),
                                         args: domains,
                                         block: None,
@@ -2028,6 +2209,7 @@ pub fn process_block(
                                     .collect::<Vec<_>>();
                                 fp_block.statements.push(ferronconf::Statement::Directive(
                                     ferronconf::Directive {
+                                        trailing_comment: None,
                                         name: "allow_ports".to_string(),
                                         args: ports,
                                         block: None,
@@ -2040,6 +2222,7 @@ pub fn process_block(
                     }
                 }
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "forward_proxy".to_string(),
                     args: vec![],
                     block: if enabled { Some(fp_block) } else { None },
@@ -2053,6 +2236,7 @@ pub fn process_block(
                 });
                 if let Some(to) = to {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "auth_to".to_string(),
                         args: vec![ferronconf::Value::String(
                             to,
@@ -2069,10 +2253,14 @@ pub fn process_block(
                     _ => true,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "auth_to".to_string(),
                     args: vec![],
                     block: Some(ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "no_verification".to_string(),
                             args: vec![ferronconf::Value::Boolean(
                                 enabled,
@@ -2099,10 +2287,14 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "auth_to".to_string(),
                     args: vec![],
                     block: Some(ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "copy".to_string(),
                             args: headers,
                             block: None,
@@ -2131,6 +2323,7 @@ pub fn process_block(
                     "proxy_request_header" => {
                         if let (Some(name), Some(value)) = (name, value) {
                             ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "request_header".to_string(),
                                 args: vec![
                                     ferronconf::Value::String(
@@ -2149,6 +2342,7 @@ pub fn process_block(
                     "proxy_request_header_remove" => {
                         if let Some(name) = name {
                             ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "request_header".to_string(),
                                 args: vec![ferronconf::Value::String(
                                     format!("-{}", name),
@@ -2164,6 +2358,7 @@ pub fn process_block(
                     "proxy_request_header_replace" => {
                         if let (Some(name), Some(value)) = (name, value) {
                             ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "request_header".to_string(),
                                 args: vec![
                                     ferronconf::Value::String(
@@ -2184,6 +2379,8 @@ pub fn process_block(
                 nested_directives
                     .entry("proxy".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
@@ -2197,6 +2394,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: node.name().to_string(),
                         args: vec![ferronconf::Value::Integer(
                             val,
@@ -2209,6 +2407,8 @@ pub fn process_block(
             }
             "forward_proxy_auth" => {
                 let mut auth_block = ferronconf::Block {
+                    trailing_comments: HashMap::new(),
+                    blank_lines_before: HashMap::new(),
                     statements: vec![],
                     span: ferronconf::Span { line: 0, column: 0 },
                 };
@@ -2217,6 +2417,7 @@ pub fn process_block(
                         if let kdlite::dom::Value::String(s) = &entry.value {
                             auth_block.statements.push(ferronconf::Statement::Directive(
                                 ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: key.to_string(),
                                     args: vec![ferronconf::Value::String(
                                         s.to_string(),
@@ -2230,6 +2431,7 @@ pub fn process_block(
                     }
                 }
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "basic_auth".to_string(),
                     args: vec![],
                     block: Some(auth_block),
@@ -2244,6 +2446,7 @@ pub fn process_block(
                 });
                 if let Some(path) = path {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "root".to_string(),
                         args: vec![ferronconf::Value::String(
                             path,
@@ -2263,6 +2466,7 @@ pub fn process_block(
                     _ => true,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: node.name().to_string(),
                     args: vec![ferronconf::Value::Boolean(
                         enabled,
@@ -2283,6 +2487,7 @@ pub fn process_block(
                 });
                 if let (Some(ext), Some(mime)) = (ext, mime) {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "mime_type".to_string(),
                         args: vec![
                             ferronconf::Value::String(ext, ferronconf::Span { line: 0, column: 0 }),
@@ -2309,6 +2514,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "index".to_string(),
                     args: files,
                     block: None,
@@ -2322,6 +2528,7 @@ pub fn process_block(
                 });
                 if !enabled {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "cache".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
@@ -2334,6 +2541,8 @@ pub fn process_block(
                     nested_directives
                         .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         });
@@ -2348,11 +2557,14 @@ pub fn process_block(
                     nested_directives
                         .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "max_entries".to_string(),
                             args: vec![ferronconf::Value::Integer(
                                 val,
@@ -2372,11 +2584,14 @@ pub fn process_block(
                     nested_directives
                         .entry("cache".to_string())
                         .or_insert_with(|| ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
                         })
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "max_response_size".to_string(),
                             args: vec![ferronconf::Value::Integer(
                                 val,
@@ -2402,11 +2617,14 @@ pub fn process_block(
                 nested_directives
                     .entry("cache".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "vary".to_string(),
                         args: headers,
                         block: None,
@@ -2428,11 +2646,14 @@ pub fn process_block(
                 nested_directives
                     .entry("cache".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "ignore".to_string(),
                         args: headers,
                         block: None,
@@ -2446,6 +2667,7 @@ pub fn process_block(
                 });
                 if let Some(val) = val {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "file_cache_control".to_string(),
                         args: vec![ferronconf::Value::String(
                             val,
@@ -2477,6 +2699,8 @@ pub fn process_block(
 
                 if let (Some(search), Some(replace)) = (search, replace) {
                     let mut replace_block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
@@ -2484,6 +2708,7 @@ pub fn process_block(
                         replace_block
                             .statements
                             .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                trailing_comment: None,
                                 name: "once".to_string(),
                                 args: vec![ferronconf::Value::Boolean(
                                     false,
@@ -2494,6 +2719,7 @@ pub fn process_block(
                             }));
                     }
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "replace".to_string(),
                         args: vec![
                             ferronconf::Value::String(
@@ -2516,6 +2742,7 @@ pub fn process_block(
                     _ => true,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "replace_last_modified".to_string(),
                     args: vec![ferronconf::Value::Boolean(
                         val,
@@ -2538,6 +2765,7 @@ pub fn process_block(
                     })
                     .collect::<Vec<_>>();
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "replace_filter_types".to_string(),
                     args: types,
                     block: None,
@@ -2556,6 +2784,7 @@ pub fn process_block(
                     })
                     .ok_or_else(|| anyhow::anyhow!("if condition must be a string name"))?;
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "if".to_string(),
                     args: vec![ferronconf::Value::String(
                         condition_name.to_string(),
@@ -2581,6 +2810,7 @@ pub fn process_block(
                     })
                     .ok_or_else(|| anyhow::anyhow!("if_not condition must be a string name"))?;
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "if_not".to_string(),
                     args: vec![ferronconf::Value::String(
                         condition_name.to_string(),
@@ -2602,6 +2832,7 @@ pub fn process_block(
                     _ => None,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "handle_error".to_string(),
                     args: if let Some(condition_name) = condition_name {
                         vec![ferronconf::Value::Integer(
@@ -3144,6 +3375,7 @@ pub fn process_block(
                     }
                 }
                 statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
+                    trailing_comment: None,
                     matcher: condition_name.to_string(),
                     expr: ferron3_conditions,
                     span: ferronconf::Span { line: 0, column: 0 },
@@ -3169,6 +3401,7 @@ pub fn process_block(
                     .unwrap_or(false);
                 if remove_base {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "location".to_string(),
                         args: vec![ferronconf::Value::String(
                             location_path.to_string(),
@@ -3190,6 +3423,7 @@ pub fn process_block(
                     let match_id = rand::random::<u64>();
                     let match_id_str = format!("ferron2__location_{:x}", match_id);
                     statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
+                        trailing_comment: None,
                         matcher: match_id_str.clone(),
                         expr: vec![ferronconf::MatcherExpression {
                             left: ferronconf::Operand::Identifier(
@@ -3209,6 +3443,7 @@ pub fn process_block(
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "if".to_string(),
                         args: vec![ferronconf::Value::String(
                             match_id_str.to_string(),
@@ -3250,6 +3485,7 @@ pub fn process_block(
                     _ => None,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "default_http_port".to_string(),
                     args: vec![if let Some(default_http_port) = default_http_port {
                         ferronconf::Value::Integer(
@@ -3269,6 +3505,7 @@ pub fn process_block(
                     _ => None,
                 });
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: "default_http_port".to_string(),
                     args: vec![if let Some(default_http_port) = default_http_port {
                         ferronconf::Value::Integer(
@@ -3294,11 +3531,14 @@ pub fn process_block(
                 nested_directives
                     .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "protocols".to_string(),
                         args: protocols
                             .iter()
@@ -3324,11 +3564,14 @@ pub fn process_block(
                 nested_directives
                     .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "timeout".to_string(),
                         args: vec![timeout],
                         block: None,
@@ -3349,11 +3592,14 @@ pub fn process_block(
                 nested_directives
                     .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: node.name().to_string(),
                         args: vec![value],
                         block: None,
@@ -3368,11 +3614,14 @@ pub fn process_block(
                 nested_directives
                     .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: node.name().to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             value,
@@ -3394,11 +3643,14 @@ pub fn process_block(
                 nested_directives
                     .entry("http".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: node.name().to_string(),
                         args: vec![ferronconf::Value::Integer(
                             value as i64,
@@ -3424,11 +3676,14 @@ pub fn process_block(
                 nested_directives
                     .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "listen_ip".to_string(),
                         args: vec![ferronconf::Value::String(
                             timeout,
@@ -3446,11 +3701,14 @@ pub fn process_block(
                 nested_directives
                     .entry("runtime".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "io_uring".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             value,
@@ -3474,11 +3732,14 @@ pub fn process_block(
                 nested_directives
                     .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "send_buf".to_string(),
                         args: vec![ferronconf::Value::Integer(
                             default_http_port,
@@ -3502,11 +3763,14 @@ pub fn process_block(
                 nested_directives
                     .entry("tcp".to_string())
                     .or_insert_with(|| ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "recv_buf".to_string(),
                         args: vec![ferronconf::Value::Integer(
                             default_http_port,
@@ -3531,6 +3795,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "header".to_string(),
                         args: vec![
                             ferronconf::Value::String(
@@ -3556,6 +3821,7 @@ pub fn process_block(
                 });
                 if let Some(name) = name {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "header".to_string(),
                         args: vec![ferronconf::Value::String(
                             format!("-{}", name),
@@ -3579,6 +3845,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(value)) = (name, value) {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "header".to_string(),
                         args: vec![
                             ferronconf::Value::String(
@@ -3601,6 +3868,7 @@ pub fn process_block(
                 if let Some(e) = node.entries.first() {
                     if let kdlite::dom::Value::String(s) = &e.value {
                         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            trailing_comment: None,
                             name: "admin_email".to_string(),
                             args: vec![ferronconf::Value::String(
                                 s.to_string(),
@@ -3623,6 +3891,7 @@ pub fn process_block(
                 });
                 if let (Some(code), Some(path)) = (code, path) {
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "error_page".to_string(),
                         args: vec![
                             ferronconf::Value::Integer(
@@ -3655,6 +3924,7 @@ pub fn process_block(
                     //   request.host !~ "^www\\."
                     // }
                     statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
+                        trailing_comment: None,
                         matcher: match_id_str.clone(),
                         expr: vec![ferronconf::MatcherExpression {
                             left: ferronconf::Operand::Identifier(
@@ -3677,22 +3947,29 @@ pub fn process_block(
                     //   }
                     // }
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "if".to_string(),
                         args: vec![ferronconf::Value::String(
                             match_id_str,
                             ferronconf::Span { line: 0, column: 0 },
                         )],
                         block: Some(ferronconf::Block {
+                            trailing_comments: HashMap::new(),
+                            blank_lines_before: HashMap::new(),
                             statements: vec![ferronconf::Statement::Directive(
                                 ferronconf::Directive {
+                                    trailing_comment: None,
                                     name: "status".to_string(),
                                     args: vec![ferronconf::Value::Integer(
                                         301,
                                         ferronconf::Span { line: 0, column: 0 },
                                     )],
                                     block: Some(ferronconf::Block {
+                                        trailing_comments: HashMap::new(),
+                                        blank_lines_before: HashMap::new(),
                                         statements: vec![ferronconf::Statement::Directive(
                                             ferronconf::Directive {
+                                                trailing_comment: None,
                                                 name: "location".to_string(),
                                                 args: vec![ferronconf::Value::InterpolatedString(
                                                     vec![
@@ -3755,6 +4032,7 @@ pub fn process_block(
                     enabled
                 };
                 statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    trailing_comment: None,
                     name: name.to_string(),
                     args: vec![ferronconf::Value::Boolean(
                         val,
@@ -3776,6 +4054,8 @@ pub fn process_block(
 
                 if let (Some(regex), Some(replacement)) = (regex, replacement) {
                     let mut block = ferronconf::Block {
+                        trailing_comments: HashMap::new(),
+                        blank_lines_before: HashMap::new(),
                         statements: vec![],
                         span: ferronconf::Span { line: 0, column: 0 },
                     };
@@ -3784,6 +4064,7 @@ pub fn process_block(
                             if let kdlite::dom::Value::Bool(b) = &entry.value {
                                 block.statements.push(ferronconf::Statement::Directive(
                                     ferronconf::Directive {
+                                        trailing_comment: None,
                                         name: key.to_string(),
                                         args: vec![ferronconf::Value::Boolean(
                                             *b,
@@ -3797,6 +4078,7 @@ pub fn process_block(
                         }
                     }
                     statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        trailing_comment: None,
                         name: "rewrite".to_string(),
                         args: vec![
                             ferronconf::Value::String(
@@ -3830,6 +4112,7 @@ pub fn process_block(
 
     for (key, block) in nested_directives {
         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            trailing_comment: None,
             name: key.to_string(),
             args: vec![],
             block: Some(block),
@@ -3842,6 +4125,7 @@ pub fn process_block(
         _ => false,
     }) {
         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            trailing_comment: None,
             name: "observability".to_string(),
             args: vec![],
             block: Some(observability_log),
@@ -3853,6 +4137,7 @@ pub fn process_block(
         _ => false,
     }) {
         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            trailing_comment: None,
             name: "observability".to_string(),
             args: vec![],
             block: Some(observability_error_log),
@@ -3864,6 +4149,7 @@ pub fn process_block(
         _ => false,
     }) {
         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            trailing_comment: None,
             name: "observability".to_string(),
             args: vec![],
             block: Some(observability_otlp),
@@ -3872,6 +4158,8 @@ pub fn process_block(
     }
 
     Ok(ferronconf::Block {
+        trailing_comments: HashMap::new(),
+        blank_lines_before: HashMap::new(),
         statements,
         span: ferronconf::Span { line: 0, column: 0 },
     })
