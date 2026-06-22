@@ -97,11 +97,7 @@ impl Upstream {
             })],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
-                super::srv::resolve_srv(
-                    srv_data,
-                    _active_health_check_state,
-                )
-                .await
+                super::srv::resolve_srv(srv_data, _active_health_check_state).await
             }
         }
     }

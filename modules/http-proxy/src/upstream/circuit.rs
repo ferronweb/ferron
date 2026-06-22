@@ -446,10 +446,10 @@ mod tests {
 
     use crate::types::circuit::CircuitBreakerState;
     use crate::types::upstream::UpstreamInner;
+    use crate::upstream::determine_proxy_to;
     use crate::upstream::lb::{
         ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
     };
-    use crate::upstream::determine_proxy_to;
 
     use super::*;
 

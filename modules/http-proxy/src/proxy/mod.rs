@@ -65,11 +65,7 @@ pub async fn execute_proxy(
     let mut metrics = ProxyMetrics::new();
 
     // Resolve upstreams (SRV records are resolved here, static ones pass through)
-    let upstreams = resolve_upstreams(
-        &config.upstreams,
-        health_check_state.cloned(),
-    )
-    .await;
+    let upstreams = resolve_upstreams(&config.upstreams, health_check_state.cloned()).await;
 
     if upstreams.is_empty() {
         ctx.events.emit(Event::Log(LogEvent {

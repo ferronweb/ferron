@@ -602,9 +602,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             };
             if let Some(limit) = limit {
                 let resolved = uc
-                    .resolve(
-                        Some(Arc::clone(&self.state.active_health_check_state)),
-                    )
+                    .resolve(Some(Arc::clone(&self.state.active_health_check_state)))
                     .await;
                 for resolved_upstream in resolved {
                     conn_manager.set_local_limit(resolved_upstream, limit);
