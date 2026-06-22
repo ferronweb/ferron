@@ -16,6 +16,13 @@ use crate::validator::AbuseProtectionValidator;
 pub struct HttpAbuseProtectionModuleLoader;
 
 impl ModuleLoader for HttpAbuseProtectionModuleLoader {
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(AbuseProtectionValidator));
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<
