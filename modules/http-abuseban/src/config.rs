@@ -33,7 +33,7 @@ pub struct AbuseProtectionConfig {
 pub fn parse_abuse_protection_config(
     config: &ferron_core::config::layer::LayeredConfiguration,
 ) -> Option<AbuseProtectionConfig> {
-    let entries = config.get_entries("abuse_protection", false);
+    let entries = config.get_entries("abuse_protection", true);
 
     if entries.is_empty() {
         return None;
