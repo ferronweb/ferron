@@ -2,10 +2,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{crate_name, crate_version, Arg, ArgAction, ArgMatches, Command};
-use mimalloc::MiMalloc;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 /// Parses the command-line arguments
 fn parse_arguments() -> ArgMatches {

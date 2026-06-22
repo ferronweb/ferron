@@ -7,11 +7,5 @@ edition = "2021"
 ferronconf = { version = "0.3.0", features = ["lexer-public"] }
 clap = { version = "4", features = ["derive"] }
 
-[target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { version = "0.1.50", features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
-
-[target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { version = "0.1.50" }
-
 [build-dependencies]
 winresource = "0.1.19"

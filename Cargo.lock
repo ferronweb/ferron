@@ -1330,7 +1330,6 @@ version = "3.0.0-beta.2"
 dependencies = [
  "clap",
  "ferronconf",
- "mimalloc",
  "winresource",
 ]
 
@@ -1803,7 +1802,6 @@ dependencies = [
  "ferronconf",
  "glob",
  "kdlite",
- "mimalloc",
  "rand 0.10.1",
  "regex-syntax",
  "winresource",
@@ -1981,7 +1979,6 @@ name = "ferron-passwd"
 version = "3.0.0-beta.2"
 dependencies = [
  "clap",
- "mimalloc",
  "password-auth",
  "rpassword",
  "winresource",
@@ -1994,7 +1991,6 @@ dependencies = [
  "brotli",
  "clap",
  "flate2",
- "mimalloc",
  "rayon",
  "winresource",
  "zstd",

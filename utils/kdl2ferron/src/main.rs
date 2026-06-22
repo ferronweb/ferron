@@ -7,13 +7,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{crate_name, crate_version, Arg, ArgAction, ArgMatches, Command};
-use mimalloc::MiMalloc;
 
 use crate::read_kdl::read_kdl_file;
 use crate::translate::translate;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 /// Parses the command-line arguments
 fn parse_arguments() -> ArgMatches {

@@ -1,11 +1,7 @@
 use clap::Parser;
-use mimalloc::MiMalloc;
 use password_auth::generate_hash;
 use rpassword::prompt_password;
 use std::process;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 /// A password tool for Ferron
 #[derive(Parser, Debug)]

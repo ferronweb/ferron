@@ -11,11 +11,5 @@ clap = { version = "4.5.28", features = ["derive"] }
 password-auth = "1.0.0"
 rpassword = "7.4.0"
 
-[target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { version = "0.1.50", features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
-
-[target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { version = "0.1.50" }
-
 [build-dependencies]
 winresource = "0.1.19"
