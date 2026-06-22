@@ -942,7 +942,7 @@ async fn request_handler_inner(
                 ctx.req = Some(req);
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
-                    ctx.hostname.as_deref().unwrap_or(""),
+                    hostname.as_deref().unwrap_or(""),
                     &routing_str,
                     status,
                     &ctx,
