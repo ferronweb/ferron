@@ -36,6 +36,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Auth user variable support** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 - **Trace ID and span ID variable support** - the `trace.id` and `trace.spanid` variables are now available in variable interpolations for the HTTP server.
 
+#### Utilities
+
+- **Formatter utility** - a new `ferron-fmt` command-line tool is available for formatting and validating Ferron configuration files.
+
 ### Changed
 
 #### Admin API
