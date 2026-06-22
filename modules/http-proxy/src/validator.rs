@@ -74,7 +74,6 @@ fn validate_proxy_block(
     let mut sub = std::collections::HashSet::new();
 
     ferron_core::validate_nested!(block, used(sub), algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
-    validate_passive_check_directives(block, ctx, &mut sub)?;
     validate_circuit_breaker_directives(block, ctx, &mut sub)?;
     ferron_core::validate_nested!(block, used(sub), retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
@@ -259,39 +258,6 @@ fn validate_srv_block(
     Ok(())
 }
 
-fn validate_passive_check_directives(
-    block: &ServerConfigurationBlock,
-    ctx: &mut ConfigurationValidatorContext,
-    parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(passive_block) = block
-        .directives
-        .get("passive_check")
-        .and_then(|d| d.first())
-        .and_then(|d| d.children.as_ref())
-    {
-        parent_used.insert("passive_check".to_string());
-        let mut sub = std::collections::HashSet::new();
-
-        if passive_block.directives.contains_key("max_fails") {
-            sub.insert("max_fails".to_string());
-        }
-        validate_number(passive_block, "max_fails", 0)?;
-        if passive_block.directives.contains_key("window") {
-            sub.insert("window".to_string());
-        }
-        validate_duration(passive_block, "window")?;
-
-        ferron_core::check_unused_subdirectives!(
-            passive_block,
-            sub,
-            &mut ctx.diagnostics,
-            ctx.scope.clone()
-        );
-    }
-    Ok(())
-}
-
 fn validate_active_check_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
@@ -379,6 +345,7 @@ fn validate_circuit_breaker_directives(
                 sub.insert("consecutive_passes".to_string());
             }
             validate_number(cb_block, "consecutive_passes", 1)?;
+            ferron_core::validate_nested!(cb_block, used(sub), record_5xx, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
             ferron_core::check_unused_subdirectives!(
                 cb_block,

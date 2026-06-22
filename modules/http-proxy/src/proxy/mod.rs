@@ -9,7 +9,6 @@ mod response;
 mod tls;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_http::{HttpContext, HttpResponse};
@@ -28,7 +27,7 @@ use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::upstream::{
     determine_proxy_to, record_backend_response, record_backend_transport_failure,
-    resolve_upstreams, FailureCache,
+    resolve_upstreams,
 };
 use crate::ProxyMetrics;
 
@@ -55,7 +54,6 @@ pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    failed_backends: Arc<FailureCache>,
     circuit_breaker_state: CircuitBreakerStateMap,
     algorithm: &LoadBalancerAlgorithmInner,
     ring: &RwLock<ConsistentHashRing>,
@@ -63,17 +61,13 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
-    config_key: &[usize],
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();
 
     // Resolve upstreams (SRV records are resolved here, static ones pass through)
     let upstreams = resolve_upstreams(
         &config.upstreams,
-        Arc::clone(&failed_backends),
-        config.passive_check.max_fails,
         health_check_state.cloned(),
-        config_key,
     )
     .await;
 
@@ -103,9 +97,6 @@ pub async fn execute_proxy(
         // Select upstream via load balancing (tracker already initialized inside)
         let Some(selected) = determine_proxy_to(
             &upstreams,
-            &failed_backends,
-            config.passive_check.enabled,
-            config.passive_check.max_fails,
             algorithm,
             conn_state,
             ewma_state,
@@ -117,7 +108,6 @@ pub async fn execute_proxy(
             ring,
             &ctx.events,
             &mut metrics,
-            config_key,
             ferron_http::trace_context::current_event_trace_context(ctx),
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
@@ -211,14 +201,11 @@ pub async fn execute_proxy(
             }
             Err(e) => {
                 record_backend_transport_failure(
-                    Arc::clone(&failed_backends),
-                    config.passive_check.enabled,
                     Some(&circuit_breaker_state),
                     &config.circuit_breaker,
                     &selected.upstream,
                     &mut metrics,
                     &ctx.events,
-                    config_key,
                     ferron_http::trace_context::current_event_trace_context(ctx),
                 );
 
@@ -227,13 +214,10 @@ pub async fn execute_proxy(
                     // Count how many healthy backends remain
                     let healthy_count = count_available_backends(
                         &upstreams,
-                        &failed_backends,
-                        config.passive_check.max_fails,
                         health_check_state,
                         Some(&circuit_breaker_state),
                         &config.circuit_breaker,
                         &metrics.selected_backends,
-                        config_key,
                     );
 
                     if healthy_count > 0

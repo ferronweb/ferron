@@ -1766,7 +1766,7 @@ pub fn process_block(
                     })
                     .statements
                     .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                        name: "passive_check".to_string(),
+                        name: "circuit_breaker".to_string(),
                         args: vec![ferronconf::Value::Boolean(
                             enabled,
                             ferronconf::Span { line: 0, column: 0 },
@@ -1785,7 +1785,7 @@ pub fn process_block(
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
                             .statements;
-                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "passive_check")) {
+                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "circuit_breaker")) {
                             match passive_check {
                                 ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
                                     statements: vec![],
@@ -1795,7 +1795,7 @@ pub fn process_block(
                             }
                         } else {
                             proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
-                                name: "passive_check".to_string(),
+                                name: "circuit_breaker".to_string(),
                                 args: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                                 block: None,
@@ -1889,7 +1889,7 @@ pub fn process_block(
                                 span: ferronconf::Span { line: 0, column: 0 },
                             })
                             .statements;
-                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "passive_check")) {
+                        let passive_check_statements = if let Some(passive_check) = proxy_statements.iter_mut().find(|s| matches!(s, ferronconf::Statement::Directive(s) if s.name == "circuit_breaker")) {
                             match passive_check {
                                 ferronconf::Statement::Directive(d) => &mut d.block.get_or_insert(ferronconf::Block {
                                     statements: vec![],
@@ -1899,7 +1899,7 @@ pub fn process_block(
                             }
                         } else {
                             proxy_statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
-                                name: "passive_check".to_string(),
+                                name: "circuit_breaker".to_string(),
                                 args: vec![],
                                 span: ferronconf::Span { line: 0, column: 0 },
                                 block: None,

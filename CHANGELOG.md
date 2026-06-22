@@ -10,6 +10,8 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Removed `force_trace` directive** - the `force_trace` directive has been removed as trace context creation is now always enabled for every request. Configurations using `force_trace true` should remove the directive; configurations using `force_trace false` should also remove it since the behavior now matches the default.
 - **Default text log format changed** - the default text access log format has been changed from Combined Log Format to Enhanced Combined Log Format, which adds `Host` header and trace ID fields. If you rely on the default text log format and want to keep the previous behavior, explicitly set the pattern to the Combined Log Format using `access_pattern "%client_ip - %auth_user [%t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""` in your `log` block.
+- **Circuit breaker `5xx` responses no longer counted by default** - upstream `5xx` responses no longer trip the circuit breaker unless `record_5xx true` is explicitly set. This makes the circuit breaker purely transport-failure-based by default, giving operators explicit control over Layer 7 error sensitivity.
+- **`passive_check` directive removed** - the `passive_check` directive has been replaced with a more generic `circuit_breaker` directive that supports passive health checking and circuit breaking for both HTTP and gRPC services.
 
 ### Added
 
@@ -53,6 +55,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Proxying
 
 - **Forward proxying CONNECT cycle log improvements** - CONNECT connection closure logs are now no longer emitted at debug level when a tunnel is closed to reduce noise in the application logs.
+- **Circuit breaker `record_5xx` toggle** - the `circuit_breaker` directive now supports a `record_5xx` subdirective (default: `false`) to control whether upstream `5xx` responses count toward tripping the circuit.
 
 ### Fixed
 

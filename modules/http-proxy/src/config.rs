@@ -38,24 +38,6 @@ pub enum HeaderAction {
     Append(HeaderName, String),
 }
 
-/// Passive health check configuration for the reverse proxy.
-#[derive(Clone)]
-pub struct HealthCheckConfig {
-    pub enabled: bool,
-    pub max_fails: u64,
-    pub window: Duration,
-}
-
-impl Default for HealthCheckConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            max_fails: 3,
-            window: Duration::from_millis(5000),
-        }
-    }
-}
-
 /// Circuit breaker configuration for the reverse proxy.
 #[derive(Clone)]
 pub struct CircuitBreakerConfig {
@@ -64,6 +46,7 @@ pub struct CircuitBreakerConfig {
     pub window: Duration,
     pub open_duration: Duration,
     pub consecutive_passes: u64,
+    pub record_5xx: bool,
 }
 
 impl Default for CircuitBreakerConfig {
@@ -74,6 +57,7 @@ impl Default for CircuitBreakerConfig {
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
+            record_5xx: false,
         }
     }
 }
@@ -83,7 +67,6 @@ impl Default for CircuitBreakerConfig {
 pub struct ProxyConfig {
     pub upstreams: Vec<Upstream>,
     pub algorithm: LoadBalancerAlgorithm,
-    pub passive_check: HealthCheckConfig,
     pub circuit_breaker: CircuitBreakerConfig,
     pub retry_connection: bool,
     pub keepalive: bool,
@@ -110,7 +93,6 @@ impl Default for ProxyConfig {
         Self {
             upstreams: Vec::new(),
             algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
-            passive_check: HealthCheckConfig::default(),
             circuit_breaker: CircuitBreakerConfig::default(),
             retry_connection: true,
             keepalive: true,
@@ -271,16 +253,6 @@ fn parse_proxy_block(
                     };
                 }
             }
-            "passive_check" => {
-                if let Some(val) = entries.first().map(|e| e.get_flag()) {
-                    cfg.passive_check.enabled = val;
-                    if val {
-                        if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
-                            parse_passive_health_check(children, &mut cfg.passive_check)?;
-                        }
-                    }
-                }
-            }
             "circuit_breaker" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.circuit_breaker.enabled = val;
@@ -359,36 +331,6 @@ fn parse_proxy_block(
         }
     }
 
-    Ok(())
-}
-
-fn parse_passive_health_check(
-    entries: &ServerConfigurationBlock,
-    health_check_config: &mut HealthCheckConfig,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-    for (name, entries) in entries.directives.iter() {
-        match name.as_str() {
-            "max_fails" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v: &ServerConfigurationValue| v.as_number())
-                {
-                    health_check_config.max_fails = val as u64;
-                }
-            }
-            "window" => {
-                if let Some(val) = entries
-                    .first()
-                    .and_then(|e| e.args.first())
-                    .and_then(|v| v.as_duration())
-                {
-                    health_check_config.window = val;
-                }
-            }
-            _ => {}
-        }
-    }
     Ok(())
 }
 
@@ -548,6 +490,11 @@ fn parse_circuit_breaker(
                     if val > 0 {
                         circuit_breaker_config.consecutive_passes = val as u64;
                     }
+                }
+            }
+            "record_5xx" => {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                    circuit_breaker_config.record_5xx = val;
                 }
             }
             _ => {}

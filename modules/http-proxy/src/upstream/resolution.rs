@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
-use crate::config::{AffinityType, CircuitBreakerConfig};
+use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::{CircuitBreakerStateMap, CIRCUIT_BREAKER_STATUS_OPEN};
 use crate::types::health::HealthCheckStateMap;
 use crate::types::lb::SelectedBackend;
@@ -13,7 +13,6 @@ use crate::types::upstream::{Upstream, UpstreamInner};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::try_acquire_circuit_breaker_slot;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
-use crate::upstream::FailureCache;
 
 /// Resolve all upstreams to a flat list of `Arc<UpstreamInner>` entries.
 ///
@@ -22,22 +21,14 @@ use crate::upstream::FailureCache;
 #[inline]
 pub async fn resolve_upstreams(
     upstreams: &[Upstream],
-    failed_backends: Arc<FailureCache>,
-    health_check_max_fails: u64,
     active_health_check_state: Option<HealthCheckStateMap>,
-    config_key: &[usize],
 ) -> Vec<Arc<UpstreamInner>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
     for upstream in upstreams {
         resolved.extend(
             upstream
-                .resolve(
-                    Arc::clone(&failed_backends),
-                    health_check_max_fails,
-                    active_health_check_state.clone(),
-                    config_key,
-                )
+                .resolve(active_health_check_state.clone())
                 .await,
         );
     }
@@ -51,21 +42,17 @@ pub async fn resolve_upstreams(
 #[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
     upstreams: &[Arc<UpstreamInner>],
-    failed_backends: &FailureCache,
-    health_check_enabled: bool,
-    health_check_max_fails: u64,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    affinity_type: Option<&AffinityType>,
+    affinity_type: Option<&crate::config::AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
     event_sink: &ferron_observability::CompositeEventSink,
     metrics: &mut crate::ProxyMetrics,
-    config_key: &[usize],
     event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
@@ -79,23 +66,9 @@ pub fn determine_proxy_to(
         .iter()
         .enumerate()
         .filter_map(|(i, u)| {
-            // Check passive failure cache
-            if health_check_enabled {
-                if let Some(fails) = failed_backends.get(&(u.clone(), config_key.to_vec())) {
-                    if fails > health_check_max_fails {
-                        unhealthy.insert(i);
-                        metrics.excluded_passive.push(Arc::clone(u));
-                        return None;
-                    }
-                }
-            }
-
             // Check active health check state
             if let Some(state_map) = health_check_state {
                 if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
-                    // Active health exclusion is tracked via the existing
-                    // active_unhealthy_backends metric — no separate exclusion
-                    // metric needed.
                     unhealthy.insert(i);
                     return None;
                 }

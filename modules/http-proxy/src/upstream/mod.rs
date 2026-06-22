@@ -5,7 +5,6 @@
 
 pub mod affinity;
 pub mod circuit;
-pub mod failure_cache;
 pub mod lb;
 pub mod resolution;
 
@@ -18,8 +17,6 @@ use std::hash::BuildHasher;
 pub use circuit::{
     is_circuit_breaker_available, record_backend_response, record_backend_transport_failure,
 };
-pub use failure_cache::ConcurrentTtlCache;
-pub(crate) use failure_cache::FailureCache;
 pub use resolution::{determine_proxy_to, resolve_upstreams};
 
 /// Returns an [`ahash::AHasher`] with a consistent seed.

@@ -86,10 +86,7 @@ impl Upstream {
     #[inline]
     pub async fn resolve(
         &self,
-        _failed_backends: std::sync::Arc<crate::upstream::FailureCache>,
-        _health_check_max_fails: u64,
         _active_health_check_state: Option<HealthCheckStateMap>,
-        _config_key: &[usize],
     ) -> Vec<Arc<UpstreamInner>> {
         match self {
             Upstream::Static(cfg) => vec![Arc::new(UpstreamInner {
@@ -102,10 +99,7 @@ impl Upstream {
             Upstream::Srv(srv_data) => {
                 super::srv::resolve_srv(
                     srv_data,
-                    _failed_backends,
-                    _health_check_max_fails,
                     _active_health_check_state,
-                    _config_key,
                 )
                 .await
             }

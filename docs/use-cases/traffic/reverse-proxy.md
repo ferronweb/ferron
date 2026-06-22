@@ -14,7 +14,8 @@ example.com {
 The WebSocket protocol is supported out of the box in this configuration — no additional configuration is required.
 
 > [!tip]
-> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `passive_check` or `circuit_breaker` settings.
+> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `
+` or `circuit_breaker` settings.
 
 ## Reverse proxy with static file serving support
 
@@ -189,7 +190,7 @@ example.com {
         request_header Host "{{request.host}}"
 
         # Enable passive health checks to auto-remove unhealthy backends
-        passive_check {
+        circuit_breaker {
             max_fails 3
             window "10s"
         }
@@ -197,7 +198,7 @@ example.com {
 }
 ```
 
-This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. Passive health checks automatically remove any backend that fails three consecutive checks within a 10-second window.
+This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. The circuit breaker automatically removes any backend that fails repeatedly within the configured time window.
 
 ### Observing A/B test results
 
@@ -209,9 +210,11 @@ Ferron's proxy metrics make it easy to compare backend performance in Prometheus
 
 You can create Grafana panels to visualize the ratio of requests between backends, compare p99 latency per backend, and alert on increased error rates in the new backend.
 
-## Passive health checks
+## Passive health checking
 
-Ferron supports passive health checks. To enable passive health checking:
+Ferron provides passive health checking — tracking request-time failures per backend without background probes — through its circuit breaker. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses, then temporarily ejects unstable backends from the load balancer.
+
+To enable passive health checking with transport-failure-only detection (the default):
 
 ```ferron
 example.com {
@@ -219,11 +222,21 @@ example.com {
         upstream http://localhost:3000
         upstream http://localhost:3001
 
-        passive_check {
+        circuit_breaker {
             max_fails 3
             window "5s"
         }
     }
+}
+```
+
+To also count upstream `5xx` responses toward the circuit:
+
+```ferron
+circuit_breaker {
+    max_fails 3
+    window "5s"
+    record_5xx true
 }
 ```
 
@@ -245,13 +258,14 @@ example.com {
             window "30s"
             open_duration "10s"
             consecutive_passes 1
+            record_5xx true
         }
     }
 }
 ```
 
 > [!important]
-> Circuit breaking counts transport failures and upstream `5xx` responses — it does not automatically retry upstream `5xx` responses.
+> Circuit breaking counts transport failures by default. Upstream `5xx` responses count only when `record_5xx true` is set. Circuit breaking does not automatically retry upstream `5xx` responses.
 
 > [!info]
 > For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy#circuit-breaking).

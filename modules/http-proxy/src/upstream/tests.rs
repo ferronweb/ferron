@@ -2,7 +2,6 @@ use dashmap::DashMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::types::affinity::AffinityType;
 use crate::types::health::{HealthCheckState, HealthCheckStateMap};
@@ -13,7 +12,6 @@ use crate::upstream::lb::selector::select_backend_index;
 use crate::upstream::lb::{
     ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
 };
-use crate::upstream::ConcurrentTtlCache;
 
 use super::*;
 
@@ -140,14 +138,10 @@ fn test_select_backend_single_backend() {
 
 #[test]
 fn test_determine_proxy_to_no_upstreams() {
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
         &[],
-        &failed_backends,
-        false,
-        3,
         &algorithm,
         None,
         None,
@@ -159,7 +153,6 @@ fn test_determine_proxy_to_no_upstreams() {
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
-        &[],
         None,
     );
     assert!(result.is_none());
@@ -168,15 +161,11 @@ fn test_determine_proxy_to_no_upstreams() {
 #[test]
 fn test_determine_proxy_to_single_backend() {
     let upstreams = vec![make_upstream("http://backend1")];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
     let algorithm = LoadBalancerAlgorithmInner::Random;
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
     let result = determine_proxy_to(
         &upstreams,
-        &failed_backends,
-        false,
-        3,
         &algorithm,
         Some(&conn_state),
         None,
@@ -188,7 +177,6 @@ fn test_determine_proxy_to_single_backend() {
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
-        &[],
         None,
     );
     assert!(result.is_some());
@@ -197,176 +185,11 @@ fn test_determine_proxy_to_single_backend() {
 }
 
 #[test]
-fn test_determine_proxy_to_health_check_filters_unhealthy() {
-    let upstreams = vec![
-        make_upstream("http://backend1"),
-        make_upstream("http://backend2"),
-    ];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-
-    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
-
-    let algorithm = LoadBalancerAlgorithmInner::Random;
-
-    let result = determine_proxy_to(
-        &upstreams,
-        &failed_backends,
-        true,
-        3,
-        &algorithm,
-        None,
-        None,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        &[],
-        None,
-    );
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
-}
-
-#[test]
-fn test_determine_proxy_to_all_unhealthy() {
-    let upstreams = vec![
-        make_upstream("http://backend1"),
-        make_upstream("http://backend2"),
-    ];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-
-    failed_backends.insert((make_upstream("http://backend1"), vec![]), 5);
-    failed_backends.insert((make_upstream("http://backend2"), vec![]), 5);
-
-    let algorithm = LoadBalancerAlgorithmInner::Random;
-
-    let result = determine_proxy_to(
-        &upstreams,
-        &failed_backends,
-        true,
-        3,
-        &algorithm,
-        None,
-        None,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        &[],
-        None,
-    );
-    assert!(result.is_none());
-}
-
-#[test]
-fn test_determine_proxy_to_health_check_disabled() {
-    let upstreams = vec![
-        make_upstream("http://backend1"),
-        make_upstream("http://backend2"),
-    ];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-
-    {
-        failed_backends.insert((make_upstream("http://backend1"), vec![]), 100);
-    }
-
-    let algorithm = LoadBalancerAlgorithmInner::Random;
-
-    let result = determine_proxy_to(
-        &upstreams,
-        &failed_backends,
-        false,
-        3,
-        &algorithm,
-        None,
-        None,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        &[],
-        None,
-    );
-    assert!(result.is_some());
-}
-
-#[test]
-fn test_record_backend_transport_failure() {
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-    let upstream = make_upstream("http://backend1");
-    let mut metrics = crate::ProxyMetrics::new();
-
-    record_backend_transport_failure(
-        Arc::clone(&failed_backends),
-        true,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        &upstream,
-        &mut metrics,
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &[],
-        None,
-    );
-
-    assert_eq!(metrics.unhealthy_backends.len(), 1);
-    assert_eq!(failed_backends.get(&(upstream.clone(), vec![])), Some(1));
-
-    record_backend_transport_failure(
-        Arc::clone(&failed_backends),
-        true,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        &upstream,
-        &mut metrics,
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &[],
-        None,
-    );
-
-    assert_eq!(failed_backends.get(&(upstream, vec![])), Some(2));
-}
-
-#[test]
-fn test_record_backend_transport_failure_passive_check_disabled() {
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
-    let upstream = make_upstream("http://backend1");
-    let mut metrics = crate::ProxyMetrics::new();
-
-    record_backend_transport_failure(
-        Arc::clone(&failed_backends),
-        false,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        &upstream,
-        &mut metrics,
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &[],
-        None,
-    );
-
-    assert_eq!(metrics.unhealthy_backends.len(), 0);
-    assert_eq!(failed_backends.get(&(upstream, vec![])), None);
-}
-
-#[test]
 fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
     let upstreams = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     health_check_state.insert(
@@ -381,9 +204,6 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
 
     let result = determine_proxy_to(
         &upstreams,
-        &failed_backends,
-        true,
-        3,
         &algorithm,
         None,
         None,
@@ -395,7 +215,6 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
-        &[],
         None,
     );
     assert!(result.is_some());
@@ -408,16 +227,12 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
     ];
-    let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
     let result = determine_proxy_to(
         &upstreams,
-        &failed_backends,
-        true,
-        3,
         &algorithm,
         None,
         None,
@@ -429,7 +244,6 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         &RwLock::new(ConsistentHashRing::new(&[])),
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
-        &[],
         None,
     );
     assert!(result.is_some());

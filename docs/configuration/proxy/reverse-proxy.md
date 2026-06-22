@@ -17,10 +17,8 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
-- `passive_check [bool: boolean]` (`http-proxy`)
-  - This directive enables passive health checking for backends. Supports nested `max_fails` and `window` directives. Default: `passive_check false`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
-  - This directive enables request-time circuit breaking for backends. Transport failures and upstream `5xx` responses count toward tripping the circuit. Supports nested `max_fails`, `window`, `open_duration`, and `consecutive_passes` directives. Default: `circuit_breaker false`
+  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, and `record_5xx` directives. Default: `circuit_breaker false`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
@@ -36,10 +34,6 @@ example.com {
         }
 
         algorithm two_random
-        passive_check {
-            max_fails 3
-            window "5s"
-        }
     }
 }
 ```
@@ -66,21 +60,15 @@ example.com {
 
 In this example, the first backend receives approximately 62.5% of requests (5/8), the second receives 25% (2/8), and the third receives 12.5% (1/8). The smooth weighted round-robin algorithm distributes requests evenly over time rather than sending all requests to one backend before moving to the next.
 
-#### Passive health check nested directives
-
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `max_fails` | `<count: integer>` | Maximum consecutive failures before marking backend unhealthy. | 3 |
-| `window` | `<duration: string>` | Time window for the failure counter. After this duration, the counter resets. | `5s` |
-
 #### Circuit breaker nested directives
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `max_fails` | `<count: integer>` | Number of transport failures or upstream `5xx` responses within the rolling `window` required to open the circuit. | 5 |
+| `max_fails` | `<count: integer>` | Number of transport failures (and `5xx` responses when `record_5xx` is enabled) within the rolling `window` required to open the circuit. | 5 |
 | `window` | `<duration: string>` | Rolling time window used for counting breaker failures. | `30s` |
 | `open_duration` | `<duration: string>` | How long the circuit stays open before a half-open trial request is allowed. | `30s` |
 | `consecutive_passes` | `<count: integer>` | Number of successful half-open trial requests required to close the circuit again. | 1 |
+| `record_5xx` | `[bool: boolean]` | Whether upstream `5xx` responses count toward tripping the circuit. Transport failures always count. | `false` |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -395,35 +383,28 @@ Ferron maintains a keep-alive connection pool for upstream backends. Key behavio
 - **HTTP/2 multiplexing** - HTTP/2 connections share a single TCP connection for multiple concurrent requests.
 
 > [!tip]
-> If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`max_fails`).
+> If you get 502 errors from backends, verify the `upstream` URLs are reachable and check circuit breaker settings (`max_fails`).
 
 ## Health checking
 
-### Passive health checking
-
-Passive health checking tracks connection failures per backend:
-
-1. Each failed connection increments a counter for that backend.
-2. If the counter exceeds `max_fails` within the `window` duration, the backend is temporarily excluded from selection.
-3. After the window expires, the counter resets and the backend becomes eligible again.
-4. When `retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
-
 ### Circuit breaking
 
-Circuit breaking tracks request-time backend failures and temporarily ejects unstable backends:
+Circuit breaking provides passive health checking — tracking request-time failures per backend without background probes. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses, then temporarily ejects unstable backends from the load balancer.
 
-1. Transport failures and upstream `5xx` responses are counted per backend in a rolling window.
+1. Transport failures and (optionally) upstream `5xx` responses are counted per backend in a rolling window.
 2. When the backend reaches `max_fails` failures within `window`, Ferron opens the circuit and stops selecting that backend.
 3. After `open_duration`, Ferron allows a single half-open trial request to the backend.
 4. If the trial request succeeds, Ferron closes the circuit after `consecutive_passes` successful half-open requests.
 5. If the half-open trial request fails, Ferron reopens the circuit immediately.
+
+By default, only transport failures count toward the circuit. Set `record_5xx true` to also count upstream `5xx` responses.
 
 Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
 
 > [!note]
 >
 > - Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
-> - Passive health checks, circuit breaking, and active health checks work together — any of them can make a backend temporarily ineligible.
+> - Circuit breaking and active health checks work together — either can make a backend temporarily ineligible.
 
 > [!tip]
 > If a backend is flapping, circuit breaking can protect the rest of the pool by temporarily ejecting it after repeated transport failures or upstream `5xx` responses.
@@ -444,6 +425,7 @@ example.com {
             window "30s"
             open_duration "10s"
             consecutive_passes 1
+            record_5xx true
         }
     }
 }
@@ -508,7 +490,7 @@ example.com {
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path | Backends selected during load balancing |
-| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
+| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
 | `ferron.proxy.requests` | Counter | `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code` | Upstream proxy requests completed |
 | `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |
 | `ferron.proxy.pool.waits` | Counter | backend URL or unix socket path | Times the connection pool was exhausted and a request had to wait |
@@ -517,7 +499,7 @@ example.com {
 | `ferron.proxy.lb.ewma_latency` | Gauge | backend URL or unix socket path | Current EWMA response latency for the selected backend (`p2c_ewma` algorithm) |
 | `ferron.proxy.lb.warmup_state` | Gauge | backend URL or unix socket path | Whether the selected backend is in EWMA warm-up phase (1) or settled (0) |
 | `ferron.proxy.lb.selections` | Counter | backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score) | P2C+EWMA backend selection with combined score |
-| `ferron.proxy.backend.excluded` | Counter | backend URL or unix socket path; `ferron.proxy.reason` (`"passive"`, `"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
+| `ferron.proxy.backend.excluded` | Counter | backend URL or unix socket path; `ferron.proxy.reason` (`"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
 | `ferron.proxy.retry.count` | Counter | backend URL or unix socket path | Number of retry attempts made for a request |
 | `ferron.proxy.retry.final` | Gauge | backend URL or unix socket path | Whether the final retry attempt succeeded (`1`) or failed (`0`) |
 | `ferron.proxy.pool.hit` | Counter | backend URL or unix socket path | Pooled connection reused successfully |

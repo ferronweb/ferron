@@ -25,7 +25,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 
 use dashmap::DashMap;
 use ferron_http::trace_context::current_event_trace_context;
@@ -63,8 +62,6 @@ pub struct ProxyMetrics {
     pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::UpstreamInner>>,
     /// The final backend selected for this request.
     pub final_selected_backend: Option<Arc<types::upstream::UpstreamInner>>,
-    /// Backends marked as unhealthy due to passive failures (request-time).
-    pub unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends whose circuit breaker was opened by request-time failures or 5xx responses.
     pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends marked as unhealthy due to active health check probes, with counts.
@@ -85,8 +82,6 @@ pub struct ProxyMetrics {
     pub status_code: Option<u16>,
 
     // -- Backend exclusion reasons --
-    /// Backends excluded due to passive health check failures.
-    pub excluded_passive: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends excluded due to circuit breaker being open.
     pub excluded_circuit_open: Vec<Arc<types::upstream::UpstreamInner>>,
     /// Backends excluded because they were already tried in a retry loop.
@@ -124,7 +119,6 @@ impl ProxyMetrics {
         Self {
             selected_backends: rustc_hash::FxHashSet::default(),
             final_selected_backend: None,
-            unhealthy_backends: Vec::new(),
             circuit_breaker_unhealthy_backends: Vec::new(),
             active_unhealthy_backends: Vec::new(),
             connection_reused: false,
@@ -134,7 +128,6 @@ impl ProxyMetrics {
             pool_wait_time_secs: 0.0,
             upstream_time_secs: 0.0,
             status_code: None,
-            excluded_passive: Vec::new(),
             excluded_circuit_open: Vec::new(),
             excluded_already_tried: Vec::new(),
             excluded_overloaded: Vec::new(),
@@ -147,7 +140,6 @@ impl ProxyMetrics {
     }
 }
 
-const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 const LOG_TARGET: &str = "ferron-http-proxy";
 
@@ -243,8 +235,6 @@ struct ProxyState {
     /// Connection pool manager — lazily initialized on first use so we can
     /// read the global `concurrent_conns` limit from config first.
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
-    /// Failed backend tracking cache (shared across all requests).
-    failed_backends: Arc<crate::upstream::FailureCache>,
     /// Circuit breaker state tracking per upstream.
     circuit_breaker_state: types::circuit::CircuitBreakerStateMap,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
@@ -276,9 +266,6 @@ impl ProxyState {
     fn new() -> Self {
         Self {
             conn_manager: RwLock::new(None),
-            failed_backends: Arc::new(crate::upstream::ConcurrentTtlCache::new(
-                DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
-            )),
             circuit_breaker_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             conn_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             ewma_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
@@ -616,10 +603,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             if let Some(limit) = limit {
                 let resolved = uc
                     .resolve(
-                        Arc::clone(&self.state.failed_backends),
-                        config.passive_check.max_fails,
                         Some(Arc::clone(&self.state.active_health_check_state)),
-                        &config_key,
                     )
                     .await;
                 for resolved_upstream in resolved {
@@ -657,7 +641,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ctx,
             &config,
             &conn_manager,
-            Arc::clone(&self.state.failed_backends),
             Arc::clone(&self.state.circuit_breaker_state),
             &algorithm,
             &ring,
@@ -665,7 +648,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),
-            &config_key,
         )
         .await;
 
@@ -729,35 +711,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     value: MetricValue::U64(1),
                     unit: Some("{backend}"),
                     description: Some("Number of times a backend server was selected."),
-                    trace_context: current_event_trace_context(ctx),
-                }));
-        }
-
-        // Emit per-backend unhealthy metrics (passive failures)
-        for backend in &metrics.unhealthy_backends {
-            let mut attrs = Vec::with_capacity(3);
-            attrs.push((
-                "ferron.proxy.backend_url",
-                MetricAttributeValue::String(backend.proxy_to.clone()),
-            ));
-            if let Some(ref unix_path) = backend.proxy_unix {
-                attrs.push((
-                    "ferron.proxy.backend_unix_path",
-                    MetricAttributeValue::String(unix_path.clone()),
-                ));
-            }
-            attrs.push((
-                "ferron.proxy.health_check_type",
-                MetricAttributeValue::String("passive".to_string()),
-            ));
-            ctx.events
-                .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.backends.unhealthy",
-                    attributes: attrs,
-                    ty: MetricType::Counter,
-                    value: MetricValue::U64(1),
-                    unit: Some("{backend}"),
-                    description: Some("Number of health check failures for a backend server."),
                     trace_context: current_event_trace_context(ctx),
                 }));
         }
@@ -959,14 +912,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 description: Some("Backend excluded from selection due to health, circuit breaker, or retry state."),
                 trace_context,
             }));
-        }
-        for backend in &metrics.excluded_passive {
-            emit_backend_excluded(
-                &ctx.events,
-                backend,
-                "passive_failure",
-                current_event_trace_context(ctx),
-            );
         }
         for backend in &metrics.excluded_circuit_open {
             emit_backend_excluded(

@@ -9,7 +9,6 @@ use crate::types::circuit::{
     CIRCUIT_BREAKER_STATUS_OPEN,
 };
 use crate::types::upstream::UpstreamInner;
-use crate::upstream::FailureCache;
 
 /// Returns whether a backend is currently available for new circuit-breaker traffic.
 pub fn is_circuit_breaker_available(
@@ -44,23 +43,13 @@ pub fn is_circuit_breaker_available(
 #[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn record_backend_transport_failure(
-    failed_backends: Arc<FailureCache>,
-    passive_check_enabled: bool,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
-    config_key: &[usize],
     event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
-    if passive_check_enabled {
-        metrics.unhealthy_backends.push(upstream.clone());
-        let key = (upstream.clone(), config_key.to_vec());
-        let current = failed_backends.get(&key).unwrap_or(0);
-        failed_backends.insert(key, current + 1);
-    }
-
     if record_circuit_breaker_failure(
         circuit_breaker_state,
         circuit_breaker,
@@ -85,7 +74,7 @@ pub fn record_backend_response(
     event_sink: &ferron_observability::CompositeEventSink,
     trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
-    let should_open = if is_circuit_breaker_failure_status(status) {
+    let should_open = if circuit_breaker.record_5xx && is_circuit_breaker_failure_status(status) {
         record_circuit_breaker_failure(
             circuit_breaker_state,
             circuit_breaker,
@@ -460,7 +449,7 @@ mod tests {
     use crate::upstream::lb::{
         ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
     };
-    use crate::upstream::{determine_proxy_to, ConcurrentTtlCache};
+    use crate::upstream::determine_proxy_to;
 
     use super::*;
 
@@ -475,7 +464,6 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_opens_after_transport_failures() {
-        let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap =
             Arc::new(DashMap::with_hasher(FxBuildHasher));
         let upstream = make_upstream("http://backend1");
@@ -486,17 +474,15 @@ mod tests {
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
+            record_5xx: false,
         };
 
         record_backend_transport_failure(
-            Arc::clone(&failed_backends),
-            false,
             Some(&circuit_breaker_state),
             &circuit_breaker,
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
-            &[],
             None,
         );
         assert!(is_circuit_breaker_available(
@@ -506,14 +492,11 @@ mod tests {
         ));
 
         record_backend_transport_failure(
-            Arc::clone(&failed_backends),
-            false,
             Some(&circuit_breaker_state),
             &circuit_breaker,
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
-            &[],
             None,
         );
 
@@ -531,7 +514,6 @@ mod tests {
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends = Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60)));
         let circuit_breaker_state: CircuitBreakerStateMap =
             Arc::new(DashMap::with_hasher(FxBuildHasher));
         let circuit_breaker = crate::config::CircuitBreakerConfig {
@@ -540,6 +522,7 @@ mod tests {
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
+            record_5xx: false,
         };
 
         circuit_breaker_state.insert(
@@ -553,9 +536,6 @@ mod tests {
 
         let result = determine_proxy_to(
             &upstreams,
-            &failed_backends,
-            false,
-            3,
             &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
             None,
             None,
@@ -567,7 +547,6 @@ mod tests {
             &RwLock::new(ConsistentHashRing::new(&[])),
             &ferron_observability::CompositeEventSink::new(vec![]),
             &mut crate::ProxyMetrics::new(),
-            &[],
             None,
         )
         .unwrap();
@@ -586,6 +565,7 @@ mod tests {
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(1),
             consecutive_passes: 1,
+            record_5xx: false,
         };
 
         circuit_breaker_state.insert(
@@ -638,6 +618,7 @@ mod tests {
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
+            record_5xx: false,
         };
 
         circuit_breaker_state.insert(
@@ -651,14 +632,77 @@ mod tests {
 
         let mut metrics = crate::ProxyMetrics::new();
         record_backend_transport_failure(
-            Arc::new(ConcurrentTtlCache::new(Duration::from_secs(60))),
-            false,
             Some(&circuit_breaker_state),
             &circuit_breaker,
             &upstream,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
-            &[],
+            None,
+        );
+
+        assert!(!is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+        assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+    }
+
+    #[test]
+    fn test_circuit_breaker_ignores_5xx_when_record_5xx_false() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+            record_5xx: false,
+        };
+
+        // A 500 response should NOT trip the circuit when record_5xx is false
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            500,
+            &mut crate::ProxyMetrics::new(),
+            &ferron_observability::CompositeEventSink::new(vec![]),
+            None,
+        );
+
+        assert!(is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+    }
+
+    #[test]
+    fn test_circuit_breaker_trips_on_5xx_when_record_5xx_true() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+            record_5xx: true,
+        };
+
+        // A 500 response SHOULD trip the circuit when record_5xx is true
+        let mut metrics = crate::ProxyMetrics::new();
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            500,
+            &mut metrics,
+            &ferron_observability::CompositeEventSink::new(vec![]),
             None,
         );
 
