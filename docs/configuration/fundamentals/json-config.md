@@ -427,3 +427,10 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ```bash
 ferron run --config-params 'watch=1;file=ferron.json' --config-adapter json
 ```
+
+## See also
+
+- [Configuration validation](/docs/v3/configuration/fundamentals/validation)
+- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
+- [Core directives](/docs/v3/configuration/server/core-directives)

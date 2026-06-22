@@ -100,7 +100,7 @@ step_uninstall() {
     # ------------------------------------------------------------------
     if [ "$FERRON_WAS_INSTALLED_BY_INSTALLER" = 1 ]; then
         log_write "removing binaries from /usr/sbin/"
-        for _bin in ferron ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve; do
+        for _bin in ferron ferron-fmt ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve; do
             rm -f "/usr/sbin/$_bin" 2>/dev/null || true
             log_write "removed /usr/sbin/$_bin"
         done

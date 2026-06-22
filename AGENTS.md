@@ -13,7 +13,7 @@ Ferron 3 is a Rust workspace (resolver "2"). Key directories:
 - `docs/` — user-facing docs; sidebar in `docs/docLinks.ts`; synced to separate website repo on push to `3.x`
 - `soak/` — soak/chaos tests via Docker Compose
 - `doctest/` — standalone harness that runs doc examples against the built binary
-- `utils/` — CLI utilities (`kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
+- `utils/` — CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
 
 **Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `modules/*/fuzz` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. Each has its own `Cargo.toml` and a dedicated run command — see tables below.
 

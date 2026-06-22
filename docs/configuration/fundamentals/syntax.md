@@ -173,5 +173,6 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 ## See also
 
 - [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals)
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
 - [Routing and URL processing](/docs/v3/configuration/routing/url-processing) (`location`, `if`, `if_not`)
 - [Core directives](/docs/v3/configuration/server/core-directives)

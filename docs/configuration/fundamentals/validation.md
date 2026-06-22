@@ -233,5 +233,6 @@ The `run` command performs the same validation during startup. If validation fai
 ## See also
 
 - [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config)
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
 - [Core directives](/docs/v3/configuration/server/core-directives)

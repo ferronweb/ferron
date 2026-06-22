@@ -37,6 +37,7 @@ mkdir -p %{buildroot}/run/ferron
 mkdir -p %{buildroot}/etc/ferron
 
 install -m 0755 data/usr/sbin/ferron %{buildroot}/usr/sbin/ferron
+install -m 0755 data/usr/sbin/ferron-fmt %{buildroot}/usr/sbin/ferron-fmt
 install -m 0755 data/usr/sbin/ferron-kdl2ferron %{buildroot}/usr/sbin/ferron-kdl2ferron
 install -m 0755 data/usr/sbin/ferron-passwd %{buildroot}/usr/sbin/ferron-passwd
 install -m 0755 data/usr/sbin/ferron-precompress %{buildroot}/usr/sbin/ferron-precompress
@@ -140,6 +141,7 @@ fi
 %files
 %defattr(-,root,root,-)
 /usr/sbin/ferron
+/usr/sbin/ferron-fmt
 /usr/sbin/ferron-kdl2ferron
 /usr/sbin/ferron-passwd
 /usr/sbin/ferron-precompress

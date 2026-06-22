@@ -60,6 +60,7 @@ curl http://localhost
 Ferron on Docker has the following file structure:
 
 - `/usr/local/bin/ferron` - Ferron web server
+- `/usr/local/bin/ferron-fmt` - Ferron configuration formatter
 - `/usr/local/bin/ferron-kdl2ferron` - Ferron configuration conversion tool
 - `/usr/local/bin/ferron-passwd` - Ferron user password generation tool
 - `/usr/local/bin/ferron-precompress` - Ferron static files precompression tool

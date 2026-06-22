@@ -96,6 +96,7 @@ step_configure_selinux() {
     if type restorecon >/dev/null 2>&1; then
         log_write "restoring SELinux contexts"
         if ! restorecon -r /usr/sbin/ferron \
+            /usr/sbin/ferron-fmt \
             /usr/sbin/ferron-kdl2ferron \
             /usr/sbin/ferron-passwd \
             /usr/sbin/ferron-precompress \

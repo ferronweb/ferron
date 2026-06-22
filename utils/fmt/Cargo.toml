@@ -1,0 +1,8 @@
+[package]
+name = "ferron-fmt"
+version = "3.0.0-beta.2"
+edition = "2021"
+
+[dependencies]
+ferronconf = { version = "0.3.0", features = ["lexer-public"] }
+clap = { version = "4", features = ["derive"] }

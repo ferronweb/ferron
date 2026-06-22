@@ -3,8 +3,8 @@
 # 40_binaries.sh — install the ferron binaries into /usr/sbin.
 #
 # For archive installs this step extracts the downloaded tarball and copies
-# the binaries (ferron, ferron-kdl2ferron, ferron-passwd, ferron-precompress,
-# ferron-serve) into /usr/sbin with mode 0755.
+# the binaries (ferron, ferron-fmt, ferron-kdl2ferron, ferron-passwd,
+# ferron-precompress, ferron-serve) into /usr/sbin with mode 0755.
 #
 # For package installs the step skips itself because the package manager
 # handles binary installation via its payload.
@@ -35,7 +35,7 @@ step_install_binaries() {
     fi
 
     # Verify that the expected binaries exist in the archive.
-    _expected_binaries="ferron ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve"
+    _expected_binaries="ferron ferron-fmt ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve"
     for _bin in $_expected_binaries; do
         if [ ! -f "$FERRON_EXTRACT_DIR/$_bin" ]; then
             log_write "warning: binary $_bin not found in archive, skipping"

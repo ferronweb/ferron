@@ -50,6 +50,7 @@ If you see a "Ferron is installed successfully!" message on the page, the web se
 Ferron 3 installed via the package for Debian/Ubuntu has the following file structure:
 
 - `/usr/sbin/ferron` - Ferron web server
+- `/usr/sbin/ferron-fmt` - Ferron configuration formatter
 - `/usr/sbin/ferron-kdl2ferron` - Ferron configuration conversion tool
 - `/usr/sbin/ferron-passwd` - Ferron user password generation tool
 - `/usr/sbin/ferron-precompress` - Ferron static files precompression tool

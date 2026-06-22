@@ -74,5 +74,6 @@ Best-practice violations use the `"Best practice violation"` diagnostic kind. Th
 ## See also
 
 - [Configuration validation](/docs/v3/configuration/fundamentals/validation)
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
 - [Security and TLS](/docs/v3/configuration/security/tls)

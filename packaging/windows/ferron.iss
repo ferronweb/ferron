@@ -56,6 +56,7 @@ Name: "service"; Description: "Install Ferron as a Windows service"; GroupDescri
 
 [Files]
 Source: "staging\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "staging\ferron-fmt.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "staging\ferron-kdl2ferron.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "staging\ferron-passwd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "staging\ferron-precompress.exe"; DestDir: "{app}"; Flags: ignoreversion

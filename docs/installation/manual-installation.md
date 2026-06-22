@@ -63,6 +63,7 @@ gpg --verify ferron-*.tar.gz.asc
 After extraction, you should see the following files and directories:
 
 - `ferron` or `ferron.exe` — the main Ferron web server executable.
+- `ferron-fmt` or `ferron-fmt.exe` — a tool for formatting Ferron configuration files.
 - `ferron-kdl2ferron` or `ferron-kdl2ferron.exe` — a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
 - `ferron-passwd` or `ferron-passwd.exe` — a tool for generating hashed passwords for the server's configuration.
 - `ferron-precompress` or `ferron-precompress.exe` — a tool for precompressing static files.

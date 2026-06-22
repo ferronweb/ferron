@@ -14,8 +14,7 @@ example.com {
 The WebSocket protocol is supported out of the box in this configuration — no additional configuration is required.
 
 > [!tip]
-> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `
-` or `circuit_breaker` settings.
+> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `circuit_breaker` settings.
 
 ## Reverse proxy with static file serving support
 

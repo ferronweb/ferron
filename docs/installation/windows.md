@@ -69,6 +69,7 @@ If you see a **"Ferron is installed successfully!"** message on the page, the we
 Ferron 3 installed via the Windows installer has the following file structure:
 
 - `C:\Program Files\Ferron\ferron.exe` — the main Ferron web server executable.
+- `C:\Program Files\Ferron\ferron-fmt.exe` - a tool for formatting Ferron configuration files.
 - `C:\Program Files\Ferron\ferron-kdl2ferron.exe` — a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
 - `C:\Program Files\Ferron\ferron-passwd.exe` — a tool for generating hashed passwords for the server's configuration.
 - `C:\Program Files\Ferron\ferron-precompress.exe` — a tool for precompressing static files.

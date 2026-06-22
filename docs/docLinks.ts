@@ -228,6 +228,12 @@ export default [
     label: "Configuration doctor",
   },
   {
+    href: "/docs/v3/configuration/fundamentals/formatting",
+    target: "_self",
+    sub: true,
+    label: "Configuration formatting",
+  },
+  {
     href: "/docs/v3/configuration/fundamentals/conditionals",
     target: "_self",
     sub: true,
