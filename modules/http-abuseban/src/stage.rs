@@ -146,7 +146,8 @@ impl Stage<HttpContext> for AbuseProtectionStage {
         &self,
         config: Option<&ferron_core::config::ServerConfigurationBlock>,
     ) -> bool {
-        config.is_some_and(|c| c.has_directive("abuse_protection"))
+        config
+            .is_some_and(|c| c.has_directive("abuse_protection") || c.has_directive("abuse_event"))
     }
 
     async fn run(&self, context: &mut HttpContext) -> Result<bool, PipelineError> {
