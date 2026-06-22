@@ -160,3 +160,176 @@ example.com {
     root /var/www/html
 }
 ```
+
+## Reporting to AbuseIPDB
+
+Ferron's native abuse protection bans IPs for a limited duration in memory. For persistent threat intelligence sharing, you can run a lightweight sidecar that tails Ferron's WARN-level logs and reports banned IPs to [AbuseIPDB](https://www.abuseipdb.com/).
+
+The sidecar watches for `Ban triggered` log lines, extracts the IP address and reason, maps the reason to an [AbuseIPDB category](https://www.abuseipdb.com/categories), and posts a report to the AbuseIPDB API.
+
+### Log format
+
+The sidecar parses lines matching this pattern:
+
+```text
+[2026-06-22 19:46:28.902 WARN] [trace=4dae55577f57aac23bdcffa24b38a31a] Ban triggered: IP ::1 - Custom abuse event: example_ban
+```
+
+- The `[trace=...]` block is optional (only present when tracing is enabled).
+- The IP address follows `IP `.
+- The reason follows ` - ` and varies by event source:
+
+| Source | Example reason |
+|--------|----------------|
+| Rate limiting | `Rate limit 10 req/s exceeded` |
+| Basic authentication | `Brute-force failure for user admin` |
+| Custom `abuse_event` directive | `Custom abuse event: wordpress_scan` |
+
+### Reason-to-category mapping
+
+| Reason prefix | AbuseIPDB category | Category ID |
+|---|---|---|
+| `Rate limit` | Web App Attack | 14 |
+| `Brute-force` | Brute-Force | 21 |
+| `Custom abuse event:` | Web App Attack (default) | 14 |
+
+### Sample script
+
+The script reads the `ABUSEIPDB_API_KEY` environment variable, tails Ferron's log file, and reports each banned IP.
+
+```python
+#!/usr/bin/env python3
+"""Tail Ferron's ban log and report IPs to AbuseIPDB."""
+
+import os
+import sys
+import re
+import time
+import json
+import argparse
+import urllib.request
+import urllib.error
+
+ABUSEIPDB_URL = "https://api.abuseipdb.com/api/v2/report"
+
+CATEGORY_MAP = {
+    "Rate limit": 14,       # Web App Attack
+    "Brute-force": 21,      # Brute-Force
+}
+DEFAULT_CATEGORY = 14
+
+LOG_PATTERN = re.compile(
+    r"^\[.* WARN\] (\[trace=[^\]]+\] )?Ban triggered: IP (\S+) - (.+)$"
+)
+
+
+def report_ip(api_key, ip, categories, comment):
+    data = json.dumps({
+        "ip": ip,
+        "categories": categories,
+        "comment": comment,
+    }).encode()
+    req = urllib.request.Request(
+        ABUSEIPDB_URL,
+        data=data,
+        headers={
+            "Key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        print(f"AbuseIPDB API error: {e.code} {e.read().decode()}", file=sys.stderr)
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Report Ferron banned IPs to AbuseIPDB"
+    )
+    parser.add_argument("logfile", help="Path to Ferron log file")
+    parser.add_argument(
+        "--api-key",
+        help="AbuseIPDB API key (default: $ABUSEIPDB_API_KEY)",
+    )
+    args = parser.parse_args()
+
+    api_key = args.api_key or os.environ.get("ABUSEIPDB_API_KEY")
+    if not api_key:
+        print(
+            "Error: API key required via --api-key or ABUSEIPDB_API_KEY env var",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    with open(args.logfile) as f:
+        f.seek(0, os.SEEK_END)
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(0.5)
+                continue
+            m = LOG_PATTERN.match(line)
+            if not m:
+                continue
+            ip = m.group(2).removeprefix("::ffff:")
+            reason = m.group(3).strip()
+
+            category = DEFAULT_CATEGORY
+            for prefix, cat in CATEGORY_MAP.items():
+                if reason.startswith(prefix):
+                    category = cat
+                    break
+
+            print(f"Reporting {ip} ({reason}) -> AbuseIPDB category {category}")
+            result = report_ip(
+                api_key, ip, [category], f"Ferron abuse ban: {reason}"
+            )
+            if result:
+                report_id = result.get("data", {}).get("ipReportId")
+                print(f"  Reported: {report_id}")
+            time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### Deployment
+
+**Systemd service** — run the sidecar alongside Ferron:
+
+```ini
+[Unit]
+Description=Ferron AbuseIPDB reporter
+After=ferron.service
+BindsTo=ferron.service
+
+[Service]
+Type=simple
+Environment=ABUSEIPDB_API_KEY=your_key_here
+ExecStart=/usr/local/bin/ferron-abuseipdb /var/log/ferron/ferron.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Docker** — run as a sidecar container sharing the log volume or using a logging driver that writes to a file.
+
+### Limitations
+
+- AbuseIPDB API daily quotas apply — plan your thresholds accordingly.
+- The script is best-effort; it does not retry failed reports or maintain a queue.
+- There is no bidirectional sync — the sidecar cannot query or clear Ferron's internal ban state.
+- Bans are lost on Ferron restart, but the sidecar already reported them by that point.
+
+## See also
+
+- [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban)
+- [Rate limiting](/docs/v3/configuration/content/rate-limit)
+- [HTTP basic authentication](/docs/v3/configuration/security/basic-auth)
