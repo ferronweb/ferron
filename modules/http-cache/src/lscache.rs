@@ -215,6 +215,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[inline]
     fn parses_vary() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -227,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn parses_purge() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -240,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn empty_header_values_produce_defaults() {
         let headers = HeaderMap::new();
         assert!(parse_litespeed_cache_control(&headers).is_none());
@@ -249,6 +252,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_double_semicolon() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_PURGE, HeaderValue::from_static("tag=a;;tag=b"));
@@ -258,6 +262,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_mixed_scope_on_same_segment() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -271,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_bare_token_falls_back_to_tag() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_PURGE, HeaderValue::from_static("some-unknown-token"));
@@ -284,6 +290,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn tags_dedup_by_scope_and_name() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_TAG, HeaderValue::from_static("tag-a, tag-a, tag-b"));
@@ -294,6 +301,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn tags_public_prefix_overrides_scope() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -309,6 +317,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn tags_empty_token_skipped() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_TAG, HeaderValue::from_static("tag-a,,tag-b"));
@@ -317,6 +326,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn vary_cookies_dedup_and_sorted() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -328,6 +338,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn vary_empty_cookie_value_skipped() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_VARY, HeaderValue::from_static("cookie="));
@@ -336,6 +347,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn vary_value_no_trim_issue() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_VARY, HeaderValue::from_static("value= desktop"));
@@ -345,6 +357,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn lscache_control_parses_multiple_headers() {
         let mut headers = HeaderMap::new();
         headers.append(
@@ -359,6 +372,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_with_stale_flag() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -372,6 +386,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_all_selector_with_tag() {
         let mut headers = HeaderMap::new();
         headers.insert(&LS_PURGE, HeaderValue::from_static("*,tag=foo"));

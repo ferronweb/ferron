@@ -93,6 +93,7 @@ struct InflightGuard {
 }
 
 impl Drop for InflightGuard {
+    #[inline]
     fn drop(&mut self) {
         self.store.complete_fetch(&self.cache_key);
     }
@@ -112,12 +113,14 @@ pub struct HttpCacheStage {
 }
 
 impl HttpCacheStage {
+    #[inline]
     pub fn new() -> Self {
         Self {
             store: Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES)),
         }
     }
 
+    #[inline]
     fn emit_request_metric(
         &self,
         ctx: &HttpContext,
@@ -155,6 +158,7 @@ impl HttpCacheStage {
         }));
     }
 
+    #[inline]
     fn emit_store_metric(&self, ctx: &HttpContext, scope: CacheScope) {
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.stores",
@@ -170,6 +174,7 @@ impl HttpCacheStage {
         }));
     }
 
+    #[inline]
     fn emit_eviction_metrics(&self, ctx: &HttpContext, stats: StoreStats) {
         if stats.expired_evictions > 0 {
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -201,6 +206,7 @@ impl HttpCacheStage {
         }
     }
 
+    #[inline]
     fn emit_purge_metric(&self, ctx: &HttpContext, scope: CacheScope, purged: usize, items: usize) {
         if purged == 0 {
             return;
@@ -230,6 +236,7 @@ impl HttpCacheStage {
 }
 
 impl Default for HttpCacheStage {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -237,10 +244,12 @@ impl Default for HttpCacheStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpContext> for HttpCacheStage {
+    #[inline]
     fn name(&self) -> &str {
         "cache"
     }
 
+    #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![
             StageConstraint::After("https_redirect".to_string()),
@@ -254,6 +263,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         ]
     }
 
+    #[inline]
     fn is_applicable(
         &self,
         config: Option<&ferron_core::config::ServerConfigurationBlock>,
@@ -261,6 +271,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         config.is_some_and(|config| config.has_directive("cache"))
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = parse_cache_config(&ctx.configuration);
         self.store
@@ -539,6 +550,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         Ok(!stop)
     }
 
+    #[inline]
     async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
         let Some(state) = ctx.extensions.remove::<RequestStateKey>() else {
             return Ok(());
@@ -1367,6 +1379,7 @@ mod tests {
     use http::Request;
     use std::net::SocketAddr;
 
+    #[inline]
     fn test_context(path: &str) -> HttpContext {
         let request = Request::builder()
             .uri(path)
@@ -1398,6 +1411,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn parses_private_key_from_cookies() {
         let mut cookies = AHashMap::default();
         cookies.insert("PHPSESSID".to_string(), "1234567890abcdef".to_string());
@@ -1407,6 +1421,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[inline]
     async fn hit_response_uses_empty_body_for_head() {
         let entry = LookupEntry {
             scope: CacheScope::Public,
@@ -1428,6 +1443,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn base_key_uses_scheme_host_and_path() {
         let ctx = test_context("/test?q=1");
         let request = ctx.req.as_ref().unwrap();
@@ -1436,6 +1452,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn base_key_prefers_routing_uri() {
         let mut ctx = test_context("/rewritten/path");
         ctx.routing_uri = Some("/canonical/path".parse().unwrap());

@@ -33,6 +33,7 @@ pub use validator::HttpCacheConfigurationValidator;
 pub struct HttpCacheModuleLoader;
 
 impl ModuleLoader for HttpCacheModuleLoader {
+    #[inline]
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ConfigurationValidator>>,
@@ -40,6 +41,7 @@ impl ModuleLoader for HttpCacheModuleLoader {
         registry.push(Box::new(HttpCacheConfigurationValidator));
     }
 
+    #[inline]
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<
@@ -53,6 +55,7 @@ impl ModuleLoader for HttpCacheModuleLoader {
             .push(Box::new(HttpCacheConfigurationValidator));
     }
 
+    #[inline]
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let stage = Arc::new(HttpCacheStage::new());
         registry.with_stage::<HttpContext, _>(move || stage.clone())

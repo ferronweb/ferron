@@ -104,16 +104,19 @@ struct StoreRequestState {
 impl Lifecycle<String, StoredEntry> for StoreLifecycle {
     type RequestState = StoreRequestState;
 
+    #[inline]
     fn begin_request(&self) -> Self::RequestState {
         StoreRequestState::default()
     }
 
+    #[inline]
     fn on_evict(&self, state: &mut Self::RequestState, _key: String, _val: StoredEntry) {
         state.size_evictions += 1;
     }
 }
 
 impl CacheStore {
+    #[inline]
     pub fn new(max_entries: usize) -> Self {
         Self {
             entries: Cache::with(
@@ -129,11 +132,13 @@ impl CacheStore {
         }
     }
 
+    #[inline]
     pub fn set_max_entries(&self, max_entries: usize) {
         self.max_entries.store(max_entries, Ordering::Relaxed);
         self.entries.set_capacity(max_entries as u64);
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -169,6 +174,7 @@ impl CacheStore {
         }
     }
 
+    #[inline]
     pub fn lookup(
         &self,
         base_key: &str,
@@ -292,6 +298,7 @@ impl CacheStore {
         (None, stats, self.entries.len(), has_variants)
     }
 
+    #[inline]
     pub fn insert_with_request(
         &self,
         mut entry: StoredEntry,
@@ -342,6 +349,7 @@ impl CacheStore {
         (stats, self.entries.len())
     }
 
+    #[inline]
     pub fn purge(
         &self,
         operations: &[PurgeOperation],
@@ -367,6 +375,7 @@ impl CacheStore {
         (stats, self.entries.len())
     }
 
+    #[inline]
     fn cleanup_expired(&self) -> usize {
         let expired_keys: Vec<String> = self
             .entries
@@ -390,6 +399,7 @@ impl CacheStore {
 
     /// Update headers on an existing cache entry without replacing the body.
     /// Takes the full cache key and the new headers. Returns `true` if updated.
+    #[inline]
     pub fn update_entry_headers_by_key(&self, cache_key: &str, new_headers: HeaderMap) -> bool {
         let Some(mut entry) = self.entries.get(cache_key) else {
             return false;
@@ -506,6 +516,7 @@ mod tests {
     use super::*;
     use http::header::{AGE, CACHE_CONTROL, COOKIE};
 
+    #[inline]
     fn request_headers(pairs: &[(&HeaderName, &str)]) -> HeaderMap {
         let mut headers = HeaderMap::new();
         for (name, value) in pairs {
@@ -514,6 +525,7 @@ mod tests {
         headers
     }
 
+    #[inline]
     fn request_cookies(pairs: &[(&str, &str)]) -> AHashMap<String, String> {
         pairs
             .iter()
@@ -521,6 +533,7 @@ mod tests {
             .collect()
     }
 
+    #[inline]
     fn stored_entry(base_key: &str, scope: CacheScope, body: &str, vary: VaryRule) -> StoredEntry {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -551,6 +564,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn builds_distinct_public_and_private_keys() {
         let vary = VaryRule::default();
         let headers = HeaderMap::new();
@@ -577,6 +591,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn lookup_returns_matching_public_entry() {
         let store = CacheStore::new(4);
         let base_key = "https://example.com/page";
@@ -605,6 +620,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn lookup_prefers_private_entry_for_matching_private_key() {
         let store = CacheStore::new(4);
         let base_key = "https://example.com/account";
@@ -634,6 +650,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn insert_evicts_least_recently_used_entry_at_capacity() {
         let store = CacheStore::new(2);
         let headers = HeaderMap::new();
@@ -694,6 +711,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn set_max_entries_trims_entries_to_capacity() {
         let store = CacheStore::new(3);
         let headers = HeaderMap::new();
@@ -757,6 +775,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn lookup_cleans_up_expired_entries() {
         let store = CacheStore::new(4);
         let headers = HeaderMap::new();
@@ -815,6 +834,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn purge_respects_scope_selectors_and_private_key() {
         let store = CacheStore::new(8);
         let headers = HeaderMap::new();
@@ -901,6 +921,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn zero_capacity_store_skips_insert() {
         let store = CacheStore::new(0);
         let headers = HeaderMap::new();
@@ -924,6 +945,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn strip_store_headers_removes_age_only() {
         let mut headers = HeaderMap::new();
         headers.insert(AGE, HeaderValue::from_static("60"));
@@ -936,6 +958,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn had_expired_is_true_when_entry_expired() {
         let store = CacheStore::new(4);
         let headers = HeaderMap::new();
@@ -983,6 +1006,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn begin_fetch_returns_leader_and_follower() {
         let store = CacheStore::new(4);
         let key = "https://example.com/concurrent";
@@ -1001,6 +1025,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn complete_fetch_notifies_waiters() {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
@@ -1033,6 +1058,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[inline]
     async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1129,6 +1155,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[inline]
     async fn follower_gets_cached_response_after_leader_stores() {
         let store = Arc::new(CacheStore::new(4));
         let base_key = "https://example.com/leader-follower";
@@ -1197,6 +1224,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[inline]
     async fn leader_non_cacheable_wakes_followers_without_cached_entry() {
         let store = Arc::new(CacheStore::new(4));
         let base_key = "https://example.com/non-cacheable";
@@ -1253,6 +1281,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn stored_entry_preserves_etag_and_last_modified() {
         let store = CacheStore::new(4);
         let mut headers = HeaderMap::new();
@@ -1309,6 +1338,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn update_entry_headers_by_key_updates_validators() {
         let store = CacheStore::new(4);
         let mut headers = HeaderMap::new();
@@ -1385,6 +1415,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn lookup_returns_cache_key_for_revalidation() {
         let store = CacheStore::new(4);
         let mut headers = HeaderMap::new();

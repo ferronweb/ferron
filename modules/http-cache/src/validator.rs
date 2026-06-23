@@ -22,6 +22,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
 pub struct HttpCacheConfigurationValidator;
 
 impl ConfigurationValidator for HttpCacheConfigurationValidator {
+    #[inline]
     fn validate_block(
         &self,
         config: &ServerConfigurationBlock,

@@ -12,6 +12,7 @@ pub enum CacheScope {
 }
 
 impl CacheScope {
+    #[inline]
     pub fn as_str(self) -> &'static str {
         match self {
             CacheScope::Public => "public",
@@ -342,6 +343,7 @@ mod tests {
     use http::HeaderValue;
 
     #[test]
+    #[inline]
     fn request_no_cache_enables_revalidation() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
@@ -351,6 +353,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn response_public_is_cacheable() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -365,6 +368,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn public_set_cookie_is_rejected() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -376,6 +380,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn standard_no_store_wins_without_litespeed_override() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -398,6 +403,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn litespeed_override_prefers_litespeed_ttl() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -423,6 +429,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn no_store_wins_over_no_cache() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -436,6 +443,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn max_age_zero_equals_no_cache() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=0"));
@@ -446,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn authorization_without_explicit_public_is_not_cacheable() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -458,6 +467,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn authorization_with_explicit_public_is_cacheable() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -469,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn private_set_cookie_is_allowed() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -481,6 +492,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn not_cacheable_status_code() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -495,6 +507,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn cacheable_by_default_status_without_explicit_directive() {
         let headers = HeaderMap::new();
         // 200 OK is cacheable by default even without explicit Cache-Control
@@ -506,6 +519,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn pragma_no_cache_triggers_revalidation() {
         let mut headers = HeaderMap::new();
         headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
@@ -516,6 +530,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn empty_cache_control_is_eligible() {
         let headers = HeaderMap::new();
         let policy = parse_request_policy(&headers);
@@ -525,6 +540,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn litespeed_override_bypasses_standard_no_cache() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
@@ -545,6 +561,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn s_maxage_precedence_over_max_age() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -559,6 +576,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn request_no_store_in_pragma_ignored() {
         // Pragma no-store is not standard; only no-cache is defined for Pragma
         let mut headers = HeaderMap::new();

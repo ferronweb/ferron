@@ -24,6 +24,7 @@ pub struct CacheConfig {
 }
 
 impl Default for CacheConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             enabled: false,
