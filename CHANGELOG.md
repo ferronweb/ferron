@@ -35,7 +35,13 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Support for date-based caching** - the `If-Modified-Since` header is now supported for static file responses, allowing clients to cache responses and avoid unnecessary re-downloads when the file has not been modified.
 - **Auth user variable support** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 - **Trace ID and span ID variable support** - the `trace.id` and `trace.spanid` variables are now available in variable interpolations for the HTTP server.
+
+#### HTTP caching
+
 - **RFC 9111 conditional request revalidation** - when a client sends `Cache-Control: max-age=0` or `no-cache`, the HTTP cache now performs conditional revalidation using stored `ETag` and `Last-Modified` validators instead of bypassing the cache entirely. If the upstream returns `304 Not Modified`, the cached response body is served with fresh headers. If the upstream returns `200 OK` (content changed), the cached entry is replaced. (`http-cache`)
+- **`stale-while-revalidate` support** - when a cached response's `max-age` has expired but a `stale-while-revalidate` directive is present, the stale response is served immediately to the client while the cache entry remains available within the stale window. This avoids latency spikes for expired cache entries. (`http-cache`)
+- **`stale-if-error` support** - when an upstream revalidation request returns a `5xx` error and a `stale-if-error` directive is present on the cached response, the stale cached response is served instead of the error. This provides resilience against backend failures. (`http-cache`)
+- **`must-revalidate` and `proxy-revalidate` enforcement** - entries with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) are never served stale, even within `stale-while-revalidate` or `stale-if-error` windows. (`http-cache`)
 - **Ignore request cache control** - when `ignore_request_cache_control` in `cache` is enabled, request-based cache control (e.g., `Cache-Control: no-cache`) is ignored in favor of the configured cache policy.
 
 #### Utilities

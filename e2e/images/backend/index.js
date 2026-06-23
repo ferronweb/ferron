@@ -78,7 +78,11 @@ app.get("/cache-etag", (req, res) => {
   const lastModified = new Date(Date.UTC(2024, 0, version)).toUTCString();
 
   if (req.headers["if-none-match"] === etag) {
-    return res.status(304).set("ETag", etag).set("Date", new Date().toUTCString()).end();
+    return res
+      .status(304)
+      .set("ETag", etag)
+      .set("Date", new Date().toUTCString())
+      .end();
   }
 
   res
@@ -94,6 +98,74 @@ app.post("/cache-etag/update", express.json(), (req, res) => {
   cacheVersions[id] = (cacheVersions[id] || 1) + 1;
   const newVersion = cacheVersions[id];
   res.send(`updated to v${newVersion}`);
+});
+
+// Cache stale-while-revalidate test endpoints
+const swrVersions = {};
+const swrFetchCounts = {};
+
+app.get("/cache-swr", (req, res) => {
+  const id = req.query.id || "default";
+  const version = swrVersions[id] || 1;
+  const fetchCount = (swrFetchCounts[id] || 0) + 1;
+  swrFetchCounts[id] = fetchCount;
+
+  // First fetch: set error flag so subsequent requests fail until version bumped
+  if (fetchCount === 1) {
+    swrFetchCounts[id] = 1;
+  }
+
+  res
+    .status(200)
+    .set("Cache-Control", "public, max-age=1, stale-while-revalidate=60")
+    .set("X-Backend-Version", String(version))
+    .set("X-Backend-Fetch-Count", String(fetchCount))
+    .send(`swr-v${version}`);
+});
+
+app.post("/cache-swr/update", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  swrVersions[id] = (swrVersions[id] || 1) + 1;
+  swrFetchCounts[id] = 0;
+  res.send(`swr updated to v${swrVersions[id]}`);
+});
+
+// Cache stale-if-error test endpoints
+const sieErrorMode = {};
+const sieVersions = {};
+
+app.get("/cache-sie", (req, res) => {
+  const id = req.query.id || "default";
+  const version = sieVersions[id] || 1;
+
+  if (sieErrorMode[id]) {
+    return res.status(503).send(`sie-error:${id}`);
+  }
+
+  res
+    .status(200)
+    .set("Cache-Control", "public, max-age=300, stale-if-error=60")
+    .set("X-Backend-Version", String(version))
+    .send(`sie-v${version}`);
+});
+
+app.post("/cache-sie/error", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  sieErrorMode[id] = true;
+  res.send(`sie error mode enabled for ${id}`);
+});
+
+app.post("/cache-sie/recover", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  sieErrorMode[id] = false;
+  res.send(`sie error mode disabled for ${id}`);
+});
+
+app.post("/cache-sie/update", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  sieVersions[id] = (sieVersions[id] || 1) + 1;
+  sieErrorMode[id] = false;
+  res.send(`sie updated to v${sieVersions[id]}`);
 });
 
 app.ws("/echo", (ws, _req) => {

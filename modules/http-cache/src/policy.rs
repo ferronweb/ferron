@@ -32,6 +32,9 @@ pub struct ResponseCacheDecision {
     pub store: bool,
     pub scope: Option<CacheScope>,
     pub ttl: Option<Duration>,
+    pub stale_while_revalidate: Option<Duration>,
+    pub stale_if_error: Option<Duration>,
+    pub must_revalidate: bool,
     pub reason: &'static str,
 }
 
@@ -43,6 +46,10 @@ struct StandardCacheControl {
     no_store: bool,
     max_age: Option<Duration>,
     s_maxage: Option<Duration>,
+    stale_while_revalidate: Option<Duration>,
+    stale_if_error: Option<Duration>,
+    must_revalidate: bool,
+    proxy_revalidate: bool,
 }
 
 pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
@@ -100,6 +107,9 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "response-no-store",
         };
     }
@@ -111,6 +121,9 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "response-no-cache",
         };
     }
@@ -130,6 +143,9 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "not-cacheable",
         };
     };
@@ -139,6 +155,9 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "authorization-public",
         };
     }
@@ -148,6 +167,9 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "public-set-cookie",
         };
     }
@@ -164,14 +186,24 @@ pub fn evaluate_response_policy(
             store: false,
             scope: None,
             ttl: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
             reason: "zero-ttl",
         };
     }
+
+    let must_revalidate = standard.must_revalidate
+        || standard.proxy_revalidate
+        || standard.s_maxage.is_some();
 
     ResponseCacheDecision {
         store: true,
         scope: Some(scope),
         ttl: Some(ttl),
+        stale_while_revalidate: standard.stale_while_revalidate,
+        stale_if_error: standard.stale_if_error,
+        must_revalidate,
         reason: "storable",
     }
 }
@@ -192,6 +224,8 @@ fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
                 "private" => parsed.private = true,
                 "no-cache" => parsed.no_cache = true,
                 "no-store" => parsed.no_store = true,
+                "must-revalidate" => parsed.must_revalidate = true,
+                "proxy-revalidate" => parsed.proxy_revalidate = true,
                 _ => {
                     if let Some((name, value)) = directive.split_once('=') {
                         match name.trim().to_ascii_lowercase().as_str() {
@@ -203,6 +237,17 @@ fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
                             "s-maxage" => {
                                 if let Ok(seconds) = value.trim().parse::<u64>() {
                                     parsed.s_maxage = Some(Duration::from_secs(seconds));
+                                }
+                            }
+                            "stale-while-revalidate" => {
+                                if let Ok(seconds) = value.trim().parse::<u64>() {
+                                    parsed.stale_while_revalidate =
+                                        Some(Duration::from_secs(seconds));
+                                }
+                            }
+                            "stale-if-error" => {
+                                if let Ok(seconds) = value.trim().parse::<u64>() {
+                                    parsed.stale_if_error = Some(Duration::from_secs(seconds));
                                 }
                             }
                             _ => {}

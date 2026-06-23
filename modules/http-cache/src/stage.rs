@@ -63,6 +63,12 @@ struct RequestState {
 
 enum LookupResult {
     Hit,
+    #[expect(dead_code)]
+    StaleWhileRevalidate {
+        entry: Box<LookupEntry>,
+        cache_key: String,
+        stats: StoreStats,
+    },
     Revalidate {
         entry: Box<LookupEntry>,
         cache_key: String,
@@ -369,18 +375,36 @@ impl Stage<HttpContext> for HttpCacheStage {
                 &request_cookies,
                 private_key.as_deref(),
             );
-            if let Some((entry, cache_key)) = lookup {
+            if let Some((entry, cache_key, hit_kind)) = lookup {
                 let scope = entry.scope;
                 self.emit_eviction_metrics(ctx, stats);
-                self.emit_request_metric(ctx, "hit", Some(scope), items);
 
                 if request_policy.reason == "request-revalidation" {
+                    self.emit_request_metric(ctx, "hit", Some(scope), items);
                     LookupResult::Revalidate {
                         entry: Box::new(entry),
                         cache_key,
                         stats,
                     }
+                } else if let crate::store::LookupHit::StaleWhileRevalidate = hit_kind {
+                    if config.enable_stale_while_revalidate {
+                        self.emit_request_metric(ctx, "hit", Some(scope), items);
+                        LookupResult::StaleWhileRevalidate {
+                            entry: Box::new(entry),
+                            cache_key,
+                            stats,
+                        }
+                    } else {
+                        // SWR disabled — treat stale entry as revalidation
+                        self.emit_request_metric(ctx, "hit", Some(scope), items);
+                        LookupResult::Revalidate {
+                            entry: Box::new(entry),
+                            cache_key,
+                            stats,
+                        }
+                    }
                 } else {
+                    self.emit_request_metric(ctx, "hit", Some(scope), items);
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
@@ -413,7 +437,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             &request_cookies,
                             private_key.as_deref(),
                         );
-                        if let Some((entry, _)) = retry_lookup {
+                        if let Some((entry, _, _)) = retry_lookup {
                             // Leader populated the cache — serve from cache
                             let scope = entry.scope;
                             self.emit_eviction_metrics(ctx, retry_stats);
@@ -456,7 +480,39 @@ impl Stage<HttpContext> for HttpCacheStage {
             LookupResult::Bypass
         };
 
-        let stop = matches!(lookup_result, LookupResult::Hit);
+        let stop = match &lookup_result {
+            LookupResult::Hit => true,
+            LookupResult::StaleWhileRevalidate { entry, .. } => {
+                // Serve stale response immediately
+                ctx.res = Some(if entry.body.is_none() {
+                    HttpResponse::BuiltinError(
+                        entry.status.as_u16(),
+                        Some(entry.headers.clone()),
+                    )
+                } else {
+                    HttpResponse::Custom(build_cached_response(
+                        (**entry).clone(),
+                        head_only,
+                        config.emit_litespeed_headers,
+                    )?)
+                });
+
+                // Annotate with stale-while-revalidate Cache-Status
+                if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
+                    annotate_response_headers(
+                        resp.headers_mut(),
+                        CacheHeaderState::StaleWhileRevalidate {
+                            scope: entry.scope,
+                            age: entry.age,
+                        },
+                        config.emit_litespeed_headers,
+                    );
+                }
+
+                true
+            }
+            _ => false,
+        };
 
         let inflight_guard = if let LookupResult::Miss {
             ref inflight_key, ..
@@ -510,6 +566,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         match &state.lookup_result {
             LookupResult::Hit => return Ok(()),
+            LookupResult::StaleWhileRevalidate { .. } => return Ok(()),
             LookupResult::Revalidate { stats, .. } => {
                 self.emit_eviction_metrics(ctx, *stats);
             }
@@ -607,6 +664,77 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         }
 
+        // Gate D: Handle stale-if-error — serve stale response on upstream 5xx
+        if response.status().is_server_error() && state.config.enable_stale_if_error {
+            if let (
+                Some((stale_entry, _stale_key, _)),
+                _stats,
+                _len,
+                _had_expired,
+            ) = self.store.lookup(
+                &state.base_key,
+                &state.request_headers,
+                &state.request_cookies,
+                state.private_key.as_deref(),
+            ) {
+                if let Some(sie_duration) = stale_entry.stale_if_error {
+                    if stale_entry.age <= stale_entry.ttl + sie_duration {
+                        // Serve the stale response instead of the error
+                        let stale_response = if let Some(body) = stale_entry.body {
+                            let mut builder = Response::builder().status(stale_entry.status);
+                            let mut headers = stale_entry.headers.clone();
+                            headers.remove(&LS_CACHE);
+                            headers.remove(header::AGE);
+                            headers.remove(CACHE_STATUS_HEADER);
+                            append_lsc_cookies_as_set_cookie(&mut headers, &stale_entry.lsc_cookies);
+                            annotate_response_headers(
+                                &mut headers,
+                                CacheHeaderState::StaleWhileRevalidate {
+                                    scope: stale_entry.scope,
+                                    age: stale_entry.age,
+                                },
+                                state.config.emit_litespeed_headers,
+                            );
+                            for (name, value) in &headers {
+                                builder = builder.header(name, value);
+                            }
+                            let body = if state.head_only {
+                                Empty::<Bytes>::new()
+                                    .map_err(|error| match error {})
+                                    .boxed_unsync()
+                            } else {
+                                Full::new(body)
+                                    .map_err(|error: std::convert::Infallible| match error {})
+                                    .boxed_unsync()
+                            };
+                            builder
+                                .body(body)
+                                .map_err(|e| PipelineError::custom(e.to_string()))?
+                        } else {
+                            Response::builder()
+                                .status(stale_entry.status)
+                                .body(
+                                    Empty::<Bytes>::new()
+                                        .map_err(|error| match error {})
+                                        .boxed_unsync(),
+                                )
+                                .map_err(|e| PipelineError::custom(e.to_string()))?
+                        };
+
+                        self.emit_request_metric(
+                            ctx,
+                            "hit",
+                            Some(stale_entry.scope),
+                            self.store.len(),
+                        );
+
+                        ctx.res = Some(HttpResponse::Custom(stale_response));
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         let mut purge_scope = None;
         let purge_ops = parse_litespeed_purge(response.headers());
         if purge_ops.iter().any(|operation| operation.stale) {
@@ -676,6 +804,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                 store: false,
                 scope: None,
                 ttl: None,
+                stale_while_revalidate: None,
+                stale_if_error: None,
+                must_revalidate: false,
                 reason: if state.head_only {
                     "head-no-store"
                 } else if has_unsupported_vary_value {
@@ -750,6 +881,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                         purge_url: state.purge_url,
                         etag,
                         last_modified,
+                        stale_while_revalidate: decision.stale_while_revalidate,
+                        stale_if_error: decision.stale_if_error,
+                        must_revalidate: decision.must_revalidate,
                     };
                     let (stats, items) = self.store.insert_with_request(
                         stored_entry,
@@ -838,6 +972,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
 enum CacheHeaderState<'a> {
     Hit { scope: CacheScope, age: Duration },
+    StaleWhileRevalidate { scope: CacheScope, age: Duration },
     Revalidated,
     Miss { stored: bool, detail: &'a str },
     Bypass { detail: &'a str },
@@ -1094,6 +1229,26 @@ fn annotate_response_headers(
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
+        CacheHeaderState::StaleWhileRevalidate { scope, age } => {
+            if emit_ls_cache {
+                let ls_value = if scope == CacheScope::Private {
+                    "hit,private"
+                } else {
+                    "hit"
+                };
+                headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            }
+            if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
+                headers.insert(header::AGE, age_value);
+            }
+            if let Ok(value) = HeaderValue::from_str(&format!(
+                "FerronCache; hit; detail=stale-while-revalidate,{}; age={}",
+                scope.as_str(),
+                age.as_secs()
+            )) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
         CacheHeaderState::Revalidated => {
             if emit_ls_cache {
                 headers.insert(&LS_CACHE, HeaderValue::from_static("hit"));
@@ -1202,6 +1357,10 @@ mod tests {
             age: Duration::from_secs(5),
             etag: None,
             last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
+            ttl: Duration::from_secs(60),
         };
         let response = build_cached_response(entry, true, false).unwrap();
         let collected = response.into_body().collect().await.unwrap().to_bytes();

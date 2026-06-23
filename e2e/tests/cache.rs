@@ -386,11 +386,7 @@ impl CacheRevalidationTestContext {
             .unwrap()
     }
 
-    async fn get_with_headers(
-        &self,
-        path: &str,
-        headers: &[(&str, &str)],
-    ) -> reqwest::Response {
+    async fn get_with_headers(&self, path: &str, headers: &[(&str, &str)]) -> reqwest::Response {
         let mut req = self.client.get(format!(
             "{}/{}",
             self.base_url,
@@ -443,7 +439,10 @@ async fn test_cache_etag_revalidation_304() {
     // Backend receives If-None-Match: W/"v1" and returns 304.
     // Ferron should reconstruct a 200 response with the cached body.
     let resp = ctx
-        .get_with_headers("/cache-etag?id=reval-304", &[("Cache-Control", "max-age=0")])
+        .get_with_headers(
+            "/cache-etag?id=reval-304",
+            &[("Cache-Control", "max-age=0")],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let cache_status = resp
@@ -455,7 +454,13 @@ async fn test_cache_etag_revalidation_304() {
         .to_string();
     assert_eq!(cache_status, "hit");
     // The Cache-Status header should indicate revalidation
-    let cache_status_header = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
+    let cache_status_header = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     assert!(
         cache_status_header.contains("revalidated"),
         "Expected revalidated Cache-Status, got: {}",
@@ -492,7 +497,11 @@ async fn test_cache_etag_content_change() {
         .unwrap()
         .to_string();
     assert_eq!(cache_status, "miss");
-    assert_eq!(resp.text().await.unwrap(), "v2", "Should return updated content");
+    assert_eq!(
+        resp.text().await.unwrap(),
+        "v2",
+        "Should return updated content"
+    );
 
     // Next unconditional request should hit the cache with the new content
     let resp = ctx.get("/cache-etag?id=content-change").await;
@@ -525,7 +534,13 @@ async fn test_cache_no_cache_triggers_revalidation() {
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status_old = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
+    let cache_status_old = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     assert!(
         cache_status_old.contains("revalidated"),
         "Expected revalidated Cache-Status for no-cache, got: {}",
@@ -535,5 +550,130 @@ async fn test_cache_no_cache_triggers_revalidation() {
         resp.text().await.unwrap(),
         "v1",
         "should return cached content after 304"
+    );
+}
+
+/// Test stale-while-revalidate behavior
+#[tokio::test]
+async fn test_cache_stale_while_revalidate() {
+    let ctx = CacheRevalidationTestContext::new("swr").await;
+
+    // First request: cache miss, stores response with max-age=1, stale-while-revalidate=60
+    let resp = ctx.get("/cache-swr?id=swr-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let cache_status = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(cache_status, "miss");
+    assert_eq!(resp.text().await.unwrap(), "swr-v1");
+
+    // Wait for the entry to expire (max-age=1s)
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Second request: entry is stale but within SWR window
+    // Should serve stale content immediately
+    let resp = ctx.get("/cache-swr?id=swr-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let cache_status = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(cache_status, "hit", "SWR should serve stale as hit");
+
+    // Verify Cache-Status header contains stale-while-revalidate detail
+    let cache_status_header = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status_header.contains("stale-while-revalidate"),
+        "Cache-Status should indicate stale-while-revalidate, got: {}",
+        cache_status_header
+    );
+
+    assert_eq!(
+        resp.text().await.unwrap(),
+        "swr-v1",
+        "SWR should return stale content"
+    );
+}
+
+/// Test stale-if-error behavior
+#[tokio::test]
+async fn test_cache_stale_if_error() {
+    let ctx = CacheRevalidationTestContext::new("sie").await;
+
+    // First request: cache miss, stores response with max-age=300, stale-if-error=60
+    let resp = ctx.get("/cache-sie?id=sie-test").await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let cache_status = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(cache_status, "miss");
+    assert_eq!(resp.text().await.unwrap(), "sie-v1");
+
+    // Enable error mode on the backend
+    let backend_port = ctx
+        ._backend
+        .get_host_port_ipv4(ContainerPort::Tcp(3000))
+        .await
+        .unwrap();
+    let resp = reqwest::Client::new()
+        .post(format!(
+            "http://localhost:{}/cache-sie/error?id=sie-test",
+            backend_port
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.status().is_success());
+
+    // Request with max-age=0 to trigger revalidation with the backend
+    // Backend returns 503, Ferron should serve stale content (SIE)
+    let resp = ctx
+        .get_with_headers("/cache-sie?id=sie-test", &[("Cache-Control", "max-age=0")])
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let cache_status = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(cache_status, "hit", "SIE should serve stale as hit");
+
+    // Verify Cache-Status header contains stale-while-revalidate detail (SIE reuses this variant)
+    let cache_status_header = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status_header.contains("stale-while-revalidate"),
+        "Cache-Status should indicate stale-while-revalidate for SIE, got: {}",
+        cache_status_header
+    );
+
+    assert_eq!(
+        resp.text().await.unwrap(),
+        "sie-v1",
+        "SIE should return stale content"
     );
 }

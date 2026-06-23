@@ -146,6 +146,21 @@ fuzz_target!(|data: &[u8]| {
         );
         assert_eq!(decision.reason, "public-set-cookie");
     }
+
+    // Validate SWR/SIE fields are consistent
+    if let Some(swr) = decision.stale_while_revalidate {
+        assert!(decision.store, "stale_while_revalidate set but store=false");
+        assert!(decision.ttl.is_some(), "stale_while_revalidate set but ttl=None");
+        assert!(swr >= Duration::ZERO, "stale_while_revalidate must be non-negative");
+    }
+    if let Some(sie) = decision.stale_if_error {
+        assert!(decision.store, "stale_if_error set but store=false");
+        assert!(decision.ttl.is_some(), "stale_if_error set but ttl=None");
+        assert!(sie >= Duration::ZERO, "stale_if_error must be non-negative");
+    }
+    if decision.must_revalidate || decision.proxy_revalidate {
+        assert!(decision.store, "must_revalidate/proxy_revalidate set but store=false");
+    }
 });
 
 fn extract_string(u: &mut Unstructured, max_len: usize) -> String {

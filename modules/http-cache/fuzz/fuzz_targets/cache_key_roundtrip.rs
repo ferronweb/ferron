@@ -147,7 +147,7 @@ fuzz_target!(|data: &[u8]| {
                 store.insert_with_request(entry, private_key.as_deref(), &headers, &cookies);
 
             // Lookup with the same parameters
-            let (result, _stats, _len) =
+            let (result, _stats, _len, _had_expired) =
                 store.lookup(&base_key, &headers, &cookies, private_key.as_deref());
 
             assert!(
@@ -170,7 +170,7 @@ fuzz_target!(|data: &[u8]| {
                 diff_headers.insert(name.clone(), flipped);
             }
 
-            let (_result2, _stats2, _len2) =
+            let (_result2, _stats2, _len2, _had_expired2) =
                 store.lookup(&base_key, &diff_headers, &cookies, private_key.as_deref());
             // May or may not be a hit depending on vary — no invariant check here
         }

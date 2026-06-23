@@ -15,6 +15,12 @@ use tokio::sync::Notify;
 use crate::lscache::{PurgeOperation, PurgeSelector, ScopedTag};
 use crate::policy::CacheScope;
 
+#[derive(Clone, Debug)]
+pub enum LookupHit {
+    Fresh,
+    StaleWhileRevalidate,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct VaryRule {
     pub header_names: Vec<HeaderName>,
@@ -45,6 +51,9 @@ pub struct StoredEntry {
     pub purge_url: String,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,
+    pub stale_while_revalidate: Option<Duration>,
+    pub stale_if_error: Option<Duration>,
+    pub must_revalidate: bool,
 }
 
 #[derive(Clone)]
@@ -57,6 +66,12 @@ pub struct LookupEntry {
     pub age: Duration,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,
+    #[expect(dead_code)]
+    pub stale_while_revalidate: Option<Duration>,
+    pub stale_if_error: Option<Duration>,
+    #[expect(dead_code)]
+    pub must_revalidate: bool,
+    pub ttl: Duration,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -160,7 +175,12 @@ impl CacheStore {
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
-    ) -> (Option<(LookupEntry, String)>, StoreStats, usize, bool) {
+    ) -> (
+        Option<(LookupEntry, String, LookupHit)>,
+        StoreStats,
+        usize,
+        bool,
+    ) {
         let stats = StoreStats {
             expired_evictions: self.cleanup_expired(),
             ..Default::default()
@@ -204,27 +224,68 @@ impl CacheStore {
             ));
         }
 
-        for key in candidate_keys {
-            if let Some(entry) = self.entries.get(&key) {
+        // First pass: look for fresh entries
+        for key in &candidate_keys {
+            if let Some(entry) = self.entries.get(key) {
                 let age = entry.created_at.elapsed();
-                return (
-                    Some((
-                        LookupEntry {
-                            scope: entry.scope,
-                            status: entry.status,
-                            headers: entry.headers.clone(),
-                            body: entry.body.clone(),
-                            lsc_cookies: entry.lsc_cookies.clone(),
-                            age,
-                            etag: entry.etag.clone(),
-                            last_modified: entry.last_modified.clone(),
-                        },
-                        key,
-                    )),
-                    stats,
-                    self.entries.len(),
-                    false,
-                );
+                if age <= entry.ttl {
+                    return (
+                        Some((
+                            LookupEntry {
+                                scope: entry.scope,
+                                status: entry.status,
+                                headers: entry.headers.clone(),
+                                body: entry.body.clone(),
+                                lsc_cookies: entry.lsc_cookies.clone(),
+                                age,
+                                etag: entry.etag.clone(),
+                                last_modified: entry.last_modified.clone(),
+                                stale_while_revalidate: entry.stale_while_revalidate,
+                                stale_if_error: entry.stale_if_error,
+                                must_revalidate: entry.must_revalidate,
+                                ttl: entry.ttl,
+                            },
+                            key.clone(),
+                            LookupHit::Fresh,
+                        )),
+                        stats,
+                        self.entries.len(),
+                        false,
+                    );
+                }
+            }
+        }
+
+        // Second pass: look for stale entries within the SWR window
+        for key in &candidate_keys {
+            if let Some(entry) = self.entries.get(key) {
+                let age = entry.created_at.elapsed();
+                let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+                if age <= entry.ttl + swr_window && !entry.must_revalidate {
+                    return (
+                        Some((
+                            LookupEntry {
+                                scope: entry.scope,
+                                status: entry.status,
+                                headers: entry.headers.clone(),
+                                body: entry.body.clone(),
+                                lsc_cookies: entry.lsc_cookies.clone(),
+                                age,
+                                etag: entry.etag.clone(),
+                                last_modified: entry.last_modified.clone(),
+                                stale_while_revalidate: entry.stale_while_revalidate,
+                                stale_if_error: entry.stale_if_error,
+                                must_revalidate: entry.must_revalidate,
+                                ttl: entry.ttl,
+                            },
+                            key.clone(),
+                            LookupHit::StaleWhileRevalidate,
+                        )),
+                        stats,
+                        self.entries.len(),
+                        false,
+                    );
+                }
             }
         }
 
@@ -310,7 +371,11 @@ impl CacheStore {
         let expired_keys: Vec<String> = self
             .entries
             .iter()
-            .filter(|(_, entry)| entry.created_at.elapsed() > entry.ttl)
+            .filter(|(_, entry)| {
+                let elapsed = entry.created_at.elapsed();
+                let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+                elapsed > entry.ttl + swr_window
+            })
             .map(|(key, _)| key)
             .collect();
 
@@ -479,6 +544,9 @@ mod tests {
             purge_url: base_key.to_string(),
             etag: None,
             last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
         }
     }
 
@@ -526,7 +594,7 @@ mod tests {
         assert_eq!(len, 1);
 
         let (lookup, stats, len, had_expired) = store.lookup(base_key, &headers, &cookies, None);
-        let (lookup, _key) = lookup.expect("expected cache hit");
+        let (lookup, _key, _hit) = lookup.expect("expected cache hit");
         assert_eq!(stats.expired_evictions, 0);
         assert_eq!(len, 1);
         assert!(!had_expired);
@@ -555,12 +623,12 @@ mod tests {
         store.insert_with_request(private, Some("user=1"), &headers, &cookies);
 
         let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
-        let (lookup, _) = lookup.expect("expected private cache hit");
+        let (lookup, _, _) = lookup.expect("expected private cache hit");
         assert_eq!(lookup.scope, CacheScope::Private);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
         let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
-        let (lookup, _) = lookup.expect("expected public cache hit");
+        let (lookup, _, _) = lookup.expect("expected public cache hit");
         assert_eq!(lookup.scope, CacheScope::Public);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
     }
@@ -1103,7 +1171,7 @@ mod tests {
             // After notification, re-check cache
             let (lookup, _, _, _) =
                 store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
-            lookup.and_then(|(entry, _)| entry.body)
+            lookup.and_then(|(entry, _, _)| entry.body)
         });
 
         // Give follower time to start waiting
@@ -1214,6 +1282,9 @@ mod tests {
             purge_url: "/test".to_string(),
             etag: headers.get(header::ETAG).cloned(),
             last_modified: headers.get(header::LAST_MODIFIED).cloned(),
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
         };
 
         let request_headers = HeaderMap::new();
@@ -1226,7 +1297,7 @@ mod tests {
             &request_cookies,
             None,
         );
-        let (entry, _key) = lookup.expect("expected cache hit");
+        let (entry, _key, _hit) = lookup.expect("expected cache hit");
         assert_eq!(
             entry.etag.as_ref().and_then(|v| v.to_str().ok()),
             Some(r#"W/"abc123""#)
@@ -1263,6 +1334,9 @@ mod tests {
             purge_url: "/test".to_string(),
             etag: headers.get(header::ETAG).cloned(),
             last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
         };
 
         let request_headers = HeaderMap::new();
@@ -1275,7 +1349,7 @@ mod tests {
             &request_cookies,
             None,
         );
-        let (_entry, cache_key) = lookup.expect("expected cache hit");
+        let (_entry, cache_key, _hit) = lookup.expect("expected cache hit");
 
         let mut new_headers = HeaderMap::new();
         new_headers.insert(
@@ -1297,7 +1371,7 @@ mod tests {
             &request_cookies,
             None,
         );
-        let (entry, _) = lookup.expect("expected cache hit after update");
+        let (entry, _, _) = lookup.expect("expected cache hit after update");
         assert_eq!(
             entry.etag.as_ref().and_then(|v| v.to_str().ok()),
             Some(r#"W/"new""#)
@@ -1336,6 +1410,9 @@ mod tests {
             purge_url: "/test".to_string(),
             etag: headers.get(header::ETAG).cloned(),
             last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
         };
 
         let request_headers = HeaderMap::new();
@@ -1348,7 +1425,7 @@ mod tests {
             &request_cookies,
             None,
         );
-        let (_entry, cache_key) = lookup.expect("expected cache hit");
+        let (_entry, cache_key, _hit) = lookup.expect("expected cache hit");
         assert!(cache_key.starts_with("https://example.com/test"));
         assert!(cache_key.contains("scope=public"));
     }

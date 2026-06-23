@@ -15,6 +15,8 @@ pub struct CacheConfig {
     pub litespeed_override_cache_control: bool,
     pub ignore_request_cache_control: bool,
     pub emit_litespeed_headers: bool,
+    pub enable_stale_while_revalidate: bool,
+    pub enable_stale_if_error: bool,
     pub vary_headers: Vec<HeaderName>,
     pub ignored_store_headers: Vec<HeaderName>,
     pub purge_method: bool,
@@ -29,6 +31,8 @@ impl Default for CacheConfig {
             litespeed_override_cache_control: false,
             ignore_request_cache_control: false,
             emit_litespeed_headers: false,
+            enable_stale_while_revalidate: true,
+            enable_stale_if_error: true,
             vary_headers: Vec::new(),
             ignored_store_headers: Vec::new(),
             purge_method: false,
@@ -50,6 +54,10 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     let ignore_request_cache_control =
         get_nested_bool(configuration, "ignore_request_cache_control", false);
 
+    let enable_stale_while_revalidate =
+        get_nested_bool(configuration, "enable_stale_while_revalidate", true);
+    let enable_stale_if_error = get_nested_bool(configuration, "enable_stale_if_error", true);
+
     let vary_headers = collect_header_names(configuration, "vary");
     let ignored_store_headers = collect_header_names(configuration, "ignore");
     let purge_method = get_nested_bool(configuration, "purge_method", false);
@@ -61,6 +69,8 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         litespeed_override_cache_control,
         ignore_request_cache_control,
         emit_litespeed_headers,
+        enable_stale_while_revalidate,
+        enable_stale_if_error,
         vary_headers,
         ignored_store_headers,
         purge_method,
