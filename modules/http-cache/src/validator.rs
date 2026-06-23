@@ -15,6 +15,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "purge_allowed_ips",
     "vary",
     "ignore",
+    "ignore_request_cache_control",
 ];
 
 #[derive(Default)]
@@ -144,6 +145,18 @@ fn validate_cache_block(
             if entry.get_flag() {
                 ctx.add_best_practice_violation(
                     "`litespeed_override_cache_control` makes LiteSpeed cache headers override standard HTTP cache policy; enable it only for applications that require LiteSpeed-compatible semantics",
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+
+    if let Some(entries) = block.directives.get("ignore_request_cache_control") {
+        for entry in entries {
+            validate_boolean_entry(entry, "ignore_request_cache_control")?;
+            if entry.get_flag() {
+                ctx.add_best_practice_violation(
+                    "`ignore_request_cache_control` is enabled - cache policy will be ignored based on request headers",
                     entry_span(entry),
                 );
             }

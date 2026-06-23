@@ -266,7 +266,15 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         let request_headers = request.headers().clone();
         let request_cookies = parse_cookies(&request_headers);
-        let request_policy = parse_request_policy(&request_headers);
+        let request_policy = if config.ignore_request_cache_control {
+            RequestCachePolicy {
+                allow_lookup: true,
+                allow_store: true,
+                reason: "eligible",
+            }
+        } else {
+            parse_request_policy(&request_headers)
+        };
         let has_authorization = request_headers.contains_key(header::AUTHORIZATION);
         let purge_url = request
             .uri()

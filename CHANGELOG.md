@@ -36,6 +36,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Auth user variable support** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 - **Trace ID and span ID variable support** - the `trace.id` and `trace.spanid` variables are now available in variable interpolations for the HTTP server.
 - **RFC 9111 conditional request revalidation** - when a client sends `Cache-Control: max-age=0` or `no-cache`, the HTTP cache now performs conditional revalidation using stored `ETag` and `Last-Modified` validators instead of bypassing the cache entirely. If the upstream returns `304 Not Modified`, the cached response body is served with fresh headers. If the upstream returns `200 OK` (content changed), the cached entry is replaced. (`http-cache`)
+- **Ignore request cache control** - when `ignore_request_cache_control` in `cache` is enabled, request-based cache control (e.g., `Cache-Control: no-cache`) is ignored in favor of the configured cache policy.
 
 #### Utilities
 
