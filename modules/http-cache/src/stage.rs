@@ -585,7 +585,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                     }
 
-                    self.emit_request_metric(ctx, "hit", scope.clone(), *items);
+                    self.emit_request_metric(ctx, "hit", *scope, *items);
                     return Ok(());
                 }
             }
@@ -949,7 +949,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             );
                         }
 
-                        self.emit_request_metric(ctx, "hit", scope.clone(), *items);
+                        self.emit_request_metric(ctx, "hit", *scope, *items);
                         return Ok(());
                     }
 
