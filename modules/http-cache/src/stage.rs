@@ -523,7 +523,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             None
         };
 
-        // Gate B: Inject conditional headers for revalidation
+        // Inject conditional headers for revalidation
         if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
             if let Some(ref mut request) = ctx.req {
                 if let Some(etag) = &entry.etag {
@@ -595,7 +595,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         };
 
-        // Gate C: Handle 304 Not Modified from upstream during revalidation
+        // Handle 304 Not Modified from upstream during revalidation
         if let LookupResult::Revalidate {
             entry: ref cached_entry,
             ref cache_key,
@@ -661,7 +661,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         }
 
-        // Gate D: Handle stale-if-error — serve stale response on upstream 5xx
+        // Handle stale-if-error — serve stale response on upstream 5xx
         if response.status().is_server_error() && state.config.enable_stale_if_error {
             if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
                 self.store.lookup(
