@@ -63,6 +63,11 @@ struct RequestState {
 
 enum LookupResult {
     Hit,
+    Revalidate {
+        entry: Box<LookupEntry>,
+        cache_key: String,
+        stats: StoreStats,
+    },
     Miss {
         stats: StoreStats,
         /// Key for inflight coalescing on expired-entry misses.
@@ -356,20 +361,29 @@ impl Stage<HttpContext> for HttpCacheStage {
                 &request_cookies,
                 private_key.as_deref(),
             );
-            if let Some(entry) = lookup {
+            if let Some((entry, cache_key)) = lookup {
                 let scope = entry.scope;
                 self.emit_eviction_metrics(ctx, stats);
                 self.emit_request_metric(ctx, "hit", Some(scope), items);
-                ctx.res = Some(if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+
+                if request_policy.reason == "request-revalidation" {
+                    LookupResult::Revalidate {
+                        entry: Box::new(entry),
+                        cache_key,
+                        stats,
+                    }
                 } else {
-                    HttpResponse::Custom(build_cached_response(
-                        entry,
-                        head_only,
-                        config.emit_litespeed_headers,
-                    )?)
-                });
-                LookupResult::Hit
+                    ctx.res = Some(if entry.body.is_none() {
+                        HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+                    } else {
+                        HttpResponse::Custom(build_cached_response(
+                            entry,
+                            head_only,
+                            config.emit_litespeed_headers,
+                        )?)
+                    });
+                    LookupResult::Hit
+                }
             } else {
                 self.emit_eviction_metrics(ctx, stats);
 
@@ -388,7 +402,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             &request_cookies,
                             private_key.as_deref(),
                         );
-                        if let Some(entry) = retry_lookup {
+                        if let Some((entry, _)) = retry_lookup {
                             // Leader populated the cache — serve from cache
                             let scope = entry.scope;
                             self.emit_eviction_metrics(ctx, retry_stats);
@@ -445,6 +459,25 @@ impl Stage<HttpContext> for HttpCacheStage {
             None
         };
 
+        // Gate B: Inject conditional headers for revalidation
+        if let LookupResult::Revalidate {
+            ref entry, ..
+        } = lookup_result
+        {
+            if let Some(ref mut request) = ctx.req {
+                if let Some(etag) = &entry.etag {
+                    request
+                        .headers_mut()
+                        .insert(header::IF_NONE_MATCH, etag.clone());
+                }
+                if let Some(last_modified) = &entry.last_modified {
+                    request
+                        .headers_mut()
+                        .insert(header::IF_MODIFIED_SINCE, last_modified.clone());
+                }
+            }
+        }
+
         ctx.extensions.insert::<RequestStateKey>(RequestState {
             config,
             base_key,
@@ -467,12 +500,15 @@ impl Stage<HttpContext> for HttpCacheStage {
             return Ok(());
         };
 
-        match state.lookup_result {
+        match &state.lookup_result {
             LookupResult::Hit => return Ok(()),
+            LookupResult::Revalidate { stats, .. } => {
+                self.emit_eviction_metrics(ctx, *stats);
+            }
             LookupResult::Miss {
                 stats,
                 inflight_key: _,
-            } => self.emit_eviction_metrics(ctx, stats),
+            } => self.emit_eviction_metrics(ctx, *stats),
             LookupResult::Bypass => {}
         }
 
@@ -496,6 +532,76 @@ impl Stage<HttpContext> for HttpCacheStage {
                 return Ok(());
             }
         };
+
+        // Gate C: Handle 304 Not Modified from upstream during revalidation
+        if let LookupResult::Revalidate {
+            entry: ref cached_entry,
+            ref cache_key,
+            ..
+        } = state.lookup_result
+        {
+            if response.status() == StatusCode::NOT_MODIFIED {
+                // Update the cached entry's headers with fresh ones from upstream
+                // (e.g., new Date, Cache-Control) but keep the stored body intact.
+                let mut fresh_headers = response.headers().clone();
+                strip_internal_headers(&mut fresh_headers);
+                self.store
+                    .update_entry_headers_by_key(cache_key, fresh_headers.clone());
+
+                // Reconstruct a 200 OK response using fresh headers + cached body
+                let mut builder = Response::builder().status(StatusCode::OK);
+                for (name, value) in &fresh_headers {
+                    builder = builder.header(name, value);
+                }
+
+                let head_only = state.head_only;
+                let body = if head_only {
+                    Empty::<Bytes>::new()
+                        .map_err(|error| match error {})
+                        .boxed_unsync()
+                } else if let Some(body) = &cached_entry.body {
+                    Full::new(body.clone())
+                        .map_err(|error: std::convert::Infallible| match error {})
+                        .boxed_unsync()
+                } else {
+                    Empty::<Bytes>::new()
+                        .map_err(|error| match error {})
+                        .boxed_unsync()
+                };
+
+                if head_only
+                    && !fresh_headers.contains_key(header::CONTENT_LENGTH)
+                {
+                    if let Some(body_bytes) = &cached_entry.body {
+                        if let Ok(value) =
+                            HeaderValue::from_str(&body_bytes.len().to_string())
+                        {
+                            builder = builder.header(header::CONTENT_LENGTH, value);
+                        }
+                    }
+                }
+
+                let mut response_200 = builder
+                    .body(body)
+                    .map_err(|e| PipelineError::custom(e.to_string()))?;
+
+                annotate_response_headers(
+                    response_200.headers_mut(),
+                    CacheHeaderState::Revalidated,
+                    state.config.emit_litespeed_headers,
+                );
+
+                self.emit_request_metric(
+                    ctx,
+                    "revalidated",
+                    Some(cached_entry.scope),
+                    self.store.len(),
+                );
+
+                ctx.res = Some(HttpResponse::Custom(response_200));
+                return Ok(());
+            }
+        }
 
         let mut purge_scope = None;
         let purge_ops = parse_litespeed_purge(response.headers());
@@ -621,6 +727,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         stored_headers.remove(header_name);
                     }
                     strip_store_headers(&mut stored_headers);
+                    let etag = stored_headers.get(header::ETAG).cloned();
+                    let last_modified = stored_headers.get(header::LAST_MODIFIED).cloned();
                     let stored_entry = StoredEntry {
                         scope,
                         base_key: state.base_key.clone(),
@@ -636,6 +744,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         private_key: None,
                         tags,
                         purge_url: state.purge_url,
+                        etag,
+                        last_modified,
                     };
                     let (stats, items) = self.store.insert_with_request(
                         stored_entry,
@@ -724,6 +834,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
 enum CacheHeaderState<'a> {
     Hit { scope: CacheScope, age: Duration },
+    Revalidated,
     Miss { stored: bool, detail: &'a str },
     Bypass { detail: &'a str },
 }
@@ -979,6 +1090,16 @@ fn annotate_response_headers(
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
+        CacheHeaderState::Revalidated => {
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("hit"));
+            }
+            if let Ok(value) =
+                HeaderValue::from_str("FerronCache; fwd=hit; detail=revalidated")
+            {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
         CacheHeaderState::Miss { stored, detail } => {
             if emit_ls_cache {
                 headers.insert(&LS_CACHE, HeaderValue::from_static("miss"));
@@ -1077,6 +1198,8 @@ mod tests {
             body: Some(Bytes::from_static(b"hello")),
             lsc_cookies: Vec::new(),
             age: Duration::from_secs(5),
+            etag: None,
+            last_modified: None,
         };
         let response = build_cached_response(entry, true, false).unwrap();
         let collected = response.into_body().collect().await.unwrap().to_bytes();

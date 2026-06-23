@@ -68,7 +68,7 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
         || contains_token(pragma, "no-cache")
     {
         return RequestCachePolicy {
-            allow_lookup: false,
+            allow_lookup: true,
             allow_store: true,
             reason: "request-revalidation",
         };
@@ -298,11 +298,11 @@ mod tests {
     use http::HeaderValue;
 
     #[test]
-    fn request_no_cache_skips_lookup() {
+    fn request_no_cache_enables_revalidation() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
         let policy = parse_request_policy(&headers);
-        assert!(!policy.allow_lookup);
+        assert!(policy.allow_lookup);
         assert!(policy.allow_store);
     }
 
@@ -396,7 +396,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=0"));
         let policy = parse_request_policy(&headers);
-        assert!(!policy.allow_lookup);
+        assert!(policy.allow_lookup);
         assert!(policy.allow_store);
         assert_eq!(policy.reason, "request-revalidation");
     }
@@ -466,7 +466,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
         let policy = parse_request_policy(&headers);
-        assert!(!policy.allow_lookup);
+        assert!(policy.allow_lookup);
         assert!(policy.allow_store);
         assert_eq!(policy.reason, "request-revalidation");
     }

@@ -43,6 +43,8 @@ pub struct StoredEntry {
     pub private_key: Option<String>,
     pub tags: Vec<ScopedTag>,
     pub purge_url: String,
+    pub etag: Option<HeaderValue>,
+    pub last_modified: Option<HeaderValue>,
 }
 
 #[derive(Clone)]
@@ -53,6 +55,8 @@ pub struct LookupEntry {
     pub body: Option<Bytes>,
     pub lsc_cookies: Vec<HeaderValue>,
     pub age: Duration,
+    pub etag: Option<HeaderValue>,
+    pub last_modified: Option<HeaderValue>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -156,7 +160,7 @@ impl CacheStore {
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
-    ) -> (Option<LookupEntry>, StoreStats, usize, bool) {
+    ) -> (Option<(LookupEntry, String)>, StoreStats, usize, bool) {
         let stats = StoreStats {
             expired_evictions: self.cleanup_expired(),
             ..Default::default()
@@ -204,14 +208,19 @@ impl CacheStore {
             if let Some(entry) = self.entries.get(&key) {
                 let age = entry.created_at.elapsed();
                 return (
-                    Some(LookupEntry {
-                        scope: entry.scope,
-                        status: entry.status,
-                        headers: entry.headers.clone(),
-                        body: entry.body.clone(),
-                        lsc_cookies: entry.lsc_cookies.clone(),
-                        age,
-                    }),
+                    Some((
+                        LookupEntry {
+                            scope: entry.scope,
+                            status: entry.status,
+                            headers: entry.headers.clone(),
+                            body: entry.body.clone(),
+                            lsc_cookies: entry.lsc_cookies.clone(),
+                            age,
+                            etag: entry.etag.clone(),
+                            last_modified: entry.last_modified.clone(),
+                        },
+                        key,
+                    )),
                     stats,
                     self.entries.len(),
                     false,
@@ -312,6 +321,25 @@ impl CacheStore {
             }
         }
         count
+    }
+
+    /// Update headers on an existing cache entry without replacing the body.
+    /// Takes the full cache key and the new headers. Returns `true` if updated.
+    pub fn update_entry_headers_by_key(
+        &self,
+        cache_key: &str,
+        new_headers: HeaderMap,
+    ) -> bool {
+        let Some(mut entry) = self.entries.get(cache_key) else {
+            return false;
+        };
+        entry.headers = new_headers.clone();
+        entry.etag = new_headers.get(header::ETAG).cloned();
+        entry.last_modified = new_headers.get(header::LAST_MODIFIED).cloned();
+        entry.created_at = Instant::now();
+        let entry = entry.clone();
+        let _ = self.entries.replace(cache_key.to_string(), entry, false);
+        true
     }
 }
 
@@ -453,6 +481,8 @@ mod tests {
             private_key: None,
             tags: Vec::new(),
             purge_url: base_key.to_string(),
+            etag: None,
+            last_modified: None,
         }
     }
 
@@ -500,7 +530,7 @@ mod tests {
         assert_eq!(len, 1);
 
         let (lookup, stats, len, had_expired) = store.lookup(base_key, &headers, &cookies, None);
-        let lookup = lookup.expect("expected cache hit");
+        let (lookup, _key) = lookup.expect("expected cache hit");
         assert_eq!(stats.expired_evictions, 0);
         assert_eq!(len, 1);
         assert!(!had_expired);
@@ -529,12 +559,12 @@ mod tests {
         store.insert_with_request(private, Some("user=1"), &headers, &cookies);
 
         let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
-        let lookup = lookup.expect("expected private cache hit");
+        let (lookup, _) = lookup.expect("expected private cache hit");
         assert_eq!(lookup.scope, CacheScope::Private);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
         let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
-        let lookup = lookup.expect("expected public cache hit");
+        let (lookup, _) = lookup.expect("expected public cache hit");
         assert_eq!(lookup.scope, CacheScope::Public);
         assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
     }
@@ -803,7 +833,7 @@ mod tests {
             )
             .0
             .expect("expected unmatched private entry to remain");
-        assert_eq!(remaining.body, Some(Bytes::from_static(b"user-2")));
+        assert_eq!(remaining.0.body, Some(Bytes::from_static(b"user-2")));
     }
 
     #[test]
@@ -1077,7 +1107,7 @@ mod tests {
             // After notification, re-check cache
             let (lookup, _, _, _) =
                 store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
-            lookup.and_then(|e| e.body)
+            lookup.and_then(|(entry, _)| entry.body)
         });
 
         // Give follower time to start waiting
@@ -1156,5 +1186,186 @@ mod tests {
             follower_saw_miss,
             "follower should see miss after non-cacheable leader"
         );
+    }
+
+    #[test]
+    fn stored_entry_preserves_etag_and_last_modified() {
+        let store = CacheStore::new(4);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60"),
+        );
+        headers.insert(
+            header::ETAG,
+            HeaderValue::from_static(r#"W/"abc123""#),
+        );
+        headers.insert(
+            header::LAST_MODIFIED,
+            HeaderValue::from_static("Tue, 01 Jan 2024 00:00:00 GMT"),
+        );
+
+        let entry = StoredEntry {
+            scope: CacheScope::Public,
+            base_key: "https://example.com/test".to_string(),
+            vary: VaryRule::default(),
+            status: StatusCode::OK,
+            headers: headers.clone(),
+            body: Some(Bytes::from_static(b"body")),
+            lsc_cookies: Vec::new(),
+            created_at: Instant::now(),
+            ttl: Duration::from_secs(60),
+            access_at: 0,
+            private_key: None,
+            tags: Vec::new(),
+            purge_url: "/test".to_string(),
+            etag: headers.get(header::ETAG).cloned(),
+            last_modified: headers.get(header::LAST_MODIFIED).cloned(),
+        };
+
+        let request_headers = HeaderMap::new();
+        let request_cookies = AHashMap::default();
+        store.insert_with_request(entry, None, &request_headers, &request_cookies);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (entry, _key) = lookup.expect("expected cache hit");
+        assert_eq!(
+            entry.etag.as_ref().and_then(|v| v.to_str().ok()),
+            Some(r#"W/"abc123""#)
+        );
+        assert_eq!(
+            entry.last_modified.as_ref().and_then(|v| v.to_str().ok()),
+            Some("Tue, 01 Jan 2024 00:00:00 GMT")
+        );
+    }
+
+    #[test]
+    fn update_entry_headers_by_key_updates_validators() {
+        let store = CacheStore::new(4);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60"),
+        );
+        headers.insert(
+            header::ETAG,
+            HeaderValue::from_static(r#"W/"old""#),
+        );
+
+        let entry = StoredEntry {
+            scope: CacheScope::Public,
+            base_key: "https://example.com/test".to_string(),
+            vary: VaryRule::default(),
+            status: StatusCode::OK,
+            headers: headers.clone(),
+            body: Some(Bytes::from_static(b"body")),
+            lsc_cookies: Vec::new(),
+            created_at: Instant::now(),
+            ttl: Duration::from_secs(60),
+            access_at: 0,
+            private_key: None,
+            tags: Vec::new(),
+            purge_url: "/test".to_string(),
+            etag: headers.get(header::ETAG).cloned(),
+            last_modified: None,
+        };
+
+        let request_headers = HeaderMap::new();
+        let request_cookies = AHashMap::default();
+        store.insert_with_request(entry, None, &request_headers, &request_cookies);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (_entry, cache_key) = lookup.expect("expected cache hit");
+
+        let mut new_headers = HeaderMap::new();
+        new_headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120"),
+        );
+        new_headers.insert(
+            header::ETAG,
+            HeaderValue::from_static(r#"W/"new""#),
+        );
+        new_headers.insert(
+            header::LAST_MODIFIED,
+            HeaderValue::from_static("Wed, 02 Jan 2024 00:00:00 GMT"),
+        );
+
+        let updated = store.update_entry_headers_by_key(&cache_key, new_headers);
+        assert!(updated);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (entry, _) = lookup.expect("expected cache hit after update");
+        assert_eq!(
+            entry.etag.as_ref().and_then(|v| v.to_str().ok()),
+            Some(r#"W/"new""#)
+        );
+        assert_eq!(
+            entry.last_modified.as_ref().and_then(|v| v.to_str().ok()),
+            Some("Wed, 02 Jan 2024 00:00:00 GMT")
+        );
+        // Body should be preserved
+        assert_eq!(entry.body, Some(Bytes::from_static(b"body")));
+    }
+
+    #[test]
+    fn lookup_returns_cache_key_for_revalidation() {
+        let store = CacheStore::new(4);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60"),
+        );
+        headers.insert(
+            header::ETAG,
+            HeaderValue::from_static(r#"W/"test-etag""#),
+        );
+
+        let entry = StoredEntry {
+            scope: CacheScope::Public,
+            base_key: "https://example.com/test".to_string(),
+            vary: VaryRule::default(),
+            status: StatusCode::OK,
+            headers: headers.clone(),
+            body: Some(Bytes::from_static(b"body")),
+            lsc_cookies: Vec::new(),
+            created_at: Instant::now(),
+            ttl: Duration::from_secs(60),
+            access_at: 0,
+            private_key: None,
+            tags: Vec::new(),
+            purge_url: "/test".to_string(),
+            etag: headers.get(header::ETAG).cloned(),
+            last_modified: None,
+        };
+
+        let request_headers = HeaderMap::new();
+        let request_cookies = AHashMap::default();
+        store.insert_with_request(entry, None, &request_headers, &request_cookies);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (_entry, cache_key) = lookup.expect("expected cache hit");
+        assert!(cache_key.starts_with("https://example.com/test"));
+        assert!(cache_key.contains("scope=public"));
     }
 }

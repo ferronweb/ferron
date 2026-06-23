@@ -35,6 +35,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Support for date-based caching** - the `If-Modified-Since` header is now supported for static file responses, allowing clients to cache responses and avoid unnecessary re-downloads when the file has not been modified.
 - **Auth user variable support** - the `auth.user` variable is now available in variable interpolations for the HTTP server.
 - **Trace ID and span ID variable support** - the `trace.id` and `trace.spanid` variables are now available in variable interpolations for the HTTP server.
+- **RFC 9111 conditional request revalidation** - when a client sends `Cache-Control: max-age=0` or `no-cache`, the HTTP cache now performs conditional revalidation using stored `ETag` and `Last-Modified` validators instead of bypassing the cache entirely. If the upstream returns `304 Not Modified`, the cached response body is served with fresh headers. If the upstream returns `200 OK` (content changed), the cached entry is replaced. (`http-cache`)
 
 #### Utilities
 

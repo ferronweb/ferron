@@ -68,6 +68,34 @@ app.get("/tls", (req, res, _next) => {
   }
 });
 
+// Cache revalidation test endpoint — tracks version state per resource id
+const cacheVersions = {};
+
+app.get("/cache-etag", (req, res) => {
+  const id = req.query.id || "default";
+  const version = cacheVersions[id] || 1;
+  const etag = `W/"v${version}"`;
+  const lastModified = new Date(Date.UTC(2024, 0, version)).toUTCString();
+
+  if (req.headers["if-none-match"] === etag) {
+    return res.status(304).set("ETag", etag).set("Date", new Date().toUTCString()).end();
+  }
+
+  res
+    .status(200)
+    .set("ETag", etag)
+    .set("Last-Modified", lastModified)
+    .set("Cache-Control", "public, max-age=300")
+    .send(`v${version}`);
+});
+
+app.post("/cache-etag/update", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  cacheVersions[id] = (cacheVersions[id] || 1) + 1;
+  const newVersion = cacheVersions[id];
+  res.send(`updated to v${newVersion}`);
+});
+
 app.ws("/echo", (ws, _req) => {
   ws.on("message", (msg) => {
     ws.send(msg);
