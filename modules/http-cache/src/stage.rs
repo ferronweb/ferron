@@ -68,6 +68,8 @@ enum LookupResult {
         entry: Box<LookupEntry>,
         cache_key: String,
         stats: StoreStats,
+        /// Key for inflight coalescing on expired-entry misses.
+        inflight_key: Option<String>,
     },
     Revalidate {
         entry: Box<LookupEntry>,
@@ -388,11 +390,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else if let crate::store::LookupHit::StaleWhileRevalidate = hit_kind {
                     if config.enable_stale_while_revalidate {
+                        let (is_leader, _notify) = self.store.begin_fetch(&base_key);
+
                         self.emit_request_metric(ctx, "hit", Some(scope), items);
                         LookupResult::StaleWhileRevalidate {
                             entry: Box::new(entry),
                             cache_key,
                             stats,
+                            inflight_key: is_leader.then_some(base_key.clone()),
                         }
                     } else {
                         // SWR disabled — treat stale entry as revalidation
@@ -482,32 +487,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         let stop = match &lookup_result {
             LookupResult::Hit => true,
-            LookupResult::StaleWhileRevalidate { entry, .. } => {
-                // Serve stale response immediately
-                ctx.res = Some(if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
-                } else {
-                    HttpResponse::Custom(build_cached_response(
-                        (**entry).clone(),
-                        head_only,
-                        config.emit_litespeed_headers,
-                    )?)
-                });
-
-                // Annotate with stale-while-revalidate Cache-Status
-                if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
-                    annotate_response_headers(
-                        resp.headers_mut(),
-                        CacheHeaderState::StaleWhileRevalidate {
-                            scope: entry.scope,
-                            age: entry.age,
-                        },
-                        config.emit_litespeed_headers,
-                    );
-                }
-
-                true
-            }
+            LookupResult::StaleWhileRevalidate { inflight_key, .. } => inflight_key.is_none(),
             _ => false,
         };
 
@@ -563,7 +543,46 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         match &state.lookup_result {
             LookupResult::Hit => return Ok(()),
-            LookupResult::StaleWhileRevalidate { .. } => return Ok(()),
+            LookupResult::StaleWhileRevalidate {
+                stats,
+                inflight_key,
+                entry,
+                ..
+            } => {
+                if inflight_key.is_some() {
+                    let mut stats = *stats;
+                    stats.expired_evictions += 1;
+                    self.emit_eviction_metrics(ctx, stats);
+                } else {
+                    // Serve stale response immediately
+                    ctx.res = Some(if entry.body.is_none() {
+                        HttpResponse::BuiltinError(
+                            entry.status.as_u16(),
+                            Some(entry.headers.clone()),
+                        )
+                    } else {
+                        HttpResponse::Custom(build_cached_response(
+                            (**entry).clone(),
+                            state.head_only,
+                            state.config.emit_litespeed_headers,
+                        )?)
+                    });
+
+                    // Annotate with stale-while-revalidate Cache-Status
+                    if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
+                        annotate_response_headers(
+                            resp.headers_mut(),
+                            CacheHeaderState::StaleWhileRevalidate {
+                                scope: entry.scope,
+                                age: entry.age,
+                            },
+                            state.config.emit_litespeed_headers,
+                        );
+                    }
+
+                    return Ok(());
+                }
+            }
             LookupResult::Revalidate { stats, .. } => {
                 self.emit_eviction_metrics(ctx, *stats);
             }
@@ -890,6 +909,37 @@ impl Stage<HttpContext> for HttpCacheStage {
                     );
                     self.emit_eviction_metrics(ctx, stats);
                     self.emit_store_metric(ctx, scope);
+
+                    if let LookupResult::StaleWhileRevalidate { entry, .. } = &state.lookup_result {
+                        // Serve stale response immediately
+                        ctx.res = Some(if entry.body.is_none() {
+                            HttpResponse::BuiltinError(
+                                entry.status.as_u16(),
+                                Some(entry.headers.clone()),
+                            )
+                        } else {
+                            HttpResponse::Custom(build_cached_response(
+                                (**entry).clone(),
+                                state.head_only,
+                                state.config.emit_litespeed_headers,
+                            )?)
+                        });
+
+                        // Annotate with stale-while-revalidate Cache-Status
+                        if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
+                            annotate_response_headers(
+                                resp.headers_mut(),
+                                CacheHeaderState::StaleWhileRevalidate {
+                                    scope: entry.scope,
+                                    age: entry.age,
+                                },
+                                state.config.emit_litespeed_headers,
+                            );
+                        }
+
+                        return Ok(());
+                    }
+
                     annotate_response_headers(
                         match &mut outgoing_response {
                             HttpResponse::Custom(r) => r.headers_mut(),
