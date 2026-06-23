@@ -70,6 +70,8 @@ enum LookupResult {
         stats: StoreStats,
         /// Key for inflight coalescing on expired-entry misses.
         inflight_key: Option<String>,
+        scope: Option<CacheScope>,
+        items: usize,
     },
     Revalidate {
         entry: Box<LookupEntry>,
@@ -392,12 +394,13 @@ impl Stage<HttpContext> for HttpCacheStage {
                     if config.enable_stale_while_revalidate {
                         let (is_leader, _notify) = self.store.begin_fetch(&base_key);
 
-                        self.emit_request_metric(ctx, "hit", Some(scope), items);
                         LookupResult::StaleWhileRevalidate {
                             entry: Box::new(entry),
                             cache_key,
                             stats,
                             inflight_key: is_leader.then_some(base_key.clone()),
+                            scope: Some(scope),
+                            items,
                         }
                     } else {
                         // SWR disabled — treat stale entry as revalidation
@@ -547,6 +550,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                 stats,
                 inflight_key,
                 entry,
+                scope,
+                items,
                 ..
             } => {
                 if inflight_key.is_some() {
@@ -580,6 +585,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                     }
 
+                    self.emit_request_metric(ctx, "hit", scope.clone(), *items);
                     return Ok(());
                 }
             }
@@ -910,7 +916,13 @@ impl Stage<HttpContext> for HttpCacheStage {
                     self.emit_eviction_metrics(ctx, stats);
                     self.emit_store_metric(ctx, scope);
 
-                    if let LookupResult::StaleWhileRevalidate { entry, .. } = &state.lookup_result {
+                    if let LookupResult::StaleWhileRevalidate {
+                        entry,
+                        scope,
+                        items,
+                        ..
+                    } = &state.lookup_result
+                    {
                         // Serve stale response immediately
                         ctx.res = Some(if entry.body.is_none() {
                             HttpResponse::BuiltinError(
@@ -937,6 +949,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             );
                         }
 
+                        self.emit_request_metric(ctx, "hit", scope.clone(), *items);
                         return Ok(());
                     }
 
