@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::convert::TryFrom;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use ferron_core::pipeline::{PipelineError, Stage};
@@ -16,7 +16,7 @@ use ferron_observability::{
 use futures_util::stream::{self, StreamExt};
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, Method, Response, StatusCode};
-use http_body::Frame;
+use http_body::{Body as _, Frame};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
 #[cfg(test)]
@@ -1055,7 +1055,21 @@ fn build_cached_response(
     head_only: bool,
     emit_ls_cache: bool,
 ) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
-    let mut builder = Response::builder().status(entry.status);
+    let body_len = entry.body.as_ref().map(|body| body.len());
+    let mut response = Response::new(if head_only {
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync()
+    } else if let Some(body) = entry.body {
+        Full::new(body)
+            .map_err(|error: std::convert::Infallible| match error {})
+            .boxed_unsync()
+    } else {
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync()
+    });
+    *response.status_mut() = entry.status;
     let mut headers = entry.headers.clone();
     headers.remove(&LS_CACHE);
     headers.remove(header::AGE);
@@ -1071,35 +1085,15 @@ fn build_cached_response(
     );
 
     if head_only && !headers.contains_key(header::CONTENT_LENGTH) {
-        if let Some(body) = &entry.body {
-            let value = HeaderValue::from_str(&body.len().to_string())
+        if let Some(body_len) = body_len {
+            let value = HeaderValue::from_str(&body_len.to_string())
                 .map_err(|error| PipelineError::custom(error.to_string()))?;
             headers.insert(header::CONTENT_LENGTH, value);
         }
     }
 
-    for (name, value) in &headers {
-        builder = builder.header(name, value);
-    }
-
-    let body = if head_only {
-        Empty::<Bytes>::new()
-            .map_err(|error| match error {})
-            .boxed_unsync()
-    } else if let Some(body) = entry.body {
-        Full::new(body)
-            .map_err(|error: std::convert::Infallible| match error {})
-            .boxed_unsync()
-    } else {
-        // No body
-        Empty::<Bytes>::new()
-            .map_err(|error| match error {})
-            .boxed_unsync()
-    };
-
-    builder
-        .body(body)
-        .map_err(|error| PipelineError::custom(error.to_string()))
+    *response.headers_mut() = headers;
+    Ok(response)
 }
 
 fn build_base_key(
@@ -1118,7 +1112,12 @@ fn build_base_key(
         .path_and_query()
         .map(|value| value.as_str())
         .unwrap_or("/");
-    format!("{scheme}://{host}{path_and_query}")
+    let mut key = String::with_capacity(scheme.len() + host.len() + path_and_query.len() + 3);
+    key.push_str(scheme);
+    key.push_str("://");
+    key.push_str(host);
+    key.push_str(path_and_query);
+    key
 }
 
 fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
@@ -1146,31 +1145,30 @@ fn build_private_cache_key(
     remote_ip: std::net::IpAddr,
     auth_user: Option<&str>,
 ) -> String {
-    let mut components = BTreeSet::new();
-    components.insert(format!("ip={remote_ip}"));
+    let mut components = Vec::with_capacity(cookies.len() + 2);
+    components.push(format!("ip={remote_ip}"));
     if let Some(auth_user) = auth_user {
-        components.insert(format!("auth={auth_user}"));
+        components.push(format!("auth={auth_user}"));
     }
 
     let mut matched_private_cookie = false;
     for (name, value) in cookies {
-        let lower = name.to_ascii_lowercase();
-        // Check if the cookie is a private cookie based on its name
-        let is_private = PRIVATE_COOKIE_NAMES.contains(&lower.as_str())
-            || lower.starts_with("wp_woocommerce_session_");
+        // Check if the cookie is a private cookie based on its name.
+        let is_private = is_private_cookie_name(name);
         if is_private && value.len() >= 16 {
             matched_private_cookie = true;
-            components.insert(format!("cookie:{name}={value}"));
+            components.push(format!("cookie:{name}={value}"));
         }
     }
 
     if !matched_private_cookie {
         for (name, value) in cookies {
-            components.insert(format!("cookie:{name}={value}"));
+            components.push(format!("cookie:{name}={value}"));
         }
     }
 
-    components.into_iter().collect::<Vec<_>>().join("&")
+    components.sort_unstable();
+    components.join("&")
 }
 
 fn build_vary_rule(
@@ -1178,7 +1176,7 @@ fn build_vary_rule(
     config: &CacheConfig,
     ls_vary: &crate::lscache::LiteSpeedVary,
 ) -> Result<Option<VaryRule>, PipelineError> {
-    let mut header_names = config.vary_headers.clone();
+    let mut header_names: AHashSet<HeaderName> = config.vary_headers.iter().cloned().collect();
     for value in headers.get_all(header::VARY) {
         let Some(text) = value.to_str().ok() else {
             continue;
@@ -1193,11 +1191,10 @@ fn build_vary_rule(
             }
             let name = HeaderName::from_bytes(token.as_bytes())
                 .map_err(|error| PipelineError::custom(error.to_string()))?;
-            if !header_names.contains(&name) {
-                header_names.push(name);
-            }
+            header_names.insert(name);
         }
     }
+    let mut header_names: Vec<_> = header_names.into_iter().collect();
     header_names.sort_by(|left, right| left.as_str().cmp(right.as_str()));
 
     let mut cookie_names = ls_vary.cookies.clone();
@@ -1217,7 +1214,13 @@ async fn collect_body_with_limit(
     let Some(body) = body else {
         return Ok(CollectBodyOutcome::Complete(None));
     };
-    let mut buffer = BytesMut::new();
+    let initial_capacity = body
+        .size_hint()
+        .upper()
+        .and_then(|upper| usize::try_from(upper).ok())
+        .map(|cap| cap.min(max_size))
+        .unwrap_or(0);
+    let mut buffer = BytesMut::with_capacity(initial_capacity);
     while let Some(frame) = body.frame().await {
         let frame = frame.map_err(|error| PipelineError::custom(error.to_string()))?;
         if let Some(data) = frame.data_ref() {
@@ -1293,11 +1296,12 @@ fn annotate_response_headers(
             if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
                 headers.insert(header::AGE, age_value);
             }
-            if let Ok(value) = HeaderValue::from_str(&format!(
-                "FerronCache; hit; detail={}; age={}",
-                scope.as_str(),
-                age.as_secs()
-            )) {
+            let mut value = String::with_capacity(48 + scope.as_str().len());
+            value.push_str("FerronCache; hit; detail=");
+            value.push_str(scope.as_str());
+            value.push_str("; age=");
+            value.push_str(&age.as_secs().to_string());
+            if let Ok(value) = HeaderValue::from_str(&value) {
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
@@ -1313,11 +1317,12 @@ fn annotate_response_headers(
             if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
                 headers.insert(header::AGE, age_value);
             }
-            if let Ok(value) = HeaderValue::from_str(&format!(
-                "FerronCache; hit; detail=stale-while-revalidate,{}; age={}",
-                scope.as_str(),
-                age.as_secs()
-            )) {
+            let mut value = String::with_capacity(70 + scope.as_str().len());
+            value.push_str("FerronCache; hit; detail=stale-while-revalidate,");
+            value.push_str(scope.as_str());
+            value.push_str("; age=");
+            value.push_str(&age.as_secs().to_string());
+            if let Ok(value) = HeaderValue::from_str(&value) {
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
@@ -1333,9 +1338,12 @@ fn annotate_response_headers(
             if emit_ls_cache {
                 headers.insert(&LS_CACHE, HeaderValue::from_static("miss"));
             }
-            if let Ok(value) = HeaderValue::from_str(&format!(
-                "FerronCache; fwd=miss; stored={stored}; detail={detail}"
-            )) {
+            let mut value = String::with_capacity(40 + detail.len());
+            value.push_str("FerronCache; fwd=miss; stored=");
+            value.push_str(if stored { "true" } else { "false" });
+            value.push_str("; detail=");
+            value.push_str(detail);
+            if let Ok(value) = HeaderValue::from_str(&value) {
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
@@ -1343,9 +1351,10 @@ fn annotate_response_headers(
             if emit_ls_cache {
                 headers.insert(&LS_CACHE, HeaderValue::from_static("bypass"));
             }
-            if let Ok(value) =
-                HeaderValue::from_str(&format!("FerronCache; fwd=bypass; detail={detail}"))
-            {
+            let mut value = String::with_capacity(32 + detail.len());
+            value.push_str("FerronCache; fwd=bypass; detail=");
+            value.push_str(detail);
+            if let Ok(value) = HeaderValue::from_str(&value) {
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }
@@ -1369,6 +1378,21 @@ fn append_lsc_cookies_as_set_cookie(headers: &mut HeaderMap, lsc_cookies: &[Head
     for cookie in lsc_cookies {
         headers.append(header::SET_COOKIE, cookie.clone());
     }
+}
+
+#[inline]
+fn is_private_cookie_name(name: &str) -> bool {
+    PRIVATE_COOKIE_NAMES
+        .iter()
+        .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        || starts_with_ignore_ascii_case(name, "wp_woocommerce_session_")
+}
+
+#[inline]
+fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
+    value
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
 }
 
 #[cfg(test)]

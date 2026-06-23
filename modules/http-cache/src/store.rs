@@ -192,13 +192,11 @@ impl CacheStore {
             ..Default::default()
         };
 
-        let has_variants = self.variants_by_base.contains_key(base_key);
-
-        let variants = self
-            .variants_by_base
-            .get(base_key)
-            .map(|v| v.value().clone())
-            .unwrap_or_default();
+        let Some(variants) = self.variants_by_base.get(base_key) else {
+            return (None, stats, self.entries.len(), false);
+        };
+        let variants = variants.value().clone();
+        let has_variants = true;
 
         let mut candidate_keys = Vec::with_capacity(variants.len());
         if let Some(private_key) = private_key {
