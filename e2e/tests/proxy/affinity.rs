@@ -7,7 +7,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-
 async fn create_backend_container(
     network: &str,
     alias: &str,

@@ -193,9 +193,8 @@ pub fn evaluate_response_policy(
         };
     }
 
-    let must_revalidate = standard.must_revalidate
-        || standard.proxy_revalidate
-        || standard.s_maxage.is_some();
+    let must_revalidate =
+        standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some();
 
     ResponseCacheDecision {
         store: true,

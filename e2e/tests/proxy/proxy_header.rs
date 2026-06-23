@@ -6,7 +6,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-
 async fn create_ferron_container_proxy(
     network: &str,
     hostname: &str,

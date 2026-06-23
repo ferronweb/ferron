@@ -7,7 +7,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-
 async fn create_ferron_container(
     network: &str,
     webroot_dir: &Path,

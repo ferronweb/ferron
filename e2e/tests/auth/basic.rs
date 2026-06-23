@@ -2,7 +2,6 @@ use std::io::Write;
 
 use testcontainers::core::ContainerPort;
 
-
 #[tokio::test]
 async fn test_http_auth_success() {
     let _ = rustls::crypto::ring::default_provider().install_default();

@@ -63,10 +63,7 @@ async fn test_host_configuration() {
     let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
         .await
         .unwrap();
-    let port = container
-        .get_host_port_ipv4(80)
-        .await
-        .unwrap();
+    let port = container.get_host_port_ipv4(80).await.unwrap();
     let client = reqwest::Client::new();
 
     common::write_file(

@@ -485,10 +485,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             LookupResult::StaleWhileRevalidate { entry, .. } => {
                 // Serve stale response immediately
                 ctx.res = Some(if entry.body.is_none() {
-                    HttpResponse::BuiltinError(
-                        entry.status.as_u16(),
-                        Some(entry.headers.clone()),
-                    )
+                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
                 } else {
                     HttpResponse::Custom(build_cached_response(
                         (**entry).clone(),
@@ -666,17 +663,14 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         // Gate D: Handle stale-if-error — serve stale response on upstream 5xx
         if response.status().is_server_error() && state.config.enable_stale_if_error {
-            if let (
-                Some((stale_entry, _stale_key, _)),
-                _stats,
-                _len,
-                _had_expired,
-            ) = self.store.lookup(
-                &state.base_key,
-                &state.request_headers,
-                &state.request_cookies,
-                state.private_key.as_deref(),
-            ) {
+            if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
+                self.store.lookup(
+                    &state.base_key,
+                    &state.request_headers,
+                    &state.request_cookies,
+                    state.private_key.as_deref(),
+                )
+            {
                 if let Some(sie_duration) = stale_entry.stale_if_error {
                     if stale_entry.age <= stale_entry.ttl + sie_duration {
                         // Serve the stale response instead of the error
@@ -686,7 +680,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                             headers.remove(&LS_CACHE);
                             headers.remove(header::AGE);
                             headers.remove(CACHE_STATUS_HEADER);
-                            append_lsc_cookies_as_set_cookie(&mut headers, &stale_entry.lsc_cookies);
+                            append_lsc_cookies_as_set_cookie(
+                                &mut headers,
+                                &stale_entry.lsc_cookies,
+                            );
                             annotate_response_headers(
                                 &mut headers,
                                 CacheHeaderState::StaleWhileRevalidate {

@@ -7,7 +7,6 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-
 // Include the generated protobuf code (message types only)
 pub mod hello {
     include!(concat!(env!("OUT_DIR"), "/helloworld.rs"));
