@@ -374,7 +374,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else {
                     ctx.res = Some(if entry.body.is_none() {
-                        HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+                        HttpResponse::BuiltinError(
+                            entry.status.as_u16(),
+                            Some(entry.headers.clone()),
+                        )
                     } else {
                         HttpResponse::Custom(build_cached_response(
                             entry,
@@ -460,10 +463,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         };
 
         // Gate B: Inject conditional headers for revalidation
-        if let LookupResult::Revalidate {
-            ref entry, ..
-        } = lookup_result
-        {
+        if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
             if let Some(ref mut request) = ctx.req {
                 if let Some(etag) = &entry.etag {
                     request
@@ -569,13 +569,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                         .boxed_unsync()
                 };
 
-                if head_only
-                    && !fresh_headers.contains_key(header::CONTENT_LENGTH)
-                {
+                if head_only && !fresh_headers.contains_key(header::CONTENT_LENGTH) {
                     if let Some(body_bytes) = &cached_entry.body {
-                        if let Ok(value) =
-                            HeaderValue::from_str(&body_bytes.len().to_string())
-                        {
+                        if let Ok(value) = HeaderValue::from_str(&body_bytes.len().to_string()) {
                             builder = builder.header(header::CONTENT_LENGTH, value);
                         }
                     }
@@ -1094,9 +1090,7 @@ fn annotate_response_headers(
             if emit_ls_cache {
                 headers.insert(&LS_CACHE, HeaderValue::from_static("hit"));
             }
-            if let Ok(value) =
-                HeaderValue::from_str("FerronCache; fwd=hit; detail=revalidated")
-            {
+            if let Ok(value) = HeaderValue::from_str("FerronCache; fwd=hit; detail=revalidated") {
                 headers.insert(CACHE_STATUS_HEADER, value);
             }
         }

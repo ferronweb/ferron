@@ -325,11 +325,7 @@ impl CacheStore {
 
     /// Update headers on an existing cache entry without replacing the body.
     /// Takes the full cache key and the new headers. Returns `true` if updated.
-    pub fn update_entry_headers_by_key(
-        &self,
-        cache_key: &str,
-        new_headers: HeaderMap,
-    ) -> bool {
+    pub fn update_entry_headers_by_key(&self, cache_key: &str, new_headers: HeaderMap) -> bool {
         let Some(mut entry) = self.entries.get(cache_key) else {
             return false;
         };
@@ -1196,10 +1192,7 @@ mod tests {
             CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=60"),
         );
-        headers.insert(
-            header::ETAG,
-            HeaderValue::from_static(r#"W/"abc123""#),
-        );
+        headers.insert(header::ETAG, HeaderValue::from_static(r#"W/"abc123""#));
         headers.insert(
             header::LAST_MODIFIED,
             HeaderValue::from_static("Tue, 01 Jan 2024 00:00:00 GMT"),
@@ -1252,10 +1245,7 @@ mod tests {
             CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=60"),
         );
-        headers.insert(
-            header::ETAG,
-            HeaderValue::from_static(r#"W/"old""#),
-        );
+        headers.insert(header::ETAG, HeaderValue::from_static(r#"W/"old""#));
 
         let entry = StoredEntry {
             scope: CacheScope::Public,
@@ -1292,10 +1282,7 @@ mod tests {
             CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=120"),
         );
-        new_headers.insert(
-            header::ETAG,
-            HeaderValue::from_static(r#"W/"new""#),
-        );
+        new_headers.insert(header::ETAG, HeaderValue::from_static(r#"W/"new""#));
         new_headers.insert(
             header::LAST_MODIFIED,
             HeaderValue::from_static("Wed, 02 Jan 2024 00:00:00 GMT"),
@@ -1331,10 +1318,7 @@ mod tests {
             CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=60"),
         );
-        headers.insert(
-            header::ETAG,
-            HeaderValue::from_static(r#"W/"test-etag""#),
-        );
+        headers.insert(header::ETAG, HeaderValue::from_static(r#"W/"test-etag""#));
 
         let entry = StoredEntry {
             scope: CacheScope::Public,
