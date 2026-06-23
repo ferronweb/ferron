@@ -56,3 +56,7 @@ With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/lang
 
 > [!important]
 > Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
+
+## See also
+
+- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache) — use Ferron as an edge caching proxy in front of Apache for PHP hosting with LSCache plugin compatibility

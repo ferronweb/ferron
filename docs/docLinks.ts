@@ -110,6 +110,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/content/php-edge-cache",
+    target: "_self",
+    label: "PHP edge caching (LSCache)",
+    sub: true,
+  },
+  {
     label: "Traffic & routing",
   },
   {
