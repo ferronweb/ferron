@@ -72,6 +72,8 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `vary` | `<string> [<string> ...]` | Additional request headers that are added to the cache key, alongside any standard `Vary` response headers returned by the origin. This directive can be specified multiple times. | none |
 | `ignore` | `<string> [<string> ...]` | Response headers that are removed from the stored cache representation while leaving the live response unchanged. This directive can be specified multiple times. | none |
 | `ignore_request_cache_control` | `[<bool>]` | When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy. | `false` |
+| `enable_stale_while_revalidate` | `[<bool>]` | When enabled, cached responses with a `stale-while-revalidate` directive are revalidated synchronously after their `max-age` expires instead of being returned immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
+| `enable_stale_if_error` | `[<bool>]` | When enabled, cached responses with a `stale-if-error` directive are served from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
 
 **Configuration example:**
 
@@ -159,6 +161,55 @@ Host: example.com
 - Public responses containing `Set-Cookie` are not stored.
 - Private responses are partitioned by client context. Ferron currently uses the client IP address, the authenticated username when available, and detected private cookies.
 - If Ferron cannot determine a narrower private cookie set, it falls back to all request cookies for the private cache key.
+
+### Stale-while-revalidate
+
+When an upstream response includes the `stale-while-revalidate` directive in its `Cache-Control` header, Ferron extends the usable lifetime of the cached entry beyond its `max-age`. The behavior differs depending on concurrent request patterns:
+
+- **Leader request** — the first request to encounter the expired entry becomes the leader and revalidates synchronously with the upstream. It receives a fresh response that replaces the cache entry.
+- **Follower requests** — concurrent requests that arrive while the leader is revalidating are served the stale cached response immediately.
+
+This ensures that one request still contacts the upstream for fresh content — no background tasks are involved — while other concurrent requests avoid waiting for revalidation.
+
+> [!note]
+> Ferron 3 does not have an internal route invocation mechanism, so background revalidation is not supported. `stale-while-revalidate` always involves a synchronous upstream request for the leader, and followers receive the stale response.
+
+The `stale-while-revalidate` duration is taken from the origin's `Cache-Control` header. For example:
+
+```http
+Cache-Control: public, max-age=60, stale-while-revalidate=3600
+```
+
+This caches the response for 60 seconds, then allows stale serving for up to 3600 seconds after expiry.
+
+When Ferron serves a stale response via this mechanism, the `Cache-Status` response header includes `detail=stale-while-revalidate`:
+
+```http
+Cache-Status: FerronCache; hit; detail=stale-while-revalidate,public; age=120
+```
+
+#### Interaction with `must-revalidate` and `proxy-revalidate`
+
+Per RFC 9111, responses with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) are never served stale, even within a `stale-while-revalidate` window. When either directive is present, Ferron treats the entry as strictly fresh-or-miss — it will either revalidate or return a miss rather than serving stale content.
+
+### Stale-if-error
+
+When an upstream response includes the `stale-if-error` directive in its `Cache-Control` header, Ferron can serve the stale cached response when revalidation fails with a 5xx server error:
+
+```http
+Cache-Control: public, max-age=300, stale-if-error=3600
+```
+
+This caches the response for 300 seconds, then allows stale serving on upstream errors for up to 3600 seconds after expiry.
+
+How it works:
+
+1. A request triggers revalidation (e.g., the cached entry has expired, or the client sent `Cache-Control: max-age=0`).
+2. Ferron contacts the upstream, which returns a 5xx status code.
+3. If a valid stale entry with `stale-if-error` exists, Ferron serves the stale response with a `Cache-Status` header containing `detail=stale-while-revalidate`.
+4. If no stale entry exists or the `stale-if-error` window has elapsed, Ferron returns the 5xx error to the client.
+
+This provides resilience against transient backend failures by falling back to previously cached content.
 
 ### LSCache-compatible response headers
 

@@ -134,6 +134,68 @@ example.com {
 
 This caches API responses from the backend, reducing load during traffic spikes.
 
+## Stale-while-revalidate
+
+Stale-while-revalidate allows a cached response to be served after its `max-age` has expired, as long as it falls within the `stale-while-revalidate` window set by the origin. This avoids latency spikes when the cache entry expires and concurrent requests arrive:
+
+```ferron
+example.com {
+    location /api {
+        proxy http://localhost:3000
+        cache {
+            max_response_size 524288
+        }
+    }
+}
+```
+
+The backend controls the stale window with `Cache-Control`:
+
+```http
+Cache-Control: public, max-age=10, stale-while-revalidate=300
+```
+
+With this configuration:
+
+- Responses are cached for 10 seconds.
+- After 10 seconds, the first request revalidates with the backend and gets fresh content.
+- Concurrent requests during revalidation receive the stale response immediately.
+
+```ferron
+example.com {
+    location /api {
+        proxy http://localhost:3000
+        cache {
+            enable_stale_while_revalidate false
+        }
+    }
+}
+```
+
+> [!note]
+> Ferron 3 does not support background revalidation — stale-while-revalidate always involves a synchronous upstream request for one request (the leader). Other concurrent requests see the stale content. This is a known limitation stemming from the absence of internal route invocation in Ferron 3.
+
+## Stale-if-error
+
+Stale-if-error provides resilience against transient backend failures by falling back to stale cached content when revalidation encounters a 5xx error:
+
+```http
+Cache-Control: public, max-age=60, stale-if-error=3600
+```
+
+If the backend returns a 5xx error during revalidation, Ferron serves the stale cached response instead of forwarding the error to the client. This keeps your application running during brief backend outages.
+
+```ferron
+example.com {
+    location /api {
+        proxy http://localhost:3000
+        cache {
+            enable_stale_if_error false
+        }
+    }
+}
+```
+
 ## Caching with rate limiting
 
 Use caching alongside rate limiting to protect backend services:
