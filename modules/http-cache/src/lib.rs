@@ -73,7 +73,7 @@ impl ModuleLoader for HttpCacheModuleLoader {
         _config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.cache.is_none() {
-            let module = Arc::new(HttpCacheModule::default());
+            let module = Arc::new(HttpCacheModule);
             modules.push(module.clone());
             self.cache = Some(module);
         }
