@@ -89,6 +89,8 @@ pub struct AcmeOnDemandConfig {
     pub port: u16,
     /// Optional endpoint to ask before issuing a certificate.
     pub on_demand_ask: Option<String>,
+    /// Optional authentication for the on-demand ask endpoint.
+    pub on_demand_ask_auth: Option<String>,
     /// Whether to skip TLS verification for the on-demand ask endpoint.
     pub on_demand_ask_no_verification: bool,
     /// Error message lock
@@ -123,6 +125,8 @@ pub struct AcmeOnDemandConfigData {
     pub port: u16,
     /// Optional endpoint to ask before issuing a certificate.
     pub on_demand_ask: Option<String>,
+    /// Optional authentication for the on-demand ask endpoint.
+    pub on_demand_ask_auth: Option<String>,
     /// Whether to skip TLS verification for the on-demand ask endpoint.
     pub on_demand_ask_no_verification: bool,
     /// Error message lock
@@ -144,6 +148,7 @@ impl AcmeOnDemandConfig {
             sni_hostname: self.sni_hostname.clone(),
             port: self.port,
             on_demand_ask: self.on_demand_ask.clone(),
+            on_demand_ask_auth: self.on_demand_ask_auth.clone(),
             on_demand_ask_no_verification: self.on_demand_ask_no_verification,
             error_message: self.error_message.clone(),
         }
@@ -171,6 +176,7 @@ impl AcmeOnDemandConfig {
             sni_hostname: data.sni_hostname,
             port: data.port,
             on_demand_ask: data.on_demand_ask,
+            on_demand_ask_auth: data.on_demand_ask_auth,
             on_demand_ask_no_verification: data.on_demand_ask_no_verification,
             error_message: data.error_message,
         }
@@ -433,6 +439,7 @@ pub fn parse_acme_config(
         let cache_path = resolve_cache_path(config);
 
         let on_demand_ask = first_value(config, "on_demand_ask");
+        let on_demand_ask_auth = first_value(config, "on_demand_ask_auth");
         let on_demand_ask_no_verification = config.get_flag("on_demand_ask_no_verification");
 
         Ok(AcmeConfigOrOnDemand::OnDemand(AcmeOnDemandConfig {
@@ -450,6 +457,7 @@ pub fn parse_acme_config(
             sni_hostname: Some(domain.to_string()),
             port,
             on_demand_ask,
+            on_demand_ask_auth,
             on_demand_ask_no_verification,
             error_message: Arc::new(parking_lot::RwLock::new(None)),
         }))

@@ -45,6 +45,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **Ignore request cache control** - when `ignore_request_cache_control` in `cache` is enabled, request-based cache control (e.g., `Cache-Control: no-cache`) is ignored in favor of the configured cache policy.
 - **Cache purge propagation** - when a cache purge occurs (via `PURGE` method or `X-LiteSpeed-Purge` header), the purge can be propagated to other instances via an external control-plane service. Edge instances send webhook POST requests to a configured control-plane URL, which broadcasts `PURGE` requests to all other registered edges. Loop prevention is handled via the `X-Purge-Source: propagation` header and origin exclusion. (`http-cache`)
 
+#### Automatic TLS
+
+- **HTTP auth for on-demand ask endpoint** - when `on_demand_ask_auth` is configured, HTTP Basic Auth credentials are used for the on-demand ask endpoint, allowing for secure access to the endpoint.
+
 #### Utilities
 
 - **Formatter utility** - a new `ferron-fmt` command-line tool is available for formatting and validating Ferron configuration files.

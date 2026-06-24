@@ -91,6 +91,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `no_verification` | `<bool>` | `false` | Skip ACME directory TLS verification |
 | `on_demand` | `<bool>` | `false` | Enable on-demand certificate issuance |
 | `on_demand_ask` | `<string>` | — | Approval endpoint URL |
+| `on_demand_ask_auth` | `<string>` | — | Authorization header for approval endpoint (optional) |
 | `on_demand_ask_no_verification` | `<bool>` | `false` | Skip TLS verification for approval endpoint |
 
 **Configuration example:**

@@ -31,6 +31,7 @@ impl ConfigurationValidator for TlsAcmeConfigurationValidator {
         // Automatic TLS on demand
         validate_directive!(config, validator_ctx.used_directives, on_demand, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, on_demand_ask, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, on_demand_ask_auth, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, on_demand_ask_no_verification, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {});
 
         // DNS

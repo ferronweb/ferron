@@ -161,6 +161,7 @@ pub fn match_hostname(pattern: &str, hostname: &str) -> bool {
 pub async fn check_ask_endpoint(
     domain: &str,
     on_demand_ask: Option<&str>,
+    auth: Option<&str>,
     no_verification: bool,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let Some(on_demand_ask) = on_demand_ask else {
@@ -204,10 +205,13 @@ pub async fn check_ask_endpoint(
             .enable_http2()
             .build(),
     );
-    let request = hyper::Request::builder()
+    let mut request_builder = hyper::Request::builder()
         .method(hyper::Method::GET)
-        .uri(endpoint_url)
-        .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
+        .uri(endpoint_url);
+    if let Some(auth) = auth {
+        request_builder = request_builder.header("Authorization", auth);
+    }
+    let request = request_builder.body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
     let response = client.request(request).await?;
 
     Ok(response.status().is_success())

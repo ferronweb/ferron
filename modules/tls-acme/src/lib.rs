@@ -497,6 +497,7 @@ async fn run_acme_background_task(
                                     match check_ask_endpoint(
                                         &sni_hostname,
                                         on_demand_data.on_demand_ask.as_deref(),
+                                        on_demand_data.on_demand_ask_auth.as_deref(),
                                         on_demand_data.on_demand_ask_no_verification,
                                     )
                                     .await
