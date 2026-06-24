@@ -325,7 +325,7 @@ fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
 fn cacheable_by_default(status: StatusCode) -> bool {
     matches!(
         status.as_u16(),
-        200 | 203 | 204 | 300 | 301 | 302 | 307 | 308 | 404 | 405 | 410 | 414 | 501
+        200 | 203 | 204 | 300 | 301 | 308 | 404 | 405 | 410 | 414 | 501
     )
 }
 
