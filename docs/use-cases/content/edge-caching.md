@@ -25,6 +25,11 @@ This is especially important for CDN deployments where a single edge node may te
             contact "admin@example.com"
             eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
         }
+
+        dns {
+            provider cloudflare
+            api_key "EXAMPLE_API_KEY" # Replace with your API key, or preferably an environment variable interpolation
+        }
     }
 
     cache {
@@ -36,6 +41,41 @@ This is especially important for CDN deployments where a single edge node may te
 ```
 
 Providers are tried **sequentially**: the primary is attempted first, followed by each `fallback` block in order. A fallback is triggered when account creation with the previous provider fails. Once a provider succeeds, subsequent operations (order creation, challenge solving, certificate installation) use that same provider.
+
+## On-demand TLS for wildcard domains
+
+Wildcard certificates normally require the **DNS-01** challenge, which means configuring and securing DNS provider API credentials on every edge node. **On-demand mode** avoids this by deferring certificate issuance until the first TLS handshake for a hostname. This lets you use the simpler **HTTP-01** challenge while still covering arbitrary subdomains under a wildcard.
+
+```ferron
+*.customer.example.com {
+    tls {
+        provider acme
+        directory "https://acme-v02.api.letsencrypt.org/directory"
+        challenge http-01
+        contact "admin@example.com"
+        cache "/var/cache/ferron-acme"
+        on_demand
+        on_demand_ask "https://internal-api.example.com/check-cert"
+
+        fallback {
+            directory "https://dv.acme-v02.api.pki.goog/directory"
+            contact "admin@example.com"
+            eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
+        }
+    }
+
+    cache {
+        max_response_size 2097152
+    }
+
+    proxy http://origin.example.com:3000
+}
+```
+
+> [!warning]
+> Always configure `on_demand_ask` in production. Without an approval endpoint, Ferron will issue certificates for any hostname under the wildcard, which can be exploited for abuse.
+
+The approval endpoint receives `?domain=<sni>` as a query parameter and must return `200` to approve issuance. This gives you control over which subdomains receive certificates without needing DNS provider keys on the edge.
 
 ## Global cache purging
 
@@ -100,6 +140,11 @@ The same Ferron configuration and cache store can be deployed on every node. Geo
             contact "admin@example.com"
             eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
         }
+
+        dns {
+            provider cloudflare
+            api_key "EXAMPLE_API_KEY" # Replace with your API key, or preferably an environment variable interpolation
+        }
     }
 
     cache {
@@ -129,6 +174,7 @@ The same Ferron configuration and cache store can be deployed on every node. Geo
 This configuration creates a CDN edge node that:
 
 - Terminates TLS with automatically renewed certificates, with fallback providers for CA resilience.
+- Issues wildcard certificates on demand via HTTP-01, avoiding DNS provider setup on every edge node.
 - Caches origin responses in memory (up to 10,000 entries, 2 MB each) with Vary support.
 - Propagates cache purges to all other edge nodes via the control-plane.
 - Actively health-checks the origin and proxies requests.
@@ -138,4 +184,4 @@ This configuration creates a CDN edge node that:
 - [HTTP caching](/docs/v3/use-cases/content/caching) — cache directives, stale-while-revalidate, stale-if-error
 - [Automatic TLS](/docs/v3/use-cases/security/automatic-tls) — ACME challenge types and DNS provider configuration
 - [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy) — load balancing, health checks, circuit breaking
-- [ACME configuration reference](/docs/v3/configuration/security/acme) — supported DNS providers and ACME directory URLs
+- [ACME configuration reference](/docs/v3/configuration/security/acme) — on-demand mode, fallback providers, and ACME directory URLs
