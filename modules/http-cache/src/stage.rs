@@ -324,7 +324,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         let base_key = build_base_key(
             ctx.encrypted,
             &request_headers,
-            ctx.routing_uri.as_ref(),
+            ctx.original_uri.as_ref(),
             request.uri(),
         );
         let private_key = Some(build_private_cache_key(
@@ -1223,10 +1223,10 @@ fn build_cached_response(
 fn build_base_key(
     encrypted: bool,
     headers: &HeaderMap,
-    routing_uri: Option<&http::Uri>,
+    original_uri: Option<&http::Uri>,
     fallback_uri: &http::Uri,
 ) -> String {
-    let uri = routing_uri.unwrap_or(fallback_uri);
+    let uri = original_uri.unwrap_or(fallback_uri);
     let scheme = if encrypted { "https" } else { "http" };
     let host = headers
         .get(header::HOST)
@@ -1712,14 +1712,14 @@ mod tests {
 
     #[test]
     #[inline]
-    fn base_key_prefers_routing_uri() {
+    fn base_key_prefers_original_uri() {
         let mut ctx = test_context("/rewritten/path");
-        ctx.routing_uri = Some("/canonical/path".parse().unwrap());
+        ctx.original_uri = Some("/canonical/path".parse().unwrap());
         let request = ctx.req.as_ref().unwrap();
         let key = build_base_key(
             ctx.encrypted,
             request.headers(),
-            ctx.routing_uri.as_ref(),
+            ctx.original_uri.as_ref(),
             request.uri(),
         );
         assert_eq!(key, "https://example.com/canonical/path");
