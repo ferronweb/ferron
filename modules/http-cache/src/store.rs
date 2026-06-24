@@ -402,9 +402,9 @@ impl CacheStore {
         let Some(mut entry) = self.entries.get(cache_key) else {
             return false;
         };
-        entry.headers = new_headers.clone();
-        entry.etag = new_headers.get(header::ETAG).cloned();
-        entry.last_modified = new_headers.get(header::LAST_MODIFIED).cloned();
+        entry.headers.extend(new_headers);
+        entry.etag = entry.headers.get(header::ETAG).cloned();
+        entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
         entry.created_at = Instant::now();
         let entry = entry.clone();
         let _ = self.entries.replace(cache_key.to_string(), entry, false);
