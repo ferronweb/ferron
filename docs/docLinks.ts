@@ -98,6 +98,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/content/edge-caching",
+    target: "_self",
+    label: "Edge caching (CDN)",
+    sub: true,
+  },
+  {
     href: "/docs/v3/use-cases/content/cgi",
     target: "_self",
     label: "CGI applications",
