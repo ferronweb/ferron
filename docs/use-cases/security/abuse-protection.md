@@ -149,6 +149,37 @@ The flow works as follows:
 3. If the client accumulates enough breaches within the window, their IP is banned.
 4. While banned, the client receives a **403 Forbidden** response with a `Retry-After` header.
 
+## Detecting automated scans by URL pattern
+
+Use `match` with a regex on `request.uri.path` combined with `abuse_event` to detect and ban automated scanners probing for vulnerable paths:
+
+```ferron
+example.com {
+    # Anti-abuse
+    abuse_protection {
+        custom_threshold {
+            events 5
+            window "300s"
+        }
+    }
+
+    # Detect automated scans targeting dynamic content, admin panels,
+    # CMS paths, hidden files, and database files
+    match AUTOMATED_SCAN {
+        request.uri.path ~ ".*\\.(?:php|asp|jsp|cgi|sql)(?:\\b|$)|^/wp-(?:admin|login)(?:\\b|$)|^/\\.|^/(?:administrator|admin|login|logon)(?:\\b|$)"
+    }
+
+    if AUTOMATED_SCAN {
+        abuse_event "automated_scan"
+    }
+
+    # Other directives go here...
+    root /var/www/html
+}
+```
+
+Requests matching this pattern trigger a custom abuse event. After 5 such events within 300 seconds, the client's IP is banned. The ban duration follows the default or configured `ban_duration`.
+
 ## Disabling abuse protection
 
 To disable abuse protection on a host:
