@@ -49,6 +49,12 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **HTTP auth for on-demand ask endpoint** - when `on_demand_ask_auth` is configured, HTTP Basic Auth credentials are used for the on-demand ask endpoint, allowing for secure access to the endpoint.
 
+#### HTTP TLS provider
+
+- **On-demand certificate fetching** — the `tls-http` module now supports on-demand (lazy) certificate retrieval. When `on_demand true` is set in a wildcard host block (e.g., `*:443`), certificates are fetched on the first TLS handshake for each SNI hostname, rather than polling a single endpoint at startup.
+- **On-demand approval endpoint** — the new `on_demand_ask`, `on_demand_ask_auth`, and `on_demand_ask_no_verification` directives control an authorization endpoint that is consulted before fetching a certificate for a hostname. The hostname is sent as a `?domain=<encoded>` query parameter.
+- **Per-SNI certificate refresh** — on-demand fetched certificates are individually refreshed at the configured `refresh_interval`, ensuring certificate rotation is applied per hostname without affecting other SNIs.
+
 #### Utilities
 
 - **Formatter utility** - a new `ferron-fmt` command-line tool is available for formatting and validating Ferron configuration files.

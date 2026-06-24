@@ -23,7 +23,8 @@ webpki-roots = "1"
 anyhow = "1.0.102"
 parking_lot = "0.12.5"
 tokio-util = "0.7.18"
-tokio = { version = "1.52.3", features = ["time"] }
+tokio = { version = "1.52.3", features = ["time", "sync"] }
 serde_json = "1.0.149"
 serde = { version = "1.0.228", features = ["derive"] }
 async-channel = "2.5.0"
+urlencoding = "2"
