@@ -403,7 +403,7 @@ pub async fn provision_certificate(
                     &format!(
                         "Failed to create account on {} provider: {}",
                         provider_name,
-                        e.to_string()
+                        e
                     ),
                     "ferron-tls-acme",
                     vec![
