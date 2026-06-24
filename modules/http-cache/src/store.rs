@@ -396,19 +396,24 @@ impl CacheStore {
     }
 
     /// Update headers on an existing cache entry without replacing the body.
-    /// Takes the full cache key and the new headers. Returns `true` if updated.
+    /// Takes the full cache key and the new headers.
+    /// Returns `Some(updated_headers)` if updated, `None` otherwise.
     #[inline]
-    pub fn update_entry_headers_by_key(&self, cache_key: &str, new_headers: HeaderMap) -> bool {
+    pub fn update_entry_headers_by_key(
+        &self,
+        cache_key: &str,
+        new_headers: HeaderMap,
+    ) -> Option<HeaderMap> {
         let Some(mut entry) = self.entries.get(cache_key) else {
-            return false;
+            return None;
         };
         entry.headers.extend(new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
         entry.created_at = Instant::now();
-        let entry = entry.clone();
-        let _ = self.entries.replace(cache_key.to_string(), entry, false);
-        true
+        let entry2 = entry.clone();
+        let _ = self.entries.replace(cache_key.to_string(), entry2, false);
+        Some(entry.headers.clone())
     }
 }
 
@@ -1391,7 +1396,7 @@ mod tests {
         );
 
         let updated = store.update_entry_headers_by_key(&cache_key, new_headers);
-        assert!(updated);
+        assert!(updated.is_some());
 
         let (lookup, _, _, _) = store.lookup(
             "https://example.com/test",

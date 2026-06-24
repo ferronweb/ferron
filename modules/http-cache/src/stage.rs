@@ -711,9 +711,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                 // (e.g., new Date, Cache-Control) but keep the stored body intact.
                 let mut fresh_headers = response.headers().clone();
                 strip_internal_headers(&mut fresh_headers);
-                state
+                if let Some(new_fresh_headers) = state
                     .store
-                    .update_entry_headers_by_key(cache_key, fresh_headers.clone());
+                    .update_entry_headers_by_key(cache_key, fresh_headers.clone())
+                {
+                    fresh_headers = new_fresh_headers;
+                }
 
                 // Reconstruct a 200 OK response using fresh headers + cached body
                 let mut builder = Response::builder().status(StatusCode::OK);
