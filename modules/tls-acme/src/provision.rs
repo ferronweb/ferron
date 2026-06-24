@@ -402,8 +402,7 @@ pub async fn provision_certificate(
                     "ACME account creation failed",
                     &format!(
                         "Failed to create account on {} provider: {}",
-                        provider_name,
-                        e
+                        provider_name, e
                     ),
                     "ferron-tls-acme",
                     vec![
