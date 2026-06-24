@@ -6,6 +6,7 @@ use std::time::Duration;
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
+use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
@@ -64,6 +65,7 @@ struct RequestState {
     has_authorization: bool,
     head_only: bool,
     lookup_result: LookupResult,
+    store: Arc<CacheStore>,
     /// When present, notifies coalesced waiters when the leader completes.
     _inflight_guard: Option<InflightGuard>,
 }
@@ -116,14 +118,14 @@ enum CollectBodyOutcome {
 
 /// Pipeline stage for HTTP response caching.
 pub struct HttpCacheStage {
-    store: Arc<CacheStore>,
+    store: Arc<dashmap::DashMap<Option<String>, Arc<CacheStore>>>,
 }
 
 impl HttpCacheStage {
     #[inline]
     pub fn new() -> Self {
         Self {
-            store: Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES)),
+            store: Arc::new(DashMap::new()),
         }
     }
 
@@ -281,12 +283,22 @@ impl Stage<HttpContext> for HttpCacheStage {
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = parse_cache_config(&ctx.configuration);
-        self.store
-            .set_max_entries(parse_max_entries(&ctx.configuration));
 
         if !config.enabled {
             return Ok(true);
         }
+
+        let store = if let Some(store) = self.store.get(&ctx.hostname) {
+            store
+        } else {
+            self.store
+                .entry(ctx.hostname.clone())
+                .or_insert_with(|| {
+                    Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES))
+                })
+                .downgrade()
+        };
+        store.set_max_entries(parse_max_entries(&ctx.configuration));
 
         let Some(request) = ctx.req.as_ref() else {
             return Ok(true);
@@ -354,7 +366,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         selectors: vec![PurgeSelector::UrlPath(request.uri().path().to_string())],
                         stale: false,
                     }];
-                    let (stats, items) = self.store.purge(&purge_ops, None);
+                    let (stats, items) = store.purge(&purge_ops, None);
                     if stats.purged > 0 {
                         self.emit_purge_metric(ctx, scope, stats.purged, items);
                     }
@@ -438,7 +450,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             && request_policy.allow_lookup;
 
         let lookup_result = if request_is_lookup_eligible {
-            let (lookup, stats, items, had_expired) = self.store.lookup(
+            let (lookup, stats, items, had_expired) = store.lookup(
                 &base_key,
                 &request_headers,
                 &request_cookies,
@@ -457,7 +469,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else if let crate::store::LookupHit::StaleWhileRevalidate = hit_kind {
                     if config.enable_stale_while_revalidate {
-                        let (is_leader, _notify) = self.store.begin_fetch(&base_key);
+                        let (is_leader, _notify) = store.begin_fetch(&base_key);
 
                         LookupResult::StaleWhileRevalidate {
                             entry: Box::new(entry),
@@ -497,14 +509,14 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 if had_expired {
                     // Thundering herd protection: coalesce concurrent requests
-                    let (is_leader, notify) = self.store.begin_fetch(&base_key);
+                    let (is_leader, notify) = store.begin_fetch(&base_key);
 
                     if !is_leader {
                         // Another request is already fetching this key.
                         // Wait for it to complete, then re-check the cache.
                         notify.notified().await;
 
-                        let (retry_lookup, retry_stats, retry_items, _) = self.store.lookup(
+                        let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
                             &base_key,
                             &request_headers,
                             &request_cookies,
@@ -564,7 +576,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         } = lookup_result
         {
             inflight_key.as_ref().map(|key| InflightGuard {
-                store: self.store.clone(),
+                store: store.clone(),
                 cache_key: key.clone(),
             })
         } else {
@@ -598,6 +610,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             has_authorization,
             head_only,
             lookup_result,
+            store: store.clone(),
             _inflight_guard: inflight_guard,
         });
 
@@ -698,7 +711,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                 // (e.g., new Date, Cache-Control) but keep the stored body intact.
                 let mut fresh_headers = response.headers().clone();
                 strip_internal_headers(&mut fresh_headers);
-                self.store
+                state
+                    .store
                     .update_entry_headers_by_key(cache_key, fresh_headers.clone());
 
                 // Reconstruct a 200 OK response using fresh headers + cached body
@@ -744,7 +758,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     ctx,
                     "revalidated",
                     Some(cached_entry.scope),
-                    self.store.len(),
+                    state.store.len(),
                 );
 
                 ctx.res = Some(HttpResponse::Custom(response_200));
@@ -755,7 +769,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         // Handle stale-if-error — serve stale response on upstream 5xx
         if response.status().is_server_error() && state.config.enable_stale_if_error {
             if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
-                self.store.lookup(
+                state.store.lookup(
                     &state.base_key,
                     &state.request_headers,
                     &state.request_cookies,
@@ -813,7 +827,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             ctx,
                             "hit",
                             Some(stale_entry.scope),
-                            self.store.len(),
+                            state.store.len(),
                         );
 
                         ctx.res = Some(HttpResponse::Custom(stale_response));
@@ -838,7 +852,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             }));
         }
         if !purge_ops.is_empty() {
-            let (stats, items) = self.store.purge(&purge_ops, state.private_key.as_deref());
+            let (stats, items) = state.store.purge(&purge_ops, state.private_key.as_deref());
             for operation in &purge_ops {
                 purge_scope = Some(operation.scope);
                 self.emit_purge_metric(ctx, operation.scope, stats.purged, items);
@@ -1026,7 +1040,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         stale_if_error: decision.stale_if_error,
                         must_revalidate: decision.must_revalidate,
                     };
-                    let (stats, items) = self.store.insert_with_request(
+                    let (stats, items) = state.store.insert_with_request(
                         stored_entry,
                         state.private_key.as_deref(),
                         &state.request_headers,
@@ -1105,7 +1119,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    self.emit_request_metric(ctx, "miss", None, self.store.len());
+                    self.emit_request_metric(ctx, "miss", None, state.store.len());
                     ctx.res = Some(HttpResponse::Custom(response));
                 }
             }
@@ -1135,7 +1149,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 ctx,
                 result,
                 purge_scope.or(decision.scope),
-                self.store.len(),
+                state.store.len(),
             );
             let (parts, body) = response.into_parts();
             ctx.res = Some(if let Some(body) = body {
