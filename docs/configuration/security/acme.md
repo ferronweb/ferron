@@ -93,6 +93,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `on_demand_ask` | `<string>` | — | Approval endpoint URL |
 | `on_demand_ask_auth` | `<string>` | — | Authorization header for approval endpoint (optional) |
 | `on_demand_ask_no_verification` | `<bool>` | `false` | Skip TLS verification for approval endpoint |
+| `fallback` | `{ ... }` | — | Fallback provider block (repeatable) |
 
 **Configuration example:**
 
@@ -205,6 +206,61 @@ tls {
 ```
 
 The HMAC secret must be base64url-encoded (without padding).
+
+## Fallback providers
+
+When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (e.g., the CA is down or unreachable), Ferron automatically tries the next configured fallback provider.
+
+```ferron
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact "admin@example.com"
+        directory "https://acme-v02.api.letsencrypt.org/directory"
+
+        fallback {
+            directory "https://acme-staging-v02.api.letsencrypt.org/directory"
+            contact "admin@example.com"
+        }
+
+        fallback {
+            directory "https://other-ca.example.com/directory"
+            eab "my-key-id" "SMq9KpHkR7z..."
+            profile "my-profile"
+        }
+    }
+}
+```
+
+Each `fallback` block accepts the same provider-level directives as the primary configuration: `directory`, `contact`, `eab`, and `profile`. The primary provider's settings are inherited — you only need to specify the fields that differ.
+
+### How fallback works
+
+- Providers are tried **sequentially**: the primary is attempted first, followed by each `fallback` block in order.
+- A fallback is triggered when account creation with the previous provider fails.
+- Once a provider succeeds, subsequent operations (order creation, challenge solving, certificate installation) use that same provider.
+- Account cache keys are scoped per-provider, so each provider maintains its own cached credentials.
+
+### Example: primary with staging fallback
+
+A common pattern is to configure production as the primary and staging as a fallback for testing or when production is unavailable:
+
+```ferron
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact "admin@example.com"
+        directory "https://acme-v02.api.letsencrypt.org/directory"
+
+        fallback {
+            directory "https://acme-staging-v02.api.letsencrypt.org/directory"
+            contact "admin@example.com"
+        }
+    }
+}
+```
 
 ## Saving certificates to disk
 

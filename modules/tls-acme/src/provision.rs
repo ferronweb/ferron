@@ -17,7 +17,8 @@ use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::rt::TokioExecutor;
 use instant_acme::{
     Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse,
-    CertificateIdentifier, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
+    CertificateIdentifier, ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder,
+    OrderStatus, RetryPolicy,
 };
 use rustls::sign::CertifiedKey;
 use rustls::ClientConfig;
@@ -28,7 +29,7 @@ use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
 use crate::challenge::tlsalpn01::TlsAlpn01Resolver;
-use crate::config::AcmeConfig;
+use crate::config::{build_rustls_client_config, AcmeConfig};
 use crate::emit_log;
 use crate::errors::acme_error_to_string;
 
@@ -284,59 +285,126 @@ pub async fn provision_certificate(
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let domains = config.domains.join(", ");
-    let account_cache_key = get_account_cache_key(&config.contact, &config.directory);
-    let certificate_cache_key =
-        get_certificate_cache_key(&config.domains, config.profile.as_deref());
 
-    // Step 1: Check if current cert is still valid or cached
+    // Get the provider list and extract all providers (primary + fallbacks)
+    let provider_list = config.provider_list.read().await;
+    let mut providers = vec![provider_list.primary.clone()];
+    providers.extend(provider_list.fallbacks.iter().cloned());
+    drop(provider_list);
+
+    // Step 0: Check if current cert is still valid or cached
+    // (This check is provider-agnostic)
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
         return Ok(false);
     }
 
-    // Step 2: Load or create ACME account
-    let acme_account = if let Some(account) = config.account.take() {
-        account
-    } else {
-        let account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
-            config.rustls_client_config.clone(),
-        )));
+    // Step 1: Iterate over providers, trying each until success or all exhausted
+    let mut acme_account: Option<Account> = None;
+    let mut selected_directory: Option<String> = None;
+    let mut selected_contact: Option<Vec<String>> = None;
+    let mut selected_eab_key: Option<Option<Arc<ExternalAccountKey>>> = None;
+    let mut selected_profile: Option<Option<String>> = None;
+    let mut selected_account_cache_key: Option<String> = None;
+    let mut selected_certificate_cache_key: Option<String> = None;
 
-        let account_result = if let Some(credentials_bytes) =
-            config.account_cache.get(&account_cache_key).await
-        {
-            if let Ok(credentials) =
-                serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
-            {
-                emit_log(
-                    event_sink,
-                    ferron_observability::LogLevel::Debug,
-                    "ACME account loaded from cache",
-                    &format!("ACME account loaded from cache for {domains}"),
-                    "ferron-tls-acme",
-                    vec![(
-                        "ferron.acme.domains",
-                        ferron_observability::LogAttributeValue::String(domains.clone()),
-                    )],
-                );
-                account_builder
-                    .from_credentials(credentials)
+    for (idx, provider) in providers.iter().enumerate() {
+        let provider_name = if idx == 0 { "primary" } else { "fallback" };
+
+        // Extract provider fields
+        let directory = provider.directory.clone();
+        let contact = provider.contact.clone();
+        let eab_key = provider.eab_key.clone();
+        let profile = provider.profile.clone();
+
+        // Build the TLS client config
+        let client_config = config.rustls_client_config.clone();
+
+        let account_cache_key = get_account_cache_key(&contact, &directory);
+        let certificate_cache_key = get_certificate_cache_key(&config.domains, profile.as_deref());
+
+        // Check cache for account credentials
+        let account_builder =
+            Account::builder_with_http(Box::new(HttpsClientForAcme::new(client_config)));
+
+        let account_result =
+            if let Some(credentials_bytes) = config.account_cache.get(&account_cache_key).await {
+                if let Ok(credentials) =
+                    serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
+                {
+                    emit_log(
+                        event_sink,
+                        ferron_observability::LogLevel::Debug,
+                        "ACME account loaded from cache",
+                        &format!(
+                            "ACME account loaded from cache for {domains} (provider: {})",
+                            provider_name
+                        ),
+                        "ferron-tls-acme",
+                        vec![
+                            (
+                                "ferron.acme.domains",
+                                ferron_observability::LogAttributeValue::String(domains.clone()),
+                            ),
+                            (
+                                "ferron.acme.provider",
+                                ferron_observability::LogAttributeValue::String(
+                                    provider_name.to_string(),
+                                ),
+                            ),
+                        ],
+                    );
+                    account_builder
+                        .from_credentials(credentials)
+                        .await
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                } else {
+                    create_new_account(
+                        config,
+                        &directory,
+                        &contact,
+                        eab_key.as_ref(),
+                        profile.as_deref(),
+                        account_builder,
+                        &account_cache_key,
+                        event_sink,
+                    )
                     .await
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                }
             } else {
-                create_new_account(config, account_builder, &account_cache_key, event_sink).await
-            }
-        } else {
-            create_new_account(config, account_builder, &account_cache_key, event_sink).await
-        };
+                create_new_account(
+                    config,
+                    &directory,
+                    &contact,
+                    eab_key.as_ref(),
+                    profile.as_deref(),
+                    account_builder,
+                    &account_cache_key,
+                    event_sink,
+                )
+                .await
+            };
 
         match account_result {
-            Ok(account) => account,
+            Ok(account) => {
+                acme_account = Some(account);
+                selected_contact = Some(contact);
+                selected_eab_key = Some(eab_key);
+                selected_profile = Some(profile);
+                selected_directory = Some(directory);
+                selected_account_cache_key = Some(account_cache_key);
+                selected_certificate_cache_key = Some(certificate_cache_key);
+                break;
+            }
             Err(e) => {
                 emit_log(
                     event_sink,
-                    ferron_observability::LogLevel::Error,
-                    "ACME account load/create failed",
-                    &format!("Failed to load or create ACME account: {}", e),
+                    ferron_observability::LogLevel::Warn,
+                    "ACME account creation failed",
+                    &format!(
+                        "Failed to create account on {} provider: {}",
+                        provider_name,
+                        e.to_string()
+                    ),
                     "ferron-tls-acme",
                     vec![
                         (
@@ -344,17 +412,45 @@ pub async fn provision_certificate(
                             ferron_observability::LogAttributeValue::String(domains.clone()),
                         ),
                         (
+                            "ferron.acme.provider",
+                            ferron_observability::LogAttributeValue::String(
+                                provider_name.to_string(),
+                            ),
+                        ),
+                        (
                             "error.message",
                             ferron_observability::LogAttributeValue::String(e.to_string()),
                         ),
                     ],
                 );
-                return Err(e);
+
+                // Try the next provider
+                if idx == providers.len() - 1 {
+                    return Err(e);
+                }
             }
         }
-    };
+    }
+
+    // At this point, we have a valid account (or failed all providers)
+    let acme_account = acme_account.ok_or_else(|| {
+        anyhow::anyhow!("No valid ACME account obtained after trying all providers")
+    })?;
+
+    let directory = selected_directory.unwrap();
+    let account_cache_key = selected_account_cache_key.unwrap();
+    let certificate_cache_key = selected_certificate_cache_key.unwrap();
 
     config.account.replace(acme_account.clone());
+    if let Some(contact) = selected_contact {
+        config.contact = contact;
+    }
+    if let Some(eab_key) = selected_eab_key {
+        config.eab_key = eab_key;
+    }
+    if let Some(profile) = selected_profile {
+        config.profile = profile;
+    }
 
     // Step 3: Create a new ACME order
     let acme_identifiers: Vec<Identifier> = config
@@ -397,7 +493,7 @@ pub async fn provision_certificate(
                 "ACME account recreated",
                 &format!(
                     "ACME account not found on server for {directory}, recreating",
-                    directory = config.directory
+                    directory = directory
                 ),
                 "ferron-tls-acme",
                 vec![
@@ -407,16 +503,25 @@ pub async fn provision_certificate(
                     ),
                     (
                         "ferron.acme.directory",
-                        ferron_observability::LogAttributeValue::String(config.directory.clone()),
+                        ferron_observability::LogAttributeValue::String(directory.to_string()),
                     ),
                 ],
             );
             config.account_cache.remove(&account_cache_key).await;
-            let account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
-                config.rustls_client_config.clone(),
-            )));
-            let new_account =
-                create_new_account(config, account_builder, &account_cache_key, event_sink).await?;
+            let client_config = build_rustls_client_config(false)?;
+            let account_builder =
+                Account::builder_with_http(Box::new(HttpsClientForAcme::new(client_config)));
+            let new_account = create_new_account(
+                config,
+                &directory,
+                &config.contact,
+                config.eab_key.as_ref(),
+                config.profile.as_deref(),
+                account_builder,
+                &account_cache_key,
+                event_sink,
+            )
+            .await?;
             new_account.new_order(&new_order).await?
         }
         Err(e) => {
@@ -896,11 +1001,15 @@ async fn cleanup_challenge_data(
 /// Creates a new ACME account and caches it.
 async fn create_new_account(
     config: &AcmeConfig,
+    directory: &str,
+    contact: &[String],
+    eab_key: Option<&Arc<ExternalAccountKey>>,
+    profile: Option<&str>,
     builder: instant_acme::AccountBuilder,
     account_cache_key: &str,
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
 ) -> Result<Account, Box<dyn std::error::Error + Send + Sync>> {
-    let contact_refs: Vec<&str> = config.contact.iter().map(|s| s.as_str()).collect();
+    let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
     let (account, credentials) = builder
         .create(
             &NewAccount {
@@ -908,8 +1017,8 @@ async fn create_new_account(
                 terms_of_service_agreed: true,
                 only_return_existing: false,
             },
-            config.directory.clone(),
-            config.eab_key.as_deref(),
+            directory.to_string(),
+            eab_key.map(|e| e.as_ref()),
         )
         .await?;
 
@@ -931,8 +1040,7 @@ async fn create_new_account(
         );
     }
 
-    let contact = config
-        .contact
+    let contact = contact
         .first()
         .map(|s| s.as_str())
         .unwrap_or("none")
@@ -943,17 +1051,23 @@ async fn create_new_account(
         "ACME account created",
         &format!(
             "ACME account created for directory {}, contact: {}",
-            config.directory, contact,
+            directory, contact,
         ),
         "ferron-tls-acme",
         vec![
             (
                 "ferron.acme.directory",
-                ferron_observability::LogAttributeValue::String(config.directory.clone()),
+                ferron_observability::LogAttributeValue::String(directory.to_string()),
             ),
             (
                 "ferron.acme.contact",
                 ferron_observability::LogAttributeValue::String(contact),
+            ),
+            (
+                "ferron.acme.profile",
+                ferron_observability::LogAttributeValue::String(
+                    profile.map_or("".to_string(), |p| p.to_string()),
+                ),
             ),
         ],
     );

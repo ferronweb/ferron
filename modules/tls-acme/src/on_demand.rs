@@ -118,6 +118,7 @@ pub async fn convert_on_demand_config(
         directory: data.directory.clone(),
         eab_key: data.eab_key.clone(),
         profile: data.profile.clone(),
+        provider_list: data.provider_list.clone(),
         account_cache: if let Some(ref account_cache_path) = account_cache_path {
             AcmeCache::File(account_cache_path.clone())
         } else {

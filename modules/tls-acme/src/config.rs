@@ -3,6 +3,9 @@
 //! Two modes are supported:
 //! - **Eager** (`AcmeConfig`): Certificates are obtained at startup for known domains.
 //! - **On-demand** (`AcmeOnDemandConfig`): Certificates are obtained lazily on first TLS handshake.
+//!
+//! A `fallback` block may be specified to provide alternative ACME directories
+//! for retrying when the primary provider fails.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +24,71 @@ use crate::challenge::{Http01DataLock, TlsAlpn01DataLock};
 pub type SniResolverLock =
     Arc<RwLock<std::collections::HashMap<String, Arc<dyn rustls::server::ResolvesServerCert>>>>;
 
+/// A single ACME provider configuration (directory + optional parameters).
+#[derive(Clone)]
+pub struct AcmeProviderConfig {
+    /// ACME directory URL.
+    pub directory: String,
+    /// Contact information for the ACME account.
+    pub contact: Vec<String>,
+    /// Optional EAB key.
+    pub eab_key: Option<Arc<ExternalAccountKey>>,
+    /// Optional ACME profile name.
+    pub profile: Option<String>,
+}
+
+impl AcmeProviderConfig {
+    /// Builds a provider config from a configuration block.
+    pub fn from_block(
+        block: &ServerConfigurationBlock,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let directory = resolve_directory(block);
+        let contact = first_value(block, "contact")
+            .map(|c| vec![format!("mailto:{c}")])
+            .unwrap_or_default();
+        let eab_key = parse_eab(block);
+        let profile = first_value(block, "profile");
+
+        Ok(Self {
+            directory,
+            contact,
+            eab_key,
+            profile,
+        })
+    }
+}
+
+/// List of ACME providers with fallback support.
+#[derive(Clone)]
+pub struct AcmeProviderList {
+    /// The primary provider.
+    pub primary: AcmeProviderConfig,
+    /// Fallback providers.
+    pub fallbacks: Vec<AcmeProviderConfig>,
+}
+
+impl AcmeProviderList {
+    /// Builds a provider list from a configuration block.
+    ///
+    /// The primary provider is extracted from the enclosing `tls { }` block,
+    /// and fallbacks are extracted from `fallback { ... }` blocks.
+    pub fn from_block(
+        config: &ServerConfigurationBlock,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let primary = AcmeProviderConfig::from_block(config)?;
+        let fallbacks = config
+            .directives
+            .get("fallback")
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.children.as_ref())
+            .flat_map(|fallback_block| AcmeProviderConfig::from_block(fallback_block).ok())
+            .collect();
+
+        Ok(Self { primary, fallbacks })
+    }
+}
+
 /// Eager ACME configuration for obtaining certificates at startup.
 pub struct AcmeConfig {
     /// The Rustls client configuration for ACME communication.
@@ -31,12 +99,14 @@ pub struct AcmeConfig {
     pub challenge_type: ChallengeType,
     /// Contact information for the ACME account.
     pub contact: Vec<String>,
-    /// ACME directory URL.
+    /// ACME directory URL (set from the selected provider during provisioning).
     pub directory: String,
-    /// Optional EAB key.
+    /// Optional EAB key (set from the selected provider during provisioning).
     pub eab_key: Option<Arc<ExternalAccountKey>>,
-    /// Optional ACME profile name.
+    /// Optional ACME profile name (set from the selected provider during provisioning).
     pub profile: Option<String>,
+    /// The list of ACME providers (primary + fallbacks).
+    pub provider_list: Arc<RwLock<AcmeProviderList>>,
     /// Cache for ACME account data.
     pub account_cache: AcmeCache,
     /// Cache for ACME certificate data.
@@ -67,12 +137,8 @@ pub struct AcmeOnDemandConfig {
     pub challenge_type: ChallengeType,
     /// Contact information for the ACME account.
     pub contact: Vec<String>,
-    /// ACME directory URL.
-    pub directory: String,
-    /// Optional EAB key.
-    pub eab_key: Option<Arc<ExternalAccountKey>>,
-    /// Optional ACME profile name.
-    pub profile: Option<String>,
+    /// The list of ACME providers (primary + fallbacks).
+    pub provider_list: Arc<RwLock<AcmeProviderList>>,
     /// Path to the cache directory for on-domain caching.
     pub cache_path: Option<PathBuf>,
     /// Lock for SNI resolvers (shared across on-demand configs).
@@ -95,6 +161,8 @@ pub struct AcmeOnDemandConfig {
     pub on_demand_ask_no_verification: bool,
     /// Error message lock
     pub error_message: Arc<parking_lot::RwLock<Option<String>>>,
+    /// The profile for this provider.
+    pub profile: Option<String>,
 }
 
 /// A cloneable subset of on-demand config data used by the background task.
@@ -109,18 +177,20 @@ pub struct AcmeOnDemandConfigData {
     pub challenge_type: ChallengeType,
     /// Contact information for the ACME account.
     pub contact: Vec<String>,
-    /// ACME directory URL.
-    pub directory: String,
-    /// Optional EAB key.
-    pub eab_key: Option<Arc<ExternalAccountKey>>,
-    /// Optional ACME profile name.
-    pub profile: Option<String>,
+    /// The list of ACME providers (primary + fallbacks).
+    pub provider_list: Arc<RwLock<AcmeProviderList>>,
     /// Path to the cache directory for on-domain caching.
     pub cache_path: Option<PathBuf>,
     /// DNS provider for DNS-01 challenges.
     pub dns_client: Option<Arc<dyn DnsClient>>,
     /// The SNI hostname pattern to match.
     pub sni_hostname: Option<String>,
+    /// The profile for this provider.
+    pub profile: Option<String>,
+    /// ACME directory URL (from the primary provider's data).
+    pub directory: String,
+    /// Optional EAB key (from the primary provider's data).
+    pub eab_key: Option<Arc<ExternalAccountKey>>,
     /// The port this config applies to.
     pub port: u16,
     /// Optional endpoint to ask before issuing a certificate.
@@ -136,13 +206,13 @@ pub struct AcmeOnDemandConfigData {
 impl AcmeOnDemandConfig {
     /// Extracts the cloneable data portion for use by the background task.
     pub fn clone_for_state(&self) -> AcmeOnDemandConfigData {
+        let provider_list = self.provider_list.blocking_read();
+        let primary = &provider_list.primary;
         AcmeOnDemandConfigData {
             rustls_client_config: self.rustls_client_config.clone(),
             challenge_type: self.challenge_type.clone(),
             contact: self.contact.clone(),
-            directory: self.directory.clone(),
-            eab_key: self.eab_key.clone(),
-            profile: self.profile.clone(),
+            provider_list: self.provider_list.clone(),
             cache_path: self.cache_path.clone(),
             dns_client: self.dns_client.clone(),
             sni_hostname: self.sni_hostname.clone(),
@@ -151,6 +221,9 @@ impl AcmeOnDemandConfig {
             on_demand_ask_auth: self.on_demand_ask_auth.clone(),
             on_demand_ask_no_verification: self.on_demand_ask_no_verification,
             error_message: self.error_message.clone(),
+            profile: primary.profile.clone(),
+            directory: primary.directory.clone(),
+            eab_key: primary.eab_key.clone(),
         }
     }
 
@@ -165,9 +238,7 @@ impl AcmeOnDemandConfig {
             rustls_client_config: data.rustls_client_config,
             challenge_type: data.challenge_type,
             contact: data.contact,
-            directory: data.directory,
-            eab_key: data.eab_key,
-            profile: data.profile,
+            provider_list: data.provider_list,
             cache_path: data.cache_path,
             sni_resolver_lock,
             tls_alpn_01_resolver_lock,
@@ -179,6 +250,7 @@ impl AcmeOnDemandConfig {
             on_demand_ask_auth: data.on_demand_ask_auth,
             on_demand_ask_no_verification: data.on_demand_ask_no_verification,
             error_message: data.error_message,
+            profile: data.profile,
         }
     }
 }
@@ -192,12 +264,22 @@ fn first_value(config: &ServerConfigurationBlock, name: &str) -> Option<String> 
 
 /// Resolves the ACME directory URL from config.
 ///
+/// Supports both single-value and multi-value syntax:
+/// - `directory "https://..."`
+/// - `directory "https://..." "https://..."`
+///
 /// Defaults to Let's Encrypt Production.
 pub fn resolve_directory(config: &ServerConfigurationBlock) -> String {
-    first_value(config, "directory").unwrap_or_else(|| {
-        // Let's Encrypt Production
-        "https://acme-v02.api.letsencrypt.org/directory".to_string()
-    })
+    config
+        .directives
+        .get("directory")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.args.first())
+        .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
+        .unwrap_or_else(|| {
+            // Let's Encrypt Production
+            "https://acme-v02.api.letsencrypt.org/directory".to_string()
+        })
 }
 
 /// Parses the EAB key from configuration.
@@ -403,9 +485,9 @@ pub fn parse_acme_config(
         .map(|c| vec![format!("mailto:{c}")])
         .unwrap_or_default();
 
-    let directory = resolve_directory(config);
-    let eab_key = parse_eab(config);
-    let profile = first_value(config, "profile");
+    // Parse the provider list with fallback support
+    let provider_list = AcmeProviderList::from_block(config)?;
+
     let on_demand = config.get_flag("on_demand");
     let no_verification = config.get_flag("no_verification");
 
@@ -446,9 +528,7 @@ pub fn parse_acme_config(
             rustls_client_config: client_config,
             challenge_type,
             contact,
-            directory,
-            eab_key,
-            profile,
+            provider_list: Arc::new(RwLock::new(provider_list)),
             cache_path,
             sni_resolver_lock,
             tls_alpn_01_resolver_lock: tls_alpn_01_resolvers,
@@ -460,6 +540,7 @@ pub fn parse_acme_config(
             on_demand_ask_auth,
             on_demand_ask_no_verification,
             error_message: Arc::new(parking_lot::RwLock::new(None)),
+            profile: None,
         }))
     } else {
         let certified_key_lock = Arc::new(RwLock::new(None));
@@ -500,9 +581,10 @@ pub fn parse_acme_config(
             domains: vec![domain.to_string()],
             challenge_type,
             contact,
-            directory,
-            eab_key,
-            profile,
+            directory: provider_list.primary.directory.clone(),
+            eab_key: provider_list.primary.eab_key.clone(),
+            profile: provider_list.primary.profile.clone(),
+            provider_list: Arc::new(RwLock::new(provider_list)),
             account_cache,
             certificate_cache,
             certified_key_lock,

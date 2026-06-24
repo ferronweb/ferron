@@ -48,6 +48,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 #### Automatic TLS
 
 - **HTTP auth for on-demand ask endpoint** - when `on_demand_ask_auth` is configured, HTTP Basic Auth credentials are used for the on-demand ask endpoint, allowing for secure access to the endpoint.
+- **Fallback ACME providers** — the `fallback` directive allows configuring multiple ACME providers with sequential failover. When the primary provider fails (e.g., CA outage), Ferron automatically tries the next configured fallback. Each provider maintains its own cached credentials. (`tls-acme`)
 
 #### HTTP TLS provider
 

@@ -39,6 +39,32 @@ impl ConfigurationValidator for TlsAcmeConfigurationValidator {
             validate_scoped_block(dns, validator_ctx, "provider", "dns", None)?;
         });
 
+        // Fallback ACME providers
+        validate_directive!(config, validator_ctx.used_directives, fallback, no_args, {
+            let mut local_ctx = ConfigurationValidatorContext {
+                used_directives: std::collections::HashSet::new(),
+                is_global: false,
+                scoped_validators: validator_ctx.scoped_validators.clone(),
+                diagnostics: Vec::new(),
+                scope: validator_ctx.scope.clone(),
+            };
+            validate_directive!(fallback, local_ctx.used_directives, directory, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+            validate_directive!(fallback, local_ctx.used_directives, contact, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+            validate_directive!(fallback, local_ctx.used_directives, profile, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+            validate_directive!(fallback, local_ctx.used_directives, eab, optional args(2) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _), ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+            for unused in fallback
+                .directives
+                .keys()
+                .filter(|d| !local_ctx.used_directives.contains(*d))
+            {
+                validator_ctx.diagnostics.push(local_ctx.create_diagnostic(
+                    ferron_core::config::validator::ConfigurationValidatorDiagnosticKind::UnknownDirective,
+                    format!("`{unused}` is not a valid `fallback` provider directive"),
+                    fallback.span.clone(),
+                ));
+            }
+        });
+
         add_acme_best_practice_diagnostics(config, validator_ctx);
 
         Ok(())
