@@ -216,3 +216,52 @@ example.com {
 ```
 
 Cached responses bypass the rate limiter and backend entirely, providing maximum protection.
+
+## Multi-instance cache purge propagation
+
+When running multiple Ferron instances behind a load balancer, a cache purge on one instance does not automatically invalidate entries on other instances. The `purge_propagation` directive solves this by sending purge events to an external control-plane service, which broadcasts them to all other registered edge instances.
+
+**Edge instance configuration:**
+
+```ferron
+example.com {
+    proxy http://backend:3000
+    cache {
+        purge_method
+        purge_allowed_ips "10.0.0.0/8"
+        purge_propagation {
+            control_plane_url "http://control-plane:9090/cache/purge"
+            shared_secret "edge-to-plane-secret"
+            node_id "edge-1"
+        }
+    }
+}
+```
+
+**How it works:**
+
+1. A `PURGE` request or an `X-LiteSpeed-Purge` header triggers a local cache purge on edge-1.
+2. Edge-1 sends a `POST` to the control-plane with the purged path and `origin: "edge-1"`.
+3. The control-plane sends `PURGE` requests to edge-2 and edge-3 (skipping edge-1).
+4. Each edge purges its local cache and returns `200 OK`.
+
+**Loop prevention:**
+
+- Edges receiving `PURGE` requests with `X-Purge-Source: propagation` execute the purge locally but do not re-propagate.
+- The control-plane excludes the origin node from its broadcast list.
+
+**Control-plane webhook protocol:**
+
+```http
+POST /cache/purge HTTP/1.1
+Host: control-plane:9090
+Content-Type: application/json
+X-Purge-Secret: edge-to-plane-secret
+
+{
+  "path": "/blog/post-123",
+  "origin": "edge-1"
+}
+```
+
+The control-plane must accept this POST, authenticate via `X-Purge-Secret`, and fan out `PURGE` requests to all registered edges except the origin. Ferron does not include a built-in control-plane — operators can implement one using any HTTP framework.

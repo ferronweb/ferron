@@ -37,6 +37,8 @@ static AUTH_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static LSCACHE_BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static MOCK_CONTROL_PLANE_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub async fn create_ferron_container(
     webroot_dir: &Path,
@@ -282,6 +284,27 @@ pub async fn build_lscache_backend_image() -> Result<GenericImage, Testcontainer
             .await?;
     lscache_backend_image.replace(lscache_backend_image_built.clone());
     Ok(lscache_backend_image_built)
+}
+
+pub async fn build_mock_control_plane_image() -> Result<GenericImage, TestcontainersError> {
+    let mut control_plane_image = MOCK_CONTROL_PLANE_IMAGE.lock().await;
+    if let Some(image) = control_plane_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let control_plane_image_built =
+        GenericBuildableImage::new("e2e-test-mock-control-plane", "latest")
+            .with_dockerfile(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/images/mock-control-plane/Dockerfile"
+            ))
+            .with_file(
+                concat!(env!("CARGO_MANIFEST_DIR"), "/images/mock-control-plane"),
+                ".",
+            )
+            .build_image()
+            .await?;
+    control_plane_image.replace(control_plane_image_built.clone());
+    Ok(control_plane_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {

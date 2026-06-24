@@ -8,6 +8,20 @@ pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;
 pub const DEFAULT_MAX_CACHE_AGE_SECS: u64 = 300;
 
+/// Configuration for multi-instance cache purge propagation via an external
+/// control-plane service.
+#[derive(Clone, Default)]
+pub struct PurgePropagationConfig {
+    /// URL of the external control-plane endpoint to POST purge events to.
+    pub control_plane_url: Option<String>,
+    /// Shared secret included as `X-Purge-Secret` header when pushing purge
+    /// events to the control-plane.
+    pub shared_secret: Option<String>,
+    /// Identifier for this edge instance, sent as `X-Purge-Origin` in outbound
+    /// webhook requests. Defaults to the machine hostname if not set.
+    pub node_id: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct CacheConfig {
     pub enabled: bool,
@@ -21,6 +35,7 @@ pub struct CacheConfig {
     pub ignored_store_headers: Vec<HeaderName>,
     pub purge_method: bool,
     pub purge_allowed_ips: Vec<IpCidr>,
+    pub purge_propagation: PurgePropagationConfig,
 }
 
 impl Default for CacheConfig {
@@ -38,6 +53,7 @@ impl Default for CacheConfig {
             ignored_store_headers: Vec::new(),
             purge_method: false,
             purge_allowed_ips: Vec::new(),
+            purge_propagation: PurgePropagationConfig::default(),
         }
     }
 }
@@ -63,6 +79,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     let ignored_store_headers = collect_header_names(configuration, "ignore");
     let purge_method = get_nested_bool(configuration, "purge_method", false);
     let purge_allowed_ips = collect_purge_allowed_ips(configuration);
+    let purge_propagation = parse_purge_propagation(configuration);
 
     CacheConfig {
         enabled,
@@ -76,6 +93,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         ignored_store_headers,
         purge_method,
         purge_allowed_ips,
+        purge_propagation,
     }
 }
 
@@ -182,4 +200,48 @@ fn cache_blocks(configuration: &LayeredConfiguration) -> Vec<&ServerConfiguratio
         .into_iter()
         .filter_map(|entry| entry.children.as_ref())
         .collect()
+}
+
+fn parse_purge_propagation(configuration: &LayeredConfiguration) -> PurgePropagationConfig {
+    let propagation_block = cache_blocks(configuration).into_iter().find_map(|block| {
+        block
+            .directives
+            .get("purge_propagation")
+            .and_then(|entries| entries.first())
+            .and_then(|entry| entry.children.as_ref())
+    });
+
+    let Some(block) = propagation_block else {
+        return PurgePropagationConfig::default();
+    };
+
+    let control_plane_url = block
+        .directives
+        .get("control_plane_url")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.args.first())
+        .and_then(|value| value.as_str())
+        .map(|s| s.to_string());
+
+    let shared_secret = block
+        .directives
+        .get("shared_secret")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.args.first())
+        .and_then(|value| value.as_str())
+        .map(|s| s.to_string());
+
+    let node_id = block
+        .directives
+        .get("node_id")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.args.first())
+        .and_then(|value| value.as_str())
+        .map(|s| s.to_string());
+
+    PurgePropagationConfig {
+        control_plane_url,
+        shared_secret,
+        node_id,
+    }
 }

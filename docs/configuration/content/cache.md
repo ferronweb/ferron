@@ -74,6 +74,7 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `ignore_request_cache_control` | `[<bool>]` | When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy. | `false` |
 | `enable_stale_while_revalidate` | `[<bool>]` | When enabled, cached responses with a `stale-while-revalidate` directive are revalidated synchronously after their `max-age` expires instead of being returned immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
 | `enable_stale_if_error` | `[<bool>]` | When enabled, cached responses with a `stale-if-error` directive are served from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
+| `purge_propagation` | block | Configures multi-instance cache purge propagation via an external control-plane service. See [Cache purge propagation](#cache-purge-propagation) below. | (disabled) |
 
 **Configuration example:**
 
@@ -99,6 +100,38 @@ example.com {
 | `cache` | Enables caching for the current HTTP host or `location` scope. | `false` |
 | `cache true` | Explicitly enables caching for the current scope. | `false` |
 | `cache false` | Disables caching for the current scope, which is useful for overriding an inherited `cache { ... }` block. | `false` |
+
+### `purge_propagation` block
+
+Use the `purge_propagation { ... }` block inside a host `cache { ... }` block to propagate cache purges to other instances via an external control-plane service. When enabled, Ferron sends a webhook POST to the control-plane whenever a local purge occurs (via `PURGE` method or `X-LiteSpeed-Purge` header). The control-plane then broadcasts `PURGE` requests to all other registered edge instances.
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `control_plane_url` | `<string>` | URL of the external control-plane endpoint to POST purge events to. | (none) |
+| `shared_secret` | `<string>` | Shared secret included as the `X-Purge-Secret` header when pushing purge events to the control-plane. | (none) |
+| `node_id` | `<string>` | Identifier for this edge instance, included in outbound webhook payloads so the control-plane can avoid broadcasting back to the origin. | `"unknown"` |
+
+**Configuration example:**
+
+```ferron
+example.com {
+    cache {
+        purge_method
+        purge_allowed_ips "10.0.0.0/8"
+        purge_propagation {
+            control_plane_url "http://control-plane:9090/cache/purge"
+            shared_secret "my-secret"
+            node_id "edge-1"
+        }
+    }
+}
+```
+
+> [!tip]
+> Use HTTPS for `control_plane_url` in production environments to protect the shared secret and purge payloads in transit.
+
+> [!important]
+> The external control-plane is responsible for broadcasting incoming purge webhooks to all other registered edge instances. Ferron only handles the outbound webhook and the inbound `PURGE` method for receiving broadcast purges. See [Cache purge propagation](#cache-purge-propagation) below for details on the webhook protocol and loop prevention.
 
 ## Behavior
 
@@ -227,6 +260,55 @@ When the cache module is enabled, Ferron understands the following response head
 > [!note]
 > `X-LiteSpeed-Vary: value=...` is not supported yet because Ferron does not currently have a request-time equivalent of LiteSpeed's rewrite-rule vary environment values. The `ignore` directive affects only the stored representation — the live response sent to the client still includes those headers unless another module removes them.
 
+### Cache purge propagation
+
+When `purge_propagation` is configured, Ferron participates in multi-instance cache invalidation through an external control-plane service. The propagation flow works as follows:
+
+1. **Local purge occurs** — either via a `PURGE` HTTP method request or an `X-LiteSpeed-Purge` response header from the upstream.
+2. **Webhook sent** — Ferron sends an HTTP `POST` to the configured `control_plane_url` with a JSON body containing the purged path and the originating node ID.
+3. **Control-plane broadcasts** — the external control-plane sends `PURGE` requests to all other registered edge instances, excluding the origin.
+4. **Edges receive purges** — other edges receive `PURGE` requests with an `X-Purge-Source: propagation` header and execute the purge locally without re-propagating.
+
+**Webhook protocol (edge to control-plane):**
+
+```http
+POST /cache/purge HTTP/1.1
+Host: control-plane:9090
+Content-Type: application/json
+X-Purge-Secret: <shared_secret>
+
+{
+  "path": "/blog/post-123",
+  "origin": "edge-1"
+}
+```
+
+**Broadcast protocol (control-plane to edge):**
+
+```http
+PURGE /blog/post-123 HTTP/1.1
+Host: edge-2:80
+X-Purge-Source: propagation
+```
+
+**Loop prevention:**
+
+Ferron uses two mechanisms to prevent infinite purge loops:
+
+- **`X-Purge-Source: propagation` header** — when an edge receives a `PURGE` request with this header, it executes the purge locally but does not forward it to the control-plane. This prevents re-propagation loops.
+- **Origin exclusion** — the control-plane removes the originating node (identified by the `origin` field in the webhook payload) from its broadcast list, preventing the origin from receiving its own purge back.
+
+**Control-plane requirements:**
+
+The external control-plane service must:
+
+1. Accept `POST` requests at the configured URL with a JSON body containing `path` and `origin` fields.
+2. Authenticate requests using the `X-Purge-Secret` header.
+3. Maintain a list of registered edge instance URLs.
+4. Send `PURGE` requests to all registered edges except the origin, including an `X-Purge-Source: propagation` header.
+
+Ferron does not include a built-in control-plane — operators can implement one using any HTTP framework or use an existing cache coordination service.
+
 ## Observability
 
 ### Metrics
@@ -248,6 +330,7 @@ The cache module emits the following metrics:
 - `DEBUG` — logged when Ferron performs a purge through `X-LiteSpeed-Purge`.
 - `DEBUG` — logged when Ferron performs a purge through `PURGE` HTTP method.
 - `DEBUG` — logged when Ferron receives an LSCache `stale` purge marker and falls back to a hard purge.
+- `WARN` — logged when outbound purge propagation to the control-plane fails.
 
 ### Structured logs
 
@@ -267,3 +350,5 @@ The following best-practice checks are reported by `ferron doctor` for directive
 - **`ignore_request_cache_control`** — When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy.
 - **`purge_method` without access control** — Cache purging enabled without `purge_allowed_ips` or `basic_auth` in the same scope allows unauthenticated cache invalidation.
 - **`purge_allowed_ips` with wildcard** — Allowing every source address for cache purging should be restricted to trusted operators or internal networks.
+- **`control_plane_url` without `shared_secret`** — Purge propagation configured without a shared secret allows any source to trigger cache purges across all edge instances.
+- **`control_plane_url` using HTTP** — Purge webhooks sent over unencrypted HTTP expose the shared secret and purge payloads. Use HTTPS in production environments.

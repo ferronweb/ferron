@@ -19,8 +19,15 @@ ahash = "0.8"
 typemap_rev = "0.4"
 dashmap = "6.2.1"
 cidr = "0.3"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "time", "rt"] }
 rustc-hash = "2"
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "0.27", features = ["http1", "http2", "rustls-native-certs", "webpki-roots"] }
+rustls = "0.23"
+rustls-native-certs = "0.8"
+webpki-roots = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }

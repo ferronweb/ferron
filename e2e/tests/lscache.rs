@@ -803,3 +803,219 @@ async fn test_lscache_purge_method_security() {
     let resp = ctx.purge("/any-path").await;
     assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
 }
+
+const BASE_CONFIG_PURGE_PROPAGATION_LOOP_PREVENTION: &str = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    purge_method true
+    purge_allowed_ips "0.0.0.0/0"
+    purge_propagation {
+      control_plane_url "http://0.0.0.0:1/cache/purge"
+      shared_secret "test-secret"
+      node_id "edge-test"
+    }
+  }
+}
+"#;
+
+/// Test that a PURGE with `X-Purge-Source: propagation` header executes the
+/// purge locally but does NOT attempt to re-propagate to the control-plane.
+#[tokio::test]
+async fn test_lscache_purge_propagation_loop_prevention() {
+    let ctx = LSCacheTestContext::new(
+        "purge-propagation-loop",
+        BASE_CONFIG_PURGE_PROPAGATION_LOOP_PREVENTION,
+    )
+    .await;
+
+    // Cache a page
+    let resp = ctx
+        .get("/propagation-loop-test?ls-cache-control=public,max-age=60&body=original-content")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "original-content");
+
+    // Verify it's cached
+    let resp = ctx
+        .get("/propagation-loop-test?ls-cache-control=public,max-age=60&body=should-not-appear")
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "original-content");
+
+    // Send PURGE with X-Purge-Source: propagation header.
+    // This simulates a broadcast from the control-plane. The edge should purge
+    // locally but NOT re-propagate (which would cause a loop).
+    let method = Method::from_bytes(b"PURGE").unwrap();
+    let resp = ctx
+        .client
+        .request(method, format!("{}/propagation-loop-test", ctx.base_url))
+        .header("X-Purge-Source", "propagation")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    // Verify cache was invalidated
+    let resp = ctx
+        .get(
+            "/propagation-loop-test?ls-cache-control=public,max-age=60&body=after-propagated-purge",
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+    assert_eq!(resp.text().await.unwrap(), "after-propagated-purge");
+}
+
+/// Test that an original PURGE (without X-Purge-Source header) attempts to
+/// propagate to the control-plane by verifying the webhook URL is contacted.
+/// Uses a mock control-plane Docker container on the same network.
+#[tokio::test]
+async fn test_lscache_purge_propagation_outbound_webhook() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    let network = "e2e-test-lscache-propagation-webhook";
+
+    // Start backend
+    let backend_image = common::build_lscache_backend_image().await.unwrap();
+    let _backend = backend_image
+        .with_exposed_port(ContainerPort::Tcp(3000))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(3000))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("backend")
+        .start()
+        .await
+        .unwrap();
+
+    // Start mock control-plane
+    let control_plane_image = common::build_mock_control_plane_image().await.unwrap();
+    let control_plane = control_plane_image
+        .with_exposed_port(ContainerPort::Tcp(9090))
+        .with_wait_for(WaitFor::message_on_stdout(
+            "Mock control-plane listening on port 9090",
+        ))
+        .with_network(network)
+        .with_hostname("control-plane")
+        .start()
+        .await
+        .unwrap();
+
+    let config = r#"
+*:80 {
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    purge_method true
+    purge_allowed_ips "0.0.0.0/0"
+    purge_propagation {
+      control_plane_url "http://control-plane:9090/cache/purge"
+      shared_secret "test-secret"
+      node_id "edge-1"
+    }
+  }
+}
+"#;
+
+    config_file
+        .as_file_mut()
+        .write_all(config.as_bytes())
+        .unwrap();
+
+    let ferron_image = common::build_ferron_image().await.unwrap();
+    let ferron = ferron_image
+        .with_exposed_port(ContainerPort::Tcp(80))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("ferron")
+        .with_mount(Mount::bind_mount(
+            config_file.path().to_string_lossy().to_string(),
+            "/etc/ferron.conf",
+        ))
+        .start()
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let base_url = format!("http://localhost:{}", port);
+    let client = reqwest::Client::new();
+
+    let cp_port = control_plane
+        .get_host_port_ipv4(ContainerPort::Tcp(9090))
+        .await
+        .unwrap();
+    let cp_url = format!("http://localhost:{}", cp_port);
+
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    // Cache a page
+    let resp = client
+        .get(format!(
+            "{}/webhook-test?ls-cache-control=public,max-age=60&body=cached",
+            base_url
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    // Send PURGE request (original, not propagated)
+    let method = Method::from_bytes(b"PURGE").unwrap();
+    let resp = client
+        .request(method, format!("{}/webhook-test", base_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    // Wait for async propagation to complete
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Query the mock control-plane's /received endpoint to verify the webhook
+    let resp = client
+        .get(format!("{}/received", cp_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let webhooks: Vec<serde_json::Value> = resp.json().await.unwrap();
+    assert!(
+        !webhooks.is_empty(),
+        "Expected at least one webhook to the control-plane"
+    );
+    let webhook = &webhooks[0];
+    assert_eq!(webhook["path"], "/webhook-test");
+    assert_eq!(webhook["origin"], "edge-1");
+}

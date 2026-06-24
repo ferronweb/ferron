@@ -1456,10 +1456,17 @@ dependencies = [
  "http-body",
  "http-body-util",
  "httpdate",
+ "hyper-rustls",
+ "hyper-util",
  "quick_cache",
  "rustc-hash",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
  "tokio",
  "typemap_rev",
+ "webpki-roots",
 ]
 
 [[package]]

@@ -43,6 +43,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 - **`stale-if-error` support** - when an upstream revalidation request returns a `5xx` error and a `stale-if-error` directive is present on the cached response, the stale cached response is served instead of the error. This provides resilience against backend failures. (`http-cache`)
 - **`must-revalidate` and `proxy-revalidate` enforcement** - entries with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) are never served stale, even within `stale-while-revalidate` or `stale-if-error` windows. (`http-cache`)
 - **Ignore request cache control** - when `ignore_request_cache_control` in `cache` is enabled, request-based cache control (e.g., `Cache-Control: no-cache`) is ignored in favor of the configured cache policy.
+- **Cache purge propagation** - when a cache purge occurs (via `PURGE` method or `X-LiteSpeed-Purge` header), the purge can be propagated to other instances via an external control-plane service. Edge instances send webhook POST requests to a configured control-plane URL, which broadcasts `PURGE` requests to all other registered edges. Loop prevention is handled via the `X-Purge-Source: propagation` header and origin exclusion. (`http-cache`)
 
 #### Utilities
 

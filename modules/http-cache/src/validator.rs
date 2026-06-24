@@ -13,6 +13,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "emit_litespeed_headers",
     "purge_method",
     "purge_allowed_ips",
+    "purge_propagation",
     "vary",
     "ignore",
     "ignore_request_cache_control",
@@ -116,6 +117,9 @@ fn validate_cache_block(
     for allowed in allowed_directives {
         if let Some(entries) = block.directives.get(*allowed) {
             sub.insert(allowed.to_string());
+            if *allowed == "purge_propagation" {
+                continue;
+            }
             for entry in entries {
                 if entry.children.is_some() {
                     return Err(
@@ -208,6 +212,75 @@ fn validate_cache_block(
 
     if let Some(entries) = block.directives.get("ignore") {
         validate_header_name_list(entries, "ignore")?;
+    }
+
+    if let Some(entries) = block.directives.get("purge_propagation") {
+        for entry in entries {
+            if let Some(children) = &entry.children {
+                validate_purge_propagation_block(children, ctx)?;
+            } else {
+                return Err(
+                    "Invalid `purge_propagation` - expected a block with nested directives".into(),
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+const PURGE_PROPAGATION_DIRECTIVES: &[&str] = &["control_plane_url", "shared_secret", "node_id"];
+
+fn validate_purge_propagation_block(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sub = std::collections::HashSet::new();
+
+    for allowed in PURGE_PROPAGATION_DIRECTIVES {
+        if let Some(entries) = block.directives.get(*allowed) {
+            sub.insert(allowed.to_string());
+            for entry in entries {
+                if entry.children.is_some() {
+                    return Err(
+                        format!("Invalid `{allowed}` - nested blocks are not supported").into(),
+                    );
+                }
+                if entry.args.len() != 1 {
+                    return Err(format!(
+                        "Invalid `{allowed}` - expected exactly one string argument"
+                    )
+                    .into());
+                }
+                if entry.args.first().and_then(|v| v.as_str()).is_none() {
+                    return Err(format!("Invalid `{allowed}` - expected a string value").into());
+                }
+            }
+        }
+    }
+
+    ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+
+    if let Some(entries) = block.directives.get("control_plane_url") {
+        for entry in entries {
+            if let Some(url) = entry.args.first().and_then(|v| v.as_str()) {
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    ctx.add_best_practice_violation(
+                        "`control_plane_url` should use HTTPS in production environments",
+                        entry_span(entry),
+                    );
+                }
+            }
+        }
+    }
+
+    if block.directives.contains_key("control_plane_url")
+        && !block.directives.contains_key("shared_secret")
+    {
+        ctx.add_best_practice_violation(
+            "`purge_propagation` has `control_plane_url` but no `shared_secret`; add a shared secret to authenticate purge webhooks",
+            None,
+        );
     }
 
     Ok(())

@@ -47,7 +47,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_http_rewrite::HttpRewriteModuleLoader),
         Box::new(ferron_http_map::HttpMapModuleLoader),
         Box::new(ferron_http_variables::HttpVariablesModuleLoader),
-        Box::new(ferron_http_cache::HttpCacheModuleLoader),
+        Box::new(ferron_http_cache::HttpCacheModuleLoader::default()),
         Box::new(ferron_http_buffer::HttpBufferModuleLoader),
         Box::new(ferron_http_compression::HttpCompressionModuleLoader),
         Box::new(ferron_http_replace::HttpReplaceModuleLoader),
