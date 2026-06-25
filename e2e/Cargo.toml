@@ -106,6 +106,10 @@ path = "tests/timeout.rs"
 name = "tls"
 path = "tests/tls.rs"
 
+[[test]]
+name = "unix"
+path = "tests/unix.rs"
+
 [dev-dependencies]
 aes = "0.9"
 brotli = "8.0.2"
