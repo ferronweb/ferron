@@ -96,6 +96,10 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 - **Error configuration routing fix** - error configuration routing were resolved with a wrong configuration, when using a wildcard hostname in the configuration, even when no error configuration is set. This has been fixed to ensure wildcard hostnames are correctly handled.
 
+#### Server startup
+
+- **Unix daemon initialization failure fix** - when initializing as a Unix daemon, the forked process would exit due to logging re-initialization issues. This has been fixed to ensure that the parent process continues running even in such cases.
+
 ## Ferron 3.0.0-beta.2
 
 **Released in June 14, 2026**

@@ -261,11 +261,6 @@ fn run_daemon(
 
     // This is the daemon process
 
-    // Re-initialize logger after daemonizing (stdout/stderr are now /dev/null)
-    // For a daemon, we might want to log to syslog or a file, but for now we'll
-    // keep the stdio logger (which will write to /dev/null)
-    ferron_core::logging::init_stdio_logger(log_level)?;
-
     // Write PID file if specified
     if let Some(ref pid_path) = pid_file {
         daemon::write_pid_file(pid_path)?;
