@@ -242,10 +242,7 @@ async fn test_lscache_no_store() {
     let resp = ctx
         .get_with_headers(
             "/nostore",
-            &[
-                ("X-Test-Cache-Control", "no-store"),
-                ("X-Test-Body", "v1"),
-            ],
+            &[("X-Test-Cache-Control", "no-store"), ("X-Test-Body", "v1")],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -261,10 +258,7 @@ async fn test_lscache_no_store() {
     let resp = ctx
         .get_with_headers(
             "/nostore",
-            &[
-                ("X-Test-Cache-Control", "no-store"),
-                ("X-Test-Body", "v2"),
-            ],
+            &[("X-Test-Cache-Control", "no-store"), ("X-Test-Body", "v2")],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -278,10 +272,7 @@ async fn test_lscache_no_cache() {
     let resp = ctx
         .get_with_headers(
             "/nocache",
-            &[
-                ("X-Test-Cache-Control", "no-cache"),
-                ("X-Test-Body", "v1"),
-            ],
+            &[("X-Test-Cache-Control", "no-cache"), ("X-Test-Body", "v1")],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -290,10 +281,7 @@ async fn test_lscache_no_cache() {
     let resp = ctx
         .get_with_headers(
             "/nocache",
-            &[
-                ("X-Test-Cache-Control", "no-cache"),
-                ("X-Test-Body", "v2"),
-            ],
+            &[("X-Test-Cache-Control", "no-cache"), ("X-Test-Body", "v2")],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -763,10 +751,7 @@ async fn test_lscache_bypass_uncacheable_status() {
     let resp = ctx
         .get_with_headers(
             "/error",
-            &[
-                ("X-Test-Status", "500"),
-                ("X-Test-Body", "error"),
-            ],
+            &[("X-Test-Status", "500"), ("X-Test-Body", "error")],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
