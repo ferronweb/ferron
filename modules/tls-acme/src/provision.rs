@@ -998,6 +998,7 @@ async fn cleanup_challenge_data(
 }
 
 /// Creates a new ACME account and caches it.
+#[allow(clippy::too_many_arguments)]
 async fn create_new_account(
     config: &AcmeConfig,
     directory: &str,

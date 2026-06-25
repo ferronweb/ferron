@@ -404,9 +404,7 @@ impl CacheStore {
         cache_key: &str,
         new_headers: HeaderMap,
     ) -> Option<HeaderMap> {
-        let Some(mut entry) = self.entries.get(cache_key) else {
-            return None;
-        };
+        let mut entry = self.entries.get(cache_key)?;
         entry.headers.extend(new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
