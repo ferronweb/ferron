@@ -156,7 +156,13 @@ async fn test_lscache_miss_then_hit() {
     let ctx = LSCacheTestContext::new("miss-hit", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/cache-test?ls-cache-control=public,max-age=60&body=first")
+        .get_with_headers(
+            "/cache-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "first"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -169,7 +175,13 @@ async fn test_lscache_miss_then_hit() {
     assert_eq!(resp.text().await.unwrap(), "first");
 
     let resp = ctx
-        .get("/cache-test?ls-cache-control=public,max-age=60&body=second")
+        .get_with_headers(
+            "/cache-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "second"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -187,7 +199,13 @@ async fn test_lscache_private_cache() {
     let ctx = LSCacheTestContext::new("private", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/private-test?ls-cache-control=private,max-age=60&body=private-content")
+        .get_with_headers(
+            "/private-test",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Body", "private-content"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -199,7 +217,13 @@ async fn test_lscache_private_cache() {
     assert_eq!(ls_cache, "miss");
 
     let resp = ctx
-        .get("/private-test?ls-cache-control=private,max-age=60&body=private-content")
+        .get_with_headers(
+            "/private-test",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Body", "private-content"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -215,7 +239,15 @@ async fn test_lscache_private_cache() {
 async fn test_lscache_no_store() {
     let ctx = LSCacheTestContext::new("no-store", BASE_CONFIG_EMIT_LS).await;
 
-    let resp = ctx.get("/nostore?ls-cache-control=no-store&body=v1").await;
+    let resp = ctx
+        .get_with_headers(
+            "/nostore",
+            &[
+                ("X-Test-Cache-Control", "no-store"),
+                ("X-Test-Body", "v1"),
+            ],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
         .headers()
@@ -226,7 +258,15 @@ async fn test_lscache_no_store() {
     assert!(ls_cache == "miss" || ls_cache == "bypass");
     assert_eq!(resp.text().await.unwrap(), "v1");
 
-    let resp = ctx.get("/nostore?ls-cache-control=no-store&body=v2").await;
+    let resp = ctx
+        .get_with_headers(
+            "/nostore",
+            &[
+                ("X-Test-Cache-Control", "no-store"),
+                ("X-Test-Body", "v2"),
+            ],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "v2");
 }
@@ -235,11 +275,27 @@ async fn test_lscache_no_store() {
 async fn test_lscache_no_cache() {
     let ctx = LSCacheTestContext::new("no-cache", BASE_CONFIG_EMIT_LS).await;
 
-    let resp = ctx.get("/nocache?ls-cache-control=no-cache&body=v1").await;
+    let resp = ctx
+        .get_with_headers(
+            "/nocache",
+            &[
+                ("X-Test-Cache-Control", "no-cache"),
+                ("X-Test-Body", "v1"),
+            ],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "v1");
 
-    let resp = ctx.get("/nocache?ls-cache-control=no-cache&body=v2").await;
+    let resp = ctx
+        .get_with_headers(
+            "/nocache",
+            &[
+                ("X-Test-Cache-Control", "no-cache"),
+                ("X-Test-Body", "v2"),
+            ],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "v2");
 }
@@ -249,13 +305,27 @@ async fn test_lscache_override_standard_no_store() {
     let ctx = LSCacheTestContext::new("override", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
-        .get("/override?ls-cache-control=public,max-age=60&cache-control=no-store&body=cached")
+        .get_with_headers(
+            "/override",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Upstream-Cache-Control", "no-store"),
+                ("X-Test-Body", "cached"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "cached");
 
     let resp = ctx
-        .get("/override?ls-cache-control=public,max-age=60&cache-control=no-store&body=should-not-appear")
+        .get_with_headers(
+            "/override",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Upstream-Cache-Control", "no-store"),
+                ("X-Test-Body", "should-not-appear"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -274,8 +344,12 @@ async fn test_lscache_vary_cookie() {
 
     let resp = ctx
         .get_with_headers(
-            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=no-cookie",
-            &[],
+            "/vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=session"),
+                ("X-Test-Body", "no-cookie"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -283,8 +357,13 @@ async fn test_lscache_vary_cookie() {
 
     let resp = ctx
         .get_with_headers(
-            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=session-abc",
-            &[("Cookie", "session=abc")],
+            "/vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=session"),
+                ("X-Test-Body", "session-abc"),
+                ("Cookie", "session=abc"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -292,8 +371,13 @@ async fn test_lscache_vary_cookie() {
 
     let resp = ctx
         .get_with_headers(
-            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=session-abc-repeat",
-            &[("Cookie", "session=abc")],
+            "/vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=session"),
+                ("X-Test-Body", "session-abc-repeat"),
+                ("Cookie", "session=abc"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -301,8 +385,12 @@ async fn test_lscache_vary_cookie() {
 
     let resp = ctx
         .get_with_headers(
-            "/vary-cookie?ls-cache-control=public,max-age=60&ls-vary=cookie=session&body=no-cookie-hit",
-            &[],
+            "/vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=session"),
+                ("X-Test-Body", "no-cookie-hit"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -314,7 +402,14 @@ async fn test_lscache_tag() {
     let ctx = LSCacheTestContext::new("tag", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/tag-test?ls-cache-control=public,max-age=60&ls-tag=Page1,Cat1&body=tagged")
+        .get_with_headers(
+            "/tag-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "Page1,Cat1"),
+                ("X-Test-Body", "tagged"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -327,7 +422,14 @@ async fn test_lscache_tag() {
     assert_eq!(resp.text().await.unwrap(), "tagged");
 
     let resp = ctx
-        .get("/tag-test?ls-cache-control=public,max-age=60&ls-tag=Page1,Cat1&body=tagged-hit")
+        .get_with_headers(
+            "/tag-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "Page1,Cat1"),
+                ("X-Test-Body", "tagged-hit"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -345,13 +447,27 @@ async fn test_lscache_purge_by_tag() {
     let ctx = LSCacheTestContext::new("purge-tag", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=before-purge")
+        .get_with_headers(
+            "/purge-tag-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "MyPage"),
+                ("X-Test-Body", "before-purge"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "before-purge");
 
     let resp = ctx
-        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=before-purge-verify")
+        .get_with_headers(
+            "/purge-tag-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "MyPage"),
+                ("X-Test-Body", "before-purge-verify"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -364,12 +480,25 @@ async fn test_lscache_purge_by_tag() {
     assert_eq!(resp.text().await.unwrap(), "before-purge");
 
     let resp = ctx
-        .get("/purge-trigger?ls-purge=tag=MyPage&body=purge-response")
+        .get_with_headers(
+            "/purge-trigger",
+            &[
+                ("X-Test-Purge", "tag=MyPage"),
+                ("X-Test-Body", "purge-response"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
     let resp = ctx
-        .get("/purge-tag-test?ls-cache-control=public,max-age=60&ls-tag=MyPage&body=after-purge")
+        .get_with_headers(
+            "/purge-tag-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "MyPage"),
+                ("X-Test-Body", "after-purge"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -408,7 +537,13 @@ async fn test_lscache_purge_by_url() {
     assert_eq!(ls_cache, "hit");
 
     let resp = ctx
-        .get("/purge-url-trigger?ls-purge=url=/url-purge-test&body=purge-url-response")
+        .get_with_headers(
+            "/purge-url-trigger",
+            &[
+                ("X-Test-Purge", "url=/url-purge-test"),
+                ("X-Test-Body", "purge-url-response"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
@@ -428,26 +563,56 @@ async fn test_lscache_purge_all() {
     let ctx = LSCacheTestContext::new("purge-all", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/page-a?ls-cache-control=public,max-age=60&ls-tag=TagA&body=page-a")
+        .get_with_headers(
+            "/page-a",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagA"),
+                ("X-Test-Body", "page-a"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
     let resp = ctx
-        .get("/page-b?ls-cache-control=public,max-age=60&ls-tag=TagB&body=page-b")
+        .get_with_headers(
+            "/page-b",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagB"),
+                ("X-Test-Body", "page-b"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    let resp = ctx.get("/purge-all-trigger?ls-purge=*").await;
+    let resp = ctx
+        .get_with_headers("/purge-all-trigger", &[("X-Test-Purge", "*")])
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
     let resp = ctx
-        .get("/page-a?ls-cache-control=public,max-age=60&ls-tag=TagA&body=page-a-new")
+        .get_with_headers(
+            "/page-a",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagA"),
+                ("X-Test-Body", "page-a-new"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "page-a-new");
 
     let resp = ctx
-        .get("/page-b?ls-cache-control=public,max-age=60&ls-tag=TagB&body=page-b-new")
+        .get_with_headers(
+            "/page-b",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagB"),
+                ("X-Test-Body", "page-b-new"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "page-b-new");
@@ -458,13 +623,27 @@ async fn test_lsc_cookie_to_set_cookie() {
     let ctx = LSCacheTestContext::new("lsc-cookie", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/cookie-test?ls-cache-control=public,max-age=60&lsc-cookie=test_cookie=123&body=cookie-set")
+        .get_with_headers(
+            "/cookie-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-LSC-Cookie", "test_cookie=123"),
+                ("X-Test-Body", "cookie-set"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "cookie-set");
 
     let resp = ctx
-        .get("/cookie-test?ls-cache-control=public,max-age=60&lsc-cookie=test_cookie=123&body=cookie-hit")
+        .get_with_headers(
+            "/cookie-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-LSC-Cookie", "test_cookie=123"),
+                ("X-Test-Body", "cookie-hit"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -491,13 +670,27 @@ async fn test_lscache_s_maxage() {
     let ctx = LSCacheTestContext::new("s-maxage", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v1")
+        .get_with_headers(
+            "/smaxage-test",
+            &[
+                ("X-Test-Cache-Control", "public,s-maxage=2"),
+                ("X-Test-Upstream-Cache-Control", "max-age=300"),
+                ("X-Test-Body", "s-maxage-v1"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "s-maxage-v1");
 
     let resp = ctx
-        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v2")
+        .get_with_headers(
+            "/smaxage-test",
+            &[
+                ("X-Test-Cache-Control", "public,s-maxage=2"),
+                ("X-Test-Upstream-Cache-Control", "max-age=300"),
+                ("X-Test-Body", "s-maxage-v2"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "s-maxage-v1");
@@ -505,7 +698,14 @@ async fn test_lscache_s_maxage() {
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
     let resp = ctx
-        .get("/smaxage-test?ls-cache-control=public,s-maxage=2&cache-control=max-age=300&body=s-maxage-v3")
+        .get_with_headers(
+            "/smaxage-test",
+            &[
+                ("X-Test-Cache-Control", "public,s-maxage=2"),
+                ("X-Test-Upstream-Cache-Control", "max-age=300"),
+                ("X-Test-Body", "s-maxage-v3"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "s-maxage-v3");
@@ -516,7 +716,14 @@ async fn test_lscache_public_tag_with_private_cache() {
     let ctx = LSCacheTestContext::new("public-tag-private", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/priv-pub-tag?ls-cache-control=private,max-age=60&ls-tag=public:PubTag,PrivTag&body=priv-with-pub-tag")
+        .get_with_headers(
+            "/priv-pub-tag",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Tag", "public:PubTag,PrivTag"),
+                ("X-Test-Body", "priv-with-pub-tag"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -529,7 +736,14 @@ async fn test_lscache_public_tag_with_private_cache() {
     assert_eq!(resp.text().await.unwrap(), "priv-with-pub-tag");
 
     let resp = ctx
-        .get("/priv-pub-tag?ls-cache-control=private,max-age=60&ls-tag=public:PubTag,PrivTag&body=priv-with-pub-tag-hit")
+        .get_with_headers(
+            "/priv-pub-tag",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Tag", "public:PubTag,PrivTag"),
+                ("X-Test-Body", "priv-with-pub-tag-hit"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -546,7 +760,15 @@ async fn test_lscache_public_tag_with_private_cache() {
 async fn test_lscache_bypass_uncacheable_status() {
     let ctx = LSCacheTestContext::new("bypass-status", BASE_CONFIG_EMIT_LS).await;
 
-    let resp = ctx.get("/error?status=500&body=error").await;
+    let resp = ctx
+        .get_with_headers(
+            "/error",
+            &[
+                ("X-Test-Status", "500"),
+                ("X-Test-Body", "error"),
+            ],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
     let ls_cache = resp
         .headers()
@@ -562,7 +784,13 @@ async fn test_lscache_shared_cache_control() {
     let ctx = LSCacheTestContext::new("shared", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/shared-test?ls-cache-control=shared,private,max-age=60&body=shared-content")
+        .get_with_headers(
+            "/shared-test",
+            &[
+                ("X-Test-Cache-Control", "shared,private,max-age=60"),
+                ("X-Test-Body", "shared-content"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -575,7 +803,13 @@ async fn test_lscache_shared_cache_control() {
     assert_eq!(resp.text().await.unwrap(), "shared-content");
 
     let resp = ctx
-        .get("/shared-test?ls-cache-control=shared,private,max-age=60&body=shared-content-hit")
+        .get_with_headers(
+            "/shared-test",
+            &[
+                ("X-Test-Cache-Control", "shared,private,max-age=60"),
+                ("X-Test-Body", "shared-content-hit"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "shared-content");
@@ -586,24 +820,48 @@ async fn test_lscache_purge_private_scope() {
     let ctx = LSCacheTestContext::new("purge-private", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v1")
+        .get_with_headers(
+            "/priv-purge",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Body", "private-v1"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "private-v1");
 
     let resp = ctx
-        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v1-verify")
+        .get_with_headers(
+            "/priv-purge",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Body", "private-v1-verify"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "private-v1");
 
     let resp = ctx
-        .get("/priv-purge-trigger?ls-purge=private,*&body=purge-private")
+        .get_with_headers(
+            "/priv-purge-trigger",
+            &[
+                ("X-Test-Purge", "private,*"),
+                ("X-Test-Body", "purge-private"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
     let resp = ctx
-        .get("/priv-purge?ls-cache-control=private,max-age=60&body=private-v2")
+        .get_with_headers(
+            "/priv-purge",
+            &[
+                ("X-Test-Cache-Control", "private,max-age=60"),
+                ("X-Test-Body", "private-v2"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "private-v2");
@@ -614,18 +872,38 @@ async fn test_lscache_purge_stale_flag() {
     let ctx = LSCacheTestContext::new("purge-stale", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get("/stale-test?ls-cache-control=public,max-age=60&ls-tag=StaleTag&body=stale-v1")
+        .get_with_headers(
+            "/stale-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "StaleTag"),
+                ("X-Test-Body", "stale-v1"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "stale-v1");
 
     let resp = ctx
-        .get("/stale-purge?ls-purge=stale,tag=StaleTag&body=purge-stale")
+        .get_with_headers(
+            "/stale-purge",
+            &[
+                ("X-Test-Purge", "stale,tag=StaleTag"),
+                ("X-Test-Body", "purge-stale"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
     let resp = ctx
-        .get("/stale-test?ls-cache-control=public,max-age=60&ls-tag=StaleTag&body=stale-v2")
+        .get_with_headers(
+            "/stale-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "StaleTag"),
+                ("X-Test-Body", "stale-v2"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "stale-v2");
@@ -637,21 +915,40 @@ async fn test_lscache_vary_value() {
     let ctx = LSCacheTestContext::new("vary-value", BASE_CONFIG_EMIT_LS).await;
 
     let resp = ctx
-        .get(
-            "/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=desktop",
+        .get_with_headers(
+            "/vary-value-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Body", "desktop"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "desktop");
 
     let resp = ctx
-        .get("/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=mobile-version")
+        .get_with_headers(
+            "/vary-value-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Body", "mobile-version"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "mobile-version");
 
     let resp = ctx
-        .get("/vary-value-test?ls-cache-control=public,max-age=60&ls-vary=value=mobile&body=mobile-hit")
+        .get_with_headers(
+            "/vary-value-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Body", "mobile-hit"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "mobile-hit");
@@ -663,8 +960,12 @@ async fn test_lscache_multiple_vary_cookies() {
 
     let resp = ctx
         .get_with_headers(
-            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=default",
-            &[],
+            "/multi-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=lang,cookie=theme"),
+                ("X-Test-Body", "default"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -672,8 +973,13 @@ async fn test_lscache_multiple_vary_cookies() {
 
     let resp = ctx
         .get_with_headers(
-            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=en-dark",
-            &[("Cookie", "lang=en;theme=dark")],
+            "/multi-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=lang,cookie=theme"),
+                ("X-Test-Body", "en-dark"),
+                ("Cookie", "lang=en;theme=dark"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -681,8 +987,13 @@ async fn test_lscache_multiple_vary_cookies() {
 
     let resp = ctx
         .get_with_headers(
-            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=en-dark-hit",
-            &[("Cookie", "lang=en;theme=dark")],
+            "/multi-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=lang,cookie=theme"),
+                ("X-Test-Body", "en-dark-hit"),
+                ("Cookie", "lang=en;theme=dark"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -690,8 +1001,13 @@ async fn test_lscache_multiple_vary_cookies() {
 
     let resp = ctx
         .get_with_headers(
-            "/multi-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=lang,cookie=theme&body=fr-light",
-            &[("Cookie", "lang=fr;theme=light")],
+            "/multi-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=lang,cookie=theme"),
+                ("X-Test-Body", "fr-light"),
+                ("Cookie", "lang=fr;theme=light"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -704,8 +1020,13 @@ async fn test_lscache_combined_vary_cookie_and_value() {
 
     let resp = ctx
         .get_with_headers(
-            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=us&body=region-us",
-            &[("Cookie", "region=west")],
+            "/combined-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=region,value=us"),
+                ("X-Test-Body", "region-us"),
+                ("Cookie", "region=west"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -713,8 +1034,13 @@ async fn test_lscache_combined_vary_cookie_and_value() {
 
     let resp = ctx
         .get_with_headers(
-            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=eu&body=region-eu",
-            &[("Cookie", "region=east")],
+            "/combined-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=region,value=eu"),
+                ("X-Test-Body", "region-eu"),
+                ("Cookie", "region=east"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -722,8 +1048,13 @@ async fn test_lscache_combined_vary_cookie_and_value() {
 
     let resp = ctx
         .get_with_headers(
-            "/combined-vary?ls-cache-control=public,max-age=60&ls-vary=cookie=region,value=us&body=region-us-hit",
-            &[("Cookie", "region=west")],
+            "/combined-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=region,value=us"),
+                ("X-Test-Body", "region-us-hit"),
+                ("Cookie", "region=west"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -757,14 +1088,26 @@ async fn test_lscache_purge_method() {
 
     // Cache a page
     let resp = ctx
-        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=before-purge")
+        .get_with_headers(
+            "/purge-method-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "before-purge"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "before-purge");
 
     // Verify it's cached
     let resp = ctx
-        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=should-not-appear")
+        .get_with_headers(
+            "/purge-method-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "should-not-appear"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -782,7 +1125,13 @@ async fn test_lscache_purge_method() {
 
     // Verify cache was invalidated
     let resp = ctx
-        .get("/purge-method-test?ls-cache-control=public,max-age=60&body=after-purge")
+        .get_with_headers(
+            "/purge-method-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "after-purge"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -832,14 +1181,26 @@ async fn test_lscache_purge_propagation_loop_prevention() {
 
     // Cache a page
     let resp = ctx
-        .get("/propagation-loop-test?ls-cache-control=public,max-age=60&body=original-content")
+        .get_with_headers(
+            "/propagation-loop-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "original-content"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "original-content");
 
     // Verify it's cached
     let resp = ctx
-        .get("/propagation-loop-test?ls-cache-control=public,max-age=60&body=should-not-appear")
+        .get_with_headers(
+            "/propagation-loop-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "should-not-appear"),
+            ],
+        )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
@@ -866,8 +1227,12 @@ async fn test_lscache_purge_propagation_loop_prevention() {
 
     // Verify cache was invalidated
     let resp = ctx
-        .get(
-            "/propagation-loop-test?ls-cache-control=public,max-age=60&body=after-propagated-purge",
+        .get_with_headers(
+            "/propagation-loop-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "after-propagated-purge"),
+            ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -982,10 +1347,9 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
 
     // Cache a page
     let resp = client
-        .get(format!(
-            "{}/webhook-test?ls-cache-control=public,max-age=60&body=cached",
-            base_url
-        ))
+        .get(format!("{}/webhook-test", base_url))
+        .header("X-Test-Cache-Control", "public,max-age=60")
+        .header("X-Test-Body", "cached")
         .send()
         .await
         .unwrap();
