@@ -383,6 +383,12 @@ step_preflight() {
 
         if [ "$_need_prereqs" = 1 ]; then
             log_write "installing prerequisites: curl gnupg2 ca-certificates lsb-release debian-archive-keyring"
+
+            # Update package lists.
+            if ! DEBIAN_FRONTEND=noninteractive apt update; then
+                log_write "warning: apt update failed"
+            fi
+
             if ! DEBIAN_FRONTEND=noninteractive apt install -y \
                     curl gnupg2 ca-certificates lsb-release debian-archive-keyring; then
                 log_write "warning: failed to install prerequisites"
