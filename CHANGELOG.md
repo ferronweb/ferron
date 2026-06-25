@@ -98,7 +98,7 @@ If you are upgrading to this beta version, you must update your configuration fi
 
 #### Server startup
 
-- **Critical Unix daemon initialization failure fix** - when initializing as a Unix daemon, the forked process would exit due to logging re-initialization issues. This has been fixed to ensure that the parent process continues running even in such cases.
+- **Critical Unix daemon initialization failure fix** - when initializing as a Unix daemon, the forked process would exit due to logging re-initialization issues. This has been fixed to ensure that the parent process continues running even in such cases. ([GitHub issue](https://github.com/ferronweb/ferron/issues/774))
 
 ## Ferron 3.0.0-beta.2
 
