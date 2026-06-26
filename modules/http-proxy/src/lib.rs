@@ -26,6 +26,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
 
+use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_observability::build_composite_sink;
@@ -245,13 +246,15 @@ struct ProxyState {
     /// along with consistent hash ring state.
     /// Round-robin counters must remain shared for a given config key.
     #[allow(clippy::type_complexity)]
-    algorithms: DashMap<
-        Vec<usize>,
-        (
-            Arc<LoadBalancerAlgorithmInner>,
-            Arc<RwLock<ConsistentHashRing>>,
-        ),
-        FxBuildHasher,
+    algorithms: ArcSwap<
+        DashMap<
+            Vec<usize>,
+            (
+                Arc<LoadBalancerAlgorithmInner>,
+                Arc<RwLock<ConsistentHashRing>>,
+            ),
+            FxBuildHasher,
+        >,
     >,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: types::health::HealthCheckStateMap,
@@ -269,7 +272,7 @@ impl ProxyState {
             circuit_breaker_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             conn_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             ewma_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
-            algorithms: DashMap::with_hasher(FxBuildHasher),
+            algorithms: ArcSwap::from_pointee(DashMap::with_hasher(FxBuildHasher)),
             active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             health_check_tasks: DashMap::with_hasher(FxBuildHasher),
             active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
@@ -432,6 +435,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 
         // Clear mTLS cache
         self::config::MTLS_FILE_CACHE.clear();
+
+        // Prevent load balancing state memory leaks
+        if let Some(ref state) = self.state {
+            state.algorithms.swap(Default::default());
+        }
 
         modules.push(Arc::new(ReverseProxyModule {
             sink: build_composite_sink(&registry, &config.global_config, None)?,
@@ -610,11 +618,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        let (algorithm, ring) = if let Some(algo) = self.state.algorithms.get(&config_key) {
+        let (algorithm, ring) = if let Some(algo) = self.state.algorithms.load().get(&config_key) {
             algo.clone()
         } else {
             self.state
                 .algorithms
+                .load()
                 .entry(config_key.clone())
                 .or_insert_with(|| {
                     (

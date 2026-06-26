@@ -1608,6 +1608,7 @@ name = "ferron-http-proxy"
 version = "3.0.0-beta.3"
 dependencies = [
  "ahash",
+ "arc-swap",
  "async-trait",
  "bytes",
  "crossbeam-queue",

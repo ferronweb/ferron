@@ -33,6 +33,7 @@ rustc-hash = "2.1.2"
 dashmap = "6.2.1"
 tokio-util = "0.7.18"
 crossbeam-queue = "0.3.12"
+arc-swap = "1.9.1"
 
 [features]
 default = ["srv-lookup"]
