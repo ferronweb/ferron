@@ -7,7 +7,7 @@
   </a>
 </p>
 <p align="center">
-  <b>Ferron</b> - a fast, modern, and easily configurable web server with automatic TLS
+  <b>Ferron</b> - a fast, modern web server built for production debugging.
 </p>
 
 * * *

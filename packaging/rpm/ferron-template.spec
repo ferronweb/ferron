@@ -1,7 +1,7 @@
 Name:           ferron3
 Version:        $VERSION
 Release:        1%{?dist}
-Summary:        A fast, modern, and easily configurable web server with automatic TLS.
+Summary:        A fast, modern web server built for production debugging.
 
 License:        MIT
 URL:            https://ferron.sh
@@ -17,7 +17,7 @@ Conflicts:      ferron-lts
 Provides:       webserver
 
 %description
-A fast, modern, and easily configurable web server with automatic TLS.
+A fast, modern web server built for production debugging.
 
 %global debug_package %{nil}
 
