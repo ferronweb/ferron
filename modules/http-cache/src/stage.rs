@@ -716,10 +716,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                     .update_entry_headers_by_key(cache_key, fresh_headers.clone())
                 {
                     fresh_headers = new_fresh_headers;
+                } else {
+                    let mut new_fresh_headers = cached_entry.headers.clone();
+                    new_fresh_headers.extend(fresh_headers);
+                    fresh_headers = new_fresh_headers;
                 }
 
-                // Reconstruct a 200 OK response using fresh headers + cached body
-                let mut builder = Response::builder().status(StatusCode::OK);
+                // Reconstruct a response using fresh headers + cached body
+                let mut builder = Response::builder().status(cached_entry.status);
                 for (name, value) in &fresh_headers {
                     builder = builder.header(name, value);
                 }

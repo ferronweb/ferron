@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not released yet**
+
+### Fixed
+
+#### HTTP caching
+
+- **Cache revalidation fix** - when a cached response is revalidated, the HTTP status code is now preserved from the cached response instead of always using `200 OK`.
+
 ## Ferron 3.0.0-beta.3
 
 **Released in June 26, 2026**
