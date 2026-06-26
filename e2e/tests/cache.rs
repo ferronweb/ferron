@@ -677,3 +677,120 @@ async fn test_cache_stale_if_error() {
         "SIE should return stale content"
     );
 }
+
+/// Regression test: cache revalidation with If-None-Match on static files.
+///
+/// Verifies that when a client revalidates a cached static file with
+/// `Cache-Control: max-age=0` and an `If-None-Match` ETag, the server
+/// correctly handles the conditional response (304 or 200).
+#[tokio::test]
+async fn test_cache_static_etag_revalidation() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache true
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let base_url = format!("http://localhost:{}", port);
+
+    // Write a static file and cache it
+    common::write_file(webroot_dir.path().join("etag-test.txt"), b"content").unwrap();
+
+    // Request 1: cache miss, response includes ETag header
+    let client = reqwest::Client::new();
+    let resp1 = client
+        .get(format!("{}/etag-test.txt", base_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), reqwest::StatusCode::OK);
+    let etag = resp1
+        .headers()
+        .get("ETag")
+        .expect("response should include ETag header")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(resp1.text().await.unwrap(), "content");
+
+    // Request 2: conditional revalidation with max-age=0 and If-None-Match
+    let resp2 = client
+        .get(format!("{}/etag-test.txt", base_url))
+        .header("Cache-Control", "max-age=0")
+        .header("If-None-Match", &etag)
+        .send()
+        .await
+        .unwrap();
+
+    // The response should be either 304 (not modified) or 200 (content changed).
+    // Before the fix, the server would always return 200 even when the backend
+    // responded with 304.
+    match resp2.status() {
+        s if s == reqwest::StatusCode::NOT_MODIFIED => {
+            // 304 must not include a body
+            assert!(
+                resp2.text().await.unwrap().is_empty(),
+                "304 response should have empty body"
+            );
+        }
+        s if s == reqwest::StatusCode::OK => {
+            // 200 must include the body
+            assert_eq!(resp2.text().await.unwrap(), "content");
+        }
+        other => panic!("expected 304 or 200, got {}", other),
+    }
+
+    // Request 3: repeat the same conditional request, same expectation
+    let resp3 = client
+        .get(format!("{}/etag-test.txt", base_url))
+        .header("Cache-Control", "max-age=0")
+        .header("If-None-Match", &etag)
+        .send()
+        .await
+        .unwrap();
+
+    match resp3.status() {
+        s if s == reqwest::StatusCode::NOT_MODIFIED => {
+            assert!(
+                resp3.text().await.unwrap().is_empty(),
+                "304 response should have empty body"
+            );
+        }
+        s if s == reqwest::StatusCode::OK => {
+            assert_eq!(resp3.text().await.unwrap(), "content");
+        }
+        other => panic!("expected 304 or 200, got {}", other),
+    }
+
+    container.stop().await.unwrap();
+}
