@@ -10,11 +10,13 @@
 
 - **Cache zones** — the `cache` directive now supports a `zone` subdirective at host scope, allowing multiple hostnames to share a single in-memory cache store. Named zones can be pre-configured at global scope with custom `max_entries` capacity. When a global `cache { max_entries }` block exists without explicit `zone` blocks, all hosts share a global zone by default. Hosts can opt out with an explicit `zone` directive.
 - **Generation-aware cache capacity** — `max_entries` is now only evaluated on configuration reload instead of on every request, preventing premature LRU eviction when different host blocks specify different capacities for the same zone.
+- **Zone attribute in cache metrics** — all cache metrics (`ferron.cache.requests`, `ferron.cache.entries`, `ferron.cache.stores`, `ferron.cache.evictions`, `ferron.cache.purges`) now include a `ferron.cache.zone` attribute identifying the zone the request belongs to.
 
 #### Rate limiting
 
 - **Rate limit zones** — the `rate_limit` directive now supports a `zone` subdirective at host scope, allowing multiple hostnames to share the same rate limit token bucket registries. Named zones can be defined at global scope. When a global `rate_limit` block exists without explicit `zone` blocks, all hosts share a global zone by default. Hosts can opt out with their own `rate_limit` block.
 - **Key extractor in fingerprint** — the rate limit fingerprint now includes the key extractor type (`ip`, `uri`, `header`), so rules with different key types no longer share the same registry.
+- **Zone attribute in rate limit metrics** — rate limit metrics (`ferron.ratelimit.rejected`, `ferron.ratelimit.allowed`) and structured log events now include a `ferron.ratelimit.zone` attribute identifying the zone the request belongs to.
 
 ### Fixed
 

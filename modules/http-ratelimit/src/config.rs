@@ -38,6 +38,17 @@ pub struct RateLimitConfig {
     pub max_buckets: usize,
 }
 
+impl RateLimitZoneId {
+    /// Return a stable string label for use in metric attributes.
+    pub fn label(&self) -> &str {
+        match self {
+            RateLimitZoneId::Global => "global",
+            RateLimitZoneId::Named(name) => name.as_str(),
+            RateLimitZoneId::Host(host) => host.as_str(),
+        }
+    }
+}
+
 impl RateLimitConfig {
     /// Default values for rate limit configuration.
     pub const DEFAULT_BURST: u64 = 0;

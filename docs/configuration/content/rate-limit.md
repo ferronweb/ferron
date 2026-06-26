@@ -230,8 +230,10 @@ The rate limiting module emits the following metrics:
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron.ratelimit.allowed` | Counter | `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests that passed rate limiting |
-| `ferron.ratelimit.rejected` | Counter | `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests rejected due to exhausted buckets or registry at capacity |
+| `ferron.ratelimit.allowed` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests that passed rate limiting |
+| `ferron.ratelimit.rejected` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests rejected due to exhausted buckets or registry at capacity |
+
+The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It is set to `"global"` for the shared global zone, the zone name for named zones, or the hostname for per-host zones.
 
 ### Logs
 
@@ -242,4 +244,4 @@ The rate limiting module emits the following metrics:
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |
+| Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.zone` (string) — zone identifier, `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |

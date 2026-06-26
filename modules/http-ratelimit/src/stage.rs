@@ -106,10 +106,16 @@ impl RateLimitEngine {
                 ferron_core::log_warn!("Rate limit registry at capacity — applying backpressure");
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",
-                    attributes: vec![(
-                        "ferron.ratelimit.key_type",
-                        MetricAttributeValue::String(key_type_label(&config.key).to_string()),
-                    )],
+                    attributes: vec![
+                        (
+                            "ferron.ratelimit.zone",
+                            MetricAttributeValue::String(zone_id.label().to_string()),
+                        ),
+                        (
+                            "ferron.ratelimit.key_type",
+                            MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                        ),
+                    ],
                     ty: MetricType::Counter,
                     value: MetricValue::U64(1),
                     unit: Some("{request}"),
@@ -137,6 +143,10 @@ impl RateLimitEngine {
                     summary: "Rate limit bucket exhausted".into(),
                     target: "ferron-ratelimit",
                     attributes: vec![
+                        (
+                            "ferron.ratelimit.zone",
+                            LogAttributeValue::String(zone_id.label().to_string()),
+                        ),
                         ("ferron.ratelimit.key", LogAttributeValue::String(key)),
                         (
                             "ferron.ratelimit.key_type",
@@ -147,10 +157,16 @@ impl RateLimitEngine {
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",
-                    attributes: vec![(
-                        "ferron.ratelimit.key_type",
-                        MetricAttributeValue::String(key_type_label(&config.key).to_string()),
-                    )],
+                    attributes: vec![
+                        (
+                            "ferron.ratelimit.zone",
+                            MetricAttributeValue::String(zone_id.label().to_string()),
+                        ),
+                        (
+                            "ferron.ratelimit.key_type",
+                            MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                        ),
+                    ],
                     ty: MetricType::Counter,
                     value: MetricValue::U64(1),
                     unit: Some("{request}"),
@@ -176,10 +192,16 @@ impl RateLimitEngine {
             // Token consumed successfully — emit allowed counter
             ctx.events.emit(Event::Metric(MetricEvent {
                 name: "ferron.ratelimit.allowed",
-                attributes: vec![(
-                    "ferron.ratelimit.key_type",
-                    MetricAttributeValue::String(key_type_label(&config.key).to_string()),
-                )],
+                attributes: vec![
+                    (
+                        "ferron.ratelimit.zone",
+                        MetricAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                    (
+                        "ferron.ratelimit.key_type",
+                        MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                    ),
+                ],
                 ty: MetricType::Counter,
                 value: MetricValue::U64(1),
                 unit: Some("{request}"),

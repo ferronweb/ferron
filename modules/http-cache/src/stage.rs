@@ -59,6 +59,7 @@ impl TypeMapKey for RequestStateKey {
 
 struct RequestState {
     config: CacheConfig,
+    zone_id: CacheZoneId,
     base_key: String,
     request_headers: HeaderMap,
     request_cookies: AHashMap<String, String>,
@@ -197,14 +198,21 @@ impl HttpCacheStage {
     fn emit_request_metric(
         &self,
         ctx: &HttpContext,
+        zone_id: &CacheZoneId,
         result: &'static str,
         scope: Option<CacheScope>,
         items: usize,
     ) {
-        let mut attrs = vec![(
-            "ferron.cache.result",
-            MetricAttributeValue::StaticStr(result),
-        )];
+        let mut attrs = vec![
+            (
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            ),
+            (
+                "ferron.cache.result",
+                MetricAttributeValue::StaticStr(result),
+            ),
+        ];
         if let Some(scope) = scope {
             attrs.push((
                 "ferron.cache.scope",
@@ -222,7 +230,10 @@ impl HttpCacheStage {
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
-            attributes: vec![],
+            attributes: vec![(
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            )],
             ty: MetricType::Gauge,
             value: MetricValue::U64(items as u64),
             unit: Some("{entry}"),
@@ -232,13 +243,19 @@ impl HttpCacheStage {
     }
 
     #[inline]
-    fn emit_store_metric(&self, ctx: &HttpContext, scope: CacheScope) {
+    fn emit_store_metric(&self, ctx: &HttpContext, zone_id: &CacheZoneId, scope: CacheScope) {
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.stores",
-            attributes: vec![(
-                "ferron.cache.scope",
-                MetricAttributeValue::StaticStr(scope.as_str()),
-            )],
+            attributes: vec![
+                (
+                    "ferron.cache.zone",
+                    MetricAttributeValue::String(zone_id.label().to_string()),
+                ),
+                (
+                    "ferron.cache.scope",
+                    MetricAttributeValue::StaticStr(scope.as_str()),
+                ),
+            ],
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
             unit: Some("{response}"),
@@ -248,14 +265,20 @@ impl HttpCacheStage {
     }
 
     #[inline]
-    fn emit_eviction_metrics(&self, ctx: &HttpContext, stats: StoreStats) {
+    fn emit_eviction_metrics(&self, ctx: &HttpContext, zone_id: &CacheZoneId, stats: StoreStats) {
         if stats.expired_evictions > 0 {
             ctx.events.emit(Event::Metric(MetricEvent {
                 name: "ferron.cache.evictions",
-                attributes: vec![(
-                    "ferron.cache.reason",
-                    MetricAttributeValue::StaticStr("expired"),
-                )],
+                attributes: vec![
+                    (
+                        "ferron.cache.zone",
+                        MetricAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                    (
+                        "ferron.cache.reason",
+                        MetricAttributeValue::StaticStr("expired"),
+                    ),
+                ],
                 ty: MetricType::Counter,
                 value: MetricValue::U64(stats.expired_evictions as u64),
                 unit: Some("{entry}"),
@@ -266,10 +289,16 @@ impl HttpCacheStage {
         if stats.size_evictions > 0 {
             ctx.events.emit(Event::Metric(MetricEvent {
                 name: "ferron.cache.evictions",
-                attributes: vec![(
-                    "ferron.cache.reason",
-                    MetricAttributeValue::StaticStr("size"),
-                )],
+                attributes: vec![
+                    (
+                        "ferron.cache.zone",
+                        MetricAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                    (
+                        "ferron.cache.reason",
+                        MetricAttributeValue::StaticStr("size"),
+                    ),
+                ],
                 ty: MetricType::Counter,
                 value: MetricValue::U64(stats.size_evictions as u64),
                 unit: Some("{entry}"),
@@ -280,16 +309,29 @@ impl HttpCacheStage {
     }
 
     #[inline]
-    fn emit_purge_metric(&self, ctx: &HttpContext, scope: CacheScope, purged: usize, items: usize) {
+    fn emit_purge_metric(
+        &self,
+        ctx: &HttpContext,
+        zone_id: &CacheZoneId,
+        scope: CacheScope,
+        purged: usize,
+        items: usize,
+    ) {
         if purged == 0 {
             return;
         }
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.purges",
-            attributes: vec![(
-                "ferron.cache.scope",
-                MetricAttributeValue::StaticStr(scope.as_str()),
-            )],
+            attributes: vec![
+                (
+                    "ferron.cache.zone",
+                    MetricAttributeValue::String(zone_id.label().to_string()),
+                ),
+                (
+                    "ferron.cache.scope",
+                    MetricAttributeValue::StaticStr(scope.as_str()),
+                ),
+            ],
             ty: MetricType::Counter,
             value: MetricValue::U64(purged as u64),
             unit: Some("{entry}"),
@@ -298,7 +340,10 @@ impl HttpCacheStage {
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
-            attributes: vec![],
+            attributes: vec![(
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            )],
             ty: MetricType::Gauge,
             value: MetricValue::U64(items as u64),
             unit: Some("{entry}"),
@@ -424,7 +469,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }];
                     let (stats, items) = store.purge(&purge_ops, None);
                     if stats.purged > 0 {
-                        self.emit_purge_metric(ctx, scope, stats.purged, items);
+                        self.emit_purge_metric(ctx, &zone_id, scope, stats.purged, items);
                     }
                     purged += stats.purged;
                 }
@@ -514,10 +559,10 @@ impl Stage<HttpContext> for HttpCacheStage {
             );
             if let Some((entry, cache_key, hit_kind)) = lookup {
                 let scope = entry.scope;
-                self.emit_eviction_metrics(ctx, stats);
+                self.emit_eviction_metrics(ctx, &zone_id, stats);
 
                 if request_policy.reason == "request-revalidation" {
-                    self.emit_request_metric(ctx, "hit", Some(scope), items);
+                    self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                     LookupResult::Revalidate {
                         entry: Box::new(entry),
                         cache_key,
@@ -537,7 +582,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     } else {
                         // SWR disabled — treat stale entry as revalidation
-                        self.emit_request_metric(ctx, "hit", Some(scope), items);
+                        self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                         LookupResult::Revalidate {
                             entry: Box::new(entry),
                             cache_key,
@@ -545,7 +590,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     }
                 } else {
-                    self.emit_request_metric(ctx, "hit", Some(scope), items);
+                    self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
@@ -561,7 +606,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     LookupResult::Hit
                 }
             } else {
-                self.emit_eviction_metrics(ctx, stats);
+                self.emit_eviction_metrics(ctx, &zone_id, stats);
 
                 if had_expired {
                     // Thundering herd protection: coalesce concurrent requests
@@ -581,8 +626,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                         if let Some((entry, _, _)) = retry_lookup {
                             // Leader populated the cache — serve from cache
                             let scope = entry.scope;
-                            self.emit_eviction_metrics(ctx, retry_stats);
-                            self.emit_request_metric(ctx, "hit", Some(scope), retry_items);
+                            self.emit_eviction_metrics(ctx, &zone_id, retry_stats);
+                            self.emit_request_metric(
+                                ctx,
+                                &zone_id,
+                                "hit",
+                                Some(scope),
+                                retry_items,
+                            );
                             ctx.res = Some(if entry.body.is_none() {
                                 HttpResponse::BuiltinError(
                                     entry.status.as_u16(),
@@ -657,6 +708,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         ctx.extensions.insert::<RequestStateKey>(RequestState {
             config,
+            zone_id,
             base_key,
             request_headers,
             request_cookies,
@@ -692,7 +744,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 if inflight_key.is_some() {
                     let mut stats = *stats;
                     stats.expired_evictions += 1;
-                    self.emit_eviction_metrics(ctx, stats);
+                    self.emit_eviction_metrics(ctx, &state.zone_id, stats);
                 } else {
                     // Serve stale response immediately
                     ctx.res = Some(if entry.body.is_none() {
@@ -720,17 +772,17 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                     }
 
-                    self.emit_request_metric(ctx, "hit", *scope, *items);
+                    self.emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                     return Ok(());
                 }
             }
             LookupResult::Revalidate { stats, .. } => {
-                self.emit_eviction_metrics(ctx, *stats);
+                self.emit_eviction_metrics(ctx, &state.zone_id, *stats);
             }
             LookupResult::Miss {
                 stats,
                 inflight_key: _,
-            } => self.emit_eviction_metrics(ctx, *stats),
+            } => self.emit_eviction_metrics(ctx, &state.zone_id, *stats),
             LookupResult::Bypass => {}
         }
 
@@ -819,6 +871,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 self.emit_request_metric(
                     ctx,
+                    &state.zone_id,
                     "revalidated",
                     Some(cached_entry.scope),
                     state.store.len(),
@@ -888,6 +941,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                         self.emit_request_metric(
                             ctx,
+                            &state.zone_id,
                             "hit",
                             Some(stale_entry.scope),
                             state.store.len(),
@@ -918,7 +972,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             let (stats, items) = state.store.purge(&purge_ops, state.private_key.as_deref());
             for operation in &purge_ops {
                 purge_scope = Some(operation.scope);
-                self.emit_purge_metric(ctx, operation.scope, stats.purged, items);
+                self.emit_purge_metric(ctx, &state.zone_id, operation.scope, stats.purged, items);
             }
             if stats.purged > 0 {
                 ctx.events.emit(Event::Log(LogEvent {
@@ -1109,8 +1163,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &state.request_headers,
                         &state.request_cookies,
                     );
-                    self.emit_eviction_metrics(ctx, stats);
-                    self.emit_store_metric(ctx, scope);
+                    self.emit_eviction_metrics(ctx, &state.zone_id, stats);
+                    self.emit_store_metric(ctx, &state.zone_id, scope);
 
                     if let LookupResult::StaleWhileRevalidate {
                         entry,
@@ -1145,7 +1199,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             );
                         }
 
-                        self.emit_request_metric(ctx, "hit", *scope, *items);
+                        self.emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                         return Ok(());
                     }
 
@@ -1161,7 +1215,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    self.emit_request_metric(ctx, "miss", Some(scope), items);
+                    self.emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
                     ctx.res = Some(outgoing_response);
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {
@@ -1182,7 +1236,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    self.emit_request_metric(ctx, "miss", None, state.store.len());
+                    self.emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
                     ctx.res = Some(HttpResponse::Custom(response));
                 }
             }
@@ -1210,6 +1264,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             };
             self.emit_request_metric(
                 ctx,
+                &state.zone_id,
                 result,
                 purge_scope.or(decision.scope),
                 state.store.len(),

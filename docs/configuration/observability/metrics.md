@@ -6,7 +6,8 @@ description: "Process, admin API, and HTTP/proxy metrics emitted by Ferron."
 This page documents the metrics emitted by Ferron. Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics, such as:
 
 - **Core HTTP server metrics** — active requests, request duration, and request count. See [HTTP host directives](/docs/v3/configuration/server/host#metrics).
-- **Rate limiting metrics** — allowed and rejected requests. See [Rate limiting](/docs/v3/configuration/content/rate-limit#metrics).
+- **Cache metrics** — cache hits, misses, entries, stores, evictions, and purges, with zone scoping. See [HTTP caching](/docs/v3/configuration/content/cache#metrics).
+- **Rate limiting metrics** — allowed and rejected requests, with zone scoping. See [Rate limiting](/docs/v3/configuration/content/rate-limit#metrics).
 - **Response control metrics** — aborted connections, IP blocks, and status rule matches. See [HTTP response control](/docs/v3/configuration/routing/response#metrics).
 - **Static file metrics** — files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/content/static-files#metrics).
 - **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/routing/rewrite#metrics).

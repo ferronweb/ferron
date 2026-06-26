@@ -22,6 +22,17 @@ pub enum CacheZoneId {
     Host(String),
 }
 
+impl CacheZoneId {
+    /// Return a stable string label for use in metric attributes.
+    pub fn label(&self) -> &str {
+        match self {
+            CacheZoneId::Global => "global",
+            CacheZoneId::Named(name) => name.as_str(),
+            CacheZoneId::Host(host) => host.as_str(),
+        }
+    }
+}
+
 /// Configuration for multi-instance cache purge propagation via an external
 /// control-plane service.
 #[derive(Clone, Default)]
