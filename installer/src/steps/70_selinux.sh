@@ -134,6 +134,8 @@ step_configure_selinux() {
     log_write "SELinux configuration complete"
 }
 
-if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+    : # not applicable in uninstall mode
+elif [ "$FERRON_INSTALL_METHOD" = "archive" ]; then
     run_step "Configuring SELinux" step_configure_selinux
 fi

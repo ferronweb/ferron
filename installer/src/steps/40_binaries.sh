@@ -79,6 +79,8 @@ step_install_binaries() {
     # here.
 }
 
-if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+    : # not applicable in uninstall mode
+elif [ "$FERRON_INSTALL_METHOD" = "archive" ]; then
     run_step "Installing binaries" step_install_binaries
 fi

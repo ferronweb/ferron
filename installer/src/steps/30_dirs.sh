@@ -50,6 +50,8 @@ step_create_dirs() {
     log_write "set ownership on /var/www/ferron"
 }
 
-if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+    : # not applicable in uninstall mode
+elif [ "$FERRON_INSTALL_METHOD" = "archive" ]; then
     run_step "Creating directory layout" step_create_dirs
 fi

@@ -187,6 +187,8 @@ step_download() {
     log_write "downloaded ferron $FERRON_VERSION for $FERRON_TARGET_TRIPLE"
 }
 
-if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+    : # not applicable in uninstall mode
+elif [ "$FERRON_INSTALL_METHOD" = "archive" ]; then
     run_step "Downloading Ferron release" step_download
 fi
