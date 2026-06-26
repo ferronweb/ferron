@@ -26,7 +26,6 @@ hyper-rustls = { version = "0.27", features = ["http1", "http2", "rustls-native-
 rustls = "0.23"
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 ferron-core = { path = "../../core" }

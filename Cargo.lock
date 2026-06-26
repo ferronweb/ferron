@@ -1462,7 +1462,6 @@ dependencies = [
  "rustc-hash",
  "rustls",
  "rustls-native-certs",
- "serde",
  "serde_json",
  "tokio",
  "typemap_rev",
