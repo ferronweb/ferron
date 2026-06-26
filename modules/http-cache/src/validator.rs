@@ -18,6 +18,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "ignore",
     "ignore_request_cache_control",
     "zone",
+    "max_entries",
 ];
 
 #[derive(Default)]

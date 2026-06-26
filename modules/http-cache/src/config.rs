@@ -122,6 +122,22 @@ pub fn parse_max_entries(configuration: &LayeredConfiguration) -> usize {
     get_nested_non_negative_usize(configuration, "max_entries", DEFAULT_MAX_CACHE_ENTRIES)
 }
 
+/// Check whether the host-level cache block explicitly specifies `max_entries`.
+///
+/// This is distinct from `parse_max_entries()` which reads from any layer
+/// (including inherited global values). This function only checks the highest-
+/// priority (host-level) cache block, using `inherit = false`.
+pub fn has_host_max_entries(configuration: &LayeredConfiguration) -> bool {
+    for entry in configuration.get_entries("cache", false) {
+        if let Some(children) = &entry.children {
+            if children.directives.contains_key("max_entries") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn parse_cache_enabled(configuration: &LayeredConfiguration) -> bool {
     for entry in configuration.get_entries("cache", true) {
         if let Some(value) = entry.args.first().and_then(|value| value.as_boolean()) {

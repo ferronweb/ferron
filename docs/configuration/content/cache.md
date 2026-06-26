@@ -80,6 +80,7 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `enable_stale_if_error` | `[<bool>]` | When enabled, cached responses with a `stale-if-error` directive are served from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
 | `purge_propagation` | block | Configures multi-instance cache purge propagation via an external control-plane service. See [Cache purge propagation](#cache-purge-propagation) below. | (disabled) |
 | `zone` | `<string>` | Assign this host to a named cache zone. Hosts sharing the same zone name share a single cache store. If omitted, the host uses an implicit per-host zone. See [Cache zones](#cache-zones) below. | (implicit per-host) |
+| `max_entries` | `<int>` | Maximum number of response entries for this host's cache. When specified without `zone`, this implicitly creates a per-host zone with the given capacity, even if a global zone exists. See [Cache zones](#cache-zones) below. | (global or `1024`) |
 
 **Configuration example:**
 
@@ -204,7 +205,7 @@ Both hosts share the 8192-entry `shared_assets` zone.
 
 **Opting out of the global zone:**
 
-If a global zone exists but a host should have its own isolated cache, use `zone` with a unique name:
+If a global zone exists but a host should have its own isolated cache, use `zone` with a unique name, or simply specify `max_entries` in the host block:
 
 ```ferron
 {
@@ -219,10 +220,12 @@ example.com {
 
 admin.example.com {
     cache {
-        zone "admin_isolated"  # opt out of global zone
+        max_entries 2048  # implicitly creates a per-host zone
     }
 }
 ```
+
+Here `admin.example.com` gets its own 2048-entry cache, while `example.com` shares the global 4096-entry store.
 
 > [!note]
 > Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries.
@@ -233,8 +236,9 @@ admin.example.com {
 Zone resolution follows this order:
 
 1. **Named zone** — if the host specifies `zone "name"`, the named zone's `CacheStore` is used. Capacity comes from the global `zone "name" { max_entries = N }` definition.
-2. **Global zone** — if no `zone` is specified and a global `cache { max_entries = N }` block exists (without explicit `zone` blocks), the global `CacheStore` is used. All hosts without an explicit `zone` share this store.
-3. **Per-host zone** — if no `zone` is specified and no global zone exists, the hostname is used as the zone ID. Capacity comes from the host-level or global `max_entries`.
+2. **Host-level `max_entries`** — if the host specifies `max_entries` in its cache block (without `zone`), an implicit per-host zone is created with that capacity. This overrides the global zone.
+3. **Global zone** — if no `zone` or host-level `max_entries` is specified and a global `cache { max_entries = N }` block exists (without explicit `zone` blocks), the global `CacheStore` is used. All hosts without an explicit `zone` share this store.
+4. **Per-host zone** — if none of the above apply, the hostname is used as the zone ID. Capacity comes from the host-level or global `max_entries`.
 
 ### PURGE method cache invalidation
 

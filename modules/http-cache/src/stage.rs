@@ -26,7 +26,7 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
 use crate::config::{
-    parse_cache_config, parse_max_entries, CacheConfig, CacheZoneId,
+    has_host_max_entries, parse_cache_config, parse_max_entries, CacheConfig, CacheZoneId,
 };
 use crate::lscache::{
     collect_lsc_cookies, parse_litespeed_cache_control, parse_litespeed_purge,
@@ -1286,9 +1286,11 @@ fn build_cached_response(
 ///
 /// Resolution order:
 /// 1. If the host specifies `zone "name"` → `CacheZoneId::Named(name)`
-/// 2. If a global `cache { max_entries = N }` block exists (no explicit `zone`
+/// 2. If the host specifies `max_entries` in its cache block (without `zone`)
+///    → `CacheZoneId::Host(hostname)` — the host wants its own capacity
+/// 3. If a global `cache { max_entries = N }` block exists (no explicit `zone`
 ///    blocks in it) → `CacheZoneId::Global` (all hosts share one store)
-/// 3. Otherwise → `CacheZoneId::Host(hostname)` (per-host store)
+/// 4. Otherwise → `CacheZoneId::Host(hostname)` (per-host store)
 fn resolve_zone_id(
     hostname: &Option<String>,
     config: &CacheConfig,
@@ -1296,6 +1298,13 @@ fn resolve_zone_id(
 ) -> CacheZoneId {
     if let Some(ref zone) = config.zone {
         zone.clone()
+    } else if has_host_max_entries(configuration) {
+        // Host specifies max_entries → implicit per-host zone
+        CacheZoneId::Host(
+            hostname
+                .clone()
+                .unwrap_or_else(|| "_default".to_string()),
+        )
     } else if crate::config::has_global_zone(configuration) {
         CacheZoneId::Global
     } else {
