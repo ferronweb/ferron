@@ -16,7 +16,7 @@ async fn create_ferron_container() -> Result<ContainerAsync<GenericImage>, Testc
                 .with_response_matcher(|_| true),
         )))
         .with_network("bridge")
-        .with_cmd(vec!["/bin/sh", "-c", "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 0.1; wait $(cat /tmp/ferron.pid)"])
+        .with_cmd(vec!["/bin/sh", "-c", "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)"])
         .start()
         .await
 }
