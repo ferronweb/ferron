@@ -137,6 +137,7 @@ impl Stage<HttpContext> for AbuseProtectionStage {
         // Run early, after client IP is resolved but before rate limiting
         vec![
             StageConstraint::After("client_ip_from_header".to_string()),
+            StageConstraint::Before("cache".to_string()),
             StageConstraint::Before("rate_limit".to_string()),
             StageConstraint::Before("basicauth".to_string()),
         ]

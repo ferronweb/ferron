@@ -229,6 +229,7 @@ impl Stage<HttpContext> for RateLimitStage {
         // and before the main request handler.
         vec![
             StageConstraint::After("client_ip_from_header".to_string()),
+            StageConstraint::Before("cache".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
         ]
     }

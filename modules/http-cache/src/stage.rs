@@ -265,6 +265,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             StageConstraint::After("rewrite".to_string()),
             StageConstraint::After("rate_limit".to_string()),
             StageConstraint::After("http_response".to_string()),
+            StageConstraint::After("abuse_protection".to_string()),
             StageConstraint::After("basicauth".to_string()),
             StageConstraint::Before("forward_proxy".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
