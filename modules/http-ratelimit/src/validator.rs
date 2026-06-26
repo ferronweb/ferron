@@ -3,14 +3,25 @@ use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirective
 
 use crate::key_extractor::KeyExtractor;
 
-/// Recognized directives inside a `rate_limit { ... }` block.
-const RECOGNIZED_DIRECTIVES: &[&str] = &[
+/// Directives allowed inside a global `rate_limit { ... }` block (no zone definitions).
+const GLOBAL_RATE_LIMIT_DIRECTIVES: &[&str] = &[
     "rate",
     "burst",
     "key",
     "deny_status",
     "bucket_ttl",
     "max_buckets",
+];
+
+/// Directives allowed inside a host-level `rate_limit { ... }` block.
+const HOST_RATE_LIMIT_DIRECTIVES: &[&str] = &[
+    "rate",
+    "burst",
+    "key",
+    "deny_status",
+    "bucket_ttl",
+    "max_buckets",
+    "zone",
 ];
 
 /// Validator for `rate_limit` configuration blocks.
@@ -23,11 +34,17 @@ impl ConfigurationValidator for RateLimitValidator {
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let is_global = ctx.is_global;
+
         if let Some(entries) = config.directives.get("rate_limit") {
             ctx.used_directives.insert("rate_limit".to_string());
             for entry in entries {
                 if let Some(ref children) = entry.children {
-                    self.validate_rate_limit_block(children, ctx)?;
+                    if is_global {
+                        self.validate_global_rate_limit_block(children, ctx)?;
+                    } else {
+                        self.validate_host_rate_limit_block(children, ctx)?;
+                    }
                 }
             }
         }
@@ -37,16 +54,71 @@ impl ConfigurationValidator for RateLimitValidator {
 }
 
 impl RateLimitValidator {
+    /// Validate a global `rate_limit` block.
+    ///
+    /// Global blocks can either:
+    /// 1. Define rate limit rules (all hosts share a global zone)
+    /// 2. Define named zones (hosts reference them with `zone "name"`)
+    fn validate_global_rate_limit_block(
+        &self,
+        block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Check if this block defines named zones
+        let has_zones = block.directives.contains_key("zone");
+
+        if has_zones {
+            // Zone definition block: validate zone directives
+            if let Some(entries) = block.directives.get("zone") {
+                for entry in entries {
+                    // Zone must have exactly one string argument
+                    if entry.args.len() != 1 {
+                        return Err(
+                            "Invalid `zone` — expected exactly one string argument (the zone name)"
+                                .into(),
+                        );
+                    }
+                    if entry.args.first().and_then(|v| v.as_str()).is_none() {
+                        return Err("Invalid `zone` — expected a string value".into());
+                    }
+                    // Zone definition should not have a block
+                    if entry.children.is_some() {
+                        return Err(
+                            "Invalid `zone` — zone definition should not have a nested block"
+                                .into(),
+                        );
+                    }
+                }
+            }
+        } else {
+            // Global rate limit rules: validate like a host block
+            self.validate_rate_limit_block(block, ctx, GLOBAL_RATE_LIMIT_DIRECTIVES)?;
+        }
+
+        Ok(())
+    }
+
+    /// Validate a host-level `rate_limit` block.
+    fn validate_host_rate_limit_block(
+        &self,
+        block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.validate_rate_limit_block(block, ctx, HOST_RATE_LIMIT_DIRECTIVES)
+    }
+
+    /// Validate a `rate_limit` block with the given allowed directives.
     fn validate_rate_limit_block(
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+        allowed_directives: &[&str],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut sub = std::collections::HashSet::new();
 
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
-            if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
+            if !allowed_directives.contains(&directive_name.as_str()) {
                 return Err(format!(
                     "Invalid `{directive_name}` — unknown directive in rate_limit block"
                 )
@@ -122,6 +194,25 @@ impl RateLimitValidator {
             sub.insert("max_buckets".to_string());
             for entry in entries {
                 self.validate_number_entry(entry, "max_buckets", 1)?;
+            }
+        }
+
+        // Validate `zone` — optional, must be a string argument (host-level only)
+        if let Some(entries) = block.directives.get("zone") {
+            sub.insert("zone".to_string());
+            for entry in entries {
+                if entry.children.is_some() {
+                    return Err("Invalid `zone` — expected a string argument, not a block".into());
+                }
+                if entry.args.len() != 1 {
+                    return Err(
+                        "Invalid `zone` — expected exactly one string argument (the zone name)"
+                            .into(),
+                    );
+                }
+                if entry.args.first().and_then(|v| v.as_str()).is_none() {
+                    return Err("Invalid `zone` — expected a string value".into());
+                }
             }
         }
 

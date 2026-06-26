@@ -38,6 +38,7 @@ Multiple `rate_limit` blocks can be defined to apply different rules simultaneou
 | `deny_status` | `<int>` | HTTP status code when rate is exceeded. | `429` |
 | `bucket_ttl` | `<int>` | Seconds before an unused bucket is evicted. | `600` |
 | `max_buckets` | `<int>` | Maximum buckets per rule (prevents memory exhaustion). | `100000` |
+| `zone` | `<string>` | Named zone for sharing rate limit buckets across hosts. | — |
 
 ### Key types
 
@@ -71,6 +72,102 @@ To prevent unbounded memory growth from one-shot clients, buckets are evicted af
 ### Per-location limits
 
 `rate_limit` blocks inside `location` blocks apply only to requests matching that path. Both host-level and location-level rules are evaluated — a request must pass all rules to be served.
+
+### Rate limit zones
+
+By default, each host gets its own isolated set of rate limit buckets. Rate limit zones allow multiple hostnames to share the same buckets, or to explicitly opt out of a global zone.
+
+**Zone resolution order:**
+
+1. If the host-level `rate_limit` block contains `zone "name"`, the host joins the named zone.
+2. If the host has its own `rate_limit` block (without `zone`) and a global zone exists, the host gets its own per-host zone (opting out of the global zone).
+3. If a global `rate_limit` block exists without `zone` blocks, all hosts without explicit zones share the global zone.
+4. Otherwise, each host gets its own per-host zone.
+
+**Global zone:**
+
+```ferron
+{
+    rate_limit {
+        rate 10
+        burst 5
+        key remote_address
+    }
+}
+
+example.com {
+    rate_limit {
+        rate 10
+        burst 5
+        key remote_address
+    }
+}
+
+api.example.com {
+    rate_limit {
+        rate 50
+        burst 10
+        key remote_address
+    }
+}
+```
+
+Both `example.com` and `api.example.com` share the same global zone. Their rate limit buckets are keyed by IP, so a client hitting both hosts shares the same token pool.
+
+**Named zones:**
+
+```ferron
+{
+    rate_limit {
+        zone "api"
+    }
+}
+
+api.example.com {
+    rate_limit {
+        zone "api"
+        rate 50
+        burst 10
+        key remote_address
+    }
+}
+
+api-v2.example.com {
+    rate_limit {
+        zone "api"
+        rate 50
+        burst 10
+        key remote_address
+    }
+}
+```
+
+Both `api.example.com` and `api-v2.example.com` share the named zone `"api"`. Their rate limit buckets are shared.
+
+**Opting out of the global zone:**
+
+```ferron
+{
+    rate_limit {
+        rate 10
+        burst 5
+        key remote_address
+    }
+}
+
+example.com {
+    # Inherits global zone
+}
+
+internal.example.com {
+    rate_limit {
+        rate 100
+        burst 20
+        key remote_address
+    }
+    # Has its own rate_limit block → per-host zone (opts out of global)
+}
+```
 
 ### Configuration reload
 

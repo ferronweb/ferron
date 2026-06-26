@@ -99,6 +99,10 @@ name = "security"
 path = "tests/security/mod.rs"
 
 [[test]]
+name = "ratelimit_zones"
+path = "tests/ratelimit_zones.rs"
+
+[[test]]
 name = "static"
 path = "tests/static.rs"
 

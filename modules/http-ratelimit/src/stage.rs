@@ -19,20 +19,20 @@ use ferron_observability::{
 use http::{HeaderMap, HeaderValue};
 use parking_lot::Mutex;
 
-use crate::config::{parse_rate_limit_config, RateLimitConfig};
+use crate::config::{parse_rate_limit_config, resolve_zone_id, RateLimitConfig, RateLimitZoneId};
 use crate::key_extractor::KeyExtractor;
 use crate::registry::TokenBucketRegistry;
 
 /// Shared rate limit engine that manages per-key token bucket registries.
 ///
 /// The engine is created once during module loading and shared across all
-/// stage invocations. It maintains a registry per unique rate limit rule,
-/// identified by a rule fingerprint.
+/// stage invocations. It maintains a registry per unique (zone, rule fingerprint)
+/// pair so that hosts in different zones get isolated registries.
 pub struct RateLimitEngine {
-    /// Registries keyed by a rule fingerprint string.
-    /// The fingerprint is derived from the rule's configuration (rate, burst, key, etc.)
-    /// so that identical rules across hosts share the same registry.
-    registries: Mutex<HashMap<String, TokenBucketRegistry>>,
+    /// Registries keyed by (zone_id, fingerprint).
+    /// The zone_id determines the sharing scope, and the fingerprint
+    /// identifies the specific rate limit rule configuration.
+    registries: Mutex<HashMap<(RateLimitZoneId, String), TokenBucketRegistry>>,
 }
 
 impl RateLimitEngine {
@@ -43,20 +43,30 @@ impl RateLimitEngine {
         }
     }
 
-    /// Get or create a registry for the given rate limit config.
-    fn get_or_create_registry(&self, config: &RateLimitConfig) -> TokenBucketRegistry {
-        // Create a fingerprint from the config parameters
+    /// Get or create a registry for the given rate limit config and zone.
+    fn get_or_create_registry(
+        &self,
+        config: &RateLimitConfig,
+        zone_id: &RateLimitZoneId,
+    ) -> TokenBucketRegistry {
+        // Create a fingerprint from the config parameters (including key type)
+        let key_type = match &config.key {
+            KeyExtractor::RemoteAddress => "ip",
+            KeyExtractor::Uri => "uri",
+            KeyExtractor::Header(name) => name.as_str(),
+        };
         let fingerprint = format!(
-            "cap:{}|rate:{}|ttl:{}|max:{}",
+            "cap:{}|rate:{}|ttl:{}|max:{}|key:{}",
             config.rate + config.burst,
             config.rate,
             config.bucket_ttl_secs,
-            config.max_buckets
+            config.max_buckets,
+            key_type
         );
 
         let mut registries = self.registries.lock();
         registries
-            .entry(fingerprint)
+            .entry((zone_id.clone(), fingerprint))
             .or_insert_with(|| {
                 TokenBucketRegistry::new(
                     config.rate + config.burst,
@@ -77,6 +87,9 @@ impl RateLimitEngine {
             return None;
         }
 
+        // Resolve zone ID for this request
+        let zone_id = resolve_zone_id(&ctx.configuration, &ctx.hostname);
+
         for config in &rules {
             // Extract key from request
             let key = match config.key.extract(ctx) {
@@ -84,8 +97,8 @@ impl RateLimitEngine {
                 None => continue, // Can't extract key — skip this rule
             };
 
-            // Get or create registry for this rule
-            let registry = self.get_or_create_registry(config);
+            // Get or create registry for this rule in the resolved zone
+            let registry = self.get_or_create_registry(config, &zone_id);
 
             // Get or create bucket
             let Some(bucket) = registry.get_or_create(&key) else {
