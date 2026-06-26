@@ -25,7 +25,9 @@ use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
-use crate::config::{parse_cache_config, parse_max_entries, CacheConfig};
+use crate::config::{
+    parse_cache_config, parse_max_entries, CacheConfig, CacheZoneId,
+};
 use crate::lscache::{
     collect_lsc_cookies, parse_litespeed_cache_control, parse_litespeed_purge,
     parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector, LS_CACHE,
@@ -124,11 +126,10 @@ struct ZoneGeneration {
 
 /// Pipeline stage for HTTP response caching.
 pub struct HttpCacheStage {
-    /// Cache stores keyed by zone ID (either `"host:{hostname}"` for implicit
-    /// per-host zones or a user-defined zone name for shared zones).
-    zones: Arc<DashMap<String, Arc<CacheStore>>>,
+    /// Cache stores keyed by `CacheZoneId`.
+    zones: Arc<DashMap<CacheZoneId, Arc<CacheStore>>>,
     /// Config generation at which each zone's `max_entries` was last applied.
-    zone_generations: Arc<DashMap<String, ZoneGeneration>>,
+    zone_generations: Arc<DashMap<CacheZoneId, ZoneGeneration>>,
 }
 
 impl HttpCacheStage {
@@ -144,13 +145,12 @@ impl HttpCacheStage {
     /// only when the configuration generation changes (not on every request).
     fn get_or_create_zone(
         &self,
-        zone_id: &str,
-        zone_name: Option<&str>,
+        zone_id: &CacheZoneId,
         configuration: &ferron_core::config::layer::LayeredConfiguration,
     ) -> Arc<CacheStore> {
         let store = self
             .zones
-            .entry(zone_id.to_string())
+            .entry(zone_id.clone())
             .or_insert_with(|| {
                 Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES))
             })
@@ -171,17 +171,20 @@ impl HttpCacheStage {
         };
 
         if should_update {
-            // For named zones, read max_entries from the global zone definition.
-            // For implicit per-host zones, read from the host's layered config.
-            let new_max = if let Some(name) = zone_name {
-                crate::config::parse_global_zone_max_entries(configuration, name)
-                    .unwrap_or(crate::config::DEFAULT_MAX_CACHE_ENTRIES)
-            } else {
-                parse_max_entries(configuration)
+            let new_max = match zone_id {
+                // Named zones: read max_entries from the global zone definition.
+                CacheZoneId::Named(name) => {
+                    crate::config::parse_global_zone_max_entries(configuration, name)
+                        .unwrap_or(crate::config::DEFAULT_MAX_CACHE_ENTRIES)
+                }
+                // Global zone: read from the global cache block's max_entries.
+                CacheZoneId::Global => parse_max_entries(configuration),
+                // Per-host zones: read from the host's layered config.
+                CacheZoneId::Host(_) => parse_max_entries(configuration),
             };
             store.set_max_entries(new_max);
             self.zone_generations
-                .entry(zone_id.to_string())
+                .entry(zone_id.clone())
                 .or_insert_with(|| ZoneGeneration {
                     generation: AtomicU64::new(current_gen),
                 })
@@ -352,8 +355,8 @@ impl Stage<HttpContext> for HttpCacheStage {
             return Ok(true);
         }
 
-        let zone_id = resolve_zone_id(&ctx.hostname, &config);
-        let store = self.get_or_create_zone(&zone_id, config.zone.as_deref(), &ctx.configuration);
+        let zone_id = resolve_zone_id(&ctx.hostname, &config, &ctx.configuration);
+        let store = self.get_or_create_zone(&zone_id, &ctx.configuration);
 
         let Some(request) = ctx.req.as_ref() else {
             return Ok(true);
@@ -1281,17 +1284,25 @@ fn build_cached_response(
 
 /// Resolve the cache zone ID for a request.
 ///
-/// If the host configuration specifies a named zone via `zone "name"`, that
-/// name is used as the zone ID, allowing multiple hostnames to share a single
-/// `CacheStore`. Otherwise, an implicit per-host zone keyed by `"host:{hostname}"`
-/// is used.
-fn resolve_zone_id(hostname: &Option<String>, config: &CacheConfig) -> String {
-    if let Some(ref zone_name) = config.zone {
-        zone_name.clone()
+/// Resolution order:
+/// 1. If the host specifies `zone "name"` → `CacheZoneId::Named(name)`
+/// 2. If a global `cache { max_entries = N }` block exists (no explicit `zone`
+///    blocks in it) → `CacheZoneId::Global` (all hosts share one store)
+/// 3. Otherwise → `CacheZoneId::Host(hostname)` (per-host store)
+fn resolve_zone_id(
+    hostname: &Option<String>,
+    config: &CacheConfig,
+    configuration: &ferron_core::config::layer::LayeredConfiguration,
+) -> CacheZoneId {
+    if let Some(ref zone) = config.zone {
+        zone.clone()
+    } else if crate::config::has_global_zone(configuration) {
+        CacheZoneId::Global
     } else {
-        format!(
-            "host:{}",
-            hostname.as_deref().unwrap_or("_default")
+        CacheZoneId::Host(
+            hostname
+                .clone()
+                .unwrap_or_else(|| "_default".to_string()),
         )
     }
 }

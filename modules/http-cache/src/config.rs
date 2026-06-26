@@ -8,6 +8,20 @@ pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;
 pub const DEFAULT_MAX_CACHE_AGE_SECS: u64 = 300;
 
+/// Identifies which cache store a request belongs to.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CacheZoneId {
+    /// The global zone — used when a global `cache { max_entries = N }` block
+    /// exists without explicit `zone` blocks. All hosts share this store.
+    Global,
+    /// A named zone defined at global scope via `zone "name" { ... }`.
+    /// Multiple hostnames can reference the same named zone.
+    Named(String),
+    /// An implicit per-host zone keyed by hostname. Used when no global zone
+    /// exists and the host does not specify an explicit `zone` directive.
+    Host(String),
+}
+
 /// Configuration for multi-instance cache purge propagation via an external
 /// control-plane service.
 #[derive(Clone, Default)]
@@ -36,9 +50,10 @@ pub struct CacheConfig {
     pub purge_method: bool,
     pub purge_allowed_ips: Vec<IpCidr>,
     pub purge_propagation: PurgePropagationConfig,
-    /// Named cache zone this host belongs to. When `None`, an implicit
-    /// per-host zone keyed by the hostname is used.
-    pub zone: Option<String>,
+    /// Cache zone this host belongs to. Determines which physical cache store
+    /// is used. Resolved by `resolve_zone_id()` based on the host directive
+    /// and global configuration.
+    pub zone: Option<CacheZoneId>,
 }
 
 impl Default for CacheConfig {
@@ -254,14 +269,14 @@ fn parse_purge_propagation(configuration: &LayeredConfiguration) -> PurgePropaga
 
 /// Parse the `zone` directive from a host-level cache block.
 ///
-/// Returns the zone name if `zone "name"` is present, or `None` for
-/// implicit per-host zones.
-fn parse_zone_name(configuration: &LayeredConfiguration) -> Option<String> {
+/// Returns the zone name as a `CacheZoneId::Named` if `zone "name"` is present,
+/// or `None` if no explicit zone directive exists.
+fn parse_zone_name(configuration: &LayeredConfiguration) -> Option<CacheZoneId> {
     for block in cache_blocks(configuration) {
         if let Some(entries) = block.directives.get("zone") {
             if let Some(entry) = entries.first() {
                 if let Some(value) = entry.args.first().and_then(|v| v.as_str()) {
-                    return Some(value.to_string());
+                    return Some(CacheZoneId::Named(value.to_string()));
                 }
             }
         }
@@ -308,4 +323,22 @@ pub fn parse_global_zone_max_entries(
         }
     }
     None
+}
+
+/// Detect whether a global zone exists in the configuration.
+///
+/// A global zone exists when the global `cache` block contains `max_entries`
+/// but does NOT contain any explicit `zone` blocks. In this case, all hosts
+/// without an explicit `zone` directive share the global cache store.
+pub fn has_global_zone(configuration: &LayeredConfiguration) -> bool {
+    for entry in configuration.get_entries("cache", true) {
+        if let Some(children) = &entry.children {
+            let has_max_entries = children.directives.contains_key("max_entries");
+            let has_zone_blocks = children.directives.contains_key("zone");
+            if has_max_entries && !has_zone_blocks {
+                return true;
+            }
+        }
+    }
+    false
 }

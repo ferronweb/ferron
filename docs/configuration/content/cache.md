@@ -150,7 +150,33 @@ example.com {
 
 ### Cache zones
 
-By default, each hostname gets its own independent cache store (an implicit per-host zone). The `zone` subdirective allows multiple hostnames to share a single cache store, and the global `zone` block lets you pre-configure named zones with custom capacity.
+Cache zones determine which hosts share a physical cache store. There are three zone types:
+
+- **Global zone** — when a global `cache { max_entries = N }` block exists (without explicit `zone` blocks), all hosts share a single cache store by default.
+- **Named zone** — explicitly defined at global scope via `zone "name" { max_entries = N }`. Multiple hostnames can reference the same named zone.
+- **Per-host zone** — each hostname gets its own independent cache store. Used when no global zone exists and the host does not specify an explicit `zone` directive.
+
+**Global zone (default when a global cache block exists):**
+
+```ferron
+{
+    cache {
+        max_entries 4096
+    }
+}
+
+example.com {
+    cache
+}
+
+www.example.com {
+    cache
+}
+```
+
+In this configuration, both `example.com` and `www.example.com` share the same 4096-entry cache store. No explicit `zone` directive is needed — the global `cache` block establishes a global zone.
+
+**Named zones:**
 
 ```ferron
 {
@@ -174,7 +200,29 @@ www.example.com {
 }
 ```
 
-In this configuration, both `example.com` and `www.example.com` share the same 8192-entry cache. A cached response from one hostname can be served to the other (if the URL matches).
+Both hosts share the 8192-entry `shared_assets` zone.
+
+**Opting out of the global zone:**
+
+If a global zone exists but a host should have its own isolated cache, use `zone` with a unique name:
+
+```ferron
+{
+    cache {
+        max_entries 4096
+    }
+}
+
+example.com {
+    cache  # uses global zone
+}
+
+admin.example.com {
+    cache {
+        zone "admin_isolated"  # opt out of global zone
+    }
+}
+```
 
 > [!note]
 > Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries.
@@ -185,7 +233,8 @@ In this configuration, both `example.com` and `www.example.com` share the same 8
 Zone resolution follows this order:
 
 1. **Named zone** — if the host specifies `zone "name"`, the named zone's `CacheStore` is used. Capacity comes from the global `zone "name" { max_entries = N }` definition.
-2. **Implicit per-host zone** — if no `zone` is specified, the hostname is used as the zone ID (e.g., `host:example.com`). Capacity comes from the host-level or global `max_entries`.
+2. **Global zone** — if no `zone` is specified and a global `cache { max_entries = N }` block exists (without explicit `zone` blocks), the global `CacheStore` is used. All hosts without an explicit `zone` share this store.
+3. **Per-host zone** — if no `zone` is specified and no global zone exists, the hostname is used as the zone ID. Capacity comes from the host-level or global `max_entries`.
 
 ### PURGE method cache invalidation
 
