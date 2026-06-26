@@ -55,6 +55,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         ctx,
                         &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
                         false,
+                        true,
                     )?;
                     if !children.directives.contains_key("max_entries") {
                         return Err(
@@ -95,6 +96,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         ctx,
                         HOST_CACHE_DIRECTIVES,
                         config.directives.contains_key("basic_auth"),
+                        false,
                     )?;
                 } else {
                     if entry.args.len() > 1 {
@@ -120,13 +122,14 @@ fn validate_cache_block(
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     allowed_directives: &[&str],
     parent_has_basic_auth: bool,
+    is_global: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sub = std::collections::HashSet::new();
 
     for allowed in allowed_directives {
         if let Some(entries) = block.directives.get(*allowed) {
             sub.insert(allowed.to_string());
-            if *allowed == "purge_propagation" {
+            if *allowed == "purge_propagation" || *allowed == "zone" {
                 continue;
             }
             for entry in entries {
@@ -237,10 +240,8 @@ fn validate_cache_block(
 
     if let Some(entries) = block.directives.get("zone") {
         for entry in entries {
-            if entry.children.is_some() {
-                return Err(
-                    "Invalid `zone` - expected a string argument, not a block".into(),
-                );
+            if !is_global && entry.children.is_some() {
+                return Err("Invalid `zone` - expected a string argument, not a block".into());
             }
             if entry.args.len() != 1 {
                 return Err(
@@ -405,9 +406,7 @@ fn validate_global_zone_block(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // zone must have exactly one string argument (the zone name)
     if entry.args.len() != 1 {
-        return Err(
-            "Invalid `zone` - expected exactly one string argument (the zone name)".into(),
-        );
+        return Err("Invalid `zone` - expected exactly one string argument (the zone name)".into());
     }
     if entry.args.first().and_then(|v| v.as_str()).is_none() {
         return Err("Invalid `zone` - expected a string value".into());
@@ -425,10 +424,9 @@ fn validate_global_zone_block(
             sub.insert(allowed.to_string());
             for entry in entries {
                 if entry.children.is_some() {
-                    return Err(format!(
-                        "Invalid `{allowed}` - nested blocks are not supported"
-                    )
-                    .into());
+                    return Err(
+                        format!("Invalid `{allowed}` - nested blocks are not supported").into(),
+                    );
                 }
             }
         }

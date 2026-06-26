@@ -31,6 +31,10 @@ name = "cache"
 path = "tests/cache.rs"
 
 [[test]]
+name = "cache_zones"
+path = "tests/cache_zones.rs"
+
+[[test]]
 name = "cgi"
 path = "tests/cgi.rs"
 

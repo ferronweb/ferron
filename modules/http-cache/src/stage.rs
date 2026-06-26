@@ -151,9 +151,7 @@ impl HttpCacheStage {
         let store = self
             .zones
             .entry(zone_id.clone())
-            .or_insert_with(|| {
-                Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES))
-            })
+            .or_insert_with(|| Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES)))
             .value()
             .clone();
 
@@ -1300,19 +1298,11 @@ fn resolve_zone_id(
         zone.clone()
     } else if has_host_max_entries(configuration) {
         // Host specifies max_entries → implicit per-host zone
-        CacheZoneId::Host(
-            hostname
-                .clone()
-                .unwrap_or_else(|| "_default".to_string()),
-        )
+        CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
     } else if crate::config::has_global_zone(configuration) {
         CacheZoneId::Global
     } else {
-        CacheZoneId::Host(
-            hostname
-                .clone()
-                .unwrap_or_else(|| "_default".to_string()),
-        )
+        CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
     }
 }
 
