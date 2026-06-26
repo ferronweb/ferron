@@ -6,7 +6,7 @@ use ferron_core::config::{
 };
 use http::header::HeaderName;
 
-const GLOBAL_CACHE_DIRECTIVES: &[&str] = &["max_entries"];
+const GLOBAL_CACHE_DIRECTIVES: &[&str] = &["max_entries", "zone"];
 const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "max_response_size",
     "litespeed_override_cache_control",
@@ -17,6 +17,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "vary",
     "ignore",
     "ignore_request_cache_control",
+    "zone",
 ];
 
 #[derive(Default)]
@@ -64,6 +65,13 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                     if let Some(nested_entries) = children.directives.get("max_entries") {
                         for nested_entry in nested_entries {
                             validate_single_non_negative_integer(nested_entry, "max_entries")?;
+                        }
+                    }
+
+                    // Validate zone blocks at global scope
+                    if let Some(zone_entries) = children.directives.get("zone") {
+                        for zone_entry in zone_entries {
+                            validate_global_zone_block(zone_entry, ctx)?;
                         }
                     }
                 }
@@ -226,6 +234,24 @@ fn validate_cache_block(
         }
     }
 
+    if let Some(entries) = block.directives.get("zone") {
+        for entry in entries {
+            if entry.children.is_some() {
+                return Err(
+                    "Invalid `zone` - expected a string argument, not a block".into(),
+                );
+            }
+            if entry.args.len() != 1 {
+                return Err(
+                    "Invalid `zone` - expected exactly one string argument (the zone name)".into(),
+                );
+            }
+            if entry.args.first().and_then(|v| v.as_str()).is_none() {
+                return Err("Invalid `zone` - expected a string value".into());
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -367,5 +393,59 @@ fn validate_header_name_list(
                 .map_err(|_| format!("Invalid `{name}` - invalid header name `{value}`"))?;
         }
     }
+    Ok(())
+}
+
+const GLOBAL_ZONE_DIRECTIVES: &[&str] = &["max_entries"];
+
+fn validate_global_zone_block(
+    entry: &ServerConfigurationDirectiveEntry,
+    ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // zone must have exactly one string argument (the zone name)
+    if entry.args.len() != 1 {
+        return Err(
+            "Invalid `zone` - expected exactly one string argument (the zone name)".into(),
+        );
+    }
+    if entry.args.first().and_then(|v| v.as_str()).is_none() {
+        return Err("Invalid `zone` - expected a string value".into());
+    }
+
+    // zone must be a block
+    let Some(children) = &entry.children else {
+        return Err("Invalid `zone` - expected a block with nested directives".into());
+    };
+
+    // Validate allowed subdirectives inside the zone block
+    let mut sub = std::collections::HashSet::new();
+    for allowed in GLOBAL_ZONE_DIRECTIVES {
+        if let Some(entries) = children.directives.get(*allowed) {
+            sub.insert(allowed.to_string());
+            for entry in entries {
+                if entry.children.is_some() {
+                    return Err(format!(
+                        "Invalid `{allowed}` - nested blocks are not supported"
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+
+    ferron_core::check_unused_subdirectives!(
+        children,
+        sub,
+        &mut ctx.diagnostics,
+        ctx.scope.clone()
+    );
+
+    // Validate max_entries if present
+    if let Some(entries) = children.directives.get("max_entries") {
+        for entry in entries {
+            validate_single_non_negative_integer(entry, "max_entries")?;
+        }
+    }
+
     Ok(())
 }

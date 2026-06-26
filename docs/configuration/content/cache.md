@@ -39,11 +39,12 @@ At HTTP host scope, `cache` can be written either as a block or as a boolean fla
 
 ### Global `cache` block
 
-Use the global `cache { ... }` block to configure shared cache capacity.
+Use the global `cache { ... }` block to configure shared cache capacity and named cache zones.
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `max_entries` | `<int>` | This directive specifies the maximum number of response entries stored in the shared in-memory HTTP cache. Setting this directive to `0` keeps the module loaded but prevents new entries from being stored. | `1024` |
+| `zone` | block | Defines a named cache zone with custom capacity. See [Cache zones](#cache-zones) below. | (none) |
 
 **Configuration example:**
 
@@ -51,6 +52,9 @@ Use the global `cache { ... }` block to configure shared cache capacity.
 {
     cache {
         max_entries 4096
+        zone "shared_assets" {
+            max_entries 8192
+        }
     }
 }
 ```
@@ -75,6 +79,7 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `enable_stale_while_revalidate` | `[<bool>]` | When enabled, cached responses with a `stale-while-revalidate` directive are revalidated synchronously after their `max-age` expires instead of being returned immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
 | `enable_stale_if_error` | `[<bool>]` | When enabled, cached responses with a `stale-if-error` directive are served from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
 | `purge_propagation` | block | Configures multi-instance cache purge propagation via an external control-plane service. See [Cache purge propagation](#cache-purge-propagation) below. | (disabled) |
+| `zone` | `<string>` | Assign this host to a named cache zone. Hosts sharing the same zone name share a single cache store. If omitted, the host uses an implicit per-host zone. See [Cache zones](#cache-zones) below. | (implicit per-host) |
 
 **Configuration example:**
 
@@ -142,6 +147,45 @@ example.com {
 - Non-`GET` responses are not stored, but they may still trigger LSCache-compatible purge headers.
 - Responses with `Vary: *` are never stored.
 - Built-in error responses generated after the main HTTP pipeline are not currently stored.
+
+### Cache zones
+
+By default, each hostname gets its own independent cache store (an implicit per-host zone). The `zone` subdirective allows multiple hostnames to share a single cache store, and the global `zone` block lets you pre-configure named zones with custom capacity.
+
+```ferron
+{
+    cache {
+        zone "shared_assets" {
+            max_entries 8192
+        }
+    }
+}
+
+example.com {
+    cache {
+        zone "shared_assets"
+    }
+}
+
+www.example.com {
+    cache {
+        zone "shared_assets"
+    }
+}
+```
+
+In this configuration, both `example.com` and `www.example.com` share the same 8192-entry cache. A cached response from one hostname can be served to the other (if the URL matches).
+
+> [!note]
+> Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries.
+
+> [!important]
+> When using named zones, the `max_entries` capacity is defined in the global `zone` block, not in the host-level `cache` block. Specifying `max_entries` in a host block that also uses `zone` will trigger a validation warning.
+
+Zone resolution follows this order:
+
+1. **Named zone** — if the host specifies `zone "name"`, the named zone's `CacheStore` is used. Capacity comes from the global `zone "name" { max_entries = N }` definition.
+2. **Implicit per-host zone** — if no `zone` is specified, the hostname is used as the zone ID (e.g., `host:example.com`). Capacity comes from the host-level or global `max_entries`.
 
 ### PURGE method cache invalidation
 

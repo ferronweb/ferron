@@ -36,6 +36,9 @@ pub struct CacheConfig {
     pub purge_method: bool,
     pub purge_allowed_ips: Vec<IpCidr>,
     pub purge_propagation: PurgePropagationConfig,
+    /// Named cache zone this host belongs to. When `None`, an implicit
+    /// per-host zone keyed by the hostname is used.
+    pub zone: Option<String>,
 }
 
 impl Default for CacheConfig {
@@ -54,6 +57,7 @@ impl Default for CacheConfig {
             purge_method: false,
             purge_allowed_ips: Vec::new(),
             purge_propagation: PurgePropagationConfig::default(),
+            zone: None,
         }
     }
 }
@@ -80,6 +84,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     let purge_method = get_nested_bool(configuration, "purge_method", false);
     let purge_allowed_ips = collect_purge_allowed_ips(configuration);
     let purge_propagation = parse_purge_propagation(configuration);
+    let zone = parse_zone_name(configuration);
 
     CacheConfig {
         enabled,
@@ -94,6 +99,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         purge_method,
         purge_allowed_ips,
         purge_propagation,
+        zone,
     }
 }
 
@@ -244,4 +250,62 @@ fn parse_purge_propagation(configuration: &LayeredConfiguration) -> PurgePropaga
         shared_secret,
         node_id,
     }
+}
+
+/// Parse the `zone` directive from a host-level cache block.
+///
+/// Returns the zone name if `zone "name"` is present, or `None` for
+/// implicit per-host zones.
+fn parse_zone_name(configuration: &LayeredConfiguration) -> Option<String> {
+    for block in cache_blocks(configuration) {
+        if let Some(entries) = block.directives.get("zone") {
+            if let Some(entry) = entries.first() {
+                if let Some(value) = entry.args.first().and_then(|v| v.as_str()) {
+                    return Some(value.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parse `max_entries` for a named zone from the global `cache` block.
+///
+/// Looks for `zone "name" { max_entries = N }` inside the global cache block.
+/// Returns `Some(max_entries)` if the zone is defined, `None` otherwise.
+pub fn parse_global_zone_max_entries(
+    configuration: &LayeredConfiguration,
+    zone_name: &str,
+) -> Option<usize> {
+    for entry in configuration.get_entries("cache", true) {
+        if let Some(children) = &entry.children {
+            if let Some(zone_entries) = children.directives.get("zone") {
+                for zone_entry in zone_entries {
+                    // Check that this zone entry matches the name
+                    if zone_entry
+                        .args
+                        .first()
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|name| name == zone_name)
+                    {
+                        // Parse the zone block's max_entries
+                        if let Some(zone_block) = &zone_entry.children {
+                            if let Some(max_entries_entries) =
+                                zone_block.directives.get("max_entries")
+                            {
+                                if let Some(entry) = max_entries_entries.first() {
+                                    if let Some(value) = entry.args.first() {
+                                        if let Some(n) = value.as_number() {
+                                            return Some(n.max(0) as usize);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }

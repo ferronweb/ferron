@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::io;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -116,17 +117,79 @@ enum CollectBodyOutcome {
     },
 }
 
+/// Tracks the config generation at which a zone's `max_entries` was last applied.
+struct ZoneGeneration {
+    generation: AtomicU64,
+}
+
 /// Pipeline stage for HTTP response caching.
 pub struct HttpCacheStage {
-    store: Arc<dashmap::DashMap<Option<String>, Arc<CacheStore>>>,
+    /// Cache stores keyed by zone ID (either `"host:{hostname}"` for implicit
+    /// per-host zones or a user-defined zone name for shared zones).
+    zones: Arc<DashMap<String, Arc<CacheStore>>>,
+    /// Config generation at which each zone's `max_entries` was last applied.
+    zone_generations: Arc<DashMap<String, ZoneGeneration>>,
 }
 
 impl HttpCacheStage {
     #[inline]
     pub fn new() -> Self {
         Self {
-            store: Arc::new(DashMap::new()),
+            zones: Arc::new(DashMap::new()),
+            zone_generations: Arc::new(DashMap::new()),
         }
+    }
+
+    /// Get or create a `CacheStore` for the given zone, updating `max_entries`
+    /// only when the configuration generation changes (not on every request).
+    fn get_or_create_zone(
+        &self,
+        zone_id: &str,
+        zone_name: Option<&str>,
+        configuration: &ferron_core::config::layer::LayeredConfiguration,
+    ) -> Arc<CacheStore> {
+        let store = self
+            .zones
+            .entry(zone_id.to_string())
+            .or_insert_with(|| {
+                Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES))
+            })
+            .value()
+            .clone();
+
+        // Only update max_entries when the config generation changes.
+        // This prevents per-request LRU eviction when different host blocks
+        // specify different capacities for the same zone.
+        let current_gen = ferron_core::admin::ADMIN_METRICS
+            .reload_metrics
+            .read()
+            .active_generation;
+
+        let should_update = match self.zone_generations.get(zone_id) {
+            Some(entry) => entry.generation.load(Ordering::Relaxed) != current_gen,
+            None => true,
+        };
+
+        if should_update {
+            // For named zones, read max_entries from the global zone definition.
+            // For implicit per-host zones, read from the host's layered config.
+            let new_max = if let Some(name) = zone_name {
+                crate::config::parse_global_zone_max_entries(configuration, name)
+                    .unwrap_or(crate::config::DEFAULT_MAX_CACHE_ENTRIES)
+            } else {
+                parse_max_entries(configuration)
+            };
+            store.set_max_entries(new_max);
+            self.zone_generations
+                .entry(zone_id.to_string())
+                .or_insert_with(|| ZoneGeneration {
+                    generation: AtomicU64::new(current_gen),
+                })
+                .generation
+                .store(current_gen, Ordering::Relaxed);
+        }
+
+        store
     }
 
     #[inline]
@@ -289,17 +352,8 @@ impl Stage<HttpContext> for HttpCacheStage {
             return Ok(true);
         }
 
-        let store = if let Some(store) = self.store.get(&ctx.hostname) {
-            store
-        } else {
-            self.store
-                .entry(ctx.hostname.clone())
-                .or_insert_with(|| {
-                    Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES))
-                })
-                .downgrade()
-        };
-        store.set_max_entries(parse_max_entries(&ctx.configuration));
+        let zone_id = resolve_zone_id(&ctx.hostname, &config);
+        let store = self.get_or_create_zone(&zone_id, config.zone.as_deref(), &ctx.configuration);
 
         let Some(request) = ctx.req.as_ref() else {
             return Ok(true);
@@ -1223,6 +1277,23 @@ fn build_cached_response(
 
     *response.headers_mut() = headers;
     Ok(response)
+}
+
+/// Resolve the cache zone ID for a request.
+///
+/// If the host configuration specifies a named zone via `zone "name"`, that
+/// name is used as the zone ID, allowing multiple hostnames to share a single
+/// `CacheStore`. Otherwise, an implicit per-host zone keyed by `"host:{hostname}"`
+/// is used.
+fn resolve_zone_id(hostname: &Option<String>, config: &CacheConfig) -> String {
+    if let Some(ref zone_name) = config.zone {
+        zone_name.clone()
+    } else {
+        format!(
+            "host:{}",
+            hostname.as_deref().unwrap_or("_default")
+        )
+    }
 }
 
 fn build_base_key(

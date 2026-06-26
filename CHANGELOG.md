@@ -4,6 +4,13 @@
 
 **Not released yet**
 
+### Added
+
+#### HTTP caching
+
+- **Cache zones** — the `cache` directive now supports a `zone` subdirective at host scope, allowing multiple hostnames to share a single in-memory cache store. Named zones can be pre-configured at global scope with custom `max_entries` capacity. Without an explicit `zone`, each hostname uses an implicit per-host cache zone. (`http-cache`)
+- **Generation-aware cache capacity** — `max_entries` is now only evaluated on configuration reload instead of on every request, preventing premature LRU eviction when different host blocks specify different capacities for the same zone. (`http-cache`)
+
 ### Fixed
 
 #### HTTP caching
