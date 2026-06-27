@@ -7,7 +7,7 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
+use crate::common;
 
 pub(crate) async fn create_ferron_container(
     webroot_dir: &std::path::Path,

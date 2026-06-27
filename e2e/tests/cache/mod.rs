@@ -7,7 +7,11 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
+#[path = "../common/mod.rs"]
 mod common;
+
+mod lscache;
+mod zones;
 
 async fn create_ferron_container(
     webroot_dir: &Path,

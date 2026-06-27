@@ -28,11 +28,7 @@ path = "tests/buffer.rs"
 
 [[test]]
 name = "cache"
-path = "tests/cache.rs"
-
-[[test]]
-name = "cache_zones"
-path = "tests/cache_zones.rs"
+path = "tests/cache/mod.rs"
 
 [[test]]
 name = "cgi"
@@ -67,10 +63,6 @@ name = "log_rotation"
 path = "tests/log_rotation.rs"
 
 [[test]]
-name = "lscache"
-path = "tests/lscache.rs"
-
-[[test]]
 name = "observability"
 path = "tests/observability/mod.rs"
 
@@ -97,10 +89,6 @@ path = "tests/response/mod.rs"
 [[test]]
 name = "security"
 path = "tests/security/mod.rs"
-
-[[test]]
-name = "ratelimit_zones"
-path = "tests/ratelimit_zones.rs"
 
 [[test]]
 name = "static"

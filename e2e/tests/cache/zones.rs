@@ -7,7 +7,7 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
+use crate::common;
 
 async fn create_ferron_container(
     config_file: &Path,
@@ -120,8 +120,17 @@ async fn test_cache_zone_global_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("miss"), "expected miss, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("miss"),
+        "expected miss, got: {cache_status}"
+    );
     assert_eq!(resp.bytes().await.unwrap().as_ref(), b"host-a-content");
 
     let resp = client
@@ -131,8 +140,17 @@ async fn test_cache_zone_global_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "expected hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "expected hit, got: {cache_status}"
+    );
 
     // Request from host-b: should miss (different hostname = different cache key)
     let resp = client
@@ -142,8 +160,17 @@ async fn test_cache_zone_global_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("miss"), "expected miss for host-b, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("miss"),
+        "expected miss for host-b, got: {cache_status}"
+    );
     assert_eq!(resp.bytes().await.unwrap().as_ref(), b"host-b-content");
 
     // Second request from host-b: should hit
@@ -154,8 +181,17 @@ async fn test_cache_zone_global_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "expected hit for host-b, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "expected hit for host-b, got: {cache_status}"
+    );
 
     container.stop().await.unwrap();
 }
@@ -255,8 +291,17 @@ async fn test_cache_zone_per_host_opt_out() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-a expected hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-a expected hit, got: {cache_status}"
+    );
 
     // host-b caches in its own per-host zone (opted out via max_entries)
     let resp = client
@@ -274,8 +319,17 @@ async fn test_cache_zone_per_host_opt_out() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-b expected hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-b expected hit, got: {cache_status}"
+    );
 
     container.stop().await.unwrap();
 }
@@ -370,8 +424,17 @@ async fn test_cache_zone_named_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("miss"), "host-a first request should miss, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("miss"),
+        "host-a first request should miss, got: {cache_status}"
+    );
     assert_eq!(resp.bytes().await.unwrap().as_ref(), b"named-zone-a");
 
     let resp = client
@@ -380,8 +443,17 @@ async fn test_cache_zone_named_shared() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-a second request should hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-a second request should hit, got: {cache_status}"
+    );
 
     // host-b: miss then hit (same named zone, different cache key)
     let resp = client
@@ -391,8 +463,17 @@ async fn test_cache_zone_named_shared() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("miss"), "host-b first request should miss, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("miss"),
+        "host-b first request should miss, got: {cache_status}"
+    );
     assert_eq!(resp.bytes().await.unwrap().as_ref(), b"named-zone-b");
 
     let resp = client
@@ -401,8 +482,17 @@ async fn test_cache_zone_named_shared() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-b second request should hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-b second request should hit, got: {cache_status}"
+    );
 
     container.stop().await.unwrap();
 }
@@ -492,8 +582,17 @@ async fn test_cache_zone_per_host_default() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-a expected hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-a expected hit, got: {cache_status}"
+    );
 
     // host-b: miss then hit (separate per-host zone)
     let resp = client
@@ -511,8 +610,17 @@ async fn test_cache_zone_per_host_default() {
         .send()
         .await
         .unwrap();
-    let cache_status = resp.headers().get("Cache-Status").unwrap().to_str().unwrap().to_string();
-    assert!(cache_status.contains("hit"), "host-b expected hit, got: {cache_status}");
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("hit"),
+        "host-b expected hit, got: {cache_status}"
+    );
 
     container.stop().await.unwrap();
 }
