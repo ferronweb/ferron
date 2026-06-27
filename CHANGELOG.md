@@ -28,6 +28,7 @@
 - **Stale-while-revalidate inflight request fix** - when a stale response is revalidated, the inflight request handling no longer causes possible hangs.
 - **`Expires` header in past edge case fix** - a response with a past `Expires` header and no `Cache-Control` directives was incorrectly cached for 5 minutes. This has been fixed to cache the response for 0 seconds (expires immediately) instead.
 - **Stale-if-error correctness fix** - a stale response is no longer served when `must-revalidate` is set.
+- **Cache key fix** - an attacker could craft a cookie value containing `&cookie:` to collide with another user's cache key. This severe cache collision was fixed by using `\0` as the separator instead of `&` in the cache key.
 
 ## Ferron 3.0.0-beta.3
 

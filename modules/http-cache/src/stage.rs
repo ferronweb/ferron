@@ -1436,7 +1436,7 @@ fn build_private_cache_key(
     }
 
     components.sort_unstable();
-    components.join("&")
+    components.join("\0")
 }
 
 fn build_vary_rule(
