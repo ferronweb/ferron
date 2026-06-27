@@ -1,22 +1,18 @@
-<p align="center">
-  <a href="https://ferron.sh" target="_blank">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
-      <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="256">
-    </picture>
-  </a>
-</p>
-<p align="center">
-  <b>Ferron</b> — a fast, modern web server built for production debugging.
-</p>
-<p align="center">
-  <a href="https://ferron.sh/docs/v3" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=flat-square"></a>
-  <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=flat-square"></a>
-  <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org?style=flat-square"></a>
-  <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web?style=flat-square"></a>
-  <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron?style=flat-square"></a>
-  <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=flat-square"></a>
-</p>
+<a href="https://ferron.sh" target="_blank">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
+    <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="256">
+  </picture>
+</a>
+
+**Ferron** — a fast, modern web server built for production debugging.
+
+[![Static Badge](https://img.shields.io/badge/Documentation-orange?style=flat-square)](https://ferron.sh/docs/v3)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=flat-square)](https://ferron.sh)
+[![Chat](https://img.shields.io/matrix/ferronweb%3Amatrix.org?style=flat-square)](https://matrix.to/#/#ferronweb:matrix.org)
+[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/ferron_web?style=flat-square)](https://x.com/ferron_web)
+[![Docker Pulls](https://img.shields.io/docker/pulls/ferronserver/ferron?style=flat-square)](https://hub.docker.com/r/ferronserver/ferron)
+[![GitHub Repo stars](https://img.shields.io/github/stars/ferronweb/ferron?style=flat-square)](https://github.com/ferronweb/ferron)
 
 > [!note]
 > **Status: Beta** — This release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
