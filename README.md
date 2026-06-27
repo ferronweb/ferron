@@ -9,9 +9,6 @@
 <p align="center">
   <b>Ferron</b> — a fast, modern web server built for production debugging.
 </p>
-
-* * *
-
 <p align="center">
   <a href="https://ferron.sh/docs/v3" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=flat-square"></a>
   <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=flat-square"></a>
@@ -20,6 +17,8 @@
   <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron?style=flat-square"></a>
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=flat-square"></a>
 </p>
+
+* * *
 
 > [!note]
 > **Status: Beta** — This release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
