@@ -89,6 +89,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (see `CHANGELOG.md`). Use bold inline headers for each bullet.
 - **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links.
+- **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception — it may update documentation alone without adding tests or code.
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
 - **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
