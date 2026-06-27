@@ -1,9 +1,11 @@
-<a href="https://ferron.sh" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
-    <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="256">
-  </picture>
-</a>
+<p>
+  <a href="https://ferron.sh" target="_blank">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
+      <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="192">
+    </picture>
+  </a>
+</p>
 
 **Ferron** — a fast, modern web server built for production debugging.
 
