@@ -45,12 +45,9 @@ Built to set up quickly, behave predictably, and hold up reliably in production.
 ```ferron
 example.com {
     root "/var/www/html"
-    directory_listing
 
-    tls {
-        provider acme
-        email "admin@example.com"
-    }
+    # If uncommented, directory listing is enabled.
+    #directory_listing
 }
 ```
 
@@ -58,9 +55,7 @@ example.com {
 
 ```ferron
 api.example.com {
-    proxy http://localhost:8080 {
-        keepalive true
-    }
+    proxy http://localhost:8080
 }
 ```
 
