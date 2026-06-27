@@ -7,7 +7,7 @@
   </a>
 </p>
 <p align="center">
-  <b>Ferron</b> - a fast, modern web server built for production debugging.
+  <b>Ferron</b> — a fast, modern web server built for production debugging.
 </p>
 
 * * *
@@ -21,6 +21,7 @@
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
 </p>
 
+> [!note]
 > **Status: Beta** — This release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
 
 ## Why Ferron 3?
