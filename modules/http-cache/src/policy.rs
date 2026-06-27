@@ -323,13 +323,7 @@ pub(crate) fn recalculate_freshness(
     let standard = parse_standard_cache_control(headers);
     let litespeed_overrides = litespeed_override_cache_control && ls_control.is_some();
 
-    let ttl = choose_ttl(
-        scope,
-        headers,
-        &standard,
-        ls_control,
-        litespeed_overrides,
-    );
+    let ttl = choose_ttl(scope, headers, &standard, ls_control, litespeed_overrides);
 
     let must_revalidate =
         standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some();
@@ -667,12 +661,8 @@ mod tests {
             ..LiteSpeedCacheControl::default()
         };
 
-        let (ttl, _swr, _sire, _must_revalidate) = recalculate_freshness(
-            CacheScope::Public,
-            &headers,
-            Some(&ls_control),
-            true,
-        );
+        let (ttl, _swr, _sire, _must_revalidate) =
+            recalculate_freshness(CacheScope::Public, &headers, Some(&ls_control), true);
         // LiteSpeed override: LS max_age (300) takes precedence
         assert_eq!(ttl, Duration::from_secs(300));
     }

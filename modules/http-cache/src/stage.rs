@@ -820,14 +820,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                 // (e.g., new Date, Cache-Control) but keep the stored body intact.
                 let mut fresh_headers = response.headers().clone();
                 strip_internal_headers(&mut fresh_headers);
-                if let Some(new_fresh_headers) = state
-                    .store
-                    .update_entry_headers_by_key(
-                        cache_key,
-                        fresh_headers.clone(),
-                        state.config.litespeed_override_cache_control,
-                    )
-                {
+                if let Some(new_fresh_headers) = state.store.update_entry_headers_by_key(
+                    cache_key,
+                    fresh_headers.clone(),
+                    state.config.litespeed_override_cache_control,
+                ) {
                     fresh_headers = new_fresh_headers;
                 } else {
                     let mut new_fresh_headers = cached_entry.headers.clone();

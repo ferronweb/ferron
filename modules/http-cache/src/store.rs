@@ -375,7 +375,10 @@ impl CacheStore {
         // Clean up variants_by_base for base keys with no remaining entries.
         // This prevents unbounded memory growth from the variants map.
         for base_key in &affected_base_keys {
-            let has_remaining = self.entries.iter().any(|(_, entry)| entry.base_key == *base_key);
+            let has_remaining = self
+                .entries
+                .iter()
+                .any(|(_, entry)| entry.base_key == *base_key);
             if !has_remaining {
                 self.variants_by_base.remove(base_key);
             }
@@ -428,13 +431,12 @@ impl CacheStore {
         // Per RFC 9111 §4.3.4, the 304 response's Cache-Control headers must
         // update the stored response's freshness parameters.
         let ls_control = crate::lscache::parse_litespeed_cache_control(&entry.headers);
-        let (ttl, stale_while_revalidate, stale_if_error, must_revalidate) =
-            recalculate_freshness(
-                entry.scope,
-                &entry.headers,
-                ls_control.as_ref(),
-                litespeed_override_cache_control,
-            );
+        let (ttl, stale_while_revalidate, stale_if_error, must_revalidate) = recalculate_freshness(
+            entry.scope,
+            &entry.headers,
+            ls_control.as_ref(),
+            litespeed_override_cache_control,
+        );
         entry.ttl = ttl;
         entry.stale_while_revalidate = stale_while_revalidate;
         entry.stale_if_error = stale_if_error;
@@ -1616,10 +1618,7 @@ mod tests {
         let (entry, _, _) = lookup.expect("expected cache hit after update");
         // s-maxage (60) is the minimum among candidates for public scope
         assert_eq!(entry.ttl, Duration::from_secs(60));
-        assert_eq!(
-            entry.stale_while_revalidate,
-            Some(Duration::from_secs(30))
-        );
+        assert_eq!(entry.stale_while_revalidate, Some(Duration::from_secs(30)));
         assert_eq!(entry.stale_if_error, Some(Duration::from_secs(600)));
         assert!(entry.must_revalidate); // s-maxage implies must-revalidate
     }
@@ -1656,7 +1655,9 @@ mod tests {
         );
 
         // Both variants exist
-        assert!(store.variants_by_base.contains_key("https://example.com/page"));
+        assert!(store
+            .variants_by_base
+            .contains_key("https://example.com/page"));
 
         // Purge all entries for this base key
         let operations = vec![PurgeOperation {
@@ -1676,7 +1677,9 @@ mod tests {
 
         // variants_by_base should be cleaned up
         assert!(
-            !store.variants_by_base.contains_key("https://example.com/page"),
+            !store
+                .variants_by_base
+                .contains_key("https://example.com/page"),
             "variants_by_base should be cleaned up after all entries are purged"
         );
     }
@@ -1702,7 +1705,9 @@ mod tests {
         );
 
         // Variant exists
-        assert!(store.variants_by_base.contains_key("https://example.com/exp"));
+        assert!(store
+            .variants_by_base
+            .contains_key("https://example.com/exp"));
 
         // Expire the entry
         {
@@ -1727,7 +1732,9 @@ mod tests {
 
         // variants_by_base should be PRESERVED (for thundering herd protection)
         assert!(
-            store.variants_by_base.contains_key("https://example.com/exp"),
+            store
+                .variants_by_base
+                .contains_key("https://example.com/exp"),
             "variants_by_base should be preserved after expiry for thundering herd protection"
         );
     }
@@ -1753,11 +1760,9 @@ mod tests {
         );
 
         // Variant exists
-        assert!(
-            store
-                .variants_by_base
-                .contains_key("https://example.com/page")
-        );
+        assert!(store
+            .variants_by_base
+            .contains_key("https://example.com/page"));
 
         // Evict by filling the cache (capacity 2, insert 2 more entries)
         store.insert_with_request(
