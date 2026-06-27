@@ -3,6 +3,7 @@
 use std::time::Duration;
 use std::time::Instant;
 
+use ahash::AHashMap;
 use arbitrary::Unstructured;
 use bytes::Bytes;
 use ferron_http_cache::lscache::ScopedTag;
@@ -10,7 +11,6 @@ use ferron_http_cache::policy::CacheScope;
 use ferron_http_cache::store::{build_entry_key, CacheStore, StoredEntry, VaryRule};
 use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, StatusCode};
-use ahash::AHashMap;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -141,6 +141,11 @@ fuzz_target!(|data: &[u8]| {
                 private_key: private_key.clone(),
                 tags: Vec::<ScopedTag>::new(),
                 purge_url: base_key.clone(),
+                etag: None,
+                last_modified: None,
+                must_revalidate: false,
+                stale_if_error: None,
+                stale_while_revalidate: None,
             };
 
             let (_stats, _len) =

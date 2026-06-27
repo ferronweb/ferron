@@ -3,13 +3,13 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use rustc_hash::FxBuildHasher;
 use ferron_http_proxy::types::upstream::UpstreamInner;
 use ferron_http_proxy::types::ConnectionsTrackState;
-use ferron_http_proxy::upstream::lb::selector::select_backend_index;
 use ferron_http_proxy::upstream::lb::p2c_ewma::EwmaStateMap;
+use ferron_http_proxy::upstream::lb::selector::select_backend_index;
 use ferron_http_proxy::upstream::lb::{LoadBalancerAlgorithmInner, WeightedRoundRobinState};
 use libfuzzer_sys::fuzz_target;
+use rustc_hash::FxBuildHasher;
 
 /// Parse algorithm + backends from raw bytes.
 ///
@@ -46,12 +46,8 @@ fn parse_input(input: &[u8]) -> Option<(LoadBalancerAlgorithmInner, Vec<(usize, 
         if pos + 4 > input.len() {
             return None;
         }
-        let weight = u32::from_le_bytes([
-            input[pos],
-            input[pos + 1],
-            input[pos + 2],
-            input[pos + 3],
-        ]);
+        let weight =
+            u32::from_le_bytes([input[pos], input[pos + 1], input[pos + 2], input[pos + 3]]);
         pos += 4;
 
         if pos + 1 > input.len() {
@@ -67,11 +63,15 @@ fn parse_input(input: &[u8]) -> Option<(LoadBalancerAlgorithmInner, Vec<(usize, 
         pos += name_len;
 
         let proxy_to = String::from_utf8(name_bytes.to_vec()).ok()?;
-        backends.push((idx, UpstreamInner {
-            proxy_to,
-            proxy_unix: None,
-            weight,
-        }));
+        backends.push((
+            idx,
+            UpstreamInner {
+                proxy_to,
+                proxy_unix: None,
+                weight,
+                mtls: None,
+            },
+        ));
     }
 
     Some((algorithm, backends))
@@ -91,7 +91,13 @@ fuzz_target!(|input: &[u8]| {
         backends.into_iter().map(|(_, u)| Arc::new(u)).collect();
 
     // Invariant 1: select_backend_index never panics
-    let idx = select_backend_index(&algorithm, &healthy, &upstreams, Some(&conn_state), Some(&ewma_state));
+    let idx = select_backend_index(
+        &algorithm,
+        &healthy,
+        &upstreams,
+        Some(&conn_state),
+        Some(&ewma_state),
+    );
 
     // Invariant 2: Returned index is always valid
     if upstreams.is_empty() {
@@ -125,7 +131,13 @@ fuzz_target!(|input: &[u8]| {
 
     // Invariant 5: All algorithms are deterministic given same state
     for _ in 0..5 {
-        let i = select_backend_index(&algorithm, &healthy, &upstreams, Some(&conn_state), Some(&ewma_state));
+        let i = select_backend_index(
+            &algorithm,
+            &healthy,
+            &upstreams,
+            Some(&conn_state),
+            Some(&ewma_state),
+        );
         assert!(
             upstreams.is_empty() || i < upstreams.len(),
             "repeat call returned invalid index {i}"

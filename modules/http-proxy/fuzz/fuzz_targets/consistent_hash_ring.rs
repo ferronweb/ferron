@@ -58,6 +58,7 @@ fn parse_backends_and_keys(input: &[u8]) -> Option<(Vec<Arc<UpstreamInner>>, Vec
             proxy_to,
             proxy_unix: None,
             weight,
+            mtls: None,
         }));
     }
 

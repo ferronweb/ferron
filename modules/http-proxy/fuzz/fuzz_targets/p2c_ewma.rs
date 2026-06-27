@@ -55,6 +55,7 @@ fn parse_input(input: &[u8]) -> Option<(Vec<Arc<UpstreamInner>>, Vec<u8>, Vec<f6
             proxy_to,
             proxy_unix: None,
             weight: 1,
+            mtls: None,
         }));
     }
 
