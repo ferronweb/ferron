@@ -25,14 +25,17 @@
 
 ## Why Ferron 3?
 
-- **High performance** - thoroughly optimized for speed with support for high concurrency.
-- **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
-- **Modular architecture** - pipeline stages and providers registered at runtime, no recompilation needed.
-- **Observability by design** - structured logs, metrics, and tracing through a unified event system.
-- **Layered configuration** - composable `ferron.conf` with snippets, conditionals, and host scopes.
-- **Automatic TLS** - ACME certificate acquisition and renewal with Let's Encrypt.
-- **Powerful reverse proxy** - load balancing, health checks, and connection pooling.
-- **Memory-safe** - built with [Rust](https://rust-lang.org/).
+Built to set up quickly, behave predictably, and hold up reliably in production.
+
+- **Readable configuration** — set up websites and reverse proxies with a clear, compact config: no sprawl, no hidden surprises.
+- **Automatic TLS** — certificates are issued and renewed automatically. You get clear signals when it works (or doesn't).
+- **First-class observability** — see exactly what happened with any request. Traces cover every layer and link directly to the relevant logs.
+- **Predictable performance** — fast and consistent under load, right out of the box. No runtime tuning required.
+- **Memory-safe** — entire categories of memory-related security holes simply don't exist in Ferron (it's built with [Rust](https://rust-lang.org/)).
+- **Reliable in production** — handles messy real-world traffic, upstream failures, and protocol edge cases — predictably.
+
+> [!tip]
+> Ferron 3 is designed around two core principles: **ease of setup** (get a working config in minutes) and **ease of debugging** (when something goes wrong, find the root cause fast).
 
 ## Configuration examples
 
@@ -61,6 +64,16 @@ api.example.com {
 ```
 
 More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
+
+## Installing Ferron 3 (pre-built)
+
+The most convenient way to get started with Ferron 3 is to use the installer script for Linux:
+
+```sh
+sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
+```
+
+See the full instructions in the [Linux installation documentation](https://ferron.sh/docs/v3/installation/linux/installer).
 
 ## Building from source
 
