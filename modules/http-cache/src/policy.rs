@@ -318,7 +318,7 @@ fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
         .and_then(|value| httpdate::parse_http_date(value).ok())
         .unwrap_or_else(std::time::SystemTime::now);
 
-    expires_at.duration_since(date).ok()
+    Some(expires_at.duration_since(date).unwrap_or(Duration::ZERO))
 }
 
 #[inline]
