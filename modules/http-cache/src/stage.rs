@@ -678,16 +678,17 @@ impl Stage<HttpContext> for HttpCacheStage {
             _ => false,
         };
 
-        let inflight_guard = if let LookupResult::Miss {
-            ref inflight_key, ..
-        } = lookup_result
-        {
-            inflight_key.as_ref().map(|key| InflightGuard {
+        let inflight_guard = match lookup_result {
+            LookupResult::Miss {
+                ref inflight_key, ..
+            }
+            | LookupResult::StaleWhileRevalidate {
+                ref inflight_key, ..
+            } => inflight_key.as_ref().map(|key| InflightGuard {
                 store: store.clone(),
                 cache_key: key.clone(),
-            })
-        } else {
-            None
+            }),
+            _ => None,
         };
 
         // Inject conditional headers for revalidation
