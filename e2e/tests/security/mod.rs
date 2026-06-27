@@ -11,6 +11,7 @@ mod common;
 
 mod abuseban;
 mod client_ip;
+mod connection_limit;
 mod fproxy;
 mod http;
 mod ip_access;

@@ -3,3 +3,4 @@ mod common;
 
 mod directives;
 mod include;
+mod map_directive;

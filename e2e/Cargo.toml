@@ -100,7 +100,7 @@ path = "tests/timeout.rs"
 
 [[test]]
 name = "tls"
-path = "tests/tls.rs"
+path = "tests/tls/mod.rs"
 
 [[test]]
 name = "unix"

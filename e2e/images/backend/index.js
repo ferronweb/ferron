@@ -168,6 +168,83 @@ app.post("/cache-sie/update", express.json(), (req, res) => {
   res.send(`sie updated to v${sieVersions[id]}`);
 });
 
+// Request body echo endpoint — inspired by nginx-tests body.t
+app.post("/echo-body", express.text({ type: "*/*" }), (req, res, _next) => {
+  res.send(req.body || "");
+});
+
+app.put("/echo-body", express.text({ type: "*/*" }), (req, res, _next) => {
+  res.send(req.body || "");
+});
+
+// HTTP method echo endpoint — inspired by nginx-tests http_method.t
+app.all("/method", (req, res, _next) => {
+  res.send(req.method);
+});
+
+// Configurable status code endpoint — inspired by nginx-tests http_error_page.t
+app.get("/status", (req, res, _next) => {
+  const code = Number.parseInt(req.query.code || "200", 10);
+  res.status(code).send(`status:${code}`);
+});
+
+// Redirect endpoint — inspired by nginx-tests proxy_redirect.t
+app.get("/redirect", (req, res, _next) => {
+  const target = req.query.target || "/";
+  const code = Number.parseInt(req.query.code || "302", 10);
+  res.redirect(code, target);
+});
+
+// Header echo — returns specified request header value
+app.get("/echo-header", (req, res, _next) => {
+  const name = req.query.name || "";
+  const value = req.headers[name.toLowerCase()] || "";
+  res.send(value);
+});
+
+// Connection hold endpoint — holds connection open for testing connection limits
+const activeHolds = {};
+app.get("/hold", (req, res, _next) => {
+  const id = req.query.id || "default";
+  activeHolds[id] = (activeHolds[id] || 0) + 1;
+  res.set("X-Active-Holds", String(activeHolds[id]));
+  // Don't respond immediately — hold for up to 10 seconds
+  const timeout = setTimeout(() => {
+    delete activeHolds[id];
+    res.send(`released:${id}`);
+  }, 10000);
+  req.on("close", () => {
+    clearTimeout(timeout);
+    activeHolds[id] = Math.max(0, (activeHolds[id] || 1) - 1);
+  });
+});
+
+// Cache purge test endpoint — Ferron-specific cache PURGE testing
+const purgeCache = {};
+app.get("/cache-purge", (req, res, _next) => {
+  const id = req.query.id || "default";
+  const version = purgeCache[id] || 1;
+  res
+    .status(200)
+    .set("Cache-Control", "public, max-age=300")
+    .send(`purge-v${version}`);
+});
+
+app.post("/cache-purge/update", express.json(), (req, res, _next) => {
+  const id = req.query.id || "default";
+  purgeCache[id] = (purgeCache[id] || 1) + 1;
+  res.send(`purge updated to v${purgeCache[id]}`);
+});
+
+// Cache with Set-Cookie test — for testing that Set-Cookie prevents caching
+app.get("/cache-set-cookie", (_req, res, _next) => {
+  res
+    .status(200)
+    .set("Cache-Control", "public, max-age=300")
+    .set("Set-Cookie", "session=abc123; Path=/")
+    .send("set-cookie-response");
+});
+
 app.ws("/echo", (ws, _req) => {
   ws.on("message", (msg) => {
     ws.send(msg);

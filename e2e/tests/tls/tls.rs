@@ -26,7 +26,7 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
+use crate::common;
 
 /// A server certificate verifier that always returns a successful verification.
 #[derive(Debug)]
