@@ -13,7 +13,7 @@ use rustc_hash::FxBuildHasher;
 use tokio::sync::Notify;
 
 use crate::lscache::{PurgeOperation, PurgeSelector, ScopedTag};
-use crate::policy::CacheScope;
+use crate::policy::{recalculate_freshness, CacheScope};
 
 #[derive(Clone, Debug)]
 pub enum LookupHit {
@@ -66,7 +66,7 @@ pub struct LookupEntry {
     pub age: Duration,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub stale_while_revalidate: Option<Duration>,
     pub stale_if_error: Option<Duration>,
     pub must_revalidate: bool,
@@ -364,9 +364,21 @@ impl CacheStore {
             }
         }
 
+        let mut affected_base_keys = AHashSet::default();
         stats.purged = keys_to_remove.len();
         for key in keys_to_remove {
-            self.entries.remove(&key);
+            if let Some((_, entry)) = self.entries.remove(&key) {
+                affected_base_keys.insert(entry.base_key);
+            }
+        }
+
+        // Clean up variants_by_base for base keys with no remaining entries.
+        // This prevents unbounded memory growth from the variants map.
+        for base_key in &affected_base_keys {
+            let has_remaining = self.entries.iter().any(|(_, entry)| entry.base_key == *base_key);
+            if !has_remaining {
+                self.variants_by_base.remove(base_key);
+            }
         }
 
         (stats, self.entries.len())
@@ -396,18 +408,38 @@ impl CacheStore {
 
     /// Update headers on an existing cache entry without replacing the body.
     /// Takes the full cache key and the new headers.
+    /// Recalculates TTL and freshness directives from the 304 response headers
+    /// per RFC 9111 §4.3.4.
     /// Returns `Some(updated_headers)` if updated, `None` otherwise.
     #[inline]
     pub fn update_entry_headers_by_key(
         &self,
         cache_key: &str,
         new_headers: HeaderMap,
+        litespeed_override_cache_control: bool,
     ) -> Option<HeaderMap> {
         let mut entry = self.entries.get(cache_key)?;
         entry.headers.extend(new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
         entry.created_at = Instant::now();
+
+        // Recalculate TTL and freshness directives from the merged headers.
+        // Per RFC 9111 §4.3.4, the 304 response's Cache-Control headers must
+        // update the stored response's freshness parameters.
+        let ls_control = crate::lscache::parse_litespeed_cache_control(&entry.headers);
+        let (ttl, stale_while_revalidate, stale_if_error, must_revalidate) =
+            recalculate_freshness(
+                entry.scope,
+                &entry.headers,
+                ls_control.as_ref(),
+                litespeed_override_cache_control,
+            );
+        entry.ttl = ttl;
+        entry.stale_while_revalidate = stale_while_revalidate;
+        entry.stale_if_error = stale_if_error;
+        entry.must_revalidate = must_revalidate;
+
         let entry2 = entry.clone();
         let _ = self.entries.replace(cache_key.to_string(), entry2, false);
         Some(entry.headers.clone())
@@ -1392,7 +1424,7 @@ mod tests {
             HeaderValue::from_static("Wed, 02 Jan 2024 00:00:00 GMT"),
         );
 
-        let updated = store.update_entry_headers_by_key(&cache_key, new_headers);
+        let updated = store.update_entry_headers_by_key(&cache_key, new_headers, false);
         assert!(updated.is_some());
 
         let (lookup, _, _, _) = store.lookup(
@@ -1459,5 +1491,305 @@ mod tests {
         let (_entry, cache_key, _hit) = lookup.expect("expected cache hit");
         assert!(cache_key.starts_with("https://example.com/test"));
         assert!(cache_key.contains("scope=public"));
+    }
+
+    #[test]
+    #[inline]
+    fn update_entry_headers_recalculates_ttl_from_304() {
+        let store = CacheStore::new(4);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60"),
+        );
+
+        let entry = StoredEntry {
+            scope: CacheScope::Public,
+            base_key: "https://example.com/test".to_string(),
+            vary: VaryRule::default(),
+            status: StatusCode::OK,
+            headers: headers.clone(),
+            body: Some(Bytes::from_static(b"body")),
+            lsc_cookies: Vec::new(),
+            created_at: Instant::now(),
+            ttl: Duration::from_secs(60),
+            access_at: 0,
+            private_key: None,
+            tags: Vec::new(),
+            purge_url: "/test".to_string(),
+            etag: None,
+            last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
+        };
+
+        let request_headers = HeaderMap::new();
+        let request_cookies = AHashMap::default();
+        store.insert_with_request(entry, None, &request_headers, &request_cookies);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (_entry, cache_key, _hit) = lookup.expect("expected cache hit");
+
+        // Simulate a 304 with new Cache-Control: max-age=120
+        let mut new_headers = HeaderMap::new();
+        new_headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120"),
+        );
+        store.update_entry_headers_by_key(&cache_key, new_headers, false);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (entry, _, _) = lookup.expect("expected cache hit after update");
+        assert_eq!(entry.ttl, Duration::from_secs(120));
+    }
+
+    #[test]
+    #[inline]
+    fn update_entry_headers_recalculates_swr_and_must_revalidate() {
+        let store = CacheStore::new(4);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60"),
+        );
+
+        let entry = StoredEntry {
+            scope: CacheScope::Public,
+            base_key: "https://example.com/test".to_string(),
+            vary: VaryRule::default(),
+            status: StatusCode::OK,
+            headers: headers.clone(),
+            body: Some(Bytes::from_static(b"body")),
+            lsc_cookies: Vec::new(),
+            created_at: Instant::now(),
+            ttl: Duration::from_secs(60),
+            access_at: 0,
+            private_key: None,
+            tags: Vec::new(),
+            purge_url: "/test".to_string(),
+            etag: None,
+            last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
+        };
+
+        let request_headers = HeaderMap::new();
+        let request_cookies = AHashMap::default();
+        store.insert_with_request(entry, None, &request_headers, &request_cookies);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (_entry, cache_key, _hit) = lookup.expect("expected cache hit");
+
+        // Simulate a 304 with stale-while-revalidate, stale-if-error, and s-maxage
+        let mut new_headers = HeaderMap::new();
+        new_headers.insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static(
+                "public, max-age=120, s-maxage=60, stale-while-revalidate=30, stale-if-error=600",
+            ),
+        );
+        store.update_entry_headers_by_key(&cache_key, new_headers, false);
+
+        let (lookup, _, _, _) = store.lookup(
+            "https://example.com/test",
+            &request_headers,
+            &request_cookies,
+            None,
+        );
+        let (entry, _, _) = lookup.expect("expected cache hit after update");
+        // s-maxage (60) is the minimum among candidates for public scope
+        assert_eq!(entry.ttl, Duration::from_secs(60));
+        assert_eq!(
+            entry.stale_while_revalidate,
+            Some(Duration::from_secs(30))
+        );
+        assert_eq!(entry.stale_if_error, Some(Duration::from_secs(600)));
+        assert!(entry.must_revalidate); // s-maxage implies must-revalidate
+    }
+
+    #[test]
+    #[inline]
+    fn variants_by_base_cleaned_up_after_purge_removes_all_entries() {
+        let store = CacheStore::new(8);
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        // Insert two entries for the same base key (different scopes)
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/page",
+                CacheScope::Public,
+                "public",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/page",
+                CacheScope::Private,
+                "private",
+                VaryRule::default(),
+            ),
+            Some("user=1"),
+            &headers,
+            &cookies,
+        );
+
+        // Both variants exist
+        assert!(store.variants_by_base.contains_key("https://example.com/page"));
+
+        // Purge all entries for this base key
+        let operations = vec![PurgeOperation {
+            scope: CacheScope::Public,
+            selectors: vec![PurgeSelector::All],
+            stale: false,
+        }];
+        store.purge(&operations, None);
+
+        // Purge the private one too
+        let operations = vec![PurgeOperation {
+            scope: CacheScope::Private,
+            selectors: vec![PurgeSelector::All],
+            stale: false,
+        }];
+        store.purge(&operations, Some("user=1"));
+
+        // variants_by_base should be cleaned up
+        assert!(
+            !store.variants_by_base.contains_key("https://example.com/page"),
+            "variants_by_base should be cleaned up after all entries are purged"
+        );
+    }
+
+    #[test]
+    #[inline]
+    fn variants_by_base_preserved_after_expiry_for_thundering_herd() {
+        let store = CacheStore::new(4);
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        // Insert an entry
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/exp",
+                CacheScope::Public,
+                "data",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+
+        // Variant exists
+        assert!(store.variants_by_base.contains_key("https://example.com/exp"));
+
+        // Expire the entry
+        {
+            let mut entry = store
+                .entries
+                .get("https://example.com/exp\nscope=public")
+                .expect("expected entry");
+            entry.created_at = Instant::now() - Duration::from_secs(10);
+            entry.ttl = Duration::from_secs(1);
+            assert!(store
+                .entries
+                .replace(
+                    "https://example.com/exp\nscope=public".to_string(),
+                    entry,
+                    false,
+                )
+                .is_ok());
+        }
+
+        // Trigger cleanup_expired via lookup
+        store.lookup("https://example.com/other", &headers, &cookies, None);
+
+        // variants_by_base should be PRESERVED (for thundering herd protection)
+        assert!(
+            store.variants_by_base.contains_key("https://example.com/exp"),
+            "variants_by_base should be preserved after expiry for thundering herd protection"
+        );
+    }
+
+    #[test]
+    #[inline]
+    fn variants_by_base_preserved_after_lru_eviction() {
+        let store = CacheStore::new(2);
+        let headers = HeaderMap::new();
+        let cookies = AHashMap::default();
+
+        // Insert an entry
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/page",
+                CacheScope::Public,
+                "data",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+
+        // Variant exists
+        assert!(
+            store
+                .variants_by_base
+                .contains_key("https://example.com/page")
+        );
+
+        // Evict by filling the cache (capacity 2, insert 2 more entries)
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/other1",
+                CacheScope::Public,
+                "other1",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+        store.insert_with_request(
+            stored_entry(
+                "https://example.com/other2",
+                CacheScope::Public,
+                "other2",
+                VaryRule::default(),
+            ),
+            None,
+            &headers,
+            &cookies,
+        );
+
+        // variants_by_base should be PRESERVED after LRU eviction
+        // (to maintain thundering herd protection for the next request)
+        assert!(
+            store
+                .variants_by_base
+                .contains_key("https://example.com/page"),
+            "variants_by_base should be preserved after LRU eviction"
+        );
     }
 }

@@ -822,7 +822,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                 strip_internal_headers(&mut fresh_headers);
                 if let Some(new_fresh_headers) = state
                     .store
-                    .update_entry_headers_by_key(cache_key, fresh_headers.clone())
+                    .update_entry_headers_by_key(
+                        cache_key,
+                        fresh_headers.clone(),
+                        state.config.litespeed_override_cache_control,
+                    )
                 {
                     fresh_headers = new_fresh_headers;
                 } else {

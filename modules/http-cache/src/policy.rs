@@ -40,7 +40,7 @@ pub struct ResponseCacheDecision {
 }
 
 #[derive(Clone, Debug, Default)]
-struct StandardCacheControl {
+pub(crate) struct StandardCacheControl {
     public: bool,
     private: bool,
     no_cache: bool,
@@ -208,7 +208,7 @@ pub fn evaluate_response_policy(
     }
 }
 
-fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
+pub(crate) fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
     let mut parsed = StandardCacheControl::default();
     for value in headers.get_all(header::CACHE_CONTROL) {
         let Some(text) = value.to_str().ok() else {
@@ -260,7 +260,7 @@ fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCacheControl {
     parsed
 }
 
-fn choose_ttl(
+pub(crate) fn choose_ttl(
     scope: CacheScope,
     headers: &HeaderMap,
     standard: &StandardCacheControl,
@@ -306,6 +306,40 @@ fn choose_ttl(
         .into_iter()
         .min()
         .unwrap_or_else(|| Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+}
+
+/// Recalculate freshness parameters from updated headers during 304 revalidation.
+///
+/// Per RFC 9111 §4.3.4, the stored response's freshness must be updated from
+/// the 304 response's headers. This function re-parses Cache-Control (and
+/// optionally LiteSpeed Cache-Control) from the merged headers and returns
+/// the new TTL, stale-while-revalidate, stale-if-error, and must-revalidate.
+pub(crate) fn recalculate_freshness(
+    scope: CacheScope,
+    headers: &HeaderMap,
+    ls_control: Option<&LiteSpeedCacheControl>,
+    litespeed_override_cache_control: bool,
+) -> (Duration, Option<Duration>, Option<Duration>, bool) {
+    let standard = parse_standard_cache_control(headers);
+    let litespeed_overrides = litespeed_override_cache_control && ls_control.is_some();
+
+    let ttl = choose_ttl(
+        scope,
+        headers,
+        &standard,
+        ls_control,
+        litespeed_overrides,
+    );
+
+    let must_revalidate =
+        standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some();
+
+    (
+        ttl,
+        standard.stale_while_revalidate,
+        standard.stale_if_error,
+        must_revalidate,
+    )
 }
 
 #[inline]
@@ -584,5 +618,62 @@ mod tests {
         let policy = parse_request_policy(&headers);
         assert!(policy.allow_lookup);
         assert!(policy.allow_store);
+    }
+
+    #[test]
+    #[inline]
+    fn recalculate_freshness_updates_ttl_and_directives() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120, stale-while-revalidate=30"),
+        );
+
+        let (ttl, swr, sire, must_revalidate) =
+            recalculate_freshness(CacheScope::Public, &headers, None, false);
+        assert_eq!(ttl, Duration::from_secs(120));
+        assert_eq!(swr, Some(Duration::from_secs(30)));
+        assert!(!must_revalidate);
+        // stale_if_error is not set in this header
+        assert!(sire.is_none());
+    }
+
+    #[test]
+    #[inline]
+    fn recalculate_freshness_with_s_maxage_sets_must_revalidate() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, s-maxage=60"),
+        );
+
+        let (ttl, _swr, _sire, must_revalidate) =
+            recalculate_freshness(CacheScope::Public, &headers, None, false);
+        assert_eq!(ttl, Duration::from_secs(60));
+        assert!(must_revalidate); // s-maxage implies must-revalidate
+    }
+
+    #[test]
+    #[inline]
+    fn recalculate_freshness_litespeed_override() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=5"),
+        );
+        let ls_control = LiteSpeedCacheControl {
+            public: true,
+            max_age: Some(Duration::from_secs(300)),
+            ..LiteSpeedCacheControl::default()
+        };
+
+        let (ttl, _swr, _sire, _must_revalidate) = recalculate_freshness(
+            CacheScope::Public,
+            &headers,
+            Some(&ls_control),
+            true,
+        );
+        // LiteSpeed override: LS max_age (300) takes precedence
+        assert_eq!(ttl, Duration::from_secs(300));
     }
 }
