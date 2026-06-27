@@ -69,7 +69,6 @@ pub struct LookupEntry {
     #[expect(dead_code)]
     pub stale_while_revalidate: Option<Duration>,
     pub stale_if_error: Option<Duration>,
-    #[expect(dead_code)]
     pub must_revalidate: bool,
     pub ttl: Duration,
 }

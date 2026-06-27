@@ -894,7 +894,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                 )
             {
                 if let Some(sie_duration) = stale_entry.stale_if_error {
-                    if stale_entry.age <= stale_entry.ttl + sie_duration {
+                    if !stale_entry.must_revalidate
+                        && stale_entry.age <= stale_entry.ttl + sie_duration
+                    {
                         // Serve the stale response instead of the error
                         let stale_response = if let Some(body) = stale_entry.body {
                             let mut builder = Response::builder().status(stale_entry.status);
