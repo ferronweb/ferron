@@ -85,6 +85,25 @@ pub(super) fn construct_proxy_request(
         parts.headers.append(name, hv);
     }
 
+    // Strip hop-by-hop headers per RFC 7230 §6.1
+    // These must not be forwarded by a proxy.
+    if let Some(c) = parts.headers.remove(http::header::CONNECTION) {
+        // If the connection header contains "upgrade",
+        // preserve it to avoid breaking the upgrade connection.
+        if str::from_utf8(c.as_bytes()).is_ok_and(|s| s.to_lowercase().contains("upgrade")) {
+            parts.headers.insert(
+                http::header::CONNECTION,
+                HeaderValue::from_static("upgrade"),
+            );
+        }
+    }
+    parts.headers.remove(HeaderName::from_static("keep-alive"));
+    parts.headers.remove(http::header::TRANSFER_ENCODING);
+    parts.headers.remove(http::header::TE);
+    parts.headers.remove(http::header::TRAILER);
+    parts.headers.remove("proxy-authorization");
+    parts.headers.remove("proxy-authenticate");
+
     let client_ip = ctx.remote_address.ip();
     let local_ip = ctx.local_address.ip();
     let proto = if ctx.encrypted { "https" } else { "http" };

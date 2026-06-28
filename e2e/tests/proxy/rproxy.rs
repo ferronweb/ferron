@@ -800,3 +800,63 @@ async fn test_proxy_keepalive_metrics() {
     ferron.stop().await.unwrap();
     otlp.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_hop_by_hop_headers_stripped() {
+    let ctx = RProxyTestContext::new("hopbyhop").await;
+
+    // Send a request with hop-by-hop headers that should be stripped
+    let response = ctx
+        .client
+        .get(format!(
+            "{}/echo-header?name=keep-alive",
+            ctx.base_url
+        ))
+        .header("Keep-Alive", "timeout=5")
+        .header("Connection", "keep-alive")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body = response.text().await.unwrap();
+    assert!(
+        body.is_empty(),
+        "Keep-Alive header should have been stripped, got: {}",
+        body
+    );
+
+    // Verify TE header is stripped
+    let response = ctx
+        .client
+        .get(format!("{}/echo-header?name=te", ctx.base_url))
+        .header("TE", "trailers")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body = response.text().await.unwrap();
+    assert!(
+        body.is_empty(),
+        "TE header should have been stripped, got: {}",
+        body
+    );
+
+    // Verify Transfer-Encoding header is stripped
+    let response = ctx
+        .client
+        .get(format!(
+            "{}/echo-header?name=transfer-encoding",
+            ctx.base_url
+        ))
+        .header("Transfer-Encoding", "chunked")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body = response.text().await.unwrap();
+    assert!(
+        body.is_empty(),
+        "Transfer-Encoding header should have been stripped, got: {}",
+        body
+    );
+}

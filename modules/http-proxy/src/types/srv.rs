@@ -35,14 +35,14 @@ pub async fn resolve_srv(
     // Select the highest-priority group (lowest numeric value)
     let highest_priority = healthy
         .iter()
-        .map(|(_, _, priority)| *priority)
+        .map(|(_, priority, _)| *priority)
         .min()
         .unwrap_or(0);
 
     let filtered: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16)> = healthy
         .into_iter()
-        .filter(|(_, _, priority)| *priority == highest_priority)
-        .map(|(upstream, weight, _)| (upstream, weight))
+        .filter(|(_, priority, _)| *priority == highest_priority)
+        .map(|(upstream, _, weight)| (upstream, weight))
         .collect();
 
     // Weighted random selection

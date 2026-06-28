@@ -20,6 +20,12 @@
 
 ### Fixed
 
+#### Reverse proxy
+
+- **SRV priority/weight swap fix** — SRV upstream resolution was reading the priority and weight fields in the wrong order, causing traffic to be routed to the wrong priority group. Priority and weight are now correctly interpreted per RFC 2782.
+- **Upgrade connection pool leak fix** — HTTP 101 upgrade connections (WebSocket, etc.) were not decrementing the pool outstanding counter, permanently reducing available pool capacity by one per upgrade. The pool item now drops correctly, releasing the slot.
+- **Hop-by-hop header stripping on requests** — the outgoing proxy request now strips hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `TE`, `Trailer`, `Proxy-Authorization`, `Proxy-Authenticate`) per RFC 7230 §6.1, preventing clients from injecting these headers to influence backend behavior.
+
 #### HTTP caching
 
 - **Cache revalidation fix** - when a cached response is revalidated, the HTTP status code is now preserved from the cached response instead of always using `200 OK`.

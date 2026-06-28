@@ -600,12 +600,11 @@ pub async fn handle_upgrade(
         }
     }
 
-    // Take the inner value to prevent Drop from returning to pool.
+    // Take the inner value to prevent Drop from returning the connection to pool.
     // For upgrade connections, we don't return them to the pool
     // (upgrade connections are long-lived, not pooled).
+    // Letting item drop naturally decrements the outstanding counter.
     let _wrapper = item.inner_mut().take();
-    // Prevent item's Drop from running (we handle cleanup manually)
-    std::mem::forget(item);
 
     let upgrade_future = vibeio_http::prepare_upgrade(&mut upgrade_request);
     vibeio::spawn(async move {

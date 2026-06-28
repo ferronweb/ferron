@@ -234,3 +234,193 @@ backend.backend.test. IN A {backend_ip}
 
     ferron.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_proxy_srv_priority_selection() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let zones_dir = crate::common::create_temp_dir();
+    #[cfg(unix)]
+    let mut bind9_config = crate::common::create_temp_file();
+    #[cfg(unix)]
+    let mut ferron_config = crate::common::create_temp_file();
+    #[cfg(unix)]
+    let mut resolv_conf = crate::common::create_temp_file();
+
+    #[cfg(not(unix))]
+    let zones_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
+    #[cfg(not(unix))]
+    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
+    #[cfg(not(unix))]
+    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
+
+    let network = "e2e-test-proxy-srv-priority";
+
+    // Start two backends with different names
+    let backend_image = crate::common::build_backend_image().await.unwrap();
+
+    let backend1 = backend_image
+        .clone()
+        .with_exposed_port(ContainerPort::Tcp(3000))
+        .with_wait_for(WaitFor::Http(Box::new(
+            testcontainers::core::wait::HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(3000))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("backend-high")
+        .with_env_var("BACKEND_NAME", "priority-high")
+        .start()
+        .await
+        .unwrap();
+    let backend1_ip = backend1.get_bridge_ip_address().await.unwrap();
+
+    let backend2 = backend_image
+        .with_exposed_port(ContainerPort::Tcp(3000))
+        .with_wait_for(WaitFor::Http(Box::new(
+            testcontainers::core::wait::HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(3000))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(network)
+        .with_hostname("backend-low")
+        .with_env_var("BACKEND_NAME", "priority-low")
+        .start()
+        .await
+        .unwrap();
+    let backend2_ip = backend2.get_bridge_ip_address().await.unwrap();
+
+    // Prepare BIND9 config with two SRV records at different priorities
+    let tsig_key_name = "ferron-test-key";
+    let tsig_key_secret = "c2VjcmV0c2FsdDEyMzQ1Njc4";
+
+    let named_conf = format!(
+        r#"key "{tsig_key_name}" {{
+    algorithm HMAC-SHA256;
+    secret "{tsig_key_secret}";
+}};
+
+options {{
+    directory "/var/lib/bind";
+    allow-query {{ any; }};
+    dnssec-validation no;
+}};
+
+zone "priority.test" {{
+    type primary;
+    file "/etc/bind/zones/db.priority.test";
+    allow-update {{ key "{tsig_key_name}"; }};
+}};
+
+zone "." {{
+    type forward;
+    {{{{FORWARDERS}}}}
+    forward only;
+}};"#
+    );
+
+    bind9_config
+        .as_file_mut()
+        .write_all(named_conf.as_bytes())
+        .unwrap();
+
+    // SRV record with priority 10 (higher priority = lower number)
+    // and priority 20 (lower priority = higher number)
+    let zone_file = format!(
+        r#"$TTL 300
+@   IN  SOA bind9. admin.priority.test. (
+            2024051901  ; serial
+            3600        ; refresh
+            1800        ; retry
+            604800      ; expire
+            300         ; minimum
+            )
+
+    IN  NS  bind9.
+
+_http._tcp.priority.test. IN SRV 10 60 3000 backend-high.priority.test.
+_http._tcp.priority.test. IN SRV 20 60 3000 backend-low.priority.test.
+backend-high.priority.test. IN A {backend1_ip}
+backend-low.priority.test. IN A {backend2_ip}
+"#
+    );
+
+    std::fs::write(
+        zones_dir.path().join("db.priority.test"),
+        zone_file.as_bytes(),
+    )
+    .unwrap();
+
+    // Start BIND9
+    let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
+        .await
+        .unwrap();
+
+    // Prepare resolv.conf
+    resolv_conf
+        .as_file_mut()
+        .write_all(
+            format!(
+                "nameserver {}\n",
+                bind9.get_bridge_ip_address().await.unwrap()
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+
+    // Prepare Ferron config
+    ferron_config
+        .as_file_mut()
+        .write_all(
+            br#"
+*:80 {
+  proxy {
+    srv _http._tcp.priority.test
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    // Start Ferron
+    let ferron = create_ferron_container(network, ferron_config.path(), resolv_conf.path())
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let client = reqwest::Client::new();
+
+    // All requests should go to the priority-10 backend (lower number = higher priority)
+    let mut all_routed_to_high_priority = true;
+    for _ in 0..10 {
+        if let Ok(resp) = client
+            .get(format!("http://localhost:{port}/whoami"))
+            .send()
+            .await
+            && resp.status().is_success()
+        {
+            let body = resp.text().await.unwrap();
+            if body.trim() != "priority-high" {
+                all_routed_to_high_priority = false;
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    assert!(
+        all_routed_to_high_priority,
+        "SRV priority selection failed: not all requests routed to the higher-priority backend"
+    );
+
+    ferron.stop().await.unwrap();
+}
