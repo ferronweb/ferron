@@ -267,14 +267,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
         if let Some(etag) = &etag_value {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
                 if let Ok(val) = if_none_match.to_str() {
-                    if method != Method::GET && method != Method::HEAD {
-                        let header_map =
-                            build_etag_header_map(etag, &vary_header, None, cache_control);
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
-                        emit_static_response_metric(ctx, 412, "precondition_failed");
-                        return Ok(false);
-                    }
                     for tag in split_etag_request(val) {
                         if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
                             if &extracted == etag {
