@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nightly-fuzz
+  group: fuzz
   cancel-in-progress: true
 
 jobs:
@@ -38,8 +38,8 @@ jobs:
 
       - name: Run fuzzing
         run: |
-          find . -wholename '*/fuzz/fuzz_targets/*.rs' \
-            | sed -E 's|\./(.+)/fuzz/fuzz_targets/(.+)\.rs|cargo +nightly fuzz run \2 --fuzz-dir ./\1/fuzz -- -max_total_time=1800 -workers=2|g' \
+          find fuzz/fuzz_targets -name '*.rs' \
+            | sed -E 's|fuzz/fuzz_targets/(.+)\.rs|cargo +nightly fuzz run \1 -- -max_total_time=1800 -workers=2|g' \
             | sh
 
       - name: Upload fuzz artifacts
@@ -47,5 +47,5 @@ jobs:
         with:
           name: fuzz-artifacts
           path: |
-            modules/**/fuzz/artifacts
-            modules/**/fuzz/corpus
+            fuzz/artifacts
+            fuzz/corpus

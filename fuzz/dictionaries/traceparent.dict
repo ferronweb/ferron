@@ -1,0 +1,24 @@
+# W3C traceparent format: version-traceid-parentid-flags
+"00-"
+"01-"
+
+# Valid trace IDs (32 hex chars)
+"4bf92f3577b34da6a3ce929d0e0e4736"
+"00000000000000000000000000000000"
+"ffffffffffffffffffffffffffffffff"
+
+# Valid span IDs (16 hex chars)
+"00f067aa0ba902b7"
+"0000000000000000"
+"ffffffffffffffff"
+
+# Flags
+"-00"
+"-01"
+"-ff"
+
+# Full valid traceparent
+"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+# Separator
+"-"

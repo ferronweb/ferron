@@ -1,5 +1,8 @@
 mod file_pipeline;
 mod observability;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod pipeline;
+#[cfg(not(any(test, feature = "fuzz")))]
 mod pipeline;
 mod request_utils;
 
@@ -44,6 +47,9 @@ static REQUEST_DURATION_BUCKETS: &[f64] = &[
     0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
 ];
 
+#[cfg(feature = "fuzz")]
+pub type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
+#[cfg(not(feature = "fuzz"))]
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
 pub async fn bad_request_handler(

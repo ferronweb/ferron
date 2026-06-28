@@ -3,19 +3,7 @@
 use ferron_http_server::util::canonicalize_url::canonicalize_path;
 use libfuzzer_sys::fuzz_target;
 
-/// Asserts that a canonicalized path result is semantically valid and safe.
-///
-/// These invariants must hold for all successful canonicalization results:
-/// 1. Both routing and forwarding must start with '/' or be '*'
-/// 2. Neither must contain '..' (root escape prevention)
-/// 3. Neither must contain '.' as a standalone segment
-/// 4. Neither must contain null bytes or control characters
-/// 5. Routing must not contain un-decoded unreserved characters
-/// 6. Asterisk form must be consistent
-/// 7. No excessive nested encoding in forwarding
-/// 8. No double-encoded percent signs in forwarding
 fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
-    // Invariant 1: Must start with '/' or be '*'
     assert!(
         routing == "*" || routing.starts_with('/'),
         "routing must start with '/' or be '*' (got: {})",
@@ -27,7 +15,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         forwarding
     );
 
-    // Invariant 10: Asterisk form consistency
     if routing == "*" {
         assert_eq!(
             forwarding, "*",
@@ -36,7 +23,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         );
     }
 
-    // Invariant 2: No '..' segments (root escape prevention)
     assert!(
         !routing.split('/').any(|s| s == ".."),
         "routing must not contain '..' (root escape): {}",
@@ -48,8 +34,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         forwarding
     );
 
-    // Invariant 3: No standalone '.' segments
-    // Check for segments that are just '.' (not '..' or '/.' or './')
     let check_dot_segments = |s: &str| {
         let segments: Vec<&str> = s.split('/').collect();
         for seg in segments {
@@ -70,7 +54,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         forwarding
     );
 
-    // Invariant 4: No null bytes or control characters
     assert!(
         routing.as_bytes().iter().all(|&b| b >= 0x20 && b != 0x7F),
         "routing must not contain null bytes or control characters: {}",
@@ -85,14 +68,12 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         forwarding
     );
 
-    // Invariant 5: Forwarding hex digits in %xx must be uppercase
     let bytes = forwarding.as_bytes();
     for i in 0..bytes.len().saturating_sub(2) {
         if bytes[i] == b'%' && bytes[i + 1].is_ascii_hexdigit() && bytes[i + 2].is_ascii_hexdigit()
         {
             let h1 = bytes[i + 1];
             let h2 = bytes[i + 2];
-            // Check if lowercase hex is used (should be uppercase in forwarding)
             if (h1 >= b'a' && h1 <= b'f') || (h2 >= b'a' && h2 <= b'f') {
                 panic!(
                     "forwarding must use uppercase hex digits: {} (found lowercase)",
@@ -102,8 +83,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         }
     }
 
-    // Invariant 6: Routing must not contain un-decoded unreserved characters
-    // This is checked by ensuring that if there's %xx in routing, it decodes to reserved
     let check_routing_encoding = |s: &str| {
         let bytes = s.as_bytes();
         let mut i = 0;
@@ -146,8 +125,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         );
     }
 
-    // Invariant 7: No excessive nested encoding in forwarding
-    // %25xx followed by another %xx is excessive
     let check_excessive_encoding = |s: &str| {
         let bytes = s.as_bytes();
         let mut i = 0;
@@ -169,8 +146,6 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
         );
     }
 
-    // Invariant 8: No double-encoded percent signs in forwarding
-    // %25xx should not appear (should be rejected as excessive encoding)
     let check_double_encoded_percent = |s: &str| {
         s.as_bytes().windows(5).any(|w| {
             w[0] == b'%'
@@ -189,21 +164,14 @@ fn assert_canonicalized_path_valid(routing: &str, forwarding: &str) {
 }
 
 fuzz_target!(|input: &[u8]| {
-    // Convert input bytes to UTF-8 string
-    // Non-UTF8 input is valid — the canonicalizer should reject it
     let Ok(input_str) = core::str::from_utf8(input) else {
         return;
     };
 
-    // Exercise the canonicalizer
     match canonicalize_path(input_str) {
         Ok(result) => {
-            // Assert all security invariants on successful canonicalization
             assert_canonicalized_path_valid(&result.routing, &result.forwarding);
         }
-        Err(_e) => {
-            // Canonicalization errors are expected for invalid input
-            // The fuzzer will explore error paths through coverage
-        }
+        Err(_e) => {}
     }
 });

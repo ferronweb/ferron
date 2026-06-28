@@ -14,7 +14,7 @@ Rust workspace (resolver "2"). Key directories:
 - `doctest/` — standalone harness that runs doc examples against the built binary
 - `utils/` — CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
 
-**Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `modules/*/fuzz` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. Each has its own `Cargo.toml` and a dedicated run command — see tables below.
+**Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `fuzz/` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. The `fuzz/` crate has its own `Cargo.toml` and a dedicated run command — see tables below.
 
 ## Essential commands
 
@@ -64,19 +64,30 @@ just installer                   # Linux installer (runs `make` in installer/)
 
 ### Fuzzing (requires nightly)
 
-Fuzz crates live under `modules/*/fuzz/` and are excluded from the main workspace. Each needs a separate `cargo +nightly fuzz` invocation from inside the fuzz directory.
+All HTTP fuzz targets live under `fuzz/` (excluded from the main workspace). Run from inside the `fuzz/` directory:
 
 ```
-cargo +nightly fuzz run canonicalize_path           # modules/http-server/fuzz
-cargo +nightly fuzz run rate_limit_concurrent       # modules/http-ratelimit/fuzz
+cargo +nightly fuzz run fuzz_http_pipeline               # full HTTP pipeline integration (nginx-style)
+cargo +nightly fuzz run fuzz_canonicalize_path           # URL path canonicalization with security invariants
+cargo +nightly fuzz run fuzz_canonicalize_path_routing   # routing-only canonicalization
+cargo +nightly fuzz run fuzz_proxy_protocol              # PROXY protocol v1/v2 parsing
+cargo +nightly fuzz run fuzz_load_balancers              # LB algorithms (consistent hash, WRR, P2C, selector)
+cargo +nightly fuzz run fuzz_cache                       # LSCache parsers, policy evaluation, cache key roundtrip
+cargo +nightly fuzz run fuzz_ratelimit                   # rate limiter under concurrent access
+cargo +nightly fuzz run fuzz_traceparent                 # W3C traceparent header parsing
+cargo +nightly fuzz run fuzz_qvalue                      # Accept/q-value header parsing
+cargo +nightly fuzz run fuzz_forwarded                   # RFC 7239 Forwarded header parsing
+cargo +nightly fuzz run fuzz_error_pages                 # error page generation
 ```
+
+Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.
 
 ## Testing structure
 
 Three tiers:
 1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files.
 2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH. Build the test image first: `docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .`
-3. **Fuzz**: `modules/*/fuzz/` — nightly `cargo-fuzz`. Excluded from main workspace.
+3. **Fuzz**: `fuzz/` — nightly `cargo-fuzz`. Excluded from main workspace.
 
 Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]` on the `ferron-http-server` crate).
 

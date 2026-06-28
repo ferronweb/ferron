@@ -36,13 +36,11 @@ fuzz_target!(|data: &[u8]| {
     maybe_insert(&mut headers, &LS_TAG, tag_bytes);
     maybe_insert(&mut headers, &LS_PURGE, purge_bytes);
 
-    // Exercise all four parsers with the same header map
     let cc_control = parse_litespeed_cache_control(&headers);
     let vary = parse_litespeed_vary(&headers);
     let tags = parse_litespeed_tags(&headers, scope);
     let purge = parse_litespeed_purge(&headers);
 
-    // --- Invariants for parse_litespeed_cache_control ---
     if let Some(ref cc) = cc_control {
         if let Some(age) = cc.max_age {
             assert!(age >= Duration::ZERO);
@@ -52,7 +50,6 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    // --- Invariants for parse_litespeed_vary ---
     let cookies = &vary.cookies;
     assert!(
         cookies.windows(2).all(|w| w[0] <= w[1]),
@@ -66,7 +63,6 @@ fuzz_target!(|data: &[u8]| {
         assert!(!value.is_empty(), "vary value must not be empty");
     }
 
-    // --- Invariants for parse_litespeed_tags ---
     for (i, tag) in tags.iter().enumerate() {
         for j in (i + 1)..tags.len() {
             assert!(
@@ -79,7 +75,6 @@ fuzz_target!(|data: &[u8]| {
         assert!(!tag.name.is_empty(), "tag name must not be empty");
     }
 
-    // --- Invariants for parse_litespeed_purge ---
     for (i, op) in purge.iter().enumerate() {
         assert!(
             !op.selectors.is_empty(),

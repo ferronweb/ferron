@@ -1,0 +1,62 @@
+# Path traversal
+"../"
+"..\\"
+"%2e%2e/"
+"%2e%2e%5c"
+"..%2f"
+"..%5c"
+
+# Null byte
+"%00"
+"%00%00"
+
+# Control characters
+"\x01"
+"\x02"
+"\x1f"
+"\x7f"
+
+# Percent encoding
+"%2f"
+"%2F"
+"%5c"
+"%5C"
+"%20"
+"%25"
+"%252f"
+
+# Dot segments
+"./"
+"/."
+"//"
+"/./"
+"/../"
+
+# Encoded dots
+"%2e"
+"%2E"
+"%2e/"
+"/%2e"
+"%2e%2e"
+
+# Common paths
+"/"
+"/index.html"
+"/admin"
+"/api/v1"
+"/static/file.txt"
+"/a/b/c/d"
+"/../../../etc/passwd"
+"/..%2f..%2f..%2fetc/passwd"
+
+# Unreserved characters
+"%41"
+"%61"
+"%5a"
+"%7a"
+"%30"
+"%39"
+"%2d"
+"%2e"
+"%5f"
+"%7e"

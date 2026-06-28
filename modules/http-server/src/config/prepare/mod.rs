@@ -20,7 +20,7 @@ pub struct HostConfigs {
 }
 
 impl HostConfigs {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "fuzz"))]
     #[inline]
     pub fn new() -> Self {
         Self::default()

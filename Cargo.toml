@@ -11,6 +11,7 @@ members = [
 exclude = [
     "doctest",
     "e2e",
+    "fuzz",
     # Fuzzing targets
     "modules/http-server/fuzz",
     "modules/http-ratelimit/fuzz",

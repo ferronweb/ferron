@@ -6,6 +6,7 @@
           "./Cargo.toml",
           "./e2e/Cargo.toml",
           "./doctest/Cargo.toml",
+          "./fuzz/Cargo.toml",
         ],
       },
     },
