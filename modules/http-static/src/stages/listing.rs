@@ -97,8 +97,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        let method = request.method().clone();
-
         // Read directory contents and metadata in one blocking pass.
         let entries = vibeio::spawn_blocking({
             let dir_path = ctx.file_path.clone();
