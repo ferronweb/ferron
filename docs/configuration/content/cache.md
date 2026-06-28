@@ -182,6 +182,7 @@ In this configuration, both `example.com` and `www.example.com` share the same 4
 ```ferron
 {
     cache {
+        max_entries 4096
         zone "shared_assets" {
             max_entries 8192
         }
