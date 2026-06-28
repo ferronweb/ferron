@@ -468,9 +468,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
             if let Ok(range_str) = range_val.to_str() {
                 if let Some(ranges) = parse_range_header(range_str, file_length.saturating_sub(1)) {
                     if file_length == 0
-                        || ranges.iter().any(|(start, end)| {
-                            *end >= file_length || *start >= file_length || *start > *end
-                        })
+                        || ranges
+                            .iter()
+                            .any(|(start, end)| *start >= file_length || *start > *end)
                     {
                         let vary = vary_header.as_deref().unwrap_or("Range");
                         let mut header_map = HeaderMap::new();
@@ -549,6 +549,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         }
                         return Ok(false);
                     } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e)) {
+                        let end = end.min(file_length);
                         let content_len = end - start + 1;
                         let vary = vary_header.as_deref().unwrap_or("Range");
 
