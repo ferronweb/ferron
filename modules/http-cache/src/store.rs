@@ -104,11 +104,6 @@ impl Lifecycle<String, StoredEntry> for StoreLifecycle {
     type RequestState = StoreRequestState;
 
     #[inline]
-    fn begin_request(&self) -> Self::RequestState {
-        StoreRequestState::default()
-    }
-
-    #[inline]
     fn on_evict(&self, state: &mut Self::RequestState, _key: String, _val: StoredEntry) {
         state.size_evictions += 1;
     }
@@ -341,7 +336,9 @@ impl CacheStore {
             }
         }
 
-        let request_state = self.entries.insert_with_lifecycle(key, entry);
+        let mut request_state = StoreRequestState::default();
+        self.entries
+            .insert_with_lifecycle(key, entry, &mut request_state);
         stats.size_evictions = request_state.size_evictions;
         (stats, self.entries.len())
     }
