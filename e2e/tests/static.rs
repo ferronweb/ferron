@@ -279,11 +279,32 @@ async fn test_partial_content() {
     assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
 
-    // Bytes=999- (Out of range)
+    // Bytes=999- (Out of range, should return 206 with available content per RFC 7233)
     let response = ctx
         .client
         .get(format!("{}/basic.txt", ctx.base_url))
         .header(header::RANGE, "bytes=999-")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+
+    // Bytes=0-999 (end beyond file, should return 206 with full content)
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=0-999")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+    assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
+
+    // Bytes=100-50 (start > end, unsatisfiable)
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=100-50")
         .send()
         .await
         .unwrap();
@@ -461,4 +482,68 @@ async fn test_custom_index() {
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
+}
+
+#[tokio::test]
+async fn test_post_if_none_match() {
+    let ctx = StaticTestContext::new().await;
+
+    // Get ETag via HEAD
+    let response = ctx
+        .client
+        .head(format!("{}/basic.txt", ctx.base_url))
+        .send()
+        .await
+        .unwrap();
+    let etag = response
+        .headers()
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // POST with matching If-None-Match should return 412 Precondition Failed
+    let response = ctx
+        .client
+        .post(format!("{}/basic.txt", ctx.base_url))
+        .header(header::IF_NONE_MATCH, &etag)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        reqwest::StatusCode::PRECONDITION_FAILED
+    );
+}
+
+#[tokio::test]
+async fn test_on_the_fly_compression_with_precompressed() {
+    let ctx = StaticTestContext::new().await;
+
+    // Create a file in the precompressed directory WITHOUT a .gz counterpart
+    common::write_file(
+        ctx._webroot_dir.path().join("precompressed/nogz.txt"),
+        b"no gzip file available",
+    )
+    .unwrap();
+
+    // Request with Accept-Encoding: gzip — should compress on-the-fly
+    let response = ctx
+        .client
+        .get(format!("{}/precompressed/nogz.txt", ctx.base_url))
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING).unwrap(),
+        "gzip"
+    );
+    let bytes = response.bytes().await.unwrap();
+    let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
+    let mut decoded = String::new();
+    decoder.read_to_string(&mut decoded).unwrap();
+    assert_eq!(decoded, "no gzip file available");
 }
