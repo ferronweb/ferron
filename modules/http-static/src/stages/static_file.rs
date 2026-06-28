@@ -39,7 +39,7 @@ use crate::util::etag::{
 use crate::util::file_stream::FileStream;
 use crate::util::mime::get_content_type;
 use crate::util::multipart_byterange::MultipartByterangeBody;
-use crate::util::range::parse_range_header;
+use crate::util::range::{parse_range_header, RangeParseError};
 
 pub struct StaticFileStage;
 
@@ -167,15 +167,17 @@ impl Stage<HttpFileContext> for StaticFileStage {
         if etag_enabled {
             etag_value = Some(ctx.etag.clone());
             vary_header = Some(if compression_possible {
-                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, Range".to_string()
+                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range".to_string()
             } else {
-                "If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, Range".to_string()
+                "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range"
+                    .to_string()
             });
         } else {
             vary_header = Some(if compression_possible {
-                "Accept-Encoding, If-Modified-Since, If-Unmodified-Since, Range".to_string()
+                "Accept-Encoding, If-Modified-Since, If-Range, If-Unmodified-Since, Range"
+                    .to_string()
             } else {
-                "If-Modified-Since, If-Unmodified-Since, Range".to_string()
+                "If-Modified-Since, If-Range, If-Unmodified-Since, Range".to_string()
             });
         }
 
@@ -187,23 +189,25 @@ impl Stage<HttpFileContext> for StaticFileStage {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
                     Ok(if_match) => {
-                        if !matches!(request.method(), &Method::GET | &Method::HEAD) {
-                            // Precondition failed when method is not GET or HEAD
-                            let header_map =
-                                build_etag_header_map(etag, &vary_header, None, cache_control);
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
-                            emit_static_response_metric(ctx, 412, "precondition_failed");
-                            return Ok(false);
-                        }
-
-                        // "*" means any version is acceptable
-                        // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
-                        // for strong comparsions, for more details see RFC 7232
+                        // "*" means any version is acceptable (RFC 7232 §3.1)
+                        // Check wildcard first, then method, then specific ETag
                         if !split_etag_request(if_match)
                             .into_iter()
-                            .any(|if_match| if_match == "*")
+                            .any(|tag| tag == "*")
                         {
+                            if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                                // Precondition failed when method is not GET or HEAD
+                                let header_map =
+                                    build_etag_header_map(etag, &vary_header, None, cache_control);
+                                ctx.http.req = Some(request);
+                                ctx.http.res =
+                                    Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                                emit_static_response_metric(ctx, 412, "precondition_failed");
+                                return Ok(false);
+                            }
+
+                            // Ferron only emits weak ETags, and strong comparison won't match
+                            // for specific ETags
                             let header_map =
                                 build_etag_header_map(etag, &vary_header, None, cache_control);
                             ctx.http.req = Some(request);
@@ -271,10 +275,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
                             if &extracted == etag {
                                 if !matches!(request.method(), &Method::GET | &Method::HEAD) {
-                                    let header_map =
-                                        build_etag_header_map(etag, &vary_header, None, cache_control);
+                                    let header_map = build_etag_header_map(
+                                        etag,
+                                        &vary_header,
+                                        None,
+                                        cache_control,
+                                    );
                                     ctx.http.req = Some(request);
-                                    ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                                    ctx.http.res =
+                                        Some(HttpResponse::BuiltinError(412, Some(header_map)));
                                     emit_static_response_metric(ctx, 412, "precondition_failed");
                                     return Ok(false);
                                 }
@@ -465,184 +474,243 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
+        // Handle If-Range (RFC 7233 §3.2)
+        // If-Range is ignored when If-Match or If-Unmodified-Since is present
+        let if_range_matches = if request.headers().contains_key(header::RANGE) {
+            if let Some(if_range) = request.headers().get(header::IF_RANGE) {
+                if request.headers().contains_key(header::IF_MATCH)
+                    || request.headers().contains_key(header::IF_UNMODIFIED_SINCE)
+                {
+                    true
+                } else if let Ok(if_range_str) = if_range.to_str() {
+                    let is_valid =
+                        if let Ok(if_range_date) = httpdate::parse_http_date(if_range_str) {
+                            mdate.as_ref().is_none_or(|mdate| *mdate == if_range_date)
+                        } else if if_range_str == "*" {
+                            true
+                        } else if let Some(etag) = &etag_value {
+                            split_etag_request(if_range_str)
+                                .iter()
+                                .filter_map(|tag| extract_etag_inner(tag, true))
+                                .any(|(extracted, _, _)| &extracted == etag)
+                        } else {
+                            false
+                        };
+                    is_valid
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        } else {
+            true
+        };
+
         // Handle Range requests
         if let Some(range_val) = request.headers().get(header::RANGE) {
             if let Ok(range_str) = range_val.to_str() {
-                if let Some(ranges) = parse_range_header(range_str, file_length.saturating_sub(1)) {
-                    if file_length == 0
-                        || ranges
-                            .iter()
-                            .any(|(start, end)| *start >= file_length || *start > *end)
-                    {
-                        let vary = vary_header.as_deref().unwrap_or("Range");
-                        let mut header_map = HeaderMap::new();
-                        header_map.insert(
-                            header::CONTENT_RANGE,
-                            HeaderValue::from_str(&format!("bytes */{file_length}"))
-                                .expect("invalid content range header"),
-                        );
-                        header_map.insert(
-                            header::VARY,
-                            HeaderValue::from_str(vary).expect("invalid vary header"),
-                        );
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
-                        emit_static_response_metric(ctx, 416, "range_not_satisfiable");
-                        return Ok(false);
-                    }
+                if if_range_matches {
+                    match parse_range_header(range_str, file_length.saturating_sub(1)) {
+                        Ok(ranges) => {
+                            if file_length == 0
+                                || ranges
+                                    .iter()
+                                    .any(|(start, end)| *start >= file_length || *start > *end)
+                            {
+                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let mut header_map = HeaderMap::new();
+                                header_map.insert(
+                                    header::CONTENT_RANGE,
+                                    HeaderValue::from_str(&format!("bytes */{file_length}"))
+                                        .expect("invalid content range header"),
+                                );
+                                header_map.insert(
+                                    header::VARY,
+                                    HeaderValue::from_str(vary).expect("invalid vary header"),
+                                );
+                                ctx.http.req = Some(request);
+                                ctx.http.res =
+                                    Some(HttpResponse::BuiltinError(416, Some(header_map)));
+                                emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                                return Ok(false);
+                            }
 
-                    if ranges.len() > 1 {
-                        // Randomly generated multipart boundary string
-                        let multipart_boundary = hex::encode(rand::random::<[u8; 12]>());
-                        let vary = vary_header.as_deref().unwrap_or("Range");
+                            if ranges.len() > 1 {
+                                let multipart_boundary = hex::encode(rand::random::<[u8; 12]>());
+                                let vary = vary_header.as_deref().unwrap_or("Range");
 
-                        let mut builder = Response::builder()
-                            .status(StatusCode::PARTIAL_CONTENT)
-                            .header(
-                                header::CONTENT_TYPE,
-                                format!("multipart/byteranges; boundary={multipart_boundary}"),
-                            );
+                                let mut builder = Response::builder()
+                                    .status(StatusCode::PARTIAL_CONTENT)
+                                    .header(
+                                        header::CONTENT_TYPE,
+                                        format!(
+                                            "multipart/byteranges; boundary={multipart_boundary}"
+                                        ),
+                                    );
 
-                        if let Some(ref mdate) = mdate {
-                            builder = builder
-                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                                if let Some(ref mdate) = mdate {
+                                    builder = builder.header(
+                                        header::LAST_MODIFIED,
+                                        httpdate::fmt_http_date(*mdate),
+                                    );
+                                }
+                                if let Some(ref etag) = etag_value {
+                                    builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
+                                }
+                                if let Some(cc) = cache_control {
+                                    builder = builder.header(
+                                        header::CACHE_CONTROL,
+                                        HeaderValue::from_str(cc)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
+                                builder = builder.header(
+                                    header::VARY,
+                                    HeaderValue::from_str(vary).expect("invalid vary header"),
+                                );
+
+                                if method == Method::HEAD {
+                                    let response = builder
+                                        .body(
+                                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                                        )
+                                        .expect("failed to build 206 HEAD response");
+                                    ctx.http.req = Some(request);
+                                    ctx.http.res = Some(HttpResponse::Custom(response));
+                                    emit_static_response_metric(ctx, 206, "partial_content");
+                                } else {
+                                    let file =
+                                        vibeio::fs::File::open(&file_path).await.map_err(|e| {
+                                            PipelineError::custom(format!(
+                                                "failed to open file: {e}"
+                                            ))
+                                        })?;
+                                    let response = builder
+                                        .body(
+                                            MultipartByterangeBody::new(
+                                                multipart_boundary,
+                                                file_length,
+                                                content_type,
+                                                ranges,
+                                                FileStream::new(file, 0, Some(file_length)),
+                                            )
+                                            .boxed_unsync(),
+                                        )
+                                        .expect("failed to build 206 response");
+                                    ctx.http.req = Some(request);
+                                    ctx.http.res = Some(HttpResponse::Custom(response));
+                                    emit_static_response_metric(ctx, 206, "partial_content");
+                                }
+                                return Ok(false);
+                            } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e))
+                            {
+                                let end = end.min(file_length - 1);
+                                let content_len = end - start + 1;
+                                let vary = vary_header.as_deref().unwrap_or("Range");
+
+                                let mut builder = Response::builder()
+                                    .status(StatusCode::PARTIAL_CONTENT)
+                                    .header(header::CONTENT_LENGTH, content_len)
+                                    .header(
+                                        header::CONTENT_RANGE,
+                                        format!("bytes {start}-{end}/{file_length}"),
+                                    );
+
+                                if let Some(ref mdate) = mdate {
+                                    builder = builder.header(
+                                        header::LAST_MODIFIED,
+                                        httpdate::fmt_http_date(*mdate),
+                                    );
+                                }
+                                if let Some(ref etag) = etag_value {
+                                    builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
+                                }
+                                if let Some(ref ct) = content_type {
+                                    builder = builder.header(header::CONTENT_TYPE, ct);
+                                }
+                                if let Some(cc) = cache_control {
+                                    builder = builder.header(
+                                        header::CACHE_CONTROL,
+                                        HeaderValue::from_str(cc)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
+                                builder = builder.header(
+                                    header::VARY,
+                                    HeaderValue::from_str(vary).expect("invalid vary header"),
+                                );
+
+                                if method == Method::HEAD {
+                                    let response = builder
+                                        .body(
+                                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                                        )
+                                        .expect("failed to build 206 HEAD response");
+                                    ctx.http.req = Some(request);
+                                    ctx.http.res = Some(HttpResponse::Custom(response));
+                                    emit_static_response_metric(ctx, 206, "partial_content");
+                                } else {
+                                    let file =
+                                        vibeio::fs::File::open(&file_path).await.map_err(|e| {
+                                            PipelineError::custom(format!(
+                                                "failed to open file: {e}"
+                                            ))
+                                        })?;
+                                    let response = builder
+                                        .body(
+                                            StreamBody::new(
+                                                FileStream::new(file, start, Some(end + 1))
+                                                    .map_ok(Frame::data),
+                                            )
+                                            .boxed_unsync(),
+                                        )
+                                        .expect("failed to build 206 response");
+                                    ctx.http.req = Some(request);
+                                    ctx.http.res = Some(HttpResponse::Custom(response));
+                                    emit_static_response_metric(ctx, 206, "partial_content");
+                                }
+                                return Ok(false);
+                            } else {
+                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let mut header_map = HeaderMap::new();
+                                header_map.insert(
+                                    header::CONTENT_RANGE,
+                                    HeaderValue::from_str(&format!("bytes */{file_length}"))
+                                        .expect("invalid content range header"),
+                                );
+                                header_map.insert(
+                                    header::VARY,
+                                    HeaderValue::from_str(vary).expect("invalid vary header"),
+                                );
+                                ctx.http.req = Some(request);
+                                ctx.http.res =
+                                    Some(HttpResponse::BuiltinError(416, Some(header_map)));
+                                emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                                return Ok(false);
+                            }
                         }
-                        if let Some(ref etag) = etag_value {
-                            builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
-                        }
-                        if let Some(cc) = cache_control {
-                            builder = builder.header(
-                                header::CACHE_CONTROL,
-                                HeaderValue::from_str(cc).expect("invalid cache-control header"),
-                            );
-                        }
-                        builder = builder.header(
-                            header::VARY,
-                            HeaderValue::from_str(vary).expect("invalid vary header"),
-                        );
-
-                        if method == Method::HEAD {
-                            let response = builder
-                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                                .expect("failed to build 206 HEAD response");
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::Custom(response));
-                            emit_static_response_metric(ctx, 206, "partial_content");
-                        } else {
-                            // Stream the range using FileStream with offset/limit
-                            let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
-                                PipelineError::custom(format!("failed to open file: {e}"))
-                            })?;
-                            let response = builder
-                                .body(
-                                    MultipartByterangeBody::new(
-                                        multipart_boundary,
-                                        file_length,
-                                        content_type,
-                                        ranges,
-                                        FileStream::new(file, 0, Some(file_length)),
-                                    )
-                                    .boxed_unsync(),
-                                )
-                                .expect("failed to build 206 response");
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::Custom(response));
-                            emit_static_response_metric(ctx, 206, "partial_content");
-                        }
-                        return Ok(false);
-                    } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e)) {
-                        let end = end.min(file_length - 1);
-                        let content_len = end - start + 1;
-                        let vary = vary_header.as_deref().unwrap_or("Range");
-
-                        let mut builder = Response::builder()
-                            .status(StatusCode::PARTIAL_CONTENT)
-                            .header(header::CONTENT_LENGTH, content_len)
-                            .header(
+                        Err(RangeParseError::Unsatisfiable) => {
+                            let vary = vary_header.as_deref().unwrap_or("Range");
+                            let mut header_map = HeaderMap::new();
+                            header_map.insert(
                                 header::CONTENT_RANGE,
-                                format!("bytes {start}-{end}/{file_length}"),
+                                HeaderValue::from_str(&format!("bytes */{file_length}"))
+                                    .expect("invalid content range header"),
                             );
-
-                        if let Some(ref mdate) = mdate {
-                            builder = builder
-                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
-                        }
-                        if let Some(ref etag) = etag_value {
-                            builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
-                        }
-                        if let Some(ref ct) = content_type {
-                            builder = builder.header(header::CONTENT_TYPE, ct);
-                        }
-                        if let Some(cc) = cache_control {
-                            builder = builder.header(
-                                header::CACHE_CONTROL,
-                                HeaderValue::from_str(cc).expect("invalid cache-control header"),
+                            header_map.insert(
+                                header::VARY,
+                                HeaderValue::from_str(vary).expect("invalid vary header"),
                             );
-                        }
-                        builder = builder.header(
-                            header::VARY,
-                            HeaderValue::from_str(vary).expect("invalid vary header"),
-                        );
-
-                        if method == Method::HEAD {
-                            let response = builder
-                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                                .expect("failed to build 206 HEAD response");
                             ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::Custom(response));
-                            emit_static_response_metric(ctx, 206, "partial_content");
-                        } else {
-                            // Stream the range using FileStream with offset/limit
-                            let file = vibeio::fs::File::open(&file_path).await.map_err(|e| {
-                                PipelineError::custom(format!("failed to open file: {e}"))
-                            })?;
-                            let response = builder
-                                .body(
-                                    StreamBody::new(
-                                        FileStream::new(file, start, Some(end + 1))
-                                            .map_ok(Frame::data),
-                                    )
-                                    .boxed_unsync(),
-                                )
-                                .expect("failed to build 206 response");
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::Custom(response));
-                            emit_static_response_metric(ctx, 206, "partial_content");
+                            ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
+                            emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                            return Ok(false);
                         }
-                        return Ok(false);
-                    } else {
-                        let vary = vary_header.as_deref().unwrap_or("Range");
-                        let mut header_map = HeaderMap::new();
-                        header_map.insert(
-                            header::CONTENT_RANGE,
-                            HeaderValue::from_str(&format!("bytes */{file_length}"))
-                                .expect("invalid content range header"),
-                        );
-                        header_map.insert(
-                            header::VARY,
-                            HeaderValue::from_str(vary).expect("invalid vary header"),
-                        );
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
-                        emit_static_response_metric(ctx, 416, "range_not_satisfiable");
-                        return Ok(false);
+                        Err(RangeParseError::InvalidSyntax) => {
+                            // Syntactically invalid — treat as absent, fall through to 200
+                        }
                     }
-                } else {
-                    let vary = vary_header.as_deref().unwrap_or("Range");
-                    let mut header_map = HeaderMap::new();
-                    header_map.insert(
-                        header::CONTENT_RANGE,
-                        HeaderValue::from_str(&format!("bytes */{file_length}"))
-                            .expect("invalid content range header"),
-                    );
-                    header_map.insert(
-                        header::VARY,
-                        HeaderValue::from_str(vary).expect("invalid vary header"),
-                    );
-                    ctx.http.req = Some(request);
-                    ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
-                    emit_static_response_metric(ctx, 416, "range_not_satisfiable");
-                    return Ok(false);
                 }
             }
         }
@@ -685,7 +753,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         if let Some(cc) = cache_control {
             builder = builder.header(
                 header::CACHE_CONTROL,
-                HeaderValue::from_str(cc).expect("invalid cache-control header"),
+                HeaderValue::from_str(cc).unwrap_or_else(|_| HeaderValue::from_static("")),
             );
         }
 
@@ -695,6 +763,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 builder = builder.header(header::CONTENT_LENGTH, file_length);
             }
             c => {
+                if is_precompressed_file {
+                    builder = builder.header(header::CONTENT_LENGTH, file_length);
+                }
                 if let Some(hv) = c.header_value() {
                     builder =
                         builder.header(header::CONTENT_ENCODING, HeaderValue::from_static(hv));
@@ -782,7 +853,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             Compression::Identity => "identity",
         };
         let cache_hit = is_precompressed_file;
-        let file_size = ctx.metadata.len();
+        let file_size = file_length;
 
         ctx.http.events.emit(Event::Metric(MetricEvent {
             name: "ferron.static.files_served",

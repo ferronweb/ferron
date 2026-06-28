@@ -55,6 +55,19 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
             ], {});
         }
 
+        if let Some(entries) = config.directives.get("file_cache_control") {
+            if let Some(entry) = entries.first() {
+                if let Some(ServerConfigurationValue::String(val, span)) = entry.args.first() {
+                    if val.contains('\r') || val.contains('\n') || val.contains('\0') {
+                        ctx.add_best_practice_violation(
+                            "`file_cache_control` value contains invalid HTTP header characters (\\r, \\n, or \\0)",
+                            span.clone(),
+                        );
+                    }
+                }
+            }
+        }
+
         if first_flag(config, "directory_listing") == Some(true) {
             ctx.add_best_practice_violation(
                 "`directory_listing` exposes generated indexes for directories without index files; enable it only for intentionally public file listings",

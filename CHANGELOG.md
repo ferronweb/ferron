@@ -18,6 +18,10 @@
 - **Key extractor in fingerprint** — the rate limit fingerprint now includes the key extractor type (`ip`, `uri`, `header`), so rules with different key types no longer share the same registry.
 - **Zone attribute in rate limit metrics** — rate limit metrics (`ferron.ratelimit.rejected`, `ferron.ratelimit.allowed`) and structured log events now include a `ferron.ratelimit.zone` attribute identifying the zone the request belongs to.
 
+#### Static file serving
+
+- **`If-Range` support** — The `If-Range` header is now supported for conditional range requests (RFC 7233 §3.2), allowing clients to receive a partial response when the entity tag or modification date matches, or a full response when the representation has changed.
+
 ### Fixed
 
 #### Reverse proxy
@@ -30,6 +34,13 @@
 
 - **HTTP range requests fix** — HTTP range requests now correctly handle out-of-bounds ranges, returning `206 Partial Content` with the available range instead of `416 Range Not Satisfiable` (per RFC 7233 §2.1).
 - **On-the-fly compression allowed while using precompressed files** — When serving precompressed files, the content is now compressed on-the-fly if precompressed files are not available, improving performance and reducing disk usage.
+- **Multipart byterange fix** — Multipart range responses now include the required `bytes ` prefix in `Content-Range` part headers (per RFC 7233 §4.1) and correctly serve one additional byte per range to match inclusive-to-exclusive bounds (`is_end_stream` no longer signals end-of-stream while the last range's data is still being streamed).
+- **`If-None-Match` POST fix** — POST requests with a matching `If-None-Match` header now correctly return `412 Precondition Failed` instead of `200 OK` (per RFC 7232 §4.2).
+- **`If-Match: *` with non-GET/HEAD fix** — `If-Match: *` now correctly passes for POST and other non-GET/HEAD requests when a representation exists, per RFC 7232 §3.1.
+- **Invalid Range header handling** — Syntactically invalid `Range` headers are now treated as absent (returning `200 OK`) instead of `416 Range Not Satisfiable`, per RFC 7233 §3.1.
+- **`file_cache_control` panic fix** — Malformed `file_cache_control` config values can no longer panic the request handler; a validation warning now catches invalid characters.
+- **Missing `Content-Length` for compressed responses** — Non-identity (compressed and precompressed) file responses now include the correct `Content-Length` header.
+- **`bytes_sent` metric fix** — The `bytes_sent` metric now reports the actual compressed file size for precompressed responses instead of the original file size.
 
 #### HTTP caching
 

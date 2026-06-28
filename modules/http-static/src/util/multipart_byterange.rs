@@ -74,13 +74,13 @@ impl Body for MultipartByterangeBody {
         if let Some((start, end)) = self.ranges_left.pop_front() {
             // There are still ranges left, populate the stream and send multipart head
             let end = end.min(self.file_length - 1);
-            self.current_stream = Some(self.file.clone_stream(start, Some(end)));
+            self.current_stream = Some(self.file.clone_stream(start, Some(end + 1)));
             let mut multipart_head = String::new();
             if had_current_stream {
                 multipart_head.push_str("\r\n");
             }
             multipart_head.push_str(&format!(
-                "--{}\r\ncontent-range: {start}-{end}/{}\r\n",
+                "--{}\r\ncontent-range: bytes {start}-{end}/{}\r\n",
                 self.boundary, self.file_length
             ));
             if let Some(content_type) = &self.content_type {
@@ -105,6 +105,6 @@ impl Body for MultipartByterangeBody {
 
     #[inline]
     fn is_end_stream(&self) -> bool {
-        self.ranges_left.is_empty()
+        self.ranges_left.is_empty() && self.current_stream.is_none()
     }
 }

@@ -249,6 +249,10 @@ async fn test_precompression() {
         response.headers().get(header::CONTENT_ENCODING).unwrap(),
         "gzip"
     );
+
+    // Precompressed responses must include Content-Length
+    assert!(response.headers().get(header::CONTENT_LENGTH).is_some());
+
     let bytes = response.bytes().await.unwrap();
     assert_eq!(bytes.to_vec(), compressed_content);
 }
@@ -504,7 +508,6 @@ async fn test_post_if_none_match() {
         .to_string();
 
     // POST with matching If-None-Match should return 412 Precondition Failed
-    // 
     let response = ctx
         .client
         .post(format!("{}/basic.txt", ctx.base_url))
@@ -512,10 +515,7 @@ async fn test_post_if_none_match() {
         .send()
         .await
         .unwrap();
-    assert_eq!(
-        response.status(),
-        reqwest::StatusCode::PRECONDITION_FAILED
-    );
+    assert_eq!(response.status(), reqwest::StatusCode::PRECONDITION_FAILED);
 }
 
 #[tokio::test]
@@ -524,7 +524,7 @@ async fn test_on_the_fly_compression_with_precompressed() {
 
     // Create a file in the precompressed directory WITHOUT a .gz counterpart
     // Content must be > 256 bytes for compression to be possible
-    let nogz_content = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id dignissim leo, ac imperdiet tellus. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.\n";
+    let nogz_content = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id dignissim leo, ac imperdiet tellus. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Maecenas id erat finibus, auctor odio eu, efficitur libero. Aenean aliquet vehicula nisi ac tincidunt. Donec non vulputate dolor. Sed faucibus pulvinar augue eget viverra. Donec ornare lacus non mi mollis lacinia. Nulla suscipit vestibulum maximus.\n";
     common::write_file(
         ctx._webroot_dir.path().join("precompressed/nogz.txt"),
         nogz_content.as_bytes(),
@@ -549,4 +549,134 @@ async fn test_on_the_fly_compression_with_precompressed() {
     let mut decoded = String::new();
     decoder.read_to_string(&mut decoded).unwrap();
     assert_eq!(decoded, nogz_content);
+}
+
+#[tokio::test]
+async fn test_multipart_range_content() {
+    let ctx = StaticTestContext::new().await;
+
+    // Request two non-contiguous ranges
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=0-11,100-200")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(content_type.starts_with("multipart/byteranges"));
+
+    let body = response.bytes().await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+
+    // Each part must have the "bytes " prefix in content-range
+    assert!(body_str.contains("content-range: bytes 0-11/"));
+    assert!(body_str.contains("content-range: bytes 100-200/"));
+
+    // Extract boundary from Content-Type
+    let boundary = content_type.split("boundary=").nth(1).unwrap().to_string();
+
+    // Split on boundary to get individual parts
+    let parts: Vec<&str> = body_str.split(&format!("--{}", boundary)).collect();
+    // parts[0] = preamble (empty), parts[last] = "--\r\n" (epilogue)
+    // Intermediate parts are actual range data
+
+    for (i, part) in parts.iter().enumerate().skip(1).take(parts.len() - 2) {
+        // Remove leading \r\n
+        let trimmed = part.trim_start_matches("\r\n");
+        // Split headers from body
+        if let Some(body_section) = trimmed.split_once("\r\n\r\n") {
+            let part_body = body_section.1.trim_end_matches("\r\n");
+            // Verify each part has at least 1 byte of content
+            assert!(!part_body.is_empty(), "part {} should have content", i);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_invalid_range_syntax_returns_200() {
+    let ctx = StaticTestContext::new().await;
+
+    // Invalid range syntax should return 200 (treat as absent) per RFC 7233 §3.1
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=abc-def")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
+}
+
+#[tokio::test]
+async fn test_if_match_star_post() {
+    let ctx = StaticTestContext::new().await;
+
+    // If-Match: * with POST should pass (matches any current representation)
+    let response = ctx
+        .client
+        .post(format!("{}/basic.txt", ctx.base_url))
+        .header(header::IF_MATCH, "*")
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(response.status(), reqwest::StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test]
+async fn test_if_range_etag_match() {
+    let ctx = StaticTestContext::new().await;
+
+    // Get ETag
+    let response = ctx
+        .client
+        .head(format!("{}/basic.txt", ctx.base_url))
+        .send()
+        .await
+        .unwrap();
+    let etag = response
+        .headers()
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // If-Range with matching ETag + Range → 206 Partial Content
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=0-9")
+        .header(header::IF_RANGE, &etag)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+    assert_eq!(response.text().await.unwrap(), &BASIC_CONTENT[0..10]);
+}
+
+#[tokio::test]
+async fn test_if_range_etag_mismatch() {
+    let ctx = StaticTestContext::new().await;
+
+    // If-Range with non-matching ETag + Range → 200 (full response)
+    let response = ctx
+        .client
+        .get(format!("{}/basic.txt", ctx.base_url))
+        .header(header::RANGE, "bytes=0-9")
+        .header(header::IF_RANGE, "W/\"nonexistent\"")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
 }
