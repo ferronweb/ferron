@@ -48,12 +48,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "fuzz_proxy_protocol"
-path = "fuzz_targets/fuzz_proxy_protocol.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "fuzz_load_balancers"
 path = "fuzz_targets/fuzz_load_balancers.rs"
 test = false
@@ -80,17 +74,5 @@ doc = false
 [[bin]]
 name = "fuzz_qvalue"
 path = "fuzz_targets/fuzz_qvalue.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "fuzz_forwarded"
-path = "fuzz_targets/fuzz_forwarded.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "fuzz_error_pages"
-path = "fuzz_targets/fuzz_error_pages.rs"
 test = false
 doc = false
