@@ -151,7 +151,7 @@ Set `client_ip_from_header` only when the trusted proxy path supplies forwarded 
 
 ### Wrong nesting
 
-KDL placement matters. A directive in the wrong block can look valid but not apply where you expect.
+Directive placement matters. A directive in the wrong block can look valid but not apply where you expect.
 
 ### Missing directive
 
