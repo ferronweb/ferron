@@ -73,7 +73,7 @@ impl Body for MultipartByterangeBody {
 
         if let Some((start, end)) = self.ranges_left.pop_front() {
             // There are still ranges left, populate the stream and send multipart head
-            let end = end.min(self.file_length);
+            let end = end.min(self.file_length - 1);
             self.current_stream = Some(self.file.clone_stream(start, Some(end)));
             let mut multipart_head = String::new();
             if had_current_stream {

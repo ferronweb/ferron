@@ -543,7 +543,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         }
                         return Ok(false);
                     } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e)) {
-                        let end = end.min(file_length);
+                        let end = end.min(file_length - 1);
                         let content_len = end - start + 1;
                         let vary = vary_header.as_deref().unwrap_or("Range");
 
