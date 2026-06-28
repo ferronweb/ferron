@@ -794,7 +794,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08570dddcc35bf42d1e7d239ec3f6bcedd9e8468701d299f3e0aea0722bca1b9"
 dependencies = [
  "ahash",
- "quick_cache",
+ "quick_cache 0.6.24",
  "slab",
  "tokio",
 ]
@@ -1458,7 +1458,7 @@ dependencies = [
  "httpdate",
  "hyper-rustls",
  "hyper-util",
- "quick_cache",
+ "quick_cache 0.7.0",
  "rustc-hash",
  "rustls",
  "rustls-native-certs",
@@ -1758,7 +1758,7 @@ dependencies = [
  "oneshot",
  "parking_lot",
  "ppp",
- "quick_cache",
+ "quick_cache 0.7.0",
  "quinn",
  "rustc-hash",
  "rustls",
@@ -4136,6 +4136,18 @@ dependencies = [
  "ahash",
  "equivalent",
  "hashbrown 0.16.1",
+ "parking_lot",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "403c1a912fec895cafb223201e368234842acb9220aaf08ab042ae89ba5f135c"
+dependencies = [
+ "equivalent",
+ "foldhash",
+ "hashbrown 0.17.1",
  "parking_lot",
 ]
 
