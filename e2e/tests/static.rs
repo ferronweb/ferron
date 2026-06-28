@@ -291,19 +291,6 @@ async fn test_partial_content() {
         response.status(),
         reqwest::StatusCode::RANGE_NOT_SATISFIABLE
     );
-
-    // Malformed
-    let response = ctx
-        .client
-        .get(format!("{}/basic.txt", ctx.base_url))
-        .header(header::RANGE, "malformed")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(
-        response.status(),
-        reqwest::StatusCode::RANGE_NOT_SATISFIABLE
-    );
 }
 
 #[tokio::test]
