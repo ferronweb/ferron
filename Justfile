@@ -45,15 +45,3 @@ package-windows target="":
 [unix]
 installer:
     cd installer && make
-
-# Run the soak test with specified duration and concurrency
-[unix]
-soak duration="60m" concurrency="50":
-    cd soak
-    DURATION={{ duration }} CONCURRENCY={{ concurrency }} ./run_soak.sh
-
-# Run the chaos test with specified duration and concurrency
-[unix]
-chaos duration="60m" concurrency="50":
-    cd soak/chaos
-    DURATION={{ duration }} CONCURRENCY={{ concurrency }} ./run_chaos.sh

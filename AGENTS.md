@@ -11,7 +11,6 @@ Rust workspace (resolver "2"). Key directories:
 - `types/*` — shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
 - `e2e/` — end-to-end tests via testcontainers (requires Docker + protoc in PATH)
 - `docs/` — user-facing docs; sidebar in `docs/docLinks.ts`; synced to separate website repo on push to `3.x`
-- `soak/` — soak/chaos tests via Docker Compose
 - `doctest/` — standalone harness that runs doc examples against the built binary
 - `utils/` — CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
 
@@ -61,8 +60,6 @@ just package-deb [target]        # Debian package (uses Docker)
 just package-rpm [target]        # RPM package (uses Docker)
 just package-windows [target]    # Windows installer (Windows host only)
 just installer                   # Linux installer (runs `make` in installer/)
-just soak [duration] [concurrency]   # Docker Compose, defaults 60m / 50
-just chaos [duration] [concurrency]  # Docker Compose, defaults 60m / 50
 ```
 
 ### Fuzzing (requires nightly)

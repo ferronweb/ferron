@@ -22,7 +22,6 @@ Thumbs.db
 
 # E2E tests
 /e2e/
-/soak/
 
 # Temporary files used by the editor
 *.swp
