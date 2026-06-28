@@ -270,6 +270,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     for tag in split_etag_request(val) {
                         if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
                             if &extracted == etag {
+                                if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                                    let header_map =
+                                        build_etag_header_map(etag, &vary_header, None, cache_control);
+                                    ctx.http.req = Some(request);
+                                    ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                                    emit_static_response_metric(ctx, 412, "precondition_failed");
+                                    return Ok(false);
+                                }
                                 let suffix = suffix_opt.and_then(|s| match s.as_str() {
                                     "gzip" | "deflate" | "br" | "zstd" => Some(s),
                                     _ => None,

@@ -504,6 +504,7 @@ async fn test_post_if_none_match() {
         .to_string();
 
     // POST with matching If-None-Match should return 412 Precondition Failed
+    // 
     let response = ctx
         .client
         .post(format!("{}/basic.txt", ctx.base_url))
@@ -522,9 +523,11 @@ async fn test_on_the_fly_compression_with_precompressed() {
     let ctx = StaticTestContext::new().await;
 
     // Create a file in the precompressed directory WITHOUT a .gz counterpart
+    // Content must be > 256 bytes for compression to be possible
+    let nogz_content = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id dignissim leo, ac imperdiet tellus. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.\n";
     common::write_file(
         ctx._webroot_dir.path().join("precompressed/nogz.txt"),
-        b"no gzip file available",
+        nogz_content.as_bytes(),
     )
     .unwrap();
 
@@ -545,5 +548,5 @@ async fn test_on_the_fly_compression_with_precompressed() {
     let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
     let mut decoded = String::new();
     decoder.read_to_string(&mut decoded).unwrap();
-    assert_eq!(decoded, "no gzip file available");
+    assert_eq!(decoded, nogz_content);
 }

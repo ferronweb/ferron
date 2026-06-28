@@ -50,9 +50,7 @@ pub fn parse_range_header(range_str: &str, default_end: u64) -> Option<Vec<(u64,
         } else if b.is_empty() {
             // Open-ended: N-
             let start = a.parse::<u64>().ok()?;
-            if start > default_end {
-                return None;
-            }
+            let start = start.min(default_end);
             ranges.push((start, default_end))
         } else {
             // Explicit range: N-M

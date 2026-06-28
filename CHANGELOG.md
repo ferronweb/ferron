@@ -29,7 +29,6 @@
 #### Static file serving
 
 - **HTTP range requests fix** — HTTP range requests now correctly handle out-of-bounds ranges, returning `206 Partial Content` with the available range instead of `416 Range Not Satisfiable` (per RFC 7233 §2.1).
-- **If-None-Match POST fix** — Previously, POST requests with an `If-None-Match` header would always return `200 OK` instead of `412 Precondition Failed` (per RFC 7232 §4.2).
 - **On-the-fly compression allowed while using precompressed files** — When serving precompressed files, the content is now compressed on-the-fly if precompressed files are not available, improving performance and reducing disk usage.
 
 #### HTTP caching
