@@ -6,9 +6,9 @@
 //! - Configuration resolution via three-stage resolver
 //! - Pipeline stages: ClientIpFromHeaderStage, HttpsRedirectStage
 
-#[cfg(any(test, feature = "bench"))]
+#[cfg(test)]
 pub mod config;
-#[cfg(not(any(test, feature = "bench")))]
+#[cfg(not(test))]
 mod config;
 
 mod handler;
@@ -16,13 +16,10 @@ mod loader;
 mod server;
 mod stages;
 pub mod tls_auto;
-#[cfg(any(test, feature = "bench", feature = "fuzz"))]
+#[cfg(test)]
 pub mod util;
-#[cfg(not(any(test, feature = "bench", feature = "fuzz")))]
+#[cfg(not(test))]
 mod util;
 mod validator;
 
 pub use loader::BasicHttpModuleLoader;
-
-#[cfg(any(test, feature = "bench"))]
-pub use handler::bench_resolve_http_file_target;

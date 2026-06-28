@@ -4,7 +4,6 @@ version = "3.0.0-beta.3"
 edition = "2021"
 
 [features]
-bench = []
 fuzz = []
 
 [dependencies]
@@ -45,16 +44,3 @@ ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http", features = ["util", "mtls"] }
 ferron-tls = { path = "../../types/tls" }
-
-[dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }
-
-[[bench]]
-name = "canonicalize_bench"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
-name = "resolve_file_pipeline_bench"
-harness = false
-required-features = ["bench"]

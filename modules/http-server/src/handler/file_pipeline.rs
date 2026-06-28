@@ -612,18 +612,6 @@ fn is_not_directory_like(error: &io::Error) -> bool {
     false
 }
 
-#[cfg(any(test, feature = "bench"))]
-pub async fn bench_resolve_http_file_target(
-    root_path: &std::path::Path,
-    request_path: &str,
-    index_files: Option<&[String]>,
-) -> Result<bool, String> {
-    match resolve_http_file_target(root_path, request_path, index_files).await {
-        Ok(opt) => Ok(opt.is_some()),
-        Err(e) => Err(format!("{:?}", e)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

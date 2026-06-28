@@ -33,8 +33,6 @@ use crate::config::ThreeStageResolver;
 use crate::util::canonicalize_cache::canonicalize_path_routing_cached;
 use crate::util::canonicalize_url::canonicalize_path;
 
-#[cfg(any(test, feature = "bench"))]
-pub use self::file_pipeline::bench_resolve_http_file_target;
 pub(crate) use self::file_pipeline::set_path_resolve_cache_ttl_millis;
 use self::observability::*;
 use self::pipeline::*;
