@@ -401,12 +401,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             if enc.contains(*penc) {
                                 let compression = Compression::from_header_value(penc);
                                 if let Some(compression) = compression {
+                                    if !compression_found {
+                                        used_compression = compression;
+                                        compression_found = true;
+                                    }
                                     if precompressed {
                                         precompressed_exts
                                             .push(compression.precompressed_ext().unwrap_or(""));
                                     } else {
-                                        used_compression = compression;
-                                        compression_found = true;
                                         break;
                                     }
                                 }
