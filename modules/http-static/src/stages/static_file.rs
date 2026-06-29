@@ -173,25 +173,23 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         let mut etag_value: Option<String> = None;
         #[allow(unused_assignments)]
-        let mut vary_header: Option<String> = None;
+        let mut vary_header: Option<HeaderValue> = None;
 
         let mdate = ctx.metadata.modified().ok();
 
         if etag_enabled {
             etag_value = Some(ctx.etag.clone());
-            vary_header = Some(if compression_possible {
-                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range".to_string()
+            vary_header = Some(HeaderValue::from_static(if compression_possible {
+                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range"
             } else {
                 "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range"
-                    .to_string()
-            });
+            }));
         } else {
-            vary_header = Some(if compression_possible {
+            vary_header = Some(HeaderValue::from_static(if compression_possible {
                 "Accept-Encoding, If-Modified-Since, If-Range, If-Unmodified-Since, Range"
-                    .to_string()
             } else {
-                "If-Modified-Since, If-Range, If-Unmodified-Since, Range".to_string()
-            });
+                "If-Modified-Since, If-Range, If-Unmodified-Since, Range"
+            }));
         }
 
         // If-Match -> If-Unmodified-Since -> If-None-Match -> If-Modified-Since
@@ -212,7 +210,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 // Precondition failed when method is not GET or HEAD
                                 let header_map = build_etag_header_map(
                                     etag,
-                                    &vary_header,
+                                    vary_header,
                                     None,
                                     cache_control.as_deref(),
                                 );
@@ -231,7 +229,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             // for specific ETags
                             let header_map = build_etag_header_map(
                                 etag,
-                                &vary_header,
+                                vary_header,
                                 None,
                                 cache_control.as_deref(),
                             );
@@ -246,7 +244,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     Err(_) => {
                         let header_map = build_etag_header_map(
                             etag,
-                            &vary_header,
+                            vary_header,
                             None,
                             cache_control.as_deref(),
                         );
@@ -275,7 +273,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     {
                         let header_map = build_last_modified_header_map(
                             mdate.as_ref(),
-                            &vary_header,
+                            vary_header,
                             None,
                             cache_control.as_deref(),
                         );
@@ -290,7 +288,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 None => {
                     let header_map = build_last_modified_header_map(
                         mdate.as_ref(),
-                        &vary_header,
+                        vary_header,
                         None,
                         cache_control.as_deref(),
                     );
@@ -314,7 +312,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 if !matches!(request.method(), &Method::GET | &Method::HEAD) {
                                     let header_map = build_etag_header_map(
                                         etag,
-                                        &vary_header,
+                                        vary_header,
                                         None,
                                         cache_control.as_deref(),
                                     );
@@ -338,8 +336,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .header(header::ETAG, &full_etag)
                                     .header(
                                         header::VARY,
-                                        HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
-                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                        vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
                                     );
                                 if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
@@ -382,8 +379,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         let mut builder =
                             Response::builder().status(StatusCode::NOT_MODIFIED).header(
                                 header::VARY,
-                                HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
-                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
                             );
                         if let Some(mdate) = &mdate {
                             builder = builder
@@ -410,7 +406,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 None => {
                     let header_map = build_last_modified_header_map(
                         mdate.as_ref(),
-                        &vary_header,
+                        vary_header,
                         None,
                         cache_control.as_deref(),
                     );
@@ -568,17 +564,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .iter()
                                     .any(|(start, end)| *start >= file_length || *start > *end)
                             {
-                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let vary = vary_header
+                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
                                 let mut header_map = HeaderMap::new();
                                 header_map.insert(
                                     header::CONTENT_RANGE,
                                     HeaderValue::from_str(&format!("bytes */{file_length}"))
                                         .expect("invalid content range header"),
                                 );
-                                header_map.insert(
-                                    header::VARY,
-                                    HeaderValue::from_str(vary).expect("invalid vary header"),
-                                );
+                                header_map.insert(header::VARY, vary);
                                 ctx.http.req = Some(request);
                                 ctx.http.res =
                                     Some(HttpResponse::BuiltinError(416, Some(header_map)));
@@ -592,7 +586,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
                             if ranges.len() > 1 {
                                 let multipart_boundary = hex::encode(rand::random::<[u8; 12]>());
-                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let vary = vary_header
+                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
 
                                 let mut builder = Response::builder()
                                     .status(StatusCode::PARTIAL_CONTENT)
@@ -619,10 +614,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
                                 }
-                                builder = builder.header(
-                                    header::VARY,
-                                    HeaderValue::from_str(vary).expect("invalid vary header"),
-                                );
+                                builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
                                     let response = builder
@@ -669,7 +661,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             {
                                 let end = end.min(file_length - 1);
                                 let content_len = end - start + 1;
-                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let vary = vary_header
+                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
 
                                 let mut builder = Response::builder()
                                     .status(StatusCode::PARTIAL_CONTENT)
@@ -698,10 +691,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
                                 }
-                                builder = builder.header(
-                                    header::VARY,
-                                    HeaderValue::from_str(vary).expect("invalid vary header"),
-                                );
+                                builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
                                     let response = builder
@@ -742,17 +732,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 }
                                 return Ok(false);
                             } else {
-                                let vary = vary_header.as_deref().unwrap_or("Range");
+                                let vary = vary_header
+                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
                                 let mut header_map = HeaderMap::new();
                                 header_map.insert(
                                     header::CONTENT_RANGE,
                                     HeaderValue::from_str(&format!("bytes */{file_length}"))
                                         .expect("invalid content range header"),
                                 );
-                                header_map.insert(
-                                    header::VARY,
-                                    HeaderValue::from_str(vary).expect("invalid vary header"),
-                                );
+                                header_map.insert(header::VARY, vary);
                                 ctx.http.req = Some(request);
                                 ctx.http.res =
                                     Some(HttpResponse::BuiltinError(416, Some(header_map)));
@@ -765,17 +753,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             }
                         }
                         Err(RangeParseError::Unsatisfiable) => {
-                            let vary = vary_header.as_deref().unwrap_or("Range");
+                            let vary =
+                                vary_header.unwrap_or_else(|| HeaderValue::from_static("Range"));
                             let mut header_map = HeaderMap::new();
                             header_map.insert(
                                 header::CONTENT_RANGE,
                                 HeaderValue::from_str(&format!("bytes */{file_length}"))
                                     .expect("invalid content range header"),
                             );
-                            header_map.insert(
-                                header::VARY,
-                                HeaderValue::from_str(vary).expect("invalid vary header"),
-                            );
+                            header_map.insert(header::VARY, vary);
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
                             emit_static_response_metric(ctx, 416, "range_not_satisfiable");
@@ -813,11 +799,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         // Vary
-        if let Some(vary) = &vary_header {
-            builder = builder.header(
-                header::VARY,
-                HeaderValue::from_str(vary).expect("invalid vary header value"),
-            );
+        if let Some(vary) = vary_header {
+            builder = builder.header(header::VARY, vary);
         }
 
         // Content-Type

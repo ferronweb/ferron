@@ -9,7 +9,7 @@ use crate::util::compression::COMP_SUFFIXES;
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
     etag: &str,
-    vary: &Option<String>,
+    vary: Option<HeaderValue>,
     content_type: Option<&str>,
     cache_control: Option<&str>,
 ) -> http::HeaderMap {
@@ -19,10 +19,7 @@ pub fn build_etag_header_map(
         HeaderValue::from_str(&construct_etag(etag, None, true)).expect("invalid etag header"),
     );
     if let Some(v) = vary {
-        header_map.insert(
-            header::VARY,
-            HeaderValue::from_str(v).expect("invalid vary header"),
-        );
+        header_map.insert(header::VARY, v);
     }
     if let Some(ct) = content_type {
         header_map.insert(
@@ -42,7 +39,7 @@ pub fn build_etag_header_map(
 /// Build a header map with Last-Modified and Vary headers.
 pub fn build_last_modified_header_map(
     last_modified: Option<&SystemTime>,
-    vary: &Option<String>,
+    vary: Option<HeaderValue>,
     content_type: Option<&str>,
     cache_control: Option<&str>,
 ) -> http::HeaderMap {
@@ -54,10 +51,7 @@ pub fn build_last_modified_header_map(
         );
     }
     if let Some(v) = vary {
-        header_map.insert(
-            header::VARY,
-            HeaderValue::from_str(v).expect("invalid vary header"),
-        );
+        header_map.insert(header::VARY, v);
     }
     if let Some(ct) = content_type {
         header_map.insert(
