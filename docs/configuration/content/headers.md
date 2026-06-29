@@ -123,3 +123,14 @@ api.example.com {
 The following best-practice check is reported by `ferron doctor` for directives on this page.
 
 - **`cors { credentials true }` with `origins "*"`** — Allowing credentials with wildcard origins defeats the browser's same-origin protection. Use explicit trusted origins when credentials are allowed.
+
+## Observability
+
+### Trace spans
+
+The headers stage sets the following attributes on its `ferron.stage.headers` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.headers.set` | int | Number of response headers set. |
+| `ferron.headers.unset` | int | Number of response headers removed. |

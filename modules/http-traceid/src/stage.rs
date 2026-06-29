@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::TraceAttributeValue;
 use http::{HeaderMap, HeaderValue};
 
 use crate::config::TraceIdConfig;
@@ -96,6 +98,9 @@ impl Stage<HttpContext> for HttpTraceIdStage {
             }
             _ => {}
         }
+
+        ctx.get_span_attributes()
+            .insert("ferron.traceid.injected", TraceAttributeValue::Bool(true));
 
         Ok(())
     }

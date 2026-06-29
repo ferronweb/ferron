@@ -158,3 +158,13 @@ The `log_field` directive runs during the inverse (post-response) phase, after t
 
 > [!info]
 > For variable mapping based on complex patterns, see [HTTP map](./map.md). For URL rewriting, see [URL rewriting](./rewrite.md).
+
+## Observability
+
+### Trace spans
+
+The variables stage sets the following attributes on its `ferron.stage.variables` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.variables.set` | int | Number of variables set during this stage. |

@@ -18,8 +18,9 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
-use ferron_http::HttpContext;
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
+use ferron_http::span::HttpContextSpanExt;
+use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
 
 pub use config::ForwardProxyConfig;
 pub use error::ForwardProxyError;
@@ -157,8 +158,26 @@ impl Stage<HttpContext> for ForwardProxyStage {
             }
         };
 
+        let is_connect = ctx
+            .req
+            .as_ref()
+            .is_some_and(|r| r.method() == http::Method::CONNECT);
+        let mode = if is_connect { "tunnel" } else { "proxy" };
+
         match proxy::execute_forward_proxy(ctx, &config).await {
-            Ok(proxy::ForwardProxyResult::Handled) => Ok(false),
+            Ok(proxy::ForwardProxyResult::Handled) => {
+                ctx.get_span_attributes()
+                    .insert("ferron.fproxy.mode", TraceAttributeValue::StaticStr(mode));
+                let status_code = ctx.res.as_ref().and_then(|r| match r {
+                    HttpResponse::Custom(ref resp) => Some(resp.status().as_u16() as i64),
+                    _ => None,
+                });
+                if let Some(code) = status_code {
+                    ctx.get_span_attributes()
+                        .insert("http.response.status_code", TraceAttributeValue::I64(code));
+                }
+                Ok(false)
+            }
             Ok(proxy::ForwardProxyResult::PassThrough) => Ok(true),
             Err(e) => {
                 ctx.events.emit(Event::Log(LogEvent {
@@ -172,6 +191,24 @@ impl Stage<HttpContext> for ForwardProxyStage {
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
+                ctx.get_span_attributes().insert(
+                    "error.type",
+                    TraceAttributeValue::String(e.error_type().to_string()),
+                );
+                if is_connect {
+                    ctx.get_span_attributes().insert(
+                        "ferron.fproxy.mode",
+                        TraceAttributeValue::StaticStr("tunnel"),
+                    );
+                }
+                let status_code = ctx.res.as_ref().and_then(|r| match r {
+                    HttpResponse::Custom(ref resp) => Some(resp.status().as_u16() as i64),
+                    _ => None,
+                });
+                if let Some(code) = status_code {
+                    ctx.get_span_attributes()
+                        .insert("http.response.status_code", TraceAttributeValue::I64(code));
+                }
                 // If we have a response already set, stop; otherwise continue
                 if ctx.res.is_some() {
                     Ok(false)

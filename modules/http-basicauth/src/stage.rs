@@ -10,8 +10,9 @@ use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
 use http::{HeaderMap, HeaderValue, Method};
 use rustc_hash::FxBuildHasher;
 use tokio::sync::Semaphore;
@@ -177,6 +178,10 @@ impl Stage<HttpContext> for BasicAuthStage {
             None => {
                 // No credentials provided
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
+                ctx.get_span_attributes().insert(
+                    "ferron.basicauth.result",
+                    TraceAttributeValue::StaticStr("skip"),
+                );
                 return Ok(false);
             }
         };
@@ -187,6 +192,12 @@ impl Stage<HttpContext> for BasicAuthStage {
             None => {
                 // Malformed credentials
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
+                ctx.get_span_attributes().insert(
+                    "ferron.basicauth.result",
+                    TraceAttributeValue::StaticStr("failure"),
+                );
+                ctx.get_span_attributes()
+                    .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
                 return Ok(false);
             }
         };
@@ -203,6 +214,12 @@ impl Stage<HttpContext> for BasicAuthStage {
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_lockout_response(ctx, &engine));
+            ctx.get_span_attributes().insert(
+                "ferron.basicauth.result",
+                TraceAttributeValue::StaticStr("failure"),
+            );
+            ctx.get_span_attributes()
+                .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
             return Ok(false);
         }
 
@@ -236,6 +253,12 @@ impl Stage<HttpContext> for BasicAuthStage {
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
+                ctx.get_span_attributes().insert(
+                    "ferron.basicauth.result",
+                    TraceAttributeValue::StaticStr("failure"),
+                );
+                ctx.get_span_attributes()
+                    .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
                 return Ok(false);
             }
         };
@@ -250,7 +273,13 @@ impl Stage<HttpContext> for BasicAuthStage {
                 attributes: vec![("user.name", LogAttributeValue::String(username.clone()))],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
-            ctx.auth_user = Some(username);
+            ctx.auth_user = Some(username.clone());
+            ctx.get_span_attributes().insert(
+                "ferron.basicauth.result",
+                TraceAttributeValue::StaticStr("success"),
+            );
+            ctx.get_span_attributes()
+                .insert("user.name", TraceAttributeValue::String(username));
             Ok(true) // Continue pipeline
         } else {
             // Authentication failed — record failure
@@ -285,6 +314,12 @@ impl Stage<HttpContext> for BasicAuthStage {
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
             ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
+            ctx.get_span_attributes().insert(
+                "ferron.basicauth.result",
+                TraceAttributeValue::StaticStr("failure"),
+            );
+            ctx.get_span_attributes()
+                .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
             Ok(false)
         }
     }

@@ -13,7 +13,9 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
+use ferron_observability::TraceAttributeValue;
 
 use crate::config::evaluate_map_directives;
 use crate::validator::MapValidator;
@@ -67,9 +69,14 @@ impl Stage<HttpContext> for MapStage {
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let mappings = evaluate_map_directives(&ctx.configuration, ctx);
+        let edited = !mappings.is_empty();
         for (name, value) in mappings {
-            ctx.variables.insert(name, value);
+            ctx.variables.insert(name.clone(), value);
+            ctx.get_span_attributes()
+                .insert("ferron.map.variable", TraceAttributeValue::String(name));
         }
+        ctx.get_span_attributes()
+            .insert("ferron.map.edited", TraceAttributeValue::Bool(edited));
         Ok(true)
     }
 }

@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Added
+
+#### Observability & tracing
+
+- **Per-stage span attributes** — all HTTP pipeline stages now emit stage-specific span attributes on their `ferron.stage.<name>` spans, enabling detailed flame graph analysis without requiring metric export. Each module's per-stage span carries module-specific context such as upstream backend URLs, cache results, rate limit decisions, authentication outcomes, and response status codes. See each module's documentation for the full list of attributes and the [tracing reference](/docs/v3/configuration/observability/tracing#per-stage-spans).
+
 ## Ferron 3.0.0-beta.4
 
 **Released in June 28, 2026**

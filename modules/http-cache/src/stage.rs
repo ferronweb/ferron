@@ -10,10 +10,11 @@ use bytes::{Bytes, BytesMut};
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    MetricValue, TraceAttributeValue,
 };
 use futures_util::stream::{self, StreamExt};
 use http::header::{self, HeaderName, HeaderValue};
@@ -456,6 +457,10 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 if !purge_allowed {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
+                    ctx.get_span_attributes().insert(
+                        "ferron.cache.result",
+                        TraceAttributeValue::String("purge_rejected".to_string()),
+                    );
                     return Ok(false);
                 }
 
@@ -540,6 +545,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                     )
                     .map_err(|e| PipelineError::custom(e.to_string()))?;
                 ctx.res = Some(HttpResponse::Custom(response));
+                ctx.get_span_attributes().insert(
+                    "ferron.cache.result",
+                    TraceAttributeValue::String("purge".to_string()),
+                );
+                ctx.get_span_attributes().insert(
+                    "ferron.cache.zone",
+                    TraceAttributeValue::String(zone_id.label().to_string()),
+                );
                 // Don't insert RequestState — run_inverse will skip
                 return Ok(false);
             }
@@ -591,6 +604,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else {
                     self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
+                    {
+                        let sa = ctx.get_span_attributes();
+                        sa.insert(
+                            "ferron.cache.result",
+                            TraceAttributeValue::String("hit".to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.zone",
+                            TraceAttributeValue::String(zone_id.label().to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.scope",
+                            TraceAttributeValue::String(scope.as_str().to_string()),
+                        );
+                    }
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
@@ -634,6 +662,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 Some(scope),
                                 retry_items,
                             );
+                            {
+                                let sa = ctx.get_span_attributes();
+                                sa.insert(
+                                    "ferron.cache.result",
+                                    TraceAttributeValue::String("hit".to_string()),
+                                );
+                                sa.insert(
+                                    "ferron.cache.zone",
+                                    TraceAttributeValue::String(zone_id.label().to_string()),
+                                );
+                                sa.insert(
+                                    "ferron.cache.scope",
+                                    TraceAttributeValue::String(scope.as_str().to_string()),
+                                );
+                            }
                             ctx.res = Some(if entry.body.is_none() {
                                 HttpResponse::BuiltinError(
                                     entry.status.as_u16(),
@@ -707,6 +750,36 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         }
 
+        if !stop {
+            let result_label = match &lookup_result {
+                LookupResult::Hit => "hit",
+                LookupResult::StaleWhileRevalidate { inflight_key, .. }
+                    if inflight_key.is_some() =>
+                {
+                    "stale"
+                }
+                LookupResult::StaleWhileRevalidate { .. } => "hit",
+                LookupResult::Revalidate { .. } => "revalidate",
+                LookupResult::Miss { .. } => "miss",
+                LookupResult::Bypass => "bypass",
+            };
+            let sa = ctx.get_span_attributes();
+            sa.insert(
+                "ferron.cache.result",
+                TraceAttributeValue::String(result_label.to_string()),
+            );
+            sa.insert(
+                "ferron.cache.zone",
+                TraceAttributeValue::String(zone_id.label().to_string()),
+            );
+            if let LookupResult::Bypass = &lookup_result {
+                sa.insert(
+                    "ferron.cache.bypass_reason",
+                    TraceAttributeValue::String(request_policy.reason.to_string()),
+                );
+            }
+        }
+
         ctx.extensions.insert::<RequestStateKey>(RequestState {
             config,
             zone_id,
@@ -774,6 +847,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
 
                     self.emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
+                    {
+                        let sa = ctx.get_span_attributes();
+                        sa.insert(
+                            "ferron.cache.result",
+                            TraceAttributeValue::String("stale".to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.zone",
+                            TraceAttributeValue::String(state.zone_id.label().to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.scope",
+                            TraceAttributeValue::String(entry.scope.as_str().to_string()),
+                        );
+                    }
                     return Ok(());
                 }
             }
@@ -952,6 +1040,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
 
                         ctx.res = Some(HttpResponse::Custom(stale_response));
+                        {
+                            let sa = ctx.get_span_attributes();
+                            sa.insert(
+                                "ferron.cache.result",
+                                TraceAttributeValue::String("stale".to_string()),
+                            );
+                            sa.insert(
+                                "ferron.cache.zone",
+                                TraceAttributeValue::String(state.zone_id.label().to_string()),
+                            );
+                            sa.insert(
+                                "ferron.cache.scope",
+                                TraceAttributeValue::String(stale_entry.scope.as_str().to_string()),
+                            );
+                        }
                         return Ok(());
                     }
                 }
@@ -1221,6 +1324,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                     );
                     self.emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
                     ctx.res = Some(outgoing_response);
+                    {
+                        let sa = ctx.get_span_attributes();
+                        sa.insert(
+                            "ferron.cache.result",
+                            TraceAttributeValue::String("miss".to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.zone",
+                            TraceAttributeValue::String(state.zone_id.label().to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.scope",
+                            TraceAttributeValue::String(scope.as_str().to_string()),
+                        );
+                    }
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {
                     ctx.events.emit(Event::Log(LogEvent {
@@ -1242,6 +1360,21 @@ impl Stage<HttpContext> for HttpCacheStage {
                     );
                     self.emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
                     ctx.res = Some(HttpResponse::Custom(response));
+                    {
+                        let sa = ctx.get_span_attributes();
+                        sa.insert(
+                            "ferron.cache.result",
+                            TraceAttributeValue::String("miss".to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.zone",
+                            TraceAttributeValue::String(state.zone_id.label().to_string()),
+                        );
+                        sa.insert(
+                            "ferron.cache.detail",
+                            TraceAttributeValue::String("response-too-large".to_string()),
+                        );
+                    }
                 }
             }
         } else {
@@ -1273,6 +1406,29 @@ impl Stage<HttpContext> for HttpCacheStage {
                 purge_scope.or(decision.scope),
                 state.store.len(),
             );
+            {
+                let sa = ctx.get_span_attributes();
+                sa.insert(
+                    "ferron.cache.result",
+                    TraceAttributeValue::String(result.to_string()),
+                );
+                sa.insert(
+                    "ferron.cache.zone",
+                    TraceAttributeValue::String(state.zone_id.label().to_string()),
+                );
+                if let Some(scope) = purge_scope.or(decision.scope) {
+                    sa.insert(
+                        "ferron.cache.scope",
+                        TraceAttributeValue::String(scope.as_str().to_string()),
+                    );
+                }
+                if result == "bypass" {
+                    sa.insert(
+                        "ferron.cache.detail",
+                        TraceAttributeValue::String(decision.reason.to_string()),
+                    );
+                }
+            }
             let (parts, body) = response.into_parts();
             ctx.res = Some(if let Some(body) = body {
                 HttpResponse::Custom(Response::from_parts(parts, body))

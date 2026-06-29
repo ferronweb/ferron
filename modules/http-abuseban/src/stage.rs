@@ -3,13 +3,14 @@
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{LogAttributeValue, TraceAttributeValue};
 use http::HeaderMap;
 use std::sync::Arc;
 
 use crate::config::parse_abuse_protection_config;
 use crate::registry::{AbuseRegistry, AbuseRegistryConfig};
-use ferron_observability::LogAttributeValue;
 
 /// HTTP pipeline stage that checks for IP bans and rejects banned clients.
 pub struct AbuseProtectionStage {
@@ -87,7 +88,7 @@ impl AbuseProtectionStage {
                     name: "ferron.abuseban.rejected",
                     attributes: vec![(
                         "ferron.abuseban.reason",
-                        ferron_observability::MetricAttributeValue::String(reason),
+                        ferron_observability::MetricAttributeValue::String(reason.clone()),
                     )],
                     ty: ferron_observability::MetricType::Counter,
                     value: ferron_observability::MetricValue::U64(1),
@@ -97,9 +98,35 @@ impl AbuseProtectionStage {
                 },
             ));
 
+            {
+                let sa = context.get_span_attributes();
+                sa.insert(
+                    "ferron.abuseban.action",
+                    TraceAttributeValue::String("rejected".to_string()),
+                );
+                sa.insert(
+                    "ferron.abuseban.reason",
+                    TraceAttributeValue::String(reason.clone()),
+                );
+                sa.insert(
+                    "ferron.abuseban.remaining_secs",
+                    TraceAttributeValue::I64(remaining_secs as i64),
+                );
+                sa.insert(
+                    "error.type",
+                    TraceAttributeValue::String("ip_banned".to_string()),
+                );
+            }
             return Ok(false); // Stop pipeline execution
         }
 
+        {
+            let sa = context.get_span_attributes();
+            sa.insert(
+                "ferron.abuseban.action",
+                TraceAttributeValue::String("skip".to_string()),
+            );
+        }
         Ok(true) // Continue pipeline execution
     }
 

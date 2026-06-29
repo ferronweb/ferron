@@ -8,8 +8,11 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use http::{HeaderValue, Response};
 use http_body_util::{BodyExt, Empty};
 
@@ -146,6 +149,11 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             description: Some("Number of HTTP redirects emitted by the server."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
+
+        ctx.get_span_attributes().insert(
+            "ferron.redirect.target",
+            TraceAttributeValue::String(https_url),
+        );
 
         // Stop the pipeline — response is ready.
         Ok(false)

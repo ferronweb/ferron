@@ -9,6 +9,7 @@ async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "d
 flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["util"] }
+ferron-observability = { path = "../../types/observability" }
 http = "1"
 http-body = "1"
 http-body-util = "0.1"

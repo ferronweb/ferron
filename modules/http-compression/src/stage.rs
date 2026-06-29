@@ -10,8 +10,10 @@ use async_compression::Level;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint as CoreStageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::TraceAttributeValue;
 use futures_util::{StreamExt, TryStreamExt};
 use http::header;
 use http_body_util::combinators::UnsyncBoxBody;
@@ -281,6 +283,14 @@ impl Stage<HttpContext> for DynamicCompressionStage {
 
         if compression == Compression::Identity {
             ctx.res = Some(HttpResponse::Custom(response));
+            ctx.get_span_attributes().insert(
+                "ferron.compression.algorithm",
+                TraceAttributeValue::String("identity".to_string()),
+            );
+            ctx.get_span_attributes().insert(
+                "ferron.compression.precompressed",
+                TraceAttributeValue::Bool(false),
+            );
             return Ok(());
         }
 
@@ -319,6 +329,16 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         let new_response = http::Response::from_parts(parts, compressed_body);
 
         ctx.res = Some(HttpResponse::Custom(new_response));
+
+        let algorithm = compression.header_value().unwrap_or("identity");
+        ctx.get_span_attributes().insert(
+            "ferron.compression.algorithm",
+            TraceAttributeValue::String(algorithm.to_string()),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.compression.precompressed",
+            TraceAttributeValue::Bool(false),
+        );
 
         Ok(())
     }

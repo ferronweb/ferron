@@ -248,3 +248,14 @@ The following best-practice checks are reported by `ferron doctor` for directive
 ### TLS deployment
 
 - **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder that TLS termination should be performed by an upstream proxy or load balancer. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
+
+## Observability
+
+### Trace spans
+
+The HTTP server sets the following attributes on per-stage spans:
+
+| Span name | Attributes | Description |
+| --- | --- | --- |
+| `ferron.stage.client_ip_from_header` | `ferron.client_ip.source`, `ferron.client_ip.original` | Client IP resolution stage |
+| `ferron.stage.https_redirect` | `ferron.redirect.target` | HTTP to HTTPS redirect stage |

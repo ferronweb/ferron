@@ -14,8 +14,11 @@ use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::PipelineError;
 use ferron_core::registry::RegistryBuilder;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use http_body_util::BodyExt;
 
 pub use validator::HttpHeadersConfigurationValidator;
@@ -229,6 +232,30 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                 cors::apply_cors_headers(headers, cors, &origin, &request_method, None);
             }
         }
+
+        let set_count = config
+            .header_actions
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a,
+                    config::HeaderAction::Append(_, _) | config::HeaderAction::Replace(_, _)
+                )
+            })
+            .count();
+        let unset_count = config
+            .header_actions
+            .iter()
+            .filter(|a| matches!(a, config::HeaderAction::Remove(_)))
+            .count();
+        ctx.get_span_attributes().insert(
+            "ferron.headers.set",
+            TraceAttributeValue::I64(set_count as i64),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.headers.unset",
+            TraceAttributeValue::I64(unset_count as i64),
+        );
 
         Ok(())
     }

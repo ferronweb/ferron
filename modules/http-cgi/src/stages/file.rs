@@ -3,9 +3,11 @@ use std::sync::LazyLock;
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue,
 };
 use http::Response;
 use http_body_util::BodyExt;
@@ -227,6 +229,7 @@ impl Stage<HttpFileContext> for CgiStage {
                     .code()
                     .map(|c| c.to_string())
                     .unwrap_or_else(|| "unknown".to_string());
+                let exit_code_val = exit_code_str.clone();
                 ctx.http.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.cgi.failures",
                     attributes: vec![
@@ -284,7 +287,22 @@ impl Stage<HttpFileContext> for CgiStage {
                             ),
                         }));
                     }
+                    let script_path = ctx.file_path.to_string_lossy().to_string();
                     ctx.http.res = Some(HttpResponse::BuiltinError(500, None));
+                    ctx.get_span_attributes().insert(
+                        "error.type",
+                        TraceAttributeValue::StaticStr("non_zero_exit_code"),
+                    );
+                    ctx.get_span_attributes()
+                        .insert("http.response.status_code", TraceAttributeValue::I64(500));
+                    ctx.get_span_attributes().insert(
+                        "ferron.cgi.script_path",
+                        TraceAttributeValue::String(script_path),
+                    );
+                    ctx.get_span_attributes().insert(
+                        "ferron.cgi.exit_code",
+                        TraceAttributeValue::String(exit_code_val),
+                    );
                     return Ok(false);
                 }
             }
@@ -327,6 +345,7 @@ impl Stage<HttpFileContext> for CgiStage {
         });
 
         // CGI response
+        let status_code = response.status().as_u16();
         ctx.http.res = Some(HttpResponse::Custom(response));
 
         ctx.http.events.emit(Event::Metric(MetricEvent {
@@ -347,6 +366,26 @@ impl Stage<HttpFileContext> for CgiStage {
             description: Some("Number of CGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
         }));
+
+        let script_path = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "http.response.status_code",
+            TraceAttributeValue::I64(status_code as i64),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.cgi.script_path",
+            TraceAttributeValue::String(script_path),
+        );
+        if let Some(exit_code) = exit_code_option {
+            let exit_code_str = exit_code
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            ctx.get_span_attributes().insert(
+                "ferron.cgi.exit_code",
+                TraceAttributeValue::String(exit_code_str),
+            );
+        }
 
         Ok(false)
     }

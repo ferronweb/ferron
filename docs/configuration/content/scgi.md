@@ -144,6 +144,16 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 | `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before a backend response was returned |
 | `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |
 
+### Trace spans
+
+The SCGI stage sets the following attributes on its `ferron.stage.scgi` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code returned by the SCGI backend. |
+| `ferron.scgi.backend_url` | string | URL of the SCGI backend. |
+| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+
 ## Examples
 
 ### Basic SCGI backend

@@ -224,3 +224,16 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 - **`auth_to_concurrent_conns false`** — Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
 - **`auth_to { no_verification }`** — Disabling TLS verification for the authentication backend should only be used in tightly controlled internal test environments.
+
+## Observability
+
+### Trace spans
+
+The forwarded authentication stage sets the following attributes on its `ferron.stage.forwarded_auth` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.fauth.result` | string | Authentication result: `success` or `failure`. |
+| `ferron.fauth.backend_url` | string | URL of the authentication backend. |
+| `http.response.status_code` | int | HTTP status code returned on authentication failure. |
+| `error.type` | string | Set to `auth_failed` on failure, enabling trace UI highlighting. |

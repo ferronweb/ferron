@@ -1,9 +1,11 @@
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue,
 };
 use http::Response;
 use http_body_util::BodyExt;
@@ -179,6 +181,16 @@ impl Stage<HttpContext> for ScgiStage {
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
+                            ctx.get_span_attributes().insert(
+                                "error.type",
+                                TraceAttributeValue::StaticStr("service_unavailable"),
+                            );
+                            ctx.get_span_attributes()
+                                .insert("http.response.status_code", TraceAttributeValue::I64(503));
+                            ctx.get_span_attributes().insert(
+                                "ferron.scgi.backend_url",
+                                TraceAttributeValue::String(scgi_to_fixed.to_string()),
+                            );
                             return Ok(true);
                         }
                         _ => return Err(PipelineError::custom(err.to_string())),
@@ -226,6 +238,16 @@ impl Stage<HttpContext> for ScgiStage {
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
+                            ctx.get_span_attributes().insert(
+                                "error.type",
+                                TraceAttributeValue::StaticStr("service_unavailable"),
+                            );
+                            ctx.get_span_attributes()
+                                .insert("http.response.status_code", TraceAttributeValue::I64(503));
+                            ctx.get_span_attributes().insert(
+                                "ferron.scgi.backend_url",
+                                TraceAttributeValue::String(scgi_to_fixed.to_string()),
+                            );
                             return Ok(false);
                         }
                         _ => return Err(PipelineError::custom(err.to_string())),
@@ -252,6 +274,7 @@ impl Stage<HttpContext> for ScgiStage {
         let response = Response::from_parts(parts, SendWrapBody::new(body).boxed_unsync());
 
         // SCGI response
+        let status_code = response.status().as_u16();
         ctx.res = Some(HttpResponse::Custom(response));
 
         let upstream_duration = request_start.elapsed().as_secs_f64();
@@ -276,6 +299,15 @@ impl Stage<HttpContext> for ScgiStage {
             description: Some("Number of SCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
+
+        ctx.get_span_attributes().insert(
+            "http.response.status_code",
+            TraceAttributeValue::I64(status_code as i64),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.scgi.backend_url",
+            TraceAttributeValue::String(scgi_to_fixed.to_string()),
+        );
 
         Ok(false)
     }

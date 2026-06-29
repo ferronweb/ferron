@@ -2,9 +2,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue,
 };
 use http::Response;
 use http_body_util::BodyExt;
@@ -200,6 +202,16 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     ),
                 }));
                 ctx.http.res = Some(HttpResponse::BuiltinError(503, None));
+                ctx.get_span_attributes().insert(
+                    "error.type",
+                    TraceAttributeValue::StaticStr("service_unavailable"),
+                );
+                ctx.get_span_attributes()
+                    .insert("http.response.status_code", TraceAttributeValue::I64(503));
+                ctx.get_span_attributes().insert(
+                    "ferron.fcgi.backend_url",
+                    TraceAttributeValue::String(scgi_to_fixed.to_string()),
+                );
                 return Ok(false);
             }
             Err(ClientError::Other(err)) => {
@@ -262,6 +274,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
         );
 
         // FastCGI response
+        let status_code = response.status().as_u16();
         ctx.http.res = Some(HttpResponse::Custom(response));
 
         let upstream_duration = request_start.elapsed().as_secs_f64();
@@ -286,6 +299,20 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             description: Some("Number of FastCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
         }));
+
+        let script_filename = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "http.response.status_code",
+            TraceAttributeValue::I64(status_code as i64),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.fcgi.backend_url",
+            TraceAttributeValue::String(scgi_to_fixed.to_string()),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.fcgi.script_filename",
+            TraceAttributeValue::String(script_filename),
+        );
 
         Ok(false)
     }

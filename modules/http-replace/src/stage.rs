@@ -9,9 +9,10 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{Event, MetricEvent, MetricType, MetricValue, TraceAttributeValue};
 use http::header::{CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, LAST_MODIFIED};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::BodyExt;
@@ -135,6 +136,8 @@ impl Stage<HttpContext> for HttpReplaceStage {
 
         let config = state.config;
         if config.rules.is_empty() {
+            ctx.get_span_attributes()
+                .insert("ferron.replace.applied", TraceAttributeValue::Bool(false));
             return Ok(());
         }
 
@@ -143,9 +146,15 @@ impl Stage<HttpContext> for HttpReplaceStage {
             Some(HttpResponse::Custom(resp)) => resp,
             Some(res) => {
                 ctx.res = Some(res);
+                ctx.get_span_attributes()
+                    .insert("ferron.replace.applied", TraceAttributeValue::Bool(false));
                 return Ok(());
             }
-            None => return Ok(()),
+            None => {
+                ctx.get_span_attributes()
+                    .insert("ferron.replace.applied", TraceAttributeValue::Bool(false));
+                return Ok(());
+            }
         };
 
         // Skip if response has Content-Encoding (compressed data)
@@ -160,6 +169,12 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 trace_context: current_event_trace_context(ctx),
             }));
             ctx.res = Some(HttpResponse::Custom(response));
+            ctx.get_span_attributes()
+                .insert("ferron.replace.applied", TraceAttributeValue::Bool(false));
+            ctx.get_span_attributes().insert(
+                "ferron.replace.skip_reason",
+                TraceAttributeValue::StaticStr("compressed"),
+            );
             return Ok(());
         }
 
@@ -176,6 +191,12 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 trace_context: current_event_trace_context(ctx),
             }));
             ctx.res = Some(HttpResponse::Custom(response));
+            ctx.get_span_attributes()
+                .insert("ferron.replace.applied", TraceAttributeValue::Bool(false));
+            ctx.get_span_attributes().insert(
+                "ferron.replace.skip_reason",
+                TraceAttributeValue::StaticStr("mime_type"),
+            );
             return Ok(());
         }
 
@@ -201,6 +222,9 @@ impl Stage<HttpContext> for HttpReplaceStage {
             description: Some("Responses successfully modified."),
             trace_context: current_event_trace_context(ctx),
         }));
+
+        ctx.get_span_attributes()
+            .insert("ferron.replace.applied", TraceAttributeValue::Bool(true));
 
         Ok(())
     }

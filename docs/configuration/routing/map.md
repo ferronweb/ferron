@@ -143,3 +143,14 @@ Map evaluation runs after client IP resolution and before URL rewriting. This me
 
 > [!info]
 > For `map` interaction with rewriting, see [URL rewriting](./rewrite.md).
+
+## Observability
+
+### Trace spans
+
+The map stage sets the following attributes on its `ferron.stage.map` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.map.variable` | string | The variable name being mapped. |
+| `ferron.map.edited` | bool | Whether the variable value was changed by the mapping. |

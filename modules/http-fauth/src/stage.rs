@@ -5,8 +5,9 @@ use std::sync::Arc;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
 use http::Request;
 use http_body_util::{BodyExt, Empty};
 
@@ -291,6 +292,14 @@ impl ForwardedAuthenticationStage {
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
 
+            ctx.get_span_attributes().insert(
+                "ferron.fauth.result",
+                TraceAttributeValue::StaticStr("success"),
+            );
+            ctx.get_span_attributes().insert(
+                "ferron.fauth.backend_url",
+                TraceAttributeValue::String(config.backend_url.clone()),
+            );
             Ok(true) // Continue pipeline
         } else {
             let auth_status = auth_response.status();
@@ -316,6 +325,17 @@ impl ForwardedAuthenticationStage {
                 )],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
+
+            ctx.get_span_attributes().insert(
+                "ferron.fauth.result",
+                TraceAttributeValue::StaticStr("failure"),
+            );
+            ctx.get_span_attributes().insert(
+                "http.response.status_code",
+                TraceAttributeValue::I64(auth_status.as_u16() as i64),
+            );
+            ctx.get_span_attributes()
+                .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
 
             Ok(false) // Stop pipeline
         }

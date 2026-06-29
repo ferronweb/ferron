@@ -153,6 +153,17 @@ proxy.example.com {
 | Forward proxy: unsupported scheme | WARN | `url.scheme` (string) — the unsupported scheme, `error.type` (string) |
 | Forward proxy: missing host | WARN | `error.type` (string) |
 
+### Trace spans
+
+The forward proxy stage sets the following attributes on its `ferron.stage.forward_proxy` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.fproxy.mode` | string | Proxy mode: `tunnel` (CONNECT) or `proxy` (standard). |
+| `ferron.fproxy.upstream` | string | The upstream host and port. |
+| `http.response.status_code` | int | HTTP status code returned to the client. |
+| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+
 ## Best practices
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.

@@ -7,10 +7,13 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
 use ferron_http::{HttpFileContext, HttpResponse};
-use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use futures_util::TryStreamExt;
 use http::header::{self, HeaderValue};
 use http::{HeaderMap, Method, Response, StatusCode};
@@ -85,6 +88,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
+        let file_path_str = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "ferron.static.file_path",
+            TraceAttributeValue::String(file_path_str),
+        );
+
         // Skip if root is not configured
         if ctx.http.configuration.get_value("root", true).is_none() {
             return Ok(true);
@@ -112,6 +121,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(res));
             emit_static_response_metric(ctx, 204, "options");
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(204));
             return Ok(false);
         }
 
@@ -125,6 +136,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(405, Some(allow_headers)));
             emit_static_response_metric(ctx, 405, "method_not_allowed");
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(405));
             return Ok(false);
         }
 
@@ -142,7 +155,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             .unwrap_or(true);
         let cache_control = config
             .get_value("file_cache_control", true)
-            .and_then(|v| v.as_str());
+            .and_then(|v| v.as_str().map(|s| s.to_string()));
 
         // Determine content type
         let content_type = get_content_type(&ctx.file_path, config);
@@ -197,31 +210,51 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         {
                             if !matches!(request.method(), &Method::GET | &Method::HEAD) {
                                 // Precondition failed when method is not GET or HEAD
-                                let header_map =
-                                    build_etag_header_map(etag, &vary_header, None, cache_control);
+                                let header_map = build_etag_header_map(
+                                    etag,
+                                    &vary_header,
+                                    None,
+                                    cache_control.as_deref(),
+                                );
                                 ctx.http.req = Some(request);
                                 ctx.http.res =
                                     Some(HttpResponse::BuiltinError(412, Some(header_map)));
                                 emit_static_response_metric(ctx, 412, "precondition_failed");
+                                ctx.get_span_attributes().insert(
+                                    "http.response.status_code",
+                                    TraceAttributeValue::I64(412),
+                                );
                                 return Ok(false);
                             }
 
                             // Ferron only emits weak ETags, and strong comparison won't match
                             // for specific ETags
-                            let header_map =
-                                build_etag_header_map(etag, &vary_header, None, cache_control);
+                            let header_map = build_etag_header_map(
+                                etag,
+                                &vary_header,
+                                None,
+                                cache_control.as_deref(),
+                            );
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                             emit_static_response_metric(ctx, 412, "precondition_failed");
+                            ctx.get_span_attributes()
+                                .insert("http.response.status_code", TraceAttributeValue::I64(412));
                             return Ok(false);
                         }
                     }
                     Err(_) => {
-                        let header_map =
-                            build_etag_header_map(etag, &vary_header, None, cache_control);
+                        let header_map = build_etag_header_map(
+                            etag,
+                            &vary_header,
+                            None,
+                            cache_control.as_deref(),
+                        );
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
                         emit_static_response_metric(ctx, 400, "bad_request");
+                        ctx.get_span_attributes()
+                            .insert("http.response.status_code", TraceAttributeValue::I64(400));
                         return Ok(false);
                     }
                 }
@@ -244,11 +277,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             mdate.as_ref(),
                             &vary_header,
                             None,
-                            cache_control,
+                            cache_control.as_deref(),
                         );
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                         emit_static_response_metric(ctx, 412, "precondition_failed");
+                        ctx.get_span_attributes()
+                            .insert("http.response.status_code", TraceAttributeValue::I64(412));
                         return Ok(false);
                     }
                 }
@@ -257,11 +292,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         mdate.as_ref(),
                         &vary_header,
                         None,
-                        cache_control,
+                        cache_control.as_deref(),
                     );
                     ctx.http.req = Some(request);
                     ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
                     emit_static_response_metric(ctx, 400, "bad_request");
+                    ctx.get_span_attributes()
+                        .insert("http.response.status_code", TraceAttributeValue::I64(400));
                     return Ok(false);
                 }
             }
@@ -279,12 +316,16 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         etag,
                                         &vary_header,
                                         None,
-                                        cache_control,
+                                        cache_control.as_deref(),
                                     );
                                     ctx.http.req = Some(request);
                                     ctx.http.res =
                                         Some(HttpResponse::BuiltinError(412, Some(header_map)));
                                     emit_static_response_metric(ctx, 412, "precondition_failed");
+                                    ctx.get_span_attributes().insert(
+                                        "http.response.status_code",
+                                        TraceAttributeValue::I64(412),
+                                    );
                                     return Ok(false);
                                 }
                                 let suffix = suffix_opt.and_then(|s| match s.as_str() {
@@ -300,7 +341,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         HeaderValue::from_str(vary_header.as_deref().unwrap_or(""))
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
-                                if let Some(cc) = cache_control {
+                                if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
                                         HeaderValue::from_str(cc)
@@ -313,6 +354,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 ctx.http.req = Some(request);
                                 ctx.http.res = Some(HttpResponse::Custom(response));
                                 emit_static_response_metric(ctx, 304, "not_modified");
+                                ctx.get_span_attributes().insert(
+                                    "http.response.status_code",
+                                    TraceAttributeValue::I64(304),
+                                );
                                 return Ok(false);
                             }
                         }
@@ -344,7 +389,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             builder = builder
                                 .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
                         }
-                        if let Some(cc) = cache_control {
+                        if let Some(cc) = cache_control.as_deref() {
                             builder = builder.header(
                                 header::CACHE_CONTROL,
                                 HeaderValue::from_str(cc)
@@ -357,6 +402,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::Custom(response));
                         emit_static_response_metric(ctx, 304, "not_modified");
+                        ctx.get_span_attributes()
+                            .insert("http.response.status_code", TraceAttributeValue::I64(304));
                         return Ok(false);
                     }
                 }
@@ -365,7 +412,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         mdate.as_ref(),
                         &vary_header,
                         None,
-                        cache_control,
+                        cache_control.as_deref(),
                     );
                     ctx.http.req = Some(request);
                     ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
@@ -448,8 +495,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             for ext in precompressed_exts {
                 if !ext.is_empty() {
                     let mut precomp_path = ctx.file_path.clone();
-                    // If the original file has an extension (e.g. file.txt) produce file.txt.br
-                    // Otherwise produce file.br
                     if let Some(orig_ext) = ctx.file_path.extension() {
                         let orig_ext_str = orig_ext.to_string_lossy();
                         let new_ext = format!("{}.{}", orig_ext_str, ext);
@@ -473,6 +518,11 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 }
             }
         }
+
+        ctx.get_span_attributes().insert(
+            "ferron.static.precompressed",
+            TraceAttributeValue::Bool(is_precompressed_file),
+        );
 
         // Handle If-Range (RFC 7233 §3.2)
         // If-Range is ignored when If-Match or If-Unmodified-Since is present
@@ -533,6 +583,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 ctx.http.res =
                                     Some(HttpResponse::BuiltinError(416, Some(header_map)));
                                 emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                                ctx.get_span_attributes().insert(
+                                    "http.response.status_code",
+                                    TraceAttributeValue::I64(416),
+                                );
                                 return Ok(false);
                             }
 
@@ -558,7 +612,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 if let Some(ref etag) = etag_value {
                                     builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
                                 }
-                                if let Some(cc) = cache_control {
+                                if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
                                         HeaderValue::from_str(cc)
@@ -579,6 +633,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     ctx.http.req = Some(request);
                                     ctx.http.res = Some(HttpResponse::Custom(response));
                                     emit_static_response_metric(ctx, 206, "partial_content");
+                                    ctx.get_span_attributes().insert(
+                                        "http.response.status_code",
+                                        TraceAttributeValue::I64(206),
+                                    );
                                 } else {
                                     let file =
                                         vibeio::fs::File::open(&file_path).await.map_err(|e| {
@@ -601,6 +659,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     ctx.http.req = Some(request);
                                     ctx.http.res = Some(HttpResponse::Custom(response));
                                     emit_static_response_metric(ctx, 206, "partial_content");
+                                    ctx.get_span_attributes().insert(
+                                        "http.response.status_code",
+                                        TraceAttributeValue::I64(206),
+                                    );
                                 }
                                 return Ok(false);
                             } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e))
@@ -629,7 +691,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 if let Some(ref ct) = content_type {
                                     builder = builder.header(header::CONTENT_TYPE, ct);
                                 }
-                                if let Some(cc) = cache_control {
+                                if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
                                         HeaderValue::from_str(cc)
@@ -650,6 +712,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     ctx.http.req = Some(request);
                                     ctx.http.res = Some(HttpResponse::Custom(response));
                                     emit_static_response_metric(ctx, 206, "partial_content");
+                                    ctx.get_span_attributes().insert(
+                                        "http.response.status_code",
+                                        TraceAttributeValue::I64(206),
+                                    );
                                 } else {
                                     let file =
                                         vibeio::fs::File::open(&file_path).await.map_err(|e| {
@@ -669,6 +735,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     ctx.http.req = Some(request);
                                     ctx.http.res = Some(HttpResponse::Custom(response));
                                     emit_static_response_metric(ctx, 206, "partial_content");
+                                    ctx.get_span_attributes().insert(
+                                        "http.response.status_code",
+                                        TraceAttributeValue::I64(206),
+                                    );
                                 }
                                 return Ok(false);
                             } else {
@@ -687,6 +757,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 ctx.http.res =
                                     Some(HttpResponse::BuiltinError(416, Some(header_map)));
                                 emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                                ctx.get_span_attributes().insert(
+                                    "http.response.status_code",
+                                    TraceAttributeValue::I64(416),
+                                );
                                 return Ok(false);
                             }
                         }
@@ -705,6 +779,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             ctx.http.req = Some(request);
                             ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
                             emit_static_response_metric(ctx, 416, "range_not_satisfiable");
+                            ctx.get_span_attributes()
+                                .insert("http.response.status_code", TraceAttributeValue::I64(416));
                             return Ok(false);
                         }
                         Err(RangeParseError::InvalidSyntax) => {
@@ -750,7 +826,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         // Cache-Control
-        if let Some(cc) = cache_control {
+        if let Some(cc) = cache_control.as_deref() {
             builder = builder.header(
                 header::CACHE_CONTROL,
                 HeaderValue::from_str(cc).unwrap_or_else(|_| HeaderValue::from_static("")),
@@ -780,6 +856,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(response));
             emit_static_response_metric(ctx, 200, "head");
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(200));
             return Ok(false);
         }
 
@@ -843,6 +921,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
         ctx.http.req = Some(request);
         ctx.http.res = Some(HttpResponse::Custom(response));
         emit_static_response_metric(ctx, 200, "full");
+        ctx.get_span_attributes()
+            .insert("http.response.status_code", TraceAttributeValue::I64(200));
 
         // Emit static file metrics
         let compression_label = match used_compression {

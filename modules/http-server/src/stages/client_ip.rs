@@ -9,8 +9,11 @@ use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use std::net::SocketAddr;
 
 pub struct ClientIpFromHeaderStage;
@@ -52,6 +55,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         };
 
         // Preserve the original remote port; only replace the IP.
+        let original_ip = ctx.remote_address.ip();
         let original_port = ctx.remote_address.port();
         ctx.remote_address = SocketAddr::new(ip, original_port);
         ctx.events.emit(Event::Metric(MetricEvent {
@@ -68,6 +72,15 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             ),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
+
+        ctx.get_span_attributes().insert(
+            "ferron.client_ip.source",
+            TraceAttributeValue::StaticStr(config.header_name()),
+        );
+        ctx.get_span_attributes().insert(
+            "ferron.client_ip.original",
+            TraceAttributeValue::String(original_ip.to_string()),
+        );
 
         Ok(true)
     }

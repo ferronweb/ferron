@@ -220,6 +220,17 @@ The abuse protection module emits the following metrics:
 | Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
 | Ban triggered         | WARN  | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
 
+### Trace spans
+
+The abuse protection stage sets the following attributes on its `ferron.stage.abuse_protection` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.abuseban.action` | string | Action taken: `skip` (not banned) or `rejected` (banned). |
+| `ferron.abuseban.reason` | string | The reason for the ban, when rejected. |
+| `ferron.abuseban.remaining_secs` | int | Remaining ban duration in seconds, when rejected. |
+| `error.type` | string | Set to `ip_banned` when the request is rejected, enabling trace UI highlighting. |
+
 ## See also
 
 - [Rate limiting](/docs/v3/configuration/content/rate-limit)

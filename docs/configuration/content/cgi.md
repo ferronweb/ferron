@@ -216,6 +216,17 @@ This enables end-to-end distributed tracing with CGI scripts. For example, a PHP
 | `ferron.cgi.process.duration` | Histogram | — | Duration of CGI process execution |
 | `ferron.cgi.stderr_errors` | Counter | — | Number of CGI requests that produced non-empty stderr output |
 
+### Trace spans
+
+The CGI stage sets the following attributes on its `ferron.stage.cgi` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code returned by the CGI script. |
+| `ferron.cgi.script_path` | string | Path to the CGI script. |
+| `ferron.cgi.exit_code` | int | Exit code of the CGI process. |
+| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+
 ## Examples
 
 ### PHP with a custom PHP-CGI binary

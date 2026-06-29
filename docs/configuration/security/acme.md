@@ -382,6 +382,15 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 | `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
+### Trace spans
+
+The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.stage.acme_http01` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.acme.domain` | string | The domain being validated. |
+| `ferron.acme.challenge_type` | string | Challenge type (`http01`). |
+
 ## See also
 
 - [DNS providers](/docs/v3/configuration/security/dns-providers) — all supported DNS-01 provider backends and their configuration

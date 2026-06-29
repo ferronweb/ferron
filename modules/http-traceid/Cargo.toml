@@ -10,3 +10,4 @@ typemap_rev = "0.4"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }

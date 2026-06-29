@@ -245,3 +245,15 @@ The `ferron.ratelimit.zone` attribute identifies which rate limit zone the reque
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.zone` (string) — zone identifier, `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |
+
+### Trace spans
+
+The rate limit stage sets the following attributes on its `ferron.stage.rate_limit` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.ratelimit.result` | string | Rate limit decision: `allowed` or `rejected`. |
+| `ferron.ratelimit.zone` | string | The rate limit zone name. |
+| `ferron.ratelimit.key_type` | string | Key extractor type: `ip`, `uri`, or `header`. |
+| `ferron.ratelimit.limit` | int | The configured rate limit (requests per second). |
+| `ferron.ratelimit.retry_after_secs` | int | Seconds until the bucket is available again (on rejection only). |

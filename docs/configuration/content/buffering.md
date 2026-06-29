@@ -75,3 +75,14 @@ When `buffer_response` is configured:
 ### Buffering and pipeline stages
 
 The buffer stage runs early in the HTTP pipeline, after URL rewriting but before rate limiting, authentication, caching, reverse proxy, and static file stages. This ordering ensures that request bodies are buffered before they reach backend handlers.
+
+## Observability
+
+### Trace spans
+
+The request buffer stage sets the following attributes on its `ferron.stage.http_buffer` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.buffer.capacity` | int | Configured buffer capacity in bytes. |
+| `ferron.buffer.size` | int | Actual buffered request body size in bytes. |

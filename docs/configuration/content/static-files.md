@@ -114,6 +114,16 @@ example.com {
 
 - **`WARN`**: logged when an `error_page` file cannot be opened. The directive is skipped and the built-in error page is used instead.
 
+### Trace spans
+
+The static file stage sets the following attributes on its `ferron.stage.static_file` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code of the file response. |
+| `ferron.static.file_path` | string | The file path relative to the document root. |
+| `ferron.static.precompressed` | bool | Whether a precompressed variant of the file was served. |
+
 ## Best practices
 
 The following best-practice check is reported by `ferron doctor` for directives on this page.

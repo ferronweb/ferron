@@ -28,8 +28,10 @@ use std::sync::{Arc, OnceLock};
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_observability::build_composite_sink;
+use ferron_observability::TraceAttributeValue;
 use parking_lot::RwLock;
 use rustc_hash::FxBuildHasher;
 
@@ -690,6 +692,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     current_event_trace_context(ctx),
                 );
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(status_code, None));
+                ctx.get_span_attributes().insert(
+                    "http.response.status_code",
+                    TraceAttributeValue::I64(status_code as i64),
+                );
+                ctx.get_span_attributes().insert(
+                    "error.type",
+                    TraceAttributeValue::String(e.error_type().to_string()),
+                );
                 return Ok(false);
             }
         };
@@ -1104,6 +1114,34 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             trace_context: current_event_trace_context(ctx),
                         }));
                 }
+            }
+        }
+
+        let sa = ctx.get_span_attributes();
+        if let Some(status) = metrics.status_code {
+            sa.insert(
+                "http.response.status_code",
+                TraceAttributeValue::I64(status as i64),
+            );
+        }
+        sa.insert(
+            "ferron.proxy.connection_reused",
+            TraceAttributeValue::Bool(metrics.connection_reused),
+        );
+        sa.insert(
+            "ferron.proxy.retry_count",
+            TraceAttributeValue::I64(metrics.retry_count as i64),
+        );
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
+            sa.insert(
+                "ferron.proxy.backend_url",
+                TraceAttributeValue::String(backend.proxy_to.clone()),
+            );
+            if let Some(ref unix_path) = backend.proxy_unix {
+                sa.insert(
+                    "ferron.proxy.backend_unix_path",
+                    TraceAttributeValue::String(unix_path.clone()),
+                );
             }
         }
 

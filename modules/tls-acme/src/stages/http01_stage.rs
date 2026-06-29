@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::TraceAttributeValue;
 use http::Response;
 use http_body_util::{BodyExt, Full};
 
@@ -69,6 +71,16 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
                     )
                     .expect("Failed to build ACME challenge response"),
             ));
+            let domain = path
+                .strip_prefix("/.well-known/acme-challenge/")
+                .unwrap_or("")
+                .to_string();
+            ctx.get_span_attributes()
+                .insert("ferron.acme.domain", TraceAttributeValue::String(domain));
+            ctx.get_span_attributes().insert(
+                "ferron.acme.challenge_type",
+                TraceAttributeValue::StaticStr("http-01"),
+            );
             return Ok(false);
         }
 

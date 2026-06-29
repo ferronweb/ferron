@@ -172,3 +172,14 @@ All directives (`status`, `abort`, `block`, `allow`, `early_hints`) can be place
 | `ferron.response.aborted` | Counter | — | Connections aborted via the `abort` directive |
 | `ferron.response.ip_blocked` | Counter | — | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
 | `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives |
+
+### Trace spans
+
+The response control stage sets the following attributes on its `ferron.stage.http_response` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.response.action` | string | Action taken: `abort`, `ip_block`, or `status_rule`. |
+| `http.response.status_code` | int | HTTP status code returned to the client. |
+| `error.type` | string | Set when the action results in an error, enabling trace UI highlighting. |
+

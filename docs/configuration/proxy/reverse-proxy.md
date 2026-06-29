@@ -531,6 +531,19 @@ example.com {
 | Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
 
+### Trace spans
+
+The reverse proxy stage sets the following attributes on its `ferron.stage.reverse_proxy` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code returned by the upstream backend. |
+| `error.type` | string | Error type string on failure (e.g., `connection_refused`, `timeout`), enabling trace UI highlighting. |
+| `ferron.proxy.backend_url` | string | URL of the upstream backend selected for the request. |
+| `ferron.proxy.backend_unix_path` | string | Unix socket path of the backend, when using Unix sockets. |
+| `ferron.proxy.connection_reused` | bool | Whether the connection to the backend was reused from the pool. |
+| `ferron.proxy.retry_count` | int | Number of retry attempts made during the request. |
+
 ## Best practices
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.

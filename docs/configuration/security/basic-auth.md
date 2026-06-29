@@ -234,3 +234,15 @@ The following best-practice checks are reported by `ferron doctor` for directive
 - **`basic_auth_concurrency false`** — Disabling the global password-verification concurrency limit removes backpressure on expensive hash checks. Keep a bounded limit.
 - **Non-Argon2id password hashes** — Prefer Argon2id for new Basic Auth credentials. Other hash algorithms are weaker against offline attacks.
 - **`brute_force_protection { enabled false }`** — Disabling credential-guessing protection removes a layer of security. Only disable when equivalent protection exists at another layer.
+
+## Observability
+
+### Trace spans
+
+The basic authentication stage sets the following attributes on its `ferron.stage.basicauth` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.basicauth.result` | string | Authentication result: `success`, `failure`, or `skip`. |
+| `user.name` | string | The authenticated username, on success. |
+| `error.type` | string | Set to `auth_failed` on authentication failure, enabling trace UI highlighting. |

@@ -81,3 +81,14 @@ When the `If-None-Match` header is present, the server checks both the base ETag
 ## Vary header
 
 When compression is possible (based on file size and extension), the server adds `Accept-Encoding` to the `Vary` header to ensure caches serve the correct compressed variant to each client.
+
+## Observability
+
+### Trace spans
+
+The dynamic compression stage sets the following attributes on its `ferron.stage.dynamic_compression` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.compression.algorithm` | string | Compression algorithm used: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
+| `ferron.compression.precompressed` | bool | Whether a precompressed file variant was served. |

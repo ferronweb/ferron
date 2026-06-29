@@ -17,7 +17,9 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
+use ferron_observability::TraceAttributeValue;
 
 use crate::config::{parse_log_field_rules, parse_set_var_rules, LogFieldSource};
 use crate::validator::VariablesValidator;
@@ -72,9 +74,14 @@ impl Stage<HttpContext> for VariablesStage {
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let rules = parse_set_var_rules(&ctx.configuration);
         let mappings = config::evaluate_set_var_rules(&rules, ctx);
+        let set_count = mappings.len();
         for (name, value) in mappings {
             ctx.variables.insert(name, value);
         }
+        ctx.get_span_attributes().insert(
+            "ferron.variables.set",
+            TraceAttributeValue::I64(set_count as i64),
+        );
         Ok(true)
     }
 

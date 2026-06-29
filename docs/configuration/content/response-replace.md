@@ -190,3 +190,12 @@ This ordering ensures that string replacement operates on raw, uncompressed resp
 | `ferron.replace.replacements_applied` | Counter | — | Responses successfully modified by replacement rules |
 | `ferron.replace.skipped_compressed` | Counter | — | Responses skipped due to `Content-Encoding` header (compressed data) |
 | `ferron.replace.skipped_mime` | Counter | — | Responses skipped due to MIME type mismatch |
+
+### Trace spans
+
+The response replacement stage sets the following attributes on its `ferron.stage.http_replace` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.replace.applied` | bool | Whether a replacement was applied. |
+| `ferron.replace.skip_reason` | string | Reason the replacement was skipped, when applicable (e.g., `compressed_body`, `unsupported_mime`). |

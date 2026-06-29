@@ -9,7 +9,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::TraceAttributeValue;
 use futures_util::stream::{self, StreamExt};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
@@ -180,6 +182,14 @@ impl Stage<HttpContext> for HttpBufferStage {
         ctx.extensions.insert::<BufferStateKey>(BufferState {
             response_buffer_size,
         });
+
+        let capacity = request_buffer_size
+            .unwrap_or(0)
+            .max(response_buffer_size.unwrap_or(0));
+        ctx.get_span_attributes().insert(
+            "ferron.buffer.capacity",
+            TraceAttributeValue::I64(capacity as i64),
+        );
 
         Ok(true)
     }

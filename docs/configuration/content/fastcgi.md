@@ -306,6 +306,17 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 | `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
 | `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |
 
+### Trace spans
+
+The FastCGI stage sets the following attributes on its `ferron.stage.fcgi_pass` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code returned by the FastCGI backend. |
+| `ferron.fcgi.backend_url` | string | URL of the FastCGI backend. |
+| `ferron.fcgi.script_filename` | string | Absolute path to the script on the backend filesystem, when available. |
+| `error.type` | string | Error type on failure (e.g., `service_unavailable`), enabling trace UI highlighting. |
+
 ## Examples
 
 ### PHP with PHP-FPM over a Unix socket

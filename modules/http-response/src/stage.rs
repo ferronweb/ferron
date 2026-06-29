@@ -9,11 +9,12 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    MetricValue, TraceAttributeValue,
 };
 use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
@@ -68,6 +69,10 @@ impl HttpResponseStage {
                 description: Some("Connections aborted via the abort directive."),
                 trace_context: current_event_trace_context(ctx),
             }));
+            ctx.get_span_attributes().insert(
+                "ferron.response.action",
+                TraceAttributeValue::StaticStr("abort"),
+            );
             return Ok(false);
         }
         Ok(true)
@@ -88,6 +93,12 @@ impl HttpResponseStage {
                 ),
                 trace_context: current_event_trace_context(ctx),
             }));
+            ctx.get_span_attributes().insert(
+                "ferron.response.action",
+                TraceAttributeValue::StaticStr("block"),
+            );
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(403));
             return Ok(false);
         }
         Ok(true)
@@ -135,6 +146,15 @@ impl HttpResponseStage {
                 description: Some("Custom status codes returned via status directives."),
                 trace_context: current_event_trace_context(ctx),
             }));
+
+            ctx.get_span_attributes().insert(
+                "ferron.response.action",
+                TraceAttributeValue::StaticStr("status"),
+            );
+            ctx.get_span_attributes().insert(
+                "http.response.status_code",
+                TraceAttributeValue::I64(rule.status_code as i64),
+            );
 
             return Ok(false);
         }

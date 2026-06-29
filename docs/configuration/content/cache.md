@@ -442,6 +442,17 @@ The `ferron.cache.zone` attribute identifies which cache zone the request belong
 | Cache purged via PURGE method | DEBUG | `cache.purged.count` (purged cache entries) |
 | LSCache stale purge marker ignored | DEBUG | - |
 
+### Trace spans
+
+The cache stage sets the following attributes on its `ferron.stage.cache` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.cache.result` | string | Cache lookup result: `hit`, `miss`, `bypass`, `revalidate`, `stale`, or `purge`. |
+| `ferron.cache.zone` | string | The cache zone serving the request. |
+| `ferron.cache.scope` | string | Cache scope (`public` or `private`), when available. |
+| `ferron.cache.detail` | string | Additional detail about the cache decision (bypass reason or skip reason), when applicable. |
+
 ## Best practices
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.

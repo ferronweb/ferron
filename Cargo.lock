@@ -1410,6 +1410,7 @@ dependencies = [
  "bytes",
  "ferron-core",
  "ferron-http",
+ "ferron-observability",
  "flate2",
  "futures-util",
  "http",
@@ -1721,6 +1722,7 @@ dependencies = [
  "async-trait",
  "ferron-core",
  "ferron-http",
+ "ferron-observability",
  "http",
  "typemap_rev",
 ]

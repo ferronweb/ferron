@@ -131,3 +131,12 @@ When `rewrite_log` is enabled, each rewrite operation is logged to the error log
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
 | URL rewritten         | INFO  | `ferron.rewrite.from` (string) — original request path + query string, `ferron.rewrite.to` (string) — rewritten path + query string |
+
+### Trace spans
+
+The rewrite stage sets the following attributes on its `ferron.stage.rewrite` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.rewrite.applied` | bool | Whether a rewrite rule was applied to the request. |
+| `ferron.rewrite.pattern_count` | int | Number of rewrite rules that matched. |

@@ -15,9 +15,12 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::HttpContext;
-use ferron_observability::{Event, LogAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, LogAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use rustc_hash::FxBuildHasher;
 
 use crate::config::{
@@ -112,6 +115,10 @@ impl Stage<HttpContext> for RewriteStage {
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let rules = parse_rewrite_config(&ctx.configuration, &self.engine);
         if rules.is_empty() {
+            ctx.get_span_attributes()
+                .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
+            ctx.get_span_attributes()
+                .insert("ferron.rewrite.pattern_count", TraceAttributeValue::I64(0));
             return Ok(true);
         }
 
@@ -138,7 +145,15 @@ impl Stage<HttpContext> for RewriteStage {
         let result = apply_rewrite_rules(&original_url, &rules, root.as_deref());
 
         let rewritten = match result {
-            RewriteResult::NoMatch => return Ok(true),
+            RewriteResult::NoMatch => {
+                ctx.get_span_attributes()
+                    .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
+                ctx.get_span_attributes().insert(
+                    "ferron.rewrite.pattern_count",
+                    TraceAttributeValue::I64(rules.len() as i64),
+                );
+                return Ok(true);
+            }
             RewriteResult::InvalidRewrite => {
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
                 ctx.events.emit(Event::Metric(MetricEvent {
@@ -152,6 +167,12 @@ impl Stage<HttpContext> for RewriteStage {
                     ),
                     trace_context: current_event_trace_context(ctx),
                 }));
+                ctx.get_span_attributes()
+                    .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
+                ctx.get_span_attributes().insert(
+                    "ferron.rewrite.pattern_count",
+                    TraceAttributeValue::I64(rules.len() as i64),
+                );
                 return Ok(false);
             }
             RewriteResult::Rewritten(url) => url,
@@ -214,6 +235,13 @@ impl Stage<HttpContext> for RewriteStage {
             description: Some("URLs successfully rewritten."),
             trace_context: current_event_trace_context(ctx),
         }));
+
+        ctx.get_span_attributes()
+            .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(true));
+        ctx.get_span_attributes().insert(
+            "ferron.rewrite.pattern_count",
+            TraceAttributeValue::I64(rules.len() as i64),
+        );
 
         Ok(true)
     }

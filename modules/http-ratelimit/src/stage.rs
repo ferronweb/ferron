@@ -10,11 +10,12 @@ use std::sync::Arc;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    MetricValue, TraceAttributeValue,
 };
 use http::{HeaderMap, HeaderValue};
 use parking_lot::Mutex;
@@ -122,6 +123,25 @@ impl RateLimitEngine {
                     description: Some("Requests rejected due to rate limit registry at capacity."),
                     trace_context: current_event_trace_context(ctx),
                 }));
+                {
+                    let sa = ctx.get_span_attributes();
+                    sa.insert(
+                        "ferron.ratelimit.result",
+                        TraceAttributeValue::String("rejected".to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.zone",
+                        TraceAttributeValue::String(zone_id.label().to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.key_type",
+                        TraceAttributeValue::String(key_type_label(&config.key).to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.limit",
+                        TraceAttributeValue::I64(config.rate as i64),
+                    );
+                }
                 return Some(Self::make_response(config.deny_status, 1.0));
             };
 
@@ -186,6 +206,29 @@ impl RateLimitEngine {
                     recorder.record_event(&abuse_event, ctx);
                 }
 
+                {
+                    let sa = ctx.get_span_attributes();
+                    sa.insert(
+                        "ferron.ratelimit.result",
+                        TraceAttributeValue::String("rejected".to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.zone",
+                        TraceAttributeValue::String(zone_id.label().to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.key_type",
+                        TraceAttributeValue::String(key_type_label(&config.key).to_string()),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.limit",
+                        TraceAttributeValue::I64(config.rate as i64),
+                    );
+                    sa.insert(
+                        "ferron.ratelimit.retry_after_secs",
+                        TraceAttributeValue::I64(retry_after.ceil() as i64),
+                    );
+                }
                 return Some(Self::make_response(config.deny_status, retry_after));
             }
 
@@ -208,6 +251,25 @@ impl RateLimitEngine {
                 description: Some("Requests that passed rate limiting."),
                 trace_context: current_event_trace_context(ctx),
             }));
+            {
+                let sa = ctx.get_span_attributes();
+                sa.insert(
+                    "ferron.ratelimit.result",
+                    TraceAttributeValue::String("allowed".to_string()),
+                );
+                sa.insert(
+                    "ferron.ratelimit.zone",
+                    TraceAttributeValue::String(zone_id.label().to_string()),
+                );
+                sa.insert(
+                    "ferron.ratelimit.key_type",
+                    TraceAttributeValue::String(key_type_label(&config.key).to_string()),
+                );
+                sa.insert(
+                    "ferron.ratelimit.limit",
+                    TraceAttributeValue::I64(config.rate as i64),
+                );
+            }
         }
 
         None
