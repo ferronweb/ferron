@@ -33,7 +33,7 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
-use crate::util::canonicalize_url::{canonicalize_path, canonicalize_path_routing};
+use crate::util::canonicalize_url::canonicalize_path;
 
 use self::observability::*;
 use self::pipeline::*;
@@ -624,55 +624,14 @@ async fn request_handler_inner(
     // Decode location for configuration resolution (routing-only, compute forwarding lazily).
     // For CONNECT requests, skip canonicalization and set the routing path to "/"
     // so the config resolver can find the applicable configuration.
+    let url_sanitize_enabled = config_resolver
+        .global()
+        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
+        .unwrap_or(true);
     let (routing_str, _original_str) = if is_connect {
         (String::from("/"), String::new())
     } else {
-        match canonicalize_path_routing(request.uri().path()) {
-            Ok((routing, original)) => (routing, original),
-            Err(e) => {
-                emit_error_with_trace(
-                    &events,
-                    format!("Invalid request URL pathname: {}", e),
-                    request_log_trace_context.clone(),
-                    vec![
-                        (
-                            "error.type",
-                            LogAttributeValue::String("url_path_error".into()),
-                        ),
-                        ("error.message", LogAttributeValue::String(e.to_string())),
-                    ],
-                );
-                if let Some(response) = execute_error_pipeline(
-                    error_pipeline.as_ref(),
-                    400,
-                    None,
-                    LayeredConfiguration::default(),
-                    &events,
-                    request_span_key.as_deref(),
-                )
-                .await
-                {
-                    return (Ok(response), None, None, None);
-                }
-                return (
-                    Ok(builtin_error_response(
-                        400,
-                        None,
-                        config_resolver.global().and_then(|g| {
-                            g.get_value("admin_email")
-                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                        }),
-                    )),
-                    None,
-                    None,
-                    None,
-                );
-            }
-        }
-    };
-
-    // Reject backslashes in URL (unless disabled by configuration)
-    if !is_connect {
+        // Reject backslashes in URL (unless disabled by configuration)
         let reject_backslash = config_resolver
             .global()
             .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
@@ -716,66 +675,66 @@ async fn request_handler_inner(
                 None,
             );
         }
-    }
 
-    // Sanitize URL (unless disabled by configuration)
-    let url_sanitize_enabled = config_resolver
-        .global()
-        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
-        .unwrap_or(true);
-    if !is_connect && url_sanitize_enabled {
-        // Compute full canonicalized path (forwarding) only when sanitization is enabled.
+        // Canonicalize + "sanitize" request URL
         match canonicalize_path(request.uri().path()) {
-            Ok(full_path) => {
-                if let Err(e) = sanitize_request_url(&mut request, &full_path.forwarding) {
-                    emit_error_with_trace(
-                        &events,
-                        format!("URL sanitization error: {}", e),
-                        request_log_trace_context.clone(),
-                        vec![
-                            (
-                                "error.type",
-                                LogAttributeValue::String("url_sanitize_error".into()),
-                            ),
-                            ("error.message", LogAttributeValue::String(e.to_string())),
-                        ],
-                    );
-                    if let Some(response) = execute_error_pipeline(
-                        error_pipeline.as_ref(),
-                        400,
-                        None,
-                        LayeredConfiguration::default(),
-                        &events,
-                        request_span_key.as_deref(),
-                    )
-                    .await
-                    {
-                        return (Ok(response), None, None, None);
-                    }
-                    return (
-                        Ok(builtin_error_response(
+            Ok(canonicalized) => {
+                if url_sanitize_enabled {
+                    if let Err(e) = sanitize_request_url(&mut request, &canonicalized.forwarding) {
+                        emit_error_with_trace(
+                            &events,
+                            format!("URL sanitization error: {}", e),
+                            request_log_trace_context.clone(),
+                            vec![
+                                (
+                                    "error.type",
+                                    LogAttributeValue::String("url_sanitize_error".into()),
+                                ),
+                                ("error.message", LogAttributeValue::String(e.to_string())),
+                            ],
+                        );
+                        if let Some(response) = execute_error_pipeline(
+                            error_pipeline.as_ref(),
                             400,
                             None,
-                            config_resolver.global().and_then(|g| {
-                                g.get_value("admin_email")
-                                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                            }),
-                        )),
-                        None,
-                        None,
-                        None,
-                    );
+                            LayeredConfiguration::default(),
+                            &events,
+                            request_span_key.as_deref(),
+                        )
+                        .await
+                        {
+                            return (Ok(response), None, None, None);
+                        }
+                        return (
+                            Ok(builtin_error_response(
+                                400,
+                                None,
+                                config_resolver.global().and_then(|g| {
+                                    g.get_value("admin_email").and_then(|v| {
+                                        v.as_string_with_interpolations(&HashMap::new())
+                                    })
+                                }),
+                            )),
+                            None,
+                            None,
+                            None,
+                        );
+                    }
                 }
+                (canonicalized.routing, canonicalized.original)
             }
             Err(e) => {
                 emit_error_with_trace(
                     &events,
-                    format!("Invalid request URL percent-encoding: {}", e),
+                    format!("Invalid request URL pathname: {}", e),
                     request_log_trace_context.clone(),
-                    vec![(
-                        "error.type",
-                        LogAttributeValue::String("url_encoding_error".into()),
-                    )],
+                    vec![
+                        (
+                            "error.type",
+                            LogAttributeValue::String("url_path_error".into()),
+                        ),
+                        ("error.message", LogAttributeValue::String(e.to_string())),
+                    ],
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -804,7 +763,7 @@ async fn request_handler_inner(
                 );
             }
         }
-    }
+    };
 
     // Create a partial HttpContext for variable resolution during config resolution.
     // This enables all interpolation variables (request.*, server.*, remote.*) to be

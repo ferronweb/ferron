@@ -42,12 +42,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "fuzz_canonicalize_path_routing"
-path = "fuzz_targets/fuzz_canonicalize_path_routing.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "fuzz_load_balancers"
 path = "fuzz_targets/fuzz_load_balancers.rs"
 test = false
