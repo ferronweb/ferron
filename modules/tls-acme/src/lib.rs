@@ -321,7 +321,7 @@ impl Module for TlsAcmeModule {
                 configs_count,
                 domains.join(", ")
             ),
-            "ferron_tls_acme",
+            "ferron-tls-acme",
             vec![
                 (
                     "ferron.acme.config_count",
@@ -409,7 +409,7 @@ async fn run_acme_background_task(
                     "On-demand certificate pre-loaded for SNI {domain}:{}",
                     config.port
                 ),
-                "ferron_tls_acme",
+                "ferron-tls-acme",
                 vec![
                     ("tls.sni", LogAttributeValue::String(domain.clone())),
                     ("tls.port", LogAttributeValue::I64(config.port as i64)),
@@ -454,7 +454,7 @@ async fn run_acme_background_task(
         LogLevel::Debug,
         "ACME provisioning cycle started",
         "ACME provisioning cycle started",
-        "ferron_tls_acme",
+        "ferron-tls-acme",
         Vec::new(),
     );
 
@@ -470,7 +470,7 @@ async fn run_acme_background_task(
                     LogLevel::Info,
                     "On-demand certificate requested",
                     &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
-                    "ferron_tls_acme",
+                    "ferron-tls-acme",
                     vec![
                         ("tls.sni", LogAttributeValue::String(sni_hostname.clone())),
                         ("tls.port", LogAttributeValue::I64(port as i64)),
@@ -513,7 +513,7 @@ async fn run_acme_background_task(
                                                 hostname",
                                                 &sni_hostname
                                             ),
-                                                "ferron_tls_acme",
+                                                "ferron-tls-acme",
                                                 vec![(
                                                     "tls.sni",
                                                     LogAttributeValue::String(sni_hostname.clone()),
@@ -532,7 +532,7 @@ async fn run_acme_background_task(
                                                 can be issued for \"{}\" hostname: {err}",
                                                 &sni_hostname
                                             ),
-                                                "ferron_tls_acme",
+                                                "ferron-tls-acme",
                                                 vec![
                                                     (
                                                         "tls.sni",
@@ -601,7 +601,7 @@ async fn run_acme_background_task(
                         "ACME provisioning cycle started — checking {} configurations",
                         configs_guard.len()
                     ),
-                    "ferron_tls_acme",
+                    "ferron-tls-acme",
                     vec![(
                         "ferron.acme.config_count",
                         LogAttributeValue::I64(configs_guard.len() as i64),
@@ -624,7 +624,7 @@ async fn run_acme_background_task(
                             LogLevel::Info,
                             "ACME certificate issued",
                             &format!("ACME certificate issued for domains: {domains}"),
-                            "ferron_tls_acme",
+                            "ferron-tls-acme",
                             vec![("ferron.acme.domains", LogAttributeValue::String(domains))],
                         );
                         emit_metric(
@@ -658,7 +658,7 @@ async fn run_acme_background_task(
                             LogLevel::Warn,
                             "ACME certificate provisioning error",
                             &format!("ACME certificate provisioning error for {domains}: {e}"),
-                            "ferron_tls_acme",
+                            "ferron-tls-acme",
                             vec![
                                 ("ferron.acme.domains", LogAttributeValue::String(domains)),
                                 ("error.message", LogAttributeValue::String(e.to_string())),

@@ -10,6 +10,12 @@
 
 - **Per-stage span attributes** — all HTTP pipeline stages now emit stage-specific span attributes on their `ferron.stage.<name>` spans, enabling detailed flame graph analysis without requiring metric export. Each module's per-stage span carries module-specific context such as upstream backend URLs, cache results, rate limit decisions, authentication outcomes, and response status codes. See each module's documentation for the full list of attributes and the [tracing reference](/docs/v3/configuration/observability/tracing#per-stage-spans).
 
+### Fixed
+
+#### Observability
+
+- **Consistent log targets** - `tls-acme` and `tls-http` now use `ferron-tls-acme` and `ferron-tls-http` log targets respectively instead of `ferron_tls_acme` and `ferron_tls_http`.
+
 ## Ferron 3.0.0-beta.4
 
 **Released in June 28, 2026**

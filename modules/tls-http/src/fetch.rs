@@ -117,7 +117,7 @@ pub async fn fetch_cert_for_domain(
                 LogLevel::Warn,
                 "TLS-HTTP request build failed",
                 &format!("Failed to build HTTP request for `tls-http`: {e}"),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![("error.message", LogAttributeValue::String(e.to_string()))],
             );
         })?;
@@ -138,7 +138,7 @@ pub async fn fetch_cert_for_domain(
             LogLevel::Warn,
             "TLS-HTTP request failed",
             &format!("Failed to send HTTP request for `tls-http`: {e}"),
-            "ferron_tls_http",
+            "ferron-tls-http",
             vec![("error.message", LogAttributeValue::String(e.to_string()))],
         );
     })?;
@@ -172,7 +172,7 @@ pub async fn fetch_cert_for_domain(
                 "TLS certificate endpoint returned unsuccessful status: {}",
                 response.status()
             ),
-            "ferron_tls_http",
+            "ferron-tls-http",
             vec![(
                 "http.status_code",
                 LogAttributeValue::I64(response.status().as_u16() as i64),
@@ -191,7 +191,7 @@ pub async fn fetch_cert_for_domain(
                 LogLevel::Warn,
                 "TLS-HTTP response read failed",
                 &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![("error.message", LogAttributeValue::String(e.to_string()))],
             );
         })?
@@ -203,7 +203,7 @@ pub async fn fetch_cert_for_domain(
             LogLevel::Warn,
             "TLS-HTTP response parse failed",
             &format!("Failed to parse the HTTP response from TLS certificate endpoint: {e}"),
-            "ferron_tls_http",
+            "ferron-tls-http",
             vec![("error.message", LogAttributeValue::String(e.to_string()))],
         );
     })?;
@@ -218,7 +218,7 @@ pub async fn fetch_cert_for_domain(
                 &format!(
                     "Failed to parse the TLS certificate chain from TLS endpoint response: {e}"
                 ),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![("error.message", LogAttributeValue::String(e.to_string()))],
             );
         })?;
@@ -230,7 +230,7 @@ pub async fn fetch_cert_for_domain(
                 LogLevel::Warn,
                 "TLS-HTTP private key parse failed",
                 &format!("Failed to parse the TLS private key from TLS endpoint response: {e}"),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![("error.message", LogAttributeValue::String(e.to_string()))],
             );
         })?;
@@ -244,7 +244,7 @@ pub async fn fetch_cert_for_domain(
                 LogLevel::Warn,
                 "TLS-HTTP private key load failed",
                 &format!("Failed to load the TLS private key: {e}"),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![("error.message", LogAttributeValue::String(e.to_string()))],
             );
         })?;
@@ -363,7 +363,7 @@ pub async fn run_tls_http_background_task(
             LogLevel::Info,
             "On-demand certificate requested",
             &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
-            "ferron_tls_http",
+            "ferron-tls-http",
             vec![
                 ("tls.sni", LogAttributeValue::String(sni_hostname.clone())),
                 ("tls.port", LogAttributeValue::I64(port as i64)),
@@ -391,7 +391,7 @@ pub async fn run_tls_http_background_task(
                 &format!(
                     "No on-demand configuration found for port {port}, request for {sni_hostname} ignored"
                 ),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![
                     ("tls.sni", LogAttributeValue::String(sni_hostname)),
                     ("tls.port", LogAttributeValue::I64(port as i64)),
@@ -418,7 +418,7 @@ pub async fn run_tls_http_background_task(
                         "The TLS certificate cannot be issued for \"{}\" hostname",
                         &sni_hostname
                     ),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("tls.sni", LogAttributeValue::String(sni_hostname))],
                 );
                 continue;
@@ -432,7 +432,7 @@ pub async fn run_tls_http_background_task(
                         "Error while determining if the TLS certificate can be issued for \
                          \"{sni_hostname}\" hostname: {err}"
                     ),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![
                         ("tls.sni", LogAttributeValue::String(sni_hostname)),
                         ("error.message", LogAttributeValue::String(err.to_string())),
@@ -473,7 +473,7 @@ pub async fn run_tls_http_background_task(
             LogLevel::Info,
             "On-demand certificate fetched",
             &format!("On-demand TLS certificate fetched for {sni_hostname}:{port}"),
-            "ferron_tls_http",
+            "ferron-tls-http",
             vec![
                 ("tls.sni", LogAttributeValue::String(sni_hostname.clone())),
                 ("tls.port", LogAttributeValue::I64(port as i64)),
@@ -530,7 +530,7 @@ pub async fn run_tls_http_background_task(
                                 &format!(
                                     "TLS certificate refreshed successfully from HTTP endpoint for {sni}"
                                 ),
-                                "ferron_tls_http",
+                                "ferron-tls-http",
                                 vec![(
                                     "ferron.tls_http.host",
                                     LogAttributeValue::String(sni.clone()),
@@ -617,7 +617,7 @@ pub async fn fetch_tls_cert_loop(
         LogLevel::Info,
         "TLS-HTTP polling started",
         &format!("TLS-HTTP certificate polling started for {url_string}"),
-        "ferron_tls_http",
+        "ferron-tls-http",
         vec![("ferron.tls_http.url", LogAttributeValue::String(url_string))],
         error_message.clone(),
     );
@@ -628,7 +628,7 @@ pub async fn fetch_tls_cert_loop(
             LogLevel::Warn,
             "TLS-HTTP client config build failed",
             "Can't build TLS client configuration for `tls-http`",
-            "ferron_tls_http",
+            "ferron-tls-http",
             Vec::new(),
             error_message.clone(),
         );
@@ -668,7 +668,7 @@ pub async fn fetch_tls_cert_loop(
                     LogLevel::Warn,
                     "TLS-HTTP request build failed",
                     &format!("Failed to build HTTP request for `tls-http`: {e}"),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     error_message.clone(),
                 );
@@ -694,7 +694,7 @@ pub async fn fetch_tls_cert_loop(
                     LogLevel::Warn,
                     "TLS-HTTP request failed",
                     &format!("Failed to send HTTP request for `tls-http`: {e}"),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     error_message.clone(),
                 );
@@ -731,7 +731,7 @@ pub async fn fetch_tls_cert_loop(
                     "TLS certificate endpoint returned unsuccessful status: {}",
                     response.status()
                 ),
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![(
                     "http.status_code",
                     LogAttributeValue::I64(response.status().as_u16() as i64),
@@ -750,7 +750,7 @@ pub async fn fetch_tls_cert_loop(
                     LogLevel::Warn,
                     "TLS-HTTP response read failed",
                     &format!("Failed to read the HTTP response from TLS certificate endpoint: {e}"),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     error_message.clone(),
                 );
@@ -767,7 +767,7 @@ pub async fn fetch_tls_cert_loop(
                     &format!(
                         "Failed to parse the HTTP response from TLS certificate endpoint: {e}"
                     ),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     error_message.clone(),
                 );
@@ -787,7 +787,7 @@ pub async fn fetch_tls_cert_loop(
                         &format!(
                         "Failed to parse the TLS certificate chain from TLS endpoint response: {e}"
                     ),
-                        "ferron_tls_http",
+                        "ferron-tls-http",
                         vec![("error.message", LogAttributeValue::String(e.to_string()))],
                         error_message.clone(),
                     );
@@ -805,7 +805,7 @@ pub async fn fetch_tls_cert_loop(
                         &format!(
                             "Failed to parse the TLS private key from TLS endpoint response: {e}"
                         ),
-                        "ferron_tls_http",
+                        "ferron-tls-http",
                         vec![("error.message", LogAttributeValue::String(e.to_string()))],
                         error_message.clone(),
                     );
@@ -823,7 +823,7 @@ pub async fn fetch_tls_cert_loop(
                     LogLevel::Warn,
                     "TLS-HTTP private key load failed",
                     &format!("Failed to load the TLS private key: {e}"),
-                    "ferron_tls_http",
+                    "ferron-tls-http",
                     vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     error_message.clone(),
                 );
@@ -857,7 +857,7 @@ pub async fn fetch_tls_cert_loop(
                 LogLevel::Info,
                 "TLS-HTTP certificate refreshed",
                 "TLS certificate refreshed successfully from HTTP endpoint",
-                "ferron_tls_http",
+                "ferron-tls-http",
                 vec![(
                     "ferron.tls_http.host",
                     LogAttributeValue::String(host.clone()),
