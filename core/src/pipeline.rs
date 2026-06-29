@@ -94,7 +94,13 @@ pub trait StageHooks<C>: Send + Sync {
     /// Called after a stage's `run` method completes.
     /// `result` is the outcome of `stage.run(ctx)`.
     #[inline]
-    async fn after_stage(&mut self, _stage: &dyn Stage<C>, _result: &Result<bool, PipelineError>) {}
+    async fn after_stage(
+        &mut self,
+        _stage: &dyn Stage<C>,
+        _result: &Result<bool, PipelineError>,
+        _ctx: &mut C,
+    ) {
+    }
 
     /// Called before a stage's `run_inverse` method is invoked.
     #[inline]
@@ -106,6 +112,7 @@ pub trait StageHooks<C>: Send + Sync {
         &mut self,
         _stage: &dyn Stage<C>,
         _result: &Result<(), PipelineError>,
+        _ctx: &mut C,
     ) {
     }
 }
@@ -202,7 +209,9 @@ impl<C> Pipeline<C> {
         for stage in executed_stages.iter().rev() {
             hooks.before_stage_inverse(stage.as_ref()).await;
             let result = stage.run_inverse(ctx).await;
-            hooks.after_stage_inverse(stage.as_ref(), &result).await;
+            hooks
+                .after_stage_inverse(stage.as_ref(), &result, ctx)
+                .await;
             result?;
         }
         Ok(())
@@ -224,7 +233,7 @@ impl<C> Pipeline<C> {
         for stage in &self.stages {
             hooks.before_stage(stage.as_ref()).await;
             let result = stage.run(ctx).await;
-            hooks.after_stage(stage.as_ref(), &result).await;
+            hooks.after_stage(stage.as_ref(), &result, ctx).await;
             executed_stages.push(stage);
             match result {
                 Ok(true) => continue,
@@ -237,7 +246,9 @@ impl<C> Pipeline<C> {
         for stage in executed_stages.iter().rev() {
             hooks.before_stage_inverse(stage.as_ref()).await;
             let result = stage.run_inverse(ctx).await;
-            hooks.after_stage_inverse(stage.as_ref(), &result).await;
+            hooks
+                .after_stage_inverse(stage.as_ref(), &result, ctx)
+                .await;
             result?;
         }
         Ok(())
@@ -257,7 +268,7 @@ impl<C> Pipeline<C> {
         for stage in &self.stages {
             hooks.before_stage(stage.as_ref()).await;
             let result = stage.run(ctx).await;
-            hooks.after_stage(stage.as_ref(), &result).await;
+            hooks.after_stage(stage.as_ref(), &result, ctx).await;
             executed_stages.push(stage);
             match result {
                 Ok(true) => continue,

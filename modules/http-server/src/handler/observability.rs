@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use ferron_core::pipeline::{PipelineError, Stage, StageHooks};
 use ferron_http::access_log::CustomAccessLogField;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{trace_context, HttpRequest};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
@@ -83,7 +84,10 @@ impl Drop for PerStageSpanHooks<'_> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
+impl<C> StageHooks<C> for PerStageSpanHooks<'_>
+where
+    C: HttpContextSpanExt,
+{
     #[inline]
     async fn before_stage(&mut self, stage: &dyn Stage<C>) {
         if !self.has_traces {
@@ -108,7 +112,12 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
     }
 
     #[inline]
-    async fn after_stage(&mut self, stage: &dyn Stage<C>, result: &Result<bool, PipelineError>) {
+    async fn after_stage(
+        &mut self,
+        stage: &dyn Stage<C>,
+        result: &Result<bool, PipelineError>,
+        ctx: &mut C,
+    ) {
         if !self.has_traces {
             return;
         }
@@ -121,7 +130,9 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             key: Cow::Owned(stage_key),
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
-            attributes: vec![],
+            attributes: ctx
+                .remove_span_attributes()
+                .map_or(vec![], |hm| hm.into_iter().collect()),
         }));
     }
 
@@ -153,6 +164,7 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
         &mut self,
         stage: &dyn Stage<C>,
         result: &Result<(), PipelineError>,
+        ctx: &mut C,
     ) {
         if !self.has_traces {
             return;
@@ -166,7 +178,9 @@ impl<C> StageHooks<C> for PerStageSpanHooks<'_> {
             key: Cow::Owned(stage_key),
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
-            attributes: vec![],
+            attributes: ctx
+                .remove_span_attributes()
+                .map_or(vec![], |hm| hm.into_iter().collect()),
         }));
     }
 }

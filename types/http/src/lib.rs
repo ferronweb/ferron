@@ -6,6 +6,7 @@ pub mod access_log;
 pub mod client_ip;
 #[cfg(feature = "mtls")]
 pub mod mtls;
+pub mod span;
 pub mod trace_context;
 #[cfg(feature = "util")]
 pub mod util;
