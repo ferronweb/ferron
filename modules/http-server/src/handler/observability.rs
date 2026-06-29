@@ -130,9 +130,7 @@ where
             key: Cow::Owned(stage_key),
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
-            attributes: ctx
-                .remove_span_attributes()
-                .map_or(vec![], |hm| hm.into_iter().collect()),
+            attributes: ctx.remove_span_attributes(),
         }));
     }
 
@@ -178,9 +176,7 @@ where
             key: Cow::Owned(stage_key),
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
-            attributes: ctx
-                .remove_span_attributes()
-                .map_or(vec![], |hm| hm.into_iter().collect()),
+            attributes: ctx.remove_span_attributes(),
         }));
     }
 }
