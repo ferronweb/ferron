@@ -28,7 +28,6 @@ urlencoding = "2.1.3"
 ppp = "2.3.0"
 typemap_rev = "0.4"
 chrono = "0.4"
-quick_cache = "0.7"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2"
 cidr = "0.3"
@@ -39,6 +38,8 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
 ] }
 oneshot = { version = "0.2.1", features = ["std", "async"] }
+foldhash = "0.2.0"
+lru = "0.18.0"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }

@@ -13,29 +13,36 @@ use super::observability::PerStageSpanHooks;
 
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
-/// TTL default: 100 milliseconds to balance performance with filesystem change detection.
-static PATH_RESOLVE_CACHE_TTL_MILLIS: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(100);
+/// TTL: 100 milliseconds to balance performance with filesystem change detection.
+const PATH_RESOLVE_CACHE_TTL_MILLIS: std::time::Duration = std::time::Duration::from_millis(100);
 
-#[inline]
-fn path_resolve_cache_ttl() -> Duration {
-    Duration::from_millis(PATH_RESOLVE_CACHE_TTL_MILLIS.load(std::sync::atomic::Ordering::Relaxed))
+type PathResolveCache = lru::LruCache<
+    (PathBuf, String),
+    Timestamped<std::rc::Rc<ResolvedHttpFile>>,
+    foldhash::fast::RandomState,
+>;
+
+thread_local! {
+    static PATH_RESOLVE_CACHE: std::cell::LazyCell<std::cell::RefCell<PathResolveCache>> =
+        std::cell::LazyCell::new(|| {
+            std::cell::RefCell::new(
+                lru::LruCache::with_hasher(
+                    std::num::NonZero::new(1024).expect("this should be valid"),
+                    foldhash::fast::RandomState::default(),
+                )
+            )
+        });
 }
 
 #[inline]
-pub(crate) fn set_path_resolve_cache_ttl_millis(ms: u64) {
-    PATH_RESOLVE_CACHE_TTL_MILLIS.store(ms, std::sync::atomic::Ordering::Relaxed);
+fn get_or_init_cache<F, R>(func: F) -> Option<R>
+where
+    F: FnOnce(&mut PathResolveCache) -> R,
+{
+    PATH_RESOLVE_CACHE
+        .try_with(|f| func(&mut *f.borrow_mut()))
+        .ok()
 }
-
-static PATH_RESOLVE_CACHE: std::sync::LazyLock<
-    quick_cache::sync::Cache<
-        (PathBuf, String),
-        Timestamped<ResolvedHttpFile>,
-        PathResolveCacheWeighter,
-    >,
-> = std::sync::LazyLock::new(|| {
-    quick_cache::sync::Cache::with_weighter(1024, 64 * 1024 * 1024, PathResolveCacheWeighter)
-});
 
 /// Wraps a value with an insertion timestamp for TTL-based expiry.
 #[derive(Debug, Clone)]
@@ -55,23 +62,6 @@ impl<T> Timestamped<T> {
 
     fn is_expired(&self, ttl: Duration) -> bool {
         self.inserted_at.elapsed() >= ttl
-    }
-}
-
-/// Weighter for the path resolve cache.
-#[derive(Clone)]
-struct PathResolveCacheWeighter;
-
-impl quick_cache::Weighter<(PathBuf, String), Timestamped<ResolvedHttpFile>>
-    for PathResolveCacheWeighter
-{
-    fn weight(&self, key: &(PathBuf, String), val: &Timestamped<ResolvedHttpFile>) -> u64 {
-        let key_size = key.0.as_os_str().len() + key.1.len();
-        let value_size = val.value.file_path.as_os_str().len()
-            + val.value.path_info.as_ref().map_or(0, |s| s.len())
-            + val.value.etag.len()
-            + size_of::<vibeio::fs::Metadata>();
-        (key_size + value_size) as u64
     }
 }
 
@@ -135,8 +125,8 @@ pub(super) async fn execute_http_file_pipeline(
 
     let index_files = resolve_index_files(ctx);
     let cache_key = (root_path.clone(), request_path.clone());
-    let resolved_file = match PATH_RESOLVE_CACHE.get(&cache_key) {
-        Some(timestamped) if !timestamped.is_expired(path_resolve_cache_ttl()) => {
+    let resolved_file = match get_or_init_cache(|c| c.get(&cache_key).cloned()).flatten() {
+        Some(timestamped) if !timestamped.is_expired(PATH_RESOLVE_CACHE_TTL_MILLIS) => {
             let cache_path = &timestamped.value.file_path;
             match vibeio::fs::symlink_metadata(cache_path).await {
                 Ok(current_metadata) if current_metadata.is_symlink() => {
@@ -249,24 +239,24 @@ async fn resolve_and_cache(
     root_path: &Path,
     request_path: &str,
     index_files: Option<&[String]>,
-) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
-    let Some(resolved_file) =
+) -> Result<Option<std::rc::Rc<ResolvedHttpFile>>, FilePipelineExecutionError> {
+    let Some(mut resolved_file) =
         resolve_http_file_target(root_path, request_path, index_files).await?
     else {
         return Ok(None);
     };
 
-    let mut resolved_file = resolved_file;
     resolved_file.etag = resolved_file.compute_etag();
+    let resolved_file = std::rc::Rc::new(resolved_file);
 
     let cache_key = (root_path.to_path_buf(), request_path.to_string());
-    PATH_RESOLVE_CACHE.insert(cache_key, Timestamped::new(resolved_file.clone()));
+    get_or_init_cache(|c| c.push(cache_key, Timestamped::new(resolved_file.clone())));
     Ok(Some(resolved_file))
 }
 
 async fn apply_resolved_file_to_context(
     ctx: &mut HttpContext,
-    resolved_file: ResolvedHttpFile,
+    resolved_file: std::rc::Rc<ResolvedHttpFile>,
     file_pipeline: &Pipeline<HttpFileContext>,
     timeout: Option<std::time::Duration>,
     root_path: PathBuf,
@@ -299,11 +289,11 @@ async fn apply_resolved_file_to_context(
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {
         http: http_ctx,
-        metadata: resolved_file.metadata,
-        file_path: resolved_file.file_path,
-        path_info: resolved_file.path_info,
+        metadata: resolved_file.metadata.clone(),
+        file_path: resolved_file.file_path.clone(),
+        path_info: resolved_file.path_info.clone(),
         file_root: root_path,
-        etag: resolved_file.etag,
+        etag: resolved_file.etag.clone(),
     };
 
     let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();

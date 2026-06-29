@@ -33,10 +33,8 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
-use crate::util::canonicalize_cache::canonicalize_path_routing_cached;
-use crate::util::canonicalize_url::canonicalize_path;
+use crate::util::canonicalize_url::{canonicalize_path, canonicalize_path_routing};
 
-pub(crate) use self::file_pipeline::set_path_resolve_cache_ttl_millis;
 use self::observability::*;
 use self::pipeline::*;
 use self::request_utils::*;
@@ -629,7 +627,7 @@ async fn request_handler_inner(
     let (routing_str, _original_str) = if is_connect {
         (String::from("/"), String::new())
     } else {
-        match canonicalize_path_routing_cached(request.uri().path()) {
+        match canonicalize_path_routing(request.uri().path()) {
             Ok((routing, original)) => (routing, original),
             Err(e) => {
                 emit_error_with_trace(
