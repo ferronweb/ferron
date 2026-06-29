@@ -182,4 +182,3 @@ The response control stage sets the following attributes on its `ferron.stage.ht
 | `ferron.response.action` | string | Action taken: `abort`, `ip_block`, or `status_rule`. |
 | `http.response.status_code` | int | HTTP status code returned to the client. |
 | `error.type` | string | Set when the action results in an error, enabling trace UI highlighting. |
-
