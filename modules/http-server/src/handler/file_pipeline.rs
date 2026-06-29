@@ -40,7 +40,7 @@ where
     F: FnOnce(&mut PathResolveCache) -> R,
 {
     PATH_RESOLVE_CACHE
-        .try_with(|f| func(&mut *f.borrow_mut()))
+        .try_with(|f| func(&mut f.borrow_mut()))
         .ok()
 }
 
