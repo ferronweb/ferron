@@ -627,6 +627,8 @@ example.com {
 | `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open |
 | `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
 | `ferron.proxy.failures` | Counter | `http.response.status_code` (HTTP response status code), `error.type` (error type classification) | Reverse-proxy failures that returned an error before a backend response was produced |
+| `ferron.proxy.dns.cache_hit` | Counter | — | DNS cache hits for strict DNS and SRV lookups |
+| `ferron.proxy.dns.cache_miss` | Counter | — | DNS cache misses (miss or expiry) for strict DNS and SRV lookups |
 
 ### Logs
 
