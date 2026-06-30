@@ -818,7 +818,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         // Emit per-backend selected metrics
         use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};
         for backend in &metrics.selected_backends {
-            let mut attrs = Vec::with_capacity(2);
+            let mut attrs = Vec::with_capacity(3);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -827,6 +827,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 attrs.push((
                     "ferron.proxy.backend_unix_path",
                     MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            if let Some(ref resolved_ip) = backend.connect_to {
+                attrs.push((
+                    "ferron.proxy.backend_resolved_ip",
+                    MetricAttributeValue::String(resolved_ip.to_string()),
                 ));
             }
             ctx.events
@@ -843,7 +849,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Emit per-backend circuit breaker unhealthy metrics
         for backend in &metrics.circuit_breaker_unhealthy_backends {
-            let mut attrs = Vec::with_capacity(3);
+            let mut attrs = Vec::with_capacity(4);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -852,6 +858,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 attrs.push((
                     "ferron.proxy.backend_unix_path",
                     MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            if let Some(ref resolved_ip) = backend.connect_to {
+                attrs.push((
+                    "ferron.proxy.backend_resolved_ip",
+                    MetricAttributeValue::String(resolved_ip.to_string()),
                 ));
             }
             attrs.push((
@@ -931,6 +943,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 upstream_attrs.push((
                     "ferron.proxy.backend_unix_path",
                     MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            if let Some(ref resolved_ip) = backend.connect_to {
+                upstream_attrs.push((
+                    "ferron.proxy.backend_resolved_ip",
+                    MetricAttributeValue::String(resolved_ip.to_string()),
                 ));
             }
         }
@@ -1014,7 +1032,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             reason: &'static str,
             trace_context: Option<ferron_observability::EventTraceContext>,
         ) {
-            let mut attrs = Vec::with_capacity(3);
+            let mut attrs = Vec::with_capacity(4);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -1023,6 +1041,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 attrs.push((
                     "ferron.proxy.backend_unix_path",
                     MetricAttributeValue::String(unix_path.clone()),
+                ));
+            }
+            if let Some(ref resolved_ip) = backend.connect_to {
+                attrs.push((
+                    "ferron.proxy.backend_resolved_ip",
+                    MetricAttributeValue::String(resolved_ip.to_string()),
                 ));
             }
             attrs.push((

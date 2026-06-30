@@ -468,7 +468,6 @@ By default, only transport failures count toward the circuit. Set `record_5xx tr
 Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
 
 > [!note]
->
 > - Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
 > - Circuit breaking and active health checks work together — either can make a backend temporarily ineligible.
 
@@ -575,34 +574,13 @@ example.com {
 In this example, the strict DNS resolution for `myapp.example.com` is cached. Subsequent requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
 
 
-
-```ferron
-example.com {
-    proxy {
-        upstream http://localhost:3000
-        upstream http://localhost:3001
-
-        algorithm round_robin
-        retry_connection false
-
-        circuit_breaker {
-            max_fails 5
-            window "30s"
-            open_duration "10s"
-            consecutive_passes 1
-            record_5xx true
-        }
-    }
-}
-```
-
 ## Observability
 
 ### Metrics
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path | Backends selected during load balancing |
+| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path, resolved IP address | Backends selected during load balancing |
 | `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
 | `ferron.proxy.requests` | Counter | `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code` | Upstream proxy requests completed |
 | `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |

@@ -17,6 +17,7 @@
 #### Observability & tracing
 
 - **Per-stage span attributes** — all HTTP pipeline stages now emit stage-specific span attributes on their `ferron.stage.<name>` spans, enabling detailed flame graph analysis without requiring metric export. Each module's per-stage span carries module-specific context such as upstream backend URLs, cache results, rate limit decisions, authentication outcomes, and response status codes. See each module's documentation for the full list of attributes and the [tracing reference](/docs/v3/configuration/observability/tracing#per-stage-spans).
+- **Resolved IP address attributes** — reverse proxy metrics now include resolved IP addresses when strict DNS (A/AAAA) resolution is enabled. The `connect_to` field of `UpstreamInner` is exposed as `ferron.proxy.backend_resolved_ip` metric attribute for all backend-related metrics, allowing observability of the actual IP addresses backends are connected to. This complements existing `backend_url` and `backend_unix_path` attributes.
 
 ### Fixed
 
