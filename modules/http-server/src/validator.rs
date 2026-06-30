@@ -120,6 +120,19 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 }
             });
 
+            // PROXY protocol
+            validate_nested!(http, used(sub), protocol_proxy, optional args(1) => [
+                ServerConfigurationValue::Boolean(_, _)
+            ] | args(0) => [
+                ServerConfigurationValue::Boolean(_, _)
+            ]);
+            if first_flag(config, "protocol_proxy") == Some(true) {
+                ctx.add_best_practice_violation(
+                    "`protocol_proxy` trusts client-provided PROXY protocol addresses; enable it only on listeners reachable exclusively by trusted load balancers",
+                    first_entry_span(config, "protocol_proxy"),
+                );
+            }
+
             add_http_block_best_practice_diagnostics(http, ctx);
             check_unused_subdirectives!(http, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
@@ -133,17 +146,6 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         validate_directive!(config, ctx.used_directives, admin_email, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
-
-        // PROXY protocol
-        validate_directive!(config, ctx.used_directives, protocol_proxy, optional args(1) => [
-            ServerConfigurationValue::Boolean(_, _)
-        ], {});
-        if first_flag(config, "protocol_proxy") == Some(true) {
-            ctx.add_best_practice_violation(
-                "`protocol_proxy` trusts client-provided PROXY protocol addresses; enable it only on listeners reachable exclusively by trusted load balancers",
-                first_entry_span(config, "protocol_proxy"),
-            );
-        }
 
         // Observability directives
         validate_observability_directives(config, ctx)?;
