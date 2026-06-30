@@ -30,7 +30,27 @@ pub fn select_backend_index(
     }
 
     match load_balancer_algorithm {
-        LoadBalancerAlgorithmInner::Random => rand::random_range(0..healthy_indices.len()),
+        LoadBalancerAlgorithmInner::Random => {
+            let weights: Vec<u32> = healthy_indices
+                .iter()
+                .map(|i| upstreams[*i].weight)
+                .collect();
+            let total: u64 = weights.iter().map(|w| *w as u64).sum();
+            if total == 0 {
+                // All weights are zero; fall back to uniform random
+                rand::random_range(0..healthy_indices.len())
+            } else {
+                let threshold = rand::random_range(0..total);
+                let mut cumulative: u64 = 0;
+                for (i, w) in weights.iter().enumerate() {
+                    cumulative += *w as u64;
+                    if threshold < cumulative {
+                        return i;
+                    }
+                }
+                0
+            }
+        }
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
             let weights: Vec<u32> = healthy_indices
                 .iter()
@@ -126,11 +146,15 @@ pub fn select_backend_index(
                 }
             };
 
-            if count2 >= count1 {
-                idx1
-            } else {
-                idx2
-            }
+            let weight1 = upstreams[healthy_indices[idx1]].weight;
+            let weight2 = upstreams[healthy_indices[idx2]].weight;
+
+            let prefer_idx1 = weight1 != 0
+                && (weight2 == 0
+                    || (count1 as u64) * (weight2 as u64)
+                        <= (count2 as u64) * (weight1 as u64));
+
+            if prefer_idx1 { idx1 } else { idx2 }
         }
         LoadBalancerAlgorithmInner::P2cEwma => {
             let params = P2cEwmaParams::default();
@@ -156,6 +180,9 @@ pub fn select_backend_index(
 
             let score_for = |pos: usize| -> f64 {
                 let upstream = &upstreams[healthy_indices[pos]];
+                if upstream.weight == 0 {
+                    return f64::MAX;
+                }
                 let active_conns = match conn_state.entry(upstream.clone()) {
                     dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
                     dashmap::Entry::Vacant(e) => {
@@ -166,7 +193,7 @@ pub fn select_backend_index(
                 let ewma = ewma_state
                     .map(|s| p2c_ewma::get_decayed_ewma(s, upstream, &params))
                     .unwrap_or(params.default_ewma);
-                p2c_ewma::compute_score(ewma, active_conns, &params)
+                p2c_ewma::compute_score(ewma, active_conns, &params) / upstream.weight as f64
             };
 
             let s1 = score_for(idx1);

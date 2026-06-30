@@ -6,6 +6,10 @@
 
 ### Added
 
+#### Reverse proxy
+
+- **Weighted load balancing for all algorithms** — `random`, `two_random`, and `p2c_ewma` now support per-upstream `weight` directives for proportional traffic distribution, joining `round_robin` and `least_conn`. Higher weight values receive proportionally more requests across all five load balancing algorithms and session affinity.
+
 #### Observability & tracing
 
 - **Per-stage span attributes** — all HTTP pipeline stages now emit stage-specific span attributes on their `ferron.stage.<name>` spans, enabling detailed flame graph analysis without requiring metric export. Each module's per-stage span carries module-specific context such as upstream backend URLs, cache results, rate limit decisions, authentication outcomes, and response status codes. See each module's documentation for the full list of attributes and the [tracing reference](/docs/v3/configuration/observability/tracing#per-stage-spans).
