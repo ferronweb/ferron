@@ -52,7 +52,7 @@ pub struct CircuitBreakerConfig {
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             max_fails: 5,
             window: Duration::from_secs(30),
             open_duration: Duration::from_secs(30),

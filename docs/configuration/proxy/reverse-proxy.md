@@ -18,7 +18,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
-  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, and `record_5xx` directives. Default: `circuit_breaker false`
+  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, and `record_5xx` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 

@@ -188,7 +188,7 @@ example.com {
         # Forward the original host to the backend
         request_header Host "{{request.host}}"
 
-        # Enable passive health checks to auto-remove unhealthy backends
+        # Customize passive health check thresholds
         circuit_breaker {
             max_fails 3
             window "10s"
@@ -197,7 +197,7 @@ example.com {
 }
 ```
 
-This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. The circuit breaker automatically removes any backend that fails repeatedly within the configured time window.
+This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. Circuit breakers are enabled by default, so passive health checking is active without any configuration — the `circuit_breaker` block above only customizes the thresholds.
 
 ### Observing A/B test results
 
@@ -213,7 +213,18 @@ You can create Grafana panels to visualize the ratio of requests between backend
 
 Ferron provides passive health checking — tracking request-time failures per backend without background probes — through its circuit breaker. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses, then temporarily ejects unstable backends from the load balancer.
 
-To enable passive health checking with transport-failure-only detection (the default):
+Circuit breakers are enabled by default, so passive health checking is active without any configuration:
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+    }
+}
+```
+
+To customize the passive health checking behavior, add the `circuit_breaker` block:
 
 ```ferron
 example.com {
@@ -241,7 +252,9 @@ circuit_breaker {
 
 ## Circuit breaking
 
-Ferron supports request-time circuit breaking for unstable backends. This is useful when you want Ferron to temporarily eject a backend after repeated transport failures or upstream `5xx` responses, then probe recovery with a single half-open trial request.
+Circuit breakers are enabled by default and protect against upstream failures by temporarily ejecting unstable backends from the load balancer. This section covers customizing the default behavior.
+
+To customize the default circuit breaker settings:
 
 ```ferron
 example.com {
