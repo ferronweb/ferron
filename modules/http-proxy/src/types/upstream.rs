@@ -166,6 +166,7 @@ fn is_ip_literal_or_localhost(url: &str) -> bool {
         .strip_prefix("http://")
         .or_else(|| url.strip_prefix("https://"))
         .unwrap_or(url);
+    let host = host.split('/').next().unwrap_or(host);
     let host = host.split(':').next().unwrap_or(host);
     let host = host.trim_start_matches('[').trim_end_matches(']');
     let host = host.to_lowercase();

@@ -59,6 +59,25 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 
     // Check cache first
     if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers) {
+        if cached.is_empty() {
+            if let Some((_, event_sink)) = crate::try_get_secondary_runtime_handle() {
+                // Log a warning if no upstreams were resolved
+                event_sink.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Debug,
+                        message: format!("No A/AAAA records for {}", hostname),
+                        summary: "No A/AAAA records".into(),
+                        target: crate::LOG_TARGET,
+                        attributes: vec![(
+                            "dns.name",
+                            ferron_observability::LogAttributeValue::String(hostname.clone()),
+                        )],
+                        trace_context: None,
+                    },
+                ));
+            }
+        }
+
         return cached;
     }
 
@@ -118,6 +137,25 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                         }));
                     }
 
+                    if upstreams.is_empty() {
+                        // Log a warning if no upstreams were resolved
+                        event_sink.emit(ferron_observability::Event::Log(
+                            ferron_observability::LogEvent {
+                                level: ferron_observability::LogLevel::Debug,
+                                message: format!("No A/AAAA records for {}", hostname),
+                                summary: "No A/AAAA records".into(),
+                                target: crate::LOG_TARGET,
+                                attributes: vec![(
+                                    "dns.name",
+                                    ferron_observability::LogAttributeValue::String(
+                                        hostname.clone(),
+                                    ),
+                                )],
+                                trace_context: None,
+                            },
+                        ));
+                    }
+
                     // Store the upstreams in the cache
                     super::dns_cache::insert_strict_dns(
                         &hostname,
@@ -135,10 +173,16 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             message: format!("No A/AAAA records for {}: {}", hostname, e),
                             summary: "No A/AAAA records".into(),
                             target: crate::LOG_TARGET,
-                            attributes: vec![(
-                                "dns.name",
-                                ferron_observability::LogAttributeValue::String(hostname),
-                            )],
+                            attributes: vec![
+                                (
+                                    "dns.name",
+                                    ferron_observability::LogAttributeValue::String(hostname),
+                                ),
+                                (
+                                    "error.message",
+                                    ferron_observability::LogAttributeValue::String(e.to_string()),
+                                ),
+                            ],
                             trace_context: None,
                         },
                     ));
@@ -159,6 +203,7 @@ pub fn parse_host_port(url: &str) -> Option<(String, u16)> {
     let rest = url
         .strip_prefix("http://")
         .or_else(|| url.strip_prefix("https://"))?;
+    let rest = rest.split_once('/').map_or(rest, |(r, _)| r);
 
     let default_port = if url.starts_with("https://") { 443 } else { 80 };
 

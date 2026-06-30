@@ -101,12 +101,18 @@ pub async fn resolve_srv_inner(
                             message: format!("SRV lookup failed for {}: {}", srv_name, e),
                             summary: "SRV lookup failed".into(),
                             target: crate::LOG_TARGET,
-                            attributes: vec![(
-                                "dns.name",
-                                ferron_observability::LogAttributeValue::String(
-                                    srv_name.to_string(),
+                            attributes: vec![
+                                (
+                                    "dns.name",
+                                    ferron_observability::LogAttributeValue::String(
+                                        srv_name.to_string(),
+                                    ),
                                 ),
-                            )],
+                                (
+                                    "error.message",
+                                    ferron_observability::LogAttributeValue::String(e.to_string()),
+                                ),
+                            ],
                             trace_context: None,
                         },
                     ));
