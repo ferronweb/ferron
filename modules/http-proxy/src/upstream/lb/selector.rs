@@ -70,11 +70,15 @@ pub fn select_backend_index(
 
             for (pos, idx) in healthy_indices.iter().enumerate() {
                 let upstream = &upstreams[*idx];
-                let connection_count = match conn_state.entry(upstream.clone()) {
-                    dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
-                    dashmap::Entry::Vacant(e) => {
-                        e.insert(Arc::new(()));
-                        0
+                let connection_count = if let Some(e) = conn_state.get(upstream) {
+                    Arc::strong_count(&*e) - 1
+                } else {
+                    match conn_state.entry(upstream.clone()) {
+                        dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
+                        dashmap::Entry::Vacant(e) => {
+                            e.insert(Arc::new(()));
+                            0
+                        }
                     }
                 };
                 if upstream.weight == 0 {
@@ -113,11 +117,7 @@ pub fn select_backend_index(
                 return rand::random_range(0..healthy_indices.len());
             };
             if healthy_indices.len() < 2 {
-                if let dashmap::Entry::Vacant(e) =
-                    conn_state.entry(upstreams[healthy_indices[0]].clone())
-                {
-                    e.insert(Arc::new(()));
-                }
+                initialize_tracker(Some(&conn_state), &upstreams[healthy_indices[0]]);
                 return 0;
             }
             let idx1 = rand::random_range(0..healthy_indices.len());
@@ -127,21 +127,29 @@ pub fn select_backend_index(
             }
 
             let (count1, _) = {
-                match conn_state.entry(upstreams[healthy_indices[idx1]].clone()) {
-                    dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
-                    dashmap::Entry::Vacant(e) => {
-                        e.insert(Arc::new(()));
-                        (0, true)
+                if let Some(e) = conn_state.get(&upstreams[healthy_indices[idx1]]) {
+                    (Arc::strong_count(&*e) - 1, false)
+                } else {
+                    match conn_state.entry(upstreams[healthy_indices[idx1]].clone()) {
+                        dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
+                        dashmap::Entry::Vacant(e) => {
+                            e.insert(Arc::new(()));
+                            (0, true)
+                        }
                     }
                 }
             };
 
             let (count2, _) = {
-                match conn_state.entry(upstreams[healthy_indices[idx2]].clone()) {
-                    dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
-                    dashmap::Entry::Vacant(e) => {
-                        e.insert(Arc::new(()));
-                        (0, true)
+                if let Some(e) = conn_state.get(&upstreams[healthy_indices[idx2]]) {
+                    (Arc::strong_count(&*e) - 1, false)
+                } else {
+                    match conn_state.entry(upstreams[healthy_indices[idx2]].clone()) {
+                        dashmap::Entry::Occupied(e) => (Arc::strong_count(e.get()) - 1, false),
+                        dashmap::Entry::Vacant(e) => {
+                            e.insert(Arc::new(()));
+                            (0, true)
+                        }
                     }
                 }
             };
@@ -167,11 +175,7 @@ pub fn select_backend_index(
             };
 
             if healthy_indices.len() < 2 {
-                if let dashmap::Entry::Vacant(e) =
-                    conn_state.entry(upstreams[healthy_indices[0]].clone())
-                {
-                    e.insert(Arc::new(()));
-                }
+                initialize_tracker(Some(&conn_state), &upstreams[healthy_indices[0]]);
                 return 0;
             }
 
@@ -186,11 +190,16 @@ pub fn select_backend_index(
                 if upstream.weight == 0 {
                     return f64::MAX;
                 }
-                let active_conns = match conn_state.entry(upstream.clone()) {
-                    dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
-                    dashmap::Entry::Vacant(e) => {
-                        e.insert(Arc::new(()));
-                        0
+
+                let active_conns = if let Some(e) = conn_state.get(upstream) {
+                    Arc::strong_count(&*e) - 1
+                } else {
+                    match conn_state.entry(upstream.clone()) {
+                        dashmap::Entry::Occupied(e) => Arc::strong_count(e.get()) - 1,
+                        dashmap::Entry::Vacant(e) => {
+                            e.insert(Arc::new(()));
+                            0
+                        }
                     }
                 };
                 let ewma = ewma_state
@@ -212,13 +221,14 @@ pub fn select_backend_index(
 }
 
 /// Get or create the connection tracker for an upstream.
+#[inline]
 pub fn initialize_tracker(
     conn_state: Option<&ConnectionsTrackState>,
     upstream: &Arc<UpstreamInner>,
 ) {
     if let Some(conn_state) = conn_state {
-        if let dashmap::Entry::Vacant(e) = conn_state.entry(upstream.clone()) {
-            e.insert(Arc::new(()));
+        if !conn_state.contains_key(upstream) {
+            conn_state.insert(upstream.clone(), Arc::new(()));
         }
     }
 }
