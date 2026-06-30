@@ -1,5 +1,6 @@
 //! Upstream resolution and backend selection logic.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -35,6 +36,11 @@ pub async fn resolve_upstreams(
 ///
 /// Returns the selected upstream and its connection tracker (if applicable).
 /// Filters out unhealthy backends when health checking is enabled.
+///
+/// Backends are grouped by priority (lower value = higher priority). The
+/// highest-priority tier is tried first. When all backends in a tier are
+/// unavailable (unhealthy, circuit-open, or already-tried), the next tier
+/// is used as a fallback.
 #[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
     upstreams: &[Arc<UpstreamInner>],
@@ -55,106 +61,121 @@ pub fn determine_proxy_to(
         return None;
     }
 
-    // Build healthy list of indices into `upstreams` — avoids Arc clones
-    // until the final selection, while tracking exclusion reasons.
+    // Build unhealthy set — health checks + already-tried backends
     let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
-    let mut healthy: Vec<usize> = upstreams
-        .iter()
-        .enumerate()
-        .filter_map(|(i, u)| {
-            // Check active health check state
-            if let Some(state_map) = health_check_state {
-                if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
-                    unhealthy.insert(i);
-                    return None;
-                }
-            }
-
-            // Check if backend is already selected (retry loop)
-            if metrics.selected_backends.contains(u) {
+    for (i, u) in upstreams.iter().enumerate() {
+        if let Some(state_map) = health_check_state {
+            if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
                 unhealthy.insert(i);
-                metrics.excluded_already_tried.push(Arc::clone(u));
-                return None;
             }
-
-            Some(i)
-        })
-        .collect();
-
-    let mut affinity_index = None;
-
-    loop {
-        if healthy.is_empty() {
-            return None;
         }
-
-        // Resolve affinity: find position in `healthy` whose original index
-        // matches affinity_index
-        if affinity_index.is_none() {
-            if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
-                affinity_index = super::affinity::resolve_affinity_index(
-                    affinity_type,
-                    key,
-                    upstreams,
-                    &unhealthy,
-                    ring,
-                );
-            };
+        if !unhealthy.contains(&i) && metrics.selected_backends.contains(u) {
+            unhealthy.insert(i);
+            metrics.excluded_already_tried.push(Arc::clone(u));
         }
-        let start_pos = affinity_index.and_then(|aff_idx| {
-            // Fast path: if affine backend is still at same position in
-            // filtered list
-            if aff_idx < healthy.len() && healthy[aff_idx] == aff_idx {
-                return Some(aff_idx);
-            }
-            // Fallback: search by original index identity
-            healthy.iter().position(|orig_idx| *orig_idx == aff_idx)
-        });
-
-        let index = if let Some(pos) = start_pos {
-            pos
-        } else if healthy.len() == 1 {
-            0
-        } else {
-            super::lb::selector::select_backend_index(
-                algorithm, &healthy, upstreams, conn_state, ewma_state,
-            )
-        };
-        let upstream_idx = healthy.swap_remove(index);
-        unhealthy.insert(upstream_idx);
-        let upstream = Arc::clone(&upstreams[upstream_idx]);
-        if start_pos == Some(index) {
-            // Affine backend is no longer healthy; reset affinity index
-            affinity_index = None;
-        }
-
-        if !try_acquire_circuit_breaker_slot(
-            circuit_breaker_state,
-            circuit_breaker,
-            &upstream,
-            event_sink,
-            event_trace_context.clone(),
-        ) {
-            // Slot acquisition may have failed due to a race — treat as overloaded
-            let open = circuit_breaker
-                .enabled
-                .then_some(circuit_breaker_state)
-                .flatten()
-                .and_then(|s| s.get(&upstream))
-                .is_some_and(|s| s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN);
-
-            if open {
-                metrics.excluded_circuit_open.push(Arc::clone(&upstream));
-            } else {
-                metrics.excluded_overloaded.push(Arc::clone(&upstream));
-            }
-
-            continue;
-        }
-
-        // Get the tracker (already initialized by select_backend_index)
-        super::lb::selector::initialize_tracker(conn_state, &upstream);
-        let tracker = super::lb::selector::get_tracker(conn_state, &upstream);
-        return Some(SelectedBackend { upstream, tracker });
     }
+
+    // Group healthy indices by priority (BTreeMap = sorted by key, lowest first)
+    let mut priority_groups: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
+    for (i, u) in upstreams.iter().enumerate() {
+        if !unhealthy.contains(&i) {
+            priority_groups
+                .entry(u.priority)
+                .or_default()
+                .push(i);
+        }
+    }
+
+    // Resolve affinity once across all tiers
+    let mut affinity_index = None;
+    if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
+        affinity_index = super::affinity::resolve_affinity_index(
+            affinity_type,
+            key,
+            upstreams,
+            &unhealthy,
+            ring,
+        );
+    };
+
+    // Try each priority group in order (lowest priority value = highest priority)
+    for (_priority, mut group) in priority_groups {
+        loop {
+            if group.is_empty() {
+                break;
+            }
+
+            // Resolve affinity: find position in group whose original index
+            // matches affinity_index
+            if affinity_index.is_none() {
+                if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
+                    affinity_index = super::affinity::resolve_affinity_index(
+                        affinity_type,
+                        key,
+                        upstreams,
+                        &unhealthy,
+                        ring,
+                    );
+                };
+            }
+            let start_pos = affinity_index.and_then(|aff_idx| {
+                if aff_idx < group.len() && group[aff_idx] == aff_idx {
+                    return Some(aff_idx);
+                }
+                group.iter().position(|orig_idx| *orig_idx == aff_idx)
+            });
+
+            let index = if let Some(pos) = start_pos {
+                pos
+            } else if group.len() == 1 {
+                0
+            } else {
+                super::lb::selector::select_backend_index(
+                    algorithm,
+                    &group,
+                    upstreams,
+                    conn_state,
+                    ewma_state,
+                )
+            };
+            let upstream_idx = group.swap_remove(index);
+            unhealthy.insert(upstream_idx);
+            let upstream = Arc::clone(&upstreams[upstream_idx]);
+            if start_pos == Some(index) {
+                affinity_index = None;
+            }
+
+            if !try_acquire_circuit_breaker_slot(
+                circuit_breaker_state,
+                circuit_breaker,
+                &upstream,
+                event_sink,
+                event_trace_context.clone(),
+            ) {
+                let open = circuit_breaker
+                    .enabled
+                    .then_some(circuit_breaker_state)
+                    .flatten()
+                    .and_then(|s| s.get(&upstream))
+                    .is_some_and(|s| {
+                        s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN
+                    });
+
+                if open {
+                    metrics.excluded_circuit_open.push(Arc::clone(&upstream));
+                } else {
+                    metrics.excluded_overloaded.push(Arc::clone(&upstream));
+                }
+
+                continue;
+            }
+
+            // Get the tracker (already initialized by select_backend_index)
+            super::lb::selector::initialize_tracker(conn_state, &upstream);
+            let tracker = super::lb::selector::get_tracker(conn_state, &upstream);
+            return Some(SelectedBackend { upstream, tracker });
+        }
+    }
+
+    None
 }

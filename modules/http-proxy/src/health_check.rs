@@ -540,6 +540,7 @@ pub fn spawn_health_check_task(
                                 health_check_config: UpstreamHealthCheckConfig::default(),
                                 // mTLS isn't applicable for resolution only
                                 mtls: None,
+                                priority: None,
                             }),
                         )
                         .await;

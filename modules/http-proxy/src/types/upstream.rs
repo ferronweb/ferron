@@ -18,6 +18,11 @@ pub struct UpstreamInner {
     pub weight: u32,
     /// mTLS credentials for an upstream
     pub mtls: Option<Arc<MtlsCredentials>>,
+    /// Priority for tiered failover. Lower values = higher priority.
+    /// Backends at the highest-priority tier are tried first; lower-priority
+    /// tiers are used as fallbacks when all higher-priority backends are
+    /// unavailable. Default: 0 (highest priority).
+    pub priority: u16,
 }
 
 /// Proxy protocol version to send to backends.
@@ -44,6 +49,9 @@ pub struct UpstreamConfig {
     pub weight: u32,
     /// Optional mTLS credentials for this upstream.
     pub mtls: Option<Arc<MtlsCredentials>>,
+    /// Priority for tiered failover. Lower values = higher priority.
+    /// Default: 0 (highest priority).
+    pub priority: u16,
 }
 
 /// Data for an SRV-based upstream.
@@ -65,6 +73,10 @@ pub struct SrvUpstreamData {
     pub weight: u32,
     /// Optional mTLS credentials for the upstreams.
     pub mtls: Option<Arc<MtlsCredentials>>,
+    /// Optional priority offset. When set, added to each DNS SRV priority
+    /// to shift the entire block's priority tier. When None, DNS SRV
+    /// priorities are used as-is.
+    pub priority: Option<u16>,
 }
 
 /// An upstream backend — either a static URL or an SRV record.
@@ -94,6 +106,7 @@ impl Upstream {
                 proxy_unix: cfg.unix_socket.clone(),
                 weight: cfg.weight,
                 mtls: cfg.mtls.clone(),
+                priority: cfg.priority,
             })],
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {

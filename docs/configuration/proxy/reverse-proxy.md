@@ -213,6 +213,7 @@ example.com {
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
 | `weight` | `<number>` | Weight for weighted load balancing. Higher values receive more requests. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
+| `priority` | `<number>` | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier is exhausted, the next tier is tried. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to the upstream server for mTLS. Must be used together with `key`. | disabled |
 | `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
 
@@ -236,6 +237,7 @@ example.com {
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
 | `weight` | `<number>` | Weight for weighted load balancing. Applied to all backends resolved from this SRV record. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
+| `priority` | `<number>` | Additive offset applied to DNS SRV priorities. A backend's effective priority is `dns_priority + offset`. Lower effective values are tried first. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to resolved backends for mTLS. Must be used together with `key`. | disabled |
 | `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
 
@@ -343,6 +345,38 @@ example.com {
 - When `retry_connection` is enabled and the affinity-targeted backend fails, Ferron retries with another backend.
 - Cookie affinity automatically sets the cookie on the first request if no valid cookie is present.
 - The affinity key is used with a consistent hash ring for deterministic routing.
+
+## Priority-based failover
+
+Backends can be assigned numeric priority values to implement tiered failover. Lower values indicate higher priority. When all backends in the highest-priority tier are unavailable (unhealthy, circuit-open, or already-tried), the next tier is used as a fallback.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://primary:8080 {
+            priority 0
+        }
+        upstream http://secondary:8080 {
+            priority 1
+        }
+        upstream http://standby:8080 {
+            priority 2
+        }
+    }
+}
+```
+
+Requests are routed to the primary tier (priority 0) first. If all primary backends are unavailable, the secondary tier (priority 1) is tried, and so on. Within each tier, the configured load balancing algorithm selects which backend handles the request. Priority and weight work together: priority determines which tier is tried, and weight determines how requests are distributed within a tier.
+
+For SRV upstreams, the `priority` subdirective is an additive offset applied to DNS SRV priorities. A backend's effective priority is `dns_priority + offset`. For example, if DNS returns priorities 10 and 20, setting `priority 5` on the SRV block shifts them to 15 and 25.
+
+```ferron
+example.com {
+    srv _http._tcp.example.com {
+        priority 5
+    }
+}
+```
 
 ## Forwarding headers
 

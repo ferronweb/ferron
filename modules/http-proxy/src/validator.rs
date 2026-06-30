@@ -203,6 +203,8 @@ fn validate_upstream_block(
     }
     validate_duration(block, "idle_timeout")?;
     ferron_core::validate_nested!(block, used(sub), unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), weight, args(1) => [ServerConfigurationValue::Number(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), priority, args(1) => [ServerConfigurationValue::Number(_, _)]);
     ferron_core::validate_nested!(block, used(sub), cert, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), key, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     #[cfg(not(unix))]
@@ -251,6 +253,8 @@ fn validate_srv_block(
     }
     validate_duration(block, "idle_timeout")?;
     ferron_core::validate_nested!(block, used(sub), dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), weight, args(1) => [ServerConfigurationValue::Number(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), priority, args(1) => [ServerConfigurationValue::Number(_, _)]);
     ferron_core::validate_nested!(block, used(sub), cert, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), key, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
 

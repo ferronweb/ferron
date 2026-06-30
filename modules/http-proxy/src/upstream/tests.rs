@@ -21,6 +21,7 @@ fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         proxy_unix: None,
         weight: 1,
         mtls: None,
+        priority: 0,
     })
 }
 
@@ -30,6 +31,7 @@ fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
         proxy_unix: None,
         weight,
         mtls: None,
+        priority: 0,
     })
 }
 

@@ -183,6 +183,7 @@ pub fn parse_proxy_config(
                 health_check_config: UpstreamHealthCheckConfig::default(),
                 weight: 1,
                 mtls: None,
+                priority: 0,
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -520,6 +521,7 @@ fn parse_upstream_entry(
     let mut unix_socket: Option<String> = None;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
     let mut weight: u32 = 1;
+    let mut priority: u16 = 0;
     let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
     let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
 
@@ -615,6 +617,15 @@ fn parse_upstream_entry(
                         }
                     }
                 }
+                "priority" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        priority = val as u16;
+                    }
+                }
                 "active_check" => {
                     if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.enabled = val;
@@ -648,6 +659,7 @@ fn parse_upstream_entry(
         health_check_config,
         weight,
         mtls,
+        priority,
     }));
 
     // Populate the O(1) lookup map
@@ -676,6 +688,7 @@ fn parse_srv_entry(
     let mut idle_timeout: Option<Duration> = None;
     let mut dns_servers: Vec<IpAddr> = Vec::new();
     let mut weight: u32 = 1;
+    let mut priority: Option<u16> = None;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
     let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
     let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
@@ -775,6 +788,15 @@ fn parse_srv_entry(
                         }
                     }
                 }
+                "priority" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        priority = Some(val as u16);
+                    }
+                }
                 "active_check" => {
                     if let Some(val) = entries.first().map(|e| e.get_flag()) {
                         health_check_config.enabled = val;
@@ -808,6 +830,7 @@ fn parse_srv_entry(
         weight,
         health_check_config,
         mtls,
+        priority,
     }));
 
     // Populate the O(1) lookup map

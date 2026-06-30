@@ -132,6 +132,7 @@ mod tests {
             proxy_unix: None,
             weight: 1,
             mtls: None,
+            priority: 0,
         })
     }
 
@@ -141,6 +142,7 @@ mod tests {
             proxy_unix: None,
             weight,
             mtls: None,
+            priority: 0,
         })
     }
 

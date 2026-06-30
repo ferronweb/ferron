@@ -499,6 +499,7 @@ mod tests {
             proxy_unix: None,
             weight: 1,
             mtls: None,
+            priority: 0,
         });
 
         // Record some pulls and returns

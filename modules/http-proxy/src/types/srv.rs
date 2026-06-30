@@ -17,8 +17,12 @@ pub async fn resolve_srv(
         return Vec::new();
     }
 
-    // Filter out unhealthy backends
-    let healthy: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> = candidates
+    let priority_offset = srv_data.priority.unwrap_or(0);
+
+    // Return all healthy backends with their final priority.
+    // Each backend's priority = DNS SRV priority + config priority offset.
+    // The top-level load balancer handles tiered failover across priorities.
+    candidates
         .into_iter()
         .filter(move |(upstream, _, _)| {
             active_health_check_state.as_ref().is_none_or(|s| {
@@ -26,40 +30,17 @@ pub async fn resolve_srv(
                     .is_none_or(|s| s.is_healthy)
             })
         })
-        .collect();
-
-    if healthy.is_empty() {
-        return Vec::new();
-    }
-
-    // Select the highest-priority group (lowest numeric value)
-    let highest_priority = healthy
-        .iter()
-        .map(|(_, priority, _)| *priority)
-        .min()
-        .unwrap_or(0);
-
-    let filtered: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16)> = healthy
-        .into_iter()
-        .filter(|(_, priority, _)| *priority == highest_priority)
-        .map(|(upstream, _, weight)| (upstream, weight))
-        .collect();
-
-    // Weighted random selection
-    let cumulative_weight: u32 = filtered.iter().map(|(_, w)| *w as u32).sum();
-    if cumulative_weight == 0 {
-        return filtered.into_iter().map(|(u, _)| u).collect();
-    }
-
-    let mut random_weight = rand::random_range(0..cumulative_weight);
-    for (upstream, weight) in filtered {
-        if random_weight < weight as u32 {
-            return vec![upstream];
-        }
-        random_weight -= weight as u32;
-    }
-
-    Vec::new()
+        .map(|(upstream, dns_priority, _dns_weight)| {
+            let priority = dns_priority.saturating_add(priority_offset);
+            std::sync::Arc::new(super::upstream::UpstreamInner {
+                proxy_to: upstream.proxy_to.clone(),
+                proxy_unix: upstream.proxy_unix.clone(),
+                weight: upstream.weight,
+                mtls: upstream.mtls.clone(),
+                priority,
+            })
+        })
+        .collect()
 }
 
 #[cfg(feature = "srv-lookup")]
@@ -169,6 +150,7 @@ pub async fn resolve_srv_inner(
                             proxy_unix: None,
                             weight,
                             mtls: mtls.clone(),
+                            priority: 0,
                         });
                         let priority = srv.priority;
 
