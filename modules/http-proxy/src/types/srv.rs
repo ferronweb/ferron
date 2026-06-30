@@ -48,9 +48,6 @@ pub async fn resolve_srv(
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,
 ) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {
-    use hickory_resolver::config::{NameServerConfig, ResolverConfig};
-    use hickory_resolver::TokioResolver;
-
     let srv_name = srv_data.srv_name.clone();
     let dns_servers = srv_data.dns_servers.clone();
     let weight = srv_data.weight;
@@ -68,39 +65,17 @@ pub async fn resolve_srv_inner(
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
         .spawn(async move {
-            use hickory_resolver::net::runtime::TokioRuntimeProvider;
-
-            // Build resolver inside the spawned task (we're on the secondary runtime)
-            let resolver_result = if !dns_servers.is_empty() {
-                let mut resolver_config = ResolverConfig::default();
-                for server in &dns_servers {
-                    resolver_config.add_name_server(NameServerConfig::udp(*server));
-                }
-                TokioResolver::builder_with_config(resolver_config, TokioRuntimeProvider::new())
-                    .build()
-            } else {
-                TokioResolver::builder_tokio()
-                    .unwrap_or_else(|_| {
-                        TokioResolver::builder_with_config(
-                            ResolverConfig::default(),
-                            TokioRuntimeProvider::new(),
-                        )
-                    })
-                    .build()
-            };
-            let resolver = match resolver_result {
-                Ok(resolver) => resolver,
-                Err(e) => {
+            // Get or create a cached resolver for these DNS servers
+            let resolver = match crate::get_or_create_resolver(&dns_servers) {
+                Some(r) => r,
+                None => {
                     event_sink.emit(ferron_observability::Event::Log(
                         ferron_observability::LogEvent {
                             level: ferron_observability::LogLevel::Warn,
-                            message: format!("Failed to create resolver: {}", e),
+                            message: "Failed to create DNS resolver".to_string(),
                             summary: "Failed to create DNS resolver".into(),
                             target: crate::LOG_TARGET,
-                            attributes: vec![(
-                                "error.message",
-                                ferron_observability::LogAttributeValue::String(e.to_string()),
-                            )],
+                            attributes: Vec::new(),
                             trace_context: None,
                         },
                     ));
