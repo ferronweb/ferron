@@ -349,7 +349,7 @@ pub async fn establish_and_send(
     } else {
         // Use pre-resolved IP from connect_to if available, otherwise parse from proxy_url
         let addr = if let Some(ct) = &upstream.connect_to {
-            ct.clone()
+            ct.to_string()
         } else {
             let host = proxy_url.host().ok_or("upstream URL has no host")?;
             let port = proxy_url

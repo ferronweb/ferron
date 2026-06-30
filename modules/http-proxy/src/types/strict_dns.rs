@@ -4,6 +4,7 @@
 //! resolved IP as a distinct upstream backend. CNAME chains are followed
 //! automatically by the resolver.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::types::health::HealthCheckStateMap;
@@ -14,6 +15,7 @@ use crate::types::upstream::{UpstreamConfig, UpstreamInner};
 /// Each resolved IP becomes a separate `UpstreamInner` with `connect_to`
 /// set to the IP address, while `proxy_to` retains the original hostname
 /// for TLS SNI and HTTP request construction.
+#[inline]
 pub async fn resolve_strict_dns(
     cfg: &UpstreamConfig,
     active_health_check_state: Option<HealthCheckStateMap>,
@@ -39,6 +41,7 @@ pub async fn resolve_strict_dns(
 ///
 /// Returns one `UpstreamInner` per resolved IP address. The hostname and
 /// port are extracted from `cfg.url`.
+#[inline]
 pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
     let url = cfg.url.clone();
     let weight = cfg.weight;
@@ -87,11 +90,6 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     match resolver.lookup_ip(hostname.clone()).await {
         Ok(lookup) => {
             for ip in lookup.iter() {
-                let connect_to = if ip.is_ipv4() {
-                    format!("{}:{}", ip, port)
-                } else {
-                    format!("[{}]:{}", ip, port)
-                };
                 let scheme = if url.starts_with("https://") {
                     "https"
                 } else {
@@ -100,7 +98,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                 let proxy_to = format!("{}://{}:{}", scheme, hostname, port);
                 upstreams.push(Arc::new(UpstreamInner {
                     proxy_to,
-                    connect_to: Some(connect_to),
+                    connect_to: Some(SocketAddr::new(ip, port)),
                     proxy_unix: None,
                     weight,
                     mtls: mtls.clone(),

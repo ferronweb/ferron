@@ -7,6 +7,7 @@
 //! without creating a cycle.
 
 #[cfg(feature = "srv-lookup")]
+#[inline]
 pub async fn resolve_srv(
     srv_data: &super::upstream::SrvUpstreamData,
     active_health_check_state: Option<super::health::HealthCheckStateMap>,
@@ -46,6 +47,7 @@ pub async fn resolve_srv(
 }
 
 #[cfg(feature = "srv-lookup")]
+#[inline]
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,
 ) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {

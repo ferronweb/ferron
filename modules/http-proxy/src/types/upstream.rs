@@ -1,6 +1,6 @@
 //! Core upstream types: connection keys, proxy protocol, and health check configuration.
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use crate::types::health::HealthCheckStateMap;
 
@@ -20,7 +20,7 @@ pub struct UpstreamInner {
     ///
     /// Set by strict DNS resolution (A/AAAA records). `None` for static URLs,
     /// IP literals, Unix sockets, and logical DNS mode.
-    pub connect_to: Option<String>,
+    pub connect_to: Option<SocketAddr>,
     /// Optional Unix socket path for local backends.
     pub proxy_unix: Option<String>,
     /// Weight for weighted load balancing algorithms (default 1).
