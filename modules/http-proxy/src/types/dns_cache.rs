@@ -170,7 +170,7 @@ static DNS_RESULT_CACHE: std::sync::OnceLock<DnsResultCache> = std::sync::OnceLo
 
 #[inline]
 fn cache() -> &'static DnsResultCache {
-    DNS_RESULT_CACHE.get_or_init(|| DnsResultCache::new())
+    DNS_RESULT_CACHE.get_or_init(DnsResultCache::new)
 }
 
 // --- Strict DNS cache API ---

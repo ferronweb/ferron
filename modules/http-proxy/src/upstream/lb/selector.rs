@@ -117,7 +117,7 @@ pub fn select_backend_index(
                 return rand::random_range(0..healthy_indices.len());
             };
             if healthy_indices.len() < 2 {
-                initialize_tracker(Some(&conn_state), &upstreams[healthy_indices[0]]);
+                initialize_tracker(Some(conn_state), &upstreams[healthy_indices[0]]);
                 return 0;
             }
             let idx1 = rand::random_range(0..healthy_indices.len());
@@ -175,7 +175,7 @@ pub fn select_backend_index(
             };
 
             if healthy_indices.len() < 2 {
-                initialize_tracker(Some(&conn_state), &upstreams[healthy_indices[0]]);
+                initialize_tracker(Some(conn_state), &upstreams[healthy_indices[0]]);
                 return 0;
             }
 
