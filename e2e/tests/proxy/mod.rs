@@ -11,3 +11,4 @@ mod proxy_header;
 mod proxy_redirect;
 mod rproxy;
 mod srv;
+mod strict_dns;

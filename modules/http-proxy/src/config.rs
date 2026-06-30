@@ -184,6 +184,8 @@ pub fn parse_proxy_config(
                 weight: 1,
                 mtls: None,
                 priority: 0,
+                logical_dns: false,
+                dns_servers: Vec::new(),
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -524,6 +526,8 @@ fn parse_upstream_entry(
     let mut priority: u16 = 0;
     let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
     let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
+    let mut logical_dns: bool = false;
+    let mut dns_servers: Vec<std::net::IpAddr> = Vec::new();
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
@@ -638,6 +642,23 @@ fn parse_upstream_entry(
                         }
                     }
                 }
+                "logical_dns" => {
+                    if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                        logical_dns = val;
+                    }
+                }
+                "dns_servers" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        dns_servers = val
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                    }
+                }
                 _ => {}
             }
         }
@@ -660,6 +681,8 @@ fn parse_upstream_entry(
         weight,
         mtls,
         priority,
+        logical_dns,
+        dns_servers,
     }));
 
     // Populate the O(1) lookup map

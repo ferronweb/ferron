@@ -207,6 +207,8 @@ fn validate_upstream_block(
     ferron_core::validate_nested!(block, used(sub), priority, args(1) => [ServerConfigurationValue::Number(_, _)]);
     ferron_core::validate_nested!(block, used(sub), cert, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), key, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), logical_dns, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());

@@ -35,6 +35,7 @@ pub async fn resolve_srv(
             let weight = (dns_weight as u32).saturating_mul(upstream.weight);
             std::sync::Arc::new(super::upstream::UpstreamInner {
                 proxy_to: upstream.proxy_to.clone(),
+                connect_to: None,
                 proxy_unix: upstream.proxy_unix.clone(),
                 weight,
                 mtls: upstream.mtls.clone(),
@@ -123,6 +124,7 @@ pub async fn resolve_srv_inner(
                         let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
                         let upstream = std::sync::Arc::new(super::upstream::UpstreamInner {
                             proxy_to,
+                            connect_to: None,
                             proxy_unix: None,
                             weight,
                             mtls: mtls.clone(),

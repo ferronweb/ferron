@@ -10,6 +10,8 @@ pub mod error;
 pub mod health;
 pub mod lb;
 pub mod srv;
+#[cfg(feature = "srv-lookup")]
+pub mod strict_dns;
 pub mod upstream;
 
 /// Shared connection tracking state for least-conn and two-random algorithms.

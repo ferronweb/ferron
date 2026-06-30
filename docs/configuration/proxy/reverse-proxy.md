@@ -12,7 +12,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `proxy` (`http-proxy`)
   - This directive configures the reverse proxy with one or more upstream backends. Supports block form with nested directives or shorthand form with upstreams as arguments. Default: none
 - `upstream <url: string>` (`http-proxy`)
-  - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, and `unix` properties. Default: none
+  - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, `unix`, `logical_dns`, and `dns_servers` properties. When the URL contains a hostname, A/AAAA records are resolved via Hickory DNS by default (strict DNS), creating a separate backend per resolved IP. Default: none
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
   - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
@@ -216,6 +216,8 @@ example.com {
 | `priority` | `<number>` | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier is exhausted, the next tier is tried. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to the upstream server for mTLS. Must be used together with `key`. | disabled |
 | `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
+| `logical_dns` | `[bool: boolean]` | When `true`, disables strict A/AAAA DNS resolution and uses the system's logical DNS resolution instead. The upstream URL is passed through as-is without per-IP backend splitting. | `false` |
+| `dns_servers` | `<string>` | Comma-separated DNS server IPs used for strict A/AAAA resolution. Uses Hickory's default resolvers if empty. | system |
 
 ### `srv` (feature-gated)
 
@@ -374,6 +376,36 @@ For SRV upstreams, the `priority` subdirective is an additive offset applied to 
 example.com {
     srv _http._tcp.example.com {
         priority 5
+    }
+}
+```
+
+## Strict DNS (A/AAAA) resolution
+
+When an `upstream` URL contains a hostname (not an IP literal), Ferron resolves A and AAAA records using Hickory DNS by default. Each resolved IP address becomes a separate backend in the load balancer, enabling per-IP load balancing, circuit breaking, and health checking.
+
+For example, if `http://myapp.example.com:8080` resolves to three IPs (`10.0.0.1`, `10.0.0.2`, `10.0.0.3`), Ferron creates three distinct backends — one per IP. The original hostname is preserved for TLS SNI and the HTTP `Host` header.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://myapp.example.com:8080 {
+            dns_servers "8.8.8.8,8.8.4.4"
+        }
+    }
+}
+```
+
+### Opting out with `logical_dns`
+
+Set `logical_dns true` to disable strict A/AAAA resolution. The upstream URL is passed through as-is, and the system's DNS resolver handles address selection. This is useful when the upstream uses DNS for logical routing (e.g., geographic steering) and you want a single logical backend rather than per-IP backends.
+
+```ferron
+example.com {
+    proxy {
+        upstream http://myapp.example.com:8080 {
+            logical_dns
+        }
     }
 }
 ```

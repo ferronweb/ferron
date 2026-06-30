@@ -12,6 +12,15 @@ use crate::types::health::HealthCheckStateMap;
 pub struct UpstreamInner {
     /// Target URL (e.g. `http://localhost:8080/path`).
     pub proxy_to: String,
+    /// Pre-resolved IP address for TCP connection (e.g. `1.2.3.4:8080`).
+    ///
+    /// When set, the connection layer uses this address for the TCP connect
+    /// instead of resolving the hostname from `proxy_to`. The original hostname
+    /// in `proxy_to` is still used for TLS SNI and the HTTP request URI.
+    ///
+    /// Set by strict DNS resolution (A/AAAA records). `None` for static URLs,
+    /// IP literals, Unix sockets, and logical DNS mode.
+    pub connect_to: Option<String>,
     /// Optional Unix socket path for local backends.
     pub proxy_unix: Option<String>,
     /// Weight for weighted load balancing algorithms (default 1).
@@ -52,6 +61,14 @@ pub struct UpstreamConfig {
     /// Priority for tiered failover. Lower values = higher priority.
     /// Default: 0 (highest priority).
     pub priority: u16,
+    /// Use logical DNS mode (ToSocketAddrs at connect time, one backend).
+    ///
+    /// When false (default) and the URL contains a hostname, A/AAAA records
+    /// are resolved via Hickory and each IP becomes a distinct backend
+    /// (strict DNS mode).
+    pub logical_dns: bool,
+    /// Custom DNS servers for strict DNS resolution (empty = system resolver).
+    pub dns_servers: Vec<std::net::IpAddr>,
 }
 
 /// Data for an SRV-based upstream.
@@ -92,28 +109,64 @@ pub enum Upstream {
 impl Upstream {
     /// Resolve this upstream to a list of concrete `UpstreamInner` entries.
     ///
-    /// Static upstreams return themselves. SRV upstreams perform a DNS lookup
-    /// on the secondary Tokio runtime, filter unhealthy backends, and perform
-    /// weighted random selection within the highest-priority group.
+    /// Static upstreams resolve A/AAAA records via Hickory for hostnames
+    /// (strict DNS mode), or pass through as-is for IP literals, Unix sockets,
+    /// and logical DNS mode. SRV upstreams perform an SRV DNS lookup.
     #[inline]
     pub async fn resolve(
         &self,
-        _active_health_check_state: Option<HealthCheckStateMap>,
+        active_health_check_state: Option<HealthCheckStateMap>,
     ) -> Vec<Arc<UpstreamInner>> {
         match self {
-            Upstream::Static(cfg) => vec![Arc::new(UpstreamInner {
-                proxy_to: cfg.url.clone(),
-                proxy_unix: cfg.unix_socket.clone(),
-                weight: cfg.weight,
-                mtls: cfg.mtls.clone(),
-                priority: cfg.priority,
-            })],
+            Upstream::Static(cfg) => {
+                let needs_dns =
+                    !cfg.logical_dns && cfg.unix_socket.is_none() && !is_ip_literal(&cfg.url);
+
+                if needs_dns {
+                    #[cfg(feature = "srv-lookup")]
+                    {
+                        super::strict_dns::resolve_strict_dns(cfg, active_health_check_state).await
+                    }
+                    #[cfg(not(feature = "srv-lookup"))]
+                    {
+                        // Fallback: no DNS resolution available, return as-is
+                        vec![Arc::new(UpstreamInner {
+                            proxy_to: cfg.url.clone(),
+                            connect_to: None,
+                            proxy_unix: cfg.unix_socket.clone(),
+                            weight: cfg.weight,
+                            mtls: cfg.mtls.clone(),
+                            priority: cfg.priority,
+                        })]
+                    }
+                } else {
+                    vec![Arc::new(UpstreamInner {
+                        proxy_to: cfg.url.clone(),
+                        connect_to: None,
+                        proxy_unix: cfg.unix_socket.clone(),
+                        weight: cfg.weight,
+                        mtls: cfg.mtls.clone(),
+                        priority: cfg.priority,
+                    })]
+                }
+            }
             #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => {
-                super::srv::resolve_srv(srv_data, _active_health_check_state).await
+                super::srv::resolve_srv(srv_data, active_health_check_state).await
             }
         }
     }
+}
+
+/// Returns true if the URL host is an IP literal (IPv4 or IPv6).
+fn is_ip_literal(url: &str) -> bool {
+    let host = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    let host = host.split(':').next().unwrap_or(host);
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.parse::<std::net::IpAddr>().is_ok()
 }
 
 /// mTLS credentials for a peer.

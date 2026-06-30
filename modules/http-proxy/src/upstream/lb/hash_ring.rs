@@ -129,6 +129,7 @@ mod tests {
     fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
+            connect_to: None,
             proxy_unix: None,
             weight: 1,
             mtls: None,
@@ -139,6 +140,7 @@ mod tests {
     fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
+            connect_to: None,
             proxy_unix: None,
             weight,
             mtls: None,

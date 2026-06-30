@@ -170,10 +170,7 @@ static SECONDARY_RUNTIME_HANDLE: OnceLock<(
 #[cfg(feature = "srv-lookup")]
 static RESOLVER_CACHE: OnceLock<
     parking_lot::RwLock<
-        std::collections::HashMap<
-            Vec<std::net::IpAddr>,
-            Arc<hickory_resolver::TokioResolver>,
-        >,
+        std::collections::HashMap<Vec<std::net::IpAddr>, Arc<hickory_resolver::TokioResolver>>,
     >,
 > = OnceLock::new();
 
@@ -297,8 +294,12 @@ pub(crate) fn get_or_create_resolver(
     };
     let resolver = Arc::new(resolver);
 
-    let cache = RESOLVER_CACHE.get_or_init(|| parking_lot::RwLock::new(std::collections::HashMap::new()));
-    cache.write().entry(key).or_insert_with(|| Arc::clone(&resolver));
+    let cache =
+        RESOLVER_CACHE.get_or_init(|| parking_lot::RwLock::new(std::collections::HashMap::new()));
+    cache
+        .write()
+        .entry(key)
+        .or_insert_with(|| Arc::clone(&resolver));
 
     Some(resolver)
 }

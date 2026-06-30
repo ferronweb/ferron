@@ -79,10 +79,7 @@ pub fn determine_proxy_to(
     let mut priority_groups: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
     for (i, u) in upstreams.iter().enumerate() {
         if !unhealthy.contains(&i) {
-            priority_groups
-                .entry(u.priority)
-                .or_default()
-                .push(i);
+            priority_groups.entry(u.priority).or_default().push(i);
         }
     }
 
@@ -131,11 +128,7 @@ pub fn determine_proxy_to(
                 0
             } else {
                 super::lb::selector::select_backend_index(
-                    algorithm,
-                    &group,
-                    upstreams,
-                    conn_state,
-                    ewma_state,
+                    algorithm, &group, upstreams, conn_state, ewma_state,
                 )
             };
             let upstream_idx = group.swap_remove(index);

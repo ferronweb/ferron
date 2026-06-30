@@ -496,6 +496,7 @@ mod tests {
         let collector = PoolStatsCollector::new();
         let upstream = Arc::new(UpstreamInner {
             proxy_to: "http://backend".to_string(),
+            connect_to: None,
             proxy_unix: None,
             weight: 1,
             mtls: None,

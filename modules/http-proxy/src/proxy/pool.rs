@@ -347,11 +347,22 @@ pub async fn establish_and_send(
         #[cfg(not(unix))]
         unreachable!();
     } else {
-        let host = proxy_url.host().ok_or("upstream URL has no host")?;
-        let port = proxy_url
-            .port_u16()
-            .unwrap_or(if is_https { 443 } else { 80 });
-        let addr = format!("{host}:{port}");
+        // Use pre-resolved IP from connect_to if available, otherwise parse from proxy_url
+        let addr = if let Some(ct) = &upstream.connect_to {
+            ct.clone()
+        } else {
+            let host = proxy_url.host().ok_or("upstream URL has no host")?;
+            let port = proxy_url
+                .port_u16()
+                .unwrap_or(if is_https { 443 } else { 80 });
+            format!("{host}:{port}")
+        };
+
+        // Extract hostname for TLS SNI (always use original hostname, not resolved IP)
+        let sni_host = proxy_url
+            .host()
+            .ok_or("upstream URL has no host")?
+            .to_string();
 
         let tcp = match vibeio::net::PollTcpStream::connect(&addr)
             .await
@@ -422,8 +433,8 @@ pub async fn establish_and_send(
                 config.no_verification,
                 upstream.mtls.clone(),
             ));
-            let domain = ServerName::try_from(host.to_string())
-                .map_err(|e| format!("Invalid server name: {e}"))?;
+            let domain =
+                ServerName::try_from(sni_host).map_err(|e| format!("Invalid server name: {e}"))?;
             let tls_start = std::time::Instant::now();
             let tls_stream = match connector.connect(domain, stream).await {
                 Ok(s) => {

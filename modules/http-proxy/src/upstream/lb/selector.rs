@@ -151,10 +151,13 @@ pub fn select_backend_index(
 
             let prefer_idx1 = weight1 != 0
                 && (weight2 == 0
-                    || (count1 as u64) * (weight2 as u64)
-                        <= (count2 as u64) * (weight1 as u64));
+                    || (count1 as u64) * (weight2 as u64) <= (count2 as u64) * (weight1 as u64));
 
-            if prefer_idx1 { idx1 } else { idx2 }
+            if prefer_idx1 {
+                idx1
+            } else {
+                idx2
+            }
         }
         LoadBalancerAlgorithmInner::P2cEwma => {
             let params = P2cEwmaParams::default();
