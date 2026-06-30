@@ -63,76 +63,70 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
         }
     };
 
-    let result = handle
-        .spawn(async move {
-            // Get or create a cached resolver for these DNS servers
-            let resolver = match crate::get_or_create_resolver(&dns_servers) {
-                Some(r) => r,
-                None => {
-                    event_sink.emit(ferron_observability::Event::Log(
-                        ferron_observability::LogEvent {
-                            level: ferron_observability::LogLevel::Warn,
-                            message: "Failed to create DNS resolver for strict DNS".to_string(),
-                            summary: "Failed to create DNS resolver".into(),
-                            target: crate::LOG_TARGET,
-                            attributes: Vec::new(),
-                            trace_context: None,
-                        },
-                    ));
-                    return Vec::new();
-                }
-            };
+    // Get or create a cached resolver for these DNS servers
+    let resolver = match crate::get_or_create_resolver(&dns_servers, handle).await {
+        Some(r) => r,
+        None => {
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: "Failed to create DNS resolver for strict DNS".to_string(),
+                    summary: "Failed to create DNS resolver".into(),
+                    target: crate::LOG_TARGET,
+                    attributes: Vec::new(),
+                    trace_context: None,
+                },
+            ));
+            return Vec::new();
+        }
+    };
 
-            let mut upstreams = Vec::new();
+    let mut upstreams = Vec::new();
 
-            // Resolve A and AAAA records using lookup_ip
-            match resolver.lookup_ip(hostname.clone()).await {
-                Ok(lookup) => {
-                    for ip in lookup.iter() {
-                        let connect_to = if ip.is_ipv4() {
-                            format!("{}:{}", ip, port)
-                        } else {
-                            format!("[{}]:{}", ip, port)
-                        };
-                        let scheme = if url.starts_with("https://") {
-                            "https"
-                        } else {
-                            "http"
-                        };
-                        let proxy_to = format!("{}://{}:{}", scheme, hostname, port);
-                        upstreams.push(Arc::new(UpstreamInner {
-                            proxy_to,
-                            connect_to: Some(connect_to),
-                            proxy_unix: None,
-                            weight,
-                            mtls: mtls.clone(),
-                            priority,
-                        }));
-                    }
-                }
-                Err(e) => {
-                    // NXDOMAIN or no records — not necessarily an error
-                    event_sink.emit(ferron_observability::Event::Log(
-                        ferron_observability::LogEvent {
-                            level: ferron_observability::LogLevel::Debug,
-                            message: format!("No A/AAAA records for {}: {}", hostname, e),
-                            summary: "No A/AAAA records".into(),
-                            target: crate::LOG_TARGET,
-                            attributes: vec![(
-                                "dns.name",
-                                ferron_observability::LogAttributeValue::String(hostname),
-                            )],
-                            trace_context: None,
-                        },
-                    ));
-                }
+    // Resolve A and AAAA records using lookup_ip
+    match resolver.lookup_ip(hostname.clone()).await {
+        Ok(lookup) => {
+            for ip in lookup.iter() {
+                let connect_to = if ip.is_ipv4() {
+                    format!("{}:{}", ip, port)
+                } else {
+                    format!("[{}]:{}", ip, port)
+                };
+                let scheme = if url.starts_with("https://") {
+                    "https"
+                } else {
+                    "http"
+                };
+                let proxy_to = format!("{}://{}:{}", scheme, hostname, port);
+                upstreams.push(Arc::new(UpstreamInner {
+                    proxy_to,
+                    connect_to: Some(connect_to),
+                    proxy_unix: None,
+                    weight,
+                    mtls: mtls.clone(),
+                    priority,
+                }));
             }
+        }
+        Err(e) => {
+            // NXDOMAIN or no records — not necessarily an error
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Debug,
+                    message: format!("No A/AAAA records for {}: {}", hostname, e),
+                    summary: "No A/AAAA records".into(),
+                    target: crate::LOG_TARGET,
+                    attributes: vec![(
+                        "dns.name",
+                        ferron_observability::LogAttributeValue::String(hostname),
+                    )],
+                    trace_context: None,
+                },
+            ));
+        }
+    }
 
-            upstreams
-        })
-        .await;
-
-    result.unwrap_or_default()
+    upstreams
 }
 
 /// Extract hostname and port from a URL string.

@@ -250,8 +250,9 @@ pub fn get_secondary_runtime_handle(
 /// Returns `None` if the secondary runtime handle hasn't been captured yet
 /// (i.e., `Module::start()` hasn't been called).
 #[cfg(feature = "srv-lookup")]
-pub(crate) fn get_or_create_resolver(
+pub(crate) async fn get_or_create_resolver(
     dns_servers: &[std::net::IpAddr],
+    handle: tokio::runtime::Handle,
 ) -> Option<Arc<hickory_resolver::TokioResolver>> {
     use hickory_resolver::config::{NameServerConfig, ResolverConfig};
     use hickory_resolver::TokioResolver;
@@ -272,25 +273,33 @@ pub(crate) fn get_or_create_resolver(
         for server in dns_servers {
             resolver_config.add_name_server(NameServerConfig::udp(*server));
         }
-        TokioResolver::builder_with_config(
-            resolver_config,
-            hickory_resolver::net::runtime::TokioRuntimeProvider::new(),
-        )
-        .build()
-    } else {
-        TokioResolver::builder_tokio()
-            .unwrap_or_else(|_| {
+        handle
+            .spawn(async move {
                 TokioResolver::builder_with_config(
-                    ResolverConfig::default(),
+                    resolver_config,
                     hickory_resolver::net::runtime::TokioRuntimeProvider::new(),
                 )
+                .build()
             })
-            .build()
+            .await
+    } else {
+        handle
+            .spawn(async move {
+                TokioResolver::builder_tokio()
+                    .unwrap_or_else(|_| {
+                        TokioResolver::builder_with_config(
+                            ResolverConfig::default(),
+                            hickory_resolver::net::runtime::TokioRuntimeProvider::new(),
+                        )
+                    })
+                    .build()
+            })
+            .await
     };
 
     let resolver = match resolver_result {
-        Ok(r) => r,
-        Err(_) => return None,
+        Ok(Ok(r)) => r,
+        _ => return None,
     };
     let resolver = Arc::new(resolver);
 
