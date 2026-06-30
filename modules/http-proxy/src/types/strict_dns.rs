@@ -156,6 +156,14 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                         ));
                     }
 
+                    upstreams.sort_unstable_by(|a, b| {
+                        (&a.proxy_to, &a.proxy_unix, &a.connect_to).cmp(&(
+                            &b.proxy_to,
+                            &b.proxy_unix,
+                            &b.connect_to,
+                        ))
+                    });
+
                     // Store the upstreams in the cache
                     super::dns_cache::insert_strict_dns(
                         &hostname,

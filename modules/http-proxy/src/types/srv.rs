@@ -126,7 +126,7 @@ pub async fn resolve_srv_inner(
                 .saturating_duration_since(std::time::Instant::now());
 
             // Parse the SRV records into upstream candidates
-            let candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
+            let mut candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
                 srv_records
                     .answers()
                     .iter()
@@ -153,6 +153,14 @@ pub async fn resolve_srv_inner(
                         Some((upstream, priority, srv.weight))
                     })
                     .collect();
+
+            candidates.sort_unstable_by(|a, b| {
+                (&a.0.proxy_to, &a.0.proxy_unix, &a.0.connect_to).cmp(&(
+                    &b.0.proxy_to,
+                    &b.0.proxy_unix,
+                    &b.0.connect_to,
+                ))
+            });
 
             // Store the candidates in the cache
             super::dns_cache::insert_srv(&srv_name, &dns_servers, candidates.clone(), ttl);
