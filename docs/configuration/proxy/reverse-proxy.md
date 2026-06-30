@@ -549,6 +549,53 @@ example.com {
 > [!tip]
 > For active health checks: ensure the probe endpoint is reachable on all backends, keep probes lightweight, and use HEAD requests when the response body is not needed. If upstreams are incorrectly marked unhealthy, check logs and verify `expect_status`.
 
+## DNS result caching
+
+When strict DNS or SRV resolution is enabled, Ferron caches resolved DNS results in memory with TTL-based expiry. The cache key includes the hostname (strict DNS) or SRV name, port, and DNS server list, ensuring that different resolver configurations are not served stale results.
+
+The cached TTL is derived from the minimum TTL across all DNS response records, with a 30-second fallback when no TTL is available. This prevents stale backends from remaining in the pool while avoiding unnecessary DNS resolution for high-traffic hostnames.
+
+Cache entries are evicted lazily — expired entries are treated as cache misses and re-resolved on demand. A periodic background task removes expired entries every 60 seconds to prevent unbounded memory growth for hostnames no longer queried.
+
+> [!info]
+> Cache metrics are available as `ferron.proxy.dns.cache_hit` and `ferron.proxy.dns.cache_miss` counters.
+
+**Configuration example:**
+
+```ferron
+example.com {
+    proxy {
+        upstream http://myapp.example.com:8080 {
+            dns_servers "8.8.8.8,8.8.4.4"
+        }
+    }
+}
+```
+
+In this example, the strict DNS resolution for `myapp.example.com` is cached. Subsequent requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
+
+
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        algorithm round_robin
+        retry_connection false
+
+        circuit_breaker {
+            max_fails 5
+            window "30s"
+            open_duration "10s"
+            consecutive_passes 1
+            record_5xx true
+        }
+    }
+}
+```
+
 ## Observability
 
 ### Metrics

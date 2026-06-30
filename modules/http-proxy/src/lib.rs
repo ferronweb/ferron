@@ -170,7 +170,7 @@ static SECONDARY_RUNTIME_HANDLE: OnceLock<(
 #[cfg(feature = "srv-lookup")]
 static RESOLVER_CACHE: OnceLock<
     parking_lot::RwLock<
-        std::collections::HashMap<Vec<std::net::IpAddr>, Arc<hickory_resolver::TokioResolver>>,
+        rustc_hash::FxHashMap<Vec<std::net::IpAddr>, Arc<hickory_resolver::TokioResolver>>,
     >,
 > = OnceLock::new();
 
@@ -303,8 +303,7 @@ pub(crate) async fn get_or_create_resolver(
     };
     let resolver = Arc::new(resolver);
 
-    let cache =
-        RESOLVER_CACHE.get_or_init(|| parking_lot::RwLock::new(std::collections::HashMap::new()));
+    let cache = RESOLVER_CACHE.get_or_init(Default::default);
     cache
         .write()
         .entry(key)
@@ -601,6 +600,43 @@ impl Module for ReverseProxyModule {
                         trace_context: None,
                     }));
                 }
+
+                // Emit DNS cache hit/miss counters
+                let hits = crate::types::dns_cache::DNS_CACHE_HITS
+                    .swap(0, std::sync::atomic::Ordering::Relaxed);
+                let misses = crate::types::dns_cache::DNS_CACHE_MISSES
+                    .swap(0, std::sync::atomic::Ordering::Relaxed);
+                if hits > 0 {
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_hit",
+                        attributes: Vec::new(),
+                        ty: MetricType::Counter,
+                        value: MetricValue::U64(hits),
+                        unit: Some("{request}"),
+                        description: Some("DNS result cache hits."),
+                        trace_context: None,
+                    }));
+                }
+                if misses > 0 {
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_miss",
+                        attributes: Vec::new(),
+                        ty: MetricType::Counter,
+                        value: MetricValue::U64(misses),
+                        unit: Some("{request}"),
+                        description: Some("DNS result cache misses."),
+                        trace_context: None,
+                    }));
+                }
+            }
+        });
+
+        // Spawn periodic DNS result cache cleanup on the secondary runtime
+        secondary_handle.spawn(async {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                crate::types::dns_cache::cleanup_expired();
             }
         });
 

@@ -56,6 +56,11 @@ pub async fn resolve_srv_inner(
     let weight = srv_data.weight;
     let mtls = srv_data.mtls.clone();
 
+    // Check cache first
+    if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers) {
+        return cached;
+    }
+
     // Get the secondary runtime handle (captured globally during Module::start)
     let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
         Some(h) => h,
@@ -104,6 +109,16 @@ pub async fn resolve_srv_inner(
         }
     };
 
+    // Extract minimum TTL from SRV records
+    let ttls = srv_records.answers().iter().filter_map(|record| {
+        if matches!(&record.data, hickory_proto::rr::RData::SRV(_)) {
+            Some(record.ttl)
+        } else {
+            None
+        }
+    });
+    let ttl = super::dns_cache::ttl_from_records(ttls);
+
     // Parse the SRV records into upstream candidates
     let candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> = srv_records
         .answers()
@@ -131,6 +146,11 @@ pub async fn resolve_srv_inner(
             Some((upstream, priority, srv.weight))
         })
         .collect();
+
+    // Cache the result
+    if !candidates.is_empty() {
+        super::dns_cache::insert_srv(&srv_name, &dns_servers, candidates.clone(), ttl);
+    }
 
     candidates
 }

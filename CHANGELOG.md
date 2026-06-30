@@ -12,6 +12,7 @@
 - **Priority-based failover** — backends can now be assigned numeric priority values to implement tiered failover. Lower values indicate higher priority. When all backends in a tier are unavailable, the next tier is used as a fallback. SRV upstreams support priority via an additive offset applied to DNS SRV priorities.
 - **SRV native weight support** — DNS SRV record weights are now used for weighted load balancing within priority tiers. Each backend's effective weight is `dns_weight × config_weight`. The config `weight` subdirective acts as a multiplier on top of DNS weights.
 - **Strict DNS (A/AAAA) resolution** — static upstreams with hostnames now resolve A/AAAA records via Hickory DNS by default, creating a separate backend per resolved IP for per-IP load balancing, circuit breaking, and health checking. IP literals, `localhost`, Unix sockets, and `logical_dns true` upstreams are unaffected. Use `dns_servers` to specify custom resolver IPs.
+- **DNS result caching** — resolved DNS results for both strict DNS (A/AAAA) and SRV upstreams are cached in memory with TTL-based expiry derived from the DNS response TTL. This avoids redundant DNS resolution and lock contention for high-traffic hostnames. Cache entries expire based on the minimum TTL from the DNS response records, with a 30-second fallback when no TTL is available.
 
 #### Observability & tracing
 

@@ -6,6 +6,8 @@
 
 pub mod affinity;
 pub mod circuit;
+#[cfg(feature = "srv-lookup")]
+pub mod dns_cache;
 pub mod error;
 pub mod health;
 pub mod lb;

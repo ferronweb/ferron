@@ -41,6 +41,8 @@ pub async fn resolve_strict_dns(
 ///
 /// Returns one `UpstreamInner` per resolved IP address. The hostname and
 /// port are extracted from `cfg.url`.
+///
+/// Results are cached based on the minimum TTL from the DNS response.
 #[inline]
 pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
     let url = cfg.url.clone();
@@ -54,6 +56,11 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
         Some(v) => v,
         None => return Vec::new(),
     };
+
+    // Check cache first
+    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers) {
+        return cached;
+    }
 
     // Get the secondary runtime handle (captured globally during Module::start)
     let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
@@ -89,6 +96,20 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     // Resolve A and AAAA records using lookup_ip
     match resolver.lookup_ip(hostname.clone()).await {
         Ok(lookup) => {
+            // Extract per-record TTL from the raw DNS records
+            let ttls =
+                lookup
+                    .as_lookup()
+                    .answers()
+                    .iter()
+                    .filter_map(|record| match &record.data {
+                        hickory_proto::rr::RData::A(_) | hickory_proto::rr::RData::AAAA(_) => {
+                            Some(record.ttl)
+                        }
+                        _ => None,
+                    });
+            let ttl = super::dns_cache::ttl_from_records(ttls);
+
             for ip in lookup.iter() {
                 let scheme = if url.starts_with("https://") {
                     "https"
@@ -104,6 +125,17 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                     mtls: mtls.clone(),
                     priority,
                 }));
+            }
+
+            // Cache the result
+            if !upstreams.is_empty() {
+                super::dns_cache::insert_strict_dns(
+                    &hostname,
+                    port,
+                    &dns_servers,
+                    upstreams.clone(),
+                    ttl,
+                );
             }
         }
         Err(e) => {
