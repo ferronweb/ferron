@@ -15,7 +15,6 @@ use dashmap::DashMap;
 
 use super::upstream::UpstreamInner;
 
-const DEFAULT_TTL_SECS: u32 = 30;
 const MAX_CACHE_ENTRIES: usize = 10_000;
 
 type StrictDnsKey = (String, u16, Vec<IpAddr>);
@@ -248,36 +247,9 @@ pub(crate) fn cleanup_expired() {
     cache().cleanup();
 }
 
-/// Compute a TTL `Duration` from a minimum DNS record TTL.
-///
-/// Uses the minimum TTL across all records, falling back to `DEFAULT_TTL_SECS`
-/// when no records are present.
-#[inline]
-pub(crate) fn ttl_from_records(ttls: impl Iterator<Item = u32>) -> Duration {
-    let min_ttl = ttls.min().unwrap_or(DEFAULT_TTL_SECS);
-    Duration::from_secs(min_ttl as u64)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    #[inline]
-    fn test_ttl_from_records_uses_minimum() {
-        let ttls = [60, 120, 300];
-        assert_eq!(ttl_from_records(ttls.into_iter()), Duration::from_secs(60));
-    }
-
-    #[test]
-    #[inline]
-    fn test_ttl_from_records_default_when_empty() {
-        let ttls: [u32; 0] = [];
-        assert_eq!(
-            ttl_from_records(ttls.into_iter()),
-            Duration::from_secs(DEFAULT_TTL_SECS as u64)
-        );
-    }
 
     #[test]
     #[inline]

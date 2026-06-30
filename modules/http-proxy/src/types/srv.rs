@@ -70,87 +70,90 @@ pub async fn resolve_srv_inner(
         }
     };
 
-    // Get or create a cached resolver for these DNS servers
-    let resolver = match crate::get_or_create_resolver(&dns_servers, handle).await {
-        Some(r) => r,
-        None => {
-            event_sink.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Warn,
-                    message: "Failed to create DNS resolver".to_string(),
-                    summary: "Failed to create DNS resolver".into(),
-                    target: crate::LOG_TARGET,
-                    attributes: Vec::new(),
-                    trace_context: None,
-                },
-            ));
-            return Vec::new();
-        }
-    };
-
-    // Perform SRV lookup
-    let srv_records = match resolver.srv_lookup(&srv_name).await {
-        Ok(records) => records,
-        Err(e) => {
-            event_sink.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Warn,
-                    message: format!("SRV lookup failed for {}: {}", srv_name, e),
-                    summary: "SRV lookup failed".into(),
-                    target: crate::LOG_TARGET,
-                    attributes: vec![(
-                        "dns.name",
-                        ferron_observability::LogAttributeValue::String(srv_name.to_string()),
-                    )],
-                    trace_context: None,
-                },
-            ));
-            return Vec::new();
-        }
-    };
-
-    // Extract minimum TTL from SRV records
-    let ttls = srv_records.answers().iter().filter_map(|record| {
-        if matches!(&record.data, hickory_proto::rr::RData::SRV(_)) {
-            Some(record.ttl)
-        } else {
-            None
-        }
-    });
-    let ttl = super::dns_cache::ttl_from_records(ttls);
-
-    // Parse the SRV records into upstream candidates
-    let candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> = srv_records
-        .answers()
-        .iter()
-        .filter_map(|record| {
-            let srv = match &record.data {
-                hickory_proto::rr::RData::SRV(srv) => srv,
-                _ => return None,
+    // Spawn SRV lookup on the secondary Tokio runtime
+    let result = handle
+        .spawn(async move {
+            // Get or create a cached resolver for these DNS servers
+            let resolver = match crate::get_or_create_resolver(&dns_servers) {
+                Some(r) => r,
+                None => {
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: "Failed to create DNS resolver".to_string(),
+                            summary: "Failed to create DNS resolver".into(),
+                            target: crate::LOG_TARGET,
+                            attributes: Vec::new(),
+                            trace_context: None,
+                        },
+                    ));
+                    return Vec::new();
+                }
             };
 
-            let target = srv.target.to_string();
-            let port = srv.port;
+            // Perform SRV lookup
+            let srv_records = match resolver.srv_lookup(&srv_name).await {
+                Ok(records) => records,
+                Err(e) => {
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: format!("SRV lookup failed for {}: {}", srv_name, e),
+                            summary: "SRV lookup failed".into(),
+                            target: crate::LOG_TARGET,
+                            attributes: vec![(
+                                "dns.name",
+                                ferron_observability::LogAttributeValue::String(
+                                    srv_name.to_string(),
+                                ),
+                            )],
+                            trace_context: None,
+                        },
+                    ));
+                    return Vec::new();
+                }
+            };
 
-            let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
-            let upstream = std::sync::Arc::new(super::upstream::UpstreamInner {
-                proxy_to,
-                connect_to: None,
-                proxy_unix: None,
-                weight,
-                mtls: mtls.clone(),
-                priority: 0,
-            });
-            let priority = srv.priority;
+            // Calculate TTL for SRV records
+            let ttl = srv_records
+                .valid_until()
+                .saturating_duration_since(std::time::Instant::now());
 
-            Some((upstream, priority, srv.weight))
+            // Parse the SRV records into upstream candidates
+            let candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
+                srv_records
+                    .answers()
+                    .iter()
+                    .filter_map(|record| {
+                        let srv = match &record.data {
+                            hickory_proto::rr::RData::SRV(srv) => srv,
+                            _ => return None,
+                        };
+
+                        let target = srv.target.to_string();
+                        let port = srv.port;
+
+                        let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
+                        let upstream = std::sync::Arc::new(super::upstream::UpstreamInner {
+                            proxy_to,
+                            connect_to: None,
+                            proxy_unix: None,
+                            weight,
+                            mtls: mtls.clone(),
+                            priority: 0,
+                        });
+                        let priority = srv.priority;
+
+                        Some((upstream, priority, srv.weight))
+                    })
+                    .collect();
+
+            // Store the candidates in the cache
+            super::dns_cache::insert_srv(&srv_name, &dns_servers, candidates.clone(), ttl);
+
+            candidates
         })
-        .collect();
+        .await;
 
-    // Cache the result
-    if !candidates.is_empty() {
-        super::dns_cache::insert_srv(&srv_name, &dns_servers, candidates.clone(), ttl);
-    }
-
-    candidates
+    result.unwrap_or_default()
 }
