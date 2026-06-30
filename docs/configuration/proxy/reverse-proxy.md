@@ -468,6 +468,7 @@ By default, only transport failures count toward the circuit. Set `record_5xx tr
 Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
 
 > [!note]
+>
 > - Half-open recovery allows only one trial request at a time. If recovery is too aggressive for your workload, increase `open_duration` or `consecutive_passes`.
 > - Circuit breaking and active health checks work together — either can make a backend temporarily ineligible.
 
@@ -572,7 +573,6 @@ example.com {
 ```
 
 In this example, the strict DNS resolution for `myapp.example.com` is cached. Subsequent requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
-
 
 ## Observability
 
