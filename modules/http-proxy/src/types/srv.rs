@@ -30,12 +30,13 @@ pub async fn resolve_srv(
                     .is_none_or(|s| s.is_healthy)
             })
         })
-        .map(|(upstream, dns_priority, _dns_weight)| {
+        .map(|(upstream, dns_priority, dns_weight)| {
             let priority = dns_priority.saturating_add(priority_offset);
+            let weight = (dns_weight as u32).saturating_mul(upstream.weight);
             std::sync::Arc::new(super::upstream::UpstreamInner {
                 proxy_to: upstream.proxy_to.clone(),
                 proxy_unix: upstream.proxy_unix.clone(),
-                weight: upstream.weight,
+                weight,
                 mtls: upstream.mtls.clone(),
                 priority,
             })

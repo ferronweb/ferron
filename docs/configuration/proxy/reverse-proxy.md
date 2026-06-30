@@ -236,7 +236,7 @@ example.com {
 | `dns_servers` | `<string>` | Comma-separated DNS server IPs. Uses system resolver if empty. | system |
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
-| `weight` | `<number>` | Weight for weighted load balancing. Applied to all backends resolved from this SRV record. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
+| `weight` | `<number>` | Multiplier applied to DNS SRV weights. Each backend's effective weight is `dns_weight × config_weight`. Set to `1` to use DNS weights as-is. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
 | `priority` | `<number>` | Additive offset applied to DNS SRV priorities. A backend's effective priority is `dns_priority + offset`. Lower effective values are tried first. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to resolved backends for mTLS. Must be used together with `key`. | disabled |
 | `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
