@@ -17,7 +17,7 @@
 > [!note]
 > **Status: beta** - this release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
 
-## Why Ferron 3?
+## Why Ferron?
 
 Built to set up quickly, behave predictably, and hold up reliably in production.
 
@@ -29,7 +29,7 @@ Built to set up quickly, behave predictably, and hold up reliably in production.
 - **Reliable in production** - handles messy real-world traffic, upstream failures, and protocol edge cases — predictably.
 
 > [!tip]
-> Ferron 3 is designed around two core principles: **ease of setup** (get a working config in minutes) and **ease of debugging** (when something goes wrong, find the root cause fast).
+> Ferron is designed around two core principles: **ease of setup** (get a working config in minutes) and **ease of debugging** (when something goes wrong, find the root cause fast).
 
 ## Configuration examples
 
@@ -54,9 +54,9 @@ api.example.com {
 
 More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
 
-## Installing Ferron 3 (pre-built)
+## Installing Ferron (pre-built)
 
-The most convenient way to get started with Ferron 3 is to use the installer script for Linux:
+The most convenient way to get started with Ferron is to use the installer script for Linux:
 
 ```sh
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
