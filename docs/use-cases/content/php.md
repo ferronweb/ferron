@@ -24,6 +24,31 @@ example.com {
 
 You can also point `fcgi_php` to TCP listeners (for example `tcp://127.0.0.1:9000/`) when your PHP FastCGI server is not exposed through a Unix socket.
 
+### Disabling PHP in specific locations
+
+You can disable PHP FastCGI for specific locations within a domain that has `fcgi_php` enabled globally. Use `fcgi_php false` in a `location` block to prevent `.php` files from being processed by the PHP backend in that scope:
+
+```ferron
+example.com {
+    root /var/www/html
+    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+
+    # Disable PHP execution for static file paths
+    location /static {
+        fcgi_php false
+        root /var/www/static
+    }
+
+    # Disable PHP for API/proxy endpoints
+    location /api {
+        fcgi_php false
+        proxy http://localhost:3000
+    }
+}
+```
+
+This is useful when you have a mixed deployment — for example, a PHP application that serves static files or proxies to another backend for certain paths. Without `fcgi_php false`, Ferron would attempt to process `.php` files in those locations through the PHP backend, which could cause unexpected behavior.
+
 ## PHP through CGI
 
 If you specifically want classic CGI execution, enable `cgi` and map the `.php` extension:
