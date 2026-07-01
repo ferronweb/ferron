@@ -43,7 +43,11 @@ pub struct ErrorRateThresholdConfig {
 impl ErrorRateThresholdConfig {
     pub fn new(events_count: usize, window_secs: u64, status_codes: Vec<u16>) -> Self {
         Self {
-            event_threshold: EventThreshold::new(AbuseEventType::ErrorRate, events_count, window_secs),
+            event_threshold: EventThreshold::new(
+                AbuseEventType::ErrorRate,
+                events_count,
+                window_secs,
+            ),
             status_codes,
         }
     }
@@ -349,7 +353,12 @@ impl AbuseRegistry {
                 "{}:{}:{}",
                 event.ip,
                 event.event_type.as_str(),
-                error_threshold.status_codes.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(",")
+                error_threshold
+                    .status_codes
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
             );
             let mut tracker = self
                 .event_trackers

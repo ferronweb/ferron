@@ -507,7 +507,9 @@ mod tests {
             ban_duration_secs: 60,
             thresholds: vec![],
             error_rate_thresholds: vec![crate::registry::ErrorRateThresholdConfig::new(
-                2, 60, vec![404],
+                2,
+                60,
+                vec![404],
             )],
             allowlist: Vec::new(),
         };
@@ -555,7 +557,9 @@ mod tests {
             ban_duration_secs: 60,
             thresholds: vec![],
             error_rate_thresholds: vec![crate::registry::ErrorRateThresholdConfig::new(
-                2, 60, vec![404],
+                2,
+                60,
+                vec![404],
             )],
             allowlist: Vec::new(),
         };

@@ -230,9 +230,7 @@ impl AbuseProtectionValidator {
         if let Some(entries) = block.directives.get("status_codes") {
             for entry in entries {
                 if entry.args.is_empty() {
-                    return Err(
-                        "Invalid `status_codes` — expected at least one status code".into(),
-                    );
+                    return Err("Invalid `status_codes` — expected at least one status code".into());
                 }
                 for arg in &entry.args {
                     let value = arg
