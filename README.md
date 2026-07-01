@@ -7,7 +7,7 @@
   </a>
 </p>
 
-**Ferron** — a fast, modern web server built for production debugging.
+# **Ferron** - a fast, modern web server built for production debugging.
 
 [![Static Badge](https://img.shields.io/badge/Documentation-orange?style=flat-square)](https://ferron.sh/docs/v3)
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=flat-square)](https://ferron.sh)
@@ -17,18 +17,18 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/ferronweb/ferron?style=flat-square)](https://github.com/ferronweb/ferron)
 
 > [!note]
-> **Status: Beta** — This release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
+> **Status: beta** - this release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
 
 ## Why Ferron 3?
 
 Built to set up quickly, behave predictably, and hold up reliably in production.
 
-- **Readable configuration** — set up websites and reverse proxies with a clear, compact config: no sprawl, no hidden surprises.
-- **Automatic TLS** — certificates are issued and renewed automatically. You get clear signals when it works (or doesn't).
-- **First-class observability** — see exactly what happened with any request. Traces cover every layer and link directly to the relevant logs.
-- **Predictable performance** — fast and consistent under load, right out of the box. No runtime tuning required.
-- **Memory-safe** — entire categories of memory-related security holes simply don't exist in Ferron (it's built with [Rust](https://rust-lang.org/)).
-- **Reliable in production** — handles messy real-world traffic, upstream failures, and protocol edge cases — predictably.
+- **Readable configuration** - set up websites and reverse proxies with a clear, compact config: no sprawl, no hidden surprises.
+- **Automatic TLS** - certificates are issued and renewed automatically. You get clear signals when it works (or doesn't).
+- **First-class observability** - see exactly what happened with any request. Traces cover every layer and link directly to the relevant logs.
+- **Predictable performance** - fast and consistent under load, right out of the box. No runtime tuning required.
+- **Memory-safe** - entire categories of memory-related security holes simply don't exist in Ferron (it's built with [Rust](https://rust-lang.org/)).
+- **Reliable in production** - handles messy real-world traffic, upstream failures, and protocol edge cases — predictably.
 
 > [!tip]
 > Ferron 3 is designed around two core principles: **ease of setup** (get a working config in minutes) and **ease of debugging** (when something goes wrong, find the root cause fast).
