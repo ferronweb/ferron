@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>🚧 Ferron 1.x is under maintenance mode.</strong> It's recommended to use <a href="https://github.com/ferronweb/ferron/tree/develop-2.x">Ferron 2</a> instead.
+  <strong>🚧 Ferron 1.x is EOL.</strong> Please migrate to <a href="https://github.com/ferronweb/ferron/tree/develop-2.x">Ferron 2</a> instead.
 </p>
 
 <p align="center">
