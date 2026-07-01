@@ -35,6 +35,7 @@ The `abuse_protection` block can be placed inside an HTTP host block.
 | `rate_limit_threshold` | block | Ban after N rate limit events in window. | 5 in 300s |
 | `brute_force_threshold` | block | Ban after N brute force failures in window. | 3 in 120s |
 | `custom_threshold` | block | Ban after N custom events in window. | none |
+| `error_rate_threshold` | block | Ban after N error responses (e.g., 404, 403) in window. | none |
 | `allowlist` | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. This directive can be specified multiple times. | none |
 
 ### Threshold blocks
@@ -45,6 +46,16 @@ Each threshold block (`rate_limit_threshold`, `brute_force_threshold`, `custom_t
 | --- | --- | --- |
 | `events` | `<int>` | Number of events required to trigger a ban (required). |
 | `window` | `<duration>` | Time window for counting events (required). |
+
+### Error rate threshold block
+
+The `error_rate_threshold` block configures when error response patterns trigger a ban:
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `events` | `<int>` | Number of error responses required to trigger a ban. | 50 |
+| `window` | `<duration>` | Time window for counting error responses. | `"60s"` |
+| `status_codes` | `<string> [<string> ...]` | HTTP status codes that count as errors (e.g., `"404"`, `"403"`). | `"404"` |
 
 **Configuration example — stricter thresholds:**
 
@@ -108,6 +119,24 @@ example.com {
 
 IPs added to the `allowlist` are never banned, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
 
+**Configuration example — error rate threshold:**
+
+```ferron
+example.com {
+    abuse_protection {
+        ban_duration "15m"
+
+        error_rate_threshold {
+            events 10
+            window "60s"
+            status_codes "404" "403"
+        }
+    }
+}
+```
+
+Ban after 10 error responses (404 or 403) within 60 seconds. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
+
 ## `abuse_event`
 
 ```ferron
@@ -144,6 +173,7 @@ The module tracks events per IP address and event type:
 - **Rate limit events** — emitted by the rate limiting module when a client exceeds their rate limit.
 - **Brute force events** — emitted by the basic authentication module when a client has repeated failed authentication attempts.
 - **Custom events** — available for other modules (and `abuse_event` directive) to emit custom abuse events.
+- **Error rate events** — emitted by the abuse protection module itself when a response status code matches configured error codes (e.g., 404, 403). Uses `run_inverse` to observe responses after the pipeline completes.
 
 Events are stored in a sliding time window. When the number of events within the window reaches the configured threshold, the IP is immediately banned.
 
@@ -169,6 +199,7 @@ Events are stored in a sliding time window. When the number of events within the
 5. If not banned: request continues through the pipeline normally.
 6. When other modules detect abuse (rate limit breach, brute force attempt), they emit events to the abuse registry.
 7. If an event causes a threshold to be exceeded, the IP is immediately banned.
+8. After the pipeline completes, the abuse protection stage's `run_inverse` observes the response status code. If it matches a configured `error_rate_threshold` status code, an error rate event is recorded.
 
 ### Allowlist behavior
 
@@ -206,7 +237,7 @@ The abuse protection module emits the following metrics:
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `ferron.abuseban.rejected` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests rejected due to IP ban |
-| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests that triggered an IP ban |
+| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`, `"error_rate"`) | Requests that triggered an IP ban |
 
 ### Logs
 

@@ -6,6 +6,10 @@
 
 ### Added
 
+#### Security
+
+- **Error rate threshold** — the `abuse_protection` directive now supports an `error_rate_threshold` sub-directive that monitors HTTP response status codes. When a client triggers an abnormal number of configured error responses (e.g., 404, 403) within a time window, their IP is temporarily banned. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
+
 #### Reverse proxy
 
 - **Weighted load balancing for all algorithms** — `random`, `two_random`, and `p2c_ewma` now support per-upstream `weight` directives for proportional traffic distribution, joining `round_robin` and `least_conn`. Higher weight values receive proportionally more requests across all five load balancing algorithms and session affinity.

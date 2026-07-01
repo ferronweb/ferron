@@ -13,11 +13,15 @@ const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "rate_limit_threshold",
     "brute_force_threshold",
     "custom_threshold",
+    "error_rate_threshold",
     "allowlist",
 ];
 
 /// Recognized directives inside a threshold block.
 const THRESHOLD_DIRECTIVES: &[&str] = &["events", "window"];
+
+/// Recognized directives inside an `error_rate_threshold { ... }` block.
+const ERROR_RATE_THRESHOLD_DIRECTIVES: &[&str] = &["events", "window", "status_codes"];
 
 /// Validator for `abuse_protection` configuration blocks.
 #[derive(Default)]
@@ -105,6 +109,16 @@ impl AbuseProtectionValidator {
             }
         }
 
+        // Validate error_rate_threshold blocks
+        if let Some(entries) = block.directives.get("error_rate_threshold") {
+            sub.insert("error_rate_threshold".to_string());
+            for entry in entries {
+                if let Some(ref children) = entry.children {
+                    self.validate_error_rate_threshold_block(children)?;
+                }
+            }
+        }
+
         if let Some(entries) = block.directives.get("allowlist") {
             sub.insert("allowlist".to_string());
             for entry in entries {
@@ -179,6 +193,62 @@ impl AbuseProtectionValidator {
 
         for entry in window_entry.into_iter().flatten() {
             self.validate_duration_entry(entry, "window")?;
+        }
+
+        Ok(())
+    }
+
+    fn validate_error_rate_threshold_block(
+        &self,
+        block: &ServerConfigurationBlock,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Check all directives are recognized
+        for directive_name in block.directives.keys() {
+            if !ERROR_RATE_THRESHOLD_DIRECTIVES.contains(&directive_name.as_str()) {
+                return Err(format!(
+                    "Invalid `{directive_name}` — unknown directive in error_rate_threshold block"
+                )
+                .into());
+            }
+        }
+
+        // Validate `events` — optional, must be a positive integer (default: 50)
+        if let Some(entries) = block.directives.get("events") {
+            for entry in entries {
+                self.validate_number_entry(entry, "events", 1)?;
+            }
+        }
+
+        // Validate `window` — optional, must be a duration (default: 60s)
+        if let Some(entries) = block.directives.get("window") {
+            for entry in entries {
+                self.validate_duration_entry(entry, "window")?;
+            }
+        }
+
+        // Validate `status_codes` — optional, must have at least one valid status code
+        if let Some(entries) = block.directives.get("status_codes") {
+            for entry in entries {
+                if entry.args.is_empty() {
+                    return Err(
+                        "Invalid `status_codes` — expected at least one status code".into(),
+                    );
+                }
+                for arg in &entry.args {
+                    let value = arg
+                        .as_str()
+                        .ok_or("Invalid `status_codes` — expected string status code values")?;
+                    let code: u16 = value.parse().map_err(|_| {
+                        format!("Invalid `status_codes` — invalid status code `{value}`")
+                    })?;
+                    if !(100..=599).contains(&code) {
+                        return Err(format!(
+                            "Invalid `status_codes` — status code `{value}` must be between 100 and 599"
+                        )
+                        .into());
+                    }
+                }
+            }
         }
 
         Ok(())

@@ -180,6 +180,48 @@ example.com {
 
 Requests matching this pattern trigger a custom abuse event. After 5 such events within 300 seconds, the client's IP is banned. The ban duration follows the default or configured `ban_duration`.
 
+## Detecting hostile scanning by error rate
+
+Use `error_rate_threshold` to automatically ban IPs that generate an abnormal number of error responses. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths:
+
+```ferron
+example.com {
+    abuse_protection {
+        ban_duration "15m"
+
+        error_rate_threshold {
+            events 10
+            window "60s"
+            status_codes "404" "403"
+        }
+    }
+
+    root /var/www/html
+}
+```
+
+This bans an IP for **15 minutes** if they trigger 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together — for example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
+
+**Stricter threshold for vulnerability scanners:**
+
+```ferron
+example.com {
+    abuse_protection {
+        ban_duration "1h"
+
+        error_rate_threshold {
+            events 5
+            window "30s"
+            status_codes "404" "403" "405"
+        }
+    }
+
+    root /var/www/html
+}
+```
+
+This bans an IP for **1 hour** after just 5 error responses within 30 seconds, also counting `405 Method Not Allowed` responses.
+
 ## Disabling abuse protection
 
 To disable abuse protection on a host:
@@ -215,6 +257,7 @@ The sidecar parses lines matching this pattern:
 | Rate limiting | `Rate limit 10 req/s exceeded` |
 | Basic authentication | `Brute-force failure for user admin` |
 | Custom `abuse_event` directive | `Custom abuse event: wordpress_scan` |
+| Error rate threshold | `Error rate: 404 responses` |
 
 ### Reason-to-category mapping
 

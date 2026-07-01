@@ -19,6 +19,8 @@ pub enum AbuseEventType {
     BruteForceFailure,
     /// Custom threshold (for extensibility).
     Custom,
+    /// Error rate threshold exceeded (e.g., too many 404/403 responses).
+    ErrorRate,
 }
 
 impl AbuseEventType {
@@ -28,6 +30,7 @@ impl AbuseEventType {
             AbuseEventType::RateLimitExceeded => "rate_limit_exceeded",
             AbuseEventType::BruteForceFailure => "brute_force_failure",
             AbuseEventType::Custom => "custom",
+            AbuseEventType::ErrorRate => "error_rate",
         }
     }
 }
@@ -43,6 +46,8 @@ pub struct AbuseEvent {
     pub reason: String,
     /// Severity level (0-100, higher = more severe).
     pub severity: u8,
+    /// HTTP status code, if this event is related to a response (e.g., for ErrorRate events).
+    pub status_code: Option<u16>,
 }
 
 impl AbuseEvent {
@@ -53,6 +58,24 @@ impl AbuseEvent {
             ip,
             reason,
             severity,
+            status_code: None,
+        }
+    }
+
+    /// Create a new abuse event with an associated HTTP status code.
+    pub fn with_status_code(
+        event_type: AbuseEventType,
+        ip: IpAddr,
+        reason: String,
+        severity: u8,
+        status_code: u16,
+    ) -> Self {
+        Self {
+            event_type,
+            ip,
+            reason,
+            severity,
+            status_code: Some(status_code),
         }
     }
 }

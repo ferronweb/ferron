@@ -4,7 +4,7 @@ use cidr::IpCidr;
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_http::abuse::AbuseEventType;
 
-use crate::registry::{AbuseRegistryConfig, EventThreshold};
+use crate::registry::{AbuseRegistryConfig, ErrorRateThresholdConfig, EventThreshold};
 
 /// Parsed abuse protection configuration from ferron.conf.
 #[derive(Debug, Clone, Default)]
@@ -103,6 +103,16 @@ fn parse_abuse_protection_block(
         }
     }
 
+    // Parse error_rate_threshold blocks
+    let mut error_rate_thresholds = Vec::new();
+    if let Some(entries) = block.directives.get("error_rate_threshold") {
+        for entry in entries {
+            if let Some(children) = &entry.children {
+                error_rate_thresholds.push(parse_error_rate_threshold_block(children)?);
+            }
+        }
+    }
+
     if thresholds.is_empty() {
         thresholds = vec![
             EventThreshold::new(AbuseEventType::RateLimitExceeded, 5, 300),
@@ -128,6 +138,7 @@ fn parse_abuse_protection_block(
         enabled: true,
         ban_duration_secs,
         thresholds,
+        error_rate_thresholds,
         allowlist,
     })
 }
@@ -154,4 +165,49 @@ fn parse_threshold_block(
         events_count,
         window_secs,
     )))
+}
+
+fn parse_error_rate_threshold_block(
+    block: &ServerConfigurationBlock,
+) -> Result<ErrorRateThresholdConfig, String> {
+    let events_count = block
+        .get_value("events")
+        .and_then(|v| v.as_number())
+        .filter(|&n| n > 0)
+        .unwrap_or(50) as usize;
+
+    let window_secs = block
+        .get_value("window")
+        .and_then(|v| v.as_duration())
+        .map(|d| d.as_secs())
+        .unwrap_or(60);
+
+    let mut status_codes = Vec::new();
+    if let Some(entries) = block.directives.get("status_codes") {
+        for entry in entries {
+            for arg in &entry.args {
+                if let Some(s) = arg.as_str() {
+                    let code: u16 = s
+                        .parse()
+                        .map_err(|_| format!("Invalid status code '{s}' — must be a number"))?;
+                    if !(100..=599).contains(&code) {
+                        return Err(format!(
+                            "Invalid status code '{s}' — must be between 100 and 599"
+                        ));
+                    }
+                    status_codes.push(code);
+                }
+            }
+        }
+    }
+
+    if status_codes.is_empty() {
+        status_codes = vec![404];
+    }
+
+    Ok(ErrorRateThresholdConfig::new(
+        events_count,
+        window_secs,
+        status_codes,
+    ))
 }

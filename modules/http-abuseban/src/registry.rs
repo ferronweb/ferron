@@ -31,6 +31,24 @@ impl EventThreshold {
     }
 }
 
+/// Configuration for an error rate threshold.
+#[derive(Debug, Clone)]
+pub struct ErrorRateThresholdConfig {
+    /// The underlying event threshold (events count + window).
+    pub event_threshold: EventThreshold,
+    /// HTTP status codes that count as errors (e.g., 404, 403).
+    pub status_codes: Vec<u16>,
+}
+
+impl ErrorRateThresholdConfig {
+    pub fn new(events_count: usize, window_secs: u64, status_codes: Vec<u16>) -> Self {
+        Self {
+            event_threshold: EventThreshold::new(AbuseEventType::ErrorRate, events_count, window_secs),
+            status_codes,
+        }
+    }
+}
+
 /// Configuration for the abuse registry.
 #[derive(Debug, Clone)]
 pub struct AbuseRegistryConfig {
@@ -40,6 +58,8 @@ pub struct AbuseRegistryConfig {
     pub ban_duration_secs: u64,
     /// Per-event-type thresholds.
     pub thresholds: Vec<EventThreshold>,
+    /// Error rate thresholds (track response status codes).
+    pub error_rate_thresholds: Vec<ErrorRateThresholdConfig>,
     /// IPs or CIDR ranges that are exempt from bans.
     pub allowlist: Vec<IpCidr>,
 }
@@ -57,6 +77,7 @@ impl Default for AbuseRegistryConfig {
                 EventThreshold::new(AbuseEventType::RateLimitExceeded, 5, 300),
                 EventThreshold::new(AbuseEventType::BruteForceFailure, 3, 120),
             ],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         }
     }
@@ -227,6 +248,11 @@ impl AbuseRegistry {
             return EventResult::Recorded;
         }
 
+        // Handle error rate events separately since they need status code matching
+        if event.event_type == AbuseEventType::ErrorRate {
+            return self.record_error_rate_event(event, config);
+        }
+
         // Opportunistically evict trackers whose events are all older than the
         // largest configured window. Prevents unbounded memory growth from
         // many distinct IP+event_type combinations.
@@ -292,6 +318,72 @@ impl AbuseRegistry {
         } else {
             EventResult::Recorded
         }
+    }
+
+    /// Record an error rate event, checking against configured error rate thresholds.
+    fn record_error_rate_event(
+        &self,
+        event: &AbuseEvent,
+        config: &AbuseRegistryConfig,
+    ) -> EventResult {
+        let status_code = match event.status_code {
+            Some(sc) => sc,
+            None => return EventResult::Recorded,
+        };
+
+        let mut overall_result = EventResult::Recorded;
+
+        for error_threshold in &config.error_rate_thresholds {
+            // Check if this status code matches the threshold's configured codes
+            if !error_threshold.status_codes.contains(&status_code) {
+                continue;
+            }
+
+            // Opportunistically evict stale trackers
+            let eviction_window = Duration::from_secs(error_threshold.event_threshold.window_secs);
+            self.evict_stale_trackers_with_window(eviction_window);
+
+            // Use a key that includes the threshold index for independent tracking
+            // per error_rate_threshold block
+            let key = format!(
+                "{}:{}:{}",
+                event.ip,
+                event.event_type.as_str(),
+                error_threshold.status_codes.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(",")
+            );
+            let mut tracker = self
+                .event_trackers
+                .entry(key.clone())
+                .or_insert_with(EventTracker::new);
+
+            // Prune old events outside the window
+            let window = Duration::from_secs(error_threshold.event_threshold.window_secs);
+            tracker.prune(window);
+
+            // Record the new event
+            tracker.record();
+
+            // Check if threshold is met
+            if tracker.count() >= error_threshold.event_threshold.events_count {
+                let ban_duration = Duration::from_secs(config.ban_duration_secs);
+                let ban_entry = BanEntry {
+                    reason: event.reason.clone(),
+                    expires_at: Instant::now() + ban_duration,
+                };
+
+                self.bans.insert(event.ip, ban_entry);
+                self.bans_triggered.fetch_add(1, Ordering::Relaxed);
+
+                tracker.events.clear();
+                drop(tracker);
+                self.event_trackers.remove(&key);
+
+                overall_result = EventResult::BanTriggered;
+                break;
+            }
+        }
+
+        overall_result
     }
 
     /// Get the current number of active bans.
@@ -411,6 +503,7 @@ mod tests {
                 3,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         }
     }
@@ -528,6 +621,7 @@ mod tests {
                 EventThreshold::new(AbuseEventType::RateLimitExceeded, 2, 10),
                 EventThreshold::new(AbuseEventType::BruteForceFailure, 3, 10),
             ],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = AbuseRegistry::new();
@@ -570,6 +664,7 @@ mod tests {
                 1,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = AbuseRegistry::new();
@@ -625,6 +720,7 @@ mod tests {
             enabled: true,
             ban_duration_secs: 60,
             thresholds: vec![],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = AbuseRegistry::new();
@@ -654,6 +750,7 @@ mod tests {
                 2,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = AbuseRegistry::new();
@@ -683,6 +780,7 @@ mod tests {
                 1,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = AbuseRegistry::new();
@@ -784,5 +882,200 @@ mod tests {
             (1..=5).contains(&triggered),
             "bans_triggered should be 1-5, got {triggered}"
         );
+    }
+
+    #[test]
+    fn error_rate_threshold_triggers_ban_on_matching_status_code() {
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![ErrorRateThresholdConfig::new(3, 60, vec![404, 403])],
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        let event = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 404 responses".into(),
+            40,
+            404,
+        );
+
+        assert_eq!(
+            registry.record_event(&event, &config),
+            EventResult::Recorded
+        );
+        assert_eq!(
+            registry.record_event(&event, &config),
+            EventResult::Recorded
+        );
+        assert_eq!(
+            registry.record_event(&event, &config),
+            EventResult::BanTriggered
+        );
+        assert!(registry.is_banned(ip, &config));
+    }
+
+    #[test]
+    fn error_rate_threshold_ignores_non_matching_status_code() {
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![ErrorRateThresholdConfig::new(3, 60, vec![404])],
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        // 500 doesn't match the configured 404
+        let event = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 500 responses".into(),
+            40,
+            500,
+        );
+
+        for _ in 0..10 {
+            assert_eq!(
+                registry.record_event(&event, &config),
+                EventResult::Recorded
+            );
+        }
+        assert!(!registry.is_banned(ip, &config));
+    }
+
+    #[test]
+    fn error_rate_threshold_no_status_code_returns_recorded() {
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![ErrorRateThresholdConfig::new(3, 60, vec![404])],
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        // Event without status_code
+        let event = AbuseEvent::new(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: no status".into(),
+            40,
+        );
+
+        for _ in 0..10 {
+            assert_eq!(
+                registry.record_event(&event, &config),
+                EventResult::Recorded
+            );
+        }
+        assert!(!registry.is_banned(ip, &config));
+    }
+
+    #[test]
+    fn error_rate_threshold_multiple_status_codes_count_together() {
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![ErrorRateThresholdConfig::new(3, 60, vec![404, 403])],
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        let event_404 = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 404 responses".into(),
+            40,
+            404,
+        );
+        let event_403 = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 403 responses".into(),
+            40,
+            403,
+        );
+
+        // Mix of 404 and 403 events
+        assert_eq!(
+            registry.record_event(&event_404, &config),
+            EventResult::Recorded
+        );
+        assert_eq!(
+            registry.record_event(&event_403, &config),
+            EventResult::Recorded
+        );
+        assert_eq!(
+            registry.record_event(&event_404, &config),
+            EventResult::BanTriggered
+        );
+        assert!(registry.is_banned(ip, &config));
+    }
+
+    #[test]
+    fn error_rate_threshold_empty_config_no_ban() {
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: Vec::new(),
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        let event = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 404 responses".into(),
+            40,
+            404,
+        );
+
+        for _ in 0..10 {
+            assert_eq!(
+                registry.record_event(&event, &config),
+                EventResult::Recorded
+            );
+        }
+        assert!(!registry.is_banned(ip, &config));
+    }
+
+    #[test]
+    fn error_rate_threshold_disabled_never_bans() {
+        let config = AbuseRegistryConfig {
+            enabled: false,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![ErrorRateThresholdConfig::new(1, 60, vec![404])],
+            allowlist: Vec::new(),
+        };
+        let registry = AbuseRegistry::new();
+        let ip = test_ip();
+
+        let event = AbuseEvent::with_status_code(
+            AbuseEventType::ErrorRate,
+            ip,
+            "Error rate: 404 responses".into(),
+            40,
+            404,
+        );
+
+        for _ in 0..10 {
+            assert_eq!(
+                registry.record_event(&event, &config),
+                EventResult::Recorded
+            );
+        }
+        assert!(!registry.is_banned(ip, &config));
     }
 }

@@ -152,6 +152,49 @@ impl AbuseProtectionStage {
 
         Ok(true)
     }
+
+    #[inline]
+    async fn run_error_rate_check(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
+        let config = match ctx.extensions.get::<AbuseRegistryConfig>() {
+            Some(config) => config.clone(),
+            None => return Ok(()),
+        };
+
+        if config.error_rate_thresholds.is_empty() {
+            return Ok(());
+        }
+
+        // Extract status code from the response
+        let status_code = match &ctx.res {
+            Some(HttpResponse::Custom(response)) => response.status().as_u16(),
+            Some(HttpResponse::BuiltinError(status, _)) => *status,
+            None => 404, // implicit 404 when no response is set
+            _ => return Ok(()),
+        };
+
+        // Check if this status code matches any configured error rate threshold
+        let matches_any = config
+            .error_rate_thresholds
+            .iter()
+            .any(|t| t.status_codes.contains(&status_code));
+
+        if !matches_any {
+            return Ok(());
+        }
+
+        if let Some(recorder) = get_global_abuse_recorder() {
+            let abuse_event = AbuseEvent::with_status_code(
+                AbuseEventType::ErrorRate,
+                ctx.remote_address.ip(),
+                format!("Error rate: {status_code} responses"),
+                40,
+                status_code,
+            );
+            recorder.record_event(&abuse_event, ctx);
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -185,6 +228,10 @@ impl Stage<HttpContext> for AbuseProtectionStage {
         } else {
             Ok(to_continue)
         }
+    }
+
+    async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
+        self.run_error_rate_check(ctx).await
     }
 }
 
@@ -296,6 +343,7 @@ mod tests {
                 1,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = Arc::new(AbuseRegistry::new());
@@ -334,6 +382,7 @@ mod tests {
                 1,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = Arc::new(AbuseRegistry::new());
@@ -389,6 +438,7 @@ mod tests {
                 1,
                 10,
             )],
+            error_rate_thresholds: Vec::new(),
             allowlist: Vec::new(),
         };
         let registry = Arc::new(AbuseRegistry::new());
@@ -445,5 +495,85 @@ mod tests {
 
         // No config at all
         assert!(!stage.is_applicable(None));
+    }
+
+    #[tokio::test]
+    async fn run_inverse_records_error_rate_event() {
+        let registry = Arc::new(AbuseRegistry::new());
+        let stage = AbuseProtectionStage::new(registry.clone());
+
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![crate::registry::ErrorRateThresholdConfig::new(
+                2, 60, vec![404],
+            )],
+            allowlist: Vec::new(),
+        };
+
+        let addr: SocketAddr = "192.0.2.1:12345".parse().unwrap();
+        let mut ctx = make_context(addr, make_config_with_abuse());
+        ctx.extensions.insert::<AbuseRegistryConfig>(config.clone());
+
+        // Set a 404 response
+        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(404, None));
+
+        // Without global recorder, run_inverse should not panic and should not record events
+        stage.run_inverse(&mut ctx).await.unwrap();
+        assert!(
+            !registry.is_banned(addr.ip(), &config),
+            "should not be banned without global recorder"
+        );
+
+        // But the registry's record_error_rate_event should work directly
+        let event = ferron_http::abuse::AbuseEvent::with_status_code(
+            ferron_http::abuse::AbuseEventType::ErrorRate,
+            addr.ip(),
+            "Error rate: 404 responses".into(),
+            40,
+            404,
+        );
+        assert_eq!(
+            registry.record_event(&event, &config),
+            ferron_http::abuse::EventResult::Recorded
+        );
+        assert_eq!(
+            registry.record_event(&event, &config),
+            ferron_http::abuse::EventResult::BanTriggered
+        );
+        assert!(registry.is_banned(addr.ip(), &config));
+    }
+
+    #[tokio::test]
+    async fn run_inverse_ignores_non_matching_status_code() {
+        let registry = Arc::new(AbuseRegistry::new());
+        let stage = AbuseProtectionStage::new(registry.clone());
+
+        let config = AbuseRegistryConfig {
+            enabled: true,
+            ban_duration_secs: 60,
+            thresholds: vec![],
+            error_rate_thresholds: vec![crate::registry::ErrorRateThresholdConfig::new(
+                2, 60, vec![404],
+            )],
+            allowlist: Vec::new(),
+        };
+
+        let addr: SocketAddr = "192.0.2.1:12345".parse().unwrap();
+        let mut ctx = make_context(addr, make_config_with_abuse());
+        ctx.extensions.insert::<AbuseRegistryConfig>(config.clone());
+
+        // Set a 200 response (not matching 404)
+        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(200, None));
+
+        for _ in 0..5 {
+            stage.run_inverse(&mut ctx).await.unwrap();
+        }
+
+        assert!(
+            !registry.is_banned(addr.ip(), &config),
+            "should not be banned for non-matching status codes"
+        );
     }
 }
