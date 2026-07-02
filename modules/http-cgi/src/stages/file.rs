@@ -65,7 +65,13 @@ impl Stage<HttpFileContext> for CgiStage {
             return Ok(true);
         };
 
-        if !ctx.metadata.is_file() {
+        // Get metadata from file handle (CGI doesn't need the handle for streaming)
+        let is_file = if let Some(ref file) = ctx.file {
+            file.metadata().map(|m| m.is_file()).unwrap_or(false)
+        } else {
+            false
+        };
+        if !is_file {
             // Not a file, skip
             return Ok(true);
         }

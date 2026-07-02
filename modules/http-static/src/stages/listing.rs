@@ -58,9 +58,16 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(true);
         };
 
-        // Only handle directories
-        if ctx.path_info.is_some() || !ctx.metadata.is_dir() {
+        let Some(file) = ctx.file.take() else {
             ctx.http.req = Some(request);
+            return Ok(true);
+        };
+        let metadata = file
+            .metadata()
+            .map_err(|e| PipelineError::custom(format!("failed to get directory metadata: {e}")))?;
+        if ctx.path_info.is_some() || !metadata.is_dir() {
+            ctx.http.req = Some(request);
+            ctx.file = Some(file);
             return Ok(true);
         }
 

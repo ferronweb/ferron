@@ -6144,3 +6144,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "vibeio"
+version = "0.2.12"

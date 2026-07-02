@@ -7,6 +7,7 @@ use std::io;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use ferron_http::file_descriptor::ReusedFile;
 use futures_core::Stream;
 use send_wrapper::SendWrapper;
 use std::pin::Pin;
@@ -24,7 +25,7 @@ type ReadChunkFuture = ReusableBoxFuture<'static, ReadChunkResult>;
 /// `SendWrapper` ensures the non-`Send` `vibeio::fs::File` can safely cross thread boundaries
 /// as long as it's only polled on the same thread (guaranteed by the single-threaded runtime).
 pub struct FileStream {
-    file: Arc<SendWrapper<vibeio::fs::File>>,
+    file: Arc<SendWrapper<ReusedFile>>,
     current_pos: u64,
     remaining: Option<u64>,
     finished: bool,
@@ -35,7 +36,7 @@ impl FileStream {
     /// Create a new `FileStream` reading from `start` to `end` (exclusive).
     /// If `end` is `None`, reads until EOF.
     #[inline]
-    pub fn new(file: vibeio::fs::File, start: u64, end: Option<u64>) -> Self {
+    pub fn new(file: ReusedFile, start: u64, end: Option<u64>) -> Self {
         let remaining = remaining_from_bounds(start, end);
         let finished = matches!(remaining, Some(0));
 
@@ -150,7 +151,7 @@ fn buffer_size_for_read(remaining: Option<u64>) -> usize {
 
 /// Reads a single chunk from a vibeio file at the given position.
 async fn read_chunk(
-    file: Arc<SendWrapper<vibeio::fs::File>>,
+    file: Arc<SendWrapper<ReusedFile>>,
     pos: u64,
     remaining: Option<u64>,
 ) -> ReadChunkResult {

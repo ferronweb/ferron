@@ -3,21 +3,32 @@ use std::path::{Component, Path, PathBuf};
 
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{Pipeline, PipelineError};
+use ferron_http::file_descriptor::{ReusedFile, SymlinkMode};
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http_body_util::BodyExt;
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
-use super::file_descriptor::SymlinkMode;
 use super::observability::PerStageSpanHooks;
 
-#[derive(Debug, Clone)]
 struct ResolvedHttpFile {
     metadata: vibeio::fs::Metadata,
     file_path: PathBuf,
     path_info: Option<String>,
     etag: String,
+    file: ReusedFile,
+}
+
+impl std::fmt::Debug for ResolvedHttpFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedHttpFile")
+            .field("metadata", &self.metadata)
+            .field("file_path", &self.file_path)
+            .field("path_info", &self.path_info)
+            .field("etag", &self.etag)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ResolvedHttpFile {
@@ -194,11 +205,11 @@ async fn apply_resolved_file_to_context(
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {
         http: http_ctx,
-        metadata: resolved_file.metadata.clone(),
         file_path: resolved_file.file_path.clone(),
         path_info: resolved_file.path_info.clone(),
         file_root: root_path,
         etag: resolved_file.etag.clone(),
+        file: Some(resolved_file.file),
     };
 
     let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
@@ -336,7 +347,10 @@ async fn resolve_http_file_target(
             }
         }
 
-        match vibeio::fs::metadata(&candidate_path).await {
+        let reused_file = ReusedFile::open(&candidate_path)
+            .await
+            .map_err(FilePipelineExecutionError::Io)?;
+        match reused_file.metadata() {
             Ok(metadata) => {
                 if metadata.is_dir() {
                     if let Some(index_files) = index_files {
@@ -363,6 +377,7 @@ async fn resolve_http_file_target(
                         trailing_slash,
                     ),
                     etag: String::new(),
+                    file: reused_file,
                 };
                 resolved.etag = resolved.compute_etag();
                 return Ok(Some(resolved));
@@ -387,10 +402,7 @@ async fn resolve_http_file_target(
 fn is_path_within_root(root: &Path, candidate: &Path) -> bool {
     // Both paths should be absolute (start with /)
     // Check if candidate starts with root as a path prefix
-    match candidate.strip_prefix(root) {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    candidate.strip_prefix(root).is_ok()
 }
 
 /// Check for symlinks in the path traversal chain (if enabled).
@@ -454,19 +466,25 @@ async fn try_resolve_index_files(
         }
 
         // Check for symlinks if enabled
-        if disable_symlinks != SymlinkMode::Off {
-            if let Err(_) = check_symlinks_in_path(&index_path, root, disable_symlinks).await {
-                continue;
-            }
+        if disable_symlinks != SymlinkMode::Off
+            && check_symlinks_in_path(&index_path, root, disable_symlinks)
+                .await
+                .is_err()
+        {
+            continue;
         }
 
-        match vibeio::fs::metadata(&index_path).await {
+        let reused_file = ReusedFile::open(&index_path)
+            .await
+            .map_err(FilePipelineExecutionError::Io)?;
+        match reused_file.metadata() {
             Ok(metadata) if metadata.is_file() => {
                 return Ok(Some(ResolvedHttpFile {
                     metadata,
                     file_path: index_path,
                     path_info: None,
                     etag: String::new(),
+                    file: reused_file,
                 }));
             }
             Ok(_) => continue,

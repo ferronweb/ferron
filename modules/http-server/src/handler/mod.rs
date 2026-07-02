@@ -1,4 +1,3 @@
-mod file_descriptor;
 mod file_pipeline;
 mod observability;
 #[cfg(any(test, feature = "fuzz"))]

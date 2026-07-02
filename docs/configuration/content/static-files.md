@@ -136,6 +136,18 @@ example.com {
 > - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
 > - Multiple status codes can be mapped to the same error page in a single directive.
 
+## File metadata and handle reuse
+
+Static file metadata is obtained directly from the validated file handle via `file.metadata().await`, which uses `statx` with `AT_EMPTY_PATH` on Linux. This closes the TOCTOU window between path validation and metadata read — the metadata always reflects the file that was opened, not a concurrent rename target.
+
+A per-thread file descriptor reuse pool is available for future handle reuse optimization. The pool uses a 3-tier eviction strategy:
+
+1. **Preemptive** — bulk removal of all expired handles (TTL-based)
+2. **Critical** — single expired handle removal when over capacity
+3. **LRU** — oldest handle by insertion time when no expired handles remain
+
+This pool is infrastructure for future use and is not yet exposed as a user-facing configuration.
+
 ## Observability
 
 ### Metrics

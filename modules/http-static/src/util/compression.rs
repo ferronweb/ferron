@@ -224,7 +224,7 @@ pub static NON_COMPRESSIBLE_FILE_EXTENSIONS: phf::Set<&'static str> = phf::phf_s
 macro_rules! compress_streaming {
     ($fn_name:ident, $compression:expr) => {
         pub fn $fn_name(
-            file: vibeio::fs::File,
+            file: ferron_http::file_descriptor::ReusedFile,
             len: Option<u64>,
         ) -> UnsyncBoxBody<Bytes, std::io::Error> {
             use tokio_util::io::{ReaderStream, StreamReader};

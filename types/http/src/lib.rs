@@ -4,6 +4,7 @@
 pub mod abuse;
 pub mod access_log;
 pub mod client_ip;
+pub mod file_descriptor;
 #[cfg(feature = "mtls")]
 pub mod mtls;
 pub mod span;
@@ -21,6 +22,8 @@ use http::{HeaderMap, Request, Response, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
 use rustc_hash::FxHashMap;
 use typemap_rev::{TypeMap, TypeMapKey};
+
+use crate::file_descriptor::ReusedFile;
 
 pub type HttpRequest = Request<UnsyncBoxBody<bytes::Bytes, std::io::Error>>;
 pub enum HttpResponse {
@@ -86,12 +89,12 @@ impl HttpContext {
 
 pub struct HttpFileContext {
     pub http: HttpContext,
-    pub metadata: vibeio::fs::Metadata,
     pub file_path: std::path::PathBuf,
     pub path_info: Option<String>, // For example, "/test" in "/index.php/test"
     pub file_root: std::path::PathBuf,
     /// Pre-computed ETag from the path resolve cache.
     pub etag: String,
+    pub file: Option<ReusedFile>,
 }
 
 pub struct HttpErrorContext {

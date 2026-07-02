@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::file_descriptor::ReusedFile;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
@@ -103,9 +104,19 @@ impl Stage<HttpFileContext> for StaticFileStage {
             return Ok(true);
         };
 
-        // Only handle files
-        if ctx.path_info.is_some() || !ctx.metadata.is_file() {
+        // Take the file handle from context and get metadata from FD
+        let Some(file) = ctx.file.take() else {
             ctx.http.req = Some(request);
+            return Ok(true);
+        };
+        let metadata = file
+            .metadata()
+            .map_err(|e| PipelineError::custom(format!("failed to get file metadata: {e}")))?;
+
+        // Only handle files
+        if ctx.path_info.is_some() || !metadata.is_file() {
+            ctx.http.req = Some(request);
+            ctx.file = Some(file);
             return Ok(true);
         }
 
@@ -162,7 +173,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         // Check if compression is possible
         let compression_possible = compressed && {
-            let file_len = ctx.metadata.len();
+            let file_len = metadata.len();
             let ext = ctx
                 .file_path
                 .extension()
@@ -175,7 +186,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         #[allow(unused_assignments)]
         let mut vary_header: Option<HeaderValue> = None;
 
-        let mdate = ctx.metadata.modified().ok();
+        let mdate = metadata.modified().ok();
 
         if etag_enabled {
             etag_value = Some(ctx.etag.clone());
@@ -371,8 +382,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .and_then(|ims| httpdate::parse_http_date(ims).ok())
             {
                 Some(if_modified_since) => {
-                    if ctx
-                        .metadata
+                    if metadata
                         .modified()
                         .is_ok_and(|mdate| mdate <= if_modified_since)
                     {
@@ -484,7 +494,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         // Handle precompressed files
         let mut file_path = ctx.file_path.clone();
-        let mut file_length = ctx.metadata.len();
+        let mut file_length = metadata.len();
         let mut is_precompressed_file = false;
 
         if precompressed {
@@ -499,13 +509,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         precomp_path.set_extension(ext);
                     }
 
-                    if let Ok(meta) = vibeio::fs::metadata(&precomp_path).await {
-                        if meta.is_file() {
-                            file_path = precomp_path;
-                            file_length = meta.len();
-                            is_precompressed_file = true;
-                            used_compression = Compression::from_precompressed_ext(ext);
-                            break;
+                    if let Ok(file) = ReusedFile::open(&precomp_path).await {
+                        if let Ok(meta) = file.metadata() {
+                            if meta.is_file() {
+                                file_path = precomp_path;
+                                file_length = meta.len();
+                                is_precompressed_file = true;
+                                used_compression = Compression::from_precompressed_ext(ext);
+                                break;
+                            }
                         }
                     }
                 } else {
@@ -630,12 +642,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         TraceAttributeValue::I64(206),
                                     );
                                 } else {
-                                    let file =
-                                        vibeio::fs::File::open(&file_path).await.map_err(|e| {
-                                            PipelineError::custom(format!(
-                                                "failed to open file: {e}"
-                                            ))
-                                        })?;
                                     let response = builder
                                         .body(
                                             MultipartByterangeBody::new(
@@ -707,12 +713,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         TraceAttributeValue::I64(206),
                                     );
                                 } else {
-                                    let file =
-                                        vibeio::fs::File::open(&file_path).await.map_err(|e| {
-                                            PipelineError::custom(format!(
-                                                "failed to open file: {e}"
-                                            ))
-                                        })?;
                                     let response = builder
                                         .body(
                                             StreamBody::new(
@@ -845,9 +845,15 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         // Full file response — streaming I/O
-        let file = vibeio::fs::File::open(&file_path)
-            .await
-            .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?;
+        // Use the file handle from context (already opened during path resolution)
+        // For precompressed files, the file_path may have changed, so we re-open
+        let file = if is_precompressed_file {
+            ReusedFile::open(&file_path)
+                .await
+                .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?
+        } else {
+            file
+        };
 
         // Extract raw fd for zerocopy (from the vibeio file via its std::fs::File inner)
         #[cfg(unix)]

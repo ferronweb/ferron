@@ -8,6 +8,7 @@ use bytes::Bytes;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::file_descriptor::ReusedFile;
 use ferron_http::HttpErrorContext;
 use futures_util::TryStreamExt;
 use http::header::{self, HeaderValue};
@@ -88,12 +89,13 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             // Try to open the error page file
             let path = Path::new(file_path);
 
-            let meta = match vibeio::fs::metadata(path).await {
-                Ok(m) => m,
-                Err(_) => {
-                    ferron_core::log_warn!("Error page file cannot be opened: {}", file_path);
-                    continue;
-                }
+            // Open file for reading
+            let Ok(file) = ReusedFile::open(path).await else {
+                continue;
+            };
+
+            let Ok(meta) = file.metadata() else {
+                continue;
             };
 
             if !meta.is_file() {
@@ -101,11 +103,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             }
 
             let file_length = meta.len();
-
-            // Open file for reading
-            let file = vibeio::fs::File::open(path)
-                .await
-                .map_err(|e| PipelineError::custom(format!("failed to open error page: {e}")))?;
 
             // Extract raw fd for zerocopy (unix) or handle (windows)
             #[cfg(unix)]
