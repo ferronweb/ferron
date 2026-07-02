@@ -23,6 +23,7 @@ pub enum SymlinkMode {
 }
 
 impl SymlinkMode {
+    #[inline]
     pub fn from_config_value(value: &ServerConfigurationValue) -> Result<Self, String> {
         if let Some(b) = value.as_boolean() {
             Ok(if b { SymlinkMode::On } else { SymlinkMode::Off })
@@ -72,6 +73,7 @@ struct FdPool {
 }
 
 impl FdPool {
+    #[inline]
     fn new() -> Self {
         Self {
             entries: BTreeMap::new(),
@@ -79,11 +81,13 @@ impl FdPool {
     }
 
     /// Total number of pooled handles across all paths.
+    #[inline]
     fn total_handles(&self) -> usize {
         self.entries.values().map(|v| v.handles.len()).sum()
     }
 
     /// Evict expired handles from the pool.
+    #[inline]
     fn evict_if_full(&mut self) -> u64 {
         let total = self.total_handles();
         if total < FD_CACHE_MAX_ENTRIES_PREEMPTIVE {
@@ -117,6 +121,7 @@ impl FdPool {
 }
 
 impl Default for FdPool {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -133,18 +138,23 @@ pub struct PoolStats {
 }
 
 impl PoolStats {
+    #[inline]
     pub fn hits(&self) -> u64 {
         self.hits.load(Ordering::Relaxed)
     }
+    #[inline]
     pub fn misses(&self) -> u64 {
         self.misses.load(Ordering::Relaxed)
     }
+    #[inline]
     pub fn evictions(&self) -> u64 {
         self.evictions.load(Ordering::Relaxed)
     }
+    #[inline]
     pub fn expirations(&self) -> u64 {
         self.expirations.load(Ordering::Relaxed)
     }
+    #[inline]
     pub fn preemptive_evictions(&self) -> u64 {
         self.preemptive_evictions.load(Ordering::Relaxed)
     }
@@ -168,6 +178,7 @@ pub struct ReusedFile {
 
 impl ReusedFile {
     /// Open a file, reusing a pooled handle if available.
+    #[inline]
     pub async fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         // Check for errors
         let cached_error = FD_REUSE_CACHE.with(|c| {
@@ -287,6 +298,7 @@ impl ReusedFile {
     /// On Linux, this uses `statx` with `AT_EMPTY_PATH`, which retrieves
     /// metadata from the open file descriptor without following the path.
     /// This mitigates TOCTOU vulnerabilities.
+    #[inline]
     pub fn metadata(&self) -> io::Result<vibeio::fs::Metadata> {
         self.metadata
             .as_ref()
@@ -301,6 +313,7 @@ impl ReusedFile {
     }
 
     /// Check if the inner file handle is present.
+    #[inline]
     pub fn is_open(&self) -> bool {
         self.inner.is_some()
     }
@@ -338,6 +351,7 @@ impl std::os::windows::io::AsRawHandle for ReusedFile {
 }
 
 impl Drop for ReusedFile {
+    #[inline]
     fn drop(&mut self) {
         if let Some(inner) = self.inner.take() {
             // Rewind the file cursor to the beginning so the next user
@@ -366,6 +380,7 @@ impl Drop for ReusedFile {
 }
 
 /// Clear the per-thread FD reuse pool.
+#[inline]
 pub fn clear_pool() {
     let _ = FD_REUSE_CACHE.try_with(|cache| {
         cache.borrow_mut().entries.clear();
@@ -373,6 +388,7 @@ pub fn clear_pool() {
 }
 
 /// Get the total number of pooled handles across all paths (for testing/observability).
+#[inline]
 pub fn pool_size() -> usize {
     FD_REUSE_CACHE
         .try_with(|cache| cache.borrow().total_handles())
@@ -380,6 +396,7 @@ pub fn pool_size() -> usize {
 }
 
 /// Get pool statistics snapshot (for observability).
+#[inline]
 pub fn pool_stats() -> PoolStatsSnapshot {
     FD_POOL_STATS.with(|s| PoolStatsSnapshot {
         hits: s.hits(),
@@ -405,6 +422,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[inline]
     fn reused_file_returns_to_pool() {
         let dir = std::env::temp_dir().join("ferron-reused-file-test");
         std::fs::create_dir_all(&dir).unwrap();
@@ -418,6 +436,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn symlink_mode_parsing() {
         let val_true = ServerConfigurationValue::Boolean(true, None);
         assert_eq!(
@@ -433,6 +452,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn pool_eviction_removes_expired() {
         let mut pool = FdPool::new();
 
