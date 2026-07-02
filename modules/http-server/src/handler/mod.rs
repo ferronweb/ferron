@@ -279,7 +279,11 @@ pub async fn request_handler(
                 ),
                 (
                     Cow::Borrowed("server.address"),
-                    TraceAttributeValue::String(server_ip.clone()),
+                    TraceAttributeValue::String(
+                        server_ip_canonical
+                            .clone()
+                            .unwrap_or_else(|| server_ip.clone()),
+                    ),
                 ),
                 (
                     Cow::Borrowed("server.port"),
