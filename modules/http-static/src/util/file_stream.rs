@@ -119,6 +119,21 @@ impl Stream for FileStream {
             Poll::Pending => Poll::Pending,
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.finished {
+            return (0, Some(0));
+        }
+        (
+            self.remaining.map_or(0, |r| {
+                // Divide and add 1 if reminder > 0
+                r.saturating_div(MAX_BUFFER_SIZE as u64)
+                    + u64::from(r % MAX_BUFFER_SIZE as u64 != 0)
+            }) as usize,
+            None,
+        )
+    }
 }
 
 #[inline]
