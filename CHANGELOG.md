@@ -10,6 +10,12 @@
 
 - **Error rate threshold** — the `abuse_protection` directive now supports an `error_rate_threshold` sub-directive that monitors HTTP response status codes. When a client triggers an abnormal number of configured error responses (e.g., 404, 403) within a time window, their IP is temporarily banned. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
 
+#### Observability & tracing
+
+- **Per-host TLS handshake metrics** — new per-host metrics for TLS handshake duration (`ferron.tls.handshake.duration` histogram), handshake count (`ferron.tls.handshake.total` counter), and active connections (`ferron.tls.connections.active` up-down counter). Each metric carries `ferron.host`, `tls.protocol.version`, and `tls.cipher_suite` attributes, enabling per-host visibility into TLS performance and client compatibility.
+- **TLS attributes on request traces** — the `ferron.request` root span now includes `tls.protocol.version` and `tls.cipher_suite` attributes for HTTPS connections, correlating TLS parameters with individual requests without requiring a separate TLS span.
+- **Per-host OCSP metrics** — OCSP fetching metrics (`ferron.ocsp.fetches_total`, `ferron.ocsp.fetch_duration_seconds`) now include a `ferron.host` dimension, and a new `ferron.ocsp.stapling.hit_total` counter tracks per-request OCSP stapling outcomes per host.
+
 #### Reverse proxy
 
 - **Weighted load balancing for all algorithms** — `random`, `two_random`, and `p2c_ewma` now support per-upstream `weight` directives for proportional traffic distribution, joining `round_robin` and `least_conn`. Higher weight values receive proportionally more requests across all five load balancing algorithms and session affinity.

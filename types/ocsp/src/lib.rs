@@ -29,7 +29,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ferron_observability::CompositeEventSink;
+use ferron_observability::{
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use parking_lot::RwLock;
 use rustls::pki_types::CertificateDer;
 use rustls::server::{ClientHello, ResolvesServerCert};
@@ -39,6 +41,9 @@ use tokio_util::sync::CancellationToken;
 
 // Type alias for the OCSP cache to reduce type complexity
 type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
+
+/// Maps certificate leaf bytes to hostname for per-host OCSP metrics.
+pub type OcspHostMap = Arc<RwLock<HashMap<Vec<u8>, String>>>;
 
 /// Error returned when `init_ocsp_service` is called more than once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +68,7 @@ struct GlobalState {
     sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
     receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>>>,
     cache: OcspCache,
+    host_map: OcspHostMap,
     cancel_token: CancellationToken,
     event_sink: parking_lot::Mutex<Option<Arc<CompositeEventSink>>>,
 }
@@ -76,6 +82,7 @@ fn get_or_init_global() -> &'static GlobalState {
             sender,
             receiver: std::sync::Mutex::new(Some(receiver)),
             cache: Arc::new(RwLock::new(HashMap::new())),
+            host_map: Arc::new(RwLock::new(HashMap::new())),
             cancel_token: CancellationToken::new(),
             event_sink: parking_lot::Mutex::new(None),
         }
@@ -101,6 +108,7 @@ pub fn take_ocsp_startup_state() -> Result<
     (
         mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>,
         OcspCache,
+        OcspHostMap,
         CancellationToken,
         Option<Arc<CompositeEventSink>>,
     ),
@@ -114,9 +122,10 @@ pub fn take_ocsp_startup_state() -> Result<
         .take()
         .ok_or(AlreadyInitialized)?;
     let cache = state.cache.clone();
+    let host_map = state.host_map.clone();
     let cancel_token = state.cancel_token.clone();
     let event_sink = state.event_sink.lock().clone();
-    Ok((receiver, cache, cancel_token, event_sink))
+    Ok((receiver, cache, host_map, cancel_token, event_sink))
 }
 
 /// Get the global `OcspServiceHandle`.
@@ -129,6 +138,7 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
     Some(OcspServiceHandle {
         sender: state.sender.clone(),
         cache: state.cache.clone(),
+        host_map: state.host_map.clone(),
     })
 }
 
@@ -141,6 +151,7 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
 pub struct OcspServiceHandle {
     sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
     cache: OcspCache,
+    host_map: OcspHostMap,
 }
 
 impl OcspServiceHandle {
@@ -149,6 +160,16 @@ impl OcspServiceHandle {
         if !cert.is_empty() {
             let _ = self.sender.send(cert);
         }
+    }
+
+    /// Send a certificate chain to the background task with an associated hostname
+    /// for per-host OCSP metrics.
+    pub fn preload_with_host(&self, cert: Vec<CertificateDer<'static>>, hostname: String) {
+        if let Some(leaf) = cert.first() {
+            let leaf_bytes = leaf.to_vec();
+            self.host_map.write().insert(leaf_bytes, hostname);
+        }
+        self.preload(cert);
     }
 }
 
@@ -162,11 +183,20 @@ impl OcspServiceHandle {
 /// On the first `resolve()` call for a given certificate, the original key is
 /// returned and a fetch is triggered in the background. Subsequent calls
 /// return the key with the stapled OCSP response attached.
-#[derive(Debug)]
 pub struct OcspStapler {
     inner: Arc<dyn ResolvesServerCert>,
     cache: OcspCache,
     sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
+    host_map: OcspHostMap,
+    event_sink: Option<Arc<CompositeEventSink>>,
+}
+
+impl std::fmt::Debug for OcspStapler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OcspStapler")
+            .field("inner", &"<dyn ResolvesServerCert>")
+            .finish()
+    }
 }
 
 impl OcspStapler {
@@ -176,7 +206,15 @@ impl OcspStapler {
             inner,
             cache: handle.cache.clone(),
             sender: handle.sender.clone(),
+            host_map: handle.host_map.clone(),
+            event_sink: None,
         }
+    }
+
+    /// Set the event sink for per-host metrics emission.
+    pub fn with_event_sink(mut self, event_sink: Arc<CompositeEventSink>) -> Self {
+        self.event_sink = Some(event_sink);
+        self
     }
 }
 
@@ -199,6 +237,25 @@ impl ResolvesServerCert for OcspStapler {
                         let mut original_key_mut = (*original_key).clone();
                         original_key_mut.ocsp = Some(ocsp.clone());
                         original_key = Arc::new(original_key_mut);
+                    }
+
+                    // Emit per-host stapling hit metric
+                    if let Some(ref event_sink) = self.event_sink {
+                        let host = self
+                            .host_map
+                            .read()
+                            .get(&leaf_bytes)
+                            .cloned()
+                            .unwrap_or_else(|| "_global".to_string());
+                        event_sink.emit(Event::Metric(MetricEvent {
+                            name: "ferron.ocsp.stapling.hit_total",
+                            attributes: vec![("ferron.host", MetricAttributeValue::String(host))],
+                            ty: MetricType::Counter,
+                            value: MetricValue::U64(1),
+                            unit: Some("{hit}"),
+                            description: Some("OCSP responses served to clients"),
+                            trace_context: None,
+                        }));
                     }
                 }
                 // Entry exists but has no OCSP yet — return original without re-triggering

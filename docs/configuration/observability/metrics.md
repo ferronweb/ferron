@@ -87,6 +87,17 @@ Ferron also emits common request-path metrics:
 | `ferron.http.server.cors_preflights` | Counter | — | CORS preflight requests handled before the main pipeline |
 | `ferron.http.server.connection_errors` | Counter | transport, lifecycle stage | Listener and handshake failures |
 
+## TLS metrics
+
+The core server emits per-host TLS metrics for every HTTPS connection. Each metric carries a `ferron.host` attribute (the SNI hostname, or `"_global"` for connections without SNI) for per-host filtering and multi-tenant monitoring.
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider`, `crypto.certificate.serial_number` | Certificate `notAfter` field as Unix epoch seconds |
+| `ferron.tls.handshake.duration` | Histogram | `ferron.host`, `tls.protocol.version`, `tls.cipher_suite`, `ferron.tls.handshake.result` | TLS handshake latency |
+| `ferron.tls.handshake.total` | Counter | `ferron.host`, `ferron.tls.handshake.result` | Total TLS handshake attempts |
+| `ferron.tls.connections.active` | UpDownCounter | `ferron.host` | Currently open TLS connections |
+
 ## Common alerting patterns
 
 The table below maps core metrics to practical alerting thresholds. Adjust thresholds based on your deployment size and traffic patterns.
@@ -100,6 +111,8 @@ The table below maps core metrics to practical alerting thresholds. Adjust thres
 | Queue buildup | `ferron.admin.observability_event_queue_len` | > 1000 |
 | Memory growth | `process.memory.usage` | Sustained increase over hours |
 | CPU saturation | `process.cpu.utilization` | > 0.9 sustained |
+| TLS handshake failures | `ferron.tls.handshake.total{result="error"}` | Rate > 5/s for 1m |
+| Slow TLS handshakes | `ferron.tls.handshake.duration` p99 | > 500ms |
 
 ## Cardinality guidance
 

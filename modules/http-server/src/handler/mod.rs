@@ -165,6 +165,7 @@ pub async fn request_handler(
     events: CompositeEventSink,
     timeout_duration: Option<std::time::Duration>,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    tls_params: Option<ferron_tls::TlsConnectionParams>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
@@ -263,37 +264,49 @@ pub async fn request_handler(
                 .as_ref()
                 .expect("trace events require request metadata to be initialized");
 
+            let mut builder_attributes = vec![
+                (
+                    Cow::Borrowed("http.request.method"),
+                    TraceAttributeValue::String(method.as_str().to_string()),
+                ),
+                (
+                    Cow::Borrowed("url.path"),
+                    TraceAttributeValue::String(path.clone()),
+                ),
+                (
+                    Cow::Borrowed("url.scheme"),
+                    TraceAttributeValue::StaticStr(scheme),
+                ),
+                (
+                    Cow::Borrowed("server.address"),
+                    TraceAttributeValue::String(server_ip.clone()),
+                ),
+                (
+                    Cow::Borrowed("server.port"),
+                    TraceAttributeValue::I64(server_port as i64),
+                ),
+                (
+                    Cow::Borrowed("client.address"),
+                    TraceAttributeValue::String(initial_client_ip_canonical.clone()),
+                ),
+            ];
+            if let Some(ref tls) = tls_params {
+                builder_attributes.push((
+                    Cow::Borrowed("tls.protocol.version"),
+                    TraceAttributeValue::String(tls.protocol_version.clone()),
+                ));
+                builder_attributes.push((
+                    Cow::Borrowed("tls.cipher_suite"),
+                    TraceAttributeValue::String(tls.cipher_suite.clone()),
+                ));
+            }
+
             let emitted = events.emit(Event::Trace(TraceEvent::StartSpan {
                 key: Cow::Owned(request_span_key.clone()),
                 name: Cow::Borrowed("ferron.request"),
                 parent: external_parent.clone(),
                 trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-                builder_attributes: vec![
-                    (
-                        Cow::Borrowed("http.request.method"),
-                        TraceAttributeValue::String(method.as_str().to_string()),
-                    ),
-                    (
-                        Cow::Borrowed("url.path"),
-                        TraceAttributeValue::String(path.clone()),
-                    ),
-                    (
-                        Cow::Borrowed("url.scheme"),
-                        TraceAttributeValue::StaticStr(scheme),
-                    ),
-                    (
-                        Cow::Borrowed("server.address"),
-                        TraceAttributeValue::String(server_ip.clone()),
-                    ),
-                    (
-                        Cow::Borrowed("server.port"),
-                        TraceAttributeValue::I64(server_port as i64),
-                    ),
-                    (
-                        Cow::Borrowed("client.address"),
-                        TraceAttributeValue::String(initial_client_ip_canonical.clone()),
-                    ),
-                ],
+                builder_attributes,
                 attributes: vec![(
                     "url.full",
                     TraceAttributeValue::String(request.uri().path_and_query().map_or_else(

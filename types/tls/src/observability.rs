@@ -6,6 +6,7 @@
 //! owned by this module so providers do not need to know them.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use ferron_observability::{
     CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
@@ -69,6 +70,109 @@ pub fn emit_certificate_not_after(
         value: MetricValue::U64(not_after),
         unit: Some("s"),
         description: Some("Certificate `notAfter` field as Unix epoch seconds"),
+        trace_context: None,
+    }));
+}
+
+/// Name of the TLS handshake duration histogram.
+pub const HANDSHAKE_DURATION_METRIC: &str = "ferron.tls.handshake.duration";
+
+/// Name of the TLS handshake total counter.
+pub const HANDSHAKE_TOTAL_METRIC: &str = "ferron.tls.handshake.total";
+
+/// Name of the active TLS connections gauge.
+pub const CONNECTIONS_ACTIVE_METRIC: &str = "ferron.tls.connections.active";
+
+/// Emit a `ferron.tls.handshake.duration` histogram for a TLS handshake.
+///
+/// - `event_sink` — the per-host `CompositeEventSink`.
+/// - `host` — the SNI hostname or `"_global"` for connections without SNI.
+/// - `duration` — elapsed time for the handshake.
+/// - `protocol_version` — negotiated protocol (e.g. `"TLSv1.3"`).
+/// - `cipher_suite` — negotiated cipher suite (e.g. `"TLS_AES_256_GCM_SHA384"`).
+/// - `result` — `"success"` or `"error"`.
+pub fn emit_handshake_duration(
+    event_sink: &CompositeEventSink,
+    host: &str,
+    duration: Duration,
+    protocol_version: &str,
+    cipher_suite: &str,
+    result: &'static str,
+) {
+    if event_sink.is_empty() {
+        return;
+    }
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: HANDSHAKE_DURATION_METRIC,
+        attributes: vec![
+            (
+                "ferron.host",
+                MetricAttributeValue::String(host.to_string()),
+            ),
+            (
+                "tls.protocol.version",
+                MetricAttributeValue::String(protocol_version.to_string()),
+            ),
+            (
+                "tls.cipher_suite",
+                MetricAttributeValue::String(cipher_suite.to_string()),
+            ),
+            (
+                "ferron.tls.handshake.result",
+                MetricAttributeValue::StaticStr(result),
+            ),
+        ],
+        ty: MetricType::Histogram(None),
+        value: MetricValue::F64(duration.as_secs_f64()),
+        unit: Some("s"),
+        description: Some("TLS handshake latency"),
+        trace_context: None,
+    }));
+}
+
+/// Emit a `ferron.tls.handshake.total` counter for a TLS handshake attempt.
+pub fn emit_handshake_total(event_sink: &CompositeEventSink, host: &str, result: &'static str) {
+    if event_sink.is_empty() {
+        return;
+    }
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: HANDSHAKE_TOTAL_METRIC,
+        attributes: vec![
+            (
+                "ferron.host",
+                MetricAttributeValue::String(host.to_string()),
+            ),
+            (
+                "ferron.tls.handshake.result",
+                MetricAttributeValue::StaticStr(result),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{handshake}"),
+        description: Some("Total TLS handshake attempts"),
+        trace_context: None,
+    }));
+}
+
+/// Emit a `ferron.tls.connections.active` up-down counter delta.
+pub fn emit_connections_active(event_sink: &CompositeEventSink, host: &str, delta: i64) {
+    if event_sink.is_empty() {
+        return;
+    }
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: CONNECTIONS_ACTIVE_METRIC,
+        attributes: vec![(
+            "ferron.host",
+            MetricAttributeValue::String(host.to_string()),
+        )],
+        ty: MetricType::UpDownCounter,
+        value: MetricValue::I64(delta),
+        unit: Some("{connection}"),
+        description: Some("Currently open TLS connections"),
         trace_context: None,
     }));
 }

@@ -35,6 +35,9 @@ use x509_parser::prelude::*;
 // Type alias for the OCSP cache to reduce type complexity
 type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 
+/// Maps certificate leaf bytes to hostname for per-host OCSP metrics.
+type OcspHostMap = Arc<RwLock<HashMap<Vec<u8>, String>>>;
+
 // ---------------------------------------------------------------------------
 // HTTPS client construction
 // ---------------------------------------------------------------------------
@@ -314,6 +317,7 @@ fn verify_single_res(
 pub async fn background_ocsp_task(
     mut receiver: mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>,
     cache: OcspCache,
+    host_map: OcspHostMap,
     cancel_token: CancellationToken,
     event_sink: Option<Arc<CompositeEventSink>>,
 ) {
@@ -457,10 +461,22 @@ pub async fn background_ocsp_task(
                             MetricType::Counter,
                             Some("{fetch}"),
                             Some("Total OCSP fetch attempts"),
-                            vec![(
-                                "ferron.ocsp.status",
-                                MetricAttributeValue::StaticStr("success"),
-                            )],
+                            vec![
+                                (
+                                    "ferron.ocsp.status",
+                                    MetricAttributeValue::StaticStr("success"),
+                                ),
+                                (
+                                    "ferron.host",
+                                    MetricAttributeValue::String(
+                                        host_map
+                                            .read()
+                                            .get(&key)
+                                            .cloned()
+                                            .unwrap_or_else(|| "_global".to_string()),
+                                    ),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -469,7 +485,16 @@ pub async fn background_ocsp_task(
                             MetricType::Histogram(None),
                             Some("s"),
                             Some("Time to fetch OCSP response"),
-                            vec![],
+                            vec![(
+                                "ferron.host",
+                                MetricAttributeValue::String(
+                                    host_map
+                                        .read()
+                                        .get(&key)
+                                        .cloned()
+                                        .unwrap_or_else(|| "_global".to_string()),
+                                ),
+                            )],
                         );
 
                         cache.write().insert(key.clone(), Some(response_der));
@@ -501,10 +526,22 @@ pub async fn background_ocsp_task(
                             MetricType::Counter,
                             Some("{fetch}"),
                             Some("Total OCSP fetch attempts"),
-                            vec![(
-                                "ferron.ocsp.status",
-                                MetricAttributeValue::StaticStr("skipped"),
-                            )],
+                            vec![
+                                (
+                                    "ferron.ocsp.status",
+                                    MetricAttributeValue::StaticStr("skipped"),
+                                ),
+                                (
+                                    "ferron.host",
+                                    MetricAttributeValue::String(
+                                        host_map
+                                            .read()
+                                            .get(&key)
+                                            .cloned()
+                                            .unwrap_or_else(|| "_global".to_string()),
+                                    ),
+                                ),
+                            ],
                         );
                         // No OCSP possible (e.g. no OCSP URL in cert)
                         cache.write().insert(key.clone(), None);
@@ -531,10 +568,22 @@ pub async fn background_ocsp_task(
                             MetricType::Counter,
                             Some("{fetch}"),
                             Some("Total OCSP fetch attempts"),
-                            vec![(
-                                "ferron.ocsp.status",
-                                MetricAttributeValue::StaticStr("error"),
-                            )],
+                            vec![
+                                (
+                                    "ferron.ocsp.status",
+                                    MetricAttributeValue::StaticStr("error"),
+                                ),
+                                (
+                                    "ferron.host",
+                                    MetricAttributeValue::String(
+                                        host_map
+                                            .read()
+                                            .get(&key)
+                                            .cloned()
+                                            .unwrap_or_else(|| "_global".to_string()),
+                                    ),
+                                ),
+                            ],
                         );
                         emit_metric(
                             &event_sink,
@@ -543,7 +592,16 @@ pub async fn background_ocsp_task(
                             MetricType::Histogram(None),
                             Some("s"),
                             Some("Time to fetch OCSP response"),
-                            vec![],
+                            vec![(
+                                "ferron.host",
+                                MetricAttributeValue::String(
+                                    host_map
+                                        .read()
+                                        .get(&key)
+                                        .cloned()
+                                        .unwrap_or_else(|| "_global".to_string()),
+                                ),
+                            )],
                         );
                         // Retry later with randomness to avoid refresh storms
                         let jitter = rand::random_range(100..=500);

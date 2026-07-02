@@ -206,8 +206,9 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 
 | Metric | Type | Attributes | Description |
 |--------|------|--------|-------------|
-| `ferron.ocsp.fetches_total` | Counter | `status` (`success`, `error`, `skipped`) | Total OCSP fetch attempts |
-| `ferron.ocsp.fetch_duration_seconds` | Histogram | — | Time to fetch OCSP response |
+| `ferron.ocsp.fetches_total` | Counter | `ferron.ocsp.status` (`success`, `error`, `skipped`), `ferron.host` | Total OCSP fetch attempts per host |
+| `ferron.ocsp.fetch_duration_seconds` | Histogram | `ferron.host` | Time to fetch OCSP response |
+| `ferron.ocsp.stapling.hit_total` | Counter | `ferron.host` | OCSP responses served to clients per host |
 | `ferron.ocsp.cached_certificates` | Gauge | — | Number of certificates tracked |
 | `ferron.ocsp.certificates_with_stapling` | Gauge | — | Certificates with valid stapled responses |
 

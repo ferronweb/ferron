@@ -502,6 +502,7 @@ async fn handle_http3_connection(
         http3_alt_svc: false,
         timeout_duration,
         peer_identity,
+        tls_params: None,
     });
     let mut connection_future = Box::pin(
         Http3::new(h3_quinn::Connection::new(conn), Http3Options::default())

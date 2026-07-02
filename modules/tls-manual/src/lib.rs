@@ -173,7 +173,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
                         );
                     }
                 }
-                ocsp_handle.preload(certified_key.cert.clone());
+                ocsp_handle.preload_with_host(certified_key.cert.clone(), resolve_host(ctx));
             }
         }
 

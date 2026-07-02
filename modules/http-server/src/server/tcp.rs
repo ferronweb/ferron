@@ -3,7 +3,7 @@
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
@@ -13,6 +13,10 @@ use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue, TraceSampler,
 };
+use ferron_tls::observability::{
+    emit_connections_active, emit_handshake_duration, emit_handshake_total,
+};
+use ferron_tls::TlsConnectionParams;
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
 use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
@@ -298,11 +302,14 @@ impl TcpListenerHandle {
                                 tls_resolver.lookup_ip(local_addr.ip())
                             };
                             if let Some(resolver) = resolver {
+                                let handshake_start = Instant::now();
                                 let tls_stream_option = match
                                     resolver.handshake(start_handshake).await
                                 {
                                     Ok(s) => s,
                                     Err(e) => {
+                                    let handshake_duration = handshake_start.elapsed();
+                                    let host = hinted_hostname.clone().unwrap_or_else(|| "_global".to_string());
                                     let tls_observability = resolve_observability_sink(
                                         &server_config.observability_resolver,
                                         Some(local_addr.ip()),
@@ -334,9 +341,20 @@ impl TcpListenerHandle {
                                         attrs,
                                     );
                                     emit_connection_error_metric(&tls_observability, "tcp", "tls_handshake");
+                                    emit_handshake_duration(
+                                        &tls_observability,
+                                        &host,
+                                        handshake_duration,
+                                        "unknown",
+                                        "unknown",
+                                        "error",
+                                    );
+                                    emit_handshake_total(&tls_observability, &host, "error");
                                     return;
                                     }
                                 };
+                                let handshake_duration = handshake_start.elapsed();
+                                let host = hinted_hostname.clone().unwrap_or_else(|| "_global".to_string());
                                 let tls_observability = resolve_observability_sink(
                                     &server_config.observability_resolver,
                                     Some(local_addr.ip()),
@@ -355,6 +373,41 @@ impl TcpListenerHandle {
                                         .1
                                         .alpn_protocol()
                                         .map(|protocol| protocol.to_vec());
+
+                                    // Extract TLS connection parameters
+                                    let protocol_version_str = tls_stream
+                                        .get_ref()
+                                        .1
+                                        .protocol_version()
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("unknown")
+                                        .replace('_', ".");
+                                    let cipher_suite_str = tls_stream
+                                        .get_ref()
+                                        .1
+                                        .negotiated_cipher_suite()
+                                        .map(|cs| cs.suite())
+                                        .and_then(|cs| cs.as_str())
+                                        .unwrap_or("unknown")
+                                        .to_string();
+
+                                    // Emit TLS handshake metrics
+                                    emit_handshake_duration(
+                                        &tls_observability,
+                                        &host,
+                                        handshake_duration,
+                                        &protocol_version_str,
+                                        &cipher_suite_str,
+                                        "success",
+                                    );
+                                    emit_handshake_total(&tls_observability, &host, "success");
+                                    emit_connections_active(&tls_observability, &host, 1);
+
+                                    let tls_params = TlsConnectionParams {
+                                        protocol_version: protocol_version_str,
+                                        cipher_suite: cipher_suite_str,
+                                    };
+
                                     if negotiated_protocol.as_deref() == Some(b"h2".as_slice()) {
                                         handle_http2_connection(
                                             tls_stream,
@@ -369,11 +422,12 @@ impl TcpListenerHandle {
                                             server_config.https_port,
                                             connection_options,
                                             server_config.observability_resolver.clone(),
-                                            tls_observability,
+                                            tls_observability.clone(),
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
                                             http3_alt_svc,
-                                            peer_identity
+                                            peer_identity,
+                                            Some(tls_params),
                                         )
                                         .await;
                                     } else if connection_options.protocols.http1 {
@@ -390,11 +444,12 @@ impl TcpListenerHandle {
                                             server_config.https_port,
                                             connection_options,
                                             server_config.observability_resolver.clone(),
-                                            tls_observability,
+                                            tls_observability.clone(),
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
                                             http3_alt_svc,
-                                            peer_identity
+                                            peer_identity,
+                                            Some(tls_params),
                                         )
                                         .await;
                                     } else {
@@ -407,6 +462,9 @@ impl TcpListenerHandle {
                                             )],
                                         );
                                     }
+
+                                    // Decrement active connections on drop
+                                    emit_connections_active(&tls_observability, &host, -1);
                                 }
                             } else {
                                 // Construct empty rustls `ServerConfig`
@@ -568,6 +626,7 @@ async fn handle_http1_connection_zerocopy<S>(
         reload_token,
         http3_alt_svc,
         peer_identity,
+        None,
     )
     .await
 }
@@ -616,6 +675,7 @@ async fn handle_http1_connection_zerocopy<S>(
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
         peer_identity,
+        tls_params: None,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -676,6 +736,7 @@ async fn handle_http1_connection<S>(
     reload_token: CancellationToken,
     http3_alt_svc: bool,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    tls_params: Option<TlsConnectionParams>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
@@ -695,6 +756,7 @@ async fn handle_http1_connection<S>(
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
         peer_identity,
+        tls_params,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -754,6 +816,7 @@ async fn handle_http2_connection<S>(
     reload_token: CancellationToken,
     http3_alt_svc: bool,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    tls_params: Option<TlsConnectionParams>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
@@ -773,6 +836,7 @@ async fn handle_http2_connection<S>(
         http3_alt_svc,
         timeout_duration: connection_options.timeout,
         peer_identity,
+        tls_params,
     });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))

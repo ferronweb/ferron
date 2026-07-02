@@ -201,6 +201,7 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 
 - **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
   - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
+  - For HTTPS connections: `tls.protocol.version` (e.g. `"TLSv1.3"`), `tls.cipher_suite` (e.g. `"TLS_AES_256_GCM_SHA384"`)
 - **`EndSpan("ferron.request", error)`** — emitted when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 

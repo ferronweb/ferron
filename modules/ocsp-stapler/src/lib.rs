@@ -38,11 +38,12 @@ impl Module for OcspStaplerModule {
         // New flow: take the startup pieces from the types crate and spawn the
         // OCSP background task from this module so heavy deps live here.
         match ferron_ocsp::take_ocsp_startup_state() {
-            Ok((receiver, cache, cancel_token, event_sink)) => {
+            Ok((receiver, cache, host_map, cancel_token, event_sink)) => {
                 // Spawn the module-owned background task on the secondary runtime
                 runtime.spawn_secondary_task(crate::background::background_ocsp_task(
                     receiver,
                     cache,
+                    host_map,
                     cancel_token,
                     event_sink,
                 ));

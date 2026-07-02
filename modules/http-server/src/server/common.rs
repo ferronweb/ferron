@@ -53,6 +53,8 @@ pub struct RequestHandlerState {
     pub https_port: Option<u16>,
     pub timeout_duration: Option<std::time::Duration>,
     pub peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    /// Negotiated TLS parameters from the handshake (protocol version and cipher suite).
+    pub tls_params: Option<ferron_tls::TlsConnectionParams>,
 }
 
 // Type alias for the config ArcSwap
@@ -331,6 +333,7 @@ pub fn build_request_handler(
                 request_observability,
                 state.timeout_duration,
                 state.peer_identity.clone(),
+                state.tls_params.clone(),
             )
             .await
         })
