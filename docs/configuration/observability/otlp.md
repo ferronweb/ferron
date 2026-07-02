@@ -108,16 +108,16 @@ The most common access-log field remappings in modern mode are:
 | `method` | `http.request.method` |
 | `version` | `network.protocol.version` |
 | `scheme` | `url.scheme` |
-| `client_ip` | `client.address` |
+| `client_ip_canonical` | `client.address` |
 | `client_port` | `client.port` |
-| `server_ip` | `server.address` |
+| `server_ip_canonical` | `server.address` |
 | `server_port` | `server.port` |
 | `auth_user` | `user.name` |
 | `status` | `http.response.status_code` |
 | `content_length` | `http.response.body.size` |
 | `duration_secs` | `http.server.request.duration` |
 | `header_<name>` | `http.request.header.<name>` |
-| `timestamp`, `trace_id`, `span_id`, `*_canonical` | dropped (use the record timestamp and standard attributes instead) |
+| `timestamp`, `trace_id`, `span_id`, `*_ip` | dropped (use the record timestamp and standard attributes instead) |
 | other fields | `ferron.legacy_field.<field_name>` |
 
 Example:

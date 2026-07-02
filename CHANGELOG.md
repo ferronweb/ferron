@@ -35,6 +35,10 @@
 
 - **Circuit breakers enabled by default** — the `circuit_breaker` directive is now enabled by default for all `proxy` configurations. Circuit breakers track transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses (when `record_5xx true`), then temporarily eject unstable backends from the load balancer. This change improves resilience by protecting against cascading failures without requiring explicit configuration. To disable circuit breakers, set `circuit_breaker false`.
 
+#### Observability
+
+- **Canonical IP addresses in logs and traces** - `client_ip_canonical` and `server_ip_canonical` are now available as OpenTelemetry-style log attributes and trace span attributes, replacing the legacy `client_ip`/`server_ip`.
+
 ### Fixed
 
 #### Observability

@@ -132,14 +132,14 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
                 AnyValue::String(value.to_string().into()),
             ),
             "scheme" => self.push("url.scheme", AnyValue::String(value.to_string().into())),
-            "client_ip" => self.push("client.address", AnyValue::String(value.to_string().into())),
-            "server_ip" => self.push("server.address", AnyValue::String(value.to_string().into())),
+            "client_ip_canonical" => {
+                self.push("client.address", AnyValue::String(value.to_string().into()))
+            }
+            "server_ip_canonical" => {
+                self.push("server.address", AnyValue::String(value.to_string().into()))
+            }
             "auth_user" => self.push("user.name", AnyValue::String(value.to_string().into())),
-            "timestamp"
-            | "trace_id"
-            | "span_id"
-            | "client_ip_canonical"
-            | "server_ip_canonical" => {
+            "timestamp" | "trace_id" | "span_id" | "client_ip" | "server_ip" => {
                 // Drop legacy-only fields; modern telemetry consumers prefer the
                 // standard attributes and the record timestamp.
             }
