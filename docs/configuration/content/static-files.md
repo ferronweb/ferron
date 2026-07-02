@@ -23,6 +23,7 @@ This page documents directives that configure static file serving, directory lis
 > Symlink-based attacks can bypass directory boundaries. If your `root` directory contains untrusted symlinks or is in a shared hosting environment, enable `disable_symlinks on` to protect against escape attacks.
 
 > [!note]
+>
 > - Symlink detection uses `symlink_metadata()`, which does not follow the symlink, so no file I/O is performed on the symlink target.
 > - When enabled, symlinks are detected at each path component level during traversal, not just at the final target.
 > - `if_not_owner` mode is Unix-specific and requires the symlink and target to have the same owner UID.
