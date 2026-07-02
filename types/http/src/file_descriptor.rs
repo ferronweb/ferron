@@ -48,7 +48,7 @@ const FD_CACHE_MAX_ENTRIES_PREEMPTIVE: usize = 256;
 
 /// A pooled file handle with insertion timestamp for TTL-based eviction.
 struct PooledHandle {
-    file: vibeio::fs::File,
+    file: std::io::Result<vibeio::fs::File>,
     /// When this handle was returned to the pool.
     pooled_at: Instant,
 }
@@ -168,10 +168,21 @@ impl ReusedFile {
         let pooled = FD_REUSE_CACHE.with(|c| {
             let mut cache = c.borrow_mut();
             let path_key = path.as_ref().to_path_buf();
-            let result = cache
-                .entries
-                .get_mut(&path_key)
-                .and_then(|handles| handles.pop());
+            let mut entry = cache.entries.get_mut(&path_key);
+            let mut result = None;
+            while entry.as_ref().is_some_and(|e| !e.is_empty()) {
+                let tr = entry.as_mut().and_then(|handles| handles.pop());
+                if tr
+                    .as_ref()
+                    .is_some_and(|tr| tr.pooled_at.elapsed() < FD_CACHE_TTL)
+                {
+                    result = tr;
+                    break;
+                } else {
+                    // Expired handle — drop it and continue
+                    FD_POOL_STATS.with(|s| s.expirations.fetch_add(1, Ordering::Relaxed));
+                }
+            }
             // Clean up empty entries
             if let Some(handles) = cache.entries.get(&path_key) {
                 if handles.is_empty() {
@@ -181,11 +192,29 @@ impl ReusedFile {
             result
         });
 
-        if let Some(pooled) = pooled {
+        if let Some(mut pooled) = pooled {
             FD_POOL_STATS.with(|s| s.hits.fetch_add(1, Ordering::Relaxed));
-            let metadata = pooled.file.metadata().await;
+            let file = match pooled.file {
+                Ok(file) => file,
+                Err(e) => {
+                    let e2 = if let Some(e) = e.raw_os_error() {
+                        std::io::Error::from_raw_os_error(e)
+                    } else {
+                        std::io::Error::new(e.kind(), e.to_string())
+                    };
+                    pooled.file = Err(e2);
+
+                    let path_buf = path.as_ref().to_path_buf();
+                    FD_REUSE_CACHE.with(move |c| {
+                        let mut cache = c.borrow_mut();
+                        cache.entries.entry(path_buf).or_default().push(pooled);
+                    });
+                    Err(e)?
+                }
+            };
+            let metadata = file.metadata().await;
             return Ok(Self {
-                inner: Some(pooled.file),
+                inner: Some(file),
                 metadata: metadata,
                 path: path.as_ref().to_path_buf(),
             });
@@ -193,13 +222,45 @@ impl ReusedFile {
 
         // Pool miss — open fresh
         FD_POOL_STATS.with(|s| s.misses.fetch_add(1, Ordering::Relaxed));
-        let file = vibeio::fs::File::open(path.as_ref()).await?;
+        let file = match vibeio::fs::File::open(path.as_ref()).await {
+            Ok(file) => file,
+            Err(e) => {
+                let e2 = if let Some(e) = e.raw_os_error() {
+                    std::io::Error::from_raw_os_error(e)
+                } else {
+                    std::io::Error::new(e.kind(), e.to_string())
+                };
+                Self::return_handle_to_pool(Err(e2), path.as_ref().to_path_buf());
+                Err(e)?
+            }
+        };
         let metadata = file.metadata().await;
         Ok(Self {
             inner: Some(file),
             metadata: metadata,
             path: path.as_ref().to_path_buf(),
         })
+    }
+
+    #[inline]
+    fn return_handle_to_pool(inner: std::io::Result<vibeio::fs::File>, path_buf: PathBuf) {
+        FD_REUSE_CACHE.with(move |c| {
+            let mut cache = c.borrow_mut();
+            let evicted = cache.evict_if_full();
+            if evicted > 0 {
+                FD_POOL_STATS.with(|s| {
+                    s.preemptive_evictions.fetch_add(evicted, Ordering::Relaxed);
+                });
+            }
+            cache
+                .entries
+                .entry(path_buf)
+                .or_default()
+                .push(PooledHandle {
+                    file: inner,
+                    pooled_at: Instant::now(),
+                });
+        });
     }
 
     /// Get cached metadata directly from the file descriptor (not the path).
@@ -279,23 +340,7 @@ impl Drop for ReusedFile {
 
             // Return the handle to the per-thread pool
             let path_buf = self.path.clone();
-            FD_REUSE_CACHE.with(move |c| {
-                let mut cache = c.borrow_mut();
-                let evicted = cache.evict_if_full();
-                if evicted > 0 {
-                    FD_POOL_STATS.with(|s| {
-                        s.preemptive_evictions.fetch_add(evicted, Ordering::Relaxed);
-                    });
-                }
-                cache
-                    .entries
-                    .entry(path_buf)
-                    .or_default()
-                    .push(PooledHandle {
-                        file: inner,
-                        pooled_at: Instant::now(),
-                    });
-            });
+            Self::return_handle_to_pool(Ok(inner), path_buf);
         }
     }
 }
@@ -384,7 +429,7 @@ mod tests {
                 .entry(file_path)
                 .or_default()
                 .push(PooledHandle {
-                    file: std_file,
+                    file: Ok(std_file),
                     pooled_at: Instant::now(),
                 });
         }
@@ -398,7 +443,7 @@ mod tests {
             .entry(expired_path.clone())
             .or_default()
             .push(PooledHandle {
-                file: std_file,
+                file: Ok(std_file),
                 pooled_at: Instant::now() - Duration::from_secs(1), // expired
             });
 

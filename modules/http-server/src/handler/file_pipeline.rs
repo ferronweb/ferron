@@ -347,6 +347,22 @@ async fn resolve_http_file_target(
             }
         }
 
+        // Optimization inspired by NGINX (kernel caching data)
+        if let Some(idx) = index_files.and_then(|idf| idf.first()) {
+            if let Some(index_file) = try_resolve_index_files(
+                &candidate_path,
+                &[idx.to_owned()],
+                root_path,
+                disable_symlinks,
+            )
+            .await?
+            {
+                let mut resolved_file = index_file;
+                resolved_file.etag = resolved_file.compute_etag();
+                return Ok(Some(resolved_file));
+            }
+        }
+
         let reused_file = ReusedFile::open(&candidate_path)
             .await
             .map_err(FilePipelineExecutionError::Io)?;
@@ -356,7 +372,7 @@ async fn resolve_http_file_target(
                     if let Some(index_files) = index_files {
                         if let Some(index_file) = try_resolve_index_files(
                             &candidate_path,
-                            index_files,
+                            &index_files[1..],
                             root_path,
                             disable_symlinks,
                         )
@@ -474,9 +490,17 @@ async fn try_resolve_index_files(
             continue;
         }
 
-        let reused_file = ReusedFile::open(&index_path)
-            .await
-            .map_err(FilePipelineExecutionError::Io)?;
+        let reused_file = match ReusedFile::open(&index_path).await {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                return Err(FilePipelineExecutionError::Forbidden);
+            }
+            Err(error) => {
+                return Err(FilePipelineExecutionError::Io(error));
+            }
+        };
         match reused_file.metadata() {
             Ok(metadata) if metadata.is_file() => {
                 return Ok(Some(ResolvedHttpFile {
