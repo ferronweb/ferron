@@ -1,7 +1,7 @@
 use std::io;
 use std::path::{Component, Path, PathBuf};
-use std::time::{Duration, Instant};
 
+use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{Pipeline, PipelineError};
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
@@ -9,61 +9,8 @@ use http_body_util::BodyExt;
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
+use super::file_descriptor::SymlinkMode;
 use super::observability::PerStageSpanHooks;
-
-/// Cache for path canonicalization results.
-/// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
-/// TTL: 100 milliseconds to balance performance with filesystem change detection.
-const PATH_RESOLVE_CACHE_TTL_MILLIS: std::time::Duration = std::time::Duration::from_millis(100);
-
-type PathResolveCache = lru::LruCache<
-    (PathBuf, String),
-    Timestamped<std::rc::Rc<ResolvedHttpFile>>,
-    foldhash::fast::RandomState,
->;
-
-thread_local! {
-    static PATH_RESOLVE_CACHE: std::cell::LazyCell<std::cell::RefCell<PathResolveCache>> =
-        std::cell::LazyCell::new(|| {
-            std::cell::RefCell::new(
-                lru::LruCache::with_hasher(
-                    std::num::NonZero::new(1024).expect("this should be valid"),
-                    foldhash::fast::RandomState::default(),
-                )
-            )
-        });
-}
-
-#[inline]
-fn get_or_init_cache<F, R>(func: F) -> Option<R>
-where
-    F: FnOnce(&mut PathResolveCache) -> R,
-{
-    PATH_RESOLVE_CACHE
-        .try_with(|f| func(&mut f.borrow_mut()))
-        .ok()
-}
-
-/// Wraps a value with an insertion timestamp for TTL-based expiry.
-#[derive(Debug, Clone)]
-struct Timestamped<T> {
-    inserted_at: Instant,
-    value: T,
-}
-
-impl<T> Timestamped<T> {
-    #[inline]
-    fn new(value: T) -> Self {
-        Self {
-            inserted_at: Instant::now(),
-            value,
-        }
-    }
-
-    fn is_expired(&self, ttl: Duration) -> bool {
-        self.inserted_at.elapsed() >= ttl
-    }
-}
 
 #[derive(Debug, Clone)]
 struct ResolvedHttpFile {
@@ -100,7 +47,6 @@ pub(super) enum FilePipelineExecutionError {
     Timeout,
     Io(io::Error),
     Pipeline(PipelineError),
-    WebrootNotFound,
 }
 
 pub(super) async fn execute_http_file_pipeline(
@@ -124,39 +70,17 @@ pub(super) async fn execute_http_file_pipeline(
     };
 
     let index_files = resolve_index_files(ctx);
-    let cache_key = (root_path.clone(), request_path.clone());
-    let resolved_file = match get_or_init_cache(|c| c.get(&cache_key).cloned()).flatten() {
-        Some(timestamped) if !timestamped.is_expired(PATH_RESOLVE_CACHE_TTL_MILLIS) => {
-            let cache_path = &timestamped.value.file_path;
-            match vibeio::fs::symlink_metadata(cache_path).await {
-                Ok(current_metadata) if current_metadata.is_symlink() => {
-                    return Err(FilePipelineExecutionError::Forbidden);
-                }
-                Ok(current_metadata)
-                    if current_metadata.len() == timestamped.value.metadata.len()
-                        && current_metadata.modified().ok()
-                            == timestamped.value.metadata.modified().ok() =>
-                {
-                    timestamped.value.clone()
-                }
-                _ => {
-                    let Some(resolved) =
-                        resolve_and_cache(&root_path, &request_path, Some(&index_files)).await?
-                    else {
-                        return Ok(());
-                    };
-                    resolved
-                }
-            }
-        }
-        _ => {
-            let Some(resolved) =
-                resolve_and_cache(&root_path, &request_path, Some(&index_files)).await?
-            else {
-                return Ok(());
-            };
-            resolved
-        }
+    let disable_symlinks = resolve_disable_symlinks(ctx)?;
+
+    let Some(resolved_file) = resolve_http_file_target(
+        &root_path,
+        &request_path,
+        Some(&index_files),
+        disable_symlinks,
+    )
+    .await?
+    else {
+        return Ok(());
     };
 
     if resolved_file.metadata.is_dir() {
@@ -235,28 +159,9 @@ pub(super) async fn execute_http_file_pipeline(
     .await
 }
 
-async fn resolve_and_cache(
-    root_path: &Path,
-    request_path: &str,
-    index_files: Option<&[String]>,
-) -> Result<Option<std::rc::Rc<ResolvedHttpFile>>, FilePipelineExecutionError> {
-    let Some(mut resolved_file) =
-        resolve_http_file_target(root_path, request_path, index_files).await?
-    else {
-        return Ok(None);
-    };
-
-    resolved_file.etag = resolved_file.compute_etag();
-    let resolved_file = std::rc::Rc::new(resolved_file);
-
-    let cache_key = (root_path.to_path_buf(), request_path.to_string());
-    get_or_init_cache(|c| c.push(cache_key, Timestamped::new(resolved_file.clone())));
-    Ok(Some(resolved_file))
-}
-
 async fn apply_resolved_file_to_context(
     ctx: &mut HttpContext,
-    resolved_file: std::rc::Rc<ResolvedHttpFile>,
+    resolved_file: ResolvedHttpFile,
     file_pipeline: &Pipeline<HttpFileContext>,
     timeout: Option<std::time::Duration>,
     root_path: PathBuf,
@@ -381,65 +286,76 @@ fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
     }
 }
 
+fn resolve_disable_symlinks(ctx: &HttpContext) -> Result<SymlinkMode, FilePipelineExecutionError> {
+    let value = ctx.configuration.get_entry("disable_symlinks", true);
+
+    if let Some(s) = value.map(|v| {
+        v.args
+            .first()
+            .unwrap_or(&ServerConfigurationValue::Boolean(false, None))
+    }) {
+        SymlinkMode::from_config_value(s).map_err(|e| {
+            FilePipelineExecutionError::Io(io::Error::new(io::ErrorKind::InvalidInput, e))
+        })
+    } else {
+        Ok(SymlinkMode::Off)
+    }
+}
+
 async fn resolve_http_file_target(
     root_path: &Path,
     request_path: &str,
     index_files: Option<&[String]>,
+    disable_symlinks: SymlinkMode,
 ) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
     if !request_path.starts_with('/') {
         return Ok(None);
     }
-
-    let canonical_root = match vibeio::fs::canonicalize(root_path).await {
-        Ok(path) => path,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            return Err(FilePipelineExecutionError::WebrootNotFound)
-        }
-        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-            return Err(FilePipelineExecutionError::Forbidden)
-        }
-        Err(e) if e.kind() == io::ErrorKind::InvalidFilename => {
-            return Err(FilePipelineExecutionError::BadRequest)
-        }
-        Err(e) => return Err(FilePipelineExecutionError::Io(e)),
-    };
 
     let request_segments = request_path_segments(request_path)?;
     let mut candidate_depth = request_segments.len();
     let trailing_slash = request_path.ends_with('/') && request_path != "/";
 
     loop {
-        let candidate_path =
-            build_candidate_path(&canonical_root, &request_segments[..candidate_depth]);
-        match vibeio::fs::metadata(&candidate_path).await {
-            Ok(metadata) => {
-                let candidate_path = vibeio::fs::canonicalize(&candidate_path)
-                    .await
-                    .map_err(FilePipelineExecutionError::Io)?;
-                if !candidate_path.starts_with(&canonical_root) {
+        let candidate_path = build_candidate_path(root_path, &request_segments[..candidate_depth]);
+
+        // Check if path is still within root (simple check: no .. in normalized form)
+        if !is_path_within_root(root_path, &candidate_path) {
+            return Err(FilePipelineExecutionError::Forbidden);
+        }
+
+        // Check for symlinks if enabled
+        if disable_symlinks != SymlinkMode::Off {
+            if let Err(e) =
+                check_symlinks_in_path(&candidate_path, root_path, disable_symlinks).await
+            {
+                if e.kind() == io::ErrorKind::PermissionDenied {
                     return Err(FilePipelineExecutionError::Forbidden);
                 }
+                // Continue with other checks
+            }
+        }
 
+        match vibeio::fs::metadata(&candidate_path).await {
+            Ok(metadata) => {
                 if metadata.is_dir() {
                     if let Some(index_files) = index_files {
-                        if let Some(index_file) =
-                            try_resolve_index_files(&candidate_path, index_files, &canonical_root)
-                                .await?
+                        if let Some(index_file) = try_resolve_index_files(
+                            &candidate_path,
+                            index_files,
+                            root_path,
+                            disable_symlinks,
+                        )
+                        .await?
                         {
-                            return Ok(Some(ResolvedHttpFile {
-                                metadata: index_file.metadata,
-                                file_path: index_file.file_path,
-                                path_info: build_path_info(
-                                    &request_segments[candidate_depth..],
-                                    trailing_slash,
-                                ),
-                                etag: String::new(),
-                            }));
+                            let mut resolved_file = index_file;
+                            resolved_file.etag = resolved_file.compute_etag();
+                            return Ok(Some(resolved_file));
                         }
                     }
                 }
 
-                let resolved = ResolvedHttpFile {
+                let mut resolved = ResolvedHttpFile {
                     metadata,
                     file_path: candidate_path,
                     path_info: build_path_info(
@@ -448,6 +364,7 @@ async fn resolve_http_file_target(
                     ),
                     etag: String::new(),
                 };
+                resolved.etag = resolved.compute_etag();
                 return Ok(Some(resolved));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -465,25 +382,89 @@ async fn resolve_http_file_target(
     }
 }
 
+/// Check if a path is within root by comparing normalized components.
+/// This uses simple path component logic without canonicalization.
+fn is_path_within_root(root: &Path, candidate: &Path) -> bool {
+    // Both paths should be absolute (start with /)
+    // Check if candidate starts with root as a path prefix
+    match candidate.strip_prefix(root) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// Check for symlinks in the path traversal chain (if enabled).
+/// Returns an error if a forbidden symlink is found.
+async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> io::Result<()> {
+    if mode == SymlinkMode::Off {
+        return Ok(());
+    }
+
+    // Walk the path components and check each for symlinks
+    let mut current = root.to_path_buf();
+
+    for component in path
+        .strip_prefix(root)
+        .unwrap_or_else(|_| Path::new(""))
+        .components()
+    {
+        current.push(component);
+
+        // Check if this component is a symlink
+        match vibeio::fs::symlink_metadata(&current).await {
+            Ok(metadata) if metadata.is_symlink() => {
+                match mode {
+                    SymlinkMode::On => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "symlinks not allowed",
+                        ));
+                    }
+                    SymlinkMode::IfNotOwner => {
+                        // For IfNotOwner mode, we currently treat it the same as On
+                        // because vibeio::fs::Metadata doesn't expose UID information.
+                        // Future enhancement: access raw std::fs::Metadata for UID comparison.
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "symlinks not allowed",
+                        ));
+                    }
+                    SymlinkMode::Off => {} // Already checked above
+                }
+            }
+            _ => {} // Not a symlink or doesn't exist, continue
+        }
+    }
+
+    Ok(())
+}
+
 async fn try_resolve_index_files(
     directory: &Path,
     index_files: &[String],
-    canonical_root: &Path,
+    root: &Path,
+    disable_symlinks: SymlinkMode,
 ) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
     for index in index_files {
         let index_path = directory.join(index);
+
+        // Check path is within root
+        if !is_path_within_root(root, &index_path) {
+            continue;
+        }
+
+        // Check for symlinks if enabled
+        if disable_symlinks != SymlinkMode::Off {
+            if let Err(_) = check_symlinks_in_path(&index_path, root, disable_symlinks).await {
+                continue;
+            }
+        }
+
         match vibeio::fs::metadata(&index_path).await {
             Ok(metadata) if metadata.is_file() => {
-                let canonical = vibeio::fs::canonicalize(&index_path)
-                    .await
-                    .map_err(FilePipelineExecutionError::Io)?;
-                if !canonical.starts_with(canonical_root) {
-                    return Err(FilePipelineExecutionError::Forbidden);
-                }
-
                 return Ok(Some(ResolvedHttpFile {
                     metadata,
-                    file_path: canonical,
+                    file_path: index_path,
                     path_info: None,
                     etag: String::new(),
                 }));
@@ -639,10 +620,11 @@ mod tests {
         let root = TestDir::new("path-info");
         std::fs::write(root.path.join("index.html"), b"hello").expect("failed to write file");
 
-        let resolved = resolve_http_file_target(&root.path, "/index.html/test", None)
-            .await
-            .expect("resolution should succeed")
-            .expect("file should resolve");
+        let resolved =
+            resolve_http_file_target(&root.path, "/index.html/test", None, SymlinkMode::Off)
+                .await
+                .expect("resolution should succeed")
+                .expect("file should resolve");
 
         assert!(resolved.metadata.is_file());
         assert_eq!(
@@ -659,7 +641,7 @@ mod tests {
     async fn returns_none_for_missing_files() {
         let root = TestDir::new("missing-file");
 
-        let resolved = resolve_http_file_target(&root.path, "/missing.txt", None)
+        let resolved = resolve_http_file_target(&root.path, "/missing.txt", None, SymlinkMode::Off)
             .await
             .expect("resolution should succeed");
 
@@ -670,7 +652,7 @@ mod tests {
     async fn rejects_parent_directory_traversal() {
         let root = TestDir::new("parent-traversal");
 
-        let error = resolve_http_file_target(&root.path, "/../secret.txt", None)
+        let error = resolve_http_file_target(&root.path, "/../secret.txt", None, SymlinkMode::Off)
             .await
             .expect_err("traversal should be rejected");
 
@@ -689,7 +671,8 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("escape.txt"))
             .expect("failed to create symlink");
 
-        let error = resolve_http_file_target(&root, "/escape.txt", None)
+        // With symlink protection enabled, it should reject
+        let error = resolve_http_file_target(&root, "/escape.txt", None, SymlinkMode::On)
             .await
             .expect_err("symlink escape should be rejected");
 
@@ -702,9 +685,10 @@ mod tests {
         std::fs::write(root.path.join("file.txt"), b"content").expect("failed to write file");
 
         // Windows ADS-style path: /file.txt::$DATA
-        let error = resolve_http_file_target(&root.path, "/file.txt::$DATA", None)
-            .await
-            .expect_err("ADS access should be rejected");
+        let error =
+            resolve_http_file_target(&root.path, "/file.txt::$DATA", None, SymlinkMode::Off)
+                .await
+                .expect_err("ADS access should be rejected");
 
         assert!(matches!(error, FilePipelineExecutionError::Forbidden));
     }

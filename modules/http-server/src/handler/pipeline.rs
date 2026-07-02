@@ -12,7 +12,7 @@ use super::observability::PerStageSpanHooks;
 use super::file_pipeline::{
     execute_http_file_pipeline, strip_matched_path_prefix, FilePipelineExecutionError,
 };
-use super::request_utils::{emit_error_with_trace, emit_warn_with_trace};
+use super::request_utils::emit_error_with_trace;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn execute_pipeline_stages(
@@ -184,27 +184,6 @@ pub async fn execute_pipeline_stages(
                         ],
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
-                }
-                Err(FilePipelineExecutionError::WebrootNotFound) => {
-                    if let Some(webroot) = ctx
-                        .configuration
-                        .get_value("root", true)
-                        .and_then(|v| v.as_string_with_interpolations(ctx))
-                    {
-                        emit_warn_with_trace(
-                            events,
-                            format!("{log_prefix}Webroot not found: {webroot}"),
-                            log_trace_context.clone(),
-                            vec![
-                                (
-                                    "error.type",
-                                    LogAttributeValue::String("webroot_not_found".into()),
-                                ),
-                                ("ferron.webroot", LogAttributeValue::String(webroot)),
-                            ],
-                        );
-                    }
-                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
                 }
             }
         }

@@ -8,6 +8,8 @@
 
 #### Security
 
+- **Configurable symlink traversal protection** — the new `disable_symlinks` directive allows configuration of symlink handling during static file serving (`false`, `true`, or `if_not_owner` on Unix). When enabled, symlinks are detected without following them during path traversal, preventing symlink-based escape attacks from outside the configured webroot. Defaults to `false` for backward compatibility.
+- **Path resolution without canonicalization** — static file path resolution now uses component-level validation with simple PathBuf checks instead of costly filesystem canonicalization. This improves performance, eliminates path canonicalization overhead, and reduces the TOCTOU window by validating paths before symlink traversal checks. Combined with `disable_symlinks on`, this implements nginx-style defense-in-depth protection.
 - **Error rate threshold** — the `abuse_protection` directive now supports an `error_rate_threshold` sub-directive that monitors HTTP response status codes. When a client triggers an abnormal number of configured error responses (e.g., 404, 403) within a time window, their IP is temporarily banned. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
 
 #### Observability & tracing

@@ -218,23 +218,6 @@ pub(super) fn emit_error_with_trace(
     }));
 }
 
-#[inline]
-pub(super) fn emit_warn_with_trace(
-    events: &CompositeEventSink,
-    message: impl Into<String>,
-    trace_context: Option<EventTraceContext>,
-    attributes: Vec<(&'static str, LogAttributeValue)>,
-) {
-    events.emit(Event::Log(LogEvent {
-        level: LogLevel::Warn,
-        message: message.into(),
-        summary: "Request warning".into(),
-        target: LOG_TARGET,
-        attributes,
-        trace_context,
-    }));
-}
-
 pub(super) async fn execute_error_pipeline(
     error_pipeline: &Pipeline<HttpErrorContext>,
     error_code: u16,
