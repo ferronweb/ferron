@@ -215,7 +215,7 @@ impl ReusedFile {
             let metadata = file.metadata().await;
             return Ok(Self {
                 inner: Some(file),
-                metadata: metadata,
+                metadata,
                 path: path.as_ref().to_path_buf(),
             });
         }
@@ -237,7 +237,7 @@ impl ReusedFile {
         let metadata = file.metadata().await;
         Ok(Self {
             inner: Some(file),
-            metadata: metadata,
+            metadata,
             path: path.as_ref().to_path_buf(),
         })
     }
