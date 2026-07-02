@@ -282,16 +282,6 @@ impl<Key, Val> quick_cache::Lifecycle<Key, Val> for CustomLifecycle<Key, Val> {
   }
 
   #[inline]
-  fn begin_request(&self) -> Self::RequestState {
-    self.inner.begin_request()
-  }
-
-  #[inline]
-  fn end_request(&self, state: Self::RequestState) {
-    self.inner.end_request(state)
-  }
-
-  #[inline]
   fn is_pinned(&self, key: &Key, val: &Val) -> bool {
     self.inner.is_pinned(key, val)
   }
@@ -363,7 +353,7 @@ impl ModuleLoader for CacheModuleLoader {
               .as_ref()
               .map_or(u64::MAX, |v| (*v as u64).saturating_add(1)),
             quick_cache::UnitWeighter,
-            quick_cache::DefaultHashBuilder::new(),
+            quick_cache::DefaultHashBuilder::default(),
             CustomLifecycle {
               inner: quick_cache::sync::DefaultLifecycle::default(),
               track_evictions: track_evictions.clone(),
