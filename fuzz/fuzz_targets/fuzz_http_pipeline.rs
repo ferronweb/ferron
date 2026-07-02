@@ -6,8 +6,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_http_server::handler::request_handler;
 use ferron_http_server::config::ThreeStageResolver;
+use ferron_http_server::handler::request_handler;
 use ferron_http_server::stages::{ClientIpFromHeaderStage, HttpsRedirectStage};
 use ferron_observability::CompositeEventSink;
 use http_body_util::BodyExt;
@@ -20,7 +20,9 @@ use libfuzzer_sys::fuzz_target;
 ///   0x01 = HTTP/2-style request (with :authority pseudo-header)
 ///
 /// Remaining bytes are treated as raw HTTP/1 request text.
-fn parse_http_request(input: &[u8]) -> Option<http::Request<http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Error>>> {
+fn parse_http_request(
+    input: &[u8],
+) -> Option<http::Request<http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Error>>> {
     if input.is_empty() {
         return None;
     }
@@ -113,12 +115,13 @@ fuzz_target!(|input: &[u8]| {
             local_address,
             remote_address,
             Some("localhost".to_string()),
-            false,  // encrypted
-            false,  // http3_alt_svc
-            None,   // https_port
+            false, // encrypted
+            false, // http3_alt_svc
+            None,  // https_port
             events,
-            None,   // timeout_duration
-            None,   // peer_identity
+            None, // timeout_duration
+            None, // peer_identity
+            None, // tls_params
         )
         .await;
 
