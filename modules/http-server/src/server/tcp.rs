@@ -279,6 +279,14 @@ impl TcpListenerHandle {
                                       (
                                           "error.message",
                                           LogAttributeValue::String(e.to_string()),
+                                      ),
+                                      (
+                                          "client.address",
+                                          LogAttributeValue::String(remote_addr.ip().to_string()),
+                                      ),
+                                      (
+                                          "server.address",
+                                          LogAttributeValue::String(local_addr.ip().to_string()),
                                       )],
                                   );
                                   emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
@@ -324,6 +332,14 @@ impl TcpListenerHandle {
                                     (
                                         "error.message",
                                         LogAttributeValue::String(e.to_string()),
+                                    ),
+                                    (
+                                        "client.address",
+                                        LogAttributeValue::String(remote_addr.ip().to_string()),
+                                    ),
+                                    (
+                                        "server.address",
+                                        LogAttributeValue::String(local_addr.ip().to_string()),
                                     )];
                                     if e.to_string().to_lowercase().contains("resolve")
                                       || e.to_string().to_lowercase().contains("resolution") {
@@ -459,6 +475,14 @@ impl TcpListenerHandle {
                                             vec![(
                                                 "error.type",
                                                 LogAttributeValue::String("tcp_tls_protocol_error".into()),
+                                            ),
+                                            (
+                                                "client.address",
+                                                LogAttributeValue::String(remote_addr.ip().to_string()),
+                                            ),
+                                            (
+                                                "server.address",
+                                                LogAttributeValue::String(local_addr.ip().to_string()),
                                             )],
                                         );
                                     }
@@ -490,7 +514,15 @@ impl TcpListenerHandle {
                                                                     (
                                                                         "error.message",
                                                                         LogAttributeValue::String(e.to_string()),
-                                                                    ),],
+                                                                    ),
+                                                                    (
+                                                                        "client.address",
+                                                                        LogAttributeValue::String(remote_addr.ip().to_string()),
+                                                                    ),
+                                                                    (
+                                                                        "server.address",
+                                                                        LogAttributeValue::String(local_addr.ip().to_string()),
+                                                                    )],
                                                                 );
                                                             }
                                     }
@@ -505,10 +537,20 @@ impl TcpListenerHandle {
                                 emit_error(
                                     &ip_observability,
                                     "Plain TCP listener requires HTTP/1.x support",
-                                    vec![(
-                                        "error.type",
-                                        LogAttributeValue::String("tcp_http1_required".into()),
-                                    )],
+                                    vec![
+                                        (
+                                            "error.type",
+                                            LogAttributeValue::String("tcp_http1_required".into()),
+                                        ),
+                                        (
+                                            "client.address",
+                                            LogAttributeValue::String(remote_addr.ip().to_string()),
+                                        ),
+                                        (
+                                            "server.address",
+                                            LogAttributeValue::String(local_addr.ip().to_string()),
+                                        ),
+                                    ],
                                 );
                                 return;
                             }
@@ -711,6 +753,14 @@ async fn handle_http1_connection_zerocopy<S>(
                     "error.message",
                     LogAttributeValue::String(error.to_string()),
                 ),
+                (
+                    "client.address",
+                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                ),
             ],
         );
     }
@@ -790,6 +840,14 @@ async fn handle_http1_connection<S>(
                 (
                     "error.message",
                     LogAttributeValue::String(error.to_string()),
+                ),
+                (
+                    "client.address",
+                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
                 ),
             ],
         );
@@ -871,6 +929,14 @@ async fn handle_http2_connection<S>(
                     "error.message",
                     LogAttributeValue::String(error.to_string()),
                 ),
+                (
+                    "client.address",
+                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                ),
             ],
         );
     }
@@ -913,6 +979,8 @@ fn build_bad_request_handler(
             let request_observability = state.connection_observability.clone();
             bad_request_handler(
                 is_timeout,
+                state.local_address,
+                state.remote_address,
                 state.error_pipeline.clone(),
                 request_observability,
             )

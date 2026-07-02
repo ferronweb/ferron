@@ -15,6 +15,7 @@
 - **Per-host TLS handshake metrics** — new per-host metrics for TLS handshake duration (`ferron.tls.handshake.duration` histogram), handshake count (`ferron.tls.handshake.total` counter), and active connections (`ferron.tls.connections.active` up-down counter). Each metric carries `ferron.host`, `tls.protocol.version`, and `tls.cipher_suite` attributes, enabling per-host visibility into TLS performance and client compatibility.
 - **TLS attributes on request traces** — the `ferron.request` root span now includes `tls.protocol.version` and `tls.cipher_suite` attributes for HTTPS connections, correlating TLS parameters with individual requests without requiring a separate TLS span.
 - **Per-host OCSP metrics** — OCSP fetching metrics (`ferron.ocsp.fetches_total`, `ferron.ocsp.fetch_duration_seconds`) now include a `ferron.host` dimension, and a new `ferron.ocsp.stapling.hit_total` counter tracks per-request OCSP stapling outcomes per host.
+- **Client and server IPs in error logs** — structured error logs for bad requests (400), request timeouts (408), TLS handshake failures, and TCP connection errors now include `client.address` and `server.address` attributes, enabling IP-based correlation and troubleshooting.
 
 #### Reverse proxy
 

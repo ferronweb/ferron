@@ -247,6 +247,27 @@ These events carry the `ferron-metrics-reload` target and are emitted through th
 | Configuration reload | `INFO` | — |
 | Configuration reload error | `WARN` | `error.message` (string) — the reload error message |
 
+### Error log attributes
+
+Structured error logs include contextual attributes to aid troubleshooting:
+
+| Attribute | Description |
+|-----------|-------------|
+| `error.type` | Error category (e.g. `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
+| `error.message` | The human-readable error description |
+| `client.address` | The client IP address, when available |
+| `server.address` | The server IP address, when available |
+
+The `client.address` and `server.address` attributes are included in:
+
+- **Bad request (400) and timeout (408) logs** — emitted when a request is rejected before handler execution.
+- **TLS handshake failure logs** — emitted when a TLS connection fails to establish or negotiate a protocol.
+- **TCP connection error logs** — emitted when an HTTP/1.x or HTTP/2 connection encounters a transport-level error.
+- **Request validation error logs** — emitted for invalid Host headers, malformed URLs, CONNECT path errors, and URL sanitization failures.
+
+> [!note]
+> Connection-level errors that occur before the socket address is resolved (e.g. accept failures, PROXY protocol errors) do not include IP attributes.
+
 ## Trace ID in console and file logs
 
 Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.

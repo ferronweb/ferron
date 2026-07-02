@@ -52,6 +52,8 @@ type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
 pub async fn bad_request_handler(
     is_timeout: bool,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
@@ -89,10 +91,20 @@ pub async fn bad_request_handler(
                 "bad request"
             }
         ),
-        vec![(
-            "error.type",
-            LogAttributeValue::String(error_type.to_string()),
-        )],
+        vec![
+            (
+                "error.type",
+                LogAttributeValue::String(error_type.to_string()),
+            ),
+            (
+                "client.address",
+                LogAttributeValue::String(remote_address.ip().to_string()),
+            ),
+            (
+                "server.address",
+                LogAttributeValue::String(local_address.ip().to_string()),
+            ),
+        ],
     );
     events.emit(Event::Metric(MetricEvent {
         name: "ferron.http.server.pre_handler_request_count",
@@ -579,6 +591,14 @@ async fn request_handler_inner(
                     LogAttributeValue::String("host_header_error".into()),
                 ),
                 ("error.message", LogAttributeValue::String(e.to_string())),
+                (
+                    "client.address",
+                    LogAttributeValue::String(remote_address.ip().to_string()),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(local_address.ip().to_string()),
+                ),
             ],
         );
         if let Some(response) = execute_error_pipeline(
@@ -618,10 +638,20 @@ async fn request_handler_inner(
             &events,
             "CONNECT requests must use authority-form URI",
             request_log_trace_context.clone(),
-            vec![(
-                "error.type",
-                LogAttributeValue::String("connect_path_error".into()),
-            )],
+            vec![
+                (
+                    "error.type",
+                    LogAttributeValue::String("connect_path_error".into()),
+                ),
+                (
+                    "client.address",
+                    LogAttributeValue::String(remote_address.ip().to_string()),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(local_address.ip().to_string()),
+                ),
+            ],
         );
         return (
             Ok(builtin_error_response(
@@ -664,6 +694,14 @@ async fn request_handler_inner(
                         LogAttributeValue::String("url_backslash_error".into()),
                     ),
                     ("error.message", LogAttributeValue::String(e.to_string())),
+                    (
+                        "client.address",
+                        LogAttributeValue::String(remote_address.ip().to_string()),
+                    ),
+                    (
+                        "server.address",
+                        LogAttributeValue::String(local_address.ip().to_string()),
+                    ),
                 ],
             );
             if let Some(response) = execute_error_pipeline(
@@ -708,6 +746,14 @@ async fn request_handler_inner(
                                     LogAttributeValue::String("url_sanitize_error".into()),
                                 ),
                                 ("error.message", LogAttributeValue::String(e.to_string())),
+                                (
+                                    "client.address",
+                                    LogAttributeValue::String(remote_address.ip().to_string()),
+                                ),
+                                (
+                                    "server.address",
+                                    LogAttributeValue::String(local_address.ip().to_string()),
+                                ),
                             ],
                         );
                         if let Some(response) = execute_error_pipeline(
@@ -751,6 +797,14 @@ async fn request_handler_inner(
                             LogAttributeValue::String("url_path_error".into()),
                         ),
                         ("error.message", LogAttributeValue::String(e.to_string())),
+                        (
+                            "client.address",
+                            LogAttributeValue::String(remote_address.ip().to_string()),
+                        ),
+                        (
+                            "server.address",
+                            LogAttributeValue::String(local_address.ip().to_string()),
+                        ),
                     ],
                 );
                 if let Some(response) = execute_error_pipeline(
