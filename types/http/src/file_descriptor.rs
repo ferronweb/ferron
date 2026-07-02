@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{self, Seek};
 use std::ops::Deref;
+#[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -48,15 +49,26 @@ const FD_CACHE_MAX_ENTRIES_PREEMPTIVE: usize = 256;
 
 /// A pooled file handle with insertion timestamp for TTL-based eviction.
 struct PooledHandle {
-    file: std::io::Result<vibeio::fs::File>,
+    file: vibeio::fs::File,
     /// When this handle was returned to the pool.
     pooled_at: Instant,
+}
+
+struct PooledError {
+    error: std::io::Error,
+    pooled_at: Instant,
+}
+
+#[derive(Default)]
+struct FdPoolItem {
+    handles: Vec<PooledHandle>,
+    error: Option<PooledError>,
 }
 
 /// Per-thread file descriptor reuse pool with expired eviction.
 struct FdPool {
     /// Maps file paths to a stack of pooled handles.
-    entries: BTreeMap<PathBuf, Vec<PooledHandle>>,
+    entries: BTreeMap<PathBuf, FdPoolItem>,
 }
 
 impl FdPool {
@@ -68,7 +80,7 @@ impl FdPool {
 
     /// Total number of pooled handles across all paths.
     fn total_handles(&self) -> usize {
-        self.entries.values().map(|v| v.len()).sum()
+        self.entries.values().map(|v| v.handles.len()).sum()
     }
 
     /// Evict expired handles from the pool.
@@ -82,12 +94,13 @@ impl FdPool {
 
         // Remove ALL expired handles in one pass.
         let mut expired_paths: Vec<PathBuf> = Vec::new();
-        for (path, handles) in &mut self.entries {
-            let before = handles.len();
-            handles.retain(|h| h.pooled_at.elapsed() < FD_CACHE_TTL);
-            let removed = (before - handles.len()) as u64;
+        for (path, item) in &mut self.entries {
+            let before = item.handles.len();
+            item.handles
+                .retain(|h| h.pooled_at.elapsed() < FD_CACHE_TTL);
+            let removed = (before - item.handles.len()) as u64;
             evicted += removed;
-            if handles.is_empty() {
+            if item.handles.is_empty() {
                 expired_paths.push(path.clone());
             }
         }
@@ -156,12 +169,27 @@ pub struct ReusedFile {
 impl ReusedFile {
     /// Open a file, reusing a pooled handle if available.
     pub async fn open(path: impl AsRef<Path>) -> io::Result<Self> {
-        // Evict expired/overflowing handles before checking pool
-        let evicted = FD_REUSE_CACHE.with(|c| c.borrow_mut().evict_if_full());
-        if evicted > 0 {
-            FD_POOL_STATS.with(|s| {
-                s.preemptive_evictions.fetch_add(evicted, Ordering::Relaxed);
-            });
+        // Check for errors
+        let cached_error = FD_REUSE_CACHE.with(|c| {
+            let mut cache = c.borrow_mut();
+            let path_key = path.as_ref().to_path_buf();
+            let ent = cache.entries.get_mut(&path_key)?;
+            let err = ent.error.as_ref()?;
+            if err.pooled_at.elapsed() < FD_CACHE_TTL {
+                let e = &err.error;
+                let e2 = if let Some(e) = e.raw_os_error() {
+                    std::io::Error::from_raw_os_error(e)
+                } else {
+                    std::io::Error::new(e.kind(), e.to_string())
+                };
+                Some(e2)
+            } else {
+                ent.error = None;
+                None
+            }
+        });
+        if let Some(e) = cached_error {
+            return Err(e);
         }
 
         // Try reusing from pool first
@@ -170,8 +198,8 @@ impl ReusedFile {
             let path_key = path.as_ref().to_path_buf();
             let mut entry = cache.entries.get_mut(&path_key);
             let mut result = None;
-            while entry.as_ref().is_some_and(|e| !e.is_empty()) {
-                let tr = entry.as_mut().and_then(|handles| handles.pop());
+            while entry.as_ref().is_some_and(|e| !e.handles.is_empty()) {
+                let tr = entry.as_mut().and_then(|item| item.handles.pop());
                 if tr
                     .as_ref()
                     .is_some_and(|tr| tr.pooled_at.elapsed() < FD_CACHE_TTL)
@@ -184,34 +212,17 @@ impl ReusedFile {
                 }
             }
             // Clean up empty entries
-            if let Some(handles) = cache.entries.get(&path_key) {
-                if handles.is_empty() {
+            if let Some(item) = cache.entries.get(&path_key) {
+                if item.handles.is_empty() {
                     cache.entries.remove(&path_key);
                 }
             }
             result
         });
 
-        if let Some(mut pooled) = pooled {
+        if let Some(pooled) = pooled {
             FD_POOL_STATS.with(|s| s.hits.fetch_add(1, Ordering::Relaxed));
-            let file = match pooled.file {
-                Ok(file) => file,
-                Err(e) => {
-                    let e2 = if let Some(e) = e.raw_os_error() {
-                        std::io::Error::from_raw_os_error(e)
-                    } else {
-                        std::io::Error::new(e.kind(), e.to_string())
-                    };
-                    pooled.file = Err(e2);
-
-                    let path_buf = path.as_ref().to_path_buf();
-                    FD_REUSE_CACHE.with(move |c| {
-                        let mut cache = c.borrow_mut();
-                        cache.entries.entry(path_buf).or_default().push(pooled);
-                    });
-                    Err(e)?
-                }
-            };
+            let file = pooled.file;
             let metadata = file.metadata().await;
             return Ok(Self {
                 inner: Some(file),
@@ -230,8 +241,15 @@ impl ReusedFile {
                 } else {
                     std::io::Error::new(e.kind(), e.to_string())
                 };
-                Self::return_handle_to_pool(Err(e2), path.as_ref().to_path_buf());
-                Err(e)?
+                FD_REUSE_CACHE.with(|c| {
+                    let mut cache = c.borrow_mut();
+                    let path_key = path.as_ref().to_path_buf();
+                    cache.entries.entry(path_key).or_default().error = Some(PooledError {
+                        error: e2,
+                        pooled_at: Instant::now(),
+                    });
+                });
+                return Err(e)?;
             }
         };
         let metadata = file.metadata().await;
@@ -243,7 +261,7 @@ impl ReusedFile {
     }
 
     #[inline]
-    fn return_handle_to_pool(inner: std::io::Result<vibeio::fs::File>, path_buf: PathBuf) {
+    fn return_handle_to_pool(inner: vibeio::fs::File, path_buf: PathBuf) {
         FD_REUSE_CACHE.with(move |c| {
             let mut cache = c.borrow_mut();
             let evicted = cache.evict_if_full();
@@ -256,6 +274,7 @@ impl ReusedFile {
                 .entries
                 .entry(path_buf)
                 .or_default()
+                .handles
                 .push(PooledHandle {
                     file: inner,
                     pooled_at: Instant::now(),
@@ -296,6 +315,7 @@ impl Deref for ReusedFile {
     }
 }
 
+#[cfg(unix)]
 impl AsRawFd for ReusedFile {
     #[inline]
     fn as_raw_fd(&self) -> std::os::fd::RawFd {
@@ -340,7 +360,7 @@ impl Drop for ReusedFile {
 
             // Return the handle to the per-thread pool
             let path_buf = self.path.clone();
-            Self::return_handle_to_pool(Ok(inner), path_buf);
+            Self::return_handle_to_pool(inner, path_buf);
         }
     }
 }
@@ -428,8 +448,9 @@ mod tests {
             pool.entries
                 .entry(file_path)
                 .or_default()
+                .handles
                 .push(PooledHandle {
-                    file: Ok(std_file),
+                    file: std_file,
                     pooled_at: Instant::now(),
                 });
         }
@@ -442,8 +463,9 @@ mod tests {
         pool.entries
             .entry(expired_path.clone())
             .or_default()
+            .handles
             .push(PooledHandle {
-                file: Ok(std_file),
+                file: std_file,
                 pooled_at: Instant::now() - Duration::from_secs(1), // expired
             });
 
@@ -454,7 +476,7 @@ mod tests {
         // The expired handle should be removed
         assert!(
             !pool.entries.contains_key(&expired_path)
-                || pool.entries.get(&expired_path).unwrap().is_empty()
+                || pool.entries.get(&expired_path).unwrap().handles.is_empty()
         );
 
         std::fs::remove_dir_all(&dir).unwrap();
