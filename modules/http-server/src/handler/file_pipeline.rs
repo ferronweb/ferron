@@ -365,14 +365,18 @@ async fn resolve_http_file_target(
 
         let reused_file = match ReusedFile::open(&candidate_path).await {
             Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden);
+                return Err(FilePipelineExecutionError::Forbidden)
             }
-            Err(error) => {
-                return Err(FilePipelineExecutionError::Io(error));
+            Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
+                return Err(FilePipelineExecutionError::BadRequest)
             }
+            Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
+                candidate_depth -= 1;
+                continue;
+            }
+            Err(error) => return Err(FilePipelineExecutionError::Io(error)),
         };
         match reused_file.metadata() {
             Ok(metadata) => {
