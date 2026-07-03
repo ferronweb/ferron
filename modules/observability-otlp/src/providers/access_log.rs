@@ -148,6 +148,9 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
                     self.push("http.response.body.size", AnyValue::Int(value))
                 }
             }
+            f if f.contains(".") => {
+                self.push(f, AnyValue::String(value.to_string().into()));
+            }
             _ => {
                 if let Some(header) = name.strip_prefix("header_") {
                     self.push(
@@ -156,7 +159,7 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
                     );
                 } else {
                     self.push(
-                        format!("ferron.legacy_field.{name}"),
+                        format!("ferron.custom.{name}"),
                         AnyValue::String(value.to_string().into()),
                     );
                 }
@@ -182,8 +185,11 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
                 "http.response.body.size",
                 AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
             ),
+            f if f.contains(".") => {
+                self.push(f, AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)));
+            }
             s => self.push(
-                format!("ferron.legacy_field.{s}"),
+                format!("ferron.custom.{s}"),
                 AnyValue::Int(i64::try_from(value).unwrap_or(i64::MAX)),
             ),
         }
@@ -192,18 +198,18 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
     fn field_f64(&mut self, name: &str, value: f64) {
         if name == "duration_secs" {
             self.push("http.server.request.duration", AnyValue::Double(value));
+        } else if name.contains(".") {
+            self.push(name, AnyValue::Double(value));
         } else {
-            self.push(
-                format!("ferron.legacy_field.{name}"),
-                AnyValue::Double(value),
-            );
+            self.push(format!("ferron.custom.{name}"), AnyValue::Double(value));
         }
     }
 
     fn field_bool(&mut self, name: &str, value: bool) {
-        self.push(
-            format!("ferron.legacy_field.{name}"),
-            AnyValue::Boolean(value),
-        );
+        if name.contains(".") {
+            self.push(name, AnyValue::Boolean(value));
+        } else {
+            self.push(format!("ferron.custom.{name}"), AnyValue::Boolean(value));
+        }
     }
 }

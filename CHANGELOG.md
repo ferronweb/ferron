@@ -46,6 +46,7 @@
 #### Observability
 
 - **Canonical IP addresses in logs and traces** - `client_ip_canonical` and `server_ip_canonical` are now available as OpenTelemetry-style log attributes and trace span attributes, replacing the legacy `client_ip`/`server_ip`.
+- **Custom log fields** - custom log fields that have `.` in their names are used as-is in OTLP logs instead of being converted to `_` in the log attribute name. This allows for more flexible log field naming and avoids conflicts with existing attribute names.
 
 ### Fixed
 
