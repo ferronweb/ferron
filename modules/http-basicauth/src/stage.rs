@@ -10,6 +10,7 @@ use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
@@ -182,6 +183,10 @@ impl Stage<HttpContext> for BasicAuthStage {
                     "ferron.basicauth.result",
                     TraceAttributeValue::StaticStr("skip"),
                 );
+                custom_access_log_fields(ctx).insert(
+                    "ferron.basicauth.result".into(),
+                    CustomAccessLogField::String("skip".into()),
+                );
                 return Ok(false);
             }
         };
@@ -198,6 +203,10 @@ impl Stage<HttpContext> for BasicAuthStage {
                 );
                 ctx.get_span_attributes()
                     .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
+                custom_access_log_fields(ctx).insert(
+                    "ferron.basicauth.result".into(),
+                    CustomAccessLogField::String("failure".into()),
+                );
                 return Ok(false);
             }
         };
@@ -220,6 +229,10 @@ impl Stage<HttpContext> for BasicAuthStage {
             );
             ctx.get_span_attributes()
                 .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
+            custom_access_log_fields(ctx).insert(
+                "ferron.basicauth.result".into(),
+                CustomAccessLogField::String("failure".into()),
+            );
             return Ok(false);
         }
 
@@ -259,6 +272,10 @@ impl Stage<HttpContext> for BasicAuthStage {
                 );
                 ctx.get_span_attributes()
                     .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
+                custom_access_log_fields(ctx).insert(
+                    "ferron.basicauth.result".into(),
+                    CustomAccessLogField::String("failure".into()),
+                );
                 return Ok(false);
             }
         };
@@ -280,6 +297,10 @@ impl Stage<HttpContext> for BasicAuthStage {
             );
             ctx.get_span_attributes()
                 .insert("user.name", TraceAttributeValue::String(username));
+            custom_access_log_fields(ctx).insert(
+                "ferron.basicauth.result".into(),
+                CustomAccessLogField::String("success".into()),
+            );
             Ok(true) // Continue pipeline
         } else {
             // Authentication failed — record failure
@@ -320,6 +341,10 @@ impl Stage<HttpContext> for BasicAuthStage {
             );
             ctx.get_span_attributes()
                 .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
+            custom_access_log_fields(ctx).insert(
+                "ferron.basicauth.result".into(),
+                CustomAccessLogField::String("failure".into()),
+            );
             Ok(false)
         }
     }

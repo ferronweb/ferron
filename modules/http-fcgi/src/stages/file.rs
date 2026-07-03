@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{
@@ -212,6 +213,10 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     "ferron.fcgi.backend_url",
                     TraceAttributeValue::String(scgi_to_fixed.to_string()),
                 );
+                custom_access_log_fields(&mut ctx.http).insert(
+                    "ferron.fcgi.backend_url".into(),
+                    CustomAccessLogField::String(scgi_to_fixed.to_string()),
+                );
                 return Ok(false);
             }
             Err(ClientError::Other(err)) => {
@@ -311,7 +316,16 @@ impl Stage<HttpFileContext> for FcgiFileStage {
         );
         ctx.get_span_attributes().insert(
             "ferron.fcgi.script_filename",
-            TraceAttributeValue::String(script_filename),
+            TraceAttributeValue::String(script_filename.clone()),
+        );
+        let log_fields = custom_access_log_fields(&mut ctx.http);
+        log_fields.insert(
+            "ferron.fcgi.backend_url".into(),
+            CustomAccessLogField::String(scgi_to_fixed.to_string()),
+        );
+        log_fields.insert(
+            "ferron.fcgi.script_filename".into(),
+            CustomAccessLogField::String(script_filename),
         );
 
         Ok(false)

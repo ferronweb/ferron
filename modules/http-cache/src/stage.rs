@@ -10,6 +10,7 @@ use bytes::{Bytes, BytesMut};
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
@@ -461,6 +462,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                         "ferron.cache.result",
                         TraceAttributeValue::String("purge_rejected".to_string()),
                     );
+                    let log_fields = custom_access_log_fields(ctx);
+                    log_fields.insert(
+                        "ferron.cache.result".into(),
+                        CustomAccessLogField::String("purge_rejected".into()),
+                    );
                     return Ok(false);
                 }
 
@@ -553,6 +559,17 @@ impl Stage<HttpContext> for HttpCacheStage {
                     "ferron.cache.zone",
                     TraceAttributeValue::String(zone_id.label().to_string()),
                 );
+                {
+                    let log_fields = custom_access_log_fields(ctx);
+                    log_fields.insert(
+                        "ferron.cache.result".into(),
+                        CustomAccessLogField::String("purge".into()),
+                    );
+                    log_fields.insert(
+                        "ferron.cache.zone".into(),
+                        CustomAccessLogField::String(zone_id.label().to_string()),
+                    );
+                }
                 // Don't insert RequestState — run_inverse will skip
                 return Ok(false);
             }
@@ -618,6 +635,15 @@ impl Stage<HttpContext> for HttpCacheStage {
                             "ferron.cache.scope",
                             TraceAttributeValue::String(scope.as_str().to_string()),
                         );
+                        let log_fields = custom_access_log_fields(ctx);
+                        log_fields.insert(
+                            "ferron.cache.result".into(),
+                            CustomAccessLogField::String("hit".into()),
+                        );
+                        log_fields.insert(
+                            "ferron.cache.zone".into(),
+                            CustomAccessLogField::String(zone_id.label().to_string()),
+                        );
                     }
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
@@ -675,6 +701,15 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 sa.insert(
                                     "ferron.cache.scope",
                                     TraceAttributeValue::String(scope.as_str().to_string()),
+                                );
+                                let log_fields = custom_access_log_fields(ctx);
+                                log_fields.insert(
+                                    "ferron.cache.result".into(),
+                                    CustomAccessLogField::String("hit".into()),
+                                );
+                                log_fields.insert(
+                                    "ferron.cache.zone".into(),
+                                    CustomAccessLogField::String(zone_id.label().to_string()),
                                 );
                             }
                             ctx.res = Some(if entry.body.is_none() {
@@ -778,6 +813,15 @@ impl Stage<HttpContext> for HttpCacheStage {
                     TraceAttributeValue::String(request_policy.reason.to_string()),
                 );
             }
+            let log_fields = custom_access_log_fields(ctx);
+            log_fields.insert(
+                "ferron.cache.result".into(),
+                CustomAccessLogField::String(result_label.to_string()),
+            );
+            log_fields.insert(
+                "ferron.cache.zone".into(),
+                CustomAccessLogField::String(zone_id.label().to_string()),
+            );
         }
 
         ctx.extensions.insert::<RequestStateKey>(RequestState {
@@ -860,6 +904,15 @@ impl Stage<HttpContext> for HttpCacheStage {
                         sa.insert(
                             "ferron.cache.scope",
                             TraceAttributeValue::String(entry.scope.as_str().to_string()),
+                        );
+                        let log_fields = custom_access_log_fields(ctx);
+                        log_fields.insert(
+                            "ferron.cache.result".into(),
+                            CustomAccessLogField::String("stale".into()),
+                        );
+                        log_fields.insert(
+                            "ferron.cache.zone".into(),
+                            CustomAccessLogField::String(state.zone_id.label().to_string()),
                         );
                     }
                     return Ok(());
@@ -1053,6 +1106,15 @@ impl Stage<HttpContext> for HttpCacheStage {
                             sa.insert(
                                 "ferron.cache.scope",
                                 TraceAttributeValue::String(stale_entry.scope.as_str().to_string()),
+                            );
+                            let log_fields = custom_access_log_fields(ctx);
+                            log_fields.insert(
+                                "ferron.cache.result".into(),
+                                CustomAccessLogField::String("stale".into()),
+                            );
+                            log_fields.insert(
+                                "ferron.cache.zone".into(),
+                                CustomAccessLogField::String(state.zone_id.label().to_string()),
                             );
                         }
                         return Ok(());

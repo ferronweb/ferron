@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpFileContext, HttpResponse};
 use ferron_observability::{
@@ -303,11 +304,20 @@ impl Stage<HttpFileContext> for CgiStage {
                         .insert("http.response.status_code", TraceAttributeValue::I64(500));
                     ctx.get_span_attributes().insert(
                         "ferron.cgi.script_path",
-                        TraceAttributeValue::String(script_path),
+                        TraceAttributeValue::String(script_path.clone()),
                     );
                     ctx.get_span_attributes().insert(
                         "ferron.cgi.exit_code",
-                        TraceAttributeValue::String(exit_code_val),
+                        TraceAttributeValue::String(exit_code_val.clone()),
+                    );
+                    let log_fields = custom_access_log_fields(&mut ctx.http);
+                    log_fields.insert(
+                        "ferron.cgi.script_path".into(),
+                        CustomAccessLogField::String(script_path),
+                    );
+                    log_fields.insert(
+                        "ferron.cgi.exit_code".into(),
+                        CustomAccessLogField::String(exit_code_val),
                     );
                     return Ok(false);
                 }
@@ -380,7 +390,7 @@ impl Stage<HttpFileContext> for CgiStage {
         );
         ctx.get_span_attributes().insert(
             "ferron.cgi.script_path",
-            TraceAttributeValue::String(script_path),
+            TraceAttributeValue::String(script_path.clone()),
         );
         if let Some(exit_code) = exit_code_option {
             let exit_code_str = exit_code
@@ -389,9 +399,18 @@ impl Stage<HttpFileContext> for CgiStage {
                 .unwrap_or_else(|| "unknown".to_string());
             ctx.get_span_attributes().insert(
                 "ferron.cgi.exit_code",
-                TraceAttributeValue::String(exit_code_str),
+                TraceAttributeValue::String(exit_code_str.clone()),
+            );
+            let log_fields = custom_access_log_fields(&mut ctx.http);
+            log_fields.insert(
+                "ferron.cgi.exit_code".into(),
+                CustomAccessLogField::String(exit_code_str),
             );
         }
+        custom_access_log_fields(&mut ctx.http).insert(
+            "ferron.cgi.script_path".into(),
+            CustomAccessLogField::String(script_path),
+        );
 
         Ok(false)
     }

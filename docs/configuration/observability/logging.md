@@ -67,6 +67,39 @@ Each access log entry contains the following fields:
 | `span_id` | Optional trace span ID for the request (if W3C trace context is available) |
 | `trace_id` | Optional trace ID for the request (if W3C trace context is available) |
 
+#### Module-contributed fields
+
+Pipeline modules contribute additional access log fields when active. These fields are only present when the corresponding module handles the request.
+
+| Field | Module | Description |
+|---|---|---|
+| `ferron.proxy.backend_url` | `http-proxy` | Backend URL that served the proxied request |
+| `ferron.proxy.backend_resolved_ip` | `http-proxy` | Resolved IP address of the backend (strict DNS only) |
+| `ferron.proxy.backend_unix_path` | `http-proxy` | Unix socket path of the backend (if applicable) |
+| `ferron.proxy.connection_reused` | `http-proxy` | Whether a pooled connection was reused |
+| `ferron.proxy.retry_count` | `http-proxy` | Number of retry attempts (0 if none) |
+| `ferron.cache.result` | `http-cache` | Cache outcome: `hit`, `miss`, `stale`, `bypass`, `revalidate`, `purge`, `purge_rejected` |
+| `ferron.cache.zone` | `http-cache` | Cache zone identifier |
+| `ferron.ratelimit.result` | `http-ratelimit` | Rate limit decision: `allowed` or `rejected` |
+| `ferron.ratelimit.zone` | `http-ratelimit` | Rate limit zone identifier |
+| `ferron.ratelimit.retry_after_secs` | `http-ratelimit` | Seconds until next request allowed (rejection only) |
+| `ferron.abuseban.action` | `http-abuseban` | Action taken: `rejected` or `skip` |
+| `ferron.abuseban.reason` | `http-abuseban` | Ban reason (rejection only) |
+| `ferron.abuseban.remaining_secs` | `http-abuseban` | Seconds remaining on ban (rejection only) |
+| `ferron.basicauth.result` | `http-basicauth` | Auth outcome: `skip`, `failure`, or `success` |
+| `ferron.fauth.result` | `http-fauth` | Forwarded auth outcome: `success` or `failure` |
+| `ferron.fauth.backend_url` | `http-fauth` | Auth backend URL contacted |
+| `ferron.static.file_path` | `http-static` | Absolute file path served |
+| `ferron.response.action` | `http-response` | Response action: `abort`, `block`, or `status` |
+| `ferron.fproxy.mode` | `http-fproxy` | Forward proxy mode: `tunnel` or `proxy` |
+| `ferron.cgi.script_path` | `http-cgi` | Path to CGI script executed |
+| `ferron.cgi.exit_code` | `http-cgi` | CGI process exit code |
+| `ferron.fcgi.backend_url` | `http-fcgi` | FastCGI backend URL |
+| `ferron.fcgi.script_filename` | `http-fcgi` | Script filename (file mode) |
+| `ferron.scgi.backend_url` | `http-scgi` | SCGI backend URL |
+| `ferron.compression.algorithm` | `http-compression` | Compression algorithm: `gzip`, `br`, `deflate`, `zstd`, or `identity` |
+| `ferron.rewrite.applied` | `http-rewrite` | Whether a URL rewrite was applied |
+
 > [!important]
 > Access logs don't contain sensitive fields (such as `header_cookie`, `header_authorization`). This is to ensure sensitive data is not exposed in log output.
 

@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
@@ -191,6 +192,10 @@ impl Stage<HttpContext> for ScgiStage {
                                 "ferron.scgi.backend_url",
                                 TraceAttributeValue::String(scgi_to_fixed.to_string()),
                             );
+                            custom_access_log_fields(ctx).insert(
+                                "ferron.scgi.backend_url".into(),
+                                CustomAccessLogField::String(scgi_to_fixed.to_string()),
+                            );
                             return Ok(true);
                         }
                         _ => return Err(PipelineError::custom(err.to_string())),
@@ -247,6 +252,10 @@ impl Stage<HttpContext> for ScgiStage {
                             ctx.get_span_attributes().insert(
                                 "ferron.scgi.backend_url",
                                 TraceAttributeValue::String(scgi_to_fixed.to_string()),
+                            );
+                            custom_access_log_fields(ctx).insert(
+                                "ferron.scgi.backend_url".into(),
+                                CustomAccessLogField::String(scgi_to_fixed.to_string()),
                             );
                             return Ok(false);
                         }
@@ -307,6 +316,10 @@ impl Stage<HttpContext> for ScgiStage {
         ctx.get_span_attributes().insert(
             "ferron.scgi.backend_url",
             TraceAttributeValue::String(scgi_to_fixed.to_string()),
+        );
+        custom_access_log_fields(ctx).insert(
+            "ferron.scgi.backend_url".into(),
+            CustomAccessLogField::String(scgi_to_fixed.to_string()),
         );
 
         Ok(false)

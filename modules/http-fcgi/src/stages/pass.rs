@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use ferron_core::config::ServerConfigurationBlockBuilder;
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
@@ -210,6 +211,10 @@ impl Stage<HttpContext> for FcgiPassStage {
                     "ferron.fcgi.backend_url",
                     TraceAttributeValue::String(scgi_to_fixed.to_string()),
                 );
+                custom_access_log_fields(ctx).insert(
+                    "ferron.fcgi.backend_url".into(),
+                    CustomAccessLogField::String(scgi_to_fixed.to_string()),
+                );
                 return Ok(false);
             }
             Err(ClientError::Other(err)) => {
@@ -305,6 +310,10 @@ impl Stage<HttpContext> for FcgiPassStage {
         ctx.get_span_attributes().insert(
             "ferron.fcgi.backend_url",
             TraceAttributeValue::String(scgi_to_fixed.to_string()),
+        );
+        custom_access_log_fields(ctx).insert(
+            "ferron.fcgi.backend_url".into(),
+            CustomAccessLogField::String(scgi_to_fixed.to_string()),
         );
 
         Ok(false)

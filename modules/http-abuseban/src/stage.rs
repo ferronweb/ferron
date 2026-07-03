@@ -3,6 +3,7 @@
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{LogAttributeValue, TraceAttributeValue};
@@ -116,6 +117,19 @@ impl AbuseProtectionStage {
                     "error.type",
                     TraceAttributeValue::String("ip_banned".to_string()),
                 );
+                let log_fields = custom_access_log_fields(context);
+                log_fields.insert(
+                    "ferron.abuseban.action".into(),
+                    CustomAccessLogField::String("rejected".into()),
+                );
+                log_fields.insert(
+                    "ferron.abuseban.reason".into(),
+                    CustomAccessLogField::String(reason),
+                );
+                log_fields.insert(
+                    "ferron.abuseban.remaining_secs".into(),
+                    CustomAccessLogField::U64(remaining_secs),
+                );
             }
             return Ok(false); // Stop pipeline execution
         }
@@ -125,6 +139,11 @@ impl AbuseProtectionStage {
             sa.insert(
                 "ferron.abuseban.action",
                 TraceAttributeValue::String("skip".to_string()),
+            );
+            let log_fields = custom_access_log_fields(context);
+            log_fields.insert(
+                "ferron.abuseban.action".into(),
+                CustomAccessLogField::String("skip".into()),
             );
         }
         Ok(true) // Continue pipeline execution

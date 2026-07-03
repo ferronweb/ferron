@@ -18,6 +18,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
@@ -168,6 +169,10 @@ impl Stage<HttpContext> for ForwardProxyStage {
             Ok(proxy::ForwardProxyResult::Handled) => {
                 ctx.get_span_attributes()
                     .insert("ferron.fproxy.mode", TraceAttributeValue::StaticStr(mode));
+                custom_access_log_fields(ctx).insert(
+                    "ferron.fproxy.mode".into(),
+                    CustomAccessLogField::String(mode.into()),
+                );
                 let status_code = ctx.res.as_ref().and_then(|r| match r {
                     HttpResponse::Custom(ref resp) => Some(resp.status().as_u16() as i64),
                     _ => None,

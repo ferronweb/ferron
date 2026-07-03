@@ -10,6 +10,7 @@ use std::sync::Arc;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
@@ -141,6 +142,15 @@ impl RateLimitEngine {
                         "ferron.ratelimit.limit",
                         TraceAttributeValue::I64(config.rate as i64),
                     );
+                    let log_fields = custom_access_log_fields(ctx);
+                    log_fields.insert(
+                        "ferron.ratelimit.result".into(),
+                        CustomAccessLogField::String("rejected".into()),
+                    );
+                    log_fields.insert(
+                        "ferron.ratelimit.zone".into(),
+                        CustomAccessLogField::String(zone_id.label().to_string()),
+                    );
                 }
                 return Some(Self::make_response(config.deny_status, 1.0));
             };
@@ -228,6 +238,19 @@ impl RateLimitEngine {
                         "ferron.ratelimit.retry_after_secs",
                         TraceAttributeValue::I64(retry_after.ceil() as i64),
                     );
+                    let log_fields = custom_access_log_fields(ctx);
+                    log_fields.insert(
+                        "ferron.ratelimit.result".into(),
+                        CustomAccessLogField::String("rejected".into()),
+                    );
+                    log_fields.insert(
+                        "ferron.ratelimit.zone".into(),
+                        CustomAccessLogField::String(zone_id.label().to_string()),
+                    );
+                    log_fields.insert(
+                        "ferron.ratelimit.retry_after_secs".into(),
+                        CustomAccessLogField::U64(retry_after.ceil() as u64),
+                    );
                 }
                 return Some(Self::make_response(config.deny_status, retry_after));
             }
@@ -268,6 +291,15 @@ impl RateLimitEngine {
                 sa.insert(
                     "ferron.ratelimit.limit",
                     TraceAttributeValue::I64(config.rate as i64),
+                );
+                let log_fields = custom_access_log_fields(ctx);
+                log_fields.insert(
+                    "ferron.ratelimit.result".into(),
+                    CustomAccessLogField::String("allowed".into()),
+                );
+                log_fields.insert(
+                    "ferron.ratelimit.zone".into(),
+                    CustomAccessLogField::String(zone_id.label().to_string()),
                 );
             }
         }

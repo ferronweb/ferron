@@ -9,6 +9,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::{HttpContext, HttpResponse};
@@ -73,6 +74,10 @@ impl HttpResponseStage {
                 "ferron.response.action",
                 TraceAttributeValue::StaticStr("abort"),
             );
+            custom_access_log_fields(ctx).insert(
+                "ferron.response.action".into(),
+                CustomAccessLogField::String("abort".into()),
+            );
             return Ok(false);
         }
         Ok(true)
@@ -99,6 +104,10 @@ impl HttpResponseStage {
             );
             ctx.get_span_attributes()
                 .insert("http.response.status_code", TraceAttributeValue::I64(403));
+            custom_access_log_fields(ctx).insert(
+                "ferron.response.action".into(),
+                CustomAccessLogField::String("block".into()),
+            );
             return Ok(false);
         }
         Ok(true)
@@ -154,6 +163,10 @@ impl HttpResponseStage {
             ctx.get_span_attributes().insert(
                 "http.response.status_code",
                 TraceAttributeValue::I64(rule.status_code as i64),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.response.action".into(),
+                CustomAccessLogField::String("status".into()),
             );
 
             return Ok(false);

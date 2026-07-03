@@ -8,6 +8,7 @@ use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::file_descriptor::ReusedFile;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
@@ -92,7 +93,11 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let file_path_str = ctx.file_path.to_string_lossy().to_string();
         ctx.get_span_attributes().insert(
             "ferron.static.file_path",
-            TraceAttributeValue::String(file_path_str),
+            TraceAttributeValue::String(file_path_str.clone()),
+        );
+        custom_access_log_fields(&mut ctx.http).insert(
+            "ferron.static.file_path".into(),
+            CustomAccessLogField::String(file_path_str),
         );
 
         // Skip if root is not configured

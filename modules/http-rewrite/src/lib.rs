@@ -15,6 +15,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::HttpContext;
@@ -119,6 +120,10 @@ impl Stage<HttpContext> for RewriteStage {
                 .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
             ctx.get_span_attributes()
                 .insert("ferron.rewrite.pattern_count", TraceAttributeValue::I64(0));
+            custom_access_log_fields(ctx).insert(
+                "ferron.rewrite.applied".into(),
+                CustomAccessLogField::Bool(false),
+            );
             return Ok(true);
         }
 
@@ -151,6 +156,10 @@ impl Stage<HttpContext> for RewriteStage {
                 ctx.get_span_attributes().insert(
                     "ferron.rewrite.pattern_count",
                     TraceAttributeValue::I64(rules.len() as i64),
+                );
+                custom_access_log_fields(ctx).insert(
+                    "ferron.rewrite.applied".into(),
+                    CustomAccessLogField::Bool(false),
                 );
                 return Ok(true);
             }
@@ -241,6 +250,10 @@ impl Stage<HttpContext> for RewriteStage {
         ctx.get_span_attributes().insert(
             "ferron.rewrite.pattern_count",
             TraceAttributeValue::I64(rules.len() as i64),
+        );
+        custom_access_log_fields(ctx).insert(
+            "ferron.rewrite.applied".into(),
+            CustomAccessLogField::Bool(true),
         );
 
         Ok(true)

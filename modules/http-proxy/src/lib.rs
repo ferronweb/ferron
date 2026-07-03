@@ -28,6 +28,7 @@ use std::sync::{Arc, OnceLock};
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_observability::build_composite_sink;
@@ -814,6 +815,35 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         };
 
         ctx.res = Some(response);
+
+        // Inject backend identity into access log fields
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
+            let log_fields = custom_access_log_fields(ctx);
+            log_fields.insert(
+                "ferron.proxy.backend_url".into(),
+                CustomAccessLogField::String(backend.proxy_to.clone()),
+            );
+            if let Some(ref resolved_ip) = backend.connect_to {
+                log_fields.insert(
+                    "ferron.proxy.backend_resolved_ip".into(),
+                    CustomAccessLogField::String(resolved_ip.to_string()),
+                );
+            }
+            if let Some(ref unix_path) = backend.proxy_unix {
+                log_fields.insert(
+                    "ferron.proxy.backend_unix_path".into(),
+                    CustomAccessLogField::String(unix_path.clone()),
+                );
+            }
+            log_fields.insert(
+                "ferron.proxy.connection_reused".into(),
+                CustomAccessLogField::Bool(metrics.connection_reused),
+            );
+            log_fields.insert(
+                "ferron.proxy.retry_count".into(),
+                CustomAccessLogField::U64(metrics.retry_count),
+            );
+        }
 
         // Emit per-backend selected metrics
         use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};

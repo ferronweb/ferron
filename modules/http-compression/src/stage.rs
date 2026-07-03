@@ -10,6 +10,7 @@ use async_compression::Level;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint as CoreStageConstraint;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
 use ferron_http::{HttpContext, HttpResponse};
@@ -291,6 +292,10 @@ impl Stage<HttpContext> for DynamicCompressionStage {
                 "ferron.compression.precompressed",
                 TraceAttributeValue::Bool(false),
             );
+            custom_access_log_fields(ctx).insert(
+                "ferron.compression.algorithm".into(),
+                CustomAccessLogField::String("identity".into()),
+            );
             return Ok(());
         }
 
@@ -338,6 +343,10 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         ctx.get_span_attributes().insert(
             "ferron.compression.precompressed",
             TraceAttributeValue::Bool(false),
+        );
+        custom_access_log_fields(ctx).insert(
+            "ferron.compression.algorithm".into(),
+            CustomAccessLogField::String(algorithm.to_string()),
         );
 
         Ok(())
