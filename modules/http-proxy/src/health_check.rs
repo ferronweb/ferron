@@ -569,6 +569,7 @@ pub fn spawn_health_check_task(
                                 // mTLS isn't applicable for resolution only
                                 mtls: None,
                                 priority: None,
+                                connection_timeout: None,
                             }),
                         )
                         .await;
@@ -611,6 +612,7 @@ pub fn spawn_health_check_task(
                             priority: 0,
                             logical_dns: false,
                             dns_servers: dns_servers.clone(),
+                            connection_timeout: None,
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),

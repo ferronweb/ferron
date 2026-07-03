@@ -134,6 +134,7 @@ mod tests {
             weight: 1,
             mtls: None,
             priority: 0,
+            connection_timeout: None,
         })
     }
 
@@ -145,6 +146,7 @@ mod tests {
             weight,
             mtls: None,
             priority: 0,
+            connection_timeout: None,
         })
     }
 

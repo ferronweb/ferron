@@ -211,6 +211,7 @@ example.com {
 | --- | --- | --- | --- |
 | `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
+| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to be established. Set to `false` to disable. | `5s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
 | `weight` | `<number>` | Weight for weighted load balancing. Higher values receive more requests. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
 | `priority` | `<number>` | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier is exhausted, the next tier is tried. | 0 |
@@ -238,6 +239,7 @@ example.com {
 | `dns_servers` | `<string>` | Comma-separated DNS server IPs. Uses system resolver if empty. | system |
 | `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
+| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to be established. Set to `false` to disable. | `5s` |
 | `weight` | `<number>` | Multiplier applied to DNS SRV weights. Each backend's effective weight is `dns_weight × config_weight`. Set to `1` to use DNS weights as-is. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
 | `priority` | `<number>` | Additive offset applied to DNS SRV priorities. A backend's effective priority is `dns_priority + offset`. Lower effective values are tried first. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to resolved backends for mTLS. Must be used together with `key`. | disabled |

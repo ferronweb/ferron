@@ -8,7 +8,7 @@ use crate::types::health::HealthCheckStateMap;
 ///
 /// This uniquely identifies a backend server for connection pooling and health tracking.
 /// It combines the target URL and optional Unix socket path.
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct UpstreamInner {
     /// Target URL (e.g. `http://localhost:8080/path`).
     pub proxy_to: String,
@@ -32,6 +32,21 @@ pub struct UpstreamInner {
     /// tiers are used as fallbacks when all higher-priority backends are
     /// unavailable. Default: 0 (highest priority).
     pub priority: u16,
+    /// Connection timeout for this upstream
+    pub connection_timeout: Option<std::time::Duration>,
+}
+
+impl std::hash::Hash for UpstreamInner {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (
+            &self.proxy_to,
+            &self.connect_to,
+            &self.proxy_unix,
+            &self.mtls,
+        )
+            .hash(state);
+    }
 }
 
 /// Proxy protocol version to send to backends.
@@ -69,6 +84,8 @@ pub struct UpstreamConfig {
     pub logical_dns: bool,
     /// Custom DNS servers for strict DNS resolution (empty = system resolver).
     pub dns_servers: Vec<std::net::IpAddr>,
+    /// Optional connection timeout
+    pub connection_timeout: Option<std::time::Duration>,
 }
 
 /// Data for an SRV-based upstream.
@@ -94,6 +111,8 @@ pub struct SrvUpstreamData {
     /// to shift the entire block's priority tier. When None, DNS SRV
     /// priorities are used as-is.
     pub priority: Option<u16>,
+    /// Optional connection timeout
+    pub connection_timeout: Option<std::time::Duration>,
 }
 
 /// An upstream backend — either a static URL or an SRV record.
@@ -138,6 +157,7 @@ impl Upstream {
                             weight: cfg.weight,
                             mtls: cfg.mtls.clone(),
                             priority: cfg.priority,
+                            connection_timeout: cfg.connection_timeout,
                         })]
                     }
                 } else {
@@ -148,6 +168,7 @@ impl Upstream {
                         weight: cfg.weight,
                         mtls: cfg.mtls.clone(),
                         priority: cfg.priority,
+                        connection_timeout: cfg.connection_timeout,
                     })]
                 }
             }

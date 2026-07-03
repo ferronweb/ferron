@@ -25,6 +25,7 @@
 - **SRV native weight support** — DNS SRV record weights are now used for weighted load balancing within priority tiers. Each backend's effective weight is `dns_weight × config_weight`. The config `weight` subdirective acts as a multiplier on top of DNS weights.
 - **Strict DNS (A/AAAA) resolution** — static upstreams with hostnames now resolve A/AAAA records via Hickory DNS by default, creating a separate backend per resolved IP for per-IP load balancing, circuit breaking, and health checking. IP literals, `localhost`, Unix sockets, and `logical_dns true` upstreams are unaffected. Use `dns_servers` to specify custom resolver IPs.
 - **DNS result caching** — resolved DNS results for both strict DNS (A/AAAA) and SRV upstreams are cached in memory with TTL-based expiry derived from the DNS response TTL. This avoids redundant DNS resolution and lock contention for high-traffic hostnames. Cache entries expire based on the minimum TTL from the DNS response records, with a 30-second fallback when no TTL is available.
+- **HTTP upstream connection timeout** — the `connection_timeout` subdirective is now available for all upstreams, allowing configuration of the maximum time to establish a TCP connection to a backend. This prevents long hangs when backends are unreachable or slow to accept connections.
 
 #### Observability & tracing
 

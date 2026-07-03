@@ -25,6 +25,8 @@ use crate::types::upstream::{MtlsCredentials, ProxyHeader, Upstream, UpstreamCon
 
 /// Default keep-alive idle timeout in milliseconds.
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
+/// Default connection timeout in milliseconds.
+const DEFAULT_CONNECTION_TIMEOUT_MS: u64 = 5_000;
 /// mTLS file cache
 pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
     LazyLock::new(DashMap::new);
@@ -186,6 +188,7 @@ pub fn parse_proxy_config(
                 priority: 0,
                 logical_dns: false,
                 dns_servers: Vec::new(),
+                connection_timeout: Some(Duration::from_millis(DEFAULT_CONNECTION_TIMEOUT_MS)),
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -520,6 +523,8 @@ fn parse_upstream_entry(
 
     let mut limit: Option<usize> = None;
     let mut idle_timeout: Option<Duration> = None;
+    let mut connection_timeout: Option<Duration> = None;
+    let mut connection_timeout_disabled: bool = false;
     let mut unix_socket: Option<String> = None;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
     let mut weight: u32 = 1;
@@ -601,6 +606,15 @@ fn parse_upstream_entry(
                         idle_timeout = Some(val);
                     }
                 }
+                "connection_timeout" => {
+                    if let Some(val) = entries.first().and_then(|e| e.args.first()) {
+                        if val.as_boolean() == Some(false) {
+                            connection_timeout_disabled = true;
+                        } else if let Some(duration) = val.as_duration() {
+                            connection_timeout = Some(duration);
+                        }
+                    }
+                }
                 "unix" => {
                     if let Some(val) = entries
                         .first()
@@ -668,6 +682,10 @@ fn parse_upstream_entry(
         idle_timeout = Some(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS));
     }
 
+    if connection_timeout.is_none() && !connection_timeout_disabled {
+        connection_timeout = Some(Duration::from_millis(DEFAULT_CONNECTION_TIMEOUT_MS));
+    }
+
     let mtls = if let (Some(certs), Some(key)) = (mtls_cert, mtls_key) {
         Some(std::sync::Arc::new(MtlsCredentials { certs, key }))
     } else {
@@ -683,6 +701,7 @@ fn parse_upstream_entry(
         priority,
         logical_dns,
         dns_servers,
+        connection_timeout,
     }));
 
     // Populate the O(1) lookup map
@@ -709,6 +728,8 @@ fn parse_srv_entry(
 
     let mut limit: Option<usize> = None;
     let mut idle_timeout: Option<Duration> = None;
+    let mut connection_timeout: Option<Duration> = None;
+    let mut connection_timeout_disabled: bool = false;
     let mut dns_servers: Vec<IpAddr> = Vec::new();
     let mut weight: u32 = 1;
     let mut priority: Option<u16> = None;
@@ -788,6 +809,15 @@ fn parse_srv_entry(
                         idle_timeout = Some(val);
                     }
                 }
+                "connection_timeout" => {
+                    if let Some(val) = entries.first().and_then(|e| e.args.first()) {
+                        if val.as_boolean() == Some(false) {
+                            connection_timeout_disabled = true;
+                        } else if let Some(duration) = val.as_duration() {
+                            connection_timeout = Some(duration);
+                        }
+                    }
+                }
                 "dns_servers" => {
                     if let Some(val) = entries
                         .first()
@@ -841,6 +871,10 @@ fn parse_srv_entry(
         idle_timeout = Some(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS));
     }
 
+    if connection_timeout.is_none() && !connection_timeout_disabled {
+        connection_timeout = Some(Duration::from_millis(DEFAULT_CONNECTION_TIMEOUT_MS));
+    }
+
     let mtls = if let (Some(certs), Some(key)) = (mtls_cert, mtls_key) {
         Some(std::sync::Arc::new(MtlsCredentials { certs, key }))
     } else {
@@ -854,6 +888,7 @@ fn parse_srv_entry(
         health_check_config,
         mtls,
         priority,
+        connection_timeout,
     }));
 
     // Populate the O(1) lookup map

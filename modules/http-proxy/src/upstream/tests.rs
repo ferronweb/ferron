@@ -23,6 +23,7 @@ fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         weight: 1,
         mtls: None,
         priority: 0,
+        connection_timeout: None,
     })
 }
 
@@ -34,6 +35,7 @@ fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
         weight,
         mtls: None,
         priority: 0,
+        connection_timeout: None,
     })
 }
 

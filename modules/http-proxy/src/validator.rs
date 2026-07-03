@@ -201,7 +201,12 @@ fn validate_upstream_block(
     if block.directives.contains_key("idle_timeout") {
         sub.insert("idle_timeout".to_string());
     }
-    validate_duration(block, "idle_timeout")?;
+    if block
+        .get_value("idle_timeout")
+        .is_none_or(|v| v.as_boolean() != Some(false))
+    {
+        validate_duration(block, "idle_timeout")?;
+    }
     ferron_core::validate_nested!(block, used(sub), unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), weight, args(1) => [ServerConfigurationValue::Number(_, _)]);
     ferron_core::validate_nested!(block, used(sub), priority, args(1) => [ServerConfigurationValue::Number(_, _)]);
@@ -209,6 +214,10 @@ fn validate_upstream_block(
     ferron_core::validate_nested!(block, used(sub), key, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), logical_dns, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
+    if block.directives.contains_key("connection_timeout") {
+        sub.insert("idle_timeout".to_string());
+    }
+    validate_duration(block, "connection_timeout")?;
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err("Unix sockets are not supported on this platform".into());
