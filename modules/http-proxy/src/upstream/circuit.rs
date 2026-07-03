@@ -211,12 +211,27 @@ fn emit_circuit_metric(
     trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent};
+
+    let mut attributes = Vec::with_capacity(3);
+    attributes.push((
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(upstream.proxy_to.clone()),
+    ));
+    if let Some(ref unix_path) = upstream.proxy_unix {
+        attributes.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    if let Some(ref resolved_ip) = upstream.connect_to {
+        attributes.push((
+            "ferron.proxy.backend_resolved_ip",
+            MetricAttributeValue::String(resolved_ip.to_string()),
+        ));
+    }
     event_sink.emit(Event::Metric(MetricEvent {
         name,
-        attributes: vec![(
-            "ferron.proxy.backend_url",
-            MetricAttributeValue::String(upstream.proxy_to.clone()),
-        )],
+        attributes,
         ty: metric_type,
         value,
         unit: Some("{circuit}"),
