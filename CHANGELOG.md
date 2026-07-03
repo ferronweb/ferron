@@ -33,7 +33,7 @@
 
 ### Changed
 
-#### Security
+#### Static file serving
 
 - **FD-based metadata and file handle reuse** — static file metadata is now obtained via `fstat`-like system calls instead of a separate `stat`-like calls, closing the TOCTOU window between path validation and metadata read. A per-thread file descriptor reuse pool with preemptive bulk expired removal eviction is implemented for handle reuse, improving performance. `HttpFileContext` now carries `file: ReusedFile` instead of `metadata: Metadata`, so all consumers derive metadata from the validated file handle.
 - **Path resolution without canonicalization** — static file path resolution now uses component-level validation with simple PathBuf checks instead of costly filesystem canonicalization. This improves performance, eliminates path canonicalization overhead, and reduces the TOCTOU window by validating paths before symlink traversal checks. Combined with `disable_symlinks on`, this implements nginx-style defense-in-depth protection.
