@@ -184,7 +184,7 @@ pub fn try_acquire_circuit_breaker_slot(
                 upstream,
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(1), // HalfOpen = 1
+                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_HALFOPEN as u64),
                 event_trace_context.clone(),
             );
             emit_circuit_metric(
@@ -285,7 +285,7 @@ fn record_circuit_breaker_failure(
                 upstream,
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(2), // Open = 2
+                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_OPEN as u64),
                 event_trace_context.clone(),
             );
             emit_circuit_metric(
@@ -339,7 +339,7 @@ fn record_circuit_breaker_failure(
                 upstream,
                 "ferron.proxy.circuit.state",
                 ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(2), // Open = 2
+                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_OPEN as u64),
                 event_trace_context.clone(),
             );
             emit_circuit_metric(
@@ -416,7 +416,7 @@ fn record_circuit_breaker_success(
             upstream,
             "ferron.proxy.circuit.state",
             ferron_observability::MetricType::Gauge,
-            ferron_observability::MetricValue::U64(0), // Closed = 0
+            ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_CLOSED as u64),
             event_trace_context.clone(),
         );
         emit_circuit_metric(

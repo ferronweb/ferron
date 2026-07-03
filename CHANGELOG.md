@@ -31,6 +31,7 @@
 - **Per-stage span attributes** — all HTTP pipeline stages now emit stage-specific span attributes on their `ferron.stage.<name>` spans, enabling detailed flame graph analysis without requiring metric export. Each module's per-stage span carries module-specific context such as upstream backend URLs, cache results, rate limit decisions, authentication outcomes, and response status codes. See each module's documentation for the full list of attributes and the [tracing reference](/docs/v3/configuration/observability/tracing#per-stage-spans).
 - **Resolved IP address attributes** — reverse proxy metrics now include resolved IP addresses when strict DNS (A/AAAA) resolution is enabled. The `connect_to` field of `UpstreamInner` is exposed as `ferron.proxy.backend_resolved_ip` metric attribute for all backend-related metrics, allowing observability of the actual IP addresses backends are connected to. This complements existing `backend_url` and `backend_unix_path` attributes.
 - **Module-injected access log fields** — all HTTP pipeline modules now emit debuggability attributes directly in access log lines, not just as trace span attributes. Proxy requests include `ferron.proxy.backend_url`, `ferron.proxy.connection_reused`, and `ferron.proxy.retry_count`. Cache results include `ferron.cache.result` and `ferron.cache.zone`. Rate limit decisions include `ferron.ratelimit.result` and `ferron.ratelimit.zone`. Auth outcomes include `ferron.basicauth.result` and `ferron.fauth.result`. Abuse protection includes `ferron.abuseban.action`. Static files include `ferron.static.file_path`. CGI/FastCGI/SCGI backends include their respective `backend_url` and `script_path` fields. See the [logging reference](/docs/v3/configuration/observability/logging#module-contributed-fields) for the full list.
+- **Circuit breaker state in access logs** — access log lines for proxied requests now include `ferron.proxy.circuit_breaker_state` (`closed`, `open`, or `half_open`), and the `ferron.proxy.circuit.state` gauge is now emitted on every proxied request instead of only on state transitions. This ensures circuit breaker visibility in both log queries and metric dashboards.
 
 ### Changed
 
@@ -54,6 +55,7 @@
 #### Observability
 
 - **Consistent log targets** - `tls-acme` and `tls-http` now use `ferron-tls-acme` and `ferron-tls-http` log targets respectively instead of `ferron_tls_acme` and `ferron_tls_http`.
+- **Circuit breaker gauge value fix** - the `ferron.proxy.circuit.state` gauge now correctly uses `1` for `open` and `2` for `half_open`, matching the constant definitions. Previously these values were swapped.
 
 ## Ferron 3.0.0-beta.4
 

@@ -78,6 +78,7 @@ Pipeline modules contribute additional access log fields when active. These fiel
 | `ferron.proxy.backend_unix_path` | `http-proxy` | Unix socket path of the backend (if applicable) |
 | `ferron.proxy.connection_reused` | `http-proxy` | Whether a pooled connection was reused |
 | `ferron.proxy.retry_count` | `http-proxy` | Number of retry attempts (0 if none) |
+| `ferron.proxy.circuit_breaker_state` | `http-proxy` | Circuit breaker state of the backend: `closed`, `open`, or `half_open` |
 | `ferron.cache.result` | `http-cache` | Cache outcome: `hit`, `miss`, `stale`, `bypass`, `revalidate`, `purge`, `purge_rejected` |
 | `ferron.cache.zone` | `http-cache` | Cache zone identifier |
 | `ferron.ratelimit.result` | `http-ratelimit` | Rate limit decision: `allowed` or `rejected` |

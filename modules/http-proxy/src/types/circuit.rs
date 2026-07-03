@@ -11,6 +11,16 @@ pub const CIRCUIT_BREAKER_STATUS_CLOSED: u8 = 0;
 pub const CIRCUIT_BREAKER_STATUS_OPEN: u8 = 1;
 pub const CIRCUIT_BREAKER_STATUS_HALFOPEN: u8 = 2;
 
+/// Returns a human-readable label for the circuit breaker status value.
+pub fn circuit_breaker_state_label(status: u8) -> &'static str {
+    match status {
+        CIRCUIT_BREAKER_STATUS_CLOSED => "closed",
+        CIRCUIT_BREAKER_STATUS_OPEN => "open",
+        CIRCUIT_BREAKER_STATUS_HALFOPEN => "half_open",
+        _ => "unknown",
+    }
+}
+
 /// Circuit breaker state for tracking failures per upstream.
 ///
 /// This state is stored in a [`DashMap`] keyed by [`UpstreamInner`].

@@ -31,6 +31,7 @@ use dashmap::DashMap;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
+use types::circuit::circuit_breaker_state_label;
 use ferron_observability::build_composite_sink;
 use ferron_observability::TraceAttributeValue;
 use parking_lot::RwLock;
@@ -843,6 +844,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 "ferron.proxy.retry_count".into(),
                 CustomAccessLogField::U64(metrics.retry_count),
             );
+            // Inject circuit breaker state for the selected backend
+            if let Some(cb_state) = self.state.circuit_breaker_state.get(backend) {
+                let status = cb_state.status.load(std::sync::atomic::Ordering::Relaxed);
+                log_fields.insert(
+                    "ferron.proxy.circuit_breaker_state".into(),
+                    CustomAccessLogField::String(circuit_breaker_state_label(status).to_string()),
+                );
+            }
         }
 
         // Emit per-backend selected metrics
@@ -953,6 +962,23 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     "ferron.proxy.backend_resolved_ip",
                     MetricAttributeValue::String(resolved_ip.to_string()),
                 ));
+            }
+        }
+
+        // Emit per-request circuit breaker state gauge for the selected backend
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
+            if let Some(cb_state) = self.state.circuit_breaker_state.get(backend) {
+                let status = cb_state.status.load(std::sync::atomic::Ordering::Relaxed);
+                ctx.events
+                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                        name: "ferron.proxy.circuit.state",
+                        attributes: upstream_attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(status as u64),
+                        unit: Some("{circuit}"),
+                        description: Some("Current circuit breaker state per backend (0=closed, 1=open, 2=half_open)."),
+                        trace_context: current_event_trace_context(ctx),
+                    }));
             }
         }
 

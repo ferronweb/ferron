@@ -602,7 +602,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.health.success` | Counter | backend URL or unix socket path | Health check probe succeeded |
 | `ferron.proxy.health.failure` | Counter | backend URL or unix socket path | Health check probe failed |
 | `ferron.proxy.health.duration` | Histogram | backend URL or unix socket path | Duration of health check probes |
-| `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` HalfOpen, `2` Open |
+| `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` Open, `2` HalfOpen |
 | `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
 | `ferron.proxy.failures` | Counter | `http.response.status_code` (HTTP response status code), `error.type` (error type classification) | Reverse-proxy failures that returned an error before a backend response was produced |
 | `ferron.proxy.dns.cache_hit` | Counter | — | DNS cache hits for strict DNS and SRV lookups |
