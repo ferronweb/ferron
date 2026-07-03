@@ -906,33 +906,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        // Emit request counter with connection reuse flag and status code
-        let mut request_attrs = Vec::with_capacity(3);
-        request_attrs.push((
-            "ferron.proxy.connection_reused",
-            MetricAttributeValue::Bool(metrics.connection_reused),
-        ));
-        if let Some(status) = metrics.status_code {
-            request_attrs.push((
-                "http.response.status_code",
-                MetricAttributeValue::I64(status as i64),
-            ));
-        }
-        request_attrs.push((
-            "ferron.proxy.status_code",
-            MetricAttributeValue::I64(metrics.status_code.map(|s| s as i64).unwrap_or(0)),
-        ));
-        ctx.events
-            .emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.requests",
-                attributes: request_attrs,
-                ty: MetricType::Counter,
-                value: MetricValue::U64(1),
-                unit: Some("{request}"),
-                description: Some("Number of reverse proxy requests."),
-                trace_context: current_event_trace_context(ctx),
-            }));
-
         let mut upstream_attrs = vec![];
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
             upstream_attrs.push((
@@ -952,6 +925,30 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 ));
             }
         }
+
+        // Emit request counter with connection reuse flag and status code
+        let mut request_attrs = Vec::with_capacity(4);
+        request_attrs.extend(upstream_attrs.clone());
+        request_attrs.push((
+            "ferron.proxy.connection_reused",
+            MetricAttributeValue::Bool(metrics.connection_reused),
+        ));
+        if let Some(status) = metrics.status_code {
+            request_attrs.push((
+                "http.response.status_code",
+                MetricAttributeValue::I64(status as i64),
+            ));
+        }
+        ctx.events
+            .emit(ferron_observability::Event::Metric(MetricEvent {
+                name: "ferron.proxy.requests",
+                attributes: request_attrs,
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some("Number of reverse proxy requests."),
+                trace_context: current_event_trace_context(ctx),
+            }));
 
         // Emit TLS handshake failures counter
         if metrics.tls_handshake_failures > 0 {

@@ -41,6 +41,7 @@
 #### Reverse proxy
 
 - **Circuit breakers enabled by default** — the `circuit_breaker` directive is now enabled by default for all `proxy` configurations. Circuit breakers track transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses (when `record_5xx true`), then temporarily eject unstable backends from the load balancer. This change improves resilience by protecting against cascading failures without requiring explicit configuration. To disable circuit breakers, set `circuit_breaker false`.
+- **`ferron.proxy.requests` metric with backend URL** — the `ferron.proxy.requests` counter metric now includes a backend URL (and related) attribute for all upstream requests, allowing observability of which backend URL handled each request.
 
 #### Observability
 
