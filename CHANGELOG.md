@@ -8,9 +8,7 @@
 
 #### Security
 
-- **FD-based metadata and file handle reuse** — static file metadata is now obtained via `file.metadata().await` (which uses `statx` with `AT_EMPTY_PATH` on Linux) instead of a separate `stat` syscall, closing the TOCTOU window between path validation and metadata read. A per-thread file descriptor reuse pool (`ReusedFile` / `FD_REUSE_CACHE`) with 3-tier eviction (preemptive bulk expired removal, critical single expired, LRU by insertion time) is implemented for future handle reuse. `HttpFileContext` now carries `file: ReusedFile` instead of `metadata: Metadata`, so all consumers derive metadata from the validated file handle.
 - **Configurable symlink traversal protection** — the new `disable_symlinks` directive allows configuration of symlink handling during static file serving (`false`, `true`, or `if_not_owner` on Unix). When enabled, symlinks are detected without following them during path traversal, preventing symlink-based escape attacks from outside the configured webroot. Defaults to `false` for backward compatibility.
-- **Path resolution without canonicalization** — static file path resolution now uses component-level validation with simple PathBuf checks instead of costly filesystem canonicalization. This improves performance, eliminates path canonicalization overhead, and reduces the TOCTOU window by validating paths before symlink traversal checks. Combined with `disable_symlinks on`, this implements nginx-style defense-in-depth protection.
 - **Error rate threshold** — the `abuse_protection` directive now supports an `error_rate_threshold` sub-directive that monitors HTTP response status codes. When a client triggers an abnormal number of configured error responses (e.g., 404, 403) within a time window, their IP is temporarily banned. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
 
 #### Observability & tracing
@@ -34,6 +32,11 @@
 - **Resolved IP address attributes** — reverse proxy metrics now include resolved IP addresses when strict DNS (A/AAAA) resolution is enabled. The `connect_to` field of `UpstreamInner` is exposed as `ferron.proxy.backend_resolved_ip` metric attribute for all backend-related metrics, allowing observability of the actual IP addresses backends are connected to. This complements existing `backend_url` and `backend_unix_path` attributes.
 
 ### Changed
+
+#### Security
+
+- **FD-based metadata and file handle reuse** — static file metadata is now obtained via `fstat`-like system calls instead of a separate `stat`-like calls, closing the TOCTOU window between path validation and metadata read. A per-thread file descriptor reuse pool with preemptive bulk expired removal eviction is implemented for handle reuse, improving performance. `HttpFileContext` now carries `file: ReusedFile` instead of `metadata: Metadata`, so all consumers derive metadata from the validated file handle.
+- **Path resolution without canonicalization** — static file path resolution now uses component-level validation with simple PathBuf checks instead of costly filesystem canonicalization. This improves performance, eliminates path canonicalization overhead, and reduces the TOCTOU window by validating paths before symlink traversal checks. Combined with `disable_symlinks on`, this implements nginx-style defense-in-depth protection.
 
 #### Reverse proxy
 
