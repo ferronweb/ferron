@@ -10,45 +10,6 @@ This page documents directives that configure static file serving, directory lis
 
 ## Directives
 
-### Symlink handling
-
-- `disable_symlinks [bool: boolean | string: "if_not_owner"]`
-  - This directive controls whether symbolic links are allowed during file path resolution. When a symlink is encountered while traversing the request path, the behavior depends on this setting:
-    - `false` (default): Allow all symlinks without restriction.
-    - `true`: Reject all symbolic links with a `403 Forbidden` response. Symlinks are detected during path traversal without following them, mitigating symlink-based escape attacks.
-    - `if_not_owner`: Allow symlinks only if owned by the same user as the target file (Unix only; treated as `on` on non-Unix systems).
-  - Default: `disable_symlinks false`
-
-> [!warning]
-> Symlink-based attacks can bypass directory boundaries. If your `root` directory contains untrusted symlinks or is in a shared hosting environment, enable `disable_symlinks on` to protect against escape attacks.
-
-> [!note]
->
-> - Symlink detection uses `symlink_metadata()`, which does not follow the symlink, so no file I/O is performed on the symlink target.
-> - When enabled, symlinks are detected at each path component level during traversal, not just at the final target.
-> - `if_not_owner` mode is Unix-specific and requires the symlink and target to have the same owner UID.
-
-**Configuration example:**
-
-```ferron
-example.com {
-    root /srv/www/example
-    disable_symlinks
-}
-
-# Allow symlinks only in a specific virtual host
-uploads.example.com {
-    root /srv/uploads
-    disable_symlinks if_not_owner
-}
-
-# Allow symlinks (default, backward compatible)
-legacy.example.com {
-    root /srv/www/legacy
-    disable_symlinks false
-}
-```
-
 ### Index and directory listings
 
 - `index <filename: string>...`
@@ -137,17 +98,48 @@ example.com {
 > - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
 > - Multiple status codes can be mapped to the same error page in a single directive.
 
-## File metadata and handle reuse
+### Symlink handling
 
-Static file metadata is obtained directly from the validated file handle via `file.metadata().await`, which uses `statx` with `AT_EMPTY_PATH` on Linux. This closes the TOCTOU window between path validation and metadata read — the metadata always reflects the file that was opened, not a concurrent rename target.
+- `disable_symlinks [bool: boolean | string: "if_not_owner"]`
+  - This directive controls whether symbolic links are allowed during file path resolution. When a symlink is encountered while traversing the request path, the behavior depends on this setting:
+    - `false` (default): Allow all symlinks without restriction.
+    - `true`: Reject all symbolic links with a `403 Forbidden` response. Symlinks are detected during path traversal without following them, mitigating symlink-based escape attacks.
+    - `"if_not_owner"`: Allow symlinks only if owned by the same user as the target file (Unix only; treated as `true` on non-Unix systems).
+  - Default: `disable_symlinks false`
 
-A per-thread file descriptor reuse pool is available for future handle reuse optimization. The pool uses a 3-tier eviction strategy:
+> [!warning]
+> Symlink-based attacks can bypass directory boundaries. If your `root` directory contains untrusted symlinks or is in a shared hosting environment, enable `disable_symlinks on` to protect against escape attacks.
 
-1. **Preemptive** — bulk removal of all expired handles (TTL-based)
-2. **Critical** — single expired handle removal when over capacity
-3. **LRU** — oldest handle by insertion time when no expired handles remain
+> [!note]
+>
+> - Symlink detection uses `symlink_metadata()`, which does not follow the symlink, so no file I/O is performed on the symlink target.
+> - When enabled, symlinks are detected at each path component level during traversal, not just at the final target.
+> - `if_not_owner` mode is Unix-specific and requires the symlink and target to have the same owner UID.
 
-This pool is infrastructure for future use and is not yet exposed as a user-facing configuration.
+**Configuration example:**
+
+```ferron
+example.com {
+    root /srv/www/example
+    disable_symlinks
+}
+
+# Allow symlinks only in a specific virtual host
+uploads.example.com {
+    root /srv/uploads
+    disable_symlinks if_not_owner
+}
+
+# Allow symlinks (default, backward compatible)
+legacy.example.com {
+    root /srv/www/legacy
+    disable_symlinks false
+}
+```
+
+## File handle reuse
+
+Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead for at most 200 milliseconds after the first request. This is done by caching file metadata and the open file handle in memory. The cache is keyed by the file path and is invalidated when the file is modified, deleted, or replaced.
 
 ## Observability
 
