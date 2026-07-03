@@ -153,10 +153,6 @@ Ferron reuses file handles (and I/O errors) for static file responses to reduce 
 | `ferron.static.bytes_sent` | Histogram | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB |
 | `ferron.static.responses` | Counter | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome) | Static-file responses across normal, conditional, range, and error paths |
 
-### Logs
-
-- **`WARN`**: logged when an `error_page` file cannot be opened. The directive is skipped and the built-in error page is used instead.
-
 ### Trace spans
 
 The static file stage sets the following attributes on its `ferron.stage.static_file` span:
