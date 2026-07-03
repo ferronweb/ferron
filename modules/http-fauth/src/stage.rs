@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
-use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
+use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};

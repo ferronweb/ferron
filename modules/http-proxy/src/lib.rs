@@ -31,11 +31,11 @@ use dashmap::DashMap;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
-use types::circuit::circuit_breaker_state_label;
 use ferron_observability::build_composite_sink;
 use ferron_observability::TraceAttributeValue;
 use parking_lot::RwLock;
 use rustc_hash::FxBuildHasher;
+use types::circuit::circuit_breaker_state_label;
 
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
