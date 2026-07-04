@@ -18,7 +18,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
-  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, and `latency_threshold` directives. Default: `circuit_breaker true`
+  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, and `flapping_window` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
@@ -70,6 +70,8 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | `consecutive_passes` | `<count: integer>` | Number of successful half-open trial requests required to close the circuit again. | 1 |
 | `record_5xx` | `[bool: boolean]` | Whether upstream `5xx` responses count toward tripping the circuit. Transport failures always count. | `false` |
 | `latency_threshold` | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (e.g., `"0.1s"`, `"0.5s"`). | disabled |
+| `flapping_transitions` | `<count: integer>` | Number of circuit breaker state transitions within `flapping_window` required to mark an upstream as flapping. When flapping, individual transition logs are suppressed and a single warning is emitted. Set to `0` to disable flapping detection. | 3 |
+| `flapping_window` | `<duration: string>` | Time window for counting state transitions for flapping detection. | `10s` |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -609,6 +611,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.health.duration` | Histogram | backend URL or unix socket path | Duration of health check probes |
 | `ferron.proxy.circuit.state` | Gauge | backend URL or unix socket path | Circuit breaker state: `0` Closed, `1` Open, `2` HalfOpen |
 | `ferron.proxy.circuit.open_total` | Counter | backend URL or unix socket path | Number of times the circuit breaker has transitioned to Open state |
+| `ferron.proxy.circuit.flapping` | Gauge | backend URL or unix socket path | Whether an upstream backend is flapping (`1` = flapping, `0` = stable) |
 | `ferron.proxy.failures` | Counter | `http.response.status_code` (HTTP response status code), `error.type` (error type classification) | Reverse-proxy failures that returned an error before a backend response was produced |
 | `ferron.proxy.dns.cache_hit` | Counter | — | DNS cache hits for strict DNS and SRV lookups |
 | `ferron.proxy.dns.cache_miss` | Counter | — | DNS cache misses (miss or expiry) for strict DNS and SRV lookups |
@@ -633,7 +636,9 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | Initializing health check | DEBUG | `ferron.proxy.health.address` (string) — backend identifier, `ferron.proxy.health.method` (string) — HTTP method, `ferron.proxy.health.uri` (string) — health check URI |
 | Upstream circuit opened | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream circuit closed | INFO  | `upstream.address` (string) — backend server URL |
-| Upstream circuit reopened after half-open trial failure | INFO  | `upstream.address` (string) — backend server URL |
+| Upstream circuit reopened after half-open trial failure | WARN  | `upstream.address` (string) — backend server URL |
+| Upstream is flapping | WARN  | `upstream.address` (string) — backend server URL |
+| Upstream flapping resolved | INFO  | `upstream.address` (string) — backend server URL |
 | Upstream circuit transitioned to half-open | INFO  | `upstream.address` (string) — backend server URL, `ferron.proxy.circuit.open_duration_ms` — open duration in milliseconds |
 | Upstream response truncated | WARN  | `ferron.proxy.backend_url` (string) — backend server URL, `upstream.bytes_received` (int) — bytes received, `upstream.content_length` (int) — expected Content-Length |
 

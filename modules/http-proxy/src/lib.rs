@@ -354,6 +354,8 @@ struct ProxyState {
     >,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: types::health::HealthCheckStateMap,
+    /// Flapping detection state per upstream.
+    flapping_state: types::flapping::FlappingStateMap,
     /// Background health check task handles, keyed by configuration pointer.
     /// Used to clean up tasks on reload.
     health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>, FxBuildHasher>,
@@ -370,6 +372,7 @@ impl ProxyState {
             ewma_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             algorithms: ArcSwap::from_pointee(DashMap::with_hasher(FxBuildHasher)),
             active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
+            flapping_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             health_check_tasks: DashMap::with_hasher(FxBuildHasher),
             active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
         }
@@ -782,6 +785,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             &config,
             &conn_manager,
             Arc::clone(&self.state.circuit_breaker_state),
+            Arc::clone(&self.state.flapping_state),
             &algorithm,
             &ring,
             Some(&self.state.conn_state),
@@ -997,6 +1001,22 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         value: MetricValue::U64(status as u64),
                         unit: Some("{circuit}"),
                         description: Some("Current circuit breaker state per backend (0=closed, 1=open, 2=half_open)."),
+                        trace_context: current_event_trace_context(ctx),
+                    }));
+            }
+            // Emit per-request flapping gauge for the selected backend
+            if let Some(flapping) = self.state.flapping_state.get(&backend.proxy_to) {
+                let is_flapping = flapping.is_flapping();
+                ctx.events
+                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                        name: "ferron.proxy.circuit.flapping",
+                        attributes: upstream_attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(is_flapping as u64),
+                        unit: Some("{circuit}"),
+                        description: Some(
+                            "Whether an upstream backend is flapping (1 = flapping, 0 = stable).",
+                        ),
                         trace_context: current_event_trace_context(ctx),
                     }));
             }

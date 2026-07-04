@@ -5,6 +5,7 @@
 
 pub mod affinity;
 pub mod circuit;
+pub mod flapping;
 pub mod lb;
 pub mod resolution;
 

@@ -21,6 +21,7 @@ use crate::connections::ConnectionManager;
 use crate::proxy::affinity::extract_affinity_key;
 use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::error::ProxyError;
+use crate::types::flapping::FlappingStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
@@ -55,6 +56,7 @@ pub async fn execute_proxy(
     config: &ProxyConfig,
     cm: &ConnectionManager,
     circuit_breaker_state: CircuitBreakerStateMap,
+    flapping_state: FlappingStateMap,
     algorithm: &LoadBalancerAlgorithmInner,
     ring: &RwLock<ConsistentHashRing>,
     conn_state: Option<&ConnectionsTrackState>,
@@ -99,6 +101,7 @@ pub async fn execute_proxy(
             health_check_state,
             &config.circuit_breaker,
             Some(&circuit_breaker_state),
+            Some(&flapping_state),
             config.affinity.as_ref().map(|t| &t.affinity_type),
             affinity_key.as_deref(),
             ring,
@@ -157,6 +160,7 @@ pub async fn execute_proxy(
                 if let Some(status) = metrics.status_code {
                     record_backend_response(
                         Some(&circuit_breaker_state),
+                        Some(&flapping_state),
                         &config.circuit_breaker,
                         &selected.upstream,
                         status,
@@ -200,6 +204,7 @@ pub async fn execute_proxy(
             Err(e) => {
                 record_backend_transport_failure(
                     Some(&circuit_breaker_state),
+                    Some(&flapping_state),
                     &config.circuit_breaker,
                     &selected.upstream,
                     &mut metrics,

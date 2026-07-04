@@ -9,6 +9,7 @@ pub mod circuit;
 #[cfg(feature = "srv-lookup")]
 pub mod dns_cache;
 pub mod error;
+pub(crate) mod flapping;
 pub mod health;
 pub mod lb;
 pub mod srv;

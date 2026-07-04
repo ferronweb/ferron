@@ -50,6 +50,7 @@ pub fn determine_proxy_to(
     health_check_state: Option<&HealthCheckStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     affinity_type: Option<&crate::config::AffinityType>,
     affinity_key: Option<&[u8]>,
     ring: &parking_lot::RwLock<ConsistentHashRing>,
@@ -141,6 +142,7 @@ pub fn determine_proxy_to(
 
             if !try_acquire_circuit_breaker_slot(
                 circuit_breaker_state,
+                flapping_state,
                 circuit_breaker,
                 &upstream,
                 event_sink,

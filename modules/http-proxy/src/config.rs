@@ -50,6 +50,10 @@ pub struct CircuitBreakerConfig {
     pub consecutive_passes: u64,
     pub record_5xx: bool,
     pub latency_threshold: Option<Duration>,
+    /// Number of state transitions within `flapping_window` to trigger flapping detection.
+    pub flapping_transitions: u64,
+    /// Time window for counting transitions for flapping detection.
+    pub flapping_window: Duration,
 }
 
 impl Default for CircuitBreakerConfig {
@@ -62,6 +66,8 @@ impl Default for CircuitBreakerConfig {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         }
     }
 }
@@ -512,6 +518,26 @@ fn parse_circuit_breaker(
                     .and_then(|v| v.as_duration())
                 {
                     circuit_breaker_config.latency_threshold = Some(val);
+                }
+            }
+            "flapping_transitions" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        circuit_breaker_config.flapping_transitions = val as u64;
+                    }
+                }
+            }
+            "flapping_window" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_duration())
+                {
+                    circuit_breaker_config.flapping_window = val;
                 }
             }
             _ => {}

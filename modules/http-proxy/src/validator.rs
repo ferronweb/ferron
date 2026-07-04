@@ -365,6 +365,14 @@ fn validate_circuit_breaker_directives(
                 sub.insert("latency_threshold".to_string());
             }
             validate_duration(cb_block, "latency_threshold")?;
+            if cb_block.directives.contains_key("flapping_transitions") {
+                sub.insert("flapping_transitions".to_string());
+            }
+            validate_number(cb_block, "flapping_transitions", 1)?;
+            if cb_block.directives.contains_key("flapping_window") {
+                sub.insert("flapping_window".to_string());
+            }
+            validate_duration(cb_block, "flapping_window")?;
 
             ferron_core::check_unused_subdirectives!(
                 cb_block,

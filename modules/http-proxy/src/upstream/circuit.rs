@@ -44,6 +44,7 @@ pub fn is_circuit_breaker_available(
 #[inline]
 pub fn record_backend_transport_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     metrics: &mut crate::ProxyMetrics,
@@ -52,6 +53,7 @@ pub fn record_backend_transport_failure(
 ) {
     if record_circuit_breaker_failure(
         circuit_breaker_state,
+        flapping_state,
         circuit_breaker,
         upstream,
         event_sink,
@@ -68,6 +70,7 @@ pub fn record_backend_transport_failure(
 #[inline]
 pub fn record_backend_response(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     status: u16,
@@ -84,6 +87,7 @@ pub fn record_backend_response(
     let should_open = if is_5xx_failure || is_latency_failure {
         record_circuit_breaker_failure(
             circuit_breaker_state,
+            flapping_state,
             circuit_breaker,
             upstream,
             event_sink,
@@ -92,6 +96,7 @@ pub fn record_backend_response(
     } else {
         record_circuit_breaker_success(
             circuit_breaker_state,
+            flapping_state,
             circuit_breaker,
             upstream,
             event_sink,
@@ -110,6 +115,7 @@ pub fn record_backend_response(
 /// Record a circuit breaker slot acquisition attempt.
 pub fn try_acquire_circuit_breaker_slot(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
@@ -172,6 +178,13 @@ pub fn try_acquire_circuit_breaker_slot(
             *state.opened_at.write() = None;
             state.half_open_in_flight.store(true, Ordering::Relaxed);
             state.half_open_pass_count.store(0, Ordering::Relaxed);
+            crate::upstream::flapping::record_circuit_transition(
+                flapping_state,
+                circuit_breaker,
+                &upstream.proxy_to,
+                event_sink,
+                event_trace_context.clone(),
+            );
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Info,
@@ -262,6 +275,7 @@ fn emit_circuit_metric(
 
 fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
@@ -299,6 +313,13 @@ fn record_circuit_breaker_failure(
                 while rf.pop().is_some() {}
             }
             *state.opened_at.write() = Some(now);
+            crate::upstream::flapping::record_circuit_transition(
+                flapping_state,
+                circuit_breaker,
+                &upstream.proxy_to,
+                event_sink,
+                event_trace_context.clone(),
+            );
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
@@ -353,6 +374,13 @@ fn record_circuit_breaker_failure(
             *state.opened_at.write() = Some(now);
             state.half_open_pass_count.store(0, Ordering::Relaxed);
             state.half_open_in_flight.store(false, Ordering::Relaxed);
+            crate::upstream::flapping::record_circuit_transition(
+                flapping_state,
+                circuit_breaker,
+                &upstream.proxy_to,
+                event_sink,
+                event_trace_context.clone(),
+            );
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
@@ -393,6 +421,7 @@ fn record_circuit_breaker_failure(
 
 fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     event_sink: &ferron_observability::CompositeEventSink,
@@ -430,6 +459,13 @@ fn record_circuit_breaker_success(
         if let Some(rf) = &state.recent_failures {
             while rf.pop().is_some() {}
         }
+        crate::upstream::flapping::record_circuit_transition(
+            flapping_state,
+            circuit_breaker,
+            &upstream.proxy_to,
+            event_sink,
+            event_trace_context.clone(),
+        );
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
@@ -514,10 +550,13 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         record_backend_transport_failure(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             &mut metrics,
@@ -532,6 +571,7 @@ mod tests {
 
         record_backend_transport_failure(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             &mut metrics,
@@ -563,6 +603,8 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         circuit_breaker_state.insert(
@@ -582,6 +624,7 @@ mod tests {
             None,
             &circuit_breaker,
             Some(&circuit_breaker_state),
+            None,
             None,
             None,
             &RwLock::new(ConsistentHashRing::new(&[])),
@@ -607,6 +650,8 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         circuit_breaker_state.insert(
@@ -620,6 +665,7 @@ mod tests {
 
         assert!(try_acquire_circuit_breaker_slot(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             &ferron_observability::CompositeEventSink::new(vec![]),
@@ -633,6 +679,7 @@ mod tests {
 
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             200,
@@ -662,6 +709,8 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         circuit_breaker_state.insert(
@@ -676,6 +725,7 @@ mod tests {
         let mut metrics = crate::ProxyMetrics::new();
         record_backend_transport_failure(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             &mut metrics,
@@ -704,11 +754,14 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         // A 500 response should NOT trip the circuit when record_5xx is false
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             500,
@@ -738,12 +791,15 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: true,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         // A 500 response SHOULD trip the circuit when record_5xx is true
         let mut metrics = crate::ProxyMetrics::new();
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             500,
@@ -774,12 +830,15 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: Some(Duration::from_millis(100)),
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         // A 200 response with 200ms latency SHOULD trip the circuit when latency_threshold is 100ms
         let mut metrics = crate::ProxyMetrics::new();
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             200,
@@ -810,11 +869,14 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         // A 200 response with high latency should NOT trip the circuit when latency_threshold is None
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             200,
@@ -844,11 +906,14 @@ mod tests {
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: Some(Duration::from_millis(100)),
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
         };
 
         // A 200 response with 50ms latency should NOT trip the circuit when latency_threshold is 100ms
         record_backend_response(
             Some(&circuit_breaker_state),
+            None,
             &circuit_breaker,
             &upstream,
             200,
