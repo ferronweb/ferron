@@ -170,6 +170,7 @@ fn test_determine_proxy_to_no_upstreams() {
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
         None,
+        false,
     );
     assert!(result.is_none());
 }
@@ -195,6 +196,7 @@ fn test_determine_proxy_to_single_backend() {
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
         None,
+        false,
     );
     assert!(result.is_some());
     let selected = result.unwrap();
@@ -234,6 +236,7 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
         None,
+        false,
     );
     assert!(result.is_some());
     assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
@@ -264,6 +267,7 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
         &ferron_observability::CompositeEventSink::new(vec![]),
         &mut crate::ProxyMetrics::new(),
         None,
+        false,
     );
     assert!(result.is_some());
     let selected = result.unwrap();

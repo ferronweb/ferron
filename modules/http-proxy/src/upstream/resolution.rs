@@ -57,6 +57,7 @@ pub fn determine_proxy_to(
     event_sink: &ferron_observability::CompositeEventSink,
     metrics: &mut crate::ProxyMetrics,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
 ) -> Option<SelectedBackend> {
     if upstreams.is_empty() {
         return None;
@@ -153,6 +154,7 @@ pub fn determine_proxy_to(
                 &upstream,
                 event_sink,
                 event_trace_context.clone(),
+                metrics_resolved_ip,
             ) {
                 let open = circuit_breaker
                     .enabled

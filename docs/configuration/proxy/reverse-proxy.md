@@ -21,6 +21,8 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, `flapping_window`, and `slow_start` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
+- `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
+  - This directive controls whether the `ferron.proxy.backend_resolved_ip` attribute is included in proxy metrics. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only, keeping metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value, which increases cardinality. Enable only when per-IP metric granularity is required and the IP set is stable. Default: `metrics_resolved_ip false`
 
 **Configuration example:**
 
@@ -416,6 +418,9 @@ example.com {
 }
 ```
 
+> [!important]
+> When using Ferron with ephemeral network addresses (e.g., as a Kubernetes ingress controller), always define upstreams using DNS hostnames (such as Kubernetes service identifiers like `http://my-service.default.svc.cluster.local:8080`) rather than individual Pod IP addresses. DNS hostnames remain stable across pod restarts and scaling events, whereas Pod IPs change frequently. Using individual Pod IPs directly as upstream URLs or relying on per-IP metric dimensions (`metrics_resolved_ip true`) can cause cardinality explosion in time-series databases, degrading observability performance and increasing storage costs.
+
 ## Forwarding headers
 
 The reverse proxy module automatically manages standard forwarding headers:
@@ -587,9 +592,9 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path, resolved IP address | Backends selected during load balancing |
-| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path; `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
-| `ferron.proxy.requests` | Counter | backend URL or unix socket path, `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code` | Upstream proxy requests completed |
+| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path, optionally resolved IP address (when `metrics_resolved_ip true`) | Backends selected during load balancing |
+| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path, optionally resolved IP address (when `metrics_resolved_ip true`); `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
+| `ferron.proxy.requests` | Counter | backend URL or unix socket path, optionally resolved IP address (when `metrics_resolved_ip true`), `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code` | Upstream proxy requests completed |
 | `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |
 | `ferron.proxy.pool.waits` | Counter | backend URL or unix socket path | Times the connection pool was exhausted and a request had to wait |
 | `ferron.proxy.pool.wait_time` | Histogram | backend URL or unix socket path | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s |

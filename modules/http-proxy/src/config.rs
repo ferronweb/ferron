@@ -101,6 +101,18 @@ pub struct ProxyConfig {
     pub idle_timeout_map: HashMap<String, Duration>,
     /// Session affinity configuration.
     pub affinity: Option<AffinityConfig>,
+    /// Whether to include the resolved IP address (`ferron.proxy.backend_resolved_ip`)
+    /// in proxy metrics attributes.
+    ///
+    /// When `false` (default), metrics use only `ferron.proxy.backend_url` and
+    /// optional `ferron.proxy.backend_unix_path` to identify backends. This
+    /// keeps metric cardinality low and is recommended for environments with
+    /// ephemeral IP addresses (e.g., Kubernetes).
+    ///
+    /// When `true`, each resolved IP becomes a distinct metric label value,
+    /// which increases cardinality. Enable only when per-IP metric granularity
+    /// is required and the IP set is stable.
+    pub metrics_resolved_ip: bool,
 }
 
 impl Default for ProxyConfig {
@@ -122,6 +134,7 @@ impl Default for ProxyConfig {
             concurrent_conns: None,
             idle_timeout_map: HashMap::new(),
             affinity: None,
+            metrics_resolved_ip: false,
         }
     }
 }
@@ -344,6 +357,11 @@ fn parse_proxy_block(
                     if let Some(type_val) = entry.args.first().and_then(|v| v.as_str()) {
                         cfg.affinity = Some(parse_affinity_entry(type_val, entry, ctx)?);
                     }
+                }
+            }
+            "metrics_resolved_ip" => {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                    cfg.metrics_resolved_ip = val;
                 }
             }
             _ => {}
