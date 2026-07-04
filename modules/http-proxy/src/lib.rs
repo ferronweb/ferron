@@ -816,9 +816,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .ensure_health_check_task(&config_key, &config.upstreams);
 
         // Update the metrics_resolved_ip flag from config
-        self.state
-            .metrics_resolved_ip
-            .store(config.metrics_resolved_ip, std::sync::atomic::Ordering::Relaxed);
+        self.state.metrics_resolved_ip.store(
+            config.metrics_resolved_ip,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         // Set or update per-upstream local limits.
         let conn_manager = self.state.get_conn_manager();
