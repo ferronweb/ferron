@@ -544,6 +544,50 @@ pub fn spawn_health_check_task(
             return;
         }
 
+        for probe_config in &probe_configs {
+            // Log health check initialization
+            let (upstream_type, config, _) = probe_config;
+            let upstream_desc = match upstream_type {
+                UpstreamHealthCheckType::Static(url) => format!("Static({})", url),
+                #[cfg(feature = "srv-lookup")]
+                UpstreamHealthCheckType::Srv((srv_name, _, _)) => format!("SRV({})", srv_name),
+                #[cfg(feature = "srv-lookup")]
+                UpstreamHealthCheckType::StrictDns((host, port, _)) => {
+                    format!("StrictDns({}:{})", host, port)
+                }
+            };
+            event_sink.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Debug,
+                    message: format!(
+                        "Initializing health check for upstream {}: {} {}",
+                        upstream_desc,
+                        config.method.as_str(),
+                        config.uri
+                    ),
+                    summary: "Initializing health check".into(),
+                    target: super::LOG_TARGET,
+                    attributes: vec![
+                        (
+                            "ferron.proxy.health.address",
+                            ferron_observability::LogAttributeValue::String(upstream_desc),
+                        ),
+                        (
+                            "ferron.proxy.health.method",
+                            ferron_observability::LogAttributeValue::String(
+                                config.method.as_str().to_string(),
+                            ),
+                        ),
+                        (
+                            "ferron.proxy.health.uri",
+                            ferron_observability::LogAttributeValue::String(config.uri.clone()),
+                        ),
+                    ],
+                    trace_context: None,
+                },
+            ));
+        }
+
         let mut last_probe_times: HashMap<String, tokio::time::Instant> = HashMap::new();
 
         loop {

@@ -616,6 +616,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 - **`ERROR`**: logged when a proxy execution error occurs (e.g., connection failure, transport error). The message includes the error type and details.
 - **`WARN`**: logged when an upstream is marked unhealthy by active health checks. The message includes the upstream address and failure reason.
 - **`INFO`**: logged when an upstream recovers after consecutive successful health check probes.
+- **`DEBUG`**: logged when a health check loop is initialized for a given upstream.
 
 ### Structured logs
 
@@ -625,6 +626,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | Reverse proxy: `<error type>` | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details |
 | Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
+| Initializing health check | DEBUG | `ferron.proxy.health.address` (string) — backend identifier, `ferron.proxy.health.method` (string) — HTTP method, `ferron.proxy.health.uri` (string) — health check URI |
 
 ### Trace spans
 
