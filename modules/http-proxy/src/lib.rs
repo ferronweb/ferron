@@ -61,6 +61,65 @@ type ActiveUnhealthyCounters = parking_lot::RwLock<std::collections::HashMap<Str
 static PROXY_POOL_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0];
 static PROXY_TLS_BUCKETS: &[f64] = &[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0];
 
+/// Inject upstream runtime state as span attributes on the current request span.
+///
+/// Called after backend selection (both success and failure paths) to give
+/// client-side OTLP traces visibility into *why* the proxy chose a particular
+/// backend and what state it was in at the time of the request.
+#[inline]
+fn inject_upstream_state_span_attributes(
+    ctx: &mut HttpContext,
+    backend: &std::sync::Arc<types::upstream::UpstreamInner>,
+    circuit_breaker_state: &types::circuit::CircuitBreakerStateMap,
+    flapping_state: &types::flapping::FlappingStateMap,
+    health_check_state: &types::health::HealthCheckStateMap,
+    conn_state: &types::ConnectionsTrackState,
+) {
+    let sa = ctx.get_span_attributes();
+
+    // Circuit breaker state
+    if let Some(cb) = circuit_breaker_state.get(backend) {
+        let status = cb.status.load(std::sync::atomic::Ordering::Relaxed);
+        sa.insert(
+            "ferron.proxy.upstream.circuit_state",
+            TraceAttributeValue::StaticStr(circuit_breaker_state_label(status)),
+        );
+    }
+
+    // Flapping state
+    if let Some(flapping) = flapping_state.get(&backend.proxy_to) {
+        sa.insert(
+            "ferron.proxy.upstream.is_flapping",
+            TraceAttributeValue::Bool(flapping.is_flapping()),
+        );
+    }
+
+    // Health check state (only when a health check entry exists for this URL)
+    if let Some(hc) = health_check_state.get(&backend.proxy_to) {
+        sa.insert(
+            "ferron.proxy.upstream.health_status",
+            TraceAttributeValue::StaticStr(if hc.is_healthy {
+                "healthy"
+            } else {
+                "unhealthy"
+            }),
+        );
+        sa.insert(
+            "ferron.proxy.upstream.consecutive_failures",
+            TraceAttributeValue::I64(hc.consecutive_fail_count as i64),
+        );
+    }
+
+    // Active connection count (approximate — same technique as P2C/least-conn selectors)
+    if let Some(entry) = conn_state.get(backend) {
+        let active = (std::sync::Arc::strong_count(&*entry) as i64).saturating_sub(1);
+        sa.insert(
+            "ferron.proxy.upstream.active_connections",
+            TraceAttributeValue::I64(active),
+        );
+    }
+}
+
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
     /// Backends selected during load balancing.
@@ -1401,6 +1460,18 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     TraceAttributeValue::String(unix_path.clone()),
                 );
             }
+        }
+
+        // Inject upstream runtime state into the request span for OTLP traces
+        if let Some(backend) = metrics.final_selected_backend.as_ref() {
+            inject_upstream_state_span_attributes(
+                ctx,
+                backend,
+                &self.state.circuit_breaker_state,
+                &self.state.flapping_state,
+                &self.state.active_health_check_state,
+                &self.state.conn_state,
+            );
         }
 
         Ok(false)

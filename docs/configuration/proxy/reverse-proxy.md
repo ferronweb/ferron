@@ -654,6 +654,11 @@ The reverse proxy stage sets the following attributes on its `ferron.stage.rever
 | `ferron.proxy.backend_unix_path` | string | Unix socket path of the backend, when using Unix sockets. |
 | `ferron.proxy.connection_reused` | bool | Whether the connection to the backend was reused from the pool. |
 | `ferron.proxy.retry_count` | int | Number of retry attempts made during the request. |
+| `ferron.proxy.upstream.circuit_state` | string | Circuit breaker state of the selected backend: `closed`, `open`, or `half_open`. |
+| `ferron.proxy.upstream.is_flapping` | bool | Whether the selected backend is currently flapping (rapidly oscillating circuit breaker states). |
+| `ferron.proxy.upstream.health_status` | string | Active health check status of the selected backend: `healthy` or `unhealthy`. Only present when health checks are configured for the upstream. |
+| `ferron.proxy.upstream.consecutive_failures` | int | Number of consecutive health check failures for the selected backend. Only present when health checks are configured. |
+| `ferron.proxy.upstream.active_connections` | int | Approximate number of active connections to the selected backend at the time of routing. |
 
 ## Best practices
 
