@@ -71,7 +71,7 @@ impl FlappingState {
     /// configured threshold, the upstream is marked as flapping.
     #[inline]
     pub fn record_transition(&self, window: std::time::Duration) -> bool {
-        let flapping = self.transitions.as_ref().map_or(true, |transitions| {
+        let flapping = self.transitions.as_ref().is_none_or(|transitions| {
             let now = Instant::now();
             let evicted = transitions.force_push(now);
             evicted.is_some_and(|t| now.duration_since(t) <= window)
