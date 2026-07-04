@@ -16,8 +16,7 @@ use testcontainers::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-#[path = "common/mod.rs"]
-mod common;
+use crate::common;
 
 async fn create_backend_container(
     network: &str,
@@ -119,9 +118,7 @@ async fn test_ws_large_text_frame() {
     )
     .await;
 
-    let (mut ws_stream, _) = connect_async(&ctx.ws_url)
-        .await
-        .expect("Failed to connect");
+    let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
     // Send a 10KB text message
     let large_msg = "A".repeat(10240);
@@ -163,9 +160,7 @@ async fn test_ws_binary_message() {
     )
     .await;
 
-    let (mut ws_stream, _) = connect_async(&ctx.ws_url)
-        .await
-        .expect("Failed to connect");
+    let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
     // Send binary data (1KB of alternating bytes)
     let binary_data: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
@@ -207,9 +202,7 @@ async fn test_ws_multiple_messages() {
     )
     .await;
 
-    let (mut ws_stream, _) = connect_async(&ctx.ws_url)
-        .await
-        .expect("Failed to connect");
+    let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
     // Send 10 messages and verify each is echoed correctly
     for i in 0..10 {
@@ -253,9 +246,7 @@ async fn test_ws_close_handshake() {
     )
     .await;
 
-    let (mut ws_stream, _) = connect_async(&ctx.ws_url)
-        .await
-        .expect("Failed to connect");
+    let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
     // Send a message first to verify connection is working
     ws_stream
@@ -320,9 +311,7 @@ async fn test_ws_ping_pong() {
     )
     .await;
 
-    let (mut ws_stream, _) = connect_async(&ctx.ws_url)
-        .await
-        .expect("Failed to connect");
+    let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
     // Send a ping with custom payload
     let ping_data = b"ping-test";

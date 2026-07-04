@@ -14,7 +14,7 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-mod common;
+use crate::common;
 
 async fn create_backend_container(
     network: &str,
