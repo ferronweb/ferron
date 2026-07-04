@@ -612,6 +612,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.failures` | Counter | `http.response.status_code` (HTTP response status code), `error.type` (error type classification) | Reverse-proxy failures that returned an error before a backend response was produced |
 | `ferron.proxy.dns.cache_hit` | Counter | — | DNS cache hits for strict DNS and SRV lookups |
 | `ferron.proxy.dns.cache_miss` | Counter | — | DNS cache misses (miss or expiry) for strict DNS and SRV lookups |
+| `ferron.proxy.upstream.response_truncated` | Counter | backend URL or unix socket path | Upstream responses that ended before the declared Content-Length |
 
 ### Logs
 
@@ -634,6 +635,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | Upstream circuit closed | INFO  | `upstream.address` (string) — backend server URL |
 | Upstream circuit reopened after half-open trial failure | INFO  | `upstream.address` (string) — backend server URL |
 | Upstream circuit transitioned to half-open | INFO  | `upstream.address` (string) — backend server URL, `ferron.proxy.circuit.open_duration_ms` — open duration in milliseconds |
+| Upstream response truncated | WARN  | `ferron.proxy.backend_url` (string) — backend server URL, `upstream.bytes_received` (int) — bytes received, `upstream.content_length` (int) — expected Content-Length |
 
 ### Trace spans
 

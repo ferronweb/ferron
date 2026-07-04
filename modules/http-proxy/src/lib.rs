@@ -117,6 +117,14 @@ pub struct ProxyMetrics {
     /// For `P2cEwma`: combined EWMA + connection-penalty scores.
     /// Empty for other algorithms.
     pub candidate_scores: Vec<f64>,
+
+    // -- Upstream response body tracking --
+    /// Whether the upstream response body was truncated (ended before Content-Length).
+    pub upstream_response_truncated: bool,
+    /// Number of bytes received from the upstream response body.
+    pub upstream_bytes_received: Option<u64>,
+    /// Expected Content-Length from the upstream response.
+    pub upstream_content_length: Option<u64>,
 }
 
 impl Default for ProxyMetrics {
@@ -150,6 +158,9 @@ impl ProxyMetrics {
             connect_time_secs: 0.0,
             ttfb_secs: 0.0,
             candidate_scores: Vec::new(),
+            upstream_response_truncated: false,
+            upstream_bytes_received: None,
+            upstream_content_length: None,
         }
     }
 }
@@ -1202,6 +1213,22 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{request}"),
                     description: Some(
                         "No pooled connection was available; a new connection was established.",
+                    ),
+                    trace_context: current_event_trace_context(ctx),
+                }));
+        }
+
+        // --- Upstream response truncation ---
+        if metrics.upstream_response_truncated {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.upstream.response_truncated",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{response}"),
+                    description: Some(
+                        "Upstream responses that ended before the declared Content-Length.",
                     ),
                     trace_context: current_event_trace_context(ctx),
                 }));

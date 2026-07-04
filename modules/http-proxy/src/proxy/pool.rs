@@ -18,7 +18,10 @@ use crate::proxy::connect::build_proxy_protocol_header;
 use crate::send_net_io::SendTcpStreamPoll;
 #[cfg(unix)]
 use crate::send_net_io::SendUnixStreamPoll;
-use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, TrackedBody};
+use crate::send_request::{
+    http1_handshake, http2_handshake, BodyTrackingState, ContentLengthTrackingBody,
+    SendRequestWrapper, TrackedBody, TruncatedTracker,
+};
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::types::error::ProxyError;
@@ -577,6 +580,10 @@ pub async fn send_via_wrapper(
         // For keepalive, we extract the wrapper and create a PoolReturnInfo.
         // This prevents the PoolItem's Drop from running, and instead we manually
         // return the connection via PoolReturnInfo when TrackedBody is dropped.
+
+        // Extract backend URL before consuming item
+        let backend_url = item.key().map(|k| k.0.proxy_to.clone()).unwrap_or_default();
+
         let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
             Some(crate::send_request::PoolReturnInfo::from_item(
                 item, wrapper, is_unix,
@@ -588,10 +595,30 @@ pub async fn send_via_wrapper(
             None
         };
 
+        // Extract Content-Length for truncation detection
+        let expected_length = parts
+            .headers
+            .get(http::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
+        let tracking_state = BodyTrackingState::new(expected_length);
+
+        // Wrap body in ContentLengthTrackingBody for byte-level tracking
+        let tracking_body = ContentLengthTrackingBody::new(body, tracking_state.clone());
+
+        let truncated_tracker = TruncatedTracker::new(
+            tracking_state,
+            backend_url,
+            ctx.events.clone(),
+            ferron_http::trace_context::current_event_trace_context(ctx),
+        );
+
         let tracked_body = TrackedBody::new(
-            body.map_err(std::io::Error::other),
+            tracking_body.map_err(std::io::Error::other),
             tracked_connection,
             pool_return_info,
+            Some(truncated_tracker),
         );
 
         // Remove some response headers as indicated by "Connection" header (RFC 7230)

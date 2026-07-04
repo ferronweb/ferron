@@ -272,14 +272,21 @@ pub struct TrackedBody<B> {
     inner: B,
     _tracker: Option<Arc<()>>,
     _tracker_pool: Option<PoolReturnInfo>,
+    _truncated_tracker: Option<TruncatedTracker>,
 }
 
 impl<B> TrackedBody<B> {
-    pub fn new(inner: B, tracker: Option<Arc<()>>, tracker_pool: Option<PoolReturnInfo>) -> Self {
+    pub fn new(
+        inner: B,
+        tracker: Option<Arc<()>>,
+        tracker_pool: Option<PoolReturnInfo>,
+        truncated_tracker: Option<TruncatedTracker>,
+    ) -> Self {
         Self {
             inner,
             _tracker: tracker,
             _tracker_pool: tracker_pool,
+            _truncated_tracker: truncated_tracker,
         }
     }
 }
@@ -304,5 +311,329 @@ where
 
     fn size_hint(&self) -> hyper::body::SizeHint {
         self.inner.size_hint()
+    }
+}
+
+/// Shared state for tracking upstream response body consumption.
+///
+/// Used by `ContentLengthTrackingBody` to record bytes received and
+/// whether the body was truncated, and by `TruncatedTracker` to emit
+/// metrics/logs when the body is dropped.
+pub struct BodyTrackingState {
+    /// Whether the body ended before the expected Content-Length.
+    pub truncated: std::sync::atomic::AtomicBool,
+    /// Total bytes received from the upstream body.
+    pub bytes_received: std::sync::atomic::AtomicU64,
+    /// Expected Content-Length from the upstream response headers.
+    pub expected_length: Option<u64>,
+}
+
+impl BodyTrackingState {
+    pub fn new(expected_length: Option<u64>) -> Arc<Self> {
+        Arc::new(Self {
+            truncated: std::sync::atomic::AtomicBool::new(false),
+            bytes_received: std::sync::atomic::AtomicU64::new(0),
+            expected_length,
+        })
+    }
+}
+
+/// A body wrapper that tracks bytes received and detects premature stream termination.
+///
+/// When the upstream response includes a `Content-Length` header, this wrapper counts
+/// the bytes yielded by `poll_frame` and flags truncation if the stream ends before
+/// the expected number of bytes have been received.
+pub struct ContentLengthTrackingBody<B> {
+    inner: B,
+    state: Arc<BodyTrackingState>,
+}
+
+impl<B> ContentLengthTrackingBody<B> {
+    pub fn new(inner: B, state: Arc<BodyTrackingState>) -> Self {
+        Self { inner, state }
+    }
+}
+
+impl<B> hyper::body::Body for ContentLengthTrackingBody<B>
+where
+    B: hyper::body::Body<Data = Bytes> + Unpin,
+{
+    type Data = Bytes;
+    type Error = B::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+        let result = std::pin::Pin::new(&mut self.inner).poll_frame(cx);
+
+        match &result {
+            std::task::Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    let len = data.len() as u64;
+                    self.state
+                        .bytes_received
+                        .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            std::task::Poll::Ready(None) => {
+                // Stream ended — check for truncation
+                if let Some(expected) = self.state.expected_length {
+                    let received = self
+                        .state
+                        .bytes_received
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    if received < expected {
+                        self.state
+                            .truncated
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        result
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
+/// Drop guard that emits a metric and warning log when an upstream response
+/// body was truncated (ended before the declared Content-Length).
+///
+/// This runs when the response body is consumed or dropped, which happens
+/// after the HTTP server framework has finished streaming to the client.
+pub struct TruncatedTracker {
+    state: Arc<BodyTrackingState>,
+    backend_url: String,
+    events: ferron_observability::CompositeEventSink,
+    trace_context: Option<ferron_observability::EventTraceContext>,
+}
+
+impl TruncatedTracker {
+    pub fn new(
+        state: Arc<BodyTrackingState>,
+        backend_url: String,
+        events: ferron_observability::CompositeEventSink,
+        trace_context: Option<ferron_observability::EventTraceContext>,
+    ) -> Self {
+        Self {
+            state,
+            backend_url,
+            events,
+            trace_context,
+        }
+    }
+}
+
+impl Drop for TruncatedTracker {
+    fn drop(&mut self) {
+        if !self
+            .state
+            .truncated
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+
+        let bytes = self
+            .state
+            .bytes_received
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let expected = self.state.expected_length.unwrap_or(0);
+
+        use ferron_observability::{
+            Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent,
+            MetricType, MetricValue,
+        };
+
+        self.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.upstream.response_truncated",
+            attributes: vec![(
+                "ferron.proxy.backend_url",
+                MetricAttributeValue::String(self.backend_url.clone()),
+            )],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{response}"),
+            description: Some("Upstream responses that ended before the declared Content-Length."),
+            trace_context: self.trace_context.clone(),
+        }));
+
+        self.events.emit(Event::Log(LogEvent {
+            level: LogLevel::Warn,
+            message: format!(
+                "Upstream response ended prematurely: received {bytes}/{expected} bytes"
+            ),
+            summary: "Upstream response truncated".into(),
+            target: "ferron-http-proxy",
+            attributes: vec![
+                (
+                    "ferron.proxy.backend_url",
+                    LogAttributeValue::String(self.backend_url.clone()),
+                ),
+                (
+                    "upstream.bytes_received",
+                    LogAttributeValue::I64(bytes as i64),
+                ),
+                (
+                    "upstream.content_length",
+                    LogAttributeValue::I64(expected as i64),
+                ),
+            ],
+            trace_context: self.trace_context.clone(),
+        }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use hyper::body::Frame;
+
+    /// A simple test body that yields pre-configured frames.
+    struct TestBody {
+        frames: Vec<Bytes>,
+        index: usize,
+    }
+
+    impl TestBody {
+        fn new(frames: Vec<Bytes>) -> Self {
+            Self { frames, index: 0 }
+        }
+    }
+
+    impl hyper::body::Body for TestBody {
+        type Data = Bytes;
+        type Error = std::io::Error;
+
+        fn poll_frame(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+            if self.index < self.frames.len() {
+                let frame = Frame::data(self.frames[self.index].clone());
+                self.index += 1;
+                std::task::Poll::Ready(Some(Ok(frame)))
+            } else {
+                std::task::Poll::Ready(None)
+            }
+        }
+
+        fn is_end_stream(&self) -> bool {
+            self.index >= self.frames.len()
+        }
+
+        fn size_hint(&self) -> hyper::body::SizeHint {
+            hyper::body::SizeHint::new()
+        }
+    }
+
+    /// Helper: drive a body to completion using poll_frame.
+    fn drive_to_completion<B: hyper::body::Body + Unpin>(body: &mut B) {
+        let waker = std::task::Waker::noop();
+        let mut cx = std::task::Context::from_waker(waker);
+        loop {
+            let pinned = std::pin::Pin::new(&mut *body);
+            match pinned.poll_frame(&mut cx) {
+                std::task::Poll::Ready(Some(Ok(_))) => {}
+                std::task::Poll::Ready(Some(Err(_))) => break,
+                std::task::Poll::Ready(None) => break,
+                std::task::Poll::Pending => break,
+            }
+        }
+    }
+
+    #[test]
+    fn test_tracking_body_no_content_length() {
+        let state = BodyTrackingState::new(None);
+        let body = TestBody::new(vec![Bytes::from("hello"), Bytes::from(" world")]);
+
+        let mut tracking = ContentLengthTrackingBody::new(body, state.clone());
+        drive_to_completion(&mut tracking);
+
+        assert_eq!(
+            state
+                .bytes_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            11
+        );
+        assert!(!state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_tracking_body_complete() {
+        let state = BodyTrackingState::new(Some(11));
+        let body = TestBody::new(vec![Bytes::from("hello"), Bytes::from(" world")]);
+
+        let mut tracking = ContentLengthTrackingBody::new(body, state.clone());
+        drive_to_completion(&mut tracking);
+
+        assert_eq!(
+            state
+                .bytes_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            11
+        );
+        assert!(!state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_tracking_body_truncated() {
+        let state = BodyTrackingState::new(Some(100));
+        let body = TestBody::new(vec![Bytes::from("hello"), Bytes::from(" world")]);
+
+        let mut tracking = ContentLengthTrackingBody::new(body, state.clone());
+        drive_to_completion(&mut tracking);
+
+        assert_eq!(
+            state
+                .bytes_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            11
+        );
+        assert!(state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_tracking_body_single_frame_exact() {
+        let state = BodyTrackingState::new(Some(5));
+        let body = TestBody::new(vec![Bytes::from("hello")]);
+
+        let mut tracking = ContentLengthTrackingBody::new(body, state.clone());
+        drive_to_completion(&mut tracking);
+
+        assert_eq!(
+            state
+                .bytes_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            5
+        );
+        assert!(!state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_tracking_body_more_bytes_than_expected() {
+        let state = BodyTrackingState::new(Some(3));
+        let body = TestBody::new(vec![Bytes::from("hello")]);
+
+        let mut tracking = ContentLengthTrackingBody::new(body, state.clone());
+        drive_to_completion(&mut tracking);
+
+        assert_eq!(
+            state
+                .bytes_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            5
+        );
+        assert!(!state.truncated.load(std::sync::atomic::Ordering::Relaxed));
     }
 }
