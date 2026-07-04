@@ -38,8 +38,6 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
 ] }
 oneshot = { version = "0.2.1", features = ["std", "async"] }
-foldhash = "0.2.0"
-lru = "0.18.0"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
