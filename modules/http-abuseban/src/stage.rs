@@ -35,7 +35,7 @@ impl AbuseProtectionStage {
             .insert::<AbuseRegistryConfig>(config.registry_config.clone());
 
         // Get the client IP address from the context
-        let client_ip = context.remote_address.ip();
+        let client_ip = context.remote_address.ip().to_canonical();
 
         // Check if this IP is banned
         if let Some(remaining) = self

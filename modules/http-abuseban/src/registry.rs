@@ -243,12 +243,12 @@ impl AbuseRegistry {
         }
 
         // Allowlisted IPs are never tracked or banned
-        if Self::is_allowlisted(event.ip, config) {
+        if Self::is_allowlisted(event.ip.to_canonical(), config) {
             return EventResult::Recorded;
         }
 
         // Check if IP is already banned
-        if self.is_banned(event.ip, config) {
+        if self.is_banned(event.ip.to_canonical(), config) {
             return EventResult::Recorded;
         }
 
@@ -269,7 +269,7 @@ impl AbuseRegistry {
         let eviction_window = Duration::from_secs(max_window_secs);
         self.evict_stale_trackers_with_window(eviction_window);
 
-        let key = format!("{}:{}", event.ip, event.event_type.as_str());
+        let key = format!("{}:{}", event.ip.to_canonical(), event.event_type.as_str());
         let mut tracker = self
             .event_trackers
             .entry(key.clone())
@@ -301,7 +301,7 @@ impl AbuseRegistry {
                 expires_at: Instant::now() + ban_duration,
             };
 
-            self.bans.insert(event.ip, ban_entry);
+            self.bans.insert(event.ip.to_canonical(), ban_entry);
             self.bans_triggered.fetch_add(1, Ordering::Relaxed);
 
             // Clear the tracker after ban. We must drop the RefMut first to avoid
@@ -351,7 +351,7 @@ impl AbuseRegistry {
             // per error_rate_threshold block
             let key = format!(
                 "{}:{}:{}",
-                event.ip,
+                event.ip.to_canonical(),
                 event.event_type.as_str(),
                 error_threshold
                     .status_codes
@@ -380,7 +380,7 @@ impl AbuseRegistry {
                     expires_at: Instant::now() + ban_duration,
                 };
 
-                self.bans.insert(event.ip, ban_entry);
+                self.bans.insert(event.ip.to_canonical(), ban_entry);
                 self.bans_triggered.fetch_add(1, Ordering::Relaxed);
 
                 tracker.events.clear();
@@ -453,7 +453,7 @@ impl AbuseRecorder for AbuseRegistry {
                         (
                             "client.address",
                             ferron_observability::LogAttributeValue::String(
-                                ctx.remote_address.ip().to_string(),
+                                ctx.remote_address.ip().to_canonical().to_string(),
                             ),
                         ),
                         (

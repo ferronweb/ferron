@@ -282,7 +282,7 @@ impl TcpListenerHandle {
                                       ),
                                       (
                                           "client.address",
-                                          LogAttributeValue::String(remote_addr.ip().to_string()),
+                                          LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
                                       ),
                                       (
                                           "server.address",
@@ -335,7 +335,7 @@ impl TcpListenerHandle {
                                     ),
                                     (
                                         "client.address",
-                                        LogAttributeValue::String(remote_addr.ip().to_string()),
+                                        LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
                                     ),
                                     (
                                         "server.address",
@@ -478,7 +478,7 @@ impl TcpListenerHandle {
                                             ),
                                             (
                                                 "client.address",
-                                                LogAttributeValue::String(remote_addr.ip().to_string()),
+                                                LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
                                             ),
                                             (
                                                 "server.address",
@@ -517,7 +517,7 @@ impl TcpListenerHandle {
                                                                     ),
                                                                     (
                                                                         "client.address",
-                                                                        LogAttributeValue::String(remote_addr.ip().to_string()),
+                                                                        LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
                                                                     ),
                                                                     (
                                                                         "server.address",
@@ -544,7 +544,7 @@ impl TcpListenerHandle {
                                         ),
                                         (
                                             "client.address",
-                                            LogAttributeValue::String(remote_addr.ip().to_string()),
+                                            LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
                                         ),
                                         (
                                             "server.address",
@@ -755,7 +755,9 @@ async fn handle_http1_connection_zerocopy<S>(
                 ),
                 (
                     "client.address",
-                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.remote_address.ip().to_canonical().to_string(),
+                    ),
                 ),
                 (
                     "server.address",
@@ -843,7 +845,9 @@ async fn handle_http1_connection<S>(
                 ),
                 (
                     "client.address",
-                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.remote_address.ip().to_canonical().to_string(),
+                    ),
                 ),
                 (
                     "server.address",
@@ -931,7 +935,9 @@ async fn handle_http2_connection<S>(
                 ),
                 (
                     "client.address",
-                    LogAttributeValue::String(handler_state.remote_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.remote_address.ip().to_canonical().to_string(),
+                    ),
                 ),
                 (
                     "server.address",

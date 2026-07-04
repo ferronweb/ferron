@@ -98,7 +98,7 @@ pub async fn bad_request_handler(
             ),
             (
                 "client.address",
-                LogAttributeValue::String(remote_address.ip().to_string()),
+                LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
             ),
             (
                 "server.address",
@@ -593,7 +593,7 @@ async fn request_handler_inner(
                 ("error.message", LogAttributeValue::String(e.to_string())),
                 (
                     "client.address",
-                    LogAttributeValue::String(remote_address.ip().to_string()),
+                    LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
                 ),
                 (
                     "server.address",
@@ -645,7 +645,7 @@ async fn request_handler_inner(
                 ),
                 (
                     "client.address",
-                    LogAttributeValue::String(remote_address.ip().to_string()),
+                    LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
                 ),
                 (
                     "server.address",
@@ -696,7 +696,7 @@ async fn request_handler_inner(
                     ("error.message", LogAttributeValue::String(e.to_string())),
                     (
                         "client.address",
-                        LogAttributeValue::String(remote_address.ip().to_string()),
+                        LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
                     ),
                     (
                         "server.address",
@@ -748,7 +748,9 @@ async fn request_handler_inner(
                                 ("error.message", LogAttributeValue::String(e.to_string())),
                                 (
                                     "client.address",
-                                    LogAttributeValue::String(remote_address.ip().to_string()),
+                                    LogAttributeValue::String(
+                                        remote_address.ip().to_canonical().to_string(),
+                                    ),
                                 ),
                                 (
                                     "server.address",
@@ -799,7 +801,9 @@ async fn request_handler_inner(
                         ("error.message", LogAttributeValue::String(e.to_string())),
                         (
                             "client.address",
-                            LogAttributeValue::String(remote_address.ip().to_string()),
+                            LogAttributeValue::String(
+                                remote_address.ip().to_canonical().to_string(),
+                            ),
                         ),
                         (
                             "server.address",

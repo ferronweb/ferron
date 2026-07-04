@@ -210,7 +210,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 return Ok(false);
             }
         };
-        let ip = ctx.remote_address.ip();
+        let ip = ctx.remote_address.ip().to_canonical();
 
         // Check brute-force lockout
         if engine.is_locked(ip) {
