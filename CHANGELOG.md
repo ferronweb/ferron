@@ -27,6 +27,7 @@
 - **DNS result caching** — resolved DNS results for both strict DNS (A/AAAA) and SRV upstreams are cached in memory with TTL-based expiry derived from the DNS response TTL. This avoids redundant DNS resolution and lock contention for high-traffic hostnames. Cache entries expire based on the minimum TTL from the DNS response records, with a 30-second fallback when no TTL is available.
 - **HTTP upstream connection timeout** — the `connection_timeout` subdirective is now available for all upstreams, allowing configuration of the maximum time to establish a TCP connection to a backend. This prevents long hangs when backends are unreachable or slow to accept connections.
 - **Health check logging** — health check initialization logs now include the HTTP method and URI in the log output, making it easier to debug and understand which health checks are being performed.
+- **Upstream circuit transition logging** — circuit breaker state transitions (open/half-open/closed) now log the upstream address and duration of the open circuit, making it easier to diagnose and troubleshoot circuit breaker behavior.
 
 #### Observability & tracing
 

@@ -627,6 +627,10 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | Upstream marked unhealthy | WARN  | `upstream.address` (string) — backend server URL |
 | Upstream recovered      | INFO  | `upstream.address` (string) — backend server URL |
 | Initializing health check | DEBUG | `ferron.proxy.health.address` (string) — backend identifier, `ferron.proxy.health.method` (string) — HTTP method, `ferron.proxy.health.uri` (string) — health check URI |
+| Upstream circuit opened | WARN  | `upstream.address` (string) — backend server URL |
+| Upstream circuit closed | INFO  | `upstream.address` (string) — backend server URL |
+| Upstream circuit reopened after half-open trial failure | INFO  | `upstream.address` (string) — backend server URL |
+| Upstream circuit transitioned to half-open | INFO  | `upstream.address` (string) — backend server URL, `ferron.proxy.circuit.open_duration_ms` — open duration in milliseconds |
 
 ### Trace spans
 

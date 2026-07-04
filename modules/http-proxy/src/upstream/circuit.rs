@@ -132,7 +132,7 @@ pub fn try_acquire_circuit_breaker_slot(
     match state.status.load(Ordering::Relaxed) {
         CIRCUIT_BREAKER_STATUS_CLOSED => true,
         CIRCUIT_BREAKER_STATUS_OPEN => {
-            {
+            let opened_at = {
                 let mut opened_at_ref = state.opened_at.upgradable_read();
                 let opened_at = if let Some(opened_at) = &*opened_at_ref {
                     opened_at
@@ -155,7 +155,9 @@ pub fn try_acquire_circuit_breaker_slot(
                 if opened_at.elapsed() < circuit_breaker.open_duration {
                     return false;
                 }
-            }
+
+                *opened_at
+            };
 
             state
                 .status
@@ -167,15 +169,26 @@ pub fn try_acquire_circuit_breaker_slot(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Info,
                     message: format!(
-                        "Upstream {} circuit transitioned to half-open",
-                        upstream.proxy_to
+                        "Upstream {} circuit transitioned to half-open after {:?}",
+                        upstream.proxy_to,
+                        opened_at.elapsed()
                     ),
                     summary: "Upstream circuit transitioned to half-open".into(),
                     target: crate::LOG_TARGET,
-                    attributes: vec![(
-                        "upstream.address",
-                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
-                    )],
+                    attributes: vec![
+                        (
+                            "upstream.address",
+                            ferron_observability::LogAttributeValue::String(
+                                upstream.proxy_to.clone(),
+                            ),
+                        ),
+                        (
+                            "ferron.proxy.circuit.open_duration_ms",
+                            ferron_observability::LogAttributeValue::I64(
+                                opened_at.elapsed().as_millis() as i64,
+                            ),
+                        ),
+                    ],
                     trace_context: event_trace_context.clone(),
                 },
             ));
