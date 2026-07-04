@@ -1,7 +1,9 @@
 //! Backend selection implementation for all load balancing algorithms.
 
 use std::sync::Arc;
+use std::time::Duration;
 
+use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::p2c_ewma::{self, EwmaStateMap, P2cEwmaParams};
@@ -21,6 +23,41 @@ pub struct SelectionResult {
     pub candidate_scores: Vec<f64>,
 }
 
+/// Compute the slow-start virtual connection penalty for an upstream.
+///
+/// Returns `0` when slow-start is disabled or the recovery window has elapsed.
+/// Otherwise returns a decaying penalty: full `weight * 10` at recovery time,
+/// linearly decreasing to `0` over `slow_start_duration`.
+#[inline]
+fn slow_start_virtual_conns(
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    slow_start_duration: Duration,
+    upstream: &Arc<UpstreamInner>,
+) -> usize {
+    if slow_start_duration.is_zero() {
+        return 0;
+    }
+    let Some(state_map) = circuit_breaker_state else {
+        return 0;
+    };
+    let Some(state) = state_map.get(upstream) else {
+        return 0;
+    };
+    let Some(ref recovery_at) = state.slow_start_recovery_at else {
+        return 0;
+    };
+    let recovery_at = *recovery_at.read();
+    let Some(recovery_at) = recovery_at else {
+        return 0;
+    };
+    let elapsed = recovery_at.elapsed();
+    if elapsed >= slow_start_duration {
+        return 0;
+    }
+    let fraction = 1.0 - elapsed.as_secs_f64() / slow_start_duration.as_secs_f64();
+    (upstream.weight as f64 * 10.0 * fraction) as usize
+}
+
 /// Selects a backend index based on the load balancing algorithm.
 ///
 /// `healthy_indices` is a slice of indices into the `upstreams` slice,
@@ -38,6 +75,8 @@ pub fn select_backend_index(
     upstreams: &[Arc<UpstreamInner>],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    slow_start_duration: Duration,
 ) -> SelectionResult {
     if healthy_indices.len() < 2 {
         // Fast path: no load balancing needed
@@ -111,17 +150,20 @@ pub fn select_backend_index(
                         }
                     }
                 };
+                let virtual_conns =
+                    slow_start_virtual_conns(circuit_breaker_state, slow_start_duration, upstream);
+                let effective_count = connection_count + virtual_conns;
                 if upstream.weight == 0 {
                     continue;
                 }
                 if let Some((prev_count, prev_weight)) = min_connections {
-                    let current_score = (connection_count as u64) * (prev_weight as u64);
+                    let current_score = (effective_count as u64) * (prev_weight as u64);
                     let prev_score = (prev_count as u64) * (upstream.weight as u64);
 
                     match current_score.cmp(&prev_score) {
                         std::cmp::Ordering::Less => {
                             best_pos = pos;
-                            min_connections = Some((connection_count, upstream.weight));
+                            min_connections = Some((effective_count, upstream.weight));
                             tie_count = 1;
                         }
                         std::cmp::Ordering::Equal => {
@@ -136,7 +178,7 @@ pub fn select_backend_index(
                     }
                 } else {
                     best_pos = pos;
-                    min_connections = Some((connection_count, upstream.weight));
+                    min_connections = Some((effective_count, upstream.weight));
                     tie_count = 1;
                 }
             }
@@ -196,21 +238,36 @@ pub fn select_backend_index(
             let weight1 = upstreams[healthy_indices[idx1]].weight;
             let weight2 = upstreams[healthy_indices[idx2]].weight;
 
+            let virtual1 = slow_start_virtual_conns(
+                circuit_breaker_state,
+                slow_start_duration,
+                &upstreams[healthy_indices[idx1]],
+            );
+            let virtual2 = slow_start_virtual_conns(
+                circuit_breaker_state,
+                slow_start_duration,
+                &upstreams[healthy_indices[idx2]],
+            );
+
+            let effective_count1 = count1 + virtual1;
+            let effective_count2 = count2 + virtual2;
+
             // Compute weighted connection scores for diagnostics
             let score1 = if weight1 == 0 {
                 f64::MAX
             } else {
-                count1 as f64 / weight1 as f64
+                effective_count1 as f64 / weight1 as f64
             };
             let score2 = if weight2 == 0 {
                 f64::MAX
             } else {
-                count2 as f64 / weight2 as f64
+                effective_count2 as f64 / weight2 as f64
             };
 
             let prefer_idx1 = weight1 != 0
                 && (weight2 == 0
-                    || (count1 as u64) * (weight2 as u64) <= (count2 as u64) * (weight1 as u64));
+                    || (effective_count1 as u64) * (weight2 as u64)
+                        <= (effective_count2 as u64) * (weight1 as u64));
 
             let index = if prefer_idx1 { idx1 } else { idx2 };
             // Winner's score first, loser's second
@@ -266,10 +323,13 @@ pub fn select_backend_index(
                         }
                     }
                 };
+                let virtual_conns =
+                    slow_start_virtual_conns(circuit_breaker_state, slow_start_duration, upstream);
                 let ewma = ewma_state
                     .map(|s| p2c_ewma::get_decayed_ewma(s, upstream, &params))
                     .unwrap_or(params.default_ewma);
-                p2c_ewma::compute_score(ewma, active_conns, &params) / upstream.weight as f64
+                p2c_ewma::compute_score(ewma, active_conns + virtual_conns, &params)
+                    / upstream.weight as f64
             };
 
             let s1 = score_for(idx1);

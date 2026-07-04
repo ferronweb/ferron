@@ -74,6 +74,7 @@ fn inject_upstream_state_span_attributes(
     flapping_state: &types::flapping::FlappingStateMap,
     health_check_state: &types::health::HealthCheckStateMap,
     conn_state: &types::ConnectionsTrackState,
+    slow_start_duration: std::time::Duration,
 ) {
     let sa = ctx.get_span_attributes();
 
@@ -117,6 +118,21 @@ fn inject_upstream_state_span_attributes(
             "ferron.proxy.upstream.active_connections",
             TraceAttributeValue::I64(active),
         );
+    }
+
+    // Slow-start state (circuit breaker recently closed)
+    if !slow_start_duration.is_zero() {
+        if let Some(cb) = circuit_breaker_state.get(backend) {
+            let in_slow_start = cb
+                .slow_start_recovery_at
+                .as_ref()
+                .and_then(|r| *r.read())
+                .is_some_and(|t| t.elapsed() < slow_start_duration);
+            sa.insert(
+                "ferron.proxy.upstream.slow_start",
+                TraceAttributeValue::Bool(in_slow_start),
+            );
+        }
     }
 }
 
@@ -1471,6 +1487,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 &self.state.flapping_state,
                 &self.state.active_health_check_state,
                 &self.state.conn_state,
+                config.circuit_breaker.slow_start_duration,
             );
         }
 

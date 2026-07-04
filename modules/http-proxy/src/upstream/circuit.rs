@@ -2,6 +2,7 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::config::CircuitBreakerConfig;
 use crate::types::circuit::{
@@ -178,6 +179,11 @@ pub fn try_acquire_circuit_breaker_slot(
             *state.opened_at.write() = None;
             state.half_open_in_flight.store(true, Ordering::Relaxed);
             state.half_open_pass_count.store(0, Ordering::Relaxed);
+            // Clear slow-start recovery timestamp — the circuit is re-entering
+            // half-open, so the slow-start penalty should not apply.
+            if let Some(ref recovery_at) = state.slow_start_recovery_at {
+                *recovery_at.write() = None;
+            }
             crate::upstream::flapping::record_circuit_transition(
                 flapping_state,
                 circuit_breaker,
@@ -452,7 +458,7 @@ fn record_circuit_breaker_success(
         return;
     };
 
-    // Use `get` instead of `get_mut` for fast path.
+    // Fast path: bail if not in HALFOPEN state.
     if circuit_breaker_state
         .get(upstream)
         .is_none_or(|s| s.status.load(Ordering::Relaxed) != CIRCUIT_BREAKER_STATUS_HALFOPEN)
@@ -475,6 +481,17 @@ fn record_circuit_breaker_success(
         state.half_open_pass_count.store(0, Ordering::Relaxed);
         if let Some(rf) = &state.recent_failures {
             while rf.pop().is_some() {}
+        }
+        // Record slow-start recovery timestamp so the LB applies a decaying
+        // virtual connection penalty, preventing thundering herd.
+        if circuit_breaker.slow_start_duration > Duration::ZERO {
+            drop(state);
+            if let Some(mut state) = circuit_breaker_state.get_mut(upstream) {
+                let recovery_at = state
+                    .slow_start_recovery_at
+                    .get_or_insert_with(|| Arc::new(parking_lot::RwLock::new(None)));
+                *recovery_at.write() = Some(Instant::now());
+            }
         }
         crate::upstream::flapping::record_circuit_transition(
             flapping_state,
@@ -569,6 +586,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         record_backend_transport_failure(
@@ -622,6 +640,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         circuit_breaker_state.insert(
@@ -669,6 +688,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         circuit_breaker_state.insert(
@@ -728,6 +748,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         circuit_breaker_state.insert(
@@ -773,6 +794,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         // A 500 response should NOT trip the circuit when record_5xx is false
@@ -810,6 +832,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         // A 500 response SHOULD trip the circuit when record_5xx is true
@@ -849,6 +872,7 @@ mod tests {
             latency_threshold: Some(Duration::from_millis(100)),
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         // A 200 response with 200ms latency SHOULD trip the circuit when latency_threshold is 100ms
@@ -888,6 +912,7 @@ mod tests {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         // A 200 response with high latency should NOT trip the circuit when latency_threshold is None
@@ -925,6 +950,7 @@ mod tests {
             latency_threshold: Some(Duration::from_millis(100)),
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         };
 
         // A 200 response with 50ms latency should NOT trip the circuit when latency_threshold is 100ms

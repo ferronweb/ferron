@@ -129,7 +129,13 @@ pub fn determine_proxy_to(
                 (0, Vec::new())
             } else {
                 let result = super::lb::selector::select_backend_index(
-                    algorithm, &group, upstreams, conn_state, ewma_state,
+                    algorithm,
+                    &group,
+                    upstreams,
+                    conn_state,
+                    ewma_state,
+                    circuit_breaker_state,
+                    circuit_breaker.slow_start_duration,
                 );
                 (result.index, result.candidate_scores)
             };

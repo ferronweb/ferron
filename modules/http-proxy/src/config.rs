@@ -54,6 +54,10 @@ pub struct CircuitBreakerConfig {
     pub flapping_transitions: u64,
     /// Time window for counting transitions for flapping detection.
     pub flapping_window: Duration,
+    /// Duration of slow-start window after circuit breaker HALFOPEN → CLOSED transition.
+    /// During slow-start, the LB applies a decaying virtual connection penalty to prevent thundering herd.
+    /// Set to `Duration::ZERO` (default) to disable.
+    pub slow_start_duration: Duration,
 }
 
 impl Default for CircuitBreakerConfig {
@@ -68,6 +72,7 @@ impl Default for CircuitBreakerConfig {
             latency_threshold: None,
             flapping_transitions: 3,
             flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
         }
     }
 }
@@ -538,6 +543,15 @@ fn parse_circuit_breaker(
                     .and_then(|v| v.as_duration())
                 {
                     circuit_breaker_config.flapping_window = val;
+                }
+            }
+            "slow_start" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_duration())
+                {
+                    circuit_breaker_config.slow_start_duration = val;
                 }
             }
             _ => {}

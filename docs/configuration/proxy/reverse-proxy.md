@@ -18,7 +18,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
-  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, and `flapping_window` directives. Default: `circuit_breaker true`
+  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, `flapping_window`, and `slow_start` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
@@ -72,6 +72,7 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | `latency_threshold` | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (e.g., `"0.1s"`, `"0.5s"`). | disabled |
 | `flapping_transitions` | `<count: integer>` | Number of circuit breaker state transitions within `flapping_window` required to mark an upstream as flapping. When flapping, individual transition logs are suppressed and a single warning is emitted. Set to `0` to disable flapping detection. | 3 |
 | `flapping_window` | `<duration: string>` | Time window for counting state transitions for flapping detection. | `10s` |
+| `slow_start` | `<duration: string>` | Duration of slow-start window after a backend's circuit breaker recovers (half-open → closed). During slow-start, the load balancer applies a decaying virtual connection penalty to prevent thundering herd — the recovered backend appears busier than it is until real traffic catches up. Set to `0` to disable. | `0` |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -656,6 +657,7 @@ The reverse proxy stage sets the following attributes on its `ferron.stage.rever
 | `ferron.proxy.retry_count` | int | Number of retry attempts made during the request. |
 | `ferron.proxy.upstream.circuit_state` | string | Circuit breaker state of the selected backend: `closed`, `open`, or `half_open`. |
 | `ferron.proxy.upstream.is_flapping` | bool | Whether the selected backend is currently flapping (rapidly oscillating circuit breaker states). |
+| `ferron.proxy.upstream.slow_start` | bool | Whether the selected backend is in slow-start (circuit breaker recently recovered). Only present when `slow_start` is configured. |
 | `ferron.proxy.upstream.health_status` | string | Active health check status of the selected backend: `healthy` or `unhealthy`. Only present when health checks are configured for the upstream. |
 | `ferron.proxy.upstream.consecutive_failures` | int | Number of consecutive health check failures for the selected backend. Only present when health checks are configured. |
 | `ferron.proxy.upstream.active_connections` | int | Approximate number of active connections to the selected backend at the time of routing. |

@@ -373,6 +373,10 @@ fn validate_circuit_breaker_directives(
                 sub.insert("flapping_window".to_string());
             }
             validate_duration(cb_block, "flapping_window")?;
+            if cb_block.directives.contains_key("slow_start") {
+                sub.insert("slow_start".to_string());
+            }
+            validate_duration(cb_block, "slow_start")?;
 
             ferron_core::check_unused_subdirectives!(
                 cb_block,
