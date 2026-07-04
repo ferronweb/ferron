@@ -34,13 +34,28 @@ pub fn record_circuit_transition(
 
     let window = circuit_breaker.flapping_window;
 
-    let state = flapping_state_map
-        .entry(upstream_url.to_string())
-        .or_insert_with(|| FlappingState::with_capacity(threshold))
-        .downgrade();
+    let state = if let Some(state) = flapping_state_map.get(upstream_url) {
+        if (threshold > 1 && state.threshold().is_none_or(|t| t != threshold))
+            || (threshold <= 1 && state.threshold().is_some())
+        {
+            drop(state);
+            let mut state = flapping_state_map
+                .entry(upstream_url.to_string())
+                .or_insert_with(|| FlappingState::with_threshold(threshold));
+            state.set_threshold(threshold);
+            state.downgrade()
+        } else {
+            state
+        }
+    } else {
+        flapping_state_map
+            .entry(upstream_url.to_string())
+            .or_insert_with(|| FlappingState::with_threshold(threshold))
+            .downgrade()
+    };
 
     let was_flapping = state.is_flapping();
-    let is_flapping = state.record_transition(window, threshold);
+    let is_flapping = state.record_transition(window);
 
     if is_flapping && !was_flapping {
         // Flapping just started — emit notification

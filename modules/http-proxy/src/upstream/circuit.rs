@@ -291,7 +291,24 @@ fn record_circuit_breaker_failure(
 
     let now = std::time::Instant::now();
     let state = if let Some(state) = circuit_breaker_state.get(upstream) {
-        state
+        let recent_failures_would_some = circuit_breaker.max_fails > 1;
+        if (!recent_failures_would_some && state.recent_failures.is_some())
+            || (recent_failures_would_some
+                && state.recent_failures.as_ref().is_none_or(|q| {
+                    q.len() != (circuit_breaker.max_fails as usize).saturating_sub(1)
+                }))
+        {
+            drop(state);
+            let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+            state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
+                Arc::new(crossbeam_queue::ArrayQueue::new(
+                    (circuit_breaker.max_fails as usize).saturating_sub(1),
+                ))
+            });
+            state.downgrade()
+        } else {
+            state
+        }
     } else {
         let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
         state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {

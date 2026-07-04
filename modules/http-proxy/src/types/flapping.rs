@@ -1,9 +1,10 @@
 //! Flapping detection types for circuit breaker and health check state transitions.
 
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
+
+use crossbeam_queue::ArrayQueue;
 
 /// Per-upstream flapping detection state.
 ///
@@ -12,7 +13,7 @@ use std::time::Instant;
 #[derive(Clone, Debug)]
 pub struct FlappingState {
     /// Recent transition timestamps (ring buffer, protected by Mutex for atomic push+count).
-    pub transitions: Arc<parking_lot::Mutex<VecDeque<Instant>>>,
+    pub transitions: Option<Arc<ArrayQueue<Instant>>>,
     /// Whether the upstream is currently in a flapping state.
     pub is_flapping: Arc<AtomicBool>,
 }
@@ -20,21 +21,35 @@ pub struct FlappingState {
 impl Default for FlappingState {
     fn default() -> Self {
         Self {
-            transitions: Arc::new(parking_lot::Mutex::new(VecDeque::with_capacity(16))),
+            transitions: Some(Arc::new(ArrayQueue::new(15))), // 16 - 1 = 15
             is_flapping: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl FlappingState {
-    /// Create a new `FlappingState` with a ring buffer sized for the given threshold.
-    pub fn with_capacity(threshold: u64) -> Self {
+    /// Create a new `FlappingState` with the given threshold.
+    #[inline]
+    pub fn with_threshold(threshold: u64) -> Self {
         Self {
-            transitions: Arc::new(parking_lot::Mutex::new(VecDeque::with_capacity(
-                (threshold as usize).saturating_mul(2).max(4),
-            ))),
+            transitions: (threshold > 1)
+                .then(|| Arc::new(ArrayQueue::new((threshold as usize).saturating_sub(1)))),
             is_flapping: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Set the threshold for this `FlappingState`.
+    #[inline]
+    pub fn set_threshold(&mut self, threshold: u64) {
+        self.transitions = (threshold > 1)
+            .then(|| Arc::new(ArrayQueue::new((threshold as usize).saturating_sub(1))));
+        self.is_flapping = Arc::new(AtomicBool::new(false));
+    }
+
+    /// Get the threshold for this `FlappingState`, if applicable.
+    #[inline]
+    pub fn threshold(&self) -> Option<u64> {
+        self.transitions.as_ref().map(|t| t.capacity() as u64 + 1)
     }
 
     /// Check whether the upstream is currently flapping.
@@ -53,24 +68,15 @@ impl FlappingState {
     ///
     /// A transition is recorded as the current instant. Timestamps older than
     /// `window` are evicted. If the count of recent transitions exceeds
-    /// `threshold`, the upstream is marked as flapping.
-    pub fn record_transition(&self, window: std::time::Duration, threshold: u64) -> bool {
-        let now = Instant::now();
+    /// configured threshold, the upstream is marked as flapping.
+    #[inline]
+    pub fn record_transition(&self, window: std::time::Duration) -> bool {
+        let flapping = self.transitions.as_ref().map_or(true, |transitions| {
+            let now = Instant::now();
+            let evicted = transitions.force_push(now);
+            evicted.is_some_and(|t| now.duration_since(t) <= window)
+        });
 
-        let count = {
-            let mut transitions = self.transitions.lock();
-            transitions.push_back(now);
-            // Evict stale entries
-            while transitions
-                .front()
-                .is_some_and(|t| now.duration_since(*t) > window)
-            {
-                transitions.pop_front();
-            }
-            transitions.len() as u64
-        };
-
-        let flapping = count >= threshold;
         self.set_flapping(flapping);
         flapping
     }
