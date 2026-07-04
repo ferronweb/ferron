@@ -49,7 +49,7 @@ fn old_select_backend_index(
 ) -> usize {
     let healthy: Vec<usize> = backends.iter().map(|(i, _)| *i).collect();
     let upstreams: Vec<Arc<UpstreamInner>> = backends.iter().map(|(_, u)| Arc::clone(u)).collect();
-    select_backend_index(algorithm, &healthy, &upstreams, conn_state, ewma_state)
+    select_backend_index(algorithm, &healthy, &upstreams, conn_state, ewma_state).index
 }
 
 #[test]

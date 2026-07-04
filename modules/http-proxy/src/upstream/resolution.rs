@@ -122,14 +122,15 @@ pub fn determine_proxy_to(
                 group.iter().position(|orig_idx| *orig_idx == aff_idx)
             });
 
-            let index = if let Some(pos) = start_pos {
-                pos
+            let (index, candidate_scores) = if let Some(pos) = start_pos {
+                (pos, Vec::new())
             } else if group.len() == 1 {
-                0
+                (0, Vec::new())
             } else {
-                super::lb::selector::select_backend_index(
+                let result = super::lb::selector::select_backend_index(
                     algorithm, &group, upstreams, conn_state, ewma_state,
-                )
+                );
+                (result.index, result.candidate_scores)
             };
             let upstream_idx = group.swap_remove(index);
             unhealthy.insert(upstream_idx);
@@ -166,7 +167,11 @@ pub fn determine_proxy_to(
             // Get the tracker (already initialized by select_backend_index)
             super::lb::selector::initialize_tracker(conn_state, &upstream);
             let tracker = super::lb::selector::get_tracker(conn_state, &upstream);
-            return Some(SelectedBackend { upstream, tracker });
+            return Some(SelectedBackend {
+                upstream,
+                tracker,
+                candidate_scores,
+            });
         }
     }
 

@@ -109,6 +109,14 @@ pub struct ProxyMetrics {
     pub connect_time_secs: f64,
     /// Time from request send to response headers received (TTFB, in seconds).
     pub ttfb_secs: f64,
+
+    // -- Load balancer diagnostics --
+    /// Candidate scores from the P2C-based selection algorithm.
+    ///
+    /// For `TwoRandomChoices`: weighted connection counts for the two candidates.
+    /// For `P2cEwma`: combined EWMA + connection-penalty scores.
+    /// Empty for other algorithms.
+    pub candidate_scores: Vec<f64>,
 }
 
 impl Default for ProxyMetrics {
@@ -141,6 +149,7 @@ impl ProxyMetrics {
             pool_miss: false,
             connect_time_secs: 0.0,
             ttfb_secs: 0.0,
+            candidate_scores: Vec::new(),
         }
     }
 }
@@ -1300,6 +1309,22 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             trace_context: current_event_trace_context(ctx),
                         }));
                 }
+            }
+
+            // Emit LB selection score gauge for P2C-based algorithms
+            if !metrics.candidate_scores.is_empty() {
+                ctx.events
+                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                        name: "ferron.proxy.lb.score",
+                        attributes: upstream_attrs.clone(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(metrics.candidate_scores[0]),
+                        unit: Some("{score}"),
+                        description: Some(
+                            "Combined load-balancer selection score for the selected backend. Lower is more preferred.",
+                        ),
+                        trace_context: current_event_trace_context(ctx),
+                    }));
             }
         }
 

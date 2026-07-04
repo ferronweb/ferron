@@ -592,6 +592,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.lb.ewma_latency` | Gauge | backend URL or unix socket path | Current EWMA response latency for the selected backend (`p2c_ewma` algorithm) |
 | `ferron.proxy.lb.warmup_state` | Gauge | backend URL or unix socket path | Whether the selected backend is in EWMA warm-up phase (1) or settled (0) |
 | `ferron.proxy.lb.selections` | Counter | backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score) | P2C+EWMA backend selection with combined score |
+| `ferron.proxy.lb.score` | Gauge | backend URL or unix socket path, resolved IP address | Combined load-balancer selection score for the selected backend. Lower = more preferred. Emitted for `two_random` (weighted connection count) and `p2c_ewma` (EWMA latency + connection penalty) algorithms. |
 | `ferron.proxy.backend.excluded` | Counter | backend URL or unix socket path; `ferron.proxy.reason` (`"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
 | `ferron.proxy.retry.count` | Counter | backend URL or unix socket path | Number of retry attempts made for a request |
 | `ferron.proxy.retry.final` | Gauge | backend URL or unix socket path | Whether the final retry attempt succeeded (`1`) or failed (`0`) |

@@ -125,6 +125,7 @@ pub async fn execute_proxy(
 
         metrics.selected_backends.insert(selected.upstream.clone());
         metrics.final_selected_backend = Some(selected.upstream.clone());
+        metrics.candidate_scores = selected.candidate_scores;
 
         let proxy_request_url: http::Uri = selected
             .upstream

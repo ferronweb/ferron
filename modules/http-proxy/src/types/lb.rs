@@ -36,4 +36,11 @@ pub struct SelectedBackend {
     /// Connection tracker for LeastConnections/TwoRandomChoices.
     /// `None` for Random/RoundRobin algorithms.
     pub tracker: Option<Arc<()>>,
+    /// Candidate scores from the load-balancer selection algorithm.
+    ///
+    /// For P2C-based algorithms (`TwoRandomChoices`, `P2cEwma`), contains
+    /// the two candidate scores that were compared. The first element is
+    /// the winner's score and the second is the loser's score. For other
+    /// algorithms, this is empty.
+    pub candidate_scores: Vec<f64>,
 }

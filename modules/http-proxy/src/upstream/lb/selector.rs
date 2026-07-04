@@ -7,11 +7,26 @@ use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::p2c_ewma::{self, EwmaStateMap, P2cEwmaParams};
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
 
+/// Result of backend selection, including the selected index and
+/// diagnostic candidate scores for P2C-based algorithms.
+pub struct SelectionResult {
+    /// The position within `healthy_indices` of the selected backend.
+    pub index: usize,
+    /// Candidate scores from the load-balancer comparison.
+    ///
+    /// For `TwoRandomChoices`: weighted connection counts (`count / weight`)
+    /// for the two randomly chosen candidates. For `P2cEwma`: the combined
+    /// EWMA + connection-penalty score for each candidate. For other
+    /// algorithms, this is empty.
+    pub candidate_scores: Vec<f64>,
+}
+
 /// Selects a backend index based on the load balancing algorithm.
 ///
 /// `healthy_indices` is a slice of indices into the `upstreams` slice,
 /// built by filtering out unhealthy or already-selected backends.
-/// Returns the position within `healthy_indices` of the selected backend.
+/// Returns a [`SelectionResult`] with the selected position and, for
+/// P2C-based algorithms, the candidate scores that were compared.
 ///
 /// For LeastConnections and TwoRandomChoices, also initializes the connection
 /// tracker `Arc<()>` in the map if missing, so that the caller can simply
@@ -23,10 +38,13 @@ pub fn select_backend_index(
     upstreams: &[Arc<UpstreamInner>],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
-) -> usize {
+) -> SelectionResult {
     if healthy_indices.len() < 2 {
         // Fast path: no load balancing needed
-        return 0;
+        return SelectionResult {
+            index: 0,
+            candidate_scores: Vec::new(),
+        };
     }
 
     match load_balancer_algorithm {
@@ -36,19 +54,25 @@ pub fn select_backend_index(
                 .map(|i| upstreams[*i].weight)
                 .collect();
             let total: u64 = weights.iter().map(|w| *w as u64).sum();
-            if total == 0 {
+            let index = if total == 0 {
                 // All weights are zero; fall back to uniform random
                 rand::random_range(0..healthy_indices.len())
             } else {
                 let threshold = rand::random_range(0..total);
                 let mut cumulative: u64 = 0;
+                let mut selected = 0;
                 for (i, w) in weights.iter().enumerate() {
                     cumulative += *w as u64;
                     if threshold < cumulative {
-                        return i;
+                        selected = i;
+                        break;
                     }
                 }
-                0
+                selected
+            };
+            SelectionResult {
+                index,
+                candidate_scores: Vec::new(),
             }
         }
         LoadBalancerAlgorithmInner::RoundRobin(state) => {
@@ -56,11 +80,17 @@ pub fn select_backend_index(
                 .iter()
                 .map(|i| upstreams[*i].weight)
                 .collect();
-            state.next(&weights)
+            SelectionResult {
+                index: state.next(&weights),
+                candidate_scores: Vec::new(),
+            }
         }
         LoadBalancerAlgorithmInner::LeastConnections => {
             let Some(conn_state) = conn_state else {
-                return 0;
+                return SelectionResult {
+                    index: 0,
+                    candidate_scores: Vec::new(),
+                };
             };
             // Reservoir sampling among ties — avoids allocating a Vec for
             // equal-scoring minima.
@@ -110,15 +140,24 @@ pub fn select_backend_index(
                     tie_count = 1;
                 }
             }
-            best_pos
+            SelectionResult {
+                index: best_pos,
+                candidate_scores: Vec::new(),
+            }
         }
         LoadBalancerAlgorithmInner::TwoRandomChoices => {
             let Some(conn_state) = conn_state else {
-                return rand::random_range(0..healthy_indices.len());
+                return SelectionResult {
+                    index: rand::random_range(0..healthy_indices.len()),
+                    candidate_scores: Vec::new(),
+                };
             };
             if healthy_indices.len() < 2 {
                 initialize_tracker(Some(conn_state), &upstreams[healthy_indices[0]]);
-                return 0;
+                return SelectionResult {
+                    index: 0,
+                    candidate_scores: Vec::new(),
+                };
             }
             let idx1 = rand::random_range(0..healthy_indices.len());
             let mut idx2 = rand::random_range(0..healthy_indices.len() - 1);
@@ -157,26 +196,51 @@ pub fn select_backend_index(
             let weight1 = upstreams[healthy_indices[idx1]].weight;
             let weight2 = upstreams[healthy_indices[idx2]].weight;
 
+            // Compute weighted connection scores for diagnostics
+            let score1 = if weight1 == 0 {
+                f64::MAX
+            } else {
+                count1 as f64 / weight1 as f64
+            };
+            let score2 = if weight2 == 0 {
+                f64::MAX
+            } else {
+                count2 as f64 / weight2 as f64
+            };
+
             let prefer_idx1 = weight1 != 0
                 && (weight2 == 0
                     || (count1 as u64) * (weight2 as u64) <= (count2 as u64) * (weight1 as u64));
 
-            if prefer_idx1 {
-                idx1
+            let index = if prefer_idx1 { idx1 } else { idx2 };
+            // Winner's score first, loser's second
+            let candidate_scores = if prefer_idx1 {
+                vec![score1, score2]
             } else {
-                idx2
+                vec![score2, score1]
+            };
+
+            SelectionResult {
+                index,
+                candidate_scores,
             }
         }
         LoadBalancerAlgorithmInner::P2cEwma => {
             let params = P2cEwmaParams::default();
 
             let Some(conn_state) = conn_state else {
-                return rand::random_range(0..healthy_indices.len());
+                return SelectionResult {
+                    index: rand::random_range(0..healthy_indices.len()),
+                    candidate_scores: Vec::new(),
+                };
             };
 
             if healthy_indices.len() < 2 {
                 initialize_tracker(Some(conn_state), &upstreams[healthy_indices[0]]);
-                return 0;
+                return SelectionResult {
+                    index: 0,
+                    candidate_scores: Vec::new(),
+                };
             }
 
             let idx1 = rand::random_range(0..healthy_indices.len());
@@ -211,10 +275,13 @@ pub fn select_backend_index(
             let s1 = score_for(idx1);
             let s2 = score_for(idx2);
 
-            if s2 < s1 {
-                idx2
-            } else {
-                idx1
+            let index = if s2 < s1 { idx2 } else { idx1 };
+            // Winner's score first, loser's second
+            let candidate_scores = if s2 < s1 { vec![s2, s1] } else { vec![s1, s2] };
+
+            SelectionResult {
+                index,
+                candidate_scores,
             }
         }
     }

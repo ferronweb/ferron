@@ -235,7 +235,8 @@ fuzz_target!(|input: &[u8]| {
                 &backends,
                 Some(&conn_state),
                 Some(&ewma_state),
-            );
+            )
+            .index;
 
             if backends.is_empty() {
                 assert_eq!(
@@ -250,7 +251,7 @@ fuzz_target!(|input: &[u8]| {
                 );
             }
 
-            let idx2 = select_backend_index(&algorithm, &healthy, &backends, None, None);
+            let idx2 = select_backend_index(&algorithm, &healthy, &backends, None, None).index;
             if backends.is_empty() {
                 assert_eq!(idx2, 0);
             } else {
