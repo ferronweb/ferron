@@ -64,17 +64,24 @@ pub fn record_backend_transport_failure(
 }
 
 /// Record an upstream response for the circuit breaker state machine.
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn record_backend_response(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<UpstreamInner>,
     status: u16,
+    upstream_time_secs: Option<f64>,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
     trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
-    let should_open = if circuit_breaker.record_5xx && is_circuit_breaker_failure_status(status) {
+    let is_5xx_failure = circuit_breaker.record_5xx && is_circuit_breaker_failure_status(status);
+    let is_latency_failure = circuit_breaker.latency_threshold.is_some_and(|threshold| {
+        upstream_time_secs.is_some_and(|t| std::time::Duration::from_secs_f64(t) > threshold)
+    });
+
+    let should_open = if is_5xx_failure || is_latency_failure {
         record_circuit_breaker_failure(
             circuit_breaker_state,
             circuit_breaker,
@@ -506,6 +513,7 @@ mod tests {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         };
 
         record_backend_transport_failure(
@@ -554,6 +562,7 @@ mod tests {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         };
 
         circuit_breaker_state.insert(
@@ -597,6 +606,7 @@ mod tests {
             open_duration: Duration::from_secs(1),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         };
 
         circuit_breaker_state.insert(
@@ -626,6 +636,7 @@ mod tests {
             &circuit_breaker,
             &upstream,
             200,
+            None,
             &mut crate::ProxyMetrics::new(),
             &ferron_observability::CompositeEventSink::new(vec![]),
             None,
@@ -650,6 +661,7 @@ mod tests {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         };
 
         circuit_breaker_state.insert(
@@ -691,6 +703,7 @@ mod tests {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         };
 
         // A 500 response should NOT trip the circuit when record_5xx is false
@@ -699,6 +712,7 @@ mod tests {
             &circuit_breaker,
             &upstream,
             500,
+            None,
             &mut crate::ProxyMetrics::new(),
             &ferron_observability::CompositeEventSink::new(vec![]),
             None,
@@ -723,6 +737,7 @@ mod tests {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: true,
+            latency_threshold: None,
         };
 
         // A 500 response SHOULD trip the circuit when record_5xx is true
@@ -732,6 +747,7 @@ mod tests {
             &circuit_breaker,
             &upstream,
             500,
+            None,
             &mut metrics,
             &ferron_observability::CompositeEventSink::new(vec![]),
             None,
@@ -743,5 +759,109 @@ mod tests {
             &upstream,
         ));
         assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+    }
+
+    #[test]
+    fn test_circuit_breaker_trips_on_high_latency() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+            record_5xx: false,
+            latency_threshold: Some(Duration::from_millis(100)),
+        };
+
+        // A 200 response with 200ms latency SHOULD trip the circuit when latency_threshold is 100ms
+        let mut metrics = crate::ProxyMetrics::new();
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            200,
+            Some(0.2),
+            &mut metrics,
+            &ferron_observability::CompositeEventSink::new(vec![]),
+            None,
+        );
+
+        assert!(!is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+        assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
+    }
+
+    #[test]
+    fn test_circuit_breaker_ignores_latency_when_not_configured() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+            record_5xx: false,
+            latency_threshold: None,
+        };
+
+        // A 200 response with high latency should NOT trip the circuit when latency_threshold is None
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            200,
+            Some(5.0),
+            &mut crate::ProxyMetrics::new(),
+            &ferron_observability::CompositeEventSink::new(vec![]),
+            None,
+        );
+
+        assert!(is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
+    }
+
+    #[test]
+    fn test_circuit_breaker_latency_below_threshold_does_not_trip() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(30),
+            consecutive_passes: 1,
+            record_5xx: false,
+            latency_threshold: Some(Duration::from_millis(100)),
+        };
+
+        // A 200 response with 50ms latency should NOT trip the circuit when latency_threshold is 100ms
+        record_backend_response(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+            200,
+            Some(0.05),
+            &mut crate::ProxyMetrics::new(),
+            &ferron_observability::CompositeEventSink::new(vec![]),
+            None,
+        );
+
+        assert!(is_circuit_breaker_available(
+            Some(&circuit_breaker_state),
+            &circuit_breaker,
+            &upstream,
+        ));
     }
 }

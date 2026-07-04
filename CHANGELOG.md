@@ -18,6 +18,7 @@
 - **Per-host OCSP metrics** — OCSP fetching metrics (`ferron.ocsp.fetches_total`, `ferron.ocsp.fetch_duration_seconds`) now include a `ferron.host` dimension, and a new `ferron.ocsp.stapling.hit_total` counter tracks per-request OCSP stapling outcomes per host.
 - **Client and server IPs in error logs** — structured error logs for bad requests (400), request timeouts (408), TLS handshake failures, and TCP connection errors now include `client.address` and `server.address` attributes, enabling IP-based correlation and troubleshooting.
 - **Load-balancer selection score metric** — new `ferron.proxy.lb.score` Gauge metric exposes the combined selection score used by the `two_random` and `p2c_ewma` load-balancing algorithms. For P2C-based algorithms, the two candidate scores compared during selection are captured and the winner's score is emitted per request. Lower scores indicate more preferred backends, enabling direct visibility into traffic distribution without manual TTFB correlation.
+- **Latency-aware circuit breaker** — the `circuit_breaker` directive now supports an optional `latency_threshold` sub-directive. When configured, upstream responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. This allows circuit breakers to eject pathologically slow backends that return successful status codes.
 
 #### Reverse proxy
 

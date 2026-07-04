@@ -160,6 +160,7 @@ pub async fn execute_proxy(
                         &config.circuit_breaker,
                         &selected.upstream,
                         status,
+                        Some(metrics.upstream_time_secs),
                         &mut metrics,
                         &ctx.events,
                         ferron_http::trace_context::current_event_trace_context(ctx),

@@ -361,6 +361,10 @@ fn validate_circuit_breaker_directives(
             }
             validate_number(cb_block, "consecutive_passes", 1)?;
             ferron_core::validate_nested!(cb_block, used(sub), record_5xx, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            if cb_block.directives.contains_key("latency_threshold") {
+                sub.insert("latency_threshold".to_string());
+            }
+            validate_duration(cb_block, "latency_threshold")?;
 
             ferron_core::check_unused_subdirectives!(
                 cb_block,

@@ -49,6 +49,7 @@ pub struct CircuitBreakerConfig {
     pub open_duration: Duration,
     pub consecutive_passes: u64,
     pub record_5xx: bool,
+    pub latency_threshold: Option<Duration>,
 }
 
 impl Default for CircuitBreakerConfig {
@@ -60,6 +61,7 @@ impl Default for CircuitBreakerConfig {
             open_duration: Duration::from_secs(30),
             consecutive_passes: 1,
             record_5xx: false,
+            latency_threshold: None,
         }
     }
 }
@@ -501,6 +503,15 @@ fn parse_circuit_breaker(
             "record_5xx" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     circuit_breaker_config.record_5xx = val;
+                }
+            }
+            "latency_threshold" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_duration())
+                {
+                    circuit_breaker_config.latency_threshold = Some(val);
                 }
             }
             _ => {}

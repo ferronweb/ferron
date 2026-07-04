@@ -18,7 +18,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
-  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, and `record_5xx` directives. Default: `circuit_breaker true`
+  - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, and `latency_threshold` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 
@@ -69,6 +69,7 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | `open_duration` | `<duration: string>` | How long the circuit stays open before a half-open trial request is allowed. | `30s` |
 | `consecutive_passes` | `<count: integer>` | Number of successful half-open trial requests required to close the circuit again. | 1 |
 | `record_5xx` | `[bool: boolean]` | Whether upstream `5xx` responses count toward tripping the circuit. Transport failures always count. | `false` |
+| `latency_threshold` | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (e.g., `"0.1s"`, `"0.5s"`). | disabled |
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -465,7 +466,7 @@ Circuit breaking provides passive health checking — tracking request-time fail
 4. If the trial request succeeds, Ferron closes the circuit after `consecutive_passes` successful half-open requests.
 5. If the half-open trial request fails, Ferron reopens the circuit immediately.
 
-By default, only transport failures count toward the circuit. Set `record_5xx true` to also count upstream `5xx` responses.
+By default, only transport failures count toward the circuit. Set `record_5xx true` to also count upstream `5xx` responses. Set `latency_threshold` to also count slow responses.
 
 Circuit breaking does not automatically retry upstream `5xx` responses. It only changes which backends are eligible for future requests.
 
@@ -494,6 +495,7 @@ example.com {
             open_duration "10s"
             consecutive_passes 1
             record_5xx true
+            latency_threshold "0.5s"
         }
     }
 }

@@ -250,6 +250,16 @@ circuit_breaker {
 }
 ```
 
+To also count slow responses toward the circuit:
+
+```ferron
+circuit_breaker {
+    max_fails 3
+    window "5s"
+    latency_threshold "0.5s"
+}
+```
+
 ## Circuit breaking
 
 Circuit breakers are enabled by default and protect against upstream failures by temporarily ejecting unstable backends from the load balancer. This section covers customizing the default behavior.
