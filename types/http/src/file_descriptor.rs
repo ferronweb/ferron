@@ -365,7 +365,7 @@ impl Drop for ReusedFile {
             }
             #[cfg(windows)]
             {
-                use std::os::windows::io::{FromRawHandle, IntoRawHandle};
+                use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
                 let handle = inner.as_raw_handle();
                 let mut std_inner = unsafe { std::fs::File::from_raw_handle(handle) };
                 let _ = std_inner.rewind();

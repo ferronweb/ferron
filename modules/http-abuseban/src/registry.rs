@@ -185,6 +185,8 @@ impl AbuseRegistry {
             return false;
         }
 
+        let ip = ip.to_canonical();
+
         // Allowlisted IPs are never banned
         if Self::is_allowlisted(ip, config) {
             return false;
@@ -209,7 +211,7 @@ impl AbuseRegistry {
             return None;
         }
 
-        self.bans.get(&ip).and_then(|entry| {
+        self.bans.get(&ip.to_canonical()).and_then(|entry| {
             if entry.is_active() {
                 Some(entry.time_remaining())
             } else {
@@ -224,7 +226,7 @@ impl AbuseRegistry {
             return None;
         }
 
-        self.bans.get(&ip).and_then(|entry| {
+        self.bans.get(&ip.to_canonical()).and_then(|entry| {
             if entry.is_active() {
                 Some(entry.reason.clone())
             } else {
