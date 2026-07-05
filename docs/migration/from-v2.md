@@ -130,26 +130,11 @@ The tool handles these conversions automatically:
 
 The migration tool provides a **starting point**, not a perfect conversion. Keep these limitations in mind:
 
-1. **`location` with `remove_base=#false`** - the tool may generate `location` blocks that need manual adjustment, since Ferron 3 always strips the base path.
+1. **`location` with `remove_base=#false`** - the tool generates `match` + `if` blocks that may need manual adjustment.
 2. **Match names** - generated `match` block names may be verbose. You should rename them for clarity.
-3. **Placeholders in proxy paths** - `{client_ip}` and similar placeholders in proxy URLs need to be converted to `{{remote.ip}}` interpolated strings.
-4. **Complex `log_format`** - custom log format strings may need manual review to ensure placeholder names are correct.
-5. **`fcgi_php`** - the `fcgi_php` directive is preserved but may need adjustment depending on your FastCGI setup.
-6. **Rego subconditions** - Rego-based conditions are not migrated. You need to rewrite them using standard match expressions.
-7. **`trust_x_forwarded_for`** - this is converted to `client_ip_from_header "x-forwarded-for" { trusted_proxy "0.0.0.0/0" }`.
-
-### After migration: manual review checklist
-
-After running the migration tool, review the generated config for:
-
-- [ ] All `condition` blocks converted to `match` blocks
-- [ ] All `{placeholder}` references in `match` blocks converted to `request.*` variables
-- [ ] `location` blocks with `remove_base=#false` adjusted for automatic base removal
-- [ ] Proxy paths with placeholders converted to `{{interpolated}}` strings
-- [ ] `observability` blocks reviewed for correct provider and format
-- [ ] TLS configuration verified (provider, challenge type, contact)
-- [ ] Include paths updated if needed
-- [ ] Duration strings use suffix syntax (`30s`, `1h`) where appropriate
+3. **Complex `log_format`** - custom log format strings may need manual review to ensure placeholder names are correct.
+4. **`fcgi_php`** - the `fcgi_php` directive is preserved but may need adjustment depending on your FastCGI setup.
+5. **Rego subconditions** - Rego-based conditions are not migrated. You need to rewrite them using standard match expressions.
 
 ## What's changed
 
@@ -177,7 +162,9 @@ globals {
 ```ferron
 # Ferron 3
 {
-    timeout "5m"
+    http {
+        timeout "5m"
+    }
 
     runtime {
         io_uring true
@@ -360,20 +347,14 @@ example.com {
     observability {
         provider otlp
 
-        logs "http://localhost:4317" {
-            protocol grpc
-        }
-        metrics "http://localhost:4317" {
-            protocol grpc
-        }
-        traces "http://localhost:4317" {
-            protocol grpc
-        }
+        logs http://localhost:4317
+        metrics http://localhost:4317
+        traces http://localhost:4317
     }
 }
 ```
 
-Ferron 3 also introduces a `log_style modern` directive in the OTLP observability block. It is optional and defaults to `legacy` (the previous behavior). Use `modern` to publish OTEL-style structured log records (short summary plus typed attributes) and remap access-log fields to OTEL semantic conventions. See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the field mapping.
+Ferron 3 also introduces a `log_style modern` directive in the OTLP observability block, enabled by default (unlike the previous `log_style legacy` behavior). See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the field mapping.
 
 ### Reverse proxying
 
@@ -418,14 +399,14 @@ example.com {
 ```ferron
 # Ferron 3
 example.com {
-    header "X-Frame-Options" "DENY"
-    header_remove "X-Powered-By"
+    header +X-Frame-Options "DENY"
+    header -X-Powered-By
 
     proxy {
         upstream http://localhost:3000
 
-        request_header "+X-Real-IP" "{{remote.ip}}"
-        request_header "-Host"
+        request_header +X-Real-IP "{{remote.ip}}"
+        request_header -Host
     }
 }
 ```
@@ -444,155 +425,6 @@ Ferron 2 used `include "/path/to/*.kdl"`. Ferron 3 uses `include "/path/to/*.con
 ```ferron
 # Ferron 3
 #include "/etc/ferron/conf.d/**/*.conf"
-```
-
-## Before → After examples
-
-### Simple static site
-
-```kdl
-// Ferron 2
-example.com {
-    root "/var/www/html"
-}
-```
-
-```ferron
-# Ferron 3
-example.com {
-    root /var/www/html
-}
-```
-
-### Reverse proxy with static files
-
-```kdl
-// Ferron 2
-example.com {
-    location "/api" remove_base=#true {
-        proxy "http://localhost:3000/api"
-    }
-
-    location "/" {
-        root "/var/www/html"
-    }
-}
-```
-
-```ferron
-# Ferron 3
-example.com {
-    location /api {
-        proxy http://localhost:3000
-    }
-
-    location / {
-        root /var/www/html
-    }
-}
-```
-
-### Conditional routing
-
-```kdl
-// Ferron 2
-example.com {
-  condition "IS_API" {
-    is_regex "{path}" "^/api(/|$)"
-  }
-
-  if "IS_API" {
-    proxy "http://127.0.0.1:3000"
-  }
-
-  if_not "IS_API" {
-    root "/var/www/html"
-  }
-}
-```
-
-```ferron
-# Ferron 3
-match api_request {
-    request.uri.path ~ "/api"
-}
-
-example.com {
-    if api_request {
-        proxy http://localhost:3000
-    }
-
-    if_not api_request {
-        root /var/www/html
-    }
-}
-```
-
-### Automatic TLS
-
-```kdl
-// Ferron 2
-example.com {
-    auto_tls
-    auto_tls_contact "admin@example.com"
-    root "/var/www/html"
-}
-```
-
-```ferron
-# Ferron 3
-example.com {
-    tls {
-        provider acme
-        challenge http-01
-        contact "admin@example.com"
-    }
-
-    root /var/www/html
-}
-```
-
-### Manual TLS
-
-```kdl
-// Ferron 2
-secure.example.com {
-    tls "/etc/ssl/cert.pem" "/etc/ssl/key.pem"
-    root "/var/www/html"
-}
-```
-
-```ferron
-# Ferron 3
-secure.example.com {
-    tls /etc/ssl/cert.pem /etc/ssl/key.pem
-    root /var/www/html
-}
-```
-
-### Logging with OTLP
-
-```kdl
-// Ferron 2
-example.com {
-    log /var/log/ferron/access.log
-    error_log /var/log/ferron/error.log
-    otlp_logs "http://localhost:4317" protocol="grpc"
-```
-
-```ferron
-# Ferron 3
-example.com {
-    log /var/log/ferron/access.log
-    error_log /var/log/ferron/error.log
-    observability {
-        provider otlp {
-            logs "http://localhost:4317" {
-                protocol grpc
-            }
-        }
-    }
-}
 ```
 
 ## Known pitfalls
@@ -626,7 +458,7 @@ This is similar to Ferron 2, but the exact ordering of inherited directives may 
 
 ### ACME challenge type
 
-Ferron 2 defaulted to TLS-ALPN-01 in some versions. Ferron 3 defaults to **HTTP-01**. If you rely on TLS-ALPN-01, specify it explicitly:
+Ferron 2 defaulted to TLS-ALPN-01. Ferron 3 defaults to **HTTP-01**. If you rely on TLS-ALPN-01, specify it explicitly:
 
 ```ferron
 example.com {
@@ -648,8 +480,13 @@ Ferron 2 used `duration 30000` syntax. Ferron 3 accepts bare duration strings:
 
 ```ferron
 {
-    timeout 30           # Plain number = seconds
-    keepalive "30m"      # Duration with suffix
+    http {
+        timeout 30           # Plain number = seconds
+    }
+    proxy {
+        upstream http://localhost:3000
+        keepalive "30m"      # Duration with suffix
+    }
 }
 ```
 
