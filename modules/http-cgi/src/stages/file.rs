@@ -144,15 +144,39 @@ impl Stage<HttpFileContext> for CgiStage {
             env_builder = env_builder.https();
         }
 
+        // Canonicalize the file path and root if they are relative paths
+        let file_path = if ctx.file_path.has_root()
+            && !ctx.file_path.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::CurDir | std::path::Component::ParentDir
+                )
+            }) {
+            ctx.file_path.clone()
+        } else {
+            vibeio::fs::canonicalize(&ctx.file_path)
+                .await
+                .unwrap_or(ctx.file_path.clone())
+        };
+        let file_root = if ctx.file_path.has_root()
+            && !ctx.file_root.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::CurDir | std::path::Component::ParentDir
+                )
+            }) {
+            ctx.file_root.clone()
+        } else {
+            vibeio::fs::canonicalize(&ctx.file_root)
+                .await
+                .unwrap_or(ctx.file_root.clone())
+        };
+
         env_builder = env_builder
             .server("Ferron".to_string())
             .server_address(ctx.http.local_address)
             .client_address(ctx.http.remote_address)
-            .script_path(
-                ctx.file_path.clone(),
-                ctx.file_root.clone(),
-                ctx.path_info.clone(),
-            )
+            .script_path(file_path, file_root, ctx.path_info.clone())
             .request_uri(original_request_uri);
 
         if let Some(hostname) = ctx.http.hostname.clone() {
