@@ -834,6 +834,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                 LookupResult::Miss { .. } => "miss",
                 LookupResult::Bypass => "bypass",
             };
+            let req_method = ctx.req.as_ref().map(|r| r.method().as_str().to_string());
+            let req_uri = ctx.req.as_ref().map(|r| r.uri().to_string());
             let sa = ctx.get_span_attributes();
             sa.insert(
                 "ferron.cache.result",
@@ -843,6 +845,18 @@ impl Stage<HttpContext> for HttpCacheStage {
                 "ferron.cache.zone",
                 TraceAttributeValue::String(zone_id.label().to_string()),
             );
+            if let Some(uri) = req_uri {
+                sa.insert(
+                    "ferron.cache.key.uri",
+                    TraceAttributeValue::String(uri),
+                );
+            }
+            if let Some(method) = req_method {
+                sa.insert(
+                    "ferron.cache.key.method",
+                    TraceAttributeValue::String(method),
+                );
+            }
             if let LookupResult::Bypass = &lookup_result {
                 sa.insert(
                     "ferron.cache.bypass_reason",
@@ -1329,6 +1343,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         if decision.store && vary_rule.is_some() {
             let scope = decision.scope.expect("scope must be set when storing");
+            let vary_rule_cloned = vary_rule.clone().expect("vary rule must exist");
             let tags = parse_litespeed_tags(response.headers(), scope);
             let (mut parts, mut body) = response.into_parts();
             parts.extensions.clear(); // Prevent zerocopy from interfering with cache
@@ -1364,8 +1379,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     let stored_entry = StoredEntry {
                         scope,
                         base_key: state.base_key.clone(),
-                        #[allow(clippy::unnecessary_unwrap)]
-                        vary: vary_rule.expect("vary rule must exist"),
+                        vary: vary_rule_cloned,
                         status,
                         headers: stored_headers,
                         body: body_bytes,
@@ -1456,6 +1470,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                             "ferron.cache.scope",
                             TraceAttributeValue::String(scope.as_str().to_string()),
                         );
+                        if let Some(ref vr) = vary_rule {
+                            if !vr.cookie_names.is_empty() {
+                                sa.insert(
+                                    "ferron.cache.key.evaluated_cookies",
+                                    TraceAttributeValue::String(vr.cookie_names.join(";")),
+                                );
+                            }
+                        }
                     }
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {

@@ -464,6 +464,9 @@ The cache stage sets the following attributes on its `ferron.stage.cache` span:
 | `ferron.cache.zone` | string | The cache zone serving the request. |
 | `ferron.cache.scope` | string | Cache scope (`public` or `private`), when available. |
 | `ferron.cache.detail` | string | Additional detail about the cache decision (bypass reason or skip reason), when applicable. |
+| `ferron.cache.key.uri` | string | The request URI path and query, useful for debugging hit-rate degradation caused by high-cardinality metadata. |
+| `ferron.cache.key.method` | string | The HTTP method of the request. |
+| `ferron.cache.key.evaluated_cookies` | string | Semicolon-separated list of cookie names used in the cache vary rule, when available. |
 
 ## Best practices
 

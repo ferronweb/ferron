@@ -12,6 +12,7 @@
 - **Status-code labels on cache store counters** — the `ferron.cache.stores` metric now includes an `http.response.status_code` attribute, allowing operators to directly query whether error responses are entering the cache layer without correlating timing across separate request and error series.
 - **Cache key fingerprint in access logs** — the cache module now contributes a `ferron.cache.key_fingerprint` field to HTTP access log lines, containing a truncated representation of the cache key. This simplifies debugging why a specific request resulted in a cache miss.
 - **Singleflight coalescing traceability in access logs** — the cache module now contributes `ferron.cache.coalesced` (bool) and `ferron.cache.coalesce_wait_duration_ms` (float) fields to HTTP access log lines, providing direct visibility into how long client requests are queuing inside the proxy during concurrent upstream revalidation.
+- **Cache key components in OTel trace attributes** — the `ferron.stage.cache` span now includes `ferron.cache.key.uri`, `ferron.cache.key.method`, and `ferron.cache.key.evaluated_cookies` attributes, making trace flame graphs instantly diagnostic when evaluating hit-rate degradation caused by high-cardinality metadata variations.
 
 ## Ferron 3.0.0-beta.5
 
