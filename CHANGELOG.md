@@ -11,6 +11,7 @@
 - **Process identity in OTel resources** — the OTLP resource now automatically includes `process.pid` and `process.start_time` attributes, allowing observability backends to distinguish between concurrent and sequential process lifetimes. This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
 - **Status-code labels on cache store counters** — the `ferron.cache.stores` metric now includes an `http.response.status_code` attribute, allowing operators to directly query whether error responses are entering the cache layer without correlating timing across separate request and error series.
 - **Cache key fingerprint in access logs** — the cache module now contributes a `ferron.cache.key_fingerprint` field to HTTP access log lines, containing a truncated representation of the cache key. This simplifies debugging why a specific request resulted in a cache miss.
+- **Singleflight coalescing traceability in access logs** — the cache module now contributes `ferron.cache.coalesced` (bool) and `ferron.cache.coalesce_wait_duration_ms` (float) fields to HTTP access log lines, providing direct visibility into how long client requests are queuing inside the proxy during concurrent upstream revalidation.
 
 ## Ferron 3.0.0-beta.5
 

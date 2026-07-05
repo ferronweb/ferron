@@ -451,6 +451,8 @@ The cache module contributes the following fields to the HTTP access log line:
 | `ferron.cache.result` | string | Cache lookup outcome: `hit`, `miss`, `bypass`, `stale`, `revalidate`, `purge`, or `purge_rejected`. |
 | `ferron.cache.zone` | string | The cache zone serving the request. |
 | `ferron.cache.key_fingerprint` | string | Truncated representation of the cache key (up to 48 characters), useful for diagnosing why a specific request missed. |
+| `ferron.cache.coalesced` | bool | Whether this request was a follower held by an active singleflight lock while another request revalidated the same key. |
+| `ferron.cache.coalesce_wait_duration_ms` | float | Time in milliseconds the follower waited for the leader's upstream response. `0` for leaders and non-coalesced requests. |
 
 ### Trace spans
 

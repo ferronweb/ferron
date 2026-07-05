@@ -686,12 +686,14 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 if had_expired {
                     // Thundering herd protection: coalesce concurrent requests
+                    let coalesce_start = std::time::Instant::now();
                     let (is_leader, notify) = store.begin_fetch(&base_key);
 
                     if !is_leader {
                         // Another request is already fetching this key.
                         // Wait for it to complete, then re-check the cache.
                         notify.notified().await;
+                        let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
 
                         let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
                             &base_key,
@@ -736,6 +738,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 log_fields.insert(
                                     "ferron.cache.key_fingerprint".into(),
                                     CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
+                                );
+                                log_fields.insert(
+                                    "ferron.cache.coalesced".into(),
+                                    CustomAccessLogField::Bool(true),
+                                );
+                                log_fields.insert(
+                                    "ferron.cache.coalesce_wait_duration_ms".into(),
+                                    CustomAccessLogField::F64(wait_ms),
                                 );
                             }
                             ctx.res = Some(if entry.body.is_none() {
@@ -851,6 +861,14 @@ impl Stage<HttpContext> for HttpCacheStage {
             log_fields.insert(
                 "ferron.cache.key_fingerprint".into(),
                 CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
+            );
+            log_fields.insert(
+                "ferron.cache.coalesced".into(),
+                CustomAccessLogField::Bool(false),
+            );
+            log_fields.insert(
+                "ferron.cache.coalesce_wait_duration_ms".into(),
+                CustomAccessLogField::F64(0.0),
             );
         }
 
