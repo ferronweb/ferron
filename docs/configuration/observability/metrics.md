@@ -67,16 +67,6 @@ The admin API emits per-request metrics for all endpoints except `/health` (whic
 | `ferron.admin.request.count` | Counter | `http.request.method`, `url.path`, `http.response.status_code` | Total number of admin API requests |
 | `ferron.admin.reload.count` | Counter | `http.response.status_code` | Total number of admin config reload attempts (POST /reload only) |
 
-### Admin API structured logs
-
-The admin API emits structured log events through the observability pipeline for important operational events:
-
-| Event | Level | Condition |
-|-------|-------|-----------|
-| Admin config reload completed | Info | `POST /reload` succeeds |
-| Admin config reload failed | Error | `POST /reload` fails |
-| Admin config queried | Info | `GET /config` requested |
-
 ### Admin API runtime metrics
 
 The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
