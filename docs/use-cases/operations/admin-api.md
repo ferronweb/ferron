@@ -6,7 +6,7 @@ description: "Securely configure, access, and harden the Ferron admin API for se
 The admin API is a built-in control plane that provides health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server and should be treated with the same security as a root shell on your server.
 
 > [!warning]
-> The admin API is **not encrypted**, has **no authentication**, and **no access control** by default. All security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
+> The admin API is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. All other security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
 
 ## Secure default configuration
 
@@ -52,7 +52,7 @@ With `127.0.0.1`, the health check works for any process running on the same hos
 
 ## Accessing the admin API from a remote machine
 
-Since the admin API has no built-in authentication, you should never expose it directly to untrusted networks. Use one of the following patterns instead.
+Even with `auth_token` configured, you should never expose the admin API directly to untrusted networks. Use one of the following patterns instead.
 
 ### SSH tunneling (recommended)
 
@@ -73,7 +73,7 @@ curl http://127.0.0.1:8081/reload
 curl http://127.0.0.1:8081/runtime
 ```
 
-The SSH connection provides encryption and authentication, compensating for the lack of TLS and auth in the admin API itself.
+The SSH connection provides encryption and authentication, compensating for the lack of TLS in the admin API itself.
 
 ### Reverse proxy with authentication
 

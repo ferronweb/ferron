@@ -31,6 +31,7 @@ static DROPPED_EVENT: Once = Once::new();
 struct PrometheusBackendConfig {
     listen: SocketAddr,
     format: String,
+    auth_token: Option<String>,
     baggage_promotions: Vec<BaggageKeyPromotion>,
 }
 
@@ -122,11 +123,17 @@ fn parse_prometheus_config(
         .unwrap_or("text")
         .to_string();
 
+    let auth_token = config
+        .get_value("endpoint_auth_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
     let baggage_promotions = parse_baggage_promotions(config);
 
     Ok(PrometheusBackendConfig {
         listen,
         format,
+        auth_token,
         baggage_promotions,
     })
 }

@@ -1138,7 +1138,10 @@ dependencies = [
  "axum",
  "chrono",
  "ferron-core",
+ "ferron-observability",
+ "http",
  "serde_json",
+ "subtle",
  "tokio",
  "tokio-util",
 ]
@@ -1879,7 +1882,9 @@ dependencies = [
  "axum",
  "ferron-core",
  "ferron-observability",
+ "http",
  "prometheus",
+ "subtle",
  "tokio",
  "tokio-util",
 ]

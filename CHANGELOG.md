@@ -6,8 +6,16 @@
 
 ### Added
 
+#### Security
+
+- **Admin API bearer token authentication** — the `admin` block now supports an `auth_token` directive for bearer token authentication on all admin API endpoints except `/health`. Clients must send `Authorization: Bearer <token>` header. The `/health` endpoint is exempt to allow load balancer and orchestrator probes.
+- **Prometheus endpoint bearer token authentication** — the `observability.prometheus` block now supports an `endpoint_auth_token` directive for bearer token authentication on the `/metrics` scrape endpoint. Scrapers must send `Authorization: Bearer <token>` header.
+
 #### Observability & tracing
 
+- **Admin API request metrics** — the admin API now emits per-request metrics (`ferron.admin.request.duration`, `ferron.admin.request.count`) for all endpoints except `/health`, with `http.request.method`, `url.path`, and `http.response.status_code` attributes. A dedicated `ferron.admin.reload.count` counter tracks reload attempts.
+- **Admin API structured logs** — the admin API now emits structured log events through the observability pipeline for config reloads (Info/Error) and config queries (Info). Health checks and status queries are not logged to avoid noise.
+- **Prometheus scrape self-metrics** — the Prometheus endpoint now emits `ferron_prometheus_scrape_duration_seconds` (Histogram), `ferron_prometheus_scrape_total` (Counter), and `ferron_prometheus_scrape_errors_total` (Counter) for monitoring scrape performance.
 - **Process identity in OTel resources** — the OTLP resource now automatically includes `process.pid` and `process.start_time` attributes, allowing observability backends to distinguish between concurrent and sequential process lifetimes. This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
 - **Status-code labels on cache store counters** — the `ferron.cache.stores` metric now includes an `http.response.status_code` attribute, allowing operators to directly query whether error responses are entering the cache layer without correlating timing across separate request and error series.
 - **Cache key fingerprint in access logs** — the cache module now contributes a `ferron.cache.key_fingerprint` field to HTTP access log lines, containing a truncated representation of the cache key. This simplifies debugging why a specific request resulted in a cache miss.

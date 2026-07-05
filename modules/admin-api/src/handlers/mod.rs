@@ -5,9 +5,15 @@ mod status;
 
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
 use ferron_core::config::ServerConfiguration;
+use ferron_observability::{
+    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
+};
 use tokio_util::sync::CancellationToken;
 
 use self::status::StatusResponse;
@@ -17,6 +23,91 @@ use self::status::StatusResponse;
 pub struct AdminState {
     /// The full server configuration, used by the `/config` endpoint.
     pub full_config: std::sync::Arc<ServerConfiguration>,
+    /// Observability event sink for emitting metrics and logs.
+    pub events: std::sync::Arc<CompositeEventSink>,
+}
+
+/// Axum middleware that emits per-request metrics for the admin API.
+///
+/// Skips metrics for `/health` (high-frequency probe, low signal).
+pub(crate) async fn admin_metrics_middleware(
+    State(state): State<AdminState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let path = request.uri().path().to_string();
+    let method = request.method().to_string();
+
+    let start = std::time::Instant::now();
+    let response = next.run(request).await;
+    let duration = start.elapsed().as_secs_f64();
+    let status_code = response.status().as_u16();
+
+    // Skip metrics for /health (frequent probe, low signal)
+    if path != "/health" {
+        let attrs = vec![
+            (
+                "http.request.method",
+                MetricAttributeValue::StaticStr(method_to_label(&method)),
+            ),
+            ("url.path", MetricAttributeValue::String(path.clone())),
+            (
+                "http.response.status_code",
+                MetricAttributeValue::I64(status_code as i64),
+            ),
+        ];
+
+        state.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.request.duration",
+            attributes: attrs.clone(),
+            ty: MetricType::Histogram(Some(
+                vec![0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0]
+                    .into(),
+            )),
+            value: MetricValue::F64(duration),
+            unit: Some("s"),
+            description: Some("Duration of admin API requests"),
+            trace_context: None,
+        }));
+
+        state.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.request.count",
+            attributes: attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: None,
+            description: Some("Total number of admin API requests"),
+            trace_context: None,
+        }));
+    }
+
+    response
+}
+
+/// Map HTTP method to a bounded set of labels to prevent cardinality explosion.
+fn method_to_label(method: &str) -> &'static str {
+    match method {
+        "GET" => "GET",
+        "POST" => "POST",
+        "PUT" => "PUT",
+        "DELETE" => "DELETE",
+        "PATCH" => "PATCH",
+        "HEAD" => "HEAD",
+        "OPTIONS" => "OPTIONS",
+        _ => "_other",
+    }
+}
+
+/// Emit a structured log event through the observability pipeline.
+fn emit_log(events: &CompositeEventSink, level: LogLevel, message: String, summary: &'static str) {
+    events.emit(Event::Log(LogEvent {
+        level,
+        message,
+        summary: std::borrow::Cow::Borrowed(summary),
+        target: "ferron-admin-api",
+        attributes: vec![],
+        trace_context: None,
+    }));
 }
 
 /// `GET /health` — returns 200 OK if the server is running, or 503 during shutdown.
@@ -45,13 +136,20 @@ pub async fn status_handler(State(_state): State<AdminState>) -> axum::Json<serd
 /// `GET /config` — returns the current effective configuration as sanitized JSON.
 pub async fn config_handler(State(state): State<AdminState>) -> axum::Json<serde_json::Value> {
     let sanitized = config::sanitize_config(&state.full_config);
+    emit_log(
+        &state.events,
+        LogLevel::Info,
+        "Admin config queried".to_string(),
+        "Admin config queried",
+    );
     axum::Json(sanitized)
 }
 
 /// `POST /reload` — triggers a configuration reload by cancelling the global reload token.
 pub async fn reload_handler(
-    State(_state): State<AdminState>,
+    State(state): State<AdminState>,
 ) -> (StatusCode, axum::Json<serde_json::Value>) {
+    let start = std::time::Instant::now();
     {
         let previous_state = ferron_core::shutdown::RELOAD_STATE.load();
         ferron_core::shutdown::RELOAD_TOKEN
@@ -59,14 +157,51 @@ pub async fn reload_handler(
             .cancel();
         previous_state.0.cancelled().await;
     }
+    let duration = start.elapsed().as_secs_f64();
     let current_state = ferron_core::shutdown::RELOAD_STATE.load();
     let error = current_state.1.get_state().await;
     if let Some(error) = error {
+        emit_log(
+            &state.events,
+            LogLevel::Error,
+            format!("Admin config reload failed: {error}"),
+            "Admin config reload failed",
+        );
+        state.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.reload.count",
+            attributes: vec![(
+                "http.response.status_code",
+                MetricAttributeValue::I64(500),
+            )],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: None,
+            description: Some("Total admin config reload attempts"),
+            trace_context: None,
+        }));
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             axum::Json(serde_json::json!({ "status": "reload_failed", "error": error })),
         )
     } else {
+        emit_log(
+            &state.events,
+            LogLevel::Info,
+            format!("Admin config reload completed in {duration:.3}s"),
+            "Admin config reload completed",
+        );
+        state.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.reload.count",
+            attributes: vec![(
+                "http.response.status_code",
+                MetricAttributeValue::I64(200),
+            )],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: None,
+            description: Some("Total admin config reload attempts"),
+            trace_context: None,
+        }));
         (
             StatusCode::OK,
             axum::Json(serde_json::json!({ "status": "reload_initiated", "error": null })),

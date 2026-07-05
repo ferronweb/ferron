@@ -5,20 +5,16 @@ description: "Prometheus metrics export configuration for monitoring Ferron serv
 
 This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports Ferron's internal metrics in Prometheus format, enabling integration with Prometheus servers, Grafana dashboards, and other monitoring systems.
 
-> [!warning]
-> The Prometheus endpoint does not currently support authentication. For secure deployments, place Ferron behind a reverse proxy with authentication or use network-level access controls.
-
 ## Directives
 
 Prometheus metrics are configured via `observability` blocks with `provider prometheus`:
 
 ```ferron
-example.com {
-    observability {
-        provider prometheus
-        endpoint_listen "127.0.0.1:8889"
-        endpoint_format text
-    }
+observability {
+    provider prometheus
+    endpoint_listen "127.0.0.1:8889"
+    endpoint_format text
+    endpoint_auth_token "my-scrape-token"
 }
 ```
 
@@ -29,6 +25,7 @@ example.com {
 | `provider` | `"prometheus"` | Specifies the Prometheus observability provider. Required. | none |
 | `endpoint_listen` | `<socket_address>` | Socket address to listen on for Prometheus metrics requests. Supports IPv4, IPv6, and port specifications. | `"127.0.0.1:8889"` |
 | `endpoint_format` | `<format>` | Output format for metrics. Supported values: `"text"` (Prometheus text format), `"protobuf"` (Prometheus protobuf format). | `"text"` |
+| `endpoint_auth_token` | `<token>` | Bearer token for authenticating Prometheus scrape requests. When set, scrapers must send `Authorization: Bearer <token>` header. | none (authentication disabled) |
 
 ### Socket address format
 
@@ -233,6 +230,10 @@ scrape_configs:
 ## Best practices
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.
+
+### Endpoint authentication
+
+- **`endpoint_listen` on non-loopback address without `endpoint_auth_token`** — The metrics endpoint is unauthenticated and exposed to all network interfaces. Bind to a loopback address, use `endpoint_auth_token` to require a bearer token, or restrict access via network controls.
 
 ### `max_distinct` high cardinality prevention
 

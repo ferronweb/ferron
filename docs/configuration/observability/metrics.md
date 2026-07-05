@@ -57,6 +57,26 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 | `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
 | `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
 
+### Admin API request metrics
+
+The admin API emits per-request metrics for all endpoints except `/health` (which is a high-frequency probe with low signal per-request).
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron.admin.request.duration` | Histogram | `http.request.method`, `url.path`, `http.response.status_code` | Duration of admin API requests in seconds |
+| `ferron.admin.request.count` | Counter | `http.request.method`, `url.path`, `http.response.status_code` | Total number of admin API requests |
+| `ferron.admin.reload.count` | Counter | `http.response.status_code` | Total number of admin config reload attempts (POST /reload only) |
+
+### Admin API structured logs
+
+The admin API emits structured log events through the observability pipeline for important operational events:
+
+| Event | Level | Condition |
+|-------|-------|-----------|
+| Admin config reload completed | Info | `POST /reload` succeeds |
+| Admin config reload failed | Error | `POST /reload` fails |
+| Admin config queried | Info | `GET /config` requested |
+
 ### Admin API runtime metrics
 
 The `metrics-admin` module also collects runtime status metrics when an observability backend is configured.
@@ -86,6 +106,19 @@ Ferron also emits common request-path metrics:
 | `ferron.http.server.client_ip_rewrites` | Counter | — | Requests whose client IP was rewritten from a trusted proxy header |
 | `ferron.http.server.cors_preflights` | Counter | — | CORS preflight requests handled before the main pipeline |
 | `ferron.http.server.connection_errors` | Counter | transport, lifecycle stage | Listener and handshake failures |
+
+## Prometheus scrape metrics
+
+The Prometheus endpoint emits self-referential metrics about its own scrape performance. These are registered in the same registry that serves `/metrics`, so they appear in every scrape response.
+
+| Metric | Type | Attributes | Description |
+|--------|------|------------|-------------|
+| `ferron_prometheus_scrape_duration_seconds` | Histogram | — | Duration of Prometheus scrape requests in seconds |
+| `ferron_prometheus_scrape_total` | Counter | — | Total number of Prometheus scrape requests |
+| `ferron_prometheus_scrape_errors_total` | Counter | — | Total number of failed Prometheus scrape requests |
+
+> [!tip]
+> Use `ferron_prometheus_scrape_duration_seconds` to monitor scrape latency. If p99 exceeds your Prometheus `scrape_timeout`, consider reducing the number of registered metrics or increasing the timeout.
 
 ## TLS metrics
 

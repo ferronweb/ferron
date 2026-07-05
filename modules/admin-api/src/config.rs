@@ -14,6 +14,10 @@ use ferron_core::config::ServerConfigurationBlock;
 pub struct AdminConfig {
     /// Address to bind the admin HTTP listener.
     pub listen: SocketAddr,
+    /// Optional bearer token for authenticating admin API requests.
+    /// When `Some`, clients must send `Authorization: Bearer <token>` header.
+    /// The `/health` endpoint is always exempt from authentication.
+    pub auth_token: Option<String>,
     /// Whether the `/health` endpoint is enabled.
     pub health: bool,
     /// Whether the `/status` endpoint is enabled.
@@ -40,6 +44,7 @@ impl AdminConfig {
 
         let listen = parse_listen(admin_block)
             .unwrap_or_else(|| "127.0.0.1:8081".parse().expect("default listen address"));
+        let auth_token = parse_string_value(admin_block, "auth_token");
         let health = parse_bool_flag(admin_block, "health").unwrap_or(true);
         let status = parse_bool_flag(admin_block, "status").unwrap_or(true);
         let config = parse_bool_flag(admin_block, "config").unwrap_or(true);
@@ -49,6 +54,7 @@ impl AdminConfig {
 
         Some(Self {
             listen,
+            auth_token,
             health,
             status,
             config,
@@ -66,6 +72,19 @@ fn parse_listen(block: &ServerConfigurationBlock) -> Option<SocketAddr> {
     let value = entry.args.first()?;
     let addr_str = value.as_string_with_interpolations(&HashMap::new())?;
     addr_str.parse().ok()
+}
+
+/// Parse a string value from the config block.
+///
+/// Returns `None` if the directive is not present.
+fn parse_string_value(block: &ServerConfigurationBlock, directive: &str) -> Option<String> {
+    let entries = block.directives.get(directive)?;
+    let entry = entries.first()?;
+    entry
+        .args
+        .first()
+        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+        .map(|s| s.to_string())
 }
 
 /// Parse a boolean flag from the admin config block.

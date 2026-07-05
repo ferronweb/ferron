@@ -12,6 +12,7 @@ use ferron_core::config::ServerConfiguration;
 use ferron_core::registry::Registry;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
+use ferron_observability::CompositeEventSink;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AdminConfig;
@@ -29,19 +30,29 @@ pub struct AdminApiModule {
     full_config: Arc<ArcSwap<ServerConfiguration>>,
     /// Token cancelled on reload to gracefully shut down the admin listener.
     reload_token: ArcSwap<CancellationToken>,
+    /// Observability event sink for emitting metrics and logs.
+    events: ArcSwap<CompositeEventSink>,
 }
 
 impl AdminApiModule {
     /// Create a new admin API module.
     pub fn new(
-        _registry: &Arc<Registry>,
+        registry: &Arc<Registry>,
         admin_config: AdminConfig,
         full_config: Arc<ServerConfiguration>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let events_arc = ferron_observability::build_composite_sink(
+            registry,
+            &full_config.global_config,
+            None,
+        )?;
+        let events = Arc::try_unwrap(events_arc).unwrap_or_else(|arc| (*arc).clone());
+
         Ok(Self {
             config: Arc::new(ArcSwap::new(Arc::new(admin_config))),
             full_config: Arc::new(ArcSwap::new(full_config)),
             reload_token: ArcSwap::from_pointee(CancellationToken::new()),
+            events: ArcSwap::from_pointee(events),
         })
     }
 
@@ -52,7 +63,7 @@ impl AdminApiModule {
     /// shut down the existing listener.
     pub fn reload(
         &self,
-        _registry: &Arc<Registry>,
+        registry: &Arc<Registry>,
         admin_config: AdminConfig,
         full_config: Arc<ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -60,9 +71,18 @@ impl AdminApiModule {
         let old_token = self.reload_token.load();
         old_token.cancel();
 
+        // Rebuild the observability sink with the new config
+        let events_arc = ferron_observability::build_composite_sink(
+            registry,
+            &full_config.global_config,
+            None,
+        )?;
+        let events = Arc::try_unwrap(events_arc).unwrap_or_else(|arc| (*arc).clone());
+
         // Atomically swap the config
         self.config.store(Arc::new(admin_config));
         self.full_config.store(full_config);
+        self.events.store(Arc::new(events));
 
         // Create a new reload token
         self.reload_token.store(Arc::new(CancellationToken::new()));
@@ -83,13 +103,17 @@ impl Module for AdminApiModule {
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         let config = self.config.load_full();
         let full_config = self.full_config.load_full();
+        let events = Arc::new((*self.events.load_full()).clone());
 
         // Clone the CancellationToken so the spawned task owns it
         let reload_token = (*self.reload_token.load_full()).clone();
 
         // Spawn on secondary runtime — control plane isolation
         runtime.spawn_secondary_task(async move {
-            let state = AdminState { full_config };
+            let state = AdminState {
+                full_config,
+                events,
+            };
             let app = build_admin_router(&config, state);
 
             match tokio::net::TcpListener::bind(config.listen).await {

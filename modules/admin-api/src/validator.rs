@@ -26,6 +26,9 @@ impl ConfigurationValidator for AdminConfigurationValidator {
                 // Listen address
                 ferron_core::validate_nested!(admin, used(sub), listen, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
 
+                // Auth token
+                ferron_core::validate_nested!(admin, used(sub), auth_token, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
+
                 // Endpoint flags
                 ferron_core::validate_nested!(admin, used(sub), health, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 ferron_core::validate_nested!(admin, used(sub), status, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
@@ -79,9 +82,15 @@ fn add_admin_best_practice_diagnostics(
         return;
     };
 
-    if !addr.ip().is_loopback() {
+    let has_auth_token = admin
+        .directives
+        .get("auth_token")
+        .and_then(|entries| entries.first())
+        .is_some_and(|e| !e.args.is_empty());
+
+    if !addr.ip().is_loopback() && !has_auth_token {
         ctx.add_best_practice_violation(
-            "`admin.listen` is not bound to a loopback address; the admin API is unauthenticated, unencrypted, and should only be reachable through a trusted local or protected management path",
+            "`admin.listen` is not bound to a loopback address and no `auth_token` is configured; the admin API is unauthenticated and should only be reachable through a trusted local or protected management path",
             entry_span(listen_entry),
         );
     }

@@ -15,8 +15,13 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
         // Prometheus endpoint configuration
         validate_directive!(config, validator_ctx.used_directives, endpoint_listen, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, endpoint_format, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, endpoint_auth_token, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
         let endpoint_listen_value = config.get_value("endpoint_listen");
+        let has_auth_token = config
+            .get_value("endpoint_auth_token")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.is_empty());
 
         // Check if Prometheus endpoint seems to be publicly exposed and emit a warning if so
         if let Some(endpoint_listen) = endpoint_listen_value.and_then(|value| value.as_str()) {
@@ -24,9 +29,9 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
                 return Ok(());
             };
 
-            if !addr.ip().is_loopback() {
+            if !addr.ip().is_loopback() && !has_auth_token {
                 validator_ctx.add_best_practice_violation(
-                    "`admin.listen` is not bound to a loopback address; the admin API is unauthenticated, unencrypted, and should only be reachable through a trusted local or protected management path",
+                    "`observability.prometheus.endpoint_listen` is not bound to a loopback address and no `endpoint_auth_token` is configured; the metrics endpoint is unauthenticated and should only be reachable through a trusted local or protected management path",
                     endpoint_listen_value.and_then(|v| match v {
                         ServerConfigurationValue::String(_, span)
                         | ServerConfigurationValue::Number(_, span)

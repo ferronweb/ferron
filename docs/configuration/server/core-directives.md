@@ -127,6 +127,8 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 
 - `listen <address: string>` (`admin-api`)
   - This directive specifies the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
+- `auth_token <token: string>` (`admin-api`)
+  - This directive sets a bearer token for authenticating admin API requests. When set, clients must send `Authorization: Bearer <token>` header. The `/health` endpoint is always exempt from authentication (required by load balancers and orchestrators). Default: none (authentication disabled)
 - `health [bool]` (`admin-api`)
   - This directive specifies whether the `GET /health` endpoint is enabled. Returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
 - `status [bool]` (`admin-api`)
@@ -146,6 +148,7 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 {
     admin {
         listen "127.0.0.1:8081"
+        auth_token "my-secret-token"
 
         health true
         status true
@@ -331,14 +334,14 @@ The admin API provides a built-in HTTP interface for server health checks, statu
 
 ### Security considerations
 
-The admin API is a **privileged control plane** that provides full server configuration access and reload capability. It is **not encrypted**, has **no authentication**, and **no access control** by default. Treat it with the same security posture as a root shell on your server.
+The admin API is a **privileged control plane** that provides full server configuration access and reload capability. It is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
 
 #### Current limitations
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | TLS / HTTPS | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
-| Authentication | Not supported | No username/password, API key, or token mechanism. Any client that can reach the listener has full administrative access. |
+| Authentication | Supported | Use `auth_token` to require a bearer token on all endpoints except `/health`. |
 | ACL / allowlists | Not supported | No built-in IP address filtering or access restrictions. |
 
 #### Risks of binding to `0.0.0.0`
@@ -507,7 +510,8 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### Admin API
 
-- **`admin.listen` on non-loopback address** — The admin API is unauthenticated and unencrypted. Bind to a loopback address or restrict access via network controls.
+- **`admin.listen` on non-loopback address** — The admin API is unencrypted and unauthenticated by default (use `auth_token` to enable bearer token auth). Bind to a loopback address or restrict access via network controls.
+- **`admin` without `auth_token`** — The admin API has no authentication by default. Use `auth_token` to require a bearer token on all endpoints except `/health` when the listener is reachable from untrusted networks.
 
 ### Location blocks
 

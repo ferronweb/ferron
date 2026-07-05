@@ -224,6 +224,7 @@ example.com {
     observability {
         provider prometheus
         endpoint_listen "0.0.0.0:8889"
+        endpoint_auth_token "your-secret-token"
         endpoint_format text
     }
 
