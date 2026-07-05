@@ -245,7 +245,13 @@ impl HttpCacheStage {
     }
 
     #[inline]
-    fn emit_store_metric(&self, ctx: &HttpContext, zone_id: &CacheZoneId, scope: CacheScope) {
+    fn emit_store_metric(
+        &self,
+        ctx: &HttpContext,
+        zone_id: &CacheZoneId,
+        scope: CacheScope,
+        status_code: u16,
+    ) {
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.stores",
             attributes: vec![
@@ -256,6 +262,10 @@ impl HttpCacheStage {
                 (
                     "ferron.cache.scope",
                     MetricAttributeValue::StaticStr(scope.as_str()),
+                ),
+                (
+                    "http.response.status_code",
+                    MetricAttributeValue::I64(status_code as i64),
                 ),
             ],
             ty: MetricType::Counter,
@@ -1333,7 +1343,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &state.request_cookies,
                     );
                     self.emit_eviction_metrics(ctx, &state.zone_id, stats);
-                    self.emit_store_metric(ctx, &state.zone_id, scope);
+                    self.emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
 
                     if let LookupResult::StaleWhileRevalidate {
                         entry,

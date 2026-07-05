@@ -1,12 +1,15 @@
 # Ferron 3 change log
 
-## Unreleased
+## Ferron UNRELEASED
+
+**Not yet released**
 
 ### Added
 
 #### Observability & tracing
 
 - **Process identity in OTel resources** — the OTLP resource now automatically includes `process.pid` and `process.start_time` attributes, allowing observability backends to distinguish between concurrent and sequential process lifetimes. This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
+- **Status-code labels on cache store counters** — the `ferron.cache.stores` metric now includes an `http.response.status_code` attribute, allowing operators to directly query whether error responses are entering the cache layer without correlating timing across separate request and error series.
 
 ## Ferron 3.0.0-beta.5
 

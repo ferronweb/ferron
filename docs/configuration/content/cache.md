@@ -417,7 +417,7 @@ The cache module emits the following metrics:
 |--------|------|------------|-------------|
 | `ferron.cache.requests` | Counter | `ferron.cache.zone`, `ferron.cache.result`, `ferron.cache.scope` | Cache hits, misses, and bypasses |
 | `ferron.cache.entries` | Gauge | `ferron.cache.zone` | Current number of cached entries |
-| `ferron.cache.stores` | Counter | `ferron.cache.zone`, `ferron.cache.scope` | Responses stored in the cache |
+| `ferron.cache.stores` | Counter | `ferron.cache.zone`, `ferron.cache.scope`, `http.response.status_code` | Responses stored in the cache |
 | `ferron.cache.evictions` | Counter | `ferron.cache.zone`, `ferron.cache.reason` (`"expired"` or `"size"`) | Entries evicted from the cache |
 | `ferron.cache.purges` | Counter | `ferron.cache.zone`, `ferron.cache.scope` | Entries purged through LSCache-compatible controls |
 
