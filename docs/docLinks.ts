@@ -188,6 +188,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/security/fail2ban",
+    target: "_self",
+    label: "Fail2ban integration",
+    sub: true,
+  },
+  {
     label: "Operations",
   },
   {
