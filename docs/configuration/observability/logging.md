@@ -263,7 +263,6 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 > [!tip]
 > If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
 
-
 ## Admin API structured logs
 
 The admin API emits structured log events through the observability pipeline for important operational events:
