@@ -290,6 +290,264 @@ async fn test_cache_vary() {
     container.stop().await.unwrap();
 }
 
+#[tokio::test]
+async fn test_cache_vary_cookies() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          vary_cookies "session_id"
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+    let base_url = format!(
+        "http://localhost:{}",
+        container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap()
+    );
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+
+    // Request 1: cookie session_id=abc → miss
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "session_id=abc")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // Request 2: same cookie session_id=abc → hit
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "session_id=abc")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // Update the file to verify miss for different cookie
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v2".as_bytes()).unwrap();
+
+    // Request 3: different cookie session_id=xyz → miss
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "session_id=xyz")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v2");
+
+    // Request 4: no cookie → miss (different key from c:session_id=abc and c:session_id=xyz)
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v3".as_bytes()).unwrap();
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v3");
+
+    // Request 5: session_id=abc again → hit (still the original v1)
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "session_id=abc")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_cache_vary_cookies_multiple() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          vary_cookies "lang"
+          vary_cookies "theme"
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+    let base_url = format!(
+        "http://localhost:{}",
+        container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap()
+    );
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+
+    // Request 1: cookie lang=en;theme=dark → miss
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "lang=en; theme=dark")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // Request 2: same cookies → hit
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "lang=en; theme=dark")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // Request 3: different theme cookie → miss
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v2".as_bytes()).unwrap();
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "lang=en; theme=light")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v2");
+
+    // Request 4: different lang cookie → miss
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v3".as_bytes()).unwrap();
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "lang=fr; theme=dark")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v3");
+
+    // Request 5: lang=en;theme=dark again → still hit with v1
+    let response = client
+        .get(format!("{}/test.txt", base_url))
+        .header("Cookie", "lang=en; theme=dark")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    container.stop().await.unwrap();
+}
+
 // Helper to create a backend container for cache revalidation tests.
 async fn create_backend_container(
     network: &str,
