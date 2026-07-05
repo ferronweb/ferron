@@ -134,7 +134,15 @@ impl BruteForceEngine {
             return None;
         }
 
-        let tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        let ip = ip.to_canonical();
+        let tracker = if let Some(tracker) = self.trackers.get(&ip) {
+            tracker
+        } else {
+            self.trackers
+                .entry(ip)
+                .or_insert_with(AttemptTracker::new)
+                .downgrade()
+        };
         tracker.retry_after()
     }
 
@@ -146,7 +154,15 @@ impl BruteForceEngine {
             return false;
         }
 
-        let mut tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        let ip = ip.to_canonical();
+        let tracker = if let Some(tracker) = self.trackers.get(&ip) {
+            tracker
+        } else {
+            self.trackers
+                .entry(ip)
+                .or_insert_with(AttemptTracker::new)
+                .downgrade()
+        };
 
         // Check lock status (pruning happens implicitly on access)
         if tracker.is_locked() {
@@ -155,7 +171,11 @@ impl BruteForceEngine {
 
         // If lockout has expired, reset the tracker
         if tracker.locked_until.is_some() {
-            tracker.clear();
+            drop(tracker);
+            self.trackers
+                .entry(ip)
+                .or_insert_with(AttemptTracker::new)
+                .clear();
         }
 
         false
@@ -174,7 +194,10 @@ impl BruteForceEngine {
         // memory growth when many distinct IPs are seen.
         self.evict_stale();
 
-        let mut tracker = self.trackers.entry(ip).or_insert_with(AttemptTracker::new);
+        let mut tracker = self
+            .trackers
+            .entry(ip.to_canonical())
+            .or_insert_with(AttemptTracker::new);
 
         // Prune old attempts outside the window
         let window = Duration::from_secs(self.config.window_secs);
