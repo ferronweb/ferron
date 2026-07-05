@@ -284,7 +284,9 @@ impl HttpCacheStage {
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
             unit: Some("{request}"),
-            description: Some("Number of requests intercepted by the singleflight deduplication layer."),
+            description: Some(
+                "Number of requests intercepted by the singleflight deduplication layer.",
+            ),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
@@ -293,7 +295,9 @@ impl HttpCacheStage {
             ty: MetricType::Gauge,
             value: MetricValue::U64(store.active_locks() as u64),
             unit: Some("{lock}"),
-            description: Some("Number of active in-flight upstream fetches coordinated by singleflight."),
+            description: Some(
+                "Number of active in-flight upstream fetches coordinated by singleflight.",
+            ),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
     }
@@ -329,9 +333,18 @@ impl HttpCacheStage {
                 ),
                 summary: "Cache entries evicted (ttl_expired)".into(),
                 attributes: vec![
-                    ("eviction.reason".into(), LogAttributeValue::String("ttl_expired".into())),
-                    ("eviction.count".into(), LogAttributeValue::I64(stats.expired_evictions as i64)),
-                    ("ferron.cache.zone".into(), LogAttributeValue::String(zone_id.label().to_string())),
+                    (
+                        "eviction.reason",
+                        LogAttributeValue::String("ttl_expired".into()),
+                    ),
+                    (
+                        "eviction.count",
+                        LogAttributeValue::I64(stats.expired_evictions as i64),
+                    ),
+                    (
+                        "ferron.cache.zone",
+                        LogAttributeValue::String(zone_id.label().to_string()),
+                    ),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
@@ -365,9 +378,18 @@ impl HttpCacheStage {
                 ),
                 summary: "Cache entries evicted (capacity_reached_lru)".into(),
                 attributes: vec![
-                    ("eviction.reason".into(), LogAttributeValue::String("capacity_reached_lru".into())),
-                    ("eviction.count".into(), LogAttributeValue::I64(stats.size_evictions as i64)),
-                    ("ferron.cache.zone".into(), LogAttributeValue::String(zone_id.label().to_string())),
+                    (
+                        "eviction.reason",
+                        LogAttributeValue::String("capacity_reached_lru".into()),
+                    ),
+                    (
+                        "eviction.count",
+                        LogAttributeValue::I64(stats.size_evictions as i64),
+                    ),
+                    (
+                        "ferron.cache.zone",
+                        LogAttributeValue::String(zone_id.label().to_string()),
+                    ),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
@@ -901,10 +923,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 TraceAttributeValue::String(zone_id.label().to_string()),
             );
             if let Some(uri) = req_uri {
-                sa.insert(
-                    "ferron.cache.key.uri",
-                    TraceAttributeValue::String(uri),
-                );
+                sa.insert("ferron.cache.key.uri", TraceAttributeValue::String(uri));
             }
             if let Some(method) = req_method {
                 sa.insert(
@@ -1239,7 +1258,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                             );
                             log_fields.insert(
                                 "ferron.cache.key_fingerprint".into(),
-                                CustomAccessLogField::String(cache_key_fingerprint(&state.base_key)),
+                                CustomAccessLogField::String(cache_key_fingerprint(
+                                    &state.base_key,
+                                )),
                             );
                         }
                         return Ok(());
@@ -1817,7 +1838,11 @@ fn build_vary_rule(
     let mut header_names: Vec<_> = header_names.into_iter().collect();
     header_names.sort_by(|left, right| left.as_str().cmp(right.as_str()));
 
-    let mut cookie_names = ls_vary.cookies.clone();
+    let mut cookie_names: AHashSet<String> = ls_vary.cookies.iter().cloned().collect();
+    for name in &config.vary_cookies {
+        cookie_names.insert(name.clone());
+    }
+    let mut cookie_names: Vec<_> = cookie_names.into_iter().collect();
     cookie_names.sort_unstable();
 
     Ok(Some(VaryRule {

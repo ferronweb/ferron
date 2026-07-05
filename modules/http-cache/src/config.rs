@@ -57,6 +57,7 @@ pub struct CacheConfig {
     pub enable_stale_while_revalidate: bool,
     pub enable_stale_if_error: bool,
     pub vary_headers: Vec<HeaderName>,
+    pub vary_cookies: Vec<String>,
     pub ignored_store_headers: Vec<HeaderName>,
     pub purge_method: bool,
     pub purge_allowed_ips: Vec<IpCidr>,
@@ -79,6 +80,7 @@ impl Default for CacheConfig {
             enable_stale_while_revalidate: true,
             enable_stale_if_error: true,
             vary_headers: Vec::new(),
+            vary_cookies: Vec::new(),
             ignored_store_headers: Vec::new(),
             purge_method: false,
             purge_allowed_ips: Vec::new(),
@@ -106,6 +108,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     let enable_stale_if_error = get_nested_bool(configuration, "enable_stale_if_error", true);
 
     let vary_headers = collect_header_names(configuration, "vary");
+    let vary_cookies = collect_string_values(configuration, "vary_cookies");
     let ignored_store_headers = collect_header_names(configuration, "ignore");
     let purge_method = get_nested_bool(configuration, "purge_method", false);
     let purge_allowed_ips = collect_purge_allowed_ips(configuration);
@@ -121,6 +124,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         enable_stale_while_revalidate,
         enable_stale_if_error,
         vary_headers,
+        vary_cookies,
         ignored_store_headers,
         purge_method,
         purge_allowed_ips,
@@ -222,6 +226,25 @@ fn collect_header_names(configuration: &LayeredConfiguration, directive: &str) -
         }
     }
     names
+}
+
+fn collect_string_values(configuration: &LayeredConfiguration, directive: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    for block in cache_blocks(configuration) {
+        if let Some(entries) = block.directives.get(directive) {
+            for entry in entries {
+                for arg in &entry.args {
+                    if let Some(value) = arg.as_str() {
+                        let trimmed = value.trim().to_string();
+                        if !trimmed.is_empty() && !values.contains(&trimmed) {
+                            values.push(trimmed);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    values
 }
 
 fn collect_purge_allowed_ips(configuration: &LayeredConfiguration) -> Vec<IpCidr> {

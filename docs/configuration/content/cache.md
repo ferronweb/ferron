@@ -26,6 +26,7 @@ example.com {
         max_response_size 1048576
         litespeed_override_cache_control false
         vary Accept-Encoding Accept-Language
+        vary_cookies lang ab_bucket
         ignore Set-Cookie
     }
 
@@ -74,6 +75,7 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 | `purge_method` | `[<bool>]` | Whether the `PURGE` HTTP method is accepted for cache invalidation. When enabled, requests with method `PURGE` to a given URL will remove all cached entries matching that URL. This directive requires either HTTP basic authentication or the `purge_allowed_ips` directive; unauthenticated requests from non-allowed IPs are rejected with a 403 Forbidden response. | `false` |
 | `purge_allowed_ips` | `<string> [<string> ...]` | One or more IP addresses or CIDR ranges that are allowed to send `PURGE` requests. When non-empty, only requests from these IPs are allowed (unless the request is already authenticated via HTTP basic authentication). This directive can be specified multiple times. | none |
 | `vary` | `<string> [<string> ...]` | Additional request headers that are added to the cache key, alongside any standard `Vary` response headers returned by the origin. This directive can be specified multiple times. | none |
+| `vary_cookies` | `<string> [<string> ...]` | Specific cookie names to include in the cache key. When set, only the listed cookies (along with any cookies added by LSCache's `X-LiteSpeed-Vary` header) are used for cache key differentiation, preventing high-entropy tracking or session cookies from fragmenting the cache. This directive can be specified multiple times. | none |
 | `ignore` | `<string> [<string> ...]` | Response headers that are removed from the stored cache representation while leaving the live response unchanged. This directive can be specified multiple times. | none |
 | `ignore_request_cache_control` | `[<bool>]` | When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy. | `false` |
 | `enable_stale_while_revalidate` | `[<bool>]` | When enabled, cached responses with a `stale-while-revalidate` directive are revalidated synchronously after their `max-age` expires instead of being returned immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
@@ -91,6 +93,7 @@ example.com {
         litespeed_override_cache_control
         emit_litespeed_headers
         vary Accept-Encoding Accept-Language
+        vary_cookies lang ab_bucket
         ignore Set-Cookie
     }
 }
