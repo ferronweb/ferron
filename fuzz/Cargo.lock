@@ -542,7 +542,7 @@ checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
 name = "ferron-core"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "bytes",
  "cidr 0.3.2",
@@ -602,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cache"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "ahash",
  "async-trait",
@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-proxy"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-ratelimit"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "async-trait",
  "bytes",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-server"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "ferron-core",
  "urlencoding",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls"
-version = "3.0.0-beta.4"
+version = "3.0.0-beta.5"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
