@@ -51,6 +51,8 @@ Each signal sub-block supports these nested directives:
 | Directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
+
+The OTLP resource automatically includes `process.pid` and `process.start_time` attributes, which allow observability backends to distinguish between concurrent processes (same PID range after restart) and sequential process lifetimes (different start times). This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
 | `no_verification` | `[bool]` | Disable TLS certificate verification. Use with caution. | `false` |
 | `log_style` | `<string>` | Log style for log records. `legacy` preserves the existing human-readable `message` body. `modern` (default) publishes a short `summary` plus typed per-event attributes and remaps access-log fields to OTEL semantic conventions. | `"modern"` |
 | `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one isn't configured. | none |

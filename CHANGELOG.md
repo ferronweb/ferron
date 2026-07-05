@@ -1,5 +1,13 @@
 # Ferron 3 change log
 
+## Unreleased
+
+### Added
+
+#### Observability & tracing
+
+- **Process identity in OTel resources** — the OTLP resource now automatically includes `process.pid` and `process.start_time` attributes, allowing observability backends to distinguish between concurrent and sequential process lifetimes. This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
+
 ## Ferron 3.0.0-beta.5
 
 **Released in July 5, 2026**
