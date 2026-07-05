@@ -477,6 +477,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                         "ferron.cache.result".into(),
                         CustomAccessLogField::String("purge_rejected".into()),
                     );
+                    log_fields.insert(
+                        "ferron.cache.key_fingerprint".into(),
+                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
+                    );
                     return Ok(false);
                 }
 
@@ -579,6 +583,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                         "ferron.cache.zone".into(),
                         CustomAccessLogField::String(zone_id.label().to_string()),
                     );
+                    log_fields.insert(
+                        "ferron.cache.key_fingerprint".into(),
+                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
+                    );
                 }
                 // Don't insert RequestState — run_inverse will skip
                 return Ok(false);
@@ -654,6 +662,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                             "ferron.cache.zone".into(),
                             CustomAccessLogField::String(zone_id.label().to_string()),
                         );
+                        log_fields.insert(
+                            "ferron.cache.key_fingerprint".into(),
+                            CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
+                        );
                     }
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
@@ -720,6 +732,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 log_fields.insert(
                                     "ferron.cache.zone".into(),
                                     CustomAccessLogField::String(zone_id.label().to_string()),
+                                );
+                                log_fields.insert(
+                                    "ferron.cache.key_fingerprint".into(),
+                                    CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
                                 );
                             }
                             ctx.res = Some(if entry.body.is_none() {
@@ -832,6 +848,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                 "ferron.cache.zone".into(),
                 CustomAccessLogField::String(zone_id.label().to_string()),
             );
+            log_fields.insert(
+                "ferron.cache.key_fingerprint".into(),
+                CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
+            );
         }
 
         ctx.extensions.insert::<RequestStateKey>(RequestState {
@@ -923,6 +943,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                         log_fields.insert(
                             "ferron.cache.zone".into(),
                             CustomAccessLogField::String(state.zone_id.label().to_string()),
+                        );
+                        log_fields.insert(
+                            "ferron.cache.key_fingerprint".into(),
+                            CustomAccessLogField::String(cache_key_fingerprint(&state.base_key)),
                         );
                     }
                     return Ok(());
@@ -1125,6 +1149,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                             log_fields.insert(
                                 "ferron.cache.zone".into(),
                                 CustomAccessLogField::String(state.zone_id.label().to_string()),
+                            );
+                            log_fields.insert(
+                                "ferron.cache.key_fingerprint".into(),
+                                CustomAccessLogField::String(cache_key_fingerprint(&state.base_key)),
                             );
                         }
                         return Ok(());
@@ -1890,6 +1918,18 @@ fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
     value
         .get(..prefix.len())
         .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+}
+
+/// Return a truncated representation of a cache key for use in access logs.
+/// The full key can be long (scheme://host/path + vary components); this
+/// provides enough to identify the resource without bloating log lines.
+fn cache_key_fingerprint(key: &str) -> String {
+    const MAX_LEN: usize = 48;
+    if key.len() <= MAX_LEN {
+        key.to_string()
+    } else {
+        format!("{}...", &key[..MAX_LEN])
+    }
 }
 
 /// Build an HTTPS client for outbound purge propagation webhooks.

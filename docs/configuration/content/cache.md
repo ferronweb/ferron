@@ -442,6 +442,16 @@ The `ferron.cache.zone` attribute identifies which cache zone the request belong
 | Cache purged via PURGE method | DEBUG | `cache.purged.count` (purged cache entries) |
 | LSCache stale purge marker ignored | DEBUG | - |
 
+### Access log fields
+
+The cache module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ferron.cache.result` | string | Cache lookup outcome: `hit`, `miss`, `bypass`, `stale`, `revalidate`, `purge`, or `purge_rejected`. |
+| `ferron.cache.zone` | string | The cache zone serving the request. |
+| `ferron.cache.key_fingerprint` | string | Truncated representation of the cache key (up to 48 characters), useful for diagnosing why a specific request missed. |
+
 ### Trace spans
 
 The cache stage sets the following attributes on its `ferron.stage.cache` span:
