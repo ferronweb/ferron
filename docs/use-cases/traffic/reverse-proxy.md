@@ -243,20 +243,35 @@ example.com {
 To also count upstream `5xx` responses toward the circuit:
 
 ```ferron
-circuit_breaker {
-    max_fails 3
-    window "5s"
-    record_5xx true
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        circuit_breaker {
+            max_fails 3
+            window "5s"
+            record_5xx true
+        }
+    }
 }
 ```
 
 To also count slow responses toward the circuit:
 
 ```ferron
-circuit_breaker {
-    max_fails 3
-    window "5s"
-    latency_threshold "0.5s"
+
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        circuit_breaker {
+            max_fails 3
+            window "5s"
+            latency_threshold "0.5s"
+        }
+    }
 }
 ```
 
