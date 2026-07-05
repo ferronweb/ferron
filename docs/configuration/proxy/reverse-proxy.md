@@ -382,8 +382,10 @@ For SRV upstreams, the `priority` subdirective is an additive offset applied to 
 
 ```ferron
 example.com {
-    srv _http._tcp.example.com {
-        priority 5
+    proxy {
+        srv _http._tcp.example.com {
+            priority 5
+        }
     }
 }
 ```
