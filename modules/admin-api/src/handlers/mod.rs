@@ -61,8 +61,10 @@ pub(crate) async fn admin_metrics_middleware(
             name: "ferron.admin.request.duration",
             attributes: attrs.clone(),
             ty: MetricType::Histogram(Some(
-                vec![0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0]
-                    .into(),
+                vec![
+                    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0,
+                ]
+                .into(),
             )),
             value: MetricValue::F64(duration),
             unit: Some("s"),
@@ -169,10 +171,7 @@ pub async fn reload_handler(
         );
         state.events.emit(Event::Metric(MetricEvent {
             name: "ferron.admin.reload.count",
-            attributes: vec![(
-                "http.response.status_code",
-                MetricAttributeValue::I64(500),
-            )],
+            attributes: vec![("http.response.status_code", MetricAttributeValue::I64(500))],
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
             unit: None,
@@ -192,10 +191,7 @@ pub async fn reload_handler(
         );
         state.events.emit(Event::Metric(MetricEvent {
             name: "ferron.admin.reload.count",
-            attributes: vec![(
-                "http.response.status_code",
-                MetricAttributeValue::I64(200),
-            )],
+            attributes: vec![("http.response.status_code", MetricAttributeValue::I64(200))],
             ty: MetricType::Counter,
             value: MetricValue::U64(1),
             unit: None,

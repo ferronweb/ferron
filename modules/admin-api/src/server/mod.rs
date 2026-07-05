@@ -41,11 +41,8 @@ impl AdminApiModule {
         admin_config: AdminConfig,
         full_config: Arc<ServerConfiguration>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let events_arc = ferron_observability::build_composite_sink(
-            registry,
-            &full_config.global_config,
-            None,
-        )?;
+        let events_arc =
+            ferron_observability::build_composite_sink(registry, &full_config.global_config, None)?;
         let events = Arc::try_unwrap(events_arc).unwrap_or_else(|arc| (*arc).clone());
 
         Ok(Self {
@@ -72,11 +69,8 @@ impl AdminApiModule {
         old_token.cancel();
 
         // Rebuild the observability sink with the new config
-        let events_arc = ferron_observability::build_composite_sink(
-            registry,
-            &full_config.global_config,
-            None,
-        )?;
+        let events_arc =
+            ferron_observability::build_composite_sink(registry, &full_config.global_config, None)?;
         let events = Arc::try_unwrap(events_arc).unwrap_or_else(|arc| (*arc).clone());
 
         // Atomically swap the config
