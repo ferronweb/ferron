@@ -260,7 +260,6 @@ example.com {
 To also count slow responses toward the circuit:
 
 ```ferron
-
 example.com {
     proxy {
         upstream http://localhost:3000
