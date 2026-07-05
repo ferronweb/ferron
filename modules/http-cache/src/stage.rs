@@ -277,6 +277,28 @@ impl HttpCacheStage {
     }
 
     #[inline]
+    fn emit_singleflight_metrics(&self, ctx: &HttpContext, store: &CacheStore) {
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.coalesced_requests",
+            attributes: Vec::new(),
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of requests intercepted by the singleflight deduplication layer."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.singleflight_active_locks",
+            attributes: Vec::new(),
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(store.active_locks() as u64),
+            unit: Some("{lock}"),
+            description: Some("Number of active in-flight upstream fetches coordinated by singleflight."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        }));
+    }
+
+    #[inline]
     fn emit_eviction_metrics(&self, ctx: &HttpContext, zone_id: &CacheZoneId, stats: StoreStats) {
         if stats.expired_evictions > 0 {
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -694,6 +716,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         // Wait for it to complete, then re-check the cache.
                         notify.notified().await;
                         let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
+                        self.emit_singleflight_metrics(ctx, &store);
 
                         let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
                             &base_key,

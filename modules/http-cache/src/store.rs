@@ -85,6 +85,7 @@ pub struct CacheStore {
     variants_by_base: DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
     inflight: DashMap<String, InflightEntry, FxBuildHasher>,
+    active_locks: AtomicUsize,
 }
 
 /// Tracks an in-flight upstream fetch for a specific cache key.
@@ -123,6 +124,7 @@ impl CacheStore {
             variants_by_base: DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
             inflight: DashMap::with_hasher(FxBuildHasher),
+            active_locks: AtomicUsize::new(0),
         }
     }
 
@@ -135,6 +137,13 @@ impl CacheStore {
     #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// Return the number of active in-flight upstream fetches currently
+    /// being coordinated by the singleflight mechanism.
+    #[inline]
+    pub fn active_locks(&self) -> usize {
+        self.active_locks.load(Ordering::Relaxed)
     }
 
     /// Try to become the in-flight fetch leader for `cache_key`.
@@ -157,6 +166,9 @@ impl CacheStore {
                 }
             });
         let notify = entry.notify.clone();
+        if is_leader {
+            self.active_locks.fetch_add(1, Ordering::Relaxed);
+        }
         (is_leader, notify)
     }
 
@@ -165,6 +177,7 @@ impl CacheStore {
     pub fn complete_fetch(&self, cache_key: &str) {
         if let Some((_, entry)) = self.inflight.remove(cache_key) {
             entry.notify.notify_waiters();
+            self.active_locks.fetch_sub(1, Ordering::Relaxed);
         }
     }
 

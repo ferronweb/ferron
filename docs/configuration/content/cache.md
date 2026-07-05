@@ -420,6 +420,8 @@ The cache module emits the following metrics:
 | `ferron.cache.stores` | Counter | `ferron.cache.zone`, `ferron.cache.scope`, `http.response.status_code` | Responses stored in the cache |
 | `ferron.cache.evictions` | Counter | `ferron.cache.zone`, `ferron.cache.reason` (`"expired"` or `"size"`) | Entries evicted from the cache |
 | `ferron.cache.purges` | Counter | `ferron.cache.zone`, `ferron.cache.scope` | Entries purged through LSCache-compatible controls |
+| `ferron.cache.coalesced_requests` | Counter | - | Requests intercepted by the singleflight deduplication layer |
+| `ferron.cache.singleflight_active_locks` | Gauge | - | Active in-flight upstream fetches coordinated by singleflight |
 
 The `ferron.cache.zone` attribute identifies which cache zone the request belongs to. It is set to `"global"` for the shared global zone, the zone name for named zones, or the hostname for per-host zones.
 
