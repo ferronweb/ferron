@@ -14,6 +14,7 @@
 - **Singleflight coalescing traceability in access logs** — the cache module now contributes `ferron.cache.coalesced` (bool) and `ferron.cache.coalesce_wait_duration_ms` (float) fields to HTTP access log lines, providing direct visibility into how long client requests are queuing inside the proxy during concurrent upstream revalidation.
 - **Cache key components in OTel trace attributes** — the `ferron.stage.cache` span now includes `ferron.cache.key.uri`, `ferron.cache.key.method`, and `ferron.cache.key.evaluated_cookies` attributes, making trace flame graphs instantly diagnostic when evaluating hit-rate degradation caused by high-cardinality metadata variations.
 - **Singleflight coordination metrics** — new `ferron.cache.coalesced_requests` (Counter) and `ferron.cache.singleflight_active_locks` (Gauge) metrics expose the efficiency of the request deduplication layer, providing visibility into how effectively singleflight handles concurrent thundering herds.
+- **Eviction reason structured logs** — cache eviction events now emit debug-level structured log entries with `eviction.reason` (`ttl_expired` or `capacity_reached_lru`), `eviction.count`, and `ferron.cache.zone` attributes, providing precise eviction timelines alongside the existing cumulative metrics.
 
 ## Ferron 3.0.0-beta.5
 

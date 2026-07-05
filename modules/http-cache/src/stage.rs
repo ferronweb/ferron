@@ -319,6 +319,22 @@ impl HttpCacheStage {
                 description: Some("Number of cache entries evicted from the HTTP cache."),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
+            ctx.events.emit(Event::Log(LogEvent {
+                level: LogLevel::Debug,
+                target: LOG_TARGET,
+                message: format!(
+                    "Evicted {} expired cache entries from zone {}",
+                    stats.expired_evictions,
+                    zone_id.label()
+                ),
+                summary: "Cache entries evicted (ttl_expired)".into(),
+                attributes: vec![
+                    ("eviction.reason".into(), LogAttributeValue::String("ttl_expired".into())),
+                    ("eviction.count".into(), LogAttributeValue::I64(stats.expired_evictions as i64)),
+                    ("ferron.cache.zone".into(), LogAttributeValue::String(zone_id.label().to_string())),
+                ],
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            }));
         }
         if stats.size_evictions > 0 {
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -337,6 +353,22 @@ impl HttpCacheStage {
                 value: MetricValue::U64(stats.size_evictions as u64),
                 unit: Some("{entry}"),
                 description: Some("Number of cache entries evicted from the HTTP cache."),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            }));
+            ctx.events.emit(Event::Log(LogEvent {
+                level: LogLevel::Debug,
+                target: LOG_TARGET,
+                message: format!(
+                    "Evicted {} cache entries (capacity) from zone {}",
+                    stats.size_evictions,
+                    zone_id.label()
+                ),
+                summary: "Cache entries evicted (capacity_reached_lru)".into(),
+                attributes: vec![
+                    ("eviction.reason".into(), LogAttributeValue::String("capacity_reached_lru".into())),
+                    ("eviction.count".into(), LogAttributeValue::I64(stats.size_evictions as i64)),
+                    ("ferron.cache.zone".into(), LogAttributeValue::String(zone_id.label().to_string())),
+                ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
