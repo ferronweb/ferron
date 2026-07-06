@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
 use crate::HttpContext;
@@ -44,7 +43,7 @@ impl From<bool> for CustomAccessLogField {
 pub struct CustomAccessLogFields;
 
 impl TypeMapKey for CustomAccessLogFields {
-    type Value = HashMap<String, CustomAccessLogField>;
+    type Value = FxHashMap<String, CustomAccessLogField>;
 }
 
 /// Returns a mutable reference to the custom access log fields in an [`HttpContext`].

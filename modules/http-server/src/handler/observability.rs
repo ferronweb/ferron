@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ferron_core::pipeline::{PipelineError, Stage, StageHooks};
@@ -10,7 +9,7 @@ use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
     Parent, TraceAttributeValue, TraceEvent,
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub use ferron_http::trace_context::to_event_trace_context;
 
@@ -201,7 +200,7 @@ pub(super) struct HttpAccessLog {
     pub request_headers: Vec<(String, String)>,
     pub timestamp: chrono::DateTime<chrono::Local>,
     pub trace_context: Option<EventTraceContext>,
-    pub custom_fields: Option<HashMap<String, CustomAccessLogField>>,
+    pub custom_fields: Option<FxHashMap<String, CustomAccessLogField>>,
 }
 
 impl AccessEvent for HttpAccessLog {

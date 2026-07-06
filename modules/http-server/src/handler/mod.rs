@@ -574,7 +574,7 @@ async fn request_handler_inner(
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
     Option<SocketAddr>,
-    Option<HashMap<String, CustomAccessLogField>>,
+    Option<FxHashMap<String, CustomAccessLogField>>,
 ) {
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
