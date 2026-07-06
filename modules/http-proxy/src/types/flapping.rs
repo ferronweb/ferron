@@ -12,7 +12,7 @@ use crossbeam_queue::ArrayQueue;
 /// is currently considered "flapping" (oscillating too rapidly).
 #[derive(Clone, Debug)]
 pub struct FlappingState {
-    /// Recent transition timestamps (ring buffer, protected by Mutex for atomic push+count).
+    /// Recent transition timestamps (ring buffer using ArrayQueue).
     pub transitions: Option<Arc<ArrayQueue<Instant>>>,
     /// Whether the upstream is currently in a flapping state.
     pub is_flapping: Arc<AtomicBool>,
