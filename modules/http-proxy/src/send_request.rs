@@ -56,6 +56,12 @@ impl SendRequestWrapper {
         }
     }
 
+    /// Check if the connection supports multiplexing (HTTP/2).
+    #[inline]
+    pub fn supports_multiplexing(&self) -> bool {
+        matches!(self.inner.as_ref(), Some(SendRequestInner::Http2(_)))
+    }
+
     /// Check if the connection is closed.
     #[inline]
     pub fn is_closed(&self) -> bool {
