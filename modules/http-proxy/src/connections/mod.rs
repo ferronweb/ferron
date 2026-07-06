@@ -76,10 +76,15 @@ impl PoolStatsCollector {
 
     #[inline]
     pub fn record_pull(&self, upstream: &Arc<UpstreamInner>, had_idle: bool) {
-        let entry = self
-            .inner
-            .entry((std::thread::current().id(), upstream.clone()))
-            .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)));
+        let key = (std::thread::current().id(), upstream.clone());
+        let entry = if let Some(entry) = self.inner.get(&key) {
+            entry
+        } else {
+            self.inner
+                .entry(key)
+                .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)))
+                .downgrade()
+        };
         entry.value().1.fetch_add(1, Ordering::Relaxed);
         if had_idle {
             entry.value().0.fetch_sub(1, Ordering::Relaxed);
@@ -88,10 +93,15 @@ impl PoolStatsCollector {
 
     #[inline]
     pub fn record_return(&self, upstream: &Arc<UpstreamInner>, stored: bool) {
-        let entry = self
-            .inner
-            .entry((std::thread::current().id(), upstream.clone()))
-            .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)));
+        let key = (std::thread::current().id(), upstream.clone());
+        let entry = if let Some(entry) = self.inner.get(&key) {
+            entry
+        } else {
+            self.inner
+                .entry(key)
+                .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)))
+                .downgrade()
+        };
         entry.value().1.fetch_sub(1, Ordering::Relaxed);
         if stored {
             entry.value().0.fetch_add(1, Ordering::Relaxed);

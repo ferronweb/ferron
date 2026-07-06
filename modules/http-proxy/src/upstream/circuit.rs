@@ -502,12 +502,16 @@ fn record_circuit_breaker_success(
         // Record slow-start recovery timestamp so the LB applies a decaying
         // virtual connection penalty, preventing thundering herd.
         if circuit_breaker.slow_start_duration > Duration::ZERO {
-            drop(state);
-            if let Some(mut state) = circuit_breaker_state.get_mut(upstream) {
-                let recovery_at = state
-                    .slow_start_recovery_at
-                    .get_or_insert_with(|| Arc::new(parking_lot::RwLock::new(None)));
-                *recovery_at.write() = Some(Instant::now());
+            if let Some(ssra) = &state.slow_start_recovery_at {
+                *ssra.write() = Some(Instant::now());
+            } else {
+                drop(state);
+                if let Some(mut state) = circuit_breaker_state.get_mut(upstream) {
+                    let recovery_at = state
+                        .slow_start_recovery_at
+                        .get_or_insert_with(|| Arc::new(parking_lot::RwLock::new(None)));
+                    *recovery_at.write() = Some(Instant::now());
+                }
             }
         }
         crate::upstream::flapping::record_circuit_transition(
