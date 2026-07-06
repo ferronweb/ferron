@@ -232,21 +232,24 @@ impl ConnectionManager {
             // because the lock was held across async boundary.
             PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
             let cancel_token = {
-                let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
+                // Fast path: concurrent read lock (multiple threads can access simultaneously)
                 let pending_pulls_key = (None, upstream.proxy_unix.is_some());
-                let pending_pulls =
-                    if let Some(pending_pulls) = pending_pulls_lock.get(&pending_pulls_key) {
-                        pending_pulls
-                    } else {
-                        pending_pulls_lock.with_upgraded(|pp| {
-                            pp.insert(pending_pulls_key.clone(), SegQueue::new());
-                        });
-                        pending_pulls_lock
-                            .get(&pending_pulls_key)
-                            .expect("pending pulls should have been initialized at this point")
-                    };
                 let cancel_token = CancellationToken::new();
-                pending_pulls.push(cancel_token.clone());
+
+                let pending_pulls_read = PENDING_PULLS.read();
+                let queue_opt = pending_pulls_read.get(&pending_pulls_key);
+                if let Some(queue) = queue_opt {
+                    queue.push(cancel_token.clone());
+                } else {
+                    drop(pending_pulls_read);
+                    // Slow path: upgrade to write lock only if the queue doesn't exist yet
+                    let mut write_lock = PENDING_PULLS.write();
+                    let queue = write_lock
+                        .entry(pending_pulls_key)
+                        .or_insert_with(SegQueue::new);
+                    queue.push(cancel_token.clone());
+                }
+
                 cancel_token
             };
 

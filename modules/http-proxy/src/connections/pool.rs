@@ -4,7 +4,6 @@
 //! designed for thread-per-core runtimes where each thread owns its pool exclusively.
 
 use std::cell::UnsafeCell;
-use std::collections::VecDeque;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -23,8 +22,8 @@ struct SingleThreadPoolInner<K, L, I> {
     unbounded: bool,
 
     // Cold fields (Large HashMaps)
-    /// Idle connections stored per key (with FIFO order).
-    idle: FxHashMap<K, VecDeque<I>>,
+    /// Idle connections stored per key.
+    idle: FxHashMap<K, Vec<I>>,
     /// Per-limit-key outstanding counts.
     local_outstanding: FxHashMap<L, usize>,
 }
@@ -146,7 +145,7 @@ where
         (unsafe { &mut *self.inner.get() })
             .idle
             .get(key)
-            .map_or(0, VecDeque::len)
+            .map_or(0, Vec::len)
     }
 
     /// Returns the total number of idle connections.
@@ -206,10 +205,12 @@ where
     /// Increments the local outstanding count for a limit key.
     #[inline]
     fn increment_local_outstanding(&self, limit_key: &L) {
-        *(unsafe { &mut *self.inner.get() })
-            .local_outstanding
-            .entry(limit_key.clone())
-            .or_insert(0) += 1;
+        let state = unsafe { &mut *self.inner.get() };
+        if let Some(count) = state.local_outstanding.get_mut(limit_key) {
+            *count += 1;
+        } else {
+            state.local_outstanding.insert(limit_key.clone(), 1);
+        }
     }
 
     /// Decrements the local outstanding count for a limit key.
@@ -251,7 +252,7 @@ where
         }
 
         // Try to get an idle connection.
-        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop_front());
+        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop());
 
         if inner.is_some() {
             state.idle_total = state.idle_total.saturating_sub(1);
@@ -296,7 +297,11 @@ where
         };
 
         if can_store {
-            state.idle.entry(key).or_default().push_front(inner);
+            if let Some(conns) = state.idle.get_mut(&key) {
+                conns.push(inner);
+            } else {
+                state.idle.insert(key, Vec::from([inner]));
+            }
             state.idle_total += 1;
         }
         // else: drop the connection (it will be dropped when this function ends)
