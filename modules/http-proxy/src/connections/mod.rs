@@ -246,7 +246,7 @@ impl ConnectionManager {
                     let mut write_lock = PENDING_PULLS.write();
                     let queue = write_lock
                         .entry(pending_pulls_key)
-                        .or_insert_with(SegQueue::new);
+                        .or_default();
                     queue.push(cancel_token.clone());
                 }
 
@@ -320,7 +320,7 @@ impl ConnectionManager {
                     let mut write_lock = PENDING_PULLS.write();
                     let queue = write_lock
                         .entry(pending_pulls_key)
-                        .or_insert_with(SegQueue::new);
+                        .or_default();
                     queue.push(cancel_token.clone());
                 }
 
