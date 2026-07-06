@@ -595,7 +595,6 @@ pub async fn send_via_wrapper(
         // Extract backend URL before consuming item
         let backend_url = item.key().map(|k| k.0.proxy_to.clone()).unwrap_or_default();
 
-        let supports_multiplexing = wrapper.supports_multiplexing();
         let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
             Some(crate::send_request::PoolReturnInfo::from_item(
                 item, wrapper, is_unix,
@@ -629,9 +628,7 @@ pub async fn send_via_wrapper(
         let tracked_body = TrackedBody::new(
             tracking_body.map_err(std::io::Error::other),
             tracked_connection,
-            (!supports_multiplexing)
-                .then_some(pool_return_info)
-                .flatten(),
+            pool_return_info,
             Some(truncated_tracker),
         );
 
