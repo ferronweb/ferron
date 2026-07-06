@@ -244,9 +244,7 @@ impl ConnectionManager {
                     drop(pending_pulls_read);
                     // Slow path: upgrade to write lock only if the queue doesn't exist yet
                     let mut write_lock = PENDING_PULLS.write();
-                    let queue = write_lock
-                        .entry(pending_pulls_key)
-                        .or_default();
+                    let queue = write_lock.entry(pending_pulls_key).or_default();
                     queue.push(cancel_token.clone());
                 }
 
@@ -318,9 +316,7 @@ impl ConnectionManager {
                     drop(pending_pulls_read);
                     // Slow path: upgrade to write lock only if the queue doesn't exist yet
                     let mut write_lock = PENDING_PULLS.write();
-                    let queue = write_lock
-                        .entry(pending_pulls_key)
-                        .or_default();
+                    let queue = write_lock.entry(pending_pulls_key).or_default();
                     queue.push(cancel_token.clone());
                 }
 
