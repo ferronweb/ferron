@@ -228,8 +228,12 @@ where
     ///
     /// Returns `None` if the global limit is reached (caller should establish a new connection).
     #[inline]
-    pub fn pull(self: &Rc<Self>, key: K) -> Option<PoolItem<K, L, I>> {
-        self.pull_with_local_limit(key, None)
+    pub fn pull(
+        self: &Rc<Self>,
+        key: K,
+        readiness_fn: impl Fn(&mut I) -> (bool, bool),
+    ) -> Option<PoolItem<K, L, I>> {
+        self.pull_with_local_limit(key, None, readiness_fn)
     }
 
     /// Pulls an item from the pool with a local limit applied.
@@ -240,6 +244,7 @@ where
         self: &Rc<Self>,
         key: K,
         local_limit: Option<(L, usize)>,
+        readiness_fn: impl Fn(&mut I) -> (bool, bool),
     ) -> Option<PoolItem<K, L, I>> {
         let state = unsafe { &mut *self.inner.get() };
         let local_limit_key = local_limit.as_ref().map(|(limit_key, _)| limit_key.clone());
@@ -252,7 +257,26 @@ where
         }
 
         // Try to get an idle connection.
-        let inner = state.idle.get_mut(&key).and_then(|conns| conns.pop());
+        let inner = if let Some(idle_conns) = state.idle.get_mut(&key) {
+            let mut removed_conns = Vec::with_capacity(idle_conns.len());
+            let mut found_conn = None;
+            while let Some(mut inner) = idle_conns.pop() {
+                let (is_ready, should_keep_in_pool) = readiness_fn(&mut inner);
+                if is_ready {
+                    found_conn = Some(inner);
+                    break;
+                } else if should_keep_in_pool {
+                    removed_conns.push(inner);
+                }
+            }
+            if found_conn.is_none() && self.is_at_global_limit() {
+                found_conn = removed_conns.pop();
+            }
+            idle_conns.extend(removed_conns.into_iter().rev());
+            found_conn
+        } else {
+            None
+        };
 
         if inner.is_some() {
             state.idle_total = state.idle_total.saturating_sub(1);
@@ -440,7 +464,7 @@ mod tests {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
 
         // Pull an item (will be None since no connections stored)
-        let item = pool.pull("key1".to_string()).unwrap();
+        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert!(item.inner().is_none());
         assert_eq!(pool.outstanding_count(), 1);
 
@@ -458,7 +482,7 @@ mod tests {
         assert_eq!(pool.idle_count(&"key1".to_string()), 1);
 
         // Pull it back
-        let item = pool.pull("key1".to_string()).unwrap();
+        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert_eq!(item.inner(), &Some(42));
         assert_eq!(pool.outstanding_count(), 1);
         assert_eq!(pool.idle_count(&"key1".to_string()), 0);
@@ -469,13 +493,13 @@ mod tests {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(2));
 
         // Fill the pool
-        let item1 = pool.pull("key1".to_string()).unwrap();
-        let item2 = pool.pull("key2".to_string()).unwrap();
+        let item1 = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let item2 = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
 
         assert_eq!(pool.outstanding_count(), 2);
 
         // Should be at limit for new connections.
-        let item3 = pool.pull("key3".to_string());
+        let item3 = pool.pull("key3".to_string(), |_| (true, true));
         assert!(item3.is_none());
 
         drop(item1);
@@ -492,14 +516,19 @@ mod tests {
 
         // Pull two items with local limit
         let item1 = pool
-            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)))
+            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)), |_| {
+                (true, true)
+            })
             .unwrap();
         let item2 = pool
-            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)))
+            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)), |_| {
+                (true, true)
+            })
             .unwrap();
 
         // Third should fail local limit
-        let item3 = pool.pull_with_local_limit("key1".to_string(), Some((limit_key, 2)));
+        let item3 =
+            pool.pull_with_local_limit("key1".to_string(), Some((limit_key, 2)), |_| (true, true));
         assert!(item3.is_none());
 
         drop(item1);
@@ -512,7 +541,7 @@ mod tests {
 
         pool.return_connection("key1".to_string(), 42);
 
-        let item = pool.pull("key1".to_string()).unwrap();
+        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         let value = item.take().unwrap();
         assert_eq!(value, 42);
 
@@ -527,7 +556,7 @@ mod tests {
         // Can pull many items without hitting limit
         let mut items = Vec::new();
         for i in 0..100 {
-            let item = pool.pull(format!("key{i}")).unwrap();
+            let item = pool.pull(format!("key{i}"), |_| (true, true)).unwrap();
             items.push(item);
         }
 
@@ -540,16 +569,16 @@ mod tests {
         assert_eq!(pool.max_size(), Some(2));
 
         // Fill the pool
-        let item1 = pool.pull("key1".to_string()).unwrap();
-        let item2 = pool.pull("key2".to_string()).unwrap();
-        assert!(pool.pull("key3".to_string()).is_none()); // At limit
+        let item1 = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let item2 = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
+        assert!(pool.pull("key3".to_string(), |_| (true, true)).is_none()); // At limit
 
         // Increase capacity
         pool.update_capacity(5);
         assert_eq!(pool.max_size(), Some(5));
 
         // Should now be able to pull more
-        let item3 = pool.pull("key3".to_string()).unwrap();
+        let item3 = pool.pull("key3".to_string(), |_| (true, true)).unwrap();
         drop(item1);
         drop(item2);
         drop(item3);
@@ -579,7 +608,7 @@ mod tests {
 
         // Pull 5 connections (all outstanding, no idle)
         let _items: Vec<_> = (0..5)
-            .map(|i| pool.pull(format!("key{i}")).unwrap())
+            .map(|i| pool.pull(format!("key{i}"), |_| (true, true)).unwrap())
             .collect();
         assert_eq!(pool.outstanding_count(), 5);
         assert_eq!(pool.total_idle_count(), 0);
@@ -598,12 +627,14 @@ mod tests {
 
         let limit_key = "upstream-a".to_string();
         let item1 = pool
-            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 1)))
+            .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 1)), |_| {
+                (true, true)
+            })
             .unwrap();
 
         // Same limit key should be shared across different pool keys.
         assert!(pool
-            .pull_with_local_limit("key2".to_string(), Some((limit_key, 1)))
+            .pull_with_local_limit("key2".to_string(), Some((limit_key, 1)), |_| (true, true))
             .is_none());
 
         drop(item1);
@@ -617,12 +648,12 @@ mod tests {
         assert_eq!(pool.total_idle_count(), 1);
 
         // Reusing the idle connection is allowed even though the pool is at capacity.
-        let item = pool.pull("key1".to_string()).unwrap();
+        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert_eq!(item.inner(), &Some(7));
         assert_eq!(pool.total_idle_count(), 0);
 
         // But a brand-new connection is still blocked at capacity.
-        assert!(pool.pull("key2".to_string()).is_none());
+        assert!(pool.pull("key2".to_string(), |_| (true, true)).is_none());
 
         drop(item);
         assert_eq!(pool.total_idle_count(), 1);

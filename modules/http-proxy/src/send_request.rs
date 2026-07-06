@@ -271,7 +271,6 @@ impl Drop for PoolReturnInfo {
 pub struct TrackedBody<B> {
     inner: B,
     _tracker: Option<Arc<()>>,
-    _tracker_pool: Option<PoolReturnInfo>,
     _truncated_tracker: Option<TruncatedTracker>,
 }
 
@@ -279,13 +278,11 @@ impl<B> TrackedBody<B> {
     pub fn new(
         inner: B,
         tracker: Option<Arc<()>>,
-        tracker_pool: Option<PoolReturnInfo>,
         truncated_tracker: Option<TruncatedTracker>,
     ) -> Self {
         Self {
             inner,
             _tracker: tracker,
-            _tracker_pool: tracker_pool,
             _truncated_tracker: truncated_tracker,
         }
     }

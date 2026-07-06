@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::thread::ThreadId;
+use std::time::Duration;
 
 use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
@@ -220,9 +221,10 @@ impl ConnectionManager {
         &self,
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
+        idle_timeout: Duration,
     ) -> PooledConnection {
         loop {
-            if let Some(conn) = self.try_pull(upstream.clone(), client_ip) {
+            if let Some(conn) = self.try_pull(upstream.clone(), client_ip, idle_timeout) {
                 // Pool not under capacity.
                 return conn;
             }
@@ -265,11 +267,15 @@ impl ConnectionManager {
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
+        idle_timeout: Duration,
     ) -> PooledConnection {
         loop {
-            if let Some(conn) =
-                self.try_pull_with_local_limit(upstream.clone(), client_ip, local_limit)
-            {
+            if let Some(conn) = self.try_pull_with_local_limit(
+                upstream.clone(),
+                client_ip,
+                local_limit,
+                idle_timeout,
+            ) {
                 // Pool not under capacity.
                 return conn;
             }
@@ -336,6 +342,7 @@ impl ConnectionManager {
         &self,
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
+        idle_timeout: Duration,
     ) -> Option<PooledConnection> {
         let upstream_for_stats = upstream.clone();
         let key = (upstream, client_ip);
@@ -350,9 +357,13 @@ impl ConnectionManager {
                 if pools.last_global_limit == per_thread {
                     #[cfg(unix)]
                     if key.0.proxy_unix.is_some() {
-                        return pools.unix_pool.pull(key);
+                        return pools
+                            .unix_pool
+                            .pull(key, |c| c.check_ready(Some(idle_timeout)));
                     }
-                    return pools.tcp_pool.pull(key);
+                    return pools
+                        .tcp_pool
+                        .pull(key, |c| c.check_ready(Some(idle_timeout)));
                 }
             }
 
@@ -374,9 +385,13 @@ impl ConnectionManager {
 
             #[cfg(unix)]
             if key.0.proxy_unix.is_some() {
-                return pools.unix_pool.pull(key);
+                return pools
+                    .unix_pool
+                    .pull(key, |c| c.check_ready(Some(idle_timeout)));
             }
-            pools.tcp_pool.pull(key)
+            pools
+                .tcp_pool
+                .pull(key, |c| c.check_ready(Some(idle_timeout)))
         });
 
         if let Some(result) = &result {
@@ -396,6 +411,7 @@ impl ConnectionManager {
         upstream: Arc<UpstreamInner>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
+        idle_timeout: Duration,
     ) -> Option<PooledConnection> {
         let upstream_for_stats = upstream.clone();
         let upstream_key = upstream;
@@ -412,9 +428,13 @@ impl ConnectionManager {
                 if pools.last_global_limit == per_thread {
                     #[cfg(unix)]
                     if key.0.proxy_unix.is_some() {
-                        return pools.unix_pool.pull_with_local_limit(key, limit);
+                        return pools.unix_pool.pull_with_local_limit(key, limit, |c| {
+                            c.check_ready(Some(idle_timeout))
+                        });
                     }
-                    return pools.tcp_pool.pull_with_local_limit(key, limit);
+                    return pools
+                        .tcp_pool
+                        .pull_with_local_limit(key, limit, |c| c.check_ready(Some(idle_timeout)));
                 }
             }
 
@@ -436,9 +456,13 @@ impl ConnectionManager {
 
             #[cfg(unix)]
             if key.0.proxy_unix.is_some() {
-                return pools.unix_pool.pull_with_local_limit(key, limit);
+                return pools
+                    .unix_pool
+                    .pull_with_local_limit(key, limit, |c| c.check_ready(Some(idle_timeout)));
             }
-            pools.tcp_pool.pull_with_local_limit(key, limit)
+            pools
+                .tcp_pool
+                .pull_with_local_limit(key, limit, |c| c.check_ready(Some(idle_timeout)))
         });
 
         if let Some(result) = &result {

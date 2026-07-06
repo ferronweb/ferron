@@ -61,10 +61,10 @@ pub async fn try_send_with_pool(
     let mut pull_start = None;
     let item_fut = async {
         if let Some(limit) = local_limit {
-            cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
+            cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit), idle_timeout)
                 .await
         } else {
-            cm.pull(upstream.clone(), client_ip).await
+            cm.pull(upstream.clone(), client_ip, idle_timeout).await
         }
     };
     let pull_start_set_fut = async {
@@ -161,6 +161,7 @@ pub async fn try_send_with_pool(
         tracked_connection,
         reusable_item,
         metrics,
+        idle_timeout,
     )
     .await
 }
@@ -218,15 +219,16 @@ pub async fn establish_and_send(
     tracked_connection: Option<Arc<()>>,
     existing_item: Option<PooledConnection>,
     metrics: &mut ProxyMetrics,
+    idle_timeout: Duration,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
     metrics.pool_miss = true;
     let mut item: PooledConnection = if let Some(it) = existing_item {
         it
     } else if let Some(limit) = local_limit {
-        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
+        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit), idle_timeout)
             .await
     } else {
-        cm.pull(upstream.clone(), client_ip).await
+        cm.pull(upstream.clone(), client_ip, idle_timeout).await
     };
 
     *item.inner_mut() = None;
@@ -628,7 +630,6 @@ pub async fn send_via_wrapper(
         let tracked_body = TrackedBody::new(
             tracking_body.map_err(std::io::Error::other),
             tracked_connection,
-            pool_return_info,
             Some(truncated_tracker),
         );
 
@@ -637,6 +638,8 @@ pub async fn send_via_wrapper(
 
         let mut response = http::Response::from_parts(parts, tracked_body.boxed_unsync());
         *response.version_mut() = http::Version::default();
+
+        drop(pool_return_info);
 
         Ok(ferron_http::HttpResponse::Custom(response))
     }
