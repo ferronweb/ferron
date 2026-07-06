@@ -51,25 +51,36 @@ pub async fn try_send_with_pool(
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
-    // Collect non-ready-but-alive connections for racing
+    // Collect non-ready-but-alive connection for racing
     let mut pending_items: Vec<PooledConnection> = Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
     // (avoids double-pull when the connection is dead and can't be raced).
     let mut reusable_item: Option<PooledConnection> = None;
 
     // Pull one connection from the pool and check readiness
-    let pull_start = std::time::Instant::now();
-    let mut item = if let Some(limit) = local_limit {
-        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
-            .await
-    } else {
-        cm.pull(upstream.clone(), client_ip).await
+    let mut pull_start = None;
+    let item_fut = async {
+        if let Some(limit) = local_limit {
+            cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit))
+                .await
+        } else {
+            cm.pull(upstream.clone(), client_ip).await
+        }
+    };
+    let pull_start_set_fut = async {
+        if pull_start.is_none() {
+            pull_start = Some(std::time::Instant::now());
+        }
+        std::future::pending().await
+    };
+    let mut item = tokio::select! {
+        biased;
+        item = item_fut => item,
+        item_mock = pull_start_set_fut => item_mock,
     };
 
-    let pull_duration = pull_start.elapsed().as_secs_f64();
-
-    // Track pool wait metrics when pool was exhausted (no immediate connection available)
-    if item.inner().is_none() || pull_duration > 0.001 {
+    // Track pool wait metrics
+    if let Some(pull_duration) = pull_start.map(|d| d.elapsed().as_secs_f64()) {
         metrics.pool_waits += 1;
         metrics.pool_wait_time_secs += pull_duration;
     }
