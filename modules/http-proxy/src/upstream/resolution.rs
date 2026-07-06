@@ -77,7 +77,67 @@ pub fn determine_proxy_to(
         }
     }
 
-    // Group healthy indices by priority (BTreeMap = sorted by key, lowest first)
+    // Fast path: single-priority short-circuit.
+    // Most configs have a single priority value. Detect this without allocating
+    // the BTreeMap by scanning healthy indices and checking if they share the
+    // same priority.
+    let first_healthy_priority = upstreams
+        .iter()
+        .enumerate()
+        .find(|(i, _)| !unhealthy.contains(i))
+        .map(|(_, u)| u.priority);
+
+    let all_same_priority = first_healthy_priority.is_some_and(|p| {
+        upstreams
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !unhealthy.contains(i))
+            .all(|(_, u)| u.priority == p)
+    });
+
+    if all_same_priority {
+        // Single priority group: build the group inline without BTreeMap
+        let mut group: Vec<usize> = upstreams
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !unhealthy.contains(i))
+            .map(|(i, _)| i)
+            .collect();
+
+        // Resolve affinity once across all tiers
+        let mut affinity_index = None;
+        if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
+            affinity_index = super::affinity::resolve_affinity_index(
+                affinity_type,
+                key,
+                upstreams,
+                &unhealthy,
+                ring,
+            );
+        };
+
+        return try_select_from_group(
+            &mut group,
+            upstreams,
+            algorithm,
+            conn_state,
+            ewma_state,
+            circuit_breaker,
+            circuit_breaker_state,
+            flapping_state,
+            affinity_type,
+            affinity_key,
+            ring,
+            event_sink,
+            metrics,
+            event_trace_context,
+            metrics_resolved_ip,
+            &mut affinity_index,
+            &mut unhealthy,
+        );
+    }
+
+    // Multi-priority: Group healthy indices by priority (BTreeMap = sorted by key, lowest first)
     let mut priority_groups: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
     for (i, u) in upstreams.iter().enumerate() {
         if !unhealthy.contains(&i) {
@@ -99,90 +159,138 @@ pub fn determine_proxy_to(
 
     // Try each priority group in order (lowest priority value = highest priority)
     for (_priority, mut group) in priority_groups {
-        loop {
-            if group.is_empty() {
-                break;
-            }
-
-            // Resolve affinity: find position in group whose original index
-            // matches affinity_index
-            if affinity_index.is_none() {
-                if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
-                    affinity_index = super::affinity::resolve_affinity_index(
-                        affinity_type,
-                        key,
-                        upstreams,
-                        &unhealthy,
-                        ring,
-                    );
-                };
-            }
-            let start_pos = affinity_index.and_then(|aff_idx| {
-                if aff_idx < group.len() && group[aff_idx] == aff_idx {
-                    return Some(aff_idx);
-                }
-                group.iter().position(|orig_idx| *orig_idx == aff_idx)
-            });
-
-            let (index, candidate_scores) = if let Some(pos) = start_pos {
-                (pos, Vec::new())
-            } else if group.len() == 1 {
-                (0, Vec::new())
-            } else {
-                let result = super::lb::selector::select_backend_index(
-                    algorithm,
-                    &group,
-                    upstreams,
-                    conn_state,
-                    ewma_state,
-                    circuit_breaker_state,
-                    circuit_breaker.slow_start_duration,
-                );
-                (result.index, result.candidate_scores)
-            };
-            let upstream_idx = group.swap_remove(index);
-            unhealthy.insert(upstream_idx);
-            let upstream = Arc::clone(&upstreams[upstream_idx]);
-            if start_pos == Some(index) {
-                affinity_index = None;
-            }
-
-            if !try_acquire_circuit_breaker_slot(
-                circuit_breaker_state,
-                flapping_state,
-                circuit_breaker,
-                &upstream,
-                event_sink,
-                event_trace_context.clone(),
-                metrics_resolved_ip,
-            ) {
-                let open = circuit_breaker
-                    .enabled
-                    .then_some(circuit_breaker_state)
-                    .flatten()
-                    .and_then(|s| s.get(&upstream))
-                    .is_some_and(|s| {
-                        s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN
-                    });
-
-                if open {
-                    metrics.excluded_circuit_open.push(Arc::clone(&upstream));
-                } else {
-                    metrics.excluded_overloaded.push(Arc::clone(&upstream));
-                }
-
-                continue;
-            }
-
-            // Get the tracker (already initialized by select_backend_index)
-            super::lb::selector::initialize_tracker(conn_state, &upstream);
-            let tracker = super::lb::selector::get_tracker(conn_state, &upstream);
-            return Some(SelectedBackend {
-                upstream,
-                tracker,
-                candidate_scores,
-            });
+        if let Some(result) = try_select_from_group(
+            &mut group,
+            upstreams,
+            algorithm,
+            conn_state,
+            ewma_state,
+            circuit_breaker,
+            circuit_breaker_state,
+            flapping_state,
+            affinity_type,
+            affinity_key,
+            ring,
+            event_sink,
+            metrics,
+            event_trace_context.clone(),
+            metrics_resolved_ip,
+            &mut affinity_index,
+            &mut unhealthy,
+        ) {
+            return Some(result);
         }
+    }
+
+    None
+}
+
+/// Try to select a backend from a single priority group.
+///
+/// Returns `Some(SelectedBackend)` if a backend was selected, or `None` if the
+/// group is exhausted (all circuit-open or overloaded). On each call, the group
+/// shrinks as backends are tried.
+#[allow(clippy::too_many_arguments)]
+fn try_select_from_group(
+    group: &mut Vec<usize>,
+    upstreams: &[Arc<UpstreamInner>],
+    algorithm: &LoadBalancerAlgorithmInner,
+    conn_state: Option<&ConnectionsTrackState>,
+    ewma_state: Option<&EwmaStateMap>,
+    circuit_breaker: &CircuitBreakerConfig,
+    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
+    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
+    affinity_type: Option<&crate::config::AffinityType>,
+    affinity_key: Option<&[u8]>,
+    ring: &parking_lot::RwLock<ConsistentHashRing>,
+    event_sink: &ferron_observability::CompositeEventSink,
+    metrics: &mut crate::ProxyMetrics,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
+    affinity_index: &mut Option<usize>,
+    unhealthy: &mut FxHashSet<usize>,
+) -> Option<SelectedBackend> {
+    loop {
+        if group.is_empty() {
+            break;
+        }
+
+        // Resolve affinity: find position in group whose original index
+        // matches affinity_index
+        if affinity_index.is_none() {
+            if let (Some(affinity_type), Some(key)) = (affinity_type, affinity_key) {
+                *affinity_index = super::affinity::resolve_affinity_index(
+                    affinity_type,
+                    key,
+                    upstreams,
+                    unhealthy,
+                    ring,
+                );
+            };
+        }
+        let start_pos = affinity_index.and_then(|aff_idx| {
+            if aff_idx < group.len() && group[aff_idx] == aff_idx {
+                return Some(aff_idx);
+            }
+            group.iter().position(|orig_idx| *orig_idx == aff_idx)
+        });
+
+        let (index, candidate_scores) = if let Some(pos) = start_pos {
+            (pos, Vec::new())
+        } else if group.len() == 1 {
+            (0, Vec::new())
+        } else {
+            let result = super::lb::selector::select_backend_index(
+                algorithm,
+                group,
+                upstreams,
+                conn_state,
+                ewma_state,
+                circuit_breaker_state,
+                circuit_breaker.slow_start_duration,
+            );
+            (result.index, result.candidate_scores)
+        };
+        let upstream_idx = group.swap_remove(index);
+        unhealthy.insert(upstream_idx);
+        let upstream = Arc::clone(&upstreams[upstream_idx]);
+        if start_pos == Some(index) {
+            *affinity_index = None;
+        }
+
+        if !try_acquire_circuit_breaker_slot(
+            circuit_breaker_state,
+            flapping_state,
+            circuit_breaker,
+            &upstream,
+            event_sink,
+            event_trace_context.clone(),
+            metrics_resolved_ip,
+        ) {
+            let open = circuit_breaker
+                .enabled
+                .then_some(circuit_breaker_state)
+                .flatten()
+                .and_then(|s| s.get(&upstream))
+                .is_some_and(|s| s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN);
+
+            if open {
+                metrics.excluded_circuit_open.push(Arc::clone(&upstream));
+            } else {
+                metrics.excluded_overloaded.push(Arc::clone(&upstream));
+            }
+
+            continue;
+        }
+
+        // Get the tracker (already initialized by select_backend_index)
+        super::lb::selector::initialize_tracker(conn_state, &upstream);
+        let tracker = super::lb::selector::get_tracker(conn_state, &upstream);
+        return Some(SelectedBackend {
+            upstream,
+            tracker,
+            candidate_scores,
+        });
     }
 
     None

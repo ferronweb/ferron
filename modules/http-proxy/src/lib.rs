@@ -439,6 +439,11 @@ struct ProxyState {
     /// Whether to include resolved IP addresses in proxy metrics attributes.
     /// Updated from config on each request.
     metrics_resolved_ip: std::sync::atomic::AtomicBool,
+    /// Cache of resolved upstreams keyed by config pointer identity.
+    /// Avoids re-resolving static upstreams on every request.
+    /// Automatically invalidated on config reload (new Arc pointers).
+    resolved_upstreams_cache:
+        DashMap<Vec<usize>, Arc<Vec<Arc<types::upstream::UpstreamInner>>>, FxBuildHasher>,
 }
 
 impl ProxyState {
@@ -454,6 +459,7 @@ impl ProxyState {
             health_check_tasks: DashMap::with_hasher(FxBuildHasher),
             active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
             metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
+            resolved_upstreams_cache: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
@@ -617,6 +623,8 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         // Prevent load balancing state memory leaks
         if let Some(ref state) = self.state {
             state.algorithms.swap(Default::default());
+            // Clear resolved upstreams cache on config reload
+            state.resolved_upstreams_cache.clear();
         }
 
         modules.push(Arc::new(ReverseProxyModule {
@@ -877,6 +885,8 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),
+            Some(&self.state.resolved_upstreams_cache),
+            &config_key,
         )
         .await;
 

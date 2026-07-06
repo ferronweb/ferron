@@ -42,6 +42,7 @@ pub async fn resolve_srv(
                 mtls: upstream.mtls.clone(),
                 priority,
                 connection_timeout: upstream.connection_timeout,
+                idle_timeout: upstream.idle_timeout,
             })
         })
         .collect()
@@ -57,6 +58,7 @@ pub async fn resolve_srv_inner(
     let weight = srv_data.weight;
     let mtls = srv_data.mtls.clone();
     let connection_timeout = srv_data.connection_timeout;
+    let idle_timeout = srv_data.idle_timeout;
 
     // Check cache first
     if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers) {
@@ -150,6 +152,7 @@ pub async fn resolve_srv_inner(
                             mtls: mtls.clone(),
                             priority: 0,
                             connection_timeout,
+                            idle_timeout,
                         });
                         let priority = srv.priority;
 

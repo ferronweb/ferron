@@ -83,6 +83,10 @@ pub struct SendStreamPoll<S: SendableStreamPoll> {
     inner_fd: RawSocket,
     obtained_dropped: bool,
     marked_dropped: Arc<AtomicBool>,
+    /// Fast-path flag: when true, we know we're on the creation thread and
+    /// no drop guard has fired, so a single atomic load of `marked_dropped`
+    /// suffices to skip the full `std::thread::current().id()` call.
+    same_thread_cache: bool,
 }
 
 #[allow(private_bounds)]
@@ -103,6 +107,7 @@ impl<S: SendableStreamPoll> SendStreamPoll<S> {
             inner_fd,
             obtained_dropped: false,
             marked_dropped: Arc::new(AtomicBool::new(false)),
+            same_thread_cache: true,
         }
     }
 
@@ -135,11 +140,20 @@ impl<S: SendableStreamPoll> SendStreamPoll<S> {
 
     #[inline]
     fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
+        // Fast path: when same_thread_cache is true and we're not handling a
+        // drop guard firing, a single Relaxed atomic load suffices to confirm
+        // the connection is still valid on this thread — no syscall needed.
+        if !dropped && self.prev_inner.is_none() && self.same_thread_cache {
+            if self.marked_dropped.load(Ordering::Relaxed) {
+                // Drop guard fired on the same thread — invalidate cache,
+                // fall through to the slow path which will reconstruct.
+                self.same_thread_cache = false;
+            } else {
+                return; // Common case: same thread, no drop — skip entirely.
+            }
+        }
+
         let current_thread_id = std::thread::current().id();
-        // Avoid unconditional atomic swap on the hot path. First check whether the
-        // previous-inner state makes it worthwhile to probe the atomic flag, then
-        // only clear it if we observed it set. This reduces atomic writes when
-        // the flag is not set (common case).
         let marked_dropped = if !dropped && self.prev_inner.is_none() {
             if self.marked_dropped.load(Ordering::Relaxed) {
                 self.marked_dropped.swap(false, Ordering::Relaxed)
@@ -169,6 +183,7 @@ impl<S: SendableStreamPoll> SendStreamPoll<S> {
             self.prev_inner = self.inner.take().map(ManuallyDrop::new);
             self.inner = Some(send_stream_poll);
             self.thread_id = current_thread_id;
+            self.same_thread_cache = true;
         }
     }
 }
@@ -221,6 +236,13 @@ impl<S: SendableStreamPoll> AsyncWrite for SendStreamPoll<S> {
 
     #[inline]
     fn is_write_vectored(&self) -> bool {
+        if self.same_thread_cache && self.prev_inner.is_none() {
+            return self
+                .inner
+                .as_ref()
+                .expect("inner element not present")
+                .is_write_vectored();
+        }
         if std::thread::current().id() != self.thread_id {
             return self.is_write_vectored;
         }

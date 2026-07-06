@@ -614,6 +614,7 @@ pub fn spawn_health_check_task(
                                 mtls: None,
                                 priority: None,
                                 connection_timeout: None,
+                                idle_timeout: Duration::from_secs(60),
                             }),
                         )
                         .await;
@@ -657,6 +658,7 @@ pub fn spawn_health_check_task(
                             logical_dns: false,
                             dns_servers: dns_servers.clone(),
                             connection_timeout: None,
+                            idle_timeout: Duration::from_secs(60),
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),

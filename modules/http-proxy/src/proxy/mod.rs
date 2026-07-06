@@ -9,12 +9,13 @@ mod response;
 mod tls;
 
 use std::collections::HashMap;
-use std::time::Duration;
+use std::sync::Arc;
 
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::StatusCode;
 use parking_lot::RwLock;
+use rustc_hash::FxBuildHasher;
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
@@ -38,19 +39,11 @@ use self::tls::{cached_tls_config, io_error_status};
 
 const LOG_TARGET: &str = "ferron-http-proxy";
 
-#[inline]
-fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
-    config
-        .idle_timeout_map
-        .get(&upstream.proxy_to)
-        .copied()
-        .unwrap_or(Duration::from_secs(60))
-}
-
 /// Main proxy execution.
 ///
 /// Returns the HTTP response and collected metrics for post-request emission.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -63,11 +56,26 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
+    resolved_upstreams_cache: Option<
+        &dashmap::DashMap<Vec<usize>, Arc<Vec<Arc<UpstreamInner>>>, FxBuildHasher>,
+    >,
+    config_key: &[usize],
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();
 
-    // Resolve upstreams (SRV records are resolved here, static ones pass through)
-    let upstreams = resolve_upstreams(&config.upstreams, health_check_state.cloned()).await;
+    // Resolve upstreams, using cache for static upstreams when available
+    let upstreams = if let Some(cache) = resolved_upstreams_cache {
+        if let Some(cached) = cache.get(config_key) {
+            Arc::clone(&cached)
+        } else {
+            let resolved = resolve_upstreams(&config.upstreams, health_check_state.cloned()).await;
+            let resolved = Arc::new(resolved);
+            cache.insert(config_key.to_vec(), Arc::clone(&resolved));
+            resolved
+        }
+    } else {
+        Arc::new(resolve_upstreams(&config.upstreams, health_check_state.cloned()).await)
+    };
 
     if upstreams.is_empty() {
         ctx.events.emit(Event::Log(LogEvent {
@@ -139,7 +147,7 @@ pub async fn execute_proxy(
         let is_https = proxy_request_url.scheme_str() == Some("https");
         let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
         let local_limit = cm.get_local_limit(selected.upstream.clone());
-        let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
+        let idle_timeout = selected.upstream.idle_timeout;
 
         match pool::try_send_with_pool(
             ctx,

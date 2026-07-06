@@ -51,6 +51,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     let priority = cfg.priority;
     let dns_servers = cfg.dns_servers.clone();
     let connection_timeout = cfg.connection_timeout;
+    let idle_timeout = cfg.idle_timeout;
 
     // Parse hostname and port from the URL
     let (hostname, port) = match parse_host_port(&url) {
@@ -136,6 +137,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             mtls: mtls.clone(),
                             priority,
                             connection_timeout,
+                            idle_timeout,
                         }));
                     }
 

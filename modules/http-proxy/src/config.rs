@@ -1,6 +1,5 @@
 //! Configuration parsing for the reverse proxy module.
 
-use std::collections::HashMap;
 use std::error::Error;
 #[cfg(feature = "srv-lookup")]
 use std::net::IpAddr;
@@ -97,8 +96,6 @@ pub struct ProxyConfig {
     /// Headers to remove.
     pub headers_to_remove: Vec<HeaderName>,
     pub concurrent_conns: Option<usize>,
-    /// Pre-built map from upstream URL to idle timeout for O(1) lookup.
-    pub idle_timeout_map: HashMap<String, Duration>,
     /// Session affinity configuration.
     pub affinity: Option<AffinityConfig>,
     /// Whether to include the resolved IP address (`ferron.proxy.backend_resolved_ip`)
@@ -132,7 +129,6 @@ impl Default for ProxyConfig {
             headers_to_replace: Vec::new(),
             headers_to_remove: Vec::new(),
             concurrent_conns: None,
-            idle_timeout_map: HashMap::new(),
             affinity: None,
             metrics_resolved_ip: false,
         }
@@ -215,8 +211,8 @@ pub fn parse_proxy_config(
                 logical_dns: false,
                 dns_servers: Vec::new(),
                 connection_timeout: Some(Duration::from_millis(DEFAULT_CONNECTION_TIMEOUT_MS)),
+                idle_timeout: default_timeout,
             }));
-            cfg.idle_timeout_map.insert(url, default_timeout);
         }
     }
 
@@ -771,13 +767,9 @@ fn parse_upstream_entry(
         logical_dns,
         dns_servers,
         connection_timeout,
+        idle_timeout: idle_timeout
+            .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
     }));
-
-    // Populate the O(1) lookup map
-    cfg.idle_timeout_map.insert(
-        url.clone(),
-        idle_timeout.unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
-    );
 
     Ok(())
 }
@@ -958,13 +950,9 @@ fn parse_srv_entry(
         mtls,
         priority,
         connection_timeout,
+        idle_timeout: idle_timeout
+            .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
     }));
-
-    // Populate the O(1) lookup map
-    cfg.idle_timeout_map.insert(
-        srv_name.clone(),
-        idle_timeout.unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
-    );
 
     Ok(())
 }

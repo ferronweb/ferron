@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
+use std::thread::ThreadId;
 
 use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
@@ -40,6 +41,8 @@ struct ThreadLocalPools {
     unix_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     /// Last per-thread TCP capacity that was synced into this TLS pool.
     last_global_limit: usize,
+    /// Cached thread ID for this thread, computed once at pool initialization.
+    thread_id: ThreadId,
 }
 
 // Thread-local storage for connection pools.
@@ -51,6 +54,10 @@ thread_local! {
 static PENDING_PULLS: LazyLock<
     parking_lot::RwLock<FxHashMap<(Option<Arc<UpstreamInner>>, bool), SegQueue<CancellationToken>>>,
 > = LazyLock::new(|| parking_lot::RwLock::new(FxHashMap::default()));
+
+/// Fast-path flag for PENDING_PULLS: when zero, no thread is waiting for a
+/// connection and `return_connection_to_pool` can skip the read lock entirely.
+static PENDING_PULL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Global pool depth stats collector.
 ///
@@ -75,8 +82,8 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_pull(&self, upstream: &Arc<UpstreamInner>, had_idle: bool) {
-        let key = (std::thread::current().id(), upstream.clone());
+    pub fn record_pull(&self, thread_id: ThreadId, upstream: &Arc<UpstreamInner>, had_idle: bool) {
+        let key = (thread_id, upstream.clone());
         let entry = if let Some(entry) = self.inner.get(&key) {
             entry
         } else {
@@ -92,8 +99,8 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_return(&self, upstream: &Arc<UpstreamInner>, stored: bool) {
-        let key = (std::thread::current().id(), upstream.clone());
+    pub fn record_return(&self, thread_id: ThreadId, upstream: &Arc<UpstreamInner>, stored: bool) {
+        let key = (thread_id, upstream.clone());
         let entry = if let Some(entry) = self.inner.get(&key) {
             entry
         } else {
@@ -223,6 +230,7 @@ impl ConnectionManager {
             // Pool likely under capacity, wait for a connection to become available
             // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
             // because the lock was held across async boundary.
+            PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
             let cancel_token = {
                 let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
                 let pending_pulls_key = (None, upstream.proxy_unix.is_some());
@@ -290,6 +298,7 @@ impl ConnectionManager {
             // Pool likely under capacity, wait for a connection to become available
             // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
             // because the lock was held across async boundary.
+            PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
             let cancel_token = {
                 let mut pending_pulls_lock = PENDING_PULLS.upgradable_read();
                 let pending_pull_key = (
@@ -352,6 +361,7 @@ impl ConnectionManager {
                     #[cfg(unix)]
                     unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
                     last_global_limit: per_thread,
+                    thread_id: std::thread::current().id(),
                 });
             }
             let pools = opt.as_mut().unwrap();
@@ -368,7 +378,8 @@ impl ConnectionManager {
         });
 
         if let Some(result) = &result {
-            POOL_STATS.record_pull(&upstream_for_stats, result.inner().is_some());
+            let thread_id = get_tls_thread_id();
+            POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
         }
 
         result
@@ -412,6 +423,7 @@ impl ConnectionManager {
                     #[cfg(unix)]
                     unix_pool: Rc::new(SingleThreadPool::new_unbounded()),
                     last_global_limit: per_thread,
+                    thread_id: std::thread::current().id(),
                 });
             }
             let pools = opt.as_mut().unwrap();
@@ -428,7 +440,8 @@ impl ConnectionManager {
         });
 
         if let Some(result) = &result {
-            POOL_STATS.record_pull(&upstream_for_stats, result.inner().is_some());
+            let thread_id = get_tls_thread_id();
+            POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
         }
 
         result
@@ -473,28 +486,51 @@ pub fn return_connection_to_pool(
             )
         };
 
-        if let Some(pending_pull) = PENDING_PULLS
-            .read()
-            .get(&(local_limit_key.clone(), is_unix))
-            .and_then(|q| q.pop())
-        {
-            // Cancel any pending pull for this local limit key, if one exists.
-            pending_pull.cancel();
-        } else if local_limit_key.is_some() {
+        // Fast path: if no thread is waiting for a connection, skip the
+        // PENDING_PULLS lock entirely. This avoids RwLock contention on the
+        // hot path when the pool is not exhausted.
+        if PENDING_PULL_COUNT.load(Ordering::Relaxed) > 0 {
             if let Some(pending_pull) = PENDING_PULLS
                 .read()
-                .get(&(None, is_unix))
+                .get(&(local_limit_key.clone(), is_unix))
                 .and_then(|q| q.pop())
             {
-                // Cancel any pending pull for the global key, if one exists.
+                // Cancel any pending pull for this local limit key, if one exists.
+                PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
                 pending_pull.cancel();
+            } else if local_limit_key.is_some() {
+                if let Some(pending_pull) = PENDING_PULLS
+                    .read()
+                    .get(&(None, is_unix))
+                    .and_then(|q| q.pop())
+                {
+                    // Cancel any pending pull for the global key, if one exists.
+                    PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
+                    pending_pull.cancel();
+                }
             }
         }
 
         stored
     });
 
-    POOL_STATS.record_return(&key.0, stored);
+    let thread_id = get_tls_thread_id();
+    POOL_STATS.record_return(thread_id, &key.0, stored);
+}
+
+/// Get the cached thread ID from thread-local pool storage.
+///
+/// Returns the thread ID that was captured when the pool was first initialized,
+/// avoiding repeated `std::thread::current().id()` calls.
+#[inline]
+fn get_tls_thread_id() -> ThreadId {
+    TLS_POOLS.with(|c| {
+        let ptr = c.get();
+        let opt = unsafe { &*ptr };
+        opt.as_ref()
+            .map(|p| p.thread_id)
+            .unwrap_or_else(|| std::thread::current().id())
+    })
 }
 
 #[cfg(test)]
@@ -512,6 +548,7 @@ mod tests {
             mtls: None,
             priority: 0,
             connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
         });
 
         // Record some pulls and returns
@@ -519,11 +556,12 @@ mod tests {
         // - record_pull with had_idle = false: +1 outstanding, 0 idle
         // - record_return with stored = true: -1 outstanding, +1 idle
         // - record_return with stored = false: -1 outstanding, 0 idle
-        collector.record_pull(&upstream, false); // +1 outstanding, 0 idle
-        collector.record_return(&upstream, true); // -1 outstanding, +1 idle
-        collector.record_pull(&upstream, true); // +1 outstanding, -1 idle
-        collector.record_pull(&upstream, false); // +1 outstanding, 0 idle
-        collector.record_return(&upstream, false); // -1 outstanding, 0 idle
+        let thread_id = std::thread::current().id();
+        collector.record_pull(thread_id, &upstream, false); // +1 outstanding, 0 idle
+        collector.record_return(thread_id, &upstream, true); // -1 outstanding, +1 idle
+        collector.record_pull(thread_id, &upstream, true); // +1 outstanding, -1 idle
+        collector.record_pull(thread_id, &upstream, false); // +1 outstanding, 0 idle
+        collector.record_return(thread_id, &upstream, false); // -1 outstanding, 0 idle
 
         let snapshot = collector.snapshot();
         assert_eq!(snapshot.len(), 1);

@@ -135,6 +135,7 @@ mod tests {
             mtls: None,
             priority: 0,
             connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
         })
     }
 
@@ -147,6 +148,7 @@ mod tests {
             mtls: None,
             priority: 0,
             connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
         })
     }
 

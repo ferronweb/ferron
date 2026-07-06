@@ -34,6 +34,8 @@ pub struct UpstreamInner {
     pub priority: u16,
     /// Connection timeout for this upstream
     pub connection_timeout: Option<std::time::Duration>,
+    /// Idle timeout for keepalive connections to this upstream.
+    pub idle_timeout: std::time::Duration,
 }
 
 impl std::hash::Hash for UpstreamInner {
@@ -86,6 +88,8 @@ pub struct UpstreamConfig {
     pub dns_servers: Vec<std::net::IpAddr>,
     /// Optional connection timeout
     pub connection_timeout: Option<std::time::Duration>,
+    /// Idle timeout for keepalive connections to this upstream.
+    pub idle_timeout: std::time::Duration,
 }
 
 /// Data for an SRV-based upstream.
@@ -113,6 +117,8 @@ pub struct SrvUpstreamData {
     pub priority: Option<u16>,
     /// Optional connection timeout
     pub connection_timeout: Option<std::time::Duration>,
+    /// Idle timeout for keepalive connections to this upstream.
+    pub idle_timeout: std::time::Duration,
 }
 
 /// An upstream backend — either a static URL or an SRV record.
@@ -158,6 +164,7 @@ impl Upstream {
                             mtls: cfg.mtls.clone(),
                             priority: cfg.priority,
                             connection_timeout: cfg.connection_timeout,
+                            idle_timeout: cfg.idle_timeout,
                         })]
                     }
                 } else {
@@ -169,6 +176,7 @@ impl Upstream {
                         mtls: cfg.mtls.clone(),
                         priority: cfg.priority,
                         connection_timeout: cfg.connection_timeout,
+                        idle_timeout: cfg.idle_timeout,
                     })]
                 }
             }
