@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
 use ferron_observability::{TraceAttributeValue, TraceEvent};
-use opentelemetry::trace::{Link, Span, SpanBuilder, SpanContext, SpanKind, TraceFlags, Tracer, TracerProvider};
-use opentelemetry::{SpanId, TraceId, KeyValue};
+use opentelemetry::trace::{
+    Link, Span, SpanBuilder, SpanContext, SpanKind, TraceFlags, Tracer, TracerProvider,
+};
+use opentelemetry::{KeyValue, SpanId, TraceId};
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
 use super::context::{build_parent_context, CorrelationContext};
@@ -46,7 +48,10 @@ pub(crate) fn emit_trace(
                 .chain(effective_metadata.iter().flat_map(|metadata| {
                     metadata.iter().map(|(key, value)| {
                         let attr_key = format!("ferron.control_plane.{}", key);
-                        trace_kv(Cow::Owned(attr_key), &TraceAttributeValue::String(value.clone()))
+                        trace_kv(
+                            Cow::Owned(attr_key),
+                            &TraceAttributeValue::String(value.clone()),
+                        )
                     })
                 }))
                 .collect();
@@ -71,7 +76,8 @@ pub(crate) fn emit_trace(
                                 }
                             })
                             .unwrap_or_default();
-                        let cx = SpanContext::new(trace_id, span_id, flags, true, Default::default());
+                        let cx =
+                            SpanContext::new(trace_id, span_id, flags, true, Default::default());
                         let attrs: Vec<KeyValue> = link
                             .attributes
                             .iter()

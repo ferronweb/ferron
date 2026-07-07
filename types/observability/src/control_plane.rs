@@ -48,9 +48,7 @@ impl ControlPlaneConfig {
     /// collects all `key "value"` pairs inside it. Also extracts any `span_links`
     /// sub-blocks. Returns `None` when neither the `control_plane` block nor
     /// `metadata` is present.
-    pub fn from_block(
-        block: &ferron_core::config::ServerConfigurationBlock,
-    ) -> Option<Self> {
+    pub fn from_block(block: &ferron_core::config::ServerConfigurationBlock) -> Option<Self> {
         let cp_entry = block.directives.get("control_plane")?.first()?;
         let cp_children = cp_entry.children.as_ref()?;
         Some(Self::extract(cp_children))
@@ -68,12 +66,13 @@ impl ControlPlaneConfig {
     }
 
     /// Extract both metadata and span links from a `control_plane` block's children.
-    fn extract(
-        cp_children: &ferron_core::config::ServerConfigurationBlock,
-    ) -> Self {
+    fn extract(cp_children: &ferron_core::config::ServerConfigurationBlock) -> Self {
         let metadata = Self::extract_metadata(cp_children).unwrap_or_default();
         let span_links = Self::extract_span_links(cp_children);
-        Self { metadata, span_links }
+        Self {
+            metadata,
+            span_links,
+        }
     }
 
     /// Extract metadata key-value pairs from a `control_plane` block's children.
@@ -203,7 +202,9 @@ mod tests {
         }
     }
 
-    fn make_block(directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>) -> ServerConfigurationBlock {
+    fn make_block(
+        directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    ) -> ServerConfigurationBlock {
         ServerConfigurationBlock {
             directives: Arc::new(directives),
             matchers: HashMap::new(),
@@ -312,7 +313,9 @@ mod tests {
         link_directives.insert(
             "sampled".to_string(),
             vec![ServerConfigurationDirectiveEntry {
-                args: vec![ferron_core::config::ServerConfigurationValue::Boolean(true, None)],
+                args: vec![ferron_core::config::ServerConfigurationValue::Boolean(
+                    true, None,
+                )],
                 children: None,
                 span: None,
             }],
@@ -423,17 +426,24 @@ mod tests {
         let config = ControlPlaneConfig::from_block(&block).unwrap();
         assert!(config.has_span_links());
         assert_eq!(config.span_links.len(), 2);
-        assert_eq!(config.span_links[0].trace_id, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        assert_eq!(
+            config.span_links[0].trace_id,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
         assert_eq!(config.span_links[0].span_id, "bbbbbbbbbbbbbbbb");
-        assert_eq!(config.span_links[1].trace_id, "cccccccccccccccccccccccccccccccc");
+        assert_eq!(
+            config.span_links[1].trace_id,
+            "cccccccccccccccccccccccccccccccc"
+        );
         assert_eq!(config.span_links[1].span_id, "dddddddddddddddd");
     }
 
     #[test]
     fn from_block_span_links_defaults() {
-        let block = build_cp_block_with_span_links(&[
-            ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb"),
-        ]);
+        let block = build_cp_block_with_span_links(&[(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbb",
+        )]);
         let config = ControlPlaneConfig::from_block(&block).unwrap();
         assert!(!config.span_links[0].sampled);
         assert!(config.span_links[0].attributes.is_empty());

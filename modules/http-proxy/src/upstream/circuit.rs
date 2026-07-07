@@ -280,16 +280,16 @@ fn emit_circuit_metric(
             ));
         }
     }
-            event_sink.emit(Event::Metric(MetricEvent {
-                name,
-                attributes,
-                ty: metric_type,
-                value,
-                unit: Some("{circuit}"),
-                description: Some("Circuit breaker state and transitions for upstream backends."),
-                trace_context,
-                control_plane_metadata: None,
-            }));
+    event_sink.emit(Event::Metric(MetricEvent {
+        name,
+        attributes,
+        ty: metric_type,
+        value,
+        unit: Some("{circuit}"),
+        description: Some("Circuit breaker state and transitions for upstream backends."),
+        trace_context,
+        control_plane_metadata: None,
+    }));
 }
 
 fn record_circuit_breaker_failure(

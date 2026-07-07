@@ -151,7 +151,10 @@ fn validate_control_plane_directives(
                     // Validate sampled is a boolean if present
                     if let Some(sampled_entries) = link_children.directives.get("sampled") {
                         if let Some(sampled_entry) = sampled_entries.first() {
-                            if !matches!(sampled_entry.args.first(), Some(ServerConfigurationValue::Boolean(_, _))) {
+                            if !matches!(
+                                sampled_entry.args.first(),
+                                Some(ServerConfigurationValue::Boolean(_, _))
+                            ) {
                                 ctx.diagnostics.push(ctx.create_diagnostic(
                                     crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                                     "`sampled` in `control_plane.span_links` must be a boolean".to_string(),

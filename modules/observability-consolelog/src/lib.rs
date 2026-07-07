@@ -140,24 +140,25 @@ impl Module for ConsoleObservabilityModule {
                         match &*msg.event {
                             ferron_observability::Event::Access(ae) => {
                                 // Prefer event-level metadata over provider-level metadata
-                                let event_metadata = ae.control_plane_metadata()
+                                let event_metadata = ae
+                                    .control_plane_metadata()
                                     .map(|m| std::sync::Arc::new(m.clone()));
-                                let effective_metadata = event_metadata.as_ref()
+                                let effective_metadata = event_metadata
+                                    .as_ref()
                                     .or(msg.control_plane_metadata.as_ref());
-                                let cp_prefix =
-                                    format_metadata_prefix(effective_metadata);
-                                let message =
-                                    format_access_event(ae, &msg.log_config, &registry);
+                                let cp_prefix = format_metadata_prefix(effective_metadata);
+                                let message = format_access_event(ae, &msg.log_config, &registry);
                                 if let Some(message) = message {
                                     log_info!("{}{}", cp_prefix, message);
                                 }
                             }
                             ferron_observability::Event::Log(le) => {
                                 // Prefer event-level metadata over provider-level metadata
-                                let effective_metadata = le.control_plane_metadata.as_ref()
+                                let effective_metadata = le
+                                    .control_plane_metadata
+                                    .as_ref()
                                     .or(msg.control_plane_metadata.as_ref());
-                                let cp_prefix =
-                                    format_metadata_prefix(effective_metadata);
+                                let cp_prefix = format_metadata_prefix(effective_metadata);
                                 let trace_id_part = le
                                     .trace_context
                                     .as_ref()
@@ -201,10 +202,7 @@ impl Drop for ConsoleObservabilityModule {
 fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
     match metadata {
         Some(meta) if !meta.is_empty() => {
-            let parts: Vec<String> = meta
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect();
+            let parts: Vec<String> = meta.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
             format!("[{}] ", parts.join(" "))
         }
         _ => String::new(),

@@ -501,7 +501,7 @@ impl AbuseRecorder for AbuseRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-use std::net::IpAddr;
+    use std::net::IpAddr;
     use std::sync::Arc;
     use std::thread;
 

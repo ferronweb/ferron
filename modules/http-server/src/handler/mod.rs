@@ -187,7 +187,9 @@ pub async fn request_handler(
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
     tls_params: Option<ferron_tls::TlsConnectionParams>,
     host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
-    host_control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
+    host_control_plane_span_links: Option<
+        Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>,
+    >,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
@@ -386,26 +388,31 @@ pub async fn request_handler(
         Vec::new()
     };
 
-    let (mut response_result, auth_user, final_remote_address, custom_fields, resolved_control_plane_metadata) =
-        request_handler_inner(
-            request,
-            pipeline,
-            file_pipeline,
-            error_pipeline,
-            config_resolver,
-            local_address,
-            remote_address,
-            hostname.clone(),
-            encrypted,
-            https_port,
-            request_trace_context.clone(),
-            request_span_key.clone(),
-            events.clone(),
-            timeout_duration,
-            peer_identity,
-            host_control_plane_metadata.clone(),
-        )
-        .await;
+    let (
+        mut response_result,
+        auth_user,
+        final_remote_address,
+        custom_fields,
+        resolved_control_plane_metadata,
+    ) = request_handler_inner(
+        request,
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        local_address,
+        remote_address,
+        hostname.clone(),
+        encrypted,
+        https_port,
+        request_trace_context.clone(),
+        request_span_key.clone(),
+        events.clone(),
+        timeout_duration,
+        peer_identity,
+        host_control_plane_metadata.clone(),
+    )
+    .await;
 
     if let Some(metric_attrs) = metric_attrs {
         // Compute duration and extract response info only when some sink may consume them.
@@ -744,20 +751,20 @@ async fn request_handler_inner(
             {
                 return (Ok(response), None, None, None, None);
             }
-        return (
-            Ok(builtin_error_response(
-                400,
+            return (
+                Ok(builtin_error_response(
+                    400,
+                    None,
+                    config_resolver.global().and_then(|g| {
+                        g.get_value("admin_email")
+                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    }),
+                )),
                 None,
-                config_resolver.global().and_then(|g| {
-                    g.get_value("admin_email")
-                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                }),
-            )),
-            None,
-            None,
-            None,
-            None,
-        );
+                None,
+                None,
+                None,
+            );
         }
 
         // Canonicalize + "sanitize" request URL
@@ -857,22 +864,21 @@ async fn request_handler_inner(
                 {
                     return (Ok(response), None, None, None, None);
                 }
-        return (
-            Ok(builtin_error_response(
-                400,
-                None,
-                config_resolver.global().and_then(|g| {
-                    g.get_value("admin_email")
-                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                }),
-            )),
-            None,
-            None,
-            None,
-            None,
-        );
-    }
-
+                return (
+                    Ok(builtin_error_response(
+                        400,
+                        None,
+                        config_resolver.global().and_then(|g| {
+                            g.get_value("admin_email")
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        }),
+                    )),
+                    None,
+                    None,
+                    None,
+                    None,
+                );
+            }
         }
     };
 
@@ -951,8 +957,9 @@ async fn request_handler_inner(
         .then_some(resolution.location_path.hostname_segments.join("."));
 
     // Extract resolved control plane metadata for post-resolution events
-    let resolved_control_plane_metadata = ferron_observability::ControlPlaneConfig::from_layered(&ctx.configuration)
-        .map(|cp| cp.metadata);
+    let resolved_control_plane_metadata =
+        ferron_observability::ControlPlaneConfig::from_layered(&ctx.configuration)
+            .map(|cp| cp.metadata);
 
     // Handle OPTIONS * requests (RFC 2616 Section 9.2)
     // Early response before pipeline execution

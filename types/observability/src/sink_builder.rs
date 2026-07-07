@@ -30,8 +30,7 @@ pub fn build_composite_sink(
 ) -> Result<Arc<CompositeEventSink>, Box<dyn std::error::Error>> {
     let mut sinks = Vec::new();
 
-    let control_plane_metadata = ControlPlaneConfig::from_block(global_config)
-        .map(|c| c.metadata);
+    let control_plane_metadata = ControlPlaneConfig::from_block(global_config).map(|c| c.metadata);
 
     if let Some(observability_registry) = registry.get_provider_registry::<ObservabilityContext>() {
         // Extract observability blocks from the global config

@@ -415,9 +415,16 @@ impl BasicHttpModule {
                                         ferron_observability::ControlPlaneConfig::from_block(
                                             &global_config,
                                         );
-                                    let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
-                                    let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
-                                    (provider, observability_block_arc, cp_metadata, cp_span_links)
+                                    let cp_metadata =
+                                        cp_config.as_ref().map(|c| c.metadata.clone());
+                                    let cp_span_links =
+                                        cp_config.as_ref().map(|c| c.span_links.clone());
+                                    (
+                                        provider,
+                                        observability_block_arc,
+                                        cp_metadata,
+                                        cp_span_links,
+                                    )
                                 })
                         })
                 })
@@ -522,8 +529,12 @@ impl BasicHttpModule {
                     let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
 
                     // Insert provider + config tuple into the resolver (sink initialization deferred)
-                    let entry: ObservabilityProviderEntry =
-                        (observability_provider, observability_block_arc, cp_metadata, cp_span_links);
+                    let entry: ObservabilityProviderEntry = (
+                        observability_provider,
+                        observability_block_arc,
+                        cp_metadata,
+                        cp_span_links,
+                    );
                     match (&host_config.0.host, host_config.0.ip) {
                         (Some(host), Some(ip)) => {
                             observability_resolver.insert_ip_and_hostname(ip, host, vec![entry]);

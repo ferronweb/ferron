@@ -242,9 +242,13 @@ impl Module for PrometheusObservabilityModule {
                 };
 
                 let cache_key = config_cache_key(&config);
-                let entry = providers
-                    .entry(cache_key)
-                    .or_insert_with(|| init_provider(&config, cancel_token.clone(), msg.control_plane_metadata.clone()));
+                let entry = providers.entry(cache_key).or_insert_with(|| {
+                    init_provider(
+                        &config,
+                        cancel_token.clone(),
+                        msg.control_plane_metadata.clone(),
+                    )
+                });
 
                 if let Some(Event::Metric(metric_event)) = msg.event.as_deref() {
                     emit_metric(

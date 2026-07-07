@@ -102,12 +102,8 @@ pub(crate) fn emit_access_log(
 
     // Inject control plane metadata as access log attributes
     // Prefer event-level metadata over provider-level metadata
-    let event_metadata = event
-        .control_plane_metadata()
-        .map(|m| Arc::new(m.clone()));
-    let effective_metadata = event_metadata
-        .as_ref()
-        .or(control_plane_metadata.as_ref());
+    let event_metadata = event.control_plane_metadata().map(|m| Arc::new(m.clone()));
+    let effective_metadata = event_metadata.as_ref().or(control_plane_metadata.as_ref());
     if let Some(metadata) = effective_metadata {
         for (key, value) in metadata.iter() {
             let attr_key = format!("ferron.control_plane.{}", key);

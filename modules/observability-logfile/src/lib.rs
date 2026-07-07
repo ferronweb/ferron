@@ -370,10 +370,7 @@ impl Drop for LogFileObservabilityModule {
 fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
     match metadata {
         Some(meta) if !meta.is_empty() => {
-            let parts: Vec<String> = meta
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect();
+            let parts: Vec<String> = meta.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
             format!("[{}] ", parts.join(" "))
         }
         _ => String::new(),

@@ -58,7 +58,8 @@ pub struct RequestHandlerState {
     /// Host-level control plane metadata (used as fallback for pre-resolution events).
     pub host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
     /// Host-level control plane span links (used for pre-resolution events).
-    pub host_control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
+    pub host_control_plane_span_links:
+        Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 }
 
 // Type alias for the config ArcSwap
@@ -154,14 +155,18 @@ fn initialize_sinks_from_providers(
 fn extract_host_control_plane_metadata(
     entries: &[ObservabilityProviderEntry],
 ) -> Option<Arc<std::collections::BTreeMap<String, String>>> {
-    entries.first().and_then(|(_, _, metadata, _)| metadata.clone())
+    entries
+        .first()
+        .and_then(|(_, _, metadata, _)| metadata.clone())
 }
 
 /// Extract host-level control plane span links from provider entries (first entry = most specific).
 fn extract_host_control_plane_span_links(
     entries: &[ObservabilityProviderEntry],
 ) -> Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>> {
-    entries.first().and_then(|(_, _, _, span_links)| span_links.clone())
+    entries
+        .first()
+        .and_then(|(_, _, _, span_links)| span_links.clone())
 }
 
 /// Helper to resolve root-level observability sinks (for pre-connection errors).
@@ -185,10 +190,8 @@ pub fn resolve_host_control_plane_metadata(
     hostname: Option<&str>,
 ) -> Option<Arc<std::collections::BTreeMap<String, String>>> {
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
-    let entries = observability_resolver.lookup_ip_and_hostname(
-        ip?,
-        normalized_hostname.as_deref().unwrap_or(""),
-    )?;
+    let entries = observability_resolver
+        .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
     extract_host_control_plane_metadata(&entries)
 }
 
@@ -200,10 +203,8 @@ pub fn resolve_host_control_plane_span_links(
     hostname: Option<&str>,
 ) -> Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>> {
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
-    let entries = observability_resolver.lookup_ip_and_hostname(
-        ip?,
-        normalized_hostname.as_deref().unwrap_or(""),
-    )?;
+    let entries = observability_resolver
+        .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
     extract_host_control_plane_span_links(&entries)
 }
 
