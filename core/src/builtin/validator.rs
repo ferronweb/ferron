@@ -44,8 +44,126 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
 
         validate_observability_directives(config, ctx)?;
 
+        validate_control_plane_directives(config, ctx);
+
         Ok(())
     }
+}
+
+/// Validate the `control_plane` directive, which carries control plane metadata
+/// (e.g. Kubernetes resource version, cluster name) and static OpenTelemetry
+/// span links for cross-plane traceability.
+fn validate_control_plane_directives(
+    config: &crate::config::ServerConfigurationBlock,
+    ctx: &mut crate::config::validator::ConfigurationValidatorContext,
+) {
+    use crate::config::ServerConfigurationValue;
+
+    validate_directive!(config, ctx.used_directives, control_plane, optional, {
+        let control_plane = match control_plane {
+            Some(cp) => cp,
+            None => return,
+        };
+        let mut sub = std::collections::HashSet::new();
+        validate_nested!(control_plane, used(sub), metadata, optional);
+        validate_nested!(control_plane, used(sub), span_links, optional);
+        crate::check_unused_subdirectives!(
+            control_plane,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
+        // The `metadata` block holds arbitrary `key "value"` directives defined
+        // by the control plane. Each directive is accepted as-is; we do not
+        // constrain the key names or require them to be pre-registered.
+        if let Some(metadata_entries) = control_plane.directives.get("metadata") {
+            if let Some(metadata_entry) = metadata_entries.first() {
+                if let Some(metadata_children) = metadata_entry.children.as_ref() {
+                    for (key, entries) in metadata_children.directives.iter() {
+                        if let Some(entry) = entries.first() {
+                            if !matches!(
+                                entry.args.first(),
+                                Some(ServerConfigurationValue::String(_, _))
+                                    | Some(ServerConfigurationValue::InterpolatedString(_, _))
+                            ) {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
+                                    crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                    format!("`{key}` in `control_plane.metadata` must have a single string value"),
+                                    entry_span(entry),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Validate `span_links` sub-blocks
+        if let Some(span_links_entries) = control_plane.directives.get("span_links") {
+            for link_entry in span_links_entries {
+                if let Some(link_children) = link_entry.children.as_ref() {
+                    let mut link_sub = std::collections::HashSet::new();
+                    validate_nested!(link_children, used(link_sub), trace_id, optional);
+                    validate_nested!(link_children, used(link_sub), span_id, optional);
+                    validate_nested!(link_children, used(link_sub), sampled, optional);
+                    validate_nested!(link_children, used(link_sub), attributes, optional);
+                    crate::check_unused_subdirectives!(
+                        link_children,
+                        link_sub,
+                        &mut ctx.diagnostics,
+                        ctx.scope.clone()
+                    );
+                    // Validate trace_id format (32 hex chars)
+                    if let Some(tid_val) = link_children.get_value("trace_id") {
+                        if let Some(tid) = tid_val.as_str() {
+                            if tid.len() != 32 || !tid.chars().all(|c| c.is_ascii_hexdigit()) {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
+                                    crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                    format!("`trace_id` in `control_plane.span_links` must be exactly 32 hex characters, got `{tid}`"),
+                                    link_children.span.clone(),
+                                ));
+                            }
+                        } else {
+                            ctx.diagnostics.push(ctx.create_diagnostic(
+                                crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                "`trace_id` in `control_plane.span_links` must be a string".to_string(),
+                                link_children.span.clone(),
+                            ));
+                        }
+                    }
+                    // Validate span_id format (16 hex chars)
+                    if let Some(sid_val) = link_children.get_value("span_id") {
+                        if let Some(sid) = sid_val.as_str() {
+                            if sid.len() != 16 || !sid.chars().all(|c| c.is_ascii_hexdigit()) {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
+                                    crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                    format!("`span_id` in `control_plane.span_links` must be exactly 16 hex characters, got `{sid}`"),
+                                    link_children.span.clone(),
+                                ));
+                            }
+                        } else {
+                            ctx.diagnostics.push(ctx.create_diagnostic(
+                                crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                "`span_id` in `control_plane.span_links` must be a string".to_string(),
+                                link_children.span.clone(),
+                            ));
+                        }
+                    }
+                    // Validate sampled is a boolean if present
+                    if let Some(sampled_entries) = link_children.directives.get("sampled") {
+                        if let Some(sampled_entry) = sampled_entries.first() {
+                            if !matches!(sampled_entry.args.first(), Some(ServerConfigurationValue::Boolean(_, _))) {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
+                                    crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                    "`sampled` in `control_plane.span_links` must be a boolean".to_string(),
+                                    entry_span(sampled_entry),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 pub fn validate_observability_directives(

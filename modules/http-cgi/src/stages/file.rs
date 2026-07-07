@@ -282,6 +282,7 @@ impl Stage<HttpFileContext> for CgiStage {
                     trace_context: ferron_http::trace_context::current_event_trace_context(
                         &ctx.http,
                     ),
+                    control_plane_metadata: None,
                 }));
                 if let Some(mut stderr) = stderr {
                     let mut stderr_string = String::new();
@@ -303,6 +304,7 @@ impl Stage<HttpFileContext> for CgiStage {
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 &ctx.http,
                             ),
+                            control_plane_metadata: None,
                         }));
                         ctx.http.events.emit(Event::Metric(MetricEvent {
                             name: "ferron.cgi.stderr_errors",
@@ -316,6 +318,7 @@ impl Stage<HttpFileContext> for CgiStage {
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 &ctx.http,
                             ),
+                            control_plane_metadata: None,
                         }));
                     }
                     let script_path = ctx.file_path.to_string_lossy().to_string();
@@ -368,6 +371,7 @@ impl Stage<HttpFileContext> for CgiStage {
                             LogAttributeValue::String(stderr_string_trimmed.to_string()),
                         )],
                         trace_context: None,
+                        control_plane_metadata: None,
                     }));
                     events.emit(Event::Metric(MetricEvent {
                         name: "ferron.cgi.stderr_errors",
@@ -379,6 +383,7 @@ impl Stage<HttpFileContext> for CgiStage {
                             "Number of CGI requests that produced non-empty stderr output.",
                         ),
                         trace_context: None,
+                        control_plane_metadata: None,
                     }));
                 }
             }
@@ -396,6 +401,7 @@ impl Stage<HttpFileContext> for CgiStage {
             unit: Some("s"),
             description: Some("Duration of CGI process execution."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+            control_plane_metadata: None,
         }));
         ctx.http.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cgi.requests",
@@ -405,6 +411,7 @@ impl Stage<HttpFileContext> for CgiStage {
             unit: Some("{request}"),
             description: Some("Number of CGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+            control_plane_metadata: None,
         }));
 
         let script_path = ctx.file_path.to_string_lossy().to_string();

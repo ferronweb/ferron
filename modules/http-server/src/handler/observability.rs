@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use ferron_core::pipeline::{PipelineError, Stage, StageHooks};
 use ferron_http::access_log::CustomAccessLogField;
@@ -31,6 +32,7 @@ pub(super) struct PerStageSpanHooks<'a> {
     parent_span_key: &'a str,
     stage_group: &'a str,
     keys: FxHashSet<(String, String)>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 }
 
 impl<'a> PerStageSpanHooks<'a> {
@@ -40,6 +42,7 @@ impl<'a> PerStageSpanHooks<'a> {
         has_traces: bool,
         parent_span_key: &'a str,
         stage_group: &'a str,
+        control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
     ) -> Self {
         Self {
             events,
@@ -47,6 +50,7 @@ impl<'a> PerStageSpanHooks<'a> {
             parent_span_key,
             stage_group,
             keys: FxHashSet::default(),
+            control_plane_metadata,
         }
     }
 
@@ -70,6 +74,7 @@ impl<'a> PerStageSpanHooks<'a> {
                 name: Cow::Owned(event_name),
                 error: Some("Pipeline couldn't complete (timeout or error)".to_string()),
                 attributes: vec![],
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }));
         }
     }
@@ -107,6 +112,8 @@ where
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
             )],
+            links: vec![],
+            control_plane_metadata: self.control_plane_metadata.clone(),
         }));
     }
 
@@ -130,6 +137,7 @@ where
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: ctx.remove_span_attributes(),
+            control_plane_metadata: self.control_plane_metadata.clone(),
         }));
     }
 
@@ -153,6 +161,8 @@ where
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
             )],
+            links: vec![],
+            control_plane_metadata: self.control_plane_metadata.clone(),
         }));
     }
 
@@ -176,6 +186,7 @@ where
             name: Cow::Owned(stage_name_otel),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: ctx.remove_span_attributes(),
+            control_plane_metadata: self.control_plane_metadata.clone(),
         }));
     }
 }
@@ -201,6 +212,7 @@ pub(super) struct HttpAccessLog {
     pub timestamp: chrono::DateTime<chrono::Local>,
     pub trace_context: Option<EventTraceContext>,
     pub custom_fields: Option<FxHashMap<String, CustomAccessLogField>>,
+    pub control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 }
 
 impl AccessEvent for HttpAccessLog {
@@ -217,6 +229,11 @@ impl AccessEvent for HttpAccessLog {
     #[inline]
     fn event_time(&self) -> Option<std::time::SystemTime> {
         Some(self.timestamp.into())
+    }
+
+    #[inline]
+    fn control_plane_metadata(&self) -> Option<&std::collections::BTreeMap<String, String>> {
+        self.control_plane_metadata.as_deref()
     }
 
     #[inline]

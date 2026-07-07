@@ -103,6 +103,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                         "Number of CORS preflight requests handled before the rest of the HTTP pipeline.",
                     ),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 return Ok(false);
             }

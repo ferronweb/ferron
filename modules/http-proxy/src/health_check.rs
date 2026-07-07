@@ -352,6 +352,7 @@ fn process_probe_result(
         unit: Some("s"),
         description: Some("Duration of active health check probe."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     if probe_success {
@@ -363,6 +364,7 @@ fn process_probe_result(
             unit: Some("{probe}"),
             description: Some("Successful active health check probes."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
     } else {
         event_sink.emit(Event::Metric(MetricEvent {
@@ -373,6 +375,7 @@ fn process_probe_result(
             unit: Some("{probe}"),
             description: Some("Failed active health check probes."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
     }
 
@@ -404,6 +407,7 @@ fn process_probe_result(
                             ),
                         )],
                         trace_context: None,
+                        control_plane_metadata: None,
                     },
                 ));
             }
@@ -445,6 +449,7 @@ fn process_probe_result(
                         ferron_observability::LogAttributeValue::String(upstream_url.to_string()),
                     )],
                     trace_context: None,
+                    control_plane_metadata: None,
                 },
             ));
             if let Some(callback) = on_unhealthy {
@@ -584,6 +589,7 @@ pub fn spawn_health_check_task(
                         ),
                     ],
                     trace_context: None,
+                    control_plane_metadata: None,
                 },
             ));
         }
@@ -635,6 +641,7 @@ pub fn spawn_health_check_task(
                                         ),
                                     )],
                                     trace_context: None,
+                                    control_plane_metadata: None,
                                 },
                             ));
                         }
@@ -682,6 +689,7 @@ pub fn spawn_health_check_task(
                                         ),
                                     )],
                                     trace_context: None,
+                                    control_plane_metadata: None,
                                 },
                             ));
                         }

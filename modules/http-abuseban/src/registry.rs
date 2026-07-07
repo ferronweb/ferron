@@ -464,6 +464,7 @@ impl AbuseRecorder for AbuseRegistry {
                         ),
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 },
             ));
 
@@ -480,6 +481,7 @@ impl AbuseRecorder for AbuseRegistry {
                     unit: Some("{request}"),
                     description: Some("Requests that triggered an IP ban."),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 },
             ));
         }
@@ -499,7 +501,7 @@ impl AbuseRecorder for AbuseRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::IpAddr;
+use std::net::IpAddr;
     use std::sync::Arc;
     use std::thread;
 

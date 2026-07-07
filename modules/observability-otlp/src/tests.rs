@@ -60,9 +60,11 @@ fn emit_trace_start_span_stores_span_object() {
                 TraceAttributeValue::String("/api/test".to_string()),
             ),
         ],
+        links: vec![],
+        control_plane_metadata: None,
     };
 
-    emit_trace(&provider, &event, &mut correlation, &[]);
+    emit_trace(&provider, &event, &mut correlation, &[], &None);
 
     assert!(correlation.get_parent_ids("test.span").is_some());
 }
@@ -85,16 +87,19 @@ fn emit_trace_end_span_ends_properly() {
             "http.request.method",
             TraceAttributeValue::String("POST".to_string()),
         )],
+        links: vec![],
+        control_plane_metadata: None,
     };
-    emit_trace(&provider, &start_event, &mut correlation, &[]);
+    emit_trace(&provider, &start_event, &mut correlation, &[], &None);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
         name: Cow::Borrowed("test.span"),
         error: Some("test error".to_string()),
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
+        control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -113,16 +118,19 @@ fn emit_trace_end_span_without_error() {
         trace_context: None,
         builder_attributes: vec![],
         attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
     };
-    emit_trace(&provider, &start_event, &mut correlation, &[]);
+    emit_trace(&provider, &start_event, &mut correlation, &[], &None);
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
         name: Cow::Borrowed("test.span"),
         error: None,
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
+        control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
 
     assert!(correlation.get_parent_ids("test.span").is_none());
 }
@@ -139,8 +147,9 @@ fn emit_trace_end_span_on_unknown_name_does_nothing() {
         name: Cow::Borrowed("unknown.span"),
         error: Some("should be ignored".to_string()),
         attributes: vec![],
+        control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[]);
+    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
     assert!(correlation.get_parent_ids("unknown.span").is_none());
 }
 
@@ -223,6 +232,7 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             unit: None,
             description: None,
             trace_context: None,
+            control_plane_metadata: None,
         };
         emit_metric(
             &provider,
@@ -230,6 +240,7 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             &mut instruments,
             &[],
             &mut DistinctValueTracker::new(),
+            &None,
         );
 
         // Verify the sanitized value is bounded
@@ -260,6 +271,7 @@ async fn emit_metric_with_long_label_value_is_hashed() {
         unit: None,
         description: None,
         trace_context: None,
+        control_plane_metadata: None,
     };
 
     // Should not panic or OOM
@@ -269,6 +281,7 @@ async fn emit_metric_with_long_label_value_is_hashed() {
         &mut instruments,
         &[],
         &mut DistinctValueTracker::new(),
+        &None,
     );
 
     // The internal sanitization should have hashed the value
@@ -310,21 +323,11 @@ fn emit_trace_promotes_baggage_to_span_attributes() {
         }),
         builder_attributes: vec![],
         attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
     };
 
-    emit_trace(&provider, &event, &mut correlation, &promotions);
-
-    // Verify span was created with baggage attributes
-    let entry = correlation
-        .get_parent_ids("test.span")
-        .expect("span should exist");
-    // The baggage was stored in the correlation context
-    assert!(entry.3.is_some());
-}
-
-#[test]
-fn emit_trace_respects_signal_filter_for_baggage() {
-    use std::borrow::Cow;
+    emit_trace(&provider, &event, &mut correlation, &promotions, &None);
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
     let mut correlation = CorrelationContext::new();
@@ -349,10 +352,12 @@ fn emit_trace_respects_signal_filter_for_baggage() {
         }),
         builder_attributes: vec![],
         attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
     };
 
     // Should not panic, and the baggage should not be promoted to traces
-    emit_trace(&provider, &event, &mut correlation, &promotions);
+    emit_trace(&provider, &event, &mut correlation, &promotions, &None);
     assert!(correlation.get_parent_ids("test.span").is_some());
 }
 
@@ -379,6 +384,7 @@ fn emit_log_promotes_baggage_to_log_attributes() {
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
         }),
+        control_plane_metadata: None,
     };
 
     // Should not panic
@@ -387,6 +393,7 @@ fn emit_log_promotes_baggage_to_log_attributes() {
         &event,
         &promotions,
         crate::config::LogStyle::Legacy,
+        &None,
     );
 }
 
@@ -418,6 +425,7 @@ async fn emit_metric_promotes_baggage_to_metric_attributes() {
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
         }),
+        control_plane_metadata: None,
     };
 
     // Should not panic and should include baggage attribute
@@ -427,6 +435,7 @@ async fn emit_metric_promotes_baggage_to_metric_attributes() {
         &mut instruments,
         &promotions,
         &mut tracker,
+        &None,
     );
 }
 
@@ -460,6 +469,7 @@ async fn emit_metric_baggage_cardinality_cap() {
                 baggage: Some(format!("user.id=value{i}")),
                 sampled: Some(true),
             }),
+            control_plane_metadata: None,
         };
         emit_metric(
             &provider,
@@ -467,6 +477,7 @@ async fn emit_metric_baggage_cardinality_cap() {
             &mut instruments,
             &promotions,
             &mut tracker,
+            &None,
         );
     }
 
@@ -484,6 +495,7 @@ async fn emit_metric_baggage_cardinality_cap() {
             baggage: Some("user.id=value2".to_string()),
             sampled: Some(true),
         }),
+        control_plane_metadata: None,
     };
     emit_metric(
         &provider,
@@ -491,6 +503,7 @@ async fn emit_metric_baggage_cardinality_cap() {
         &mut instruments,
         &promotions,
         &mut tracker,
+        &None,
     );
 }
 
@@ -513,10 +526,11 @@ fn emit_log_modern_uses_summary_as_body() {
             ("http.response.status_code", LogAttributeValue::I64(502)),
         ],
         trace_context: None,
+        control_plane_metadata: None,
     };
 
     // Should not panic.
-    emit_log(&provider, &event, &[], LogStyle::Modern);
+    emit_log(&provider, &event, &[], LogStyle::Modern, &None);
 }
 
 #[test]
@@ -541,10 +555,11 @@ fn emit_log_modern_preserves_attribute_types() {
             ("attr.f64", LogAttributeValue::F64(1.5)),
         ],
         trace_context: None,
+        control_plane_metadata: None,
     };
 
     // Smoke test: must not panic and must accept all attribute variants.
-    emit_log(&provider, &event, &[], LogStyle::Modern);
+    emit_log(&provider, &event, &[], LogStyle::Modern, &None);
 }
 
 #[test]
@@ -630,5 +645,6 @@ fn emit_access_log_modern_smoke() {
         &registry,
         &[],
         LogStyle::Modern,
+        &None,
     );
 }

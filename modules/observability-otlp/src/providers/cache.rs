@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker};
 use ferron_observability::{CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel};
@@ -18,12 +19,15 @@ pub struct OtlpProviderCache {
     pub metrics_instruments: HashMap<&'static str, CachedInstrument>,
     pub baggage_promotions: Vec<BaggageKeyPromotion>,
     pub baggage_tracker: DistinctValueTracker,
+    /// Control plane metadata to include in all observability signals.
+    pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl OtlpProviderCache {
     pub fn init(
         config: &OtlpBackendConfig,
         event_sink: Option<&CompositeEventSink>,
+        control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
     ) -> OtlpProviderCache {
         let resource = build_resource(config.service_name.clone());
         let correlation = CorrelationContext::new();
@@ -45,6 +49,7 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
             }
             result.ok()
@@ -67,6 +72,7 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
             }
             result.ok()
@@ -89,6 +95,7 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
             }
             result.ok()
@@ -102,6 +109,7 @@ impl OtlpProviderCache {
             metrics_instruments: HashMap::new(),
             baggage_promotions: config.baggage_promotions.clone(),
             baggage_tracker: DistinctValueTracker::new(),
+            control_plane_metadata,
         }
     }
 }

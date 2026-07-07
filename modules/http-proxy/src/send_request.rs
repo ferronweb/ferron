@@ -462,6 +462,7 @@ impl Drop for TruncatedTracker {
             unit: Some("{response}"),
             description: Some("Upstream responses that ended before the declared Content-Length."),
             trace_context: self.trace_context.clone(),
+            control_plane_metadata: None,
         }));
 
         self.events.emit(Event::Log(LogEvent {
@@ -486,6 +487,7 @@ impl Drop for TruncatedTracker {
                 ),
             ],
             trace_context: self.trace_context.clone(),
+            control_plane_metadata: None,
         }));
     }
 }

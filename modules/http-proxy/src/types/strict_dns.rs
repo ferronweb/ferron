@@ -75,6 +75,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             ferron_observability::LogAttributeValue::String(hostname.clone()),
                         )],
                         trace_context: None,
+                        control_plane_metadata: None,
                     },
                 ));
             }
@@ -108,6 +109,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             target: crate::LOG_TARGET,
                             attributes: Vec::new(),
                             trace_context: None,
+                            control_plane_metadata: None,
                         },
                     ));
                     return Vec::new();
@@ -156,6 +158,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                                     ),
                                 )],
                                 trace_context: None,
+                                control_plane_metadata: None,
                             },
                         ));
                     }
@@ -196,6 +199,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                                 ),
                             ],
                             trace_context: None,
+                            control_plane_metadata: None,
                         },
                     ));
                 }

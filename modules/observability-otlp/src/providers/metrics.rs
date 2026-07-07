@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
 use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};
@@ -44,6 +45,7 @@ pub(crate) fn emit_metric(
     instruments: &mut HashMap<&'static str, CachedInstrument>,
     promotions: &[BaggageKeyPromotion],
     tracker: &mut DistinctValueTracker,
+    control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
 ) {
     use opentelemetry::metrics::MeterProvider;
 
@@ -88,6 +90,19 @@ pub(crate) fn emit_metric(
                     .and_then(|p| p.max_distinct),
             );
             attrs.push(KeyValue::new(attr.attribute_name, value));
+        }
+    }
+
+    // Inject control plane metadata as metric attributes
+    // Prefer event-level metadata over provider-level metadata
+    let effective_metadata = event
+        .control_plane_metadata
+        .as_ref()
+        .or(control_plane_metadata.as_ref());
+    if let Some(metadata) = effective_metadata {
+        for (key, value) in metadata.iter() {
+            let attr_key = format!("ferron.control_plane.{}", key);
+            attrs.push(KeyValue::new(attr_key, value.clone()));
         }
     }
 

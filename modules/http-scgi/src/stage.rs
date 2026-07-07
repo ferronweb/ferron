@@ -160,6 +160,7 @@ impl Stage<HttpContext> for ScgiStage {
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
                             }));
                             ctx.events.emit(Event::Metric(MetricEvent {
                                 name: "ferron.scgi.failures",
@@ -180,6 +181,7 @@ impl Stage<HttpContext> for ScgiStage {
                                     "Number of SCGI requests that failed before a backend response was returned.",
                                 ),
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             ctx.get_span_attributes().insert(
@@ -221,6 +223,7 @@ impl Stage<HttpContext> for ScgiStage {
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
                             }));
                             ctx.events.emit(Event::Metric(MetricEvent {
                                 name: "ferron.scgi.failures",
@@ -241,6 +244,7 @@ impl Stage<HttpContext> for ScgiStage {
                                     "Number of SCGI requests that failed before a backend response was returned.",
                                 ),
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             ctx.get_span_attributes().insert(
@@ -298,6 +302,7 @@ impl Stage<HttpContext> for ScgiStage {
             unit: Some("s"),
             description: Some("Duration of SCGI upstream request processing."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.scgi.requests",
@@ -307,6 +312,7 @@ impl Stage<HttpContext> for ScgiStage {
             unit: Some("{request}"),
             description: Some("Number of SCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
 
         ctx.get_span_attributes().insert(

@@ -479,4 +479,10 @@ export default [
     label: "Prometheus metrics",
     sub: true,
   },
+  {
+    href: "/docs/v3/configuration/observability/control-plane",
+    target: "_self",
+    label: "Cross-plane traceability",
+    sub: true,
+  },
 ];

@@ -71,6 +71,7 @@ pub fn emit_certificate_not_after(
         unit: Some("s"),
         description: Some("Certificate `notAfter` field as Unix epoch seconds"),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -128,6 +129,7 @@ pub fn emit_handshake_duration(
         unit: Some("s"),
         description: Some("TLS handshake latency"),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -154,6 +156,7 @@ pub fn emit_handshake_total(event_sink: &CompositeEventSink, host: &str, result:
         unit: Some("{handshake}"),
         description: Some("Total TLS handshake attempts"),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -174,5 +177,6 @@ pub fn emit_connections_active(event_sink: &CompositeEventSink, host: &str, delt
         unit: Some("{connection}"),
         description: Some("Currently open TLS connections"),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }

@@ -1,5 +1,5 @@
 use ferron_core::{config_validator_scoped_key, log_warn};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 use tokio::fs::OpenOptions;
@@ -27,12 +27,14 @@ static DROPPED_EVENT: Once = Once::new();
 struct ConfiguredEvent {
     event: Arc<Event>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// The initialized event sink that writes events to log files
 struct LogFileEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl EventSink for LogFileEventSink {
@@ -42,6 +44,7 @@ impl EventSink for LogFileEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event: Arc::new(event),
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -71,6 +74,7 @@ impl EventSink for LogFileEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event,
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -276,7 +280,14 @@ impl Module for LogFileObservabilityModule {
                                            v.as_string_with_interpolations(&HashMap::new())) {
                                         if let Some(message) =
                                           format_access_event(ae, &msg.log_config, &registry) {
-                                            let mut line = message;
+                                            // Prefer event-level metadata over provider-level metadata
+                                            let event_metadata = ae.control_plane_metadata()
+                                                .map(|m| std::sync::Arc::new(m.clone()));
+                                            let effective_metadata = event_metadata.as_ref()
+                                                .or(msg.control_plane_metadata.as_ref());
+                                            let cp_prefix =
+                                                format_metadata_prefix(effective_metadata);
+                                            let mut line = format!("{}{}", cp_prefix, message);
                                             line.push('\n');
 
                                             // Read rotation config
@@ -303,7 +314,13 @@ impl Module for LogFileObservabilityModule {
                                     if let Some(log_path) = log_path {
                                         if let Some(message) =
                                           format_log_event(le, &msg.log_config, &registry) {
-                                        let mut message = message.to_string().replace("\n", "\n  ");
+                                        // Prefer event-level metadata over provider-level metadata
+                                        let effective_metadata = le.control_plane_metadata.as_ref()
+                                            .or(msg.control_plane_metadata.as_ref());
+                                        let cp_prefix =
+                                            format_metadata_prefix(effective_metadata);
+                                        let mut message = format!("{}{}", cp_prefix, message);
+                                        message = message.to_string().replace("\n", "\n  ");
                                         message.push('\n');
 
                                         // Read rotation config for error log
@@ -347,6 +364,19 @@ impl Module for LogFileObservabilityModule {
 impl Drop for LogFileObservabilityModule {
     fn drop(&mut self) {
         self.cancel_token.cancel();
+    }
+}
+
+fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
+    match metadata {
+        Some(meta) if !meta.is_empty() => {
+            let parts: Vec<String> = meta
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect();
+            format!("[{}] ", parts.join(" "))
+        }
+        _ => String::new(),
     }
 }
 
@@ -429,6 +459,7 @@ impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
         ctx.sink = Some(Arc::new(LogFileEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
+            control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
         Ok(())
     }

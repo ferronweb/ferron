@@ -30,6 +30,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("s"),
         description: Some("Time since the server started."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -44,6 +45,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("{connection}"),
         description: Some("Currently open TCP connections across all HTTP listeners."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -58,6 +60,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("{request}"),
         description: Some("Total HTTP requests served across all listeners."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -68,6 +71,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("{reload}"),
         description: Some("Number of configuration reloads performed."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -82,6 +86,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("{event}"),
         description: Some("Total number of observability events dropped due to backpressure."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -96,6 +101,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         unit: Some("{event}"),
         description: Some("Approximate current length of the observability event queue."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     // --- Reload metrics ---
@@ -114,6 +120,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             unit: Some("{enabled}"),
             description: Some("Whether the last configuration reload was successful."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
 
         event_sink.emit(Event::Metric(MetricEvent {
@@ -124,6 +131,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             unit: Some("{generation}"),
             description: Some("Active generation of the configuration being reloaded."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
     }
 
@@ -139,6 +147,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             unit: Some("{thread}"),
             description: Some("Number of primary threads."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
 
         event_sink.emit(Event::Metric(MetricEvent {
@@ -153,6 +162,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             unit: Some("{enabled}"),
             description: Some("Whether io_uring is supported."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
 
         event_sink.emit(Event::Metric(MetricEvent {
@@ -167,6 +177,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             unit: Some("{enabled}"),
             description: Some("Whether io_uring is enabled at runtime."),
             trace_context: None,
+            control_plane_metadata: None,
         }));
     }
 }

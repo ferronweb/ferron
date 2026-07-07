@@ -34,6 +34,8 @@ mod tls_resolve;
 type ObservabilityProviderEntry = (
     Arc<dyn ferron_core::providers::Provider<ObservabilityContext>>,
     Arc<ferron_core::config::ServerConfigurationBlock>,
+    Option<Arc<std::collections::BTreeMap<String, String>>>,
+    Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 );
 
 /// Configuration that can be atomically swapped during reload.
@@ -409,7 +411,13 @@ impl BasicHttpModule {
                                 .get(&observability_provider_name)
                                 .map(|provider| {
                                     let observability_block_arc = Arc::new(observability_block);
-                                    (provider, observability_block_arc)
+                                    let cp_config =
+                                        ferron_observability::ControlPlaneConfig::from_block(
+                                            &global_config,
+                                        );
+                                    let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
+                                    let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
+                                    (provider, observability_block_arc, cp_metadata, cp_span_links)
                                 })
                         })
                 })
@@ -507,9 +515,15 @@ impl BasicHttpModule {
 
                     let observability_block_arc = Arc::new(observability_block);
 
+                    // Extract control_plane metadata and span links from the host block
+                    let cp_config =
+                        ferron_observability::ControlPlaneConfig::from_block(&host_config.1);
+                    let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
+                    let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
+
                     // Insert provider + config tuple into the resolver (sink initialization deferred)
                     let entry: ObservabilityProviderEntry =
-                        (observability_provider, observability_block_arc);
+                        (observability_provider, observability_block_arc, cp_metadata, cp_span_links);
                     match (&host_config.0.host, host_config.0.ip) {
                         (Some(host), Some(ip)) => {
                             observability_resolver.insert_ip_and_hostname(ip, host, vec![entry]);

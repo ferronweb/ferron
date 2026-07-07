@@ -51,6 +51,7 @@ fn emit_connection_error_metric(
         unit: Some("{error}"),
         description: Some("Number of connection lifecycle errors by transport and stage."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -702,6 +703,16 @@ async fn handle_http1_connection_zerocopy<S>(
         + 'static,
 {
     let graceful_shutdown = CancellationToken::new();
+    let host_control_plane_metadata = resolve_host_control_plane_metadata(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
+    let host_control_plane_span_links = resolve_host_control_plane_span_links(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
     let handler_state = Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -718,6 +729,8 @@ async fn handle_http1_connection_zerocopy<S>(
         timeout_duration: connection_options.timeout,
         peer_identity,
         tls_params: None,
+        host_control_plane_metadata,
+        host_control_plane_span_links,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -793,6 +806,16 @@ async fn handle_http1_connection<S>(
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let graceful_shutdown = CancellationToken::new();
+    let host_control_plane_metadata = resolve_host_control_plane_metadata(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
+    let host_control_plane_span_links = resolve_host_control_plane_span_links(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
     let handler_state = Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -809,6 +832,8 @@ async fn handle_http1_connection<S>(
         timeout_duration: connection_options.timeout,
         peer_identity,
         tls_params,
+        host_control_plane_metadata,
+        host_control_plane_span_links,
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -883,6 +908,16 @@ async fn handle_http2_connection<S>(
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let graceful_shutdown = CancellationToken::new();
+    let host_control_plane_metadata = resolve_host_control_plane_metadata(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
+    let host_control_plane_span_links = resolve_host_control_plane_span_links(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
     let handler_state = Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -899,6 +934,8 @@ async fn handle_http2_connection<S>(
         timeout_duration: connection_options.timeout,
         peer_identity,
         tls_params,
+        host_control_plane_metadata,
+        host_control_plane_span_links,
     });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
@@ -989,6 +1026,8 @@ fn build_bad_request_handler(
                 state.remote_address,
                 state.error_pipeline.clone(),
                 request_observability,
+                state.host_control_plane_metadata.clone(),
+                state.host_control_plane_span_links.clone(),
             )
             .await
         })

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// Size of a W3C traceparent trace ID (32 hex chars).
@@ -34,6 +35,8 @@ pub struct LogEvent {
     /// attributes in OTLP `log_style modern`. Ignored by other sinks.
     pub attributes: Vec<(&'static str, LogAttributeValue)>,
     pub trace_context: Option<EventTraceContext>,
+    /// Control plane metadata to include as `ferron.control_plane.*` attributes.
+    pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// Represents an attribute value for a log record.
@@ -81,6 +84,8 @@ pub struct MetricEvent {
     pub description: Option<&'static str>,
     /// Optional trace context for the metric, useful for correlating with trace events.
     pub trace_context: Option<EventTraceContext>,
+    /// Control plane metadata to include as `ferron.control_plane.*` attributes.
+    pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// Represents a type of metric.
@@ -156,6 +161,24 @@ pub struct EventTraceContext {
     pub sampled: Option<bool>,
 }
 
+/// Identifies a span to link to, optionally with attributes.
+///
+/// Span links connect causally related spans that do not have a direct
+/// parent-child relationship. For example, a control plane event that
+/// triggers multiple data plane requests would link to each resulting
+/// request span.
+#[derive(Clone, Debug)]
+pub struct SpanLink {
+    /// The trace ID of the linked span (32 hex chars).
+    pub trace_id: String,
+    /// The span ID of the linked span (16 hex chars).
+    pub span_id: String,
+    /// Whether the linked span was sampled.
+    pub sampled: Option<bool>,
+    /// Attributes describing the relationship.
+    pub attributes: Vec<(&'static str, TraceAttributeValue)>,
+}
+
 /// Represents a trace event with its name, attributes, and optional span ID.
 #[derive(Clone)]
 pub enum Parent {
@@ -175,6 +198,8 @@ pub enum TraceEvent {
     /// `builder_attributes` are set on the `SpanBuilder` **before** the span is
     /// built, making them visible to the sampler. `attributes` are set **after**
     /// the span is built and are not visible to the sampler.
+    /// `links` connect this span to causally related spans without a
+    /// parent-child relationship.
     StartSpan {
         key: Cow<'static, str>,
         name: Cow<'static, str>,
@@ -182,6 +207,9 @@ pub enum TraceEvent {
         trace_context: Option<EventTraceContext>,
         builder_attributes: Vec<(Cow<'static, str>, TraceAttributeValue)>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
+        links: Vec<SpanLink>,
+        /// Control plane metadata to include as `ferron.control_plane.*` attributes.
+        control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
     },
     /// End the span with the given name, optional error description, and final attributes.
     /// Attributes here are merged with those from StartSpan and are useful for values
@@ -191,6 +219,8 @@ pub enum TraceEvent {
         name: Cow<'static, str>,
         error: Option<String>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
+        /// Control plane metadata to include as `ferron.control_plane.*` attributes.
+        control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
     },
 }
 
@@ -229,6 +259,7 @@ mod tests {
                 LogAttributeValue::String("127.0.0.1".to_string()),
             )],
             trace_context: None,
+            control_plane_metadata: None,
         };
         assert_eq!(event.message, "full text message");
         assert_eq!(event.summary, "short");

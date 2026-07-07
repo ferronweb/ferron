@@ -10,6 +10,7 @@ use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use crate::util::error_pages::generate_default_error_page;
 
@@ -197,8 +198,9 @@ pub(super) fn emit_error(
     events: &CompositeEventSink,
     message: impl Into<String>,
     attributes: Vec<(&'static str, LogAttributeValue)>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
-    emit_error_with_trace(events, message, None, attributes);
+    emit_error_with_trace(events, message, None, attributes, control_plane_metadata);
 }
 
 #[inline]
@@ -207,6 +209,7 @@ pub(super) fn emit_error_with_trace(
     message: impl Into<String>,
     trace_context: Option<EventTraceContext>,
     attributes: Vec<(&'static str, LogAttributeValue)>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
@@ -215,6 +218,7 @@ pub(super) fn emit_error_with_trace(
         target: LOG_TARGET,
         attributes,
         trace_context,
+        control_plane_metadata,
     }));
 }
 
@@ -225,6 +229,7 @@ pub(super) async fn execute_error_pipeline(
     configuration: LayeredConfiguration,
     events: &CompositeEventSink,
     parent_span_key: Option<&str>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> Option<Response<ResponseBody>> {
     let has_traces = events.has_trace_sinks();
     let span_key = has_traces.then(|| {
@@ -245,6 +250,8 @@ pub(super) async fn execute_error_pipeline(
                 "http.response.status_code",
                 TraceAttributeValue::I64(error_code as i64),
             )],
+            links: vec![],
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
     }
 
@@ -263,6 +270,7 @@ pub(super) async fn execute_error_pipeline(
                 "error.type",
                 LogAttributeValue::String("error_pipeline_error".into()),
             )],
+            control_plane_metadata.clone(),
         );
     }
 
@@ -272,6 +280,7 @@ pub(super) async fn execute_error_pipeline(
             name: Cow::Borrowed("ferron.pipeline.execute_error"),
             error: None,
             attributes: vec![],
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
     }
 

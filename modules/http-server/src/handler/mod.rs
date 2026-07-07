@@ -24,7 +24,7 @@ use ferron_http::{
 };
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue, TraceAttributeValue, TraceEvent,
+    MetricValue, SpanLink, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -56,6 +56,8 @@ pub async fn bad_request_handler(
     remote_address: SocketAddr,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     events: CompositeEventSink,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
+    control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     let status_code = if is_timeout { 408 } else { 400 };
     ferron_core::admin::ADMIN_METRICS
@@ -74,6 +76,8 @@ pub async fn bad_request_handler(
                 "ferron.http.request.stage",
                 TraceAttributeValue::StaticStr("pre_handler"),
             )],
+            links: convert_control_plane_span_links(&control_plane_span_links),
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
         emitted.then_some(request_span_key)
     } else {
@@ -105,6 +109,7 @@ pub async fn bad_request_handler(
                 LogAttributeValue::String(local_address.ip().to_string()),
             ),
         ],
+        control_plane_metadata.clone(),
     );
     events.emit(Event::Metric(MetricEvent {
         name: "ferron.http.server.pre_handler_request_count",
@@ -129,6 +134,7 @@ pub async fn bad_request_handler(
             "Number of malformed or timed-out HTTP requests rejected before request handling.",
         ),
         trace_context: None,
+        control_plane_metadata: None,
     }));
     let mut response = if let Some(response) = execute_error_pipeline(
         error_pipeline.as_ref(),
@@ -137,6 +143,7 @@ pub async fn bad_request_handler(
         LayeredConfiguration::default(),
         &events,
         request_span_key.as_deref(),
+        control_plane_metadata.clone(),
     )
     .await
     {
@@ -156,6 +163,7 @@ pub async fn bad_request_handler(
                 "http.response.status_code",
                 TraceAttributeValue::I64(status_code as i64),
             )],
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
     }
     Ok(response)
@@ -178,6 +186,8 @@ pub async fn request_handler(
     timeout_duration: Option<std::time::Duration>,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
     tls_params: Option<ferron_tls::TlsConnectionParams>,
+    host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
+    host_control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
@@ -330,6 +340,8 @@ pub async fn request_handler(
                         |path_and_query| path_and_query.to_string(),
                     )),
                 )],
+                links: convert_control_plane_span_links(&host_control_plane_span_links),
+                control_plane_metadata: host_control_plane_metadata.clone(),
             }));
             emitted.then_some(request_span_key)
         } else {
@@ -350,6 +362,7 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+            control_plane_metadata: host_control_plane_metadata.clone(),
         }));
     }
 
@@ -373,7 +386,7 @@ pub async fn request_handler(
         Vec::new()
     };
 
-    let (mut response_result, auth_user, final_remote_address, custom_fields) =
+    let (mut response_result, auth_user, final_remote_address, custom_fields, resolved_control_plane_metadata) =
         request_handler_inner(
             request,
             pipeline,
@@ -390,6 +403,7 @@ pub async fn request_handler(
             events.clone(),
             timeout_duration,
             peer_identity,
+            host_control_plane_metadata.clone(),
         )
         .await;
 
@@ -455,6 +469,7 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         // Emit request duration histogram
@@ -466,6 +481,7 @@ pub async fn request_handler(
             unit: Some("s"),
             description: Some("Duration of HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         // Emit request count
@@ -477,6 +493,7 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
+            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         // Emit access log
@@ -509,6 +526,7 @@ pub async fn request_handler(
             timestamp,
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
             custom_fields,
+            control_plane_metadata: resolved_control_plane_metadata.clone(),
         })));
 
         if let Some(request_span_key) = request_span_key {
@@ -533,6 +551,7 @@ pub async fn request_handler(
                 name: Cow::Borrowed("ferron.request"),
                 error: error_description,
                 attributes: end_attrs,
+                control_plane_metadata: resolved_control_plane_metadata.clone(),
             }));
         }
     }
@@ -570,11 +589,13 @@ async fn request_handler_inner(
     events: CompositeEventSink,
     timeout_duration: Option<std::time::Duration>,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> (
     Result<Response<ResponseBody>, io::Error>,
     Option<String>,
     Option<SocketAddr>,
     Option<FxHashMap<String, CustomAccessLogField>>,
+    Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
@@ -600,6 +621,7 @@ async fn request_handler_inner(
                     LogAttributeValue::String(local_address.ip().to_string()),
                 ),
             ],
+            host_control_plane_metadata.clone(),
         );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
@@ -608,10 +630,11 @@ async fn request_handler_inner(
             LayeredConfiguration::default(),
             &events,
             request_span_key.as_deref(),
+            host_control_plane_metadata.clone(),
         )
         .await
         {
-            return (Ok(response), None, None, None);
+            return (Ok(response), None, None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -622,6 +645,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
             None,
@@ -652,6 +676,7 @@ async fn request_handler_inner(
                     LogAttributeValue::String(local_address.ip().to_string()),
                 ),
             ],
+            host_control_plane_metadata.clone(),
         );
         return (
             Ok(builtin_error_response(
@@ -662,6 +687,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
             None,
             None,
@@ -703,6 +729,7 @@ async fn request_handler_inner(
                         LogAttributeValue::String(local_address.ip().to_string()),
                     ),
                 ],
+                host_control_plane_metadata.clone(),
             );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -711,24 +738,26 @@ async fn request_handler_inner(
                 LayeredConfiguration::default(),
                 &events,
                 request_span_key.as_deref(),
+                host_control_plane_metadata.clone(),
             )
             .await
             {
-                return (Ok(response), None, None, None);
+                return (Ok(response), None, None, None, None);
             }
-            return (
-                Ok(builtin_error_response(
-                    400,
-                    None,
-                    config_resolver.global().and_then(|g| {
-                        g.get_value("admin_email")
-                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                    }),
-                )),
+        return (
+            Ok(builtin_error_response(
+                400,
                 None,
-                None,
-                None,
-            );
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
+            None,
+            None,
+            None,
+            None,
+        );
         }
 
         // Canonicalize + "sanitize" request URL
@@ -757,6 +786,7 @@ async fn request_handler_inner(
                                     LogAttributeValue::String(local_address.ip().to_string()),
                                 ),
                             ],
+                            host_control_plane_metadata.clone(),
                         );
                         if let Some(response) = execute_error_pipeline(
                             error_pipeline.as_ref(),
@@ -765,10 +795,11 @@ async fn request_handler_inner(
                             LayeredConfiguration::default(),
                             &events,
                             request_span_key.as_deref(),
+                            host_control_plane_metadata.clone(),
                         )
                         .await
                         {
-                            return (Ok(response), None, None, None);
+                            return (Ok(response), None, None, None, None);
                         }
                         return (
                             Ok(builtin_error_response(
@@ -780,6 +811,7 @@ async fn request_handler_inner(
                                     })
                                 }),
                             )),
+                            None,
                             None,
                             None,
                             None,
@@ -810,6 +842,7 @@ async fn request_handler_inner(
                             LogAttributeValue::String(local_address.ip().to_string()),
                         ),
                     ],
+                    host_control_plane_metadata.clone(),
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -818,25 +851,28 @@ async fn request_handler_inner(
                     LayeredConfiguration::default(),
                     &events,
                     request_span_key.as_deref(),
+                    host_control_plane_metadata.clone(),
                 )
                 .await
                 {
-                    return (Ok(response), None, None, None);
+                    return (Ok(response), None, None, None, None);
                 }
-                return (
-                    Ok(builtin_error_response(
-                        400,
-                        None,
-                        config_resolver.global().and_then(|g| {
-                            g.get_value("admin_email")
-                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                        }),
-                    )),
-                    None,
-                    None,
-                    None,
-                );
-            }
+        return (
+            Ok(builtin_error_response(
+                400,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
+            None,
+            None,
+            None,
+            None,
+        );
+    }
+
         }
     };
 
@@ -887,10 +923,11 @@ async fn request_handler_inner(
             LayeredConfiguration::default(),
             &events,
             request_span_key.as_deref(),
+            host_control_plane_metadata.clone(),
         )
         .await
         {
-            return (Ok(response), None, None, None);
+            return (Ok(response), None, None, None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -904,6 +941,7 @@ async fn request_handler_inner(
             None,
             None,
             None,
+            None,
         );
     };
 
@@ -911,6 +949,10 @@ async fn request_handler_inner(
     ctx.configuration = resolution.configuration.clone();
     ctx.hostname = (!resolution.location_path.hostname_segments.is_empty())
         .then_some(resolution.location_path.hostname_segments.join("."));
+
+    // Extract resolved control plane metadata for post-resolution events
+    let resolved_control_plane_metadata = ferron_observability::ControlPlaneConfig::from_layered(&ctx.configuration)
+        .map(|cp| cp.metadata);
 
     // Handle OPTIONS * requests (RFC 2616 Section 9.2)
     // Early response before pipeline execution
@@ -928,7 +970,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None, None);
+        return (Ok(response), None, None, None, None);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -957,6 +999,7 @@ async fn request_handler_inner(
         &resolution.location_path.path_segments,
         request_span_key.as_deref(),
         timeout_duration,
+        resolved_control_plane_metadata.clone(),
     )
     .await;
 
@@ -1006,6 +1049,7 @@ async fn request_handler_inner(
                             &resolution.location_path.path_segments,
                             request_span_key.as_deref(),
                             timeout_duration,
+                            resolved_control_plane_metadata.clone(),
                         )
                         .await;
                     }
@@ -1028,6 +1072,7 @@ async fn request_handler_inner(
                     ctx.configuration.clone(),
                     &events,
                     request_span_key.as_deref(),
+                    resolved_control_plane_metadata.clone(),
                 )
                 .await
                 {
@@ -1045,5 +1090,33 @@ async fn request_handler_inner(
         auth_user,
         Some(final_remote),
         custom_fields,
+        resolved_control_plane_metadata,
     )
+}
+
+/// Convert control plane span link configs into `SpanLink` instances for trace events.
+fn convert_control_plane_span_links(
+    span_links: &Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
+) -> Vec<SpanLink> {
+    let Some(links) = span_links else {
+        return Vec::new();
+    };
+    links
+        .iter()
+        .map(|link| SpanLink {
+            trace_id: link.trace_id.clone(),
+            span_id: link.span_id.clone(),
+            sampled: Some(link.sampled),
+            attributes: link
+                .attributes
+                .iter()
+                .map(|(k, v)| -> (&'static str, TraceAttributeValue) {
+                    (
+                        Box::leak(k.clone().into_boxed_str()),
+                        TraceAttributeValue::String(v.clone()),
+                    )
+                })
+                .collect(),
+        })
+        .collect()
 }

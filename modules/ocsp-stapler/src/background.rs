@@ -650,6 +650,7 @@ fn emit_log(
             target,
             attributes,
             trace_context: None,
+            control_plane_metadata: None,
         }));
     }
 }
@@ -672,6 +673,7 @@ fn emit_metric(
             unit,
             description,
             trace_context: None,
+            control_plane_metadata: None,
         }));
     }
 }

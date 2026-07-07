@@ -3,7 +3,7 @@ mod config;
 mod providers;
 mod validator;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
@@ -26,6 +26,7 @@ static DROPPED_EVENT: Once = Once::new();
 struct ConfiguredEvent {
     event: Arc<Event>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// The OTLP event sink that emits events to an OTLP collector
@@ -35,6 +36,7 @@ struct OtlpEventSink {
     has_logs: bool,
     has_metrics: bool,
     has_traces: bool,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl EventSink for OtlpEventSink {
@@ -49,6 +51,7 @@ impl EventSink for OtlpEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event: Arc::new(event),
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -83,6 +86,7 @@ impl EventSink for OtlpEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event,
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -157,9 +161,13 @@ impl Module for OtlpObservabilityModule {
                 let config = OtlpBackendConfig::parse_config(&msg.log_config);
 
                 let cache_key = config_cache_key(&config);
-                let entry = providers
-                    .entry(cache_key)
-                    .or_insert_with(|| OtlpProviderCache::init(&config, event_sink.as_deref()));
+                let entry = providers.entry(cache_key).or_insert_with(|| {
+                    OtlpProviderCache::init(
+                        &config,
+                        event_sink.as_deref(),
+                        msg.control_plane_metadata.clone(),
+                    )
+                });
 
                 match &*msg.event {
                     Event::Log(log_event) => {
@@ -169,6 +177,7 @@ impl Module for OtlpObservabilityModule {
                                 log_event,
                                 &entry.baggage_promotions,
                                 config.log_style,
+                                &entry.control_plane_metadata,
                             );
                         }
                     }
@@ -180,6 +189,7 @@ impl Module for OtlpObservabilityModule {
                                 &mut entry.metrics_instruments,
                                 &entry.baggage_promotions,
                                 &mut entry.baggage_tracker,
+                                &entry.control_plane_metadata,
                             );
                         }
                     }
@@ -190,6 +200,7 @@ impl Module for OtlpObservabilityModule {
                                 trace_event,
                                 &mut entry.correlation,
                                 &entry.baggage_promotions,
+                                &entry.control_plane_metadata,
                             );
                         }
                     }
@@ -202,6 +213,7 @@ impl Module for OtlpObservabilityModule {
                                 &registry,
                                 &entry.baggage_promotions,
                                 config.log_style,
+                                &entry.control_plane_metadata,
                             );
                         }
                     }
@@ -308,6 +320,7 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
             has_logs,
             has_metrics,
             has_traces,
+            control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
         Ok(())
     }

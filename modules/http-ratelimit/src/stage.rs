@@ -123,6 +123,7 @@ impl RateLimitEngine {
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to rate limit registry at capacity."),
                     trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 {
                     let sa = ctx.get_span_attributes();
@@ -184,6 +185,7 @@ impl RateLimitEngine {
                         ),
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",
@@ -202,6 +204,7 @@ impl RateLimitEngine {
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to exhausted rate limit buckets."),
                     trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
 
                 // Emit abuse event so the abuse protection module can track
@@ -273,6 +276,7 @@ impl RateLimitEngine {
                 unit: Some("{request}"),
                 description: Some("Requests that passed rate limiting."),
                 trace_context: current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
             {
                 let sa = ctx.get_span_attributes();

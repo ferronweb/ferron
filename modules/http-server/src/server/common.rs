@@ -55,6 +55,10 @@ pub struct RequestHandlerState {
     pub peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
     /// Negotiated TLS parameters from the handshake (protocol version and cipher suite).
     pub tls_params: Option<ferron_tls::TlsConnectionParams>,
+    /// Host-level control plane metadata (used as fallback for pre-resolution events).
+    pub host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
+    /// Host-level control plane span links (used for pre-resolution events).
+    pub host_control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 }
 
 // Type alias for the config ArcSwap
@@ -63,6 +67,8 @@ pub type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
 pub type ObservabilityProviderEntry = (
     Arc<dyn Provider<ObservabilityContext>>,
     Arc<ferron_core::config::ServerConfigurationBlock>,
+    Option<Arc<std::collections::BTreeMap<String, String>>>,
+    Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
 );
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -129,10 +135,11 @@ fn initialize_sinks_from_providers(
     entries: &[ObservabilityProviderEntry],
 ) -> Vec<Arc<dyn EventSink>> {
     let mut sinks = Vec::with_capacity(entries.len());
-    for (provider, log_config) in entries {
+    for (provider, log_config, control_plane_metadata, _control_plane_span_links) in entries {
         let mut ctx = ObservabilityContext {
             log_config: log_config.clone(),
             sink: None,
+            control_plane_metadata: control_plane_metadata.clone(),
         };
         if let Ok(()) = provider.execute(&mut ctx) {
             if let Some(sink) = ctx.sink {
@@ -141,6 +148,20 @@ fn initialize_sinks_from_providers(
         }
     }
     sinks
+}
+
+/// Extract host-level control plane metadata from provider entries (first entry = most specific).
+fn extract_host_control_plane_metadata(
+    entries: &[ObservabilityProviderEntry],
+) -> Option<Arc<std::collections::BTreeMap<String, String>>> {
+    entries.first().and_then(|(_, _, metadata, _)| metadata.clone())
+}
+
+/// Extract host-level control plane span links from provider entries (first entry = most specific).
+fn extract_host_control_plane_span_links(
+    entries: &[ObservabilityProviderEntry],
+) -> Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>> {
+    entries.first().and_then(|(_, _, _, span_links)| span_links.clone())
 }
 
 /// Helper to resolve root-level observability sinks (for pre-connection errors).
@@ -154,6 +175,36 @@ pub fn resolve_root_observability_sink(
         .map(|e| initialize_sinks_from_providers(&e))
         .unwrap_or_default();
     CompositeEventSink::with_sampler(sinks, trace_sampler.cloned())
+}
+
+/// Resolve host-level control plane metadata from the observability resolver.
+#[inline]
+pub fn resolve_host_control_plane_metadata(
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+    ip: Option<IpAddr>,
+    hostname: Option<&str>,
+) -> Option<Arc<std::collections::BTreeMap<String, String>>> {
+    let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
+    let entries = observability_resolver.lookup_ip_and_hostname(
+        ip?,
+        normalized_hostname.as_deref().unwrap_or(""),
+    )?;
+    extract_host_control_plane_metadata(&entries)
+}
+
+/// Resolve host-level control plane span links from the observability resolver.
+#[inline]
+pub fn resolve_host_control_plane_span_links(
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+    ip: Option<IpAddr>,
+    hostname: Option<&str>,
+) -> Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>> {
+    let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
+    let entries = observability_resolver.lookup_ip_and_hostname(
+        ip?,
+        normalized_hostname.as_deref().unwrap_or(""),
+    )?;
+    extract_host_control_plane_span_links(&entries)
 }
 
 #[inline]
@@ -264,6 +315,7 @@ pub fn emit_error(
         target: LOG_TARGET,
         attributes,
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -334,6 +386,8 @@ pub fn build_request_handler(
                 state.timeout_duration,
                 state.peer_identity.clone(),
                 state.tls_params.clone(),
+                state.host_control_plane_metadata.clone(),
+                state.host_control_plane_span_links.clone(),
             )
             .await
         })

@@ -1,5 +1,6 @@
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{Pipeline, PipelineError};
@@ -65,6 +66,7 @@ pub(super) async fn execute_http_file_pipeline(
     file_pipeline: &Pipeline<HttpFileContext>,
     timeout: Option<std::time::Duration>,
     parent_span_key: Option<&str>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> Result<(), FilePipelineExecutionError> {
     let Some(request_path_encoded) = ctx
         .req
@@ -153,6 +155,7 @@ pub(super) async fn execute_http_file_pipeline(
                     unit: Some("{redirect}"),
                     description: Some("Number of HTTP redirects emitted by the server."),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 return Ok(());
             }
@@ -166,6 +169,7 @@ pub(super) async fn execute_http_file_pipeline(
         timeout,
         root_path,
         parent_span_key,
+        control_plane_metadata,
     )
     .await
 }
@@ -177,6 +181,7 @@ async fn apply_resolved_file_to_context(
     timeout: Option<std::time::Duration>,
     root_path: PathBuf,
     parent_span_key: Option<&str>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> Result<(), FilePipelineExecutionError> {
     if let Some(path_info) = resolved_file.path_info.as_ref() {
         ctx.variables
@@ -218,6 +223,7 @@ async fn apply_resolved_file_to_context(
         has_traces,
         parent_span_key.unwrap_or(""),
         "file",
+        control_plane_metadata,
     );
     let pipeline_result = if let Some(timeout) = timeout {
         if has_traces {

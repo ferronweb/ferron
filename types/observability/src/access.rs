@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub trait AccessEvent: Send + Sync {
     fn protocol(&self) -> &'static str;
     fn visit(&self, visitor: &mut dyn AccessVisitor);
@@ -12,6 +14,12 @@ pub trait AccessEvent: Send + Sync {
     /// current time when unset).
     #[inline]
     fn event_time(&self) -> Option<std::time::SystemTime> {
+        None
+    }
+
+    /// Control plane metadata to include as `ferron.control_plane.*` attributes.
+    #[inline]
+    fn control_plane_metadata(&self) -> Option<&BTreeMap<String, String>> {
         None
     }
 }

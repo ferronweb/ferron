@@ -229,6 +229,7 @@ impl HttpCacheStage {
             unit: Some("{request}"),
             description: Some("Number of cache lookups handled by the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
@@ -241,6 +242,7 @@ impl HttpCacheStage {
             unit: Some("{entry}"),
             description: Some("Number of entries currently stored in the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
     }
 
@@ -273,6 +275,7 @@ impl HttpCacheStage {
             unit: Some("{response}"),
             description: Some("Number of responses stored in the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
     }
 
@@ -288,6 +291,7 @@ impl HttpCacheStage {
                 "Number of requests intercepted by the singleflight deduplication layer.",
             ),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.singleflight_active_locks",
@@ -299,6 +303,7 @@ impl HttpCacheStage {
                 "Number of active in-flight upstream fetches coordinated by singleflight.",
             ),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
     }
 
@@ -322,6 +327,7 @@ impl HttpCacheStage {
                 unit: Some("{entry}"),
                 description: Some("Number of cache entries evicted from the HTTP cache."),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
@@ -347,6 +353,7 @@ impl HttpCacheStage {
                     ),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
         }
         if stats.size_evictions > 0 {
@@ -367,6 +374,7 @@ impl HttpCacheStage {
                 unit: Some("{entry}"),
                 description: Some("Number of cache entries evicted from the HTTP cache."),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
@@ -392,6 +400,7 @@ impl HttpCacheStage {
                     ),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
         }
     }
@@ -425,6 +434,7 @@ impl HttpCacheStage {
             unit: Some("{entry}"),
             description: Some("Number of cache entries purged via LSCache-compatible controls."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.cache.entries",
@@ -437,6 +447,7 @@ impl HttpCacheStage {
             unit: Some("{entry}"),
             description: Some("Number of entries currently stored in the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
     }
 }
@@ -582,6 +593,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     summary: "Cache purged via PURGE method".into(),
                     attributes: vec![("cache.purged.count", LogAttributeValue::I64(purged as i64))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
 
                 // Propagate purge to external control-plane unless this is a
@@ -626,6 +638,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 attributes: Vec::new(),
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
                             }));
                         }
                     }
@@ -1281,6 +1294,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 summary: "LSCache stale purge marker ignored".into(),
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
         }
         if !purge_ops.is_empty() {
@@ -1303,6 +1317,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         LogAttributeValue::I64(stats.purged as i64),
                     )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
 
                 // Propagate each purged path to the external control-plane.
@@ -1354,6 +1369,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 ctx,
                             ),
+                            control_plane_metadata: None,
                         }));
                     }
                 }
@@ -1378,6 +1394,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     .into(),
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
         }
         let has_set_cookie = response.headers().contains_key(header::SET_COOKIE);
@@ -1564,6 +1581,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         summary: "Skipping cache store because response body exceeded maximum size".into(),
                         attributes: Vec::new(),
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                        control_plane_metadata: None,
                     }));
                     let mut response = response_from_streaming_parts(parts, prefix, remainder)?;
                     annotate_response_headers(

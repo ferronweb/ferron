@@ -1,9 +1,11 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
 use ferron_observability::{TraceAttributeValue, TraceEvent};
-use opentelemetry::trace::{Span, SpanBuilder, SpanKind, Tracer, TracerProvider};
-use opentelemetry::KeyValue;
+use opentelemetry::trace::{Link, Span, SpanBuilder, SpanContext, SpanKind, TraceFlags, Tracer, TracerProvider};
+use opentelemetry::{SpanId, TraceId, KeyValue};
 use opentelemetry_sdk::trace::SdkTracerProvider;
 
 use super::context::{build_parent_context, CorrelationContext};
@@ -13,6 +15,7 @@ pub(crate) fn emit_trace(
     event: &TraceEvent,
     correlation: &mut CorrelationContext,
     promotions: &[BaggageKeyPromotion],
+    control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
 ) {
     let tracer = provider.tracer("ferron");
 
@@ -24,6 +27,8 @@ pub(crate) fn emit_trace(
             trace_context,
             builder_attributes,
             attributes,
+            links,
+            control_plane_metadata: event_metadata,
         } => {
             let mut builder = SpanBuilder::from_name(name.clone());
 
@@ -33,12 +38,49 @@ pub(crate) fn emit_trace(
             }
 
             // Set builder-level attributes (visible to the sampler)
-            if !builder_attributes.is_empty() {
-                let otel_attrs: Vec<KeyValue> = builder_attributes
+            // Prefer event-level metadata over provider-level metadata
+            let effective_metadata = event_metadata.as_ref().or(control_plane_metadata.as_ref());
+            let combined_attrs: Vec<KeyValue> = builder_attributes
+                .iter()
+                .map(|(k, v)| trace_kv(k.clone(), v))
+                .chain(effective_metadata.iter().flat_map(|metadata| {
+                    metadata.iter().map(|(key, value)| {
+                        let attr_key = format!("ferron.control_plane.{}", key);
+                        trace_kv(Cow::Owned(attr_key), &TraceAttributeValue::String(value.clone()))
+                    })
+                }))
+                .collect();
+            if !combined_attrs.is_empty() {
+                builder = builder.with_attributes(combined_attrs);
+            }
+
+            // Set span links (visible to the sampler)
+            if !links.is_empty() {
+                let otel_links: Vec<Link> = links
                     .iter()
-                    .map(|(k, v)| trace_kv(k.clone(), v))
+                    .filter_map(|link| {
+                        let trace_id = TraceId::from_hex(&link.trace_id).ok()?;
+                        let span_id = SpanId::from_hex(&link.span_id).ok()?;
+                        let flags = link
+                            .sampled
+                            .map(|s| {
+                                if s {
+                                    TraceFlags::SAMPLED
+                                } else {
+                                    TraceFlags::default()
+                                }
+                            })
+                            .unwrap_or_default();
+                        let cx = SpanContext::new(trace_id, span_id, flags, true, Default::default());
+                        let attrs: Vec<KeyValue> = link
+                            .attributes
+                            .iter()
+                            .map(|(k, v)| trace_kv((*k).into(), v))
+                            .collect();
+                        Some(Link::new(cx, attrs, 0))
+                    })
                     .collect();
-                builder = builder.with_attributes(otel_attrs);
+                builder = builder.with_links(otel_links);
             }
 
             let requested_ids = trace_context
@@ -88,6 +130,7 @@ pub(crate) fn emit_trace(
             name: _,
             error,
             attributes,
+            control_plane_metadata: _,
         } => {
             if let Some(mut active_span) = correlation.remove_span(key) {
                 // Apply any final attributes (e.g. http.response.status_code)

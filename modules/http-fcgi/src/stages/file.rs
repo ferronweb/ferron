@@ -203,6 +203,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     trace_context: ferron_http::trace_context::current_event_trace_context(
                         &ctx.http,
                     ),
+                    control_plane_metadata: None,
                 }));
                 ctx.http.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.failures",
@@ -225,6 +226,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                     trace_context: ferron_http::trace_context::current_event_trace_context(
                         &ctx.http,
                     ),
+                    control_plane_metadata: None,
                 }));
                 ctx.http.res = Some(HttpResponse::BuiltinError(503, None));
                 ctx.get_span_attributes().insert(
@@ -276,6 +278,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                         LogAttributeValue::String(stderr_string_trimmed.to_string()),
                     )],
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
                 events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.stderr_errors",
@@ -287,6 +290,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
                         "Number of FastCGI requests that produced non-empty stderr output.",
                     ),
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
             }
         });
@@ -318,6 +322,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             unit: Some("s"),
             description: Some("Duration of FastCGI upstream request processing."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+            control_plane_metadata: None,
         }));
         ctx.http.events.emit(Event::Metric(MetricEvent {
             name: "ferron.fcgi.requests",
@@ -327,6 +332,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             unit: Some("{request}"),
             description: Some("Number of FastCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(&ctx.http),
+            control_plane_metadata: None,
         }));
 
         let script_filename = ctx.file_path.to_string_lossy().to_string();

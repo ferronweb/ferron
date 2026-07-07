@@ -73,6 +73,7 @@ pub fn record_circuit_transition(
                     ferron_observability::LogAttributeValue::String(upstream_url.to_string()),
                 )],
                 trace_context: event_trace_context.clone(),
+                control_plane_metadata: None,
             },
         ));
         emit_flapping_metric(event_sink, upstream_url, 1, event_trace_context);
@@ -92,6 +93,7 @@ pub fn record_circuit_transition(
                     ferron_observability::LogAttributeValue::String(upstream_url.to_string()),
                 )],
                 trace_context: event_trace_context.clone(),
+                control_plane_metadata: None,
             },
         ));
         emit_flapping_metric(event_sink, upstream_url, 0, event_trace_context);
@@ -123,6 +125,7 @@ fn emit_flapping_metric(
         unit: Some("{circuit}"),
         description: Some("Whether an upstream backend is flapping (1 = flapping, 0 = stable)."),
         trace_context,
+        control_plane_metadata: None,
     }));
 }
 

@@ -14,6 +14,8 @@ use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue,
 };
+use super::common::resolve_host_control_plane_metadata;
+use super::common::resolve_host_control_plane_span_links;
 use quinn::{AsyncTimer, AsyncUdpSocket, Incoming, Runtime};
 use send_wrapper::SendWrapper;
 use tokio_util::sync::CancellationToken;
@@ -51,6 +53,7 @@ fn emit_connection_error_metric(
         unit: Some("{error}"),
         description: Some("Number of connection lifecycle errors by transport and stage."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
 
@@ -487,6 +490,16 @@ async fn handle_http3_connection(
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) {
     let graceful_shutdown = CancellationToken::new();
+    let host_control_plane_metadata = resolve_host_control_plane_metadata(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
+    let host_control_plane_span_links = resolve_host_control_plane_span_links(
+        &observability_resolver,
+        Some(local_address.ip()),
+        hinted_hostname.as_deref(),
+    );
     let handler_state = Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -503,6 +516,8 @@ async fn handle_http3_connection(
         timeout_duration,
         peer_identity,
         tls_params: None,
+        host_control_plane_metadata,
+        host_control_plane_span_links,
     });
     let mut connection_future = Box::pin(
         Http3::new(h3_quinn::Connection::new(conn), Http3Options::default())

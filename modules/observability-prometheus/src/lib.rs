@@ -2,7 +2,7 @@ mod endpoint;
 mod validator;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
@@ -39,12 +39,14 @@ struct PrometheusBackendConfig {
 struct ConfiguredEvent {
     event: Option<Arc<Event>>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// The Prometheus event sink that emits events to an Prometheus collector
 struct PrometheusEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl EventSink for PrometheusEventSink {
@@ -54,6 +56,7 @@ impl EventSink for PrometheusEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event: Some(Arc::new(event)),
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -83,6 +86,7 @@ impl EventSink for PrometheusEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event: Some(event),
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -240,7 +244,7 @@ impl Module for PrometheusObservabilityModule {
                 let cache_key = config_cache_key(&config);
                 let entry = providers
                     .entry(cache_key)
-                    .or_insert_with(|| init_provider(&config, cancel_token.clone()));
+                    .or_insert_with(|| init_provider(&config, cancel_token.clone(), msg.control_plane_metadata.clone()));
 
                 if let Some(Event::Metric(metric_event)) = msg.event.as_deref() {
                     emit_metric(
@@ -249,6 +253,7 @@ impl Module for PrometheusObservabilityModule {
                         &mut entry.metrics_instruments,
                         &entry.baggage_promotions,
                         &mut entry.baggage_tracker,
+                        &entry.control_plane_metadata,
                     );
                 }
             }
@@ -264,6 +269,7 @@ struct PrometheusProviderCache {
     metrics_instruments: PrometheusInstrumentCache,
     baggage_promotions: Vec<BaggageKeyPromotion>,
     baggage_tracker: DistinctValueTracker,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 enum CachedInstrument {
@@ -286,6 +292,7 @@ fn config_cache_key(config: &PrometheusBackendConfig) -> String {
 fn init_provider(
     config: &PrometheusBackendConfig,
     reload_token: CancellationToken,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 ) -> PrometheusProviderCache {
     let config_clone = config.clone();
     let registry = prometheus::Registry::new();
@@ -306,6 +313,7 @@ fn init_provider(
         metrics_instruments: HashMap::new(),
         baggage_promotions,
         baggage_tracker: DistinctValueTracker::new(),
+        control_plane_metadata,
     }
 }
 
@@ -315,6 +323,7 @@ fn emit_metric(
     instruments: &mut PrometheusInstrumentCache,
     promotions: &[BaggageKeyPromotion],
     tracker: &mut DistinctValueTracker,
+    control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
 ) {
     // Sanitize label values to avoid high-cardinality or invalid label contents.
     fn sanitize_label_value(s: &str) -> String {
@@ -370,6 +379,14 @@ fn emit_metric(
                     .and_then(|p| p.max_distinct),
             );
             attrs.push((attr.attribute_name.into(), value));
+        }
+    }
+
+    // Inject control plane metadata as metric const_labels
+    if let Some(metadata) = control_plane_metadata {
+        for (key, value) in metadata.iter() {
+            let attr_key = format!("ferron_control_plane_{}", key);
+            attrs.push((attr_key.into(), value.clone()));
         }
     }
 
@@ -718,10 +735,12 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
         let _ = self.inner.try_send(ConfiguredEvent {
             event: None,
             log_config: ctx.log_config.clone(),
+            control_plane_metadata: ctx.control_plane_metadata.clone(),
         });
         ctx.sink = Some(Arc::new(PrometheusEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
+            control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
         Ok(())
     }

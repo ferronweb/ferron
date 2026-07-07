@@ -167,6 +167,7 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 unit: Some("{response}"),
                 description: Some("Responses skipped due to Content-Encoding header."),
                 trace_context: current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
             ctx.res = Some(HttpResponse::Custom(response));
             ctx.get_span_attributes()
@@ -189,6 +190,7 @@ impl Stage<HttpContext> for HttpReplaceStage {
                 unit: Some("{response}"),
                 description: Some("Responses skipped due to MIME type mismatch."),
                 trace_context: current_event_trace_context(ctx),
+                control_plane_metadata: None,
             }));
             ctx.res = Some(HttpResponse::Custom(response));
             ctx.get_span_attributes()
@@ -220,8 +222,9 @@ impl Stage<HttpContext> for HttpReplaceStage {
             value: MetricValue::U64(1),
             unit: Some("{response}"),
             description: Some("Responses successfully modified."),
-            trace_context: current_event_trace_context(ctx),
-        }));
+                trace_context: current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
 
         ctx.get_span_attributes()
             .insert("ferron.replace.applied", TraceAttributeValue::Bool(true));

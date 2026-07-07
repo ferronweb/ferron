@@ -122,6 +122,8 @@ fuzz_target!(|input: &[u8]| {
             None, // timeout_duration
             None, // peer_identity
             None, // tls_params
+            None, // host_control_plane_metadata
+            None, // host_control_plane_span_links
         )
         .await;
 

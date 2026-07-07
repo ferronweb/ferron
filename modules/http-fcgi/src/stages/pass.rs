@@ -179,6 +179,7 @@ impl Stage<HttpContext> for FcgiPassStage {
                         LogAttributeValue::String(scgi_to_fixed.to_string()),
                     )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.failures",
@@ -199,6 +200,7 @@ impl Stage<HttpContext> for FcgiPassStage {
                         "Number of FastCGI requests that failed before a backend response was returned.",
                     ),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
                 }));
                 ctx.res = Some(HttpResponse::BuiltinError(503, None));
                 ctx.get_span_attributes().insert(
@@ -250,6 +252,7 @@ impl Stage<HttpContext> for FcgiPassStage {
                         LogAttributeValue::String(stderr_string_trimmed.to_string()),
                     )],
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
                 events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.stderr_errors",
@@ -261,6 +264,7 @@ impl Stage<HttpContext> for FcgiPassStage {
                         "Number of FastCGI requests that produced non-empty stderr output.",
                     ),
                     trace_context: None,
+                    control_plane_metadata: None,
                 }));
             }
         });
@@ -292,6 +296,7 @@ impl Stage<HttpContext> for FcgiPassStage {
             unit: Some("s"),
             description: Some("Duration of FastCGI upstream request processing."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.fcgi.requests",
@@ -301,6 +306,7 @@ impl Stage<HttpContext> for FcgiPassStage {
             unit: Some("{request}"),
             description: Some("Number of FastCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
 
         ctx.get_span_attributes().insert(

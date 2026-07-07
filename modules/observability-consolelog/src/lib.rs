@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
@@ -17,12 +18,14 @@ static DROPPED_EVENT: Once = Once::new();
 struct ConfiguredEvent {
     event: Arc<Event>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// The initialized event sink that emits events to the console
 struct ConsoleEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl EventSink for ConsoleEventSink {
@@ -32,6 +35,7 @@ impl EventSink for ConsoleEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event: Arc::new(event),
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -61,6 +65,7 @@ impl EventSink for ConsoleEventSink {
             match self.inner.try_send(ConfiguredEvent {
                 event,
                 log_config: self.log_config.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
             }) {
                 Ok(_) => {
                     ferron_core::admin::ADMIN_METRICS
@@ -134,12 +139,25 @@ impl Module for ConsoleObservabilityModule {
 
                         match &*msg.event {
                             ferron_observability::Event::Access(ae) => {
-                                let message = format_access_event(ae, &msg.log_config, &registry);
+                                // Prefer event-level metadata over provider-level metadata
+                                let event_metadata = ae.control_plane_metadata()
+                                    .map(|m| std::sync::Arc::new(m.clone()));
+                                let effective_metadata = event_metadata.as_ref()
+                                    .or(msg.control_plane_metadata.as_ref());
+                                let cp_prefix =
+                                    format_metadata_prefix(effective_metadata);
+                                let message =
+                                    format_access_event(ae, &msg.log_config, &registry);
                                 if let Some(message) = message {
-                                    log_info!("{}", message);
+                                    log_info!("{}{}", cp_prefix, message);
                                 }
                             }
                             ferron_observability::Event::Log(le) => {
+                                // Prefer event-level metadata over provider-level metadata
+                                let effective_metadata = le.control_plane_metadata.as_ref()
+                                    .or(msg.control_plane_metadata.as_ref());
+                                let cp_prefix =
+                                    format_metadata_prefix(effective_metadata);
                                 let trace_id_part = le
                                     .trace_context
                                     .as_ref()
@@ -148,16 +166,16 @@ impl Module for ConsoleObservabilityModule {
                                     .unwrap_or_default();
                                 match le.level {
                                     ferron_observability::LogLevel::Error => {
-                                        log_error!("{}{}", trace_id_part, le.message)
+                                        log_error!("{}{}{}", cp_prefix, trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Warn => {
-                                        log_warn!("{}{}", trace_id_part, le.message)
+                                        log_warn!("{}{}{}", cp_prefix, trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Info => {
-                                        log_info!("{}{}", trace_id_part, le.message)
+                                        log_info!("{}{}{}", cp_prefix, trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Debug => {
-                                        log_debug!("{}{}", trace_id_part, le.message)
+                                        log_debug!("{}{}{}", cp_prefix, trace_id_part, le.message)
                                     }
                                 }
                             }
@@ -177,6 +195,19 @@ impl Module for ConsoleObservabilityModule {
 impl Drop for ConsoleObservabilityModule {
     fn drop(&mut self) {
         self.cancel_token.cancel();
+    }
+}
+
+fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
+    match metadata {
+        Some(meta) if !meta.is_empty() => {
+            let parts: Vec<String> = meta
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect();
+            format!("[{}] ", parts.join(" "))
+        }
+        _ => String::new(),
     }
 }
 
@@ -222,6 +253,7 @@ impl Provider<ObservabilityContext> for ConsoleObservabilityProvider {
         ctx.sink = Some(Arc::new(ConsoleEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
+            control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
         Ok(())
     }

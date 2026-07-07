@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
 use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
 use opentelemetry::logs::AnyValue;
@@ -11,6 +14,7 @@ pub(crate) fn emit_log(
     event: &LogEvent,
     promotions: &[BaggageKeyPromotion],
     log_style: LogStyle,
+    control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
 ) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider, Severity};
 
@@ -69,6 +73,19 @@ pub(crate) fn emit_log(
         let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::LOGS);
         for attr in extracted {
             record.add_attribute(attr.attribute_name, AnyValue::String(attr.value.into()));
+        }
+    }
+
+    // Inject control plane metadata as log record attributes
+    // Prefer event-level metadata over provider-level metadata
+    let effective_metadata = event
+        .control_plane_metadata
+        .as_ref()
+        .or(control_plane_metadata.as_ref());
+    if let Some(metadata) = effective_metadata {
+        for (key, value) in metadata.iter() {
+            let attr_key = format!("ferron.control_plane.{}", key);
+            record.add_attribute(attr_key, AnyValue::String(value.clone().into()));
         }
     }
 

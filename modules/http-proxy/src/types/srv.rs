@@ -89,6 +89,7 @@ pub async fn resolve_srv_inner(
                             target: crate::LOG_TARGET,
                             attributes: Vec::new(),
                             trace_context: None,
+                            control_plane_metadata: None,
                         },
                     ));
                     return Vec::new();
@@ -118,6 +119,7 @@ pub async fn resolve_srv_inner(
                                 ),
                             ],
                             trace_context: None,
+                            control_plane_metadata: None,
                         },
                     ));
                     return Vec::new();

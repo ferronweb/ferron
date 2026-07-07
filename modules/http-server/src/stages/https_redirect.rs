@@ -148,6 +148,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             unit: Some("{redirect}"),
             description: Some("Number of HTTP redirects emitted by the server."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
         }));
 
         ctx.get_span_attributes().insert(

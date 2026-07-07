@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_core::pipeline::Pipeline;
@@ -24,6 +25,7 @@ pub async fn execute_pipeline_stages(
     path_segments: &[String],
     request_span_key: Option<&str>,
     timeout_duration: Option<Duration>,
+    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
     let has_traces = events.has_trace_sinks();
     let pipeline_span_key =
@@ -68,6 +70,8 @@ pub async fn execute_pipeline_stages(
                 "ferron.pipeline.log_prefix",
                 TraceAttributeValue::String(log_prefix.to_string()),
             )],
+            links: vec![],
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
     }
 
@@ -79,6 +83,7 @@ pub async fn execute_pipeline_stages(
         has_traces && pipeline_span_key.is_some(),
         pipeline_span_key.as_deref().unwrap_or(""),
         "http",
+        control_plane_metadata.clone(),
     );
 
     let executed_stages = match if let Some(timeout_duration) =
@@ -110,6 +115,7 @@ pub async fn execute_pipeline_stages(
                         LogAttributeValue::String(error.to_string()),
                     ),
                 ],
+                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
@@ -123,6 +129,7 @@ pub async fn execute_pipeline_stages(
                     "error.type",
                     LogAttributeValue::String("pipeline_timeout".into()),
                 )],
+                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(408, None));
             None
@@ -136,6 +143,7 @@ pub async fn execute_pipeline_stages(
                 file_pipeline,
                 timeout_duration.map(|d| d.saturating_sub(instant.elapsed())),
                 pipeline_span_key.as_deref(),
+                control_plane_metadata.clone(),
             )
             .await
             {
@@ -164,6 +172,7 @@ pub async fn execute_pipeline_stages(
                                 LogAttributeValue::String(error.to_string()),
                             ),
                         ],
+                        control_plane_metadata.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -182,6 +191,7 @@ pub async fn execute_pipeline_stages(
                                 LogAttributeValue::String(error.to_string()),
                             ),
                         ],
+                        control_plane_metadata.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -200,6 +210,7 @@ pub async fn execute_pipeline_stages(
                     "error.type",
                     LogAttributeValue::String("pipeline_inverse_error".into()),
                 )],
+                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }
@@ -220,6 +231,7 @@ pub async fn execute_pipeline_stages(
                 _ => None,
             }),
             attributes: vec![],
+            control_plane_metadata: control_plane_metadata.clone(),
         }));
     }
 }
