@@ -28,6 +28,10 @@
 
 - **`vary_cookies` directive** — the cache module now supports a `vary_cookies` directive that accepts an explicit list of cookie names for cache key differentiation. When set, only the listed cookies are included in the cache key, preventing high-entropy tracking or session cookies from fragmenting the cache and collapsing hit rates.
 
+### Changed
+
+- **`localhost` resolution in reverse proxy** — `localhost` is no longer exempt from STRICT_DNS-style DNS resolution; it is treated as a regular hostname and resolved via A and AAAA records.
+
 ## Ferron 3.0.0-beta.5
 
 **Released in July 5, 2026**

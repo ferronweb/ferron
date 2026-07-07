@@ -144,9 +144,8 @@ impl Upstream {
     ) -> Vec<Arc<UpstreamInner>> {
         match self {
             Upstream::Static(cfg) => {
-                let needs_dns = !cfg.logical_dns
-                    && cfg.unix_socket.is_none()
-                    && !is_ip_literal_or_localhost(&cfg.url);
+                let needs_dns =
+                    !cfg.logical_dns && cfg.unix_socket.is_none() && !is_ip_literal(&cfg.url);
 
                 if needs_dns {
                     #[cfg(feature = "srv-lookup")]
@@ -188,22 +187,18 @@ impl Upstream {
     }
 }
 
-/// Returns true if the URL host is an IP literal (IPv4 or IPv6) or localhost.
+/// Returns true if the URL host is an IP literal (IPv4 or IPv6).
 #[inline]
-fn is_ip_literal_or_localhost(url: &str) -> bool {
+fn is_ip_literal(url: &str) -> bool {
     let host = url
         .strip_prefix("http://")
         .or_else(|| url.strip_prefix("https://"))
         .unwrap_or(url);
     let host = host.split('/').next().unwrap_or(host);
-    let host = host.split(':').next().unwrap_or(host);
+    let host = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
     let host = host.trim_start_matches('[').trim_end_matches(']');
     let host = host.to_lowercase();
     host.parse::<std::net::IpAddr>().is_ok()
-        || host == "localhost"
-        || host.ends_with(".localhost")
-        || host.ends_with(".localdomain")
-        || host.ends_with(".localdomain6")
 }
 
 /// mTLS credentials for a peer.

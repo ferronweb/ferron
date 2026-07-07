@@ -392,7 +392,7 @@ example.com {
 
 ## Strict DNS (A/AAAA) resolution
 
-When an `upstream` URL contains a hostname (not an IP literal; except `localhost`), Ferron resolves A and AAAA records using Hickory DNS by default. Each resolved IP address becomes a separate backend in the load balancer, enabling per-IP load balancing, circuit breaking, and health checking.
+When an `upstream` URL contains a hostname (not an IP literal), Ferron resolves A and AAAA records using Hickory DNS by default. Each resolved IP address becomes a separate backend in the load balancer, enabling per-IP load balancing, circuit breaking, and health checking.
 
 For example, if `http://myapp.example.com:8080` resolves to three IPs (`10.0.0.1`, `10.0.0.2`, `10.0.0.3`), Ferron creates three distinct backends — one per IP. The original hostname is preserved for TLS SNI and the HTTP `Host` header.
 
