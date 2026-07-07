@@ -482,10 +482,7 @@ Ferron 2 used `duration 30000` syntax. Ferron 3 accepts bare duration strings:
 {
     http {
         timeout 30           # Plain number = seconds
-    }
-    proxy {
-        upstream http://localhost:3000
-        keepalive "30m"      # Duration with suffix
+        #timeout "30s"       # Duration with suffix
     }
 }
 ```
