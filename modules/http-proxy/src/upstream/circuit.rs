@@ -313,7 +313,7 @@ fn record_circuit_breaker_failure(
         if (!recent_failures_would_some && state.recent_failures.is_some())
             || (recent_failures_would_some
                 && state.recent_failures.as_ref().is_none_or(|q| {
-                    q.len() != (circuit_breaker.max_fails as usize).saturating_sub(1)
+                    q.capacity() != (circuit_breaker.max_fails as usize).saturating_sub(1)
                 }))
         {
             drop(state);
