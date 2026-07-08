@@ -1526,7 +1526,7 @@ dependencies = [
  "glob",
  "h3",
  "h3-quinn",
- "hashlink 0.12.0",
+ "hashlink 0.12.1",
  "http-body-util",
  "httpdate",
  "hyper",
@@ -1661,7 +1661,7 @@ dependencies = [
  "ferron-common",
  "flate2",
  "futures-util",
- "hashlink 0.12.0",
+ "hashlink 0.12.1",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -1695,7 +1695,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "ferron-common",
- "hashlink 0.12.0",
+ "hashlink 0.12.1",
  "hyper",
  "hyper-rustls",
  "opentelemetry",
@@ -1752,7 +1752,7 @@ version = "2.8.1"
 dependencies = [
  "anyhow",
  "glob",
- "hashlink 0.12.0",
+ "hashlink 0.12.1",
  "kdl",
  "yaml-rust2",
 ]
@@ -2057,9 +2057,9 @@ dependencies = [
 
 [[package]]
 name = "hashlink"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5081f264ed7adee96ea4b4778b6bb9da0a7228b084587aa3bd3ff05da7c5a3b"
+checksum = "32069d97bb81e38fa67eab65e3393bf804bb85969f2bc06bf13f64aef5aba248"
 dependencies = [
  "hashbrown 0.17.1",
 ]
