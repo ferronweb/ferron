@@ -230,6 +230,7 @@ jobs:
           bodyFile: "CHANGES-CURRENT"
           tag: "${{ env.FERRON_VERSION }}"
           commit: "3.x"
+          prerelease: true # Ferron 3 is currently in beta.
 
       - name: Release Ferron to GitHub (Windows)
         if: contains(matrix.target, 'windows')
