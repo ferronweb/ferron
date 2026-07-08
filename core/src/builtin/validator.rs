@@ -34,7 +34,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                 validate_nested!(tcp, used(sub), send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
                 validate_nested!(tcp, used(sub), recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
                 validate_nested!(tcp, used(sub), backlog, args(1) => [ServerConfigurationValue::Number(_, _)]);
-                validate_nested!(tcp, used(sub), multipath, args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(tcp, used(sub), multipath, args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 crate::check_unused_subdirectives!(
                     tcp,
                     sub,
