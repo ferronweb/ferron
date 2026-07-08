@@ -151,6 +151,7 @@ fn emit_metrics(
         unit: Some("s"),
         description: Some("Total CPU seconds broken down by different states."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -164,6 +165,7 @@ fn emit_metrics(
         unit: Some("s"),
         description: Some("Total CPU seconds broken down by different states."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -177,6 +179,7 @@ fn emit_metrics(
              divided by the elapsed time and number of CPUs available to the process.",
         ),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -193,6 +196,7 @@ fn emit_metrics(
              divided by the elapsed time and number of CPUs available to the process.",
         ),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
@@ -203,6 +207,7 @@ fn emit_metrics(
         unit: Some("By"),
         description: Some("The amount of physical memory in use."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 
     event_sink.emit(Event::Metric(MetricEvent {
