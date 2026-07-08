@@ -696,7 +696,6 @@ impl Stage<HttpContext> for HttpCacheStage {
             );
             if let Some((entry, cache_key, hit_kind)) = lookup {
                 let scope = entry.scope;
-                self.emit_eviction_metrics(ctx, &zone_id, stats);
 
                 if request_policy.reason == "request-revalidation" {
                     self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
@@ -728,6 +727,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else {
                     self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
+                    self.emit_eviction_metrics(ctx, &zone_id, stats);
                     {
                         let sa = ctx.get_span_attributes();
                         sa.insert(
@@ -771,8 +771,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                     LookupResult::Hit
                 }
             } else {
-                self.emit_eviction_metrics(ctx, &zone_id, stats);
-
                 if had_expired {
                     // Thundering herd protection: coalesce concurrent requests
                     let coalesce_start = std::time::Instant::now();
@@ -1014,6 +1012,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     self.emit_eviction_metrics(ctx, &state.zone_id, stats);
                 } else {
                     // Serve stale response immediately
+                    self.emit_eviction_metrics(ctx, &state.zone_id, *stats);
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),

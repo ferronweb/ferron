@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### HTTP caching
+
+- **Duplicate eviction metrics** — eviction metrics (and logs) were being emitted twice for cache hits, leading to incorrect metric values. This has been fixed.
+
 ## Ferron 3.0.0-beta.6
 
 **Released in July 8, 2026**
