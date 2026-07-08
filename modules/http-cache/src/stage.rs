@@ -337,7 +337,7 @@ impl HttpCacheStage {
                     stats.expired_evictions,
                     zone_id.label()
                 ),
-                summary: "Cache entries evicted (ttl_expired)".into(),
+                summary: "Cache entries evicted".into(),
                 attributes: vec![
                     (
                         "eviction.reason",
@@ -384,7 +384,7 @@ impl HttpCacheStage {
                     stats.size_evictions,
                     zone_id.label()
                 ),
-                summary: "Cache entries evicted (capacity_reached_lru)".into(),
+                summary: "Cache entries evicted".into(),
                 attributes: vec![
                     (
                         "eviction.reason",

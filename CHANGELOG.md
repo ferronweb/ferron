@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changed
+
+#### HTTP caching
+
+- **Unified cache eviction log summaries** — the cache eviction log summaries are now unified to not include eviction reasons (they're already in log attributes).
+
 ### Fixed
 
 #### HTTP caching

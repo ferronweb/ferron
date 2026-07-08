@@ -446,8 +446,7 @@ The `ferron.cache.zone` attribute identifies which cache zone the request belong
 | Cache purged via LSCache controls | DEBUG | `cache.purged.count` (purged cache entries) |
 | Cache purged via PURGE method | DEBUG | `cache.purged.count` (purged cache entries) |
 | LSCache stale purge marker ignored | DEBUG | - |
-| Cache entries evicted (ttl_expired) | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
-| Cache entries evicted (capacity_reached_lru) | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
+| Cache entries evicted | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
 
 ### Access log fields
 
