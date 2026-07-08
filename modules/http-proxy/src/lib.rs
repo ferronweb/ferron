@@ -645,7 +645,7 @@ struct ReverseProxyModule {
 
 impl Module for ReverseProxyModule {
     fn name(&self) -> &str {
-        "reverse-proxy"
+        "http-proxy"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

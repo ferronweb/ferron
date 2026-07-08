@@ -51,7 +51,7 @@ impl ReloadMetricsModule {
 
 impl Module for ReloadMetricsModule {
     fn name(&self) -> &str {
-        "observability-reload-metrics"
+        "metrics-reload"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -51,7 +51,7 @@ impl AdminMetricsModule {
 
 impl Module for AdminMetricsModule {
     fn name(&self) -> &str {
-        "observability-admin-metrics"
+        "metrics-admin"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

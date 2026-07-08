@@ -906,7 +906,7 @@ impl BasicHttpModule {
 
 impl Module for BasicHttpModule {
     fn name(&self) -> &str {
-        "http"
+        "http-server"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

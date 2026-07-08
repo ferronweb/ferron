@@ -105,7 +105,7 @@ struct ForwardProxyModule;
 
 impl Module for ForwardProxyModule {
     fn name(&self) -> &str {
-        "forward-proxy"
+        "http-fproxy"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

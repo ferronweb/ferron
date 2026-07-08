@@ -333,7 +333,7 @@ pub async fn background_ocsp_task(
             LogLevel::Info,
             "OCSP HTTPS initialization failed",
             "Failed to initialize HTTPS for OCSP background task",
-            "ferron_ocsp",
+            "ferron-ocsp-stapler",
             Vec::new(),
         );
         return;
@@ -349,14 +349,14 @@ pub async fn background_ocsp_task(
         LogLevel::Debug,
         "OCSP background task started",
         "OCSP background task started",
-        "ferron_ocsp",
+        "ferron-ocsp-stapler",
         Vec::new(),
     );
 
     loop {
         let received_certified_key = tokio::select! {
             _ = cancel_token.cancelled() => {
-                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "OCSP background task shutting down", "ferron_ocsp", Vec::new());
+                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "OCSP background task shutting down", "ferron-ocsp-stapler", Vec::new());
                 return;
             }
             _ = tokio::time::sleep(sleep_duration) => None,
@@ -377,7 +377,7 @@ pub async fn background_ocsp_task(
                         LogLevel::Debug,
                         "OCSP fetch triggered",
                         &format!("OCSP fetch triggered for certificate {ident}"),
-                        "ferron_ocsp",
+                        "ferron-ocsp-stapler",
                         vec![(
                             "ferron.ocsp.cert.subject",
                             LogAttributeValue::String(ident.clone()),
@@ -451,7 +451,7 @@ pub async fn background_ocsp_task(
                                 chrono::DateTime::<chrono::Utc>::from(next_update_time)
                                     .format("%Y-%m-%d %H:%M:%S")
                             ),
-                            "ferron_ocsp",
+                            "ferron-ocsp-stapler",
                             log_attributes,
                         );
                         emit_metric(
@@ -510,7 +510,7 @@ pub async fn background_ocsp_task(
                                 "OCSP stapling skipped — \
                                  no OCSP URL or incomplete chain in certificate {ident}"
                             ),
-                            "ferron_ocsp",
+                            "ferron-ocsp-stapler",
                             vec![
                                 ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
                                 (
@@ -555,7 +555,7 @@ pub async fn background_ocsp_task(
                             LogLevel::Warn,
                             "OCSP fetch failed",
                             &format!("OCSP fetch failed for {ident}: {e}"),
-                            "ferron_ocsp",
+                            "ferron-ocsp-stapler",
                             vec![
                                 ("ferron.ocsp.cert.subject", LogAttributeValue::String(ident)),
                                 ("error.message", LogAttributeValue::String(e.to_string())),

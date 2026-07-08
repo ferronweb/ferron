@@ -59,7 +59,7 @@ impl ProcessMetricsModule {
 
 impl Module for ProcessMetricsModule {
     fn name(&self) -> &str {
-        "observability-process-metrics"
+        "metrics-process"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
