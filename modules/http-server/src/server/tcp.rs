@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
-use ferron_core::{log_error, log_info};
+use ferron_core::{log_error, log_info, log_warn};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
@@ -61,6 +61,7 @@ pub(crate) struct TcpListenerOptions {
     pub send_buffer_size: Option<usize>,
     pub recv_buffer_size: Option<usize>,
     pub backlog: Option<i32>,
+    pub multipath: bool,
 }
 
 pub struct TcpListenerHandle {
@@ -78,6 +79,7 @@ impl TcpListenerHandle {
             options.address,
             (options.send_buffer_size, options.recv_buffer_size),
             options.backlog,
+            options.multipath,
         )?;
 
         if config.load().tls_resolver.is_some() {
@@ -593,16 +595,48 @@ fn build_tcp_listener(
     address: SocketAddr,
     tcp_buffer_sizes: (Option<usize>, Option<usize>),
     backlog: Option<i32>,
+    multipath: bool,
 ) -> Result<std::net::TcpListener, io::Error> {
-    let listener_socket = socket2::Socket::new(
-        if address.is_ipv6() {
-            socket2::Domain::IPV6
-        } else {
-            socket2::Domain::IPV4
-        },
-        socket2::Type::STREAM,
-        Some(socket2::Protocol::TCP),
-    )?;
+    let domain = if address.is_ipv6() {
+        socket2::Domain::IPV6
+    } else {
+        socket2::Domain::IPV4
+    };
+
+    #[cfg(target_os = "linux")]
+    let listener_socket = if multipath {
+        match socket2::Socket::new(
+            domain,
+            socket2::Type::STREAM,
+            Some(socket2::Protocol::MPTCP),
+        ) {
+            Ok(s) => {
+                log_info!("MPTCP listener enabled on {}", address);
+                s
+            }
+            Err(e) => {
+                log_warn!(
+                    "MPTCP requested but unavailable ({}), falling back to standard TCP on {}",
+                    e,
+                    address
+                );
+                socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?
+            }
+        }
+    } else {
+        socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?
+    };
+
+    #[cfg(not(target_os = "linux"))]
+    let listener_socket = {
+        if multipath {
+            log_warn!(
+                "MPTCP is not supported on this platform, falling back to standard TCP on {}",
+                address
+            );
+        }
+        socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?
+    };
 
     listener_socket
         .set_reuse_address(!cfg!(windows))

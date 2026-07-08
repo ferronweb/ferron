@@ -11,6 +11,10 @@
 - **Admin API bearer token authentication** — the `admin` block now supports an `auth_token` directive for bearer token authentication on all admin API endpoints except `/health`. Clients must send `Authorization: Bearer <token>` header. The `/health` endpoint is exempt to allow load balancer and orchestrator probes.
 - **Prometheus endpoint bearer token authentication** — the `observability.prometheus` block now supports an `endpoint_auth_token` directive for bearer token authentication on the `/metrics` scrape endpoint. Scrapers must send `Authorization: Bearer <token>` header.
 
+#### Networking
+
+- **Multipath TCP (MPTCP) support** — the `tcp` block now supports a `multipath` directive that enables Multipath TCP on the HTTP listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and connection resilience. When enabled, Ferron attempts to create an MPTCP socket; if the kernel does not support MPTCP or it is disabled, a warning is logged and the listener falls back to standard TCP. ([GitHub issue](https://github.com/ferronweb/ferron/issues/619))
+
 #### Observability & tracing
 
 - **Admin API request metrics** — the admin API now emits per-request metrics (`ferron.admin.request.duration`, `ferron.admin.request.count`) for all endpoints except `/health`, with `http.request.method`, `url.path`, and `http.response.status_code` attributes. A dedicated `ferron.admin.reload.count` counter tracks reload attempts.

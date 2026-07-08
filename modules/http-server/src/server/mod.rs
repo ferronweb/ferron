@@ -175,6 +175,18 @@ fn resolve_tcp_backlog(
     })?))
 }
 
+fn resolve_tcp_multipath(tcp_config: Option<&ServerConfigurationBlock>) -> anyhow::Result<bool> {
+    let Some(value) = tcp_config.and_then(|config| config.get_value("multipath")) else {
+        return Ok(false);
+    };
+
+    let Some(enabled) = value.as_boolean() else {
+        anyhow::bail!("tcp.multipath must be a boolean");
+    };
+
+    Ok(enabled)
+}
+
 fn resolve_tcp_listener_options(
     global_config: &ServerConfigurationBlock,
     port: u16,
@@ -212,6 +224,7 @@ fn resolve_tcp_listener_options(
         send_buffer_size: resolve_tcp_buffer_size(tcp_config, "send_buf")?,
         recv_buffer_size: resolve_tcp_buffer_size(tcp_config, "recv_buf")?,
         backlog: resolve_tcp_backlog(tcp_config)?,
+        multipath: resolve_tcp_multipath(tcp_config)?,
     })
 }
 
