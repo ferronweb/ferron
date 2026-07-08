@@ -218,5 +218,6 @@ fn emit_metrics(
         unit: Some("By"),
         description: Some("The amount of committed virtual memory."),
         trace_context: None,
+        control_plane_metadata: None,
     }));
 }
