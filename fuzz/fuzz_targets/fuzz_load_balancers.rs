@@ -68,6 +68,7 @@ fn parse_input(input: &[u8]) -> Option<(u8, Vec<Arc<UpstreamInner>>, &[u8])> {
             connect_to: None,
             connection_timeout: None,
             idle_timeout: std::time::Duration::from_secs(60),
+            dns_status: ferron_http_proxy::types::upstream::DnsResolutionStatus::NotApplicable,
         }));
     }
 

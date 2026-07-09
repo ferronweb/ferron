@@ -261,7 +261,7 @@ fn emit_circuit_metric(
 ) {
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent};
 
-    let mut attributes = Vec::with_capacity(3);
+    let mut attributes = Vec::with_capacity(4);
     attributes.push((
         "ferron.proxy.backend_url",
         MetricAttributeValue::String(upstream.proxy_to.clone()),
@@ -279,6 +279,10 @@ fn emit_circuit_metric(
                 MetricAttributeValue::String(resolved_ip.to_string()),
             ));
         }
+        attributes.push((
+            "ferron.proxy.dns_status",
+            MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
+        ));
     }
     event_sink.emit(Event::Metric(MetricEvent {
         name,
@@ -596,6 +600,7 @@ mod tests {
             priority: 0,
             connection_timeout: None,
             idle_timeout: std::time::Duration::from_secs(60),
+            dns_status: Default::default(),
         })
     }
 

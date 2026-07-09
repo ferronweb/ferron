@@ -313,6 +313,47 @@ pub(crate) fn insert_srv(
     cache().srv.insert(key, value, ttl);
 }
 
+/// Aggregated TTL statistics for the strict DNS cache.
+pub(crate) struct DnsCacheTtlStats {
+    pub min_remaining_secs: f64,
+    pub max_remaining_secs: f64,
+    pub avg_remaining_secs: f64,
+    pub entry_count: usize,
+}
+
+/// Compute aggregated TTL statistics across all active strict DNS cache entries.
+///
+/// Returns `None` if the cache is empty. Used for low-cardinality TTL gauge emission.
+#[inline]
+pub(crate) fn strict_dns_ttl_stats() -> Option<DnsCacheTtlStats> {
+    let now = std::time::Instant::now();
+    let mut min = f64::MAX;
+    let mut max = 0.0f64;
+    let mut sum = 0.0f64;
+    let mut count = 0usize;
+
+    for entry in cache().strict_dns.entries.iter() {
+        if let Some(ref inner) = entry.value().inner {
+            let remaining = inner.expires_at.duration_since(now).as_secs_f64().max(0.0);
+            min = min.min(remaining);
+            max = max.max(remaining);
+            sum += remaining;
+            count += 1;
+        }
+    }
+
+    if count == 0 {
+        return None;
+    }
+
+    Some(DnsCacheTtlStats {
+        min_remaining_secs: min,
+        max_remaining_secs: max,
+        avg_remaining_secs: sum / count as f64,
+        entry_count: count,
+    })
+}
+
 /// Remove all expired entries from both caches.
 ///
 /// Called periodically by a background task and on config reload.

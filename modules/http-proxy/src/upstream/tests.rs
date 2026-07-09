@@ -25,6 +25,7 @@ fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         priority: 0,
         connection_timeout: None,
         idle_timeout: std::time::Duration::from_secs(60),
+        dns_status: Default::default(),
     })
 }
 
@@ -38,6 +39,7 @@ fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
         priority: 0,
         connection_timeout: None,
         idle_timeout: std::time::Duration::from_secs(60),
+        dns_status: Default::default(),
     })
 }
 

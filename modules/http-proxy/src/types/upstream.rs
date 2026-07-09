@@ -4,6 +4,38 @@ use std::{net::SocketAddr, sync::Arc};
 
 use crate::types::health::HealthCheckStateMap;
 
+/// DNS resolution status for an upstream backend.
+///
+/// Tracks whether DNS resolution was applicable and its outcome,
+/// used for metric labeling when `metrics_resolved_ip` is enabled.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DnsResolutionStatus {
+    /// DNS resolution not applicable (static URL, IP literal, Unix socket).
+    #[default]
+    NotApplicable,
+    /// DNS resolution succeeded (`connect_to` contains the resolved IP).
+    Resolved,
+    /// DNS lookup failed — domain not found (NXDOMAIN).
+    Nxdomain,
+    /// DNS lookup failed — other error (SERVFAIL, timeout, etc.).
+    DnsError,
+    /// Logical DNS mode — resolution deferred to TCP connect time.
+    LogicalDns,
+}
+
+impl DnsResolutionStatus {
+    /// Returns the metric label value for this status.
+    pub fn as_label(&self) -> &'static str {
+        match self {
+            Self::NotApplicable => "static",
+            Self::Resolved => "resolved",
+            Self::Nxdomain => "nxdomain",
+            Self::DnsError => "dns_error",
+            Self::LogicalDns => "logical_dns",
+        }
+    }
+}
+
 /// Upstream connection key.
 ///
 /// This uniquely identifies a backend server for connection pooling and health tracking.
@@ -36,6 +68,8 @@ pub struct UpstreamInner {
     pub connection_timeout: Option<std::time::Duration>,
     /// Idle timeout for keepalive connections to this upstream.
     pub idle_timeout: std::time::Duration,
+    /// DNS resolution status, used for metric labeling.
+    pub dns_status: DnsResolutionStatus,
 }
 
 impl std::hash::Hash for UpstreamInner {
@@ -164,9 +198,15 @@ impl Upstream {
                             priority: cfg.priority,
                             connection_timeout: cfg.connection_timeout,
                             idle_timeout: cfg.idle_timeout,
+                            dns_status: DnsResolutionStatus::NotApplicable,
                         })]
                     }
                 } else {
+                    let dns_status = if cfg.logical_dns {
+                        DnsResolutionStatus::LogicalDns
+                    } else {
+                        DnsResolutionStatus::NotApplicable
+                    };
                     vec![Arc::new(UpstreamInner {
                         proxy_to: cfg.url.clone(),
                         connect_to: None,
@@ -176,6 +216,7 @@ impl Upstream {
                         priority: cfg.priority,
                         connection_timeout: cfg.connection_timeout,
                         idle_timeout: cfg.idle_timeout,
+                        dns_status,
                     })]
                 }
             }

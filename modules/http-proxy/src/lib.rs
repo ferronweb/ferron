@@ -736,6 +736,59 @@ impl Module for ReverseProxyModule {
                         control_plane_metadata: None,
                     }));
                 }
+
+                // Emit aggregated DNS cache TTL remaining gauge
+                if let Some(ttl_stats) = crate::types::dns_cache::strict_dns_ttl_stats() {
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
+                        attributes: vec![(
+                            "aggregation",
+                            MetricAttributeValue::String("min".into()),
+                        )],
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(ttl_stats.min_remaining_secs),
+                        unit: Some("{second}"),
+                        description: Some("Minimum remaining TTL across all DNS cache entries."),
+                        trace_context: None,
+                        control_plane_metadata: None,
+                    }));
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
+                        attributes: vec![(
+                            "aggregation",
+                            MetricAttributeValue::String("max".into()),
+                        )],
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(ttl_stats.max_remaining_secs),
+                        unit: Some("{second}"),
+                        description: Some("Maximum remaining TTL across all DNS cache entries."),
+                        trace_context: None,
+                        control_plane_metadata: None,
+                    }));
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
+                        attributes: vec![(
+                            "aggregation",
+                            MetricAttributeValue::String("avg".into()),
+                        )],
+                        ty: MetricType::Gauge,
+                        value: MetricValue::F64(ttl_stats.avg_remaining_secs),
+                        unit: Some("{second}"),
+                        description: Some("Average remaining TTL across all DNS cache entries."),
+                        trace_context: None,
+                        control_plane_metadata: None,
+                    }));
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.dns.cache_entries",
+                        attributes: Vec::new(),
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(ttl_stats.entry_count as u64),
+                        unit: Some("{entry}"),
+                        description: Some("Number of active entries in the DNS cache."),
+                        trace_context: None,
+                        control_plane_metadata: None,
+                    }));
+                }
             }
         });
 
@@ -957,6 +1010,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     CustomAccessLogField::String(resolved_ip.to_string()),
                 );
             }
+            log_fields.insert(
+                "ferron.proxy.dns_status".into(),
+                CustomAccessLogField::String(backend.dns_status.as_label().to_string()),
+            );
             if let Some(ref unix_path) = backend.proxy_unix {
                 log_fields.insert(
                     "ferron.proxy.backend_unix_path".into(),
@@ -988,8 +1045,30 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Emit per-backend selected metrics
         use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+
+        // Helper: build resolved IP and DNS status attributes for proxy metrics.
+        fn resolved_ip_attrs(
+            metrics_resolved_ip: bool,
+            backend: &Arc<types::upstream::UpstreamInner>,
+        ) -> Vec<(&'static str, MetricAttributeValue)> {
+            if !metrics_resolved_ip {
+                return Vec::new();
+            }
+            let mut attrs = Vec::with_capacity(2);
+            if let Some(ref ip) = backend.connect_to {
+                attrs.push((
+                    "ferron.proxy.backend_resolved_ip",
+                    MetricAttributeValue::String(ip.to_string()),
+                ));
+            }
+            attrs.push((
+                "ferron.proxy.dns_status",
+                MetricAttributeValue::String(backend.dns_status.as_label().to_string()),
+            ));
+            attrs
+        }
         for backend in &metrics.selected_backends {
-            let mut attrs = Vec::with_capacity(3);
+            let mut attrs = Vec::with_capacity(4);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -1000,14 +1079,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     MetricAttributeValue::String(unix_path.clone()),
                 ));
             }
-            if metrics_resolved_ip {
-                if let Some(ref resolved_ip) = backend.connect_to {
-                    attrs.push((
-                        "ferron.proxy.backend_resolved_ip",
-                        MetricAttributeValue::String(resolved_ip.to_string()),
-                    ));
-                }
-            }
+            attrs.extend(resolved_ip_attrs(metrics_resolved_ip, backend));
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.backends.selected",
@@ -1023,7 +1095,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Emit per-backend circuit breaker unhealthy metrics
         for backend in &metrics.circuit_breaker_unhealthy_backends {
-            let mut attrs = Vec::with_capacity(4);
+            let mut attrs = Vec::with_capacity(5);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -1034,14 +1106,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     MetricAttributeValue::String(unix_path.clone()),
                 ));
             }
-            if metrics_resolved_ip {
-                if let Some(ref resolved_ip) = backend.connect_to {
-                    attrs.push((
-                        "ferron.proxy.backend_resolved_ip",
-                        MetricAttributeValue::String(resolved_ip.to_string()),
-                    ));
-                }
-            }
+            attrs.extend(resolved_ip_attrs(metrics_resolved_ip, backend));
             attrs.push((
                 "ferron.proxy.health_check_type",
                 MetricAttributeValue::String("circuit_breaker".to_string()),
@@ -1096,14 +1161,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     MetricAttributeValue::String(unix_path.clone()),
                 ));
             }
-            if metrics_resolved_ip {
-                if let Some(ref resolved_ip) = backend.connect_to {
-                    upstream_attrs.push((
-                        "ferron.proxy.backend_resolved_ip",
-                        MetricAttributeValue::String(resolved_ip.to_string()),
-                    ));
-                }
-            }
+            upstream_attrs.extend(resolved_ip_attrs(metrics_resolved_ip, backend));
         }
 
         // Emit per-request circuit breaker state gauge for the selected backend
@@ -1251,7 +1309,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             trace_context: Option<ferron_observability::EventTraceContext>,
             metrics_resolved_ip: bool,
         ) {
-            let mut attrs = Vec::with_capacity(4);
+            let mut attrs = Vec::with_capacity(5);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -1262,14 +1320,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     MetricAttributeValue::String(unix_path.clone()),
                 ));
             }
-            if metrics_resolved_ip {
-                if let Some(ref resolved_ip) = backend.connect_to {
-                    attrs.push((
-                        "ferron.proxy.backend_resolved_ip",
-                        MetricAttributeValue::String(resolved_ip.to_string()),
-                    ));
-                }
-            }
+            attrs.extend(resolved_ip_attrs(metrics_resolved_ip, backend));
             attrs.push((
                 "ferron.proxy.reason",
                 MetricAttributeValue::StaticStr(reason),

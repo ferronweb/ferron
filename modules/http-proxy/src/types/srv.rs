@@ -43,6 +43,7 @@ pub async fn resolve_srv(
                 priority,
                 connection_timeout: upstream.connection_timeout,
                 idle_timeout: upstream.idle_timeout,
+                dns_status: super::upstream::DnsResolutionStatus::Resolved,
             })
         })
         .collect()
@@ -155,6 +156,7 @@ pub async fn resolve_srv_inner(
                             priority: 0,
                             connection_timeout,
                             idle_timeout,
+                            dns_status: super::upstream::DnsResolutionStatus::Resolved,
                         });
                         let priority = srv.priority;
 

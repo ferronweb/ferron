@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::types::health::HealthCheckStateMap;
-use crate::types::upstream::{UpstreamConfig, UpstreamInner};
+use crate::types::upstream::{DnsResolutionStatus, UpstreamConfig, UpstreamInner};
 
 /// Resolve A/AAAA records for the hostname in `UpstreamConfig`.
 ///
@@ -140,6 +140,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             priority,
                             connection_timeout,
                             idle_timeout,
+                            dns_status: DnsResolutionStatus::Resolved,
                         }));
                     }
 

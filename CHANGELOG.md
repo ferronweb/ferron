@@ -13,6 +13,13 @@
 #### Reverse proxying
 
 - **DNS thundering herd prevention** — the DNS resolver now uses a singleflight mechanism to prevent multiple concurrent DNS queries for the same hostname, reducing load on DNS servers and improving performance.
+- **DNS resolution status metric attribute** — the `metrics_resolved_ip` directive now also emits a `ferron.proxy.dns_status` attribute on all proxy metrics and access logs when enabled. Values: `"resolved"` (DNS succeeded), `"nxdomain"` (domain not found), `"dns_error"` (other DNS failure), `"logical_dns"` (resolution deferred to connect time), `"static"` (DNS not applicable). This provides visibility into DNS resolution outcomes without requiring per-IP label explosion.
+
+### Added
+
+#### Observability & tracing
+
+- **DNS cache TTL remaining gauge** — new `ferron.proxy.dns.cache_ttl_remaining_seconds` Gauge metric exposes aggregated remaining TTL for DNS cache entries (`min`, `max`, `avg` aggregation via `aggregation` attribute). A companion `ferron.proxy.dns.cache_entries` Gauge tracks the number of active cache entries. This allows operators to alert on impending DNS record expiration before backend connections break.
 
 ### Fixed
 
