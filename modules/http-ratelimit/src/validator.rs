@@ -203,7 +203,7 @@ impl RateLimitValidator {
         if let Some(entries) = block.directives.get("throttle") {
             sub.insert("throttle".to_string());
             for entry in entries {
-                if entry.args.len() > 0 && entry.args.get(0).and_then(|a| a.as_boolean()).is_none()
+                if !entry.args.is_empty() && entry.args.first().and_then(|a| a.as_boolean()).is_none()
                 {
                     return Err("Invalid `throttle` — expected a boolean value".into());
                 }
