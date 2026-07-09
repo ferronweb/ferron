@@ -419,7 +419,7 @@ pub async fn run_tls_http_background_task(
                     "Certificate issuance denied",
                     &format!(
                         "The TLS certificate cannot be issued for \"{}\" hostname",
-                        &sni_hostname
+                        sni_hostname
                     ),
                     "ferron-tls-http",
                     vec![("tls.sni", LogAttributeValue::String(sni_hostname))],

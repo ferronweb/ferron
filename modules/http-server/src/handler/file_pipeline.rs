@@ -357,7 +357,7 @@ async fn resolve_http_file_target(
         if let Some(idx) = index_files.and_then(|idf| idf.first()) {
             if let Some(index_file) = try_resolve_index_files(
                 &candidate_path,
-                &[idx.to_owned()],
+                std::slice::from_ref(idx),
                 root_path,
                 disable_symlinks,
             )

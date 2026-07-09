@@ -4211,7 +4211,7 @@ fn convert_placeholders_into_interpolated_strings(
                 "server_ip_canonical" => Some("server.ip".to_string()), // Automatically canonicalized
                 s if s.starts_with("header:") => Some(format!(
                     "request.header.{}",
-                    &s[7..].to_lowercase().replace("-", "_")
+                    s[7..].to_lowercase().replace("-", "_")
                 )),
                 _ => None,
             };

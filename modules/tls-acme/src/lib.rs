@@ -511,7 +511,7 @@ async fn run_acme_background_task(
                                                 &format!(
                                                 "The TLS certificate cannot be issued for \"{}\" \
                                                 hostname",
-                                                &sni_hostname
+                                                sni_hostname
                                             ),
                                                 "ferron-tls-acme",
                                                 vec![(
@@ -530,7 +530,7 @@ async fn run_acme_background_task(
                                                 &format!(
                                                 "Error while determining if the TLS certificate \
                                                 can be issued for \"{}\" hostname: {err}",
-                                                &sni_hostname
+                                                sni_hostname
                                             ),
                                                 "ferron-tls-acme",
                                                 vec![

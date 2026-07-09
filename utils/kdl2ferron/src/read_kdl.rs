@@ -9,7 +9,7 @@ fn kdlite_error_near(pos: usize, file_contents: &str) -> String {
                 .split_at_checked(50)
                 .map_or(split.1, |split2| split2.0)
         })
-        .and_then(|part| if part.is_empty() { None } else { Some(part) });
+        .filter(|&part| !part.is_empty());
     part.map_or("<end or out of bounds>".to_string(), |p| {
         format!("\"{}\"", p.escape_default())
     })
