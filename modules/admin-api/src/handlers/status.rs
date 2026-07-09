@@ -16,11 +16,22 @@ pub struct StatusResponse {
     pub observability_events_dropped: u64,
     /// Approximate current enqueued observability events.
     pub observability_event_queue_len: u64,
+    /// Content hash of the loaded configuration (xxh3 hex).
+    pub config_file_hash: String,
+    /// Last modification time of the configuration source (epoch seconds).
+    pub config_file_mtime: u64,
 }
 
 impl StatusResponse {
     /// Build from the global `ADMIN_METRICS`.
     pub fn from_global() -> Self {
+        let config_mtime = ADMIN_METRICS.config_mtime.read();
+        let mtime_epoch = config_mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let config_hash = ADMIN_METRICS.config_hash.read().clone();
+
         Self {
             uptime_sec: ADMIN_METRICS.start_time.elapsed().as_secs(),
             connections_active: ADMIN_METRICS.connections_active.load(Ordering::Relaxed),
@@ -32,6 +43,8 @@ impl StatusResponse {
             observability_event_queue_len: ADMIN_METRICS
                 .observability_event_queue_len
                 .load(Ordering::Relaxed),
+            config_file_hash: config_hash,
+            config_file_mtime: mtime_epoch,
         }
     }
 }

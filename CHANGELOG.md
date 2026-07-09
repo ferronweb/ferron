@@ -8,6 +8,7 @@
 
 #### Observability & tracing
 
+- **Configuration content hash** — new `ferron.admin.config_mtime` Gauge metric and `config_file_hash` / `config_file_mtime` fields on the `/status` Admin API endpoint expose the xxh3 content hash and last-modified time of the loaded configuration files. This enables rapid cluster-wide drift detection via a single PromQL query checking for hash mismatch across instances.
 - **DNS cache TTL remaining gauge** — new `ferron.proxy.dns.cache_ttl_remaining_seconds` Gauge metric exposes aggregated remaining TTL for DNS cache entries (`min`, `max`, `avg` aggregation via `aggregation` attribute). A companion `ferron.proxy.dns.cache_entries` Gauge tracks the number of active cache entries. This allows operators to alert on impending DNS record expiration before backend connections break.
 - **Pool connection limit metrics** — the `ferron.proxy.pool.local_limit` and `ferron.proxy.pool.global_limit` pool metrics are now available for monitoring connection pool usage.
 

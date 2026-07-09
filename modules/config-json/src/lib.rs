@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
-use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::config::adapter::{ConfigurationAdapter, ConfigurationMetadata};
 use ferron_core::loader::ModuleLoader;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
@@ -19,6 +19,7 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         (
             ferron_core::config::ServerConfiguration,
             Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
+            ConfigurationMetadata,
         ),
         Box<dyn std::error::Error>,
     > {
@@ -27,6 +28,15 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         ))?;
         let file_contents = std::fs::read_to_string(filename)
             .map_err(|e| anyhow::anyhow!("Failed to read configuration file '{filename}': {e}",))?;
+
+        // Compute content hash from the file contents
+        let hash = xxhash_rust::xxh3::xxh3_64(file_contents.as_bytes());
+        let config_hash = format!("{:016x}", hash);
+
+        // Get file modification time
+        let config_mtime = std::fs::metadata(filename)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
 
         let watch_enabled = params
             .get("watch")
@@ -41,11 +51,17 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
                 as Box<dyn ferron_core::config::adapter::ConfigurationWatcher>
         };
 
+        let metadata = ConfigurationMetadata {
+            config_hash,
+            config_mtime,
+        };
+
         Ok((
             serde_json::from_str(&file_contents).map_err(|e| {
                 anyhow::anyhow!("Failed to parse configuration file '{filename}': {e}",)
             })?,
             watcher,
+            metadata,
         ))
     }
 

@@ -7,6 +7,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::LazyLock;
 use std::time::{Instant, SystemTime};
 
+/// Default mtime used before any configuration has been loaded.
+const DEFAULT_MTIME: SystemTime = SystemTime::UNIX_EPOCH;
+
 /// Metrics for the reload process.
 pub struct ReloadMetrics {
     pub last_reload_time: SystemTime,
@@ -64,6 +67,10 @@ pub struct AdminMetrics {
     pub reload_metrics: parking_lot::RwLock<ReloadMetrics>,
     /// Metrics related to runtime.
     pub runtime_metrics: parking_lot::RwLock<RuntimeMetrics>,
+    /// Content hash of the loaded configuration (xxh3 hex).
+    pub config_hash: parking_lot::RwLock<String>,
+    /// Last modification time of the configuration source.
+    pub config_mtime: parking_lot::RwLock<SystemTime>,
 }
 
 impl AdminMetrics {
@@ -79,6 +86,8 @@ impl AdminMetrics {
             observability_event_queue_len: AtomicU64::new(0),
             reload_metrics: parking_lot::RwLock::new(ReloadMetrics::default()),
             runtime_metrics: parking_lot::RwLock::new(RuntimeMetrics::default()),
+            config_hash: parking_lot::RwLock::new(String::new()),
+            config_mtime: parking_lot::RwLock::new(DEFAULT_MTIME),
         }
     }
 }

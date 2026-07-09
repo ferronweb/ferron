@@ -682,7 +682,7 @@ fn validate(
         loader.register_scoped_configuration_validators(&mut scoped_validator_registry);
     }
 
-    let (config, _) = config_adapter
+    let (config, _, _) = config_adapter
         .adapt(&config_adapter_params)
         .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
 
@@ -734,7 +734,7 @@ fn adapt(
         ..
     } = load_config_adapters(config_path, config_params, config_adapter, loaders)?;
 
-    let (config, _) = config_adapter
+    let (config, _, _) = config_adapter
         .adapt(&config_adapter_params)
         .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
     let json = serde_json::to_string_pretty(&config)?;
@@ -779,7 +779,7 @@ fn load_modules(
             scoped_validator_registry.clone(),
             registry.clone(),
         ) {
-            Ok((config, watcher, modules)) => {
+            Ok((config, watcher, modules, metadata)) => {
                 let first_time = runtime.is_none();
 
                 let mut layered_config = LayeredConfiguration::new();
@@ -808,6 +808,16 @@ fn load_modules(
                     reload_metrics.last_reload_error = None;
                     reload_metrics.active_generation =
                         reload_metrics.active_generation.saturating_add(1);
+                }
+
+                // Store config metadata for drift detection
+                {
+                    let mut config_hash = ferron_core::admin::ADMIN_METRICS.config_hash.write();
+                    *config_hash = metadata.config_hash;
+                }
+                {
+                    let mut config_mtime = ferron_core::admin::ADMIN_METRICS.config_mtime.write();
+                    *config_mtime = metadata.config_mtime;
                 }
 
                 reload_state.1.set_state(None);
@@ -904,10 +914,11 @@ fn load_modules_config(
         Arc<ferron_core::config::ServerConfiguration>,
         Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
         Vec<Arc<dyn ferron_core::Module>>,
+        ferron_core::config::adapter::ConfigurationMetadata,
     ),
     Box<dyn std::error::Error>,
 > {
-    let (config, watcher) = config_adapter
+    let (config, watcher, metadata) = config_adapter
         .adapt(&config_adapter_params)
         .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
     let config = Arc::new(config);
@@ -935,5 +946,5 @@ fn load_modules_config(
         loader.register_modules(module_registry.clone(), &mut modules, config.clone())?;
     }
 
-    Ok((config, watcher, modules))
+    Ok((config, watcher, modules, metadata))
 }

@@ -91,6 +91,8 @@ async fn test_admin_status_and_config() {
     let json: serde_json::Value = resp.json().await.unwrap();
     assert!(json.get("uptime_sec").is_some());
     assert!(json.get("requests_total").is_some());
+    assert!(json.get("config_file_hash").is_some());
+    assert!(json.get("config_file_mtime").is_some());
 
     // /config should return sanitized JSON
     let resp = client

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::hash::Hasher;
+use std::time::SystemTime;
 
 use anyhow::anyhow;
-use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::config::adapter::{ConfigurationAdapter, ConfigurationMetadata};
 use ferron_core::config::ServerConfiguration;
 use ferron_core::loader::ModuleLoader;
 
@@ -28,6 +30,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
         (
             ServerConfiguration,
             Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
+            ConfigurationMetadata,
         ),
         Box<dyn std::error::Error>,
     > {
@@ -43,6 +46,22 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
             &mut loaded_files,
         )?;
 
+        // Compute content hash from all loaded files (main + includes)
+        let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+        let mut latest_mtime = SystemTime::UNIX_EPOCH;
+        for file_path in &loaded_files {
+            let content = std::fs::read_to_string(file_path)?;
+            hasher.update(content.as_bytes());
+            if let Ok(metadata) = std::fs::metadata(file_path) {
+                if let Ok(mtime) = metadata.modified() {
+                    if mtime > latest_mtime {
+                        latest_mtime = mtime;
+                    }
+                }
+            }
+        }
+        let config_hash = format!("{:016x}", hasher.finish());
+
         let watch_enabled = params
             .get("watch")
             .map(|v| v == "true" || v == "1")
@@ -55,7 +74,12 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
             Box::new(DisabledConfigurationWatcher)
         };
 
-        Ok((translate_configuration(&statements)?, watcher))
+        let metadata = ConfigurationMetadata {
+            config_hash,
+            config_mtime: latest_mtime,
+        };
+
+        Ok((translate_configuration(&statements)?, watcher, metadata))
     }
 
     #[inline]

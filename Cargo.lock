@@ -1164,6 +1164,7 @@ dependencies = [
  "notify",
  "notify-debouncer-mini",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1177,6 +1178,7 @@ dependencies = [
  "notify-debouncer-mini",
  "serde_json",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

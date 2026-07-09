@@ -56,6 +56,7 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 | `ferron.admin.reloads` | Counter | — | Number of configuration reloads performed |
 | `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
 | `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
+| `ferron.admin.config_mtime` | Gauge | — | Last modification time of the configuration source (epoch seconds) |
 
 ### Admin API request metrics
 

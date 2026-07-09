@@ -135,6 +135,8 @@ pub async fn status_handler(State(_state): State<AdminState>) -> axum::Json<serd
         "reloads": metrics.reloads,
         "observability_events_dropped": metrics.observability_events_dropped,
         "observability_event_queue_len": metrics.observability_event_queue_len,
+        "config_file_hash": metrics.config_file_hash,
+        "config_file_mtime": metrics.config_file_mtime,
     }))
 }
 

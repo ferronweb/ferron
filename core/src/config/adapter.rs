@@ -5,6 +5,7 @@
 //! - Watching for configuration changes to support reload
 
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 use async_trait::async_trait;
 
@@ -27,6 +28,30 @@ pub trait ConfigurationWatcher: Send + Sync {
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
+/// Metadata about the loaded configuration source.
+///
+/// Returned alongside the parsed configuration to enable drift detection
+/// and observability without re-reading the source.
+pub struct ConfigurationMetadata {
+    /// Content hash of the configuration source (e.g., xxh3 hex of all loaded files).
+    pub config_hash: String,
+    /// Last modification time of the configuration source.
+    pub config_mtime: SystemTime,
+}
+
+/// Result type for `ConfigurationAdapter::adapt()`.
+///
+/// Contains the parsed configuration, a watcher for future changes,
+/// and metadata about the configuration source.
+pub type AdaptResult = Result<
+    (
+        ServerConfiguration,
+        Box<dyn ConfigurationWatcher>,
+        ConfigurationMetadata,
+    ),
+    Box<dyn std::error::Error>,
+>;
+
 /// Adapter for loading server configuration from a specific source.
 ///
 /// Adapters are responsible for parsing configuration from their source
@@ -40,11 +65,15 @@ pub trait ConfigurationWatcher: Send + Sync {
 ///     fn adapt(
 ///         &self,
 ///         params: &HashMap<String, String>,
-///     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>), Box<dyn std::error::Error>> {
+///     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>, ConfigurationMetadata), Box<dyn std::error::Error>> {
 ///         let path = params.get("path").ok_or("missing path")?;
 ///         let config = load_yaml_config(path)?;
 ///         let watcher = FileWatcher::new(path.into());
-///         Ok((config, Box::new(watcher)))
+///         let metadata = ConfigurationMetadata {
+///             config_hash: compute_hash(path),
+///             config_mtime: std::fs::metadata(path)?.modified()?,
+///         };
+///         Ok((config, Box::new(watcher), metadata))
 ///     }
 ///
 ///     fn file_extension(&self) -> Vec<&'static str> {
@@ -64,10 +93,8 @@ pub trait ConfigurationAdapter {
     /// A tuple containing:
     /// - The parsed `ServerConfiguration`
     /// - A `ConfigurationWatcher` to detect future changes
-    fn adapt(
-        &self,
-        params: &HashMap<String, String>,
-    ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>), Box<dyn std::error::Error>>;
+    /// - `ConfigurationMetadata` with content hash and modification time
+    fn adapt(&self, params: &HashMap<String, String>) -> AdaptResult;
 
     /// File extensions this adapter can handle.
     ///

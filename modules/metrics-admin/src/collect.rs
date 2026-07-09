@@ -180,4 +180,26 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             control_plane_metadata: None,
         }));
     }
+
+    // --- Config metadata metrics ---
+    {
+        let config_mtime = metrics.config_mtime.read();
+        let mtime_epoch = config_mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.config_mtime",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::F64(mtime_epoch),
+            unit: Some("s"),
+            description: Some(
+                "Last modification time of the configuration source (epoch seconds).",
+            ),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    }
 }
