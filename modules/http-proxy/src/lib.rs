@@ -1392,7 +1392,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 MetricAttributeValue::StaticStr(reason),
             ));
             events.emit(ferron_observability::Event::Metric(MetricEvent {
-                name: "ferron.proxy.backend.excluded",
+                name: "ferron.proxy.backends.excluded",
                 attributes: attrs,
                 ty: MetricType::Counter,
                 value: MetricValue::U64(1),

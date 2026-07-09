@@ -42,6 +42,7 @@
 #### Observability & tracing
 
 - **Prometheus endpoint is no longer on-demand** — the Prometheus endpoint is now always available on the configured port, regardless of the number of active connections.
+- **Reverse proxy metric naming consistency** — the `ferron.proxy.backend.excluded` metric name has been renamed to `ferron.proxy.backends.excluded` for consistency with other reverse proxy metrics.
 
 ## Ferron 3.0.0-beta.6
 
