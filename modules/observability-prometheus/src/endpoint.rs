@@ -10,6 +10,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::PrometheusBackendConfig;
 
+type EndpointState = (
+    Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
+    String,
+    Histogram,
+    Counter,
+    Counter,
+);
+
 /// Shared state for the bearer token auth middleware.
 #[derive(Clone)]
 struct AuthState {
@@ -103,13 +111,7 @@ pub async fn endpoint_listener_fn(
 }
 
 async fn endpoint_fn(
-    State((registry, format, scrape_duration, scrape_total, _scrape_errors)): State<(
-        Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
-        String,
-        Histogram,
-        Counter,
-        Counter,
-    )>,
+    State((registry, format, scrape_duration, scrape_total, _scrape_errors)): State<EndpointState>,
 ) -> Result<axum::response::Response, axum::http::StatusCode> {
     let start = std::time::Instant::now();
     scrape_total.inc();

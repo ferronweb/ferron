@@ -21,6 +21,7 @@ use ferron_observability::{
 };
 use prometheus_client::encoding::{EncodeLabelKey, EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::exemplar::{CounterWithExemplar, HistogramWithExemplars};
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{self, Histogram, NativeHistogramConfig};
@@ -311,12 +312,16 @@ struct PrometheusProviderCache {
 type MetricCache = HashMap<&'static str, CachedMetric>;
 
 enum CachedMetric {
-    BareCounter(Counter),
+    BareCounter(CounterWithExemplar<Vec<(String, String)>>),
     BareGauge(Gauge),
     BareHistogram(Histogram),
-    FamilyCounter(Family<DynamicLabels, Counter>),
+    BareHistogramWithExemplars(HistogramWithExemplars<Vec<(String, String)>>),
+    FamilyCounter(Family<DynamicLabels, CounterWithExemplar<Vec<(String, String)>>>),
     FamilyGauge(Family<DynamicLabels, Gauge>),
     FamilyHistogram(Family<DynamicLabels, Histogram>),
+    FamilyHistogramWithExemplars(
+        Family<DynamicLabels, HistogramWithExemplars<Vec<(String, String)>>>,
+    ),
 }
 
 fn config_cache_key(config: &PrometheusBackendConfig) -> String {
@@ -375,7 +380,7 @@ fn init_provider(
     });
 
     PrometheusProviderCache {
-        registry: registry,
+        registry,
         metrics_cache: HashMap::new(),
         baggage_promotions,
         baggage_tracker: DistinctValueTracker::new(),
@@ -397,6 +402,26 @@ fn make_histogram_constructor(native_histograms: bool) -> fn() -> Histogram {
         }
         constructor_classic
     }
+}
+
+fn exemplar_histogram_constructor() -> HistogramWithExemplars<Vec<(String, String)>> {
+    HistogramWithExemplars::new(DEFAULT_BUCKETS.iter().copied())
+}
+
+fn exemplar_labels(event: &MetricEvent) -> Option<Vec<(String, String)>> {
+    // Trace and span IDs are already hex-encoded...
+    event.trace_context.as_ref().map(|tc| {
+        vec![
+            (
+                "trace_id".to_string(),
+                String::from_utf8_lossy(&tc.trace_id).to_string(),
+            ),
+            (
+                "span_id".to_string(),
+                String::from_utf8_lossy(&tc.span_id).to_string(),
+            ),
+        ]
+    })
 }
 
 async fn emit_metric(
@@ -477,10 +502,11 @@ async fn emit_metric(
             if val < 0.0 {
                 return;
             }
+            let exemplar = exemplar_labels(event);
             let cached = match cache.entry(event.name) {
                 std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                 std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
-                    let metric = Counter::default();
+                    let metric = CounterWithExemplar::<Vec<(String, String)>>::default();
                     registry.write().await.register(
                         event.name.to_string().replace(".", "_"),
                         format_description(event),
@@ -488,7 +514,10 @@ async fn emit_metric(
                     );
                     CachedMetric::BareCounter(metric)
                 } else {
-                    let metric = Family::default();
+                    let metric = Family::<
+                            DynamicLabels,
+                            CounterWithExemplar<Vec<(String, String)>>,
+                        >::default();
                     registry.write().await.register(
                         event.name.to_string().replace(".", "_"),
                         format_description(event),
@@ -499,19 +528,20 @@ async fn emit_metric(
             };
             match cached {
                 CachedMetric::BareCounter(c) => {
-                    c.inc_by(val as u64);
+                    c.inc_by(val as u64, exemplar, None);
                 }
                 CachedMetric::FamilyCounter(f) => {
-                    f.get_or_create(&labels).inc_by(val as u64);
+                    f.get_or_create(&labels).inc_by(val as u64, exemplar, None);
                 }
                 _ => {}
             }
         }
         (MetricType::Counter, MetricValue::U64(val)) => {
+            let exemplar = exemplar_labels(event);
             let cached = match cache.entry(event.name) {
                 std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                 std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
-                    let metric = Counter::default();
+                    let metric = CounterWithExemplar::<Vec<(String, String)>>::default();
                     registry.write().await.register(
                         event.name.to_string().replace(".", "_"),
                         format_description(event),
@@ -519,7 +549,10 @@ async fn emit_metric(
                     );
                     CachedMetric::BareCounter(metric)
                 } else {
-                    let metric = Family::default();
+                    let metric = Family::<
+                            DynamicLabels,
+                            CounterWithExemplar<Vec<(String, String)>>,
+                        >::default();
                     registry.write().await.register(
                         event.name.to_string().replace(".", "_"),
                         format_description(event),
@@ -530,10 +563,10 @@ async fn emit_metric(
             };
             match cached {
                 CachedMetric::BareCounter(c) => {
-                    c.inc_by(val);
+                    c.inc_by(val, exemplar, None);
                 }
                 CachedMetric::FamilyCounter(f) => {
-                    f.get_or_create(&labels).inc_by(val);
+                    f.get_or_create(&labels).inc_by(val, exemplar, None);
                 }
                 _ => {}
             }
@@ -694,71 +727,151 @@ async fn emit_metric(
             }
         }
         (MetricType::Histogram(_), MetricValue::F64(val)) => {
-            let cached = match cache.entry(event.name) {
-                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
-                std::collections::hash_map::Entry::Vacant(e) => e.insert({
-                    let constructor = make_histogram_constructor(native_histograms);
-                    if labels.0.is_empty() {
-                        let metric = constructor();
-                        registry.write().await.register(
-                            event.name.to_string().replace(".", "_"),
-                            format_description(event),
-                            metric.clone(),
-                        );
-                        CachedMetric::BareHistogram(metric)
-                    } else {
-                        let metric = Family::new_with_constructor(constructor);
-                        registry.write().await.register(
-                            event.name.to_string().replace(".", "_"),
-                            format_description(event),
-                            metric.clone(),
-                        );
-                        CachedMetric::FamilyHistogram(metric)
+            if native_histograms {
+                let cached = match cache.entry(event.name) {
+                    std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        let constructor = make_histogram_constructor(true);
+                        if labels.0.is_empty() {
+                            let metric = constructor();
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::BareHistogram(metric)
+                        } else {
+                            let metric = Family::new_with_constructor(constructor);
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::FamilyHistogram(metric)
+                        }
+                    }),
+                };
+                match cached {
+                    CachedMetric::BareHistogram(h) => {
+                        h.observe(val);
                     }
-                }),
-            };
-            match cached {
-                CachedMetric::BareHistogram(h) => {
-                    h.observe(val);
+                    CachedMetric::FamilyHistogram(f) => {
+                        f.get_or_create(&labels).observe(val);
+                    }
+                    _ => {}
                 }
-                CachedMetric::FamilyHistogram(f) => {
-                    f.get_or_create(&labels).observe(val);
+            } else {
+                let exemplar = exemplar_labels(event);
+                let cached = match cache.entry(event.name) {
+                    std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        if labels.0.is_empty() {
+                            let metric = exemplar_histogram_constructor();
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::BareHistogramWithExemplars(metric)
+                        } else {
+                            let metric = Family::<
+                                DynamicLabels,
+                                HistogramWithExemplars<Vec<(String, String)>>,
+                            >::new_with_constructor(
+                                exemplar_histogram_constructor
+                            );
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::FamilyHistogramWithExemplars(metric)
+                        }
+                    }),
+                };
+                match cached {
+                    CachedMetric::BareHistogramWithExemplars(h) => {
+                        h.observe(val, exemplar, None);
+                    }
+                    CachedMetric::FamilyHistogramWithExemplars(f) => {
+                        f.get_or_create(&labels).observe(val, exemplar, None);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         (MetricType::Histogram(_), MetricValue::U64(val)) => {
-            let cached = match cache.entry(event.name) {
-                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
-                std::collections::hash_map::Entry::Vacant(e) => e.insert({
-                    let constructor = make_histogram_constructor(native_histograms);
-                    if labels.0.is_empty() {
-                        let metric = constructor();
-                        registry.write().await.register(
-                            event.name.to_string().replace(".", "_"),
-                            format_description(event),
-                            metric.clone(),
-                        );
-                        CachedMetric::BareHistogram(metric)
-                    } else {
-                        let metric = Family::new_with_constructor(constructor);
-                        registry.write().await.register(
-                            event.name.to_string().replace(".", "_"),
-                            format_description(event),
-                            metric.clone(),
-                        );
-                        CachedMetric::FamilyHistogram(metric)
+            if native_histograms {
+                let cached = match cache.entry(event.name) {
+                    std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        let constructor = make_histogram_constructor(true);
+                        if labels.0.is_empty() {
+                            let metric = constructor();
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::BareHistogram(metric)
+                        } else {
+                            let metric = Family::new_with_constructor(constructor);
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::FamilyHistogram(metric)
+                        }
+                    }),
+                };
+                match cached {
+                    CachedMetric::BareHistogram(h) => {
+                        h.observe(val as f64);
                     }
-                }),
-            };
-            match cached {
-                CachedMetric::BareHistogram(h) => {
-                    h.observe(val as f64);
+                    CachedMetric::FamilyHistogram(f) => {
+                        f.get_or_create(&labels).observe(val as f64);
+                    }
+                    _ => {}
                 }
-                CachedMetric::FamilyHistogram(f) => {
-                    f.get_or_create(&labels).observe(val as f64);
+            } else {
+                let exemplar = exemplar_labels(event);
+                let cached = match cache.entry(event.name) {
+                    std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        if labels.0.is_empty() {
+                            let metric = exemplar_histogram_constructor();
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::BareHistogramWithExemplars(metric)
+                        } else {
+                            let metric = Family::<
+                                DynamicLabels,
+                                HistogramWithExemplars<Vec<(String, String)>>,
+                            >::new_with_constructor(
+                                exemplar_histogram_constructor
+                            );
+                            registry.write().await.register(
+                                event.name.to_string().replace(".", "_"),
+                                format_description(event),
+                                metric.clone(),
+                            );
+                            CachedMetric::FamilyHistogramWithExemplars(metric)
+                        }
+                    }),
+                };
+                match cached {
+                    CachedMetric::BareHistogramWithExemplars(h) => {
+                        h.observe(val as f64, exemplar, None);
+                    }
+                    CachedMetric::FamilyHistogramWithExemplars(f) => {
+                        f.get_or_create(&labels).observe(val as f64, exemplar, None);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         _ => {}

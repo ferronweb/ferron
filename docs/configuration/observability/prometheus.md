@@ -57,6 +57,20 @@ Text format always exposes classic bucket histograms regardless of this setting,
 > [!note]
 > Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions will silently ignore the native histogram data and use the classic buckets.
 
+### Metric exemplars
+
+When a request has an active trace context (trace ID and span ID), the Prometheus module automatically attaches **exemplars** to counter and histogram observations. Exemplars link a specific metric observation to a trace, enabling drill-down from a metric spike to the specific request that caused it.
+
+Each exemplar contains:
+
+- `trace_id` — the W3C trace ID of the request
+- `span_id` — the W3C span ID of the request
+
+Exemplars are enabled by default for all counter metrics. For histograms, exemplars are active when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive in Ferron's Prometheus module.
+
+> [!note]
+> Exemplars are displayed in the OpenMetrics text format as comments appended at the end of the metric line and are natively supported in the Prometheus protobuf format. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
+
 ### Baggage promotion
 
 The `baggage` sub-directive promotes specific W3C Baggage keys into Prometheus metric labels. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation.
