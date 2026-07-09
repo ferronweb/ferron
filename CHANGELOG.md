@@ -8,6 +8,7 @@
 
 #### Observability & tracing
 
+- **Prometheus native histogram support** — the Prometheus observability backend now supports OpenMetrics native histograms alongside classic bucket histograms. Enable with `endpoint_native_histograms true` in the `observability.prometheus` block. Native histograms are only available in protobuf format; the text format continues to expose classic bucket histograms.
 - **Configuration content hash** — new `ferron.admin.config_mtime` Gauge metric and `config_file_hash` / `config_file_mtime` fields on the `/status` Admin API endpoint expose the xxh3 content hash and last-modified time of the loaded configuration files. This enables rapid cluster-wide drift detection via a single PromQL query checking for hash mismatch across instances.
 - **DNS cache TTL remaining gauge** — new `ferron.proxy.dns.cache_ttl_remaining_seconds` Gauge metric exposes aggregated remaining TTL for DNS cache entries (`min`, `max`, `avg` aggregation via `aggregation` attribute). A companion `ferron.proxy.dns.cache_entries` Gauge tracks the number of active cache entries. This allows operators to alert on impending DNS record expiration before backend connections break.
 - **Pool connection limit metrics** — the `ferron.proxy.pool.local_limit` and `ferron.proxy.pool.global_limit` pool metrics are now available for monitoring connection pool usage.
@@ -18,6 +19,10 @@
 #### HTTP caching
 
 - **Unified cache eviction log summaries** — the cache eviction log summaries are now unified to not include eviction reasons (they're already in log attributes).
+
+#### Observability & tracing
+
+- **Prometheus text format content-type** — the Prometheus text endpoint now serves `application/openmetrics-text; version=1.0.0` instead of `text/plain; version=0.0.4`, matching the OpenMetrics specification used by prometheus-client. Prometheus scrapers that do not support OpenMetrics content negotiation may need to be updated.
 
 #### Reverse proxying
 
@@ -33,6 +38,10 @@
 #### HTTP caching
 
 - **Duplicate eviction metrics** — eviction metrics (and logs) were being emitted twice for cache hits, leading to incorrect metric values. This has been fixed.
+
+#### Observability & tracing
+
+- **Prometheus endpoint is no longer on-demand** — the Prometheus endpoint is now always available on the configured port, regardless of the number of active connections.
 
 ## Ferron 3.0.0-beta.6
 

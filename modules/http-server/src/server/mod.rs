@@ -538,10 +538,19 @@ impl BasicHttpModule {
                     // Insert provider + config tuple into the resolver (sink initialization deferred)
                     let entry: ObservabilityProviderEntry = (
                         observability_provider,
-                        observability_block_arc,
+                        observability_block_arc.clone(),
                         cp_metadata,
                         cp_span_links,
                     );
+                    // Initialize observability sinks for first time
+                    {
+                        let mut context = ObservabilityContext {
+                            sink: None,
+                            control_plane_metadata: entry.2.clone(),
+                            log_config: observability_block_arc.clone(),
+                        };
+                        let _ = entry.0.execute(&mut context);
+                    }
                     match (&host_config.0.host, host_config.0.ip) {
                         (Some(host), Some(ip)) => {
                             observability_resolver.insert_ip_and_hostname(ip, host, vec![entry]);

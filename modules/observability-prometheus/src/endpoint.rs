@@ -3,42 +3,16 @@ use std::sync::Arc;
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use prometheus::{Encoder, Histogram, Registry};
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::histogram::Histogram;
 use subtle::ConstantTimeEq;
 use tokio_util::sync::CancellationToken;
 
 use crate::PrometheusBackendConfig;
 
-pub enum AnyEncoder {
-    Text(prometheus::TextEncoder),
-    Protobuf(prometheus::ProtobufEncoder),
-}
-
-impl prometheus::Encoder for AnyEncoder {
-    fn encode<W: std::io::Write>(
-        &self,
-        metric_families: &[prometheus::proto::MetricFamily],
-        writer: &mut W,
-    ) -> Result<(), prometheus::Error> {
-        match self {
-            AnyEncoder::Text(encoder) => encoder.encode(metric_families, writer),
-            AnyEncoder::Protobuf(encoder) => encoder.encode(metric_families, writer),
-        }
-    }
-
-    fn format_type(&self) -> &str {
-        match self {
-            AnyEncoder::Text(encoder) => encoder.format_type(),
-            AnyEncoder::Protobuf(encoder) => encoder.format_type(),
-        }
-    }
-}
-
 /// Shared state for the bearer token auth middleware.
 #[derive(Clone)]
 struct AuthState {
-    /// The bearer token required for authentication.
-    /// `None` means authentication is disabled.
     auth_token: Option<Arc<str>>,
 }
 
@@ -83,47 +57,13 @@ async fn bearer_auth_middleware(
 pub async fn endpoint_listener_fn(
     config: PrometheusBackendConfig,
     reload_token: CancellationToken,
-    registry: prometheus::Registry,
+    registry: Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
+    scrape_duration: Histogram,
+    scrape_total: Counter,
+    scrape_errors: Counter,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let auth_token = config.auth_token.as_deref().map(Arc::from);
 
-    // Register self-referential scrape metrics
-    let scrape_duration = prometheus::Histogram::with_opts(prometheus::HistogramOpts {
-        common_opts: prometheus::Opts {
-            namespace: String::new(),
-            subsystem: String::new(),
-            name: "ferron_prometheus_scrape_duration_seconds".to_string(),
-            help: "Duration of Prometheus scrape requests in seconds".to_string(),
-            const_labels: Default::default(),
-            variable_labels: Vec::new(),
-        },
-        buckets: vec![
-            0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
-        ],
-    })?;
-    registry.register(Box::new(scrape_duration.clone()))?;
-
-    let scrape_total = prometheus::IntCounter::with_opts(prometheus::Opts {
-        namespace: String::new(),
-        subsystem: String::new(),
-        name: "ferron_prometheus_scrape_total".to_string(),
-        help: "Total number of Prometheus scrape requests".to_string(),
-        const_labels: Default::default(),
-        variable_labels: Vec::new(),
-    })?;
-    registry.register(Box::new(scrape_total.clone()))?;
-
-    let scrape_errors = prometheus::IntCounter::with_opts(prometheus::Opts {
-        namespace: String::new(),
-        subsystem: String::new(),
-        name: "ferron_prometheus_scrape_errors_total".to_string(),
-        help: "Total number of failed Prometheus scrape requests".to_string(),
-        const_labels: Default::default(),
-        variable_labels: Vec::new(),
-    })?;
-    registry.register(Box::new(scrape_errors.clone()))?;
-
-    // Axum server
     let app = axum::Router::new()
         .route("/metrics", axum::routing::get(endpoint_fn))
         .with_state((
@@ -134,7 +74,6 @@ pub async fn endpoint_listener_fn(
             scrape_errors,
         ));
 
-    // Apply bearer token auth middleware if a token is configured
     let app = if let Some(token) = auth_token {
         let auth_state = AuthState {
             auth_token: Some(token),
@@ -164,34 +103,50 @@ pub async fn endpoint_listener_fn(
 }
 
 async fn endpoint_fn(
-    State((registry, format, scrape_duration, scrape_total, scrape_errors)): State<(
-        Registry,
+    State((registry, format, scrape_duration, scrape_total, _scrape_errors)): State<(
+        Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
         String,
         Histogram,
-        prometheus::IntCounter,
-        prometheus::IntCounter,
+        Counter,
+        Counter,
     )>,
 ) -> Result<axum::response::Response, axum::http::StatusCode> {
     let start = std::time::Instant::now();
     scrape_total.inc();
 
-    let encoder: AnyEncoder = match format.as_str() {
-        "protobuf" => AnyEncoder::Protobuf(prometheus::ProtobufEncoder::new()),
-        _ => AnyEncoder::Text(prometheus::TextEncoder::new()),
-    };
-    let mut buffer = Vec::new();
-    let result = encoder.encode(&registry.gather(), &mut buffer);
+    match format.as_str() {
+        "protobuf" => {
+            let buffer = prometheus_client::encoding::prometheus_protobuf::encode_to_vec(
+                &*registry.read().await,
+            )
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let duration = start.elapsed().as_secs_f64();
-    scrape_duration.observe(duration);
+            let duration = start.elapsed().as_secs_f64();
+            scrape_duration.observe(duration);
 
-    if result.is_err() {
-        scrape_errors.inc();
-        return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            axum::response::Response::builder()
+                .header(
+                    axum::http::header::CONTENT_TYPE,
+                    "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encode=delimited",
+                )
+                .body(axum::body::Body::from(buffer))
+                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        _ => {
+            let mut buffer = String::new();
+            prometheus_client::encoding::text::encode(&mut buffer, &*registry.read().await)
+                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            let duration = start.elapsed().as_secs_f64();
+            scrape_duration.observe(duration);
+
+            axum::response::Response::builder()
+                .header(
+                    axum::http::header::CONTENT_TYPE,
+                    "application/openmetrics-text; version=1.0.0; charset=utf-8",
+                )
+                .body(axum::body::Body::from(buffer))
+                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
-
-    axum::response::Response::builder()
-        .header(axum::http::header::CONTENT_TYPE, encoder.format_type())
-        .body(axum::body::Body::from(buffer))
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
 }

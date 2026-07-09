@@ -12,5 +12,5 @@ async-channel = "2.5.0"
 http = "1"
 tokio = { version = "1", features = ["net", "rt", "sync", "macros"] }
 tokio-util = "0.7"
-prometheus = "0.14.0"
+prometheus-client = { version = "0.25.0", features = ["prometheus_protobuf"] }
 subtle = "2.6.1"

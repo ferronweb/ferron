@@ -1,9 +1,9 @@
 mod endpoint;
 mod validator;
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
+use std::fmt;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
@@ -12,26 +12,56 @@ use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
+use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{config_validator_scoped_key, log_warn, Module};
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
 };
+use prometheus_client::encoding::{EncodeLabelKey, EncodeLabelSet, EncodeLabelValue};
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::{self, Histogram, NativeHistogramConfig};
 use tokio_util::sync::CancellationToken;
 
 use crate::endpoint::endpoint_listener_fn;
 
-type PrometheusInstrumentCache =
-    HashMap<(&'static str, Vec<(Cow<'static, str>, String)>), CachedInstrument>;
 static DROPPED_EVENT: Once = Once::new();
 
-/// Shared configuration for an Prometheus backend instance
+const DEFAULT_BUCKETS: [f64; 11] = [
+    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+];
+
+/// A dynamic label set for metrics with arbitrary key-value attributes.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct DynamicLabels(Vec<(String, String)>);
+
+impl EncodeLabelSet for DynamicLabels {
+    fn encode(
+        &self,
+        encoder: &mut prometheus_client::encoding::LabelSetEncoder,
+    ) -> Result<(), fmt::Error> {
+        for (key, value) in &self.0 {
+            let mut label_encoder = encoder.encode_label();
+            let mut label_key_encoder = label_encoder.encode_label_key()?;
+            EncodeLabelKey::encode(key, &mut label_key_encoder)?;
+            let mut label_value_encoder = label_key_encoder.encode_label_value()?;
+            EncodeLabelValue::encode(value, &mut label_value_encoder)?;
+            label_value_encoder.finish()?;
+        }
+        Ok(())
+    }
+}
+
+/// Shared configuration for a Prometheus backend instance
 #[derive(Clone)]
 struct PrometheusBackendConfig {
     listen: SocketAddr,
     format: String,
     auth_token: Option<String>,
+    native_histograms: bool,
     baggage_promotions: Vec<BaggageKeyPromotion>,
 }
 
@@ -42,7 +72,7 @@ struct ConfiguredEvent {
     control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
-/// The Prometheus event sink that emits events to an Prometheus collector
+/// The Prometheus event sink that emits events to a Prometheus collector
 struct PrometheusEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
@@ -64,7 +94,6 @@ impl EventSink for PrometheusEventSink {
                         .fetch_add(1, Ordering::Relaxed);
                 }
                 Err(_) => {
-                    // Increment dropped-events metric
                     ferron_core::admin::ADMIN_METRICS
                         .observability_events_dropped
                         .fetch_add(1, Ordering::Relaxed);
@@ -94,7 +123,6 @@ impl EventSink for PrometheusEventSink {
                         .fetch_add(1, Ordering::Relaxed);
                 }
                 Err(_) => {
-                    // Increment dropped-events metric
                     ferron_core::admin::ADMIN_METRICS
                         .observability_events_dropped
                         .fetch_add(1, Ordering::Relaxed);
@@ -132,27 +160,23 @@ fn parse_prometheus_config(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    let native_histograms = config
+        .get_value("endpoint_native_histograms")
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+
     let baggage_promotions = parse_baggage_promotions(config);
 
     Ok(PrometheusBackendConfig {
         listen,
         format,
         auth_token,
+        native_histograms,
         baggage_promotions,
     })
 }
 
 /// Parse the `baggage` directive from the Prometheus config block.
-///
-/// Expected format:
-/// ```text
-/// baggage {
-///     key "tenant.id" {
-///         attribute "tenant.id"
-///         max_distinct 1000
-///     }
-/// }
-/// ```
 fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKeyPromotion> {
     let Some(baggage_entries) = config.directives.get("baggage") else {
         return Vec::new();
@@ -192,7 +216,7 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
         promotions.push(BaggageKeyPromotion {
             baggage_key: baggage_key.to_string(),
             attribute_name,
-            signals: Some(SignalSet::METRICS), // Prometheus only handles metrics.
+            signals: Some(SignalSet::METRICS),
             max_distinct,
         });
     }
@@ -222,11 +246,16 @@ impl Module for PrometheusObservabilityModule {
         let rx = self.inner.clone();
 
         runtime.spawn_secondary_task(async move {
-            // Per-config exporter cache
             let mut providers: HashMap<String, PrometheusProviderCache> = HashMap::new();
+            let reload_token = RELOAD_TOKEN.load_full();
 
             while let Some(msg) = tokio::select! {
-                result = rx.recv() => result.ok(),
+                result = async {
+                    let Some(result) = reload_token.run_until_cancelled(rx.recv()).await else {
+                        return std::future::pending().await;
+                    };
+                    result
+                } => result.ok(),
                 _ = cancel_token.cancelled() => None,
             } {
                 ferron_core::admin::ADMIN_METRICS
@@ -254,11 +283,13 @@ impl Module for PrometheusObservabilityModule {
                     emit_metric(
                         &entry.registry,
                         metric_event,
-                        &mut entry.metrics_instruments,
+                        &mut entry.metrics_cache,
                         &entry.baggage_promotions,
                         &mut entry.baggage_tracker,
                         &entry.control_plane_metadata,
-                    );
+                        entry.native_histograms,
+                    )
+                    .await;
                 }
             }
         });
@@ -269,26 +300,25 @@ impl Module for PrometheusObservabilityModule {
 
 /// Cached Prometheus providers for a given config
 struct PrometheusProviderCache {
-    registry: prometheus::Registry,
-    metrics_instruments: PrometheusInstrumentCache,
+    registry: Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
+    metrics_cache: MetricCache,
     baggage_promotions: Vec<BaggageKeyPromotion>,
     baggage_tracker: DistinctValueTracker,
     control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+    native_histograms: bool,
 }
 
-enum CachedInstrument {
-    F64Counter(prometheus::core::GenericCounter<prometheus::core::AtomicF64>),
-    F64Gauge(prometheus::core::GenericGauge<prometheus::core::AtomicF64>),
-    F64Histogram(prometheus::Histogram),
-    // F64UpDownCounter would be gauge
-    I64Gauge(prometheus::core::GenericGauge<prometheus::core::AtomicI64>),
-    // I64UpDownCounter would be gauge
-    U64Counter(prometheus::core::GenericCounter<prometheus::core::AtomicU64>),
-    U64Gauge(prometheus::core::GenericGauge<prometheus::core::AtomicU64>),
-    // U64Histogram would be F64Histogram...
+type MetricCache = HashMap<&'static str, CachedMetric>;
+
+enum CachedMetric {
+    BareCounter(Counter),
+    BareGauge(Gauge),
+    BareHistogram(Histogram),
+    FamilyCounter(Family<DynamicLabels, Counter>),
+    FamilyGauge(Family<DynamicLabels, Gauge>),
+    FamilyHistogram(Family<DynamicLabels, Histogram>),
 }
 
-/// Create a cache key from the signal configs
 fn config_cache_key(config: &PrometheusBackendConfig) -> String {
     format!("{}|{}", config.listen, config.format)
 }
@@ -299,37 +329,85 @@ fn init_provider(
     control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 ) -> PrometheusProviderCache {
     let config_clone = config.clone();
-    let registry = prometheus::Registry::new();
-    let registry_clone = registry.clone();
+    let mut registry = prometheus_client::registry::Registry::default();
     let baggage_promotions = config.baggage_promotions.clone();
-    // Note: Prometheus endpoint listener is spawned on demand when the first event
-    // with a given config is received. This allows us to avoid starting unnecessary listeners
-    // for configs that are never used, but also means that the first event may be delayed
-    // while the listener is starting up.
+    let native_histograms = config.native_histograms;
+
+    // Register self-referential scrape metrics
+    let scrape_duration = Histogram::new(histogram::exponential_buckets(0.001, 2.0, 14));
+    registry.register(
+        "ferron_prometheus_scrape_duration_seconds",
+        "Duration of Prometheus scrape requests in seconds",
+        scrape_duration.clone(),
+    );
+
+    let scrape_total = Counter::default();
+    registry.register(
+        "ferron_prometheus_scrape_total",
+        "Total number of Prometheus scrape requests",
+        scrape_total.clone(),
+    );
+
+    let scrape_errors = Counter::default();
+    registry.register(
+        "ferron_prometheus_scrape_errors_total",
+        "Total number of failed Prometheus scrape requests",
+        scrape_errors.clone(),
+    );
+
+    let registry = Arc::new(tokio::sync::RwLock::new(registry));
+
+    let registry2 = registry.clone();
     tokio::spawn(async move {
         let socket_addr = config_clone.listen;
-        if let Err(err) = endpoint_listener_fn(config_clone, reload_token, registry_clone).await {
+        if let Err(err) = endpoint_listener_fn(
+            config_clone,
+            reload_token,
+            registry2,
+            scrape_duration,
+            scrape_total,
+            scrape_errors,
+        )
+        .await
+        {
             ferron_core::log_warn!("Prometheus endpoint listener at {socket_addr} failed: {err}");
         }
     });
+
     PrometheusProviderCache {
-        registry,
-        metrics_instruments: HashMap::new(),
+        registry: registry,
+        metrics_cache: HashMap::new(),
         baggage_promotions,
         baggage_tracker: DistinctValueTracker::new(),
         control_plane_metadata,
+        native_histograms,
     }
 }
 
-fn emit_metric(
-    registry: &prometheus::Registry,
+fn make_histogram_constructor(native_histograms: bool) -> fn() -> Histogram {
+    if native_histograms {
+        fn constructor_native() -> Histogram {
+            let native = NativeHistogramConfig::new(1.1);
+            Histogram::new_classic_and_native(DEFAULT_BUCKETS, native)
+        }
+        constructor_native
+    } else {
+        fn constructor_classic() -> Histogram {
+            Histogram::new(DEFAULT_BUCKETS)
+        }
+        constructor_classic
+    }
+}
+
+async fn emit_metric(
+    registry: &tokio::sync::RwLock<prometheus_client::registry::Registry>,
     event: &MetricEvent,
-    instruments: &mut PrometheusInstrumentCache,
+    cache: &mut MetricCache,
     promotions: &[BaggageKeyPromotion],
     tracker: &mut DistinctValueTracker,
     control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
+    native_histograms: bool,
 ) {
-    // Sanitize label values to avoid high-cardinality or invalid label contents.
     fn sanitize_label_value(s: &str) -> String {
         let s = s.trim();
         if s.len() <= 128 {
@@ -345,7 +423,7 @@ fn emit_metric(
         }
     }
 
-    let mut attrs: Vec<(Cow<'static, str>, String)> = event
+    let mut attrs: Vec<(String, String)> = event
         .attributes
         .iter()
         .map(|(k, v)| {
@@ -362,11 +440,10 @@ fn emit_metric(
                     }
                 }
             };
-            ((*k).into(), sanitize_label_value(&raw))
+            (k.replace('.', "_"), sanitize_label_value(&raw))
         })
         .collect();
 
-    // Promote configured baggage keys into metric attributes
     if let Some(baggage_str) = event
         .trace_context
         .as_ref()
@@ -382,347 +459,324 @@ fn emit_metric(
                     .find(|p| p.effective_attribute_name() == attr.attribute_name)
                     .and_then(|p| p.max_distinct),
             );
-            attrs.push((attr.attribute_name.into(), value));
+            attrs.push((attr.attribute_name.replace('.', "_"), value));
         }
     }
 
-    // Inject control plane metadata as metric const_labels
     if let Some(metadata) = control_plane_metadata {
         for (key, value) in metadata.iter() {
             let attr_key = format!("ferron_control_plane_{}", key);
-            attrs.push((attr_key.into(), value.clone()));
+            attrs.push((attr_key, value.clone()));
         }
     }
 
+    let labels = DynamicLabels(attrs);
+
     match (&event.ty, event.value) {
         (MetricType::Counter, MetricValue::F64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericCounter::<prometheus::core::AtomicF64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::F64Counter(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            if val < 0.0 {
+                return;
+            }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Counter::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareCounter(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyCounter(metric)
+                }),
             };
-            if let Some(CachedInstrument::F64Counter(i)) = instrument {
-                if val >= 0.0 {
-                    i.inc_by(val);
+            match cached {
+                CachedMetric::BareCounter(c) => {
+                    c.inc_by(val as u64);
                 }
+                CachedMetric::FamilyCounter(f) => {
+                    f.get_or_create(&labels).inc_by(val as u64);
+                }
+                _ => {}
             }
         }
         (MetricType::Counter, MetricValue::U64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericCounter::<prometheus::core::AtomicU64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::U64Counter(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Counter::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareCounter(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyCounter(metric)
+                }),
             };
-            if let Some(CachedInstrument::U64Counter(i)) = instrument {
-                i.inc_by(val);
+            match cached {
+                CachedMetric::BareCounter(c) => {
+                    c.inc_by(val);
+                }
+                CachedMetric::FamilyCounter(f) => {
+                    f.get_or_create(&labels).inc_by(val);
+                }
+                _ => {}
             }
         }
         (MetricType::UpDownCounter, MetricValue::F64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericCounter::<prometheus::core::AtomicU64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::U64Counter(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Gauge::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareGauge(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyGauge(metric)
+                }),
             };
-            if let Some(CachedInstrument::F64Gauge(i)) = instrument {
-                i.add(val);
+            match cached {
+                CachedMetric::BareGauge(g) => {
+                    g.inc_by(val as i64);
+                }
+                CachedMetric::FamilyGauge(f) => {
+                    f.get_or_create(&labels).inc_by(val as i64);
+                }
+                _ => {}
             }
         }
         (MetricType::UpDownCounter, MetricValue::I64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericGauge::<prometheus::core::AtomicI64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::I64Gauge(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Gauge::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareGauge(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyGauge(metric)
+                }),
             };
-            if let Some(CachedInstrument::I64Gauge(i)) = instrument {
-                i.add(val);
+            match cached {
+                CachedMetric::BareGauge(g) => {
+                    g.inc_by(val);
+                }
+                CachedMetric::FamilyGauge(f) => {
+                    f.get_or_create(&labels).inc_by(val);
+                }
+                _ => {}
             }
         }
         (MetricType::Gauge, MetricValue::F64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericGauge::<prometheus::core::AtomicF64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::F64Gauge(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Gauge::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareGauge(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyGauge(metric)
+                }),
             };
-            if let Some(CachedInstrument::F64Gauge(i)) = instrument {
-                i.set(val);
+            match cached {
+                CachedMetric::BareGauge(g) => {
+                    g.set(val as i64);
+                }
+                CachedMetric::FamilyGauge(f) => {
+                    f.get_or_create(&labels).set(val as i64);
+                }
+                _ => {}
             }
         }
         (MetricType::Gauge, MetricValue::I64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericGauge::<prometheus::core::AtomicI64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
-                        );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::I64Gauge(collector)) as &CachedInstrument)
-                    } else {
-                        None
-                    }
-                }
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Gauge::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareGauge(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyGauge(metric)
+                }),
             };
-            if let Some(CachedInstrument::I64Gauge(i)) = instrument {
-                i.set(val);
+            match cached {
+                CachedMetric::BareGauge(g) => {
+                    g.set(val);
+                }
+                CachedMetric::FamilyGauge(f) => {
+                    f.get_or_create(&labels).set(val);
+                }
+                _ => {}
             }
         }
         (MetricType::Gauge, MetricValue::U64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let collector =
-                        prometheus::core::GenericGauge::<prometheus::core::AtomicU64>::with_opts(
-                            prometheus::Opts {
-                                namespace: String::new(),
-                                subsystem: String::new(),
-                                name: event.name.to_string().replace(".", "_"),
-                                help: event
-                                    .description
-                                    .unwrap_or("No description provided")
-                                    .to_string(),
-                                const_labels: attrs
-                                    .iter()
-                                    .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                    .collect(),
-                                variable_labels: Vec::new(),
-                            },
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert(if labels.0.is_empty() {
+                    let metric = Gauge::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::BareGauge(metric)
+                } else {
+                    let metric = Family::default();
+                    registry.write().await.register(
+                        event.name.to_string().replace(".", "_"),
+                        format_description(event),
+                        metric.clone(),
+                    );
+                    CachedMetric::FamilyGauge(metric)
+                }),
+            };
+            match cached {
+                CachedMetric::BareGauge(g) => {
+                    g.set(val as i64);
+                }
+                CachedMetric::FamilyGauge(f) => {
+                    f.get_or_create(&labels).set(val as i64);
+                }
+                _ => {}
+            }
+        }
+        (MetricType::Histogram(_), MetricValue::F64(val)) => {
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                    let constructor = make_histogram_constructor(native_histograms);
+                    if labels.0.is_empty() {
+                        let metric = constructor();
+                        registry.write().await.register(
+                            event.name.to_string().replace(".", "_"),
+                            format_description(event),
+                            metric.clone(),
                         );
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::U64Gauge(collector)) as &CachedInstrument)
+                        CachedMetric::BareHistogram(metric)
                     } else {
-                        None
+                        let metric = Family::new_with_constructor(constructor);
+                        registry.write().await.register(
+                            event.name.to_string().replace(".", "_"),
+                            format_description(event),
+                            metric.clone(),
+                        );
+                        CachedMetric::FamilyHistogram(metric)
                     }
-                }
+                }),
             };
-            if let Some(CachedInstrument::U64Gauge(i)) = instrument {
-                i.set(val);
+            match cached {
+                CachedMetric::BareHistogram(h) => {
+                    h.observe(val);
+                }
+                CachedMetric::FamilyHistogram(f) => {
+                    f.get_or_create(&labels).observe(val);
+                }
+                _ => {}
             }
         }
-        (MetricType::Histogram(buckets), MetricValue::F64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let mut histogram_opts = prometheus::HistogramOpts {
-                        common_opts: prometheus::Opts {
-                            namespace: String::new(),
-                            subsystem: String::new(),
-                            name: event.name.to_string().replace(".", "_"),
-                            help: event
-                                .description
-                                .unwrap_or("No description provided")
-                                .to_string(),
-                            const_labels: attrs
-                                .iter()
-                                .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                .collect(),
-                            variable_labels: Vec::new(),
-                        },
-                        buckets: buckets.as_deref().map(<[_]>::to_vec).unwrap_or_else(|| {
-                            vec![
-                                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                            ]
-                        }),
-                    };
-                    if let Some(u) = event.unit {
-                        histogram_opts.common_opts.help += &format!(" (unit: {})", u);
-                    }
-                    let collector = prometheus::Histogram::with_opts(histogram_opts);
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::F64Histogram(collector))
-                            as &CachedInstrument)
+        (MetricType::Histogram(_), MetricValue::U64(val)) => {
+            let cached = match cache.entry(event.name) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                    let constructor = make_histogram_constructor(native_histograms);
+                    if labels.0.is_empty() {
+                        let metric = constructor();
+                        registry.write().await.register(
+                            event.name.to_string().replace(".", "_"),
+                            format_description(event),
+                            metric.clone(),
+                        );
+                        CachedMetric::BareHistogram(metric)
                     } else {
-                        None
+                        let metric = Family::new_with_constructor(constructor);
+                        registry.write().await.register(
+                            event.name.to_string().replace(".", "_"),
+                            format_description(event),
+                            metric.clone(),
+                        );
+                        CachedMetric::FamilyHistogram(metric)
                     }
-                }
+                }),
             };
-            if let Some(CachedInstrument::F64Histogram(i)) = instrument {
-                i.observe(val);
-            }
-        }
-        (MetricType::Histogram(buckets), MetricValue::U64(val)) => {
-            let instrument_entry = instruments.entry((event.name, attrs.clone()));
-            let instrument = match instrument_entry {
-                std::collections::hash_map::Entry::Occupied(ref e) => Some(e.get()),
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    let mut histogram_opts = prometheus::HistogramOpts {
-                        common_opts: prometheus::Opts {
-                            namespace: String::new(),
-                            subsystem: String::new(),
-                            name: event.name.to_string().replace(".", "_"),
-                            help: event
-                                .description
-                                .unwrap_or("No description provided")
-                                .to_string(),
-                            const_labels: attrs
-                                .iter()
-                                .map(|(k, v)| (k.replace(".", "_"), v.clone()))
-                                .collect(),
-                            variable_labels: Vec::new(),
-                        },
-                        buckets: buckets.as_deref().map(<[_]>::to_vec).unwrap_or_else(|| {
-                            vec![
-                                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                            ]
-                        }),
-                    };
-                    if let Some(u) = event.unit {
-                        histogram_opts.common_opts.help += &format!(" (unit: {})", u);
-                    }
-                    let collector = prometheus::Histogram::with_opts(histogram_opts);
-                    if let Ok(collector) = collector {
-                        let _ = registry.register(Box::new(collector.clone()));
-                        Some(e.insert(CachedInstrument::F64Histogram(collector))
-                            as &CachedInstrument)
-                    } else {
-                        None
-                    }
+            match cached {
+                CachedMetric::BareHistogram(h) => {
+                    h.observe(val as f64);
                 }
-            };
-            if let Some(CachedInstrument::F64Histogram(i)) = instrument {
-                i.observe(val as f64);
+                CachedMetric::FamilyHistogram(f) => {
+                    f.get_or_create(&labels).observe(val as f64);
+                }
+                _ => {}
             }
         }
         _ => {}
     }
+}
+
+fn format_description(event: &MetricEvent) -> String {
+    let base = event
+        .description
+        .as_ref()
+        .map(|d| d.to_string().trim_end_matches('.').to_string())
+        .unwrap_or_else(|| "No description provided".to_string());
+    let unit_suffix = if let Some(unit) = event.unit.as_ref() {
+        format!(" (unit: {})", unit)
+    } else {
+        "".to_string()
+    };
+    format!("{}{}", base, unit_suffix)
 }
 
 struct PrometheusObservabilityProvider {
@@ -735,7 +789,6 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
-        // Eagerly initialize the Prometheus endpoint
         let _ = self.inner.try_send(ConfiguredEvent {
             event: None,
             log_config: ctx.log_config.clone(),

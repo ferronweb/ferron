@@ -25,6 +25,7 @@ observability {
 | `provider` | `"prometheus"` | Specifies the Prometheus observability provider. Required. | none |
 | `endpoint_listen` | `<socket_address>` | Socket address to listen on for Prometheus metrics requests. Supports IPv4, IPv6, and port specifications. | `"127.0.0.1:8889"` |
 | `endpoint_format` | `<format>` | Output format for metrics. Supported values: `"text"` (Prometheus text format), `"protobuf"` (Prometheus protobuf format). | `"text"` |
+| `endpoint_native_histograms` | `<bool>` | Enable native exponential histograms in protobuf format. When enabled, histogram metrics include both classic buckets and native histogram data in protobuf output. Text format always shows classic buckets regardless of this setting. | `false` |
 | `endpoint_auth_token` | `<token>` | Bearer token for authenticating Prometheus scrape requests. When set, scrapers must send `Authorization: Bearer <token>` header. | none (authentication disabled) |
 
 ### Socket address format
@@ -46,6 +47,15 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 
 - **`"text"`** — standard Prometheus text exposition format (default)
 - **`"protobuf"`** — Prometheus protobuf format for more efficient scraping
+
+### Native histograms
+
+When `endpoint_native_histograms true` is set and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms provide high-resolution percentile data across deep orders of magnitude (1ms to 100s) without requiring manual bucket allocation.
+
+Text format always exposes classic bucket histograms regardless of this setting, since the OpenMetrics text format does not support native histograms.
+
+> [!note]
+> Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions will silently ignore the native histogram data and use the classic buckets.
 
 ### Baggage promotion
 

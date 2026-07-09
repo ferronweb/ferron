@@ -38,7 +38,7 @@ When using the OTLP observability backend, all histogram metrics use **Base2 Exp
 - **High resolution across orders of magnitude** — the default configuration uses 160 buckets covering the range from sub-millisecond to 100 seconds with less than 5% relative error, preserving tail-latency outliers (p99, p99.9) that would be masked by coarse fixed buckets.
 - **No configuration required** — the exponential histogram aggregation is applied automatically at the SDK layer via an OTel View. No configuration changes are needed.
 
-The Prometheus observability backend continues to use explicit bucket histograms with predefined boundaries.
+The Prometheus observability backend also supports native exponential histograms when `endpoint_native_histograms true` is configured and the output format is set to `"protobuf"`. In text format, it uses explicit bucket histograms with predefined boundaries.
 
 ## Process metrics
 

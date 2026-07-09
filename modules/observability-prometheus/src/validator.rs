@@ -16,6 +16,7 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
         validate_directive!(config, validator_ctx.used_directives, endpoint_listen, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, endpoint_format, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, endpoint_auth_token, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, endpoint_native_histograms, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
 
         let endpoint_listen_value = config.get_value("endpoint_listen");
         let has_auth_token = config
