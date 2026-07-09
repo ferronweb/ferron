@@ -44,7 +44,7 @@ Each signal sub-block supports these nested directives:
 > If you are having connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
 
 > [!note]
-> Ferron does not currently support OTLP metric exemplars.
+> Ferron does not currently support OTLP metric exemplars, due to OpenTelemetry SDK limitations.
 
 ### Global options
 
