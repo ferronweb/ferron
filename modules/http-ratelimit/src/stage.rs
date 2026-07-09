@@ -83,7 +83,7 @@ impl RateLimitEngine {
     /// Check all rate limit rules against the current request.
     ///
     /// Returns `Some(response)` if any rule is exhausted, or `None` if all rules pass.
-    fn check_rate_limits(&self, ctx: &mut HttpContext) -> Option<HttpResponse> {
+    async fn check_rate_limits(&self, ctx: &mut HttpContext) -> Option<HttpResponse> {
         let rules = parse_rate_limit_config(&ctx.configuration);
         if rules.is_empty() {
             return None;
@@ -157,8 +157,14 @@ impl RateLimitEngine {
             };
 
             // Attempt to consume one token
-            if !bucket.try_consume(1) {
-                let retry_after = bucket.time_until_available(1);
+            let (allowed, throttled) = if config.throttle {
+                let throttled = bucket.consume(1).await;
+                (true, throttled) // Always allow, but throttle the bucket
+            } else {
+                (bucket.try_consume(1).await, false)
+            };
+            if !allowed {
+                let retry_after = bucket.time_until_available(1).await;
                 ferron_core::log_debug!(
                     "Rate limit bucket exhausted for key \"{}\" (type: {})",
                     key,
@@ -278,11 +284,36 @@ impl RateLimitEngine {
                 trace_context: current_event_trace_context(ctx),
                 control_plane_metadata: None,
             }));
+            if throttled {
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.ratelimit.throttled",
+                    attributes: vec![
+                        (
+                            "ferron.ratelimit.zone",
+                            MetricAttributeValue::String(zone_id.label().to_string()),
+                        ),
+                        (
+                            "ferron.ratelimit.key_type",
+                            MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                        ),
+                    ],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("Requests that were throttled by rate limiting."),
+                    trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
+                }));
+            }
             {
                 let sa = ctx.get_span_attributes();
                 sa.insert(
                     "ferron.ratelimit.result",
-                    TraceAttributeValue::String("allowed".to_string()),
+                    TraceAttributeValue::String(if throttled {
+                        "throttled".to_string()
+                    } else {
+                        "allowed".to_string()
+                    }),
                 );
                 sa.insert(
                     "ferron.ratelimit.zone",
@@ -376,7 +407,7 @@ impl Stage<HttpContext> for RateLimitStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        if let Some(response) = self.engine.check_rate_limits(ctx) {
+        if let Some(response) = self.engine.check_rate_limits(ctx).await {
             ctx.res = Some(response);
             return Ok(false); // Stop pipeline — response is ready
         }

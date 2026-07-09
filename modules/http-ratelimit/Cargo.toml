@@ -15,12 +15,15 @@ http = "1"
 http-body-util = "0.1.3"
 bytes = "1"
 rustc-hash = "2"
+vibeio = { version = "0.2.15", default-features = false, features = ["time"] }
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["abuse"] }
 ferron-observability = { path = "../../types/observability" }
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
 typemap_rev = "0.4"
+futures-executor = "0.3.32"

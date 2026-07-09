@@ -1586,12 +1586,14 @@ dependencies = [
  "ferron-core",
  "ferron-http",
  "ferron-observability",
+ "futures-executor",
  "http",
  "http-body-util",
  "parking_lot",
  "rustc-hash",
  "tokio",
  "typemap_rev",
+ "vibeio",
 ]
 
 [[package]]

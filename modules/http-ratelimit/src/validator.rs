@@ -11,6 +11,7 @@ const GLOBAL_RATE_LIMIT_DIRECTIVES: &[&str] = &[
     "deny_status",
     "bucket_ttl",
     "max_buckets",
+    "throttle",
 ];
 
 /// Directives allowed inside a host-level `rate_limit { ... }` block.
@@ -22,6 +23,7 @@ const HOST_RATE_LIMIT_DIRECTIVES: &[&str] = &[
     "bucket_ttl",
     "max_buckets",
     "zone",
+    "throttle",
 ];
 
 /// Validator for `rate_limit` configuration blocks.
@@ -194,6 +196,17 @@ impl RateLimitValidator {
             sub.insert("max_buckets".to_string());
             for entry in entries {
                 self.validate_number_entry(entry, "max_buckets", 1)?;
+            }
+        }
+
+        // Validate `throttle` — optional, must be a flag
+        if let Some(entries) = block.directives.get("throttle") {
+            sub.insert("throttle".to_string());
+            for entry in entries {
+                if entry.args.len() > 0 && entry.args.get(0).and_then(|a| a.as_boolean()).is_none()
+                {
+                    return Err("Invalid `throttle` — expected a boolean value".into());
+                }
             }
         }
 

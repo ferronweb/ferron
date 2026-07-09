@@ -66,7 +66,7 @@ fuzz_target!(|data: &[u8]| {
                 let key_idx = op_idx % num_keys;
                 let key = &keys[key_idx];
                 if let Some(bucket) = registry.get_or_create(key) {
-                    if bucket.try_consume(1) {
+                    if futures_executor::block_on(bucket.try_consume(1)) {
                         successes[key_idx].fetch_add(1, Ordering::SeqCst);
                     }
                 }

@@ -36,6 +36,8 @@ pub struct RateLimitConfig {
     pub bucket_ttl_secs: u64,
     /// Maximum number of buckets per rule (prevents unbounded memory growth).
     pub max_buckets: usize,
+    /// Whether to throttle requests instead of rejecting them.
+    pub throttle: bool,
 }
 
 impl RateLimitZoneId {
@@ -124,6 +126,8 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
         .filter(|&n| n > 0)
         .unwrap_or(RateLimitConfig::DEFAULT_MAX_BUCKETS as i64) as usize;
 
+    let throttle = block.get_flag("throttle");
+
     Some(RateLimitConfig {
         rate,
         burst,
@@ -131,6 +135,7 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
         deny_status,
         bucket_ttl_secs,
         max_buckets,
+        throttle,
     })
 }
 

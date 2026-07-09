@@ -103,3 +103,19 @@ api.example.com {
 ```
 
 Each unique API key gets its own token bucket, independent of the client IP.
+
+## Throttling
+
+To enable throttling for rate-limited requests, use the `throttle` subdirective:
+
+```ferron
+api.example.com {
+    proxy http://localhost:3000
+    rate_limit {
+        rate 50
+        burst 100
+        key request.header.X-Api-Key
+        throttle
+    }
+}
+```

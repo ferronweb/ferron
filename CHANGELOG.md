@@ -15,6 +15,10 @@
 - **Pool connection limit metrics** — the `ferron.proxy.pool.local_limit` and `ferron.proxy.pool.global_limit` pool metrics are now available for monitoring connection pool usage.
 - **Method and idempotency labels on retry metrics** — the `ferron.proxy.retry.count` Counter and `ferron.proxy.retry.final` Gauge now include `http.request.method` (categorized: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`, `CONNECT`, `TRACE`, `_other`) and `ferron.proxy.method_idempotent` (bool per RFC 9110 §9.2.2) labels, enabling zero-delay alerting on non-idempotent retry anomalies that indicate potential state corruption.
 
+#### Security
+
+- **Rate limit throttling** — the `rate_limit` directive now supports a `throttle` subdirective that allows rate-limited requests to be delayed instead of rejected. When enabled, requests exceeding the configured rate limit are queued before being processed. This reduces the likelihood of client-side errors and improves user experience during temporary traffic spikes.
+
 ### Changed
 
 #### HTTP caching

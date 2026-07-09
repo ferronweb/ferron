@@ -28,6 +28,7 @@ ferron-http-ratelimit = { path = "../modules/http-ratelimit", features = ["fuzz"
 ferron-core = { path = "../core" }
 ferron-observability = { path = "../types/observability" }
 http-body-util = "0.1"
+futures-executor = "0.3.32"
 
 [[bin]]
 name = "fuzz_http_pipeline"

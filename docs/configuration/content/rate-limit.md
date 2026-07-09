@@ -39,6 +39,7 @@ Multiple `rate_limit` blocks can be defined to apply different rules simultaneou
 | `bucket_ttl` | `<int>` | Seconds before an unused bucket is evicted. | `600` |
 | `max_buckets` | `<int>` | Maximum buckets per rule (prevents memory exhaustion). | `100000` |
 | `zone` | `<string>` | Named zone for sharing rate limit buckets across hosts. | — |
+| `throttle` | `<bool>` | If `true`, requests are delayed instead of rejected when the bucket is empty. | `false` |
 
 ### Key types
 
@@ -232,6 +233,7 @@ The rate limiting module emits the following metrics:
 |--------|------|------------|-------------|
 | `ferron.ratelimit.allowed` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests that passed rate limiting |
 | `ferron.ratelimit.rejected` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests rejected due to exhausted buckets or registry at capacity |
+| `ferron.ratelimit.throttled` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests delayed due to throttling |
 
 The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It is set to `"global"` for the shared global zone, the zone name for named zones, or the hostname for per-host zones.
 
@@ -252,7 +254,7 @@ The rate limit stage sets the following attributes on its `ferron.stage.rate_lim
 
 | Attribute | Type | Description |
 | --- | --- | --- |
-| `ferron.ratelimit.result` | string | Rate limit decision: `allowed` or `rejected`. |
+| `ferron.ratelimit.result` | string | Rate limit decision: `allowed`, `throttled` or `rejected`. |
 | `ferron.ratelimit.zone` | string | The rate limit zone name. |
 | `ferron.ratelimit.key_type` | string | Key extractor type: `ip`, `uri`, or `header`. |
 | `ferron.ratelimit.limit` | int | The configured rate limit (requests per second). |

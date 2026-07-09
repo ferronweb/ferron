@@ -153,26 +153,26 @@ mod tests {
         assert_eq!(registry.len(), 1);
     }
 
-    #[test]
-    fn returns_same_bucket_for_same_key() {
+    #[tokio::test]
+    async fn returns_same_bucket_for_same_key() {
         let registry = TokenBucketRegistry::new(10, 1.0, 60, 100);
         let b1 = registry.get_or_create("192.0.2.1").unwrap();
         let b2 = registry.get_or_create("192.0.2.1").unwrap();
 
         // Both should share the same underlying bucket
-        b1.try_consume(10);
-        assert!(!b2.try_consume(1)); // bucket is now empty
+        b1.try_consume(10).await;
+        assert!(!b2.try_consume(1).await); // bucket is now empty
     }
 
-    #[test]
-    fn different_keys_get_different_buckets() {
+    #[tokio::test]
+    async fn different_keys_get_different_buckets() {
         let registry = TokenBucketRegistry::new(5, 0.0, 60, 100);
         let b1 = registry.get_or_create("key1").unwrap();
         let b2 = registry.get_or_create("key2").unwrap();
 
         // Draining one should not affect the other
-        b1.try_consume(5);
-        assert!(b2.try_consume(1));
+        b1.try_consume(5).await;
+        assert!(b2.try_consume(1).await);
     }
 
     #[test]
@@ -200,15 +200,15 @@ mod tests {
         assert!(registry.get_or_create("k4").is_none());
     }
 
-    #[test]
-    fn evicts_before_creating_new_when_at_capacity() {
+    #[tokio::test]
+    async fn evicts_before_creating_new_when_at_capacity() {
         // Use short TTL so entries become stale quickly
         let registry = TokenBucketRegistry::new(10, 0.0, 1, 2);
         let b1 = registry.get_or_create("k1").unwrap();
         let _b2 = registry.get_or_create("k2").unwrap();
 
         // Access k1 to keep it fresh, wait for k2 to go stale
-        b1.try_consume(1); // touches k1
+        b1.try_consume(1).await; // touches k1
         thread::sleep(Duration::from_secs(2));
 
         // k2 is stale, evict should free a slot
@@ -226,7 +226,7 @@ mod tests {
             handles.push(thread::spawn(move || {
                 let key = format!("key-{}", i);
                 let bucket = r.get_or_create(&key).unwrap();
-                bucket.try_consume(1);
+                futures_executor::block_on(bucket.try_consume(1));
             }));
         }
 

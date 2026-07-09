@@ -26,6 +26,7 @@ impl TokenBucket {
     /// Create a new token bucket.
     ///
     /// The bucket starts full (`tokens == capacity`).
+    #[inline]
     pub fn new(capacity: u64, refill_rate: f64) -> Self {
         Self {
             capacity,
@@ -39,6 +40,7 @@ impl TokenBucket {
     ///
     /// Refills the bucket first based on elapsed time, then attempts consumption.
     /// Returns `true` if tokens were consumed, `false` if the bucket is empty.
+    #[inline]
     pub fn try_consume(&mut self, n: u64) -> bool {
         self.refill();
         let needed = n as f64;
@@ -51,6 +53,7 @@ impl TokenBucket {
     }
 
     /// Refill tokens based on elapsed time since last refill.
+    #[inline]
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f64();
@@ -62,6 +65,7 @@ impl TokenBucket {
     }
 
     /// Get the current number of available tokens (after refill).
+    #[inline]
     pub fn available_tokens(&self) -> f64 {
         let elapsed = Instant::now()
             .duration_since(self.last_refill)
@@ -70,6 +74,7 @@ impl TokenBucket {
     }
 
     /// Estimate seconds until `n` tokens are available.
+    #[inline]
     pub fn time_until_available(&self, n: u64) -> f64 {
         let current = self.available_tokens();
         let needed = (n as f64) - current;
@@ -90,14 +95,15 @@ impl TokenBucket {
 /// so mutex overhead is minimal in practice.
 #[derive(Clone)]
 pub struct ConcurrentTokenBucket {
-    inner: Arc<parking_lot::Mutex<TokenBucket>>,
+    inner: Arc<tokio::sync::RwLock<TokenBucket>>,
 }
 
 impl ConcurrentTokenBucket {
     /// Create a new thread-safe token bucket.
+    #[inline]
     pub fn new(capacity: u64, refill_rate: f64) -> Self {
         Self {
-            inner: Arc::new(parking_lot::Mutex::new(TokenBucket::new(
+            inner: Arc::new(tokio::sync::RwLock::new(TokenBucket::new(
                 capacity,
                 refill_rate,
             ))),
@@ -105,13 +111,31 @@ impl ConcurrentTokenBucket {
     }
 
     /// Attempt to consume `n` tokens. Returns `true` on success.
-    pub fn try_consume(&self, n: u64) -> bool {
-        self.inner.lock().try_consume(n)
+    #[inline]
+    pub async fn try_consume(&self, n: u64) -> bool {
+        self.inner.write().await.try_consume(n)
+    }
+
+    /// Consume `n` tokens, blocking until available. Return `true` if throttled.
+    #[inline]
+    pub async fn consume(&self, n: u64) -> bool {
+        let mut throttled = false;
+        loop {
+            if self.try_consume(n).await {
+                return throttled;
+            }
+            throttled = true;
+            let wait_time = self.time_until_available(n).await;
+            if wait_time > 0.0 {
+                vibeio::time::sleep(std::time::Duration::from_secs_f64(wait_time)).await;
+            }
+        }
     }
 
     /// Estimate seconds until `n` tokens are available.
-    pub fn time_until_available(&self, n: u64) -> f64 {
-        self.inner.lock().time_until_available(n)
+    #[inline]
+    pub async fn time_until_available(&self, n: u64) -> f64 {
+        self.inner.read().await.time_until_available(n)
     }
 }
 
@@ -183,7 +207,9 @@ mod tests {
 
         for _ in 0..10 {
             let b = bucket.clone();
-            handles.push(thread::spawn(move || b.try_consume(1)));
+            handles.push(thread::spawn(move || {
+                futures_executor::block_on(b.try_consume(1))
+            }));
         }
 
         let successes: usize = handles

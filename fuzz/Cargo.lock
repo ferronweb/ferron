@@ -579,6 +579,7 @@ dependencies = [
  "ferron-http-ratelimit",
  "ferron-http-server",
  "ferron-observability",
+ "futures-executor",
  "http",
  "http-body-util",
  "httparse",
@@ -686,6 +687,8 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "rustc-hash",
+ "tokio",
+ "vibeio",
 ]
 
 [[package]]
@@ -2467,17 +2470,15 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vibeio"
-version = "0.2.13"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfd556b0b3efd91cb88566b6aa6d0ceef475b37443b6d898e170ce9da73a2f67"
+checksum = "63b968e30d91bc5c14d23f9af184f26ea7f0d886ab309d11b37148b244d7dfa4"
 dependencies = [
- "async-channel",
  "crossbeam-queue",
  "futures-util",
  "io-uring",
  "libc",
  "mio",
- "once_cell",
  "oneshot",
  "rusty_pool",
  "slab",
@@ -2512,9 +2513,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-hyper"
-version = "0.2.13"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad90efd1432f4a5dfbd7a451668181708c8034ba4e4e0f963ed2c364c8bf00ad"
+checksum = "b63645f8d42242b1be5c52493902ba6d698cb99db91f8726732fd07eb0305e0c"
 dependencies = [
  "hyper",
  "tokio",
