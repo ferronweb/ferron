@@ -10,6 +10,10 @@
 
 - **Unified cache eviction log summaries** — the cache eviction log summaries are now unified to not include eviction reasons (they're already in log attributes).
 
+#### Reverse proxying
+
+- **DNS thundering herd prevention** — the DNS resolver now uses a singleflight mechanism to prevent multiple concurrent DNS queries for the same hostname, reducing load on DNS servers and improving performance.
+
 ### Fixed
 
 #### HTTP caching

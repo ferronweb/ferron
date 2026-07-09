@@ -61,7 +61,7 @@ pub async fn resolve_srv_inner(
     let idle_timeout = srv_data.idle_timeout;
 
     // Check cache first
-    if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers) {
+    if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers).await {
         return cached;
     }
 

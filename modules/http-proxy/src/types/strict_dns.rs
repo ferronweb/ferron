@@ -60,7 +60,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     };
 
     // Check cache first
-    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers) {
+    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers).await {
         if cached.is_empty() {
             if let Some((_, event_sink)) = crate::try_get_secondary_runtime_handle() {
                 // Log a warning if no upstreams were resolved

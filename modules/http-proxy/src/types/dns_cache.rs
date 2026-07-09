@@ -28,15 +28,34 @@ pub(crate) static DNS_CACHE_HITS: std::sync::atomic::AtomicU64 =
 pub(crate) static DNS_CACHE_MISSES: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
-struct DnsCacheEntry<V> {
+struct DnsCacheEntryInner<V> {
     value: V,
     expires_at: Instant,
+}
+
+impl<V> DnsCacheEntryInner<V> {
+    #[inline]
+    fn is_expired(&self) -> bool {
+        Instant::now() >= self.expires_at
+    }
+}
+
+#[derive(Default)]
+struct DnsCacheEntry<V> {
+    inner: Option<DnsCacheEntryInner<V>>,
+    notify: Arc<tokio::sync::Notify>,
+    notify_listen: std::sync::atomic::AtomicBool,
 }
 
 impl<V> DnsCacheEntry<V> {
     #[inline]
     fn is_expired(&self) -> bool {
-        Instant::now() >= self.expires_at
+        self.inner.as_ref().map_or(true, |inner| inner.is_expired())
+    }
+
+    #[inline]
+    fn notify_hit(&self) {
+        self.notify.notify_waiters();
     }
 }
 
@@ -54,16 +73,26 @@ impl StrictDnsCache {
     }
 
     #[inline]
-    fn get(&self, key: &StrictDnsKey) -> Option<StrictDnsValue> {
-        let expired = self
-            .entries
-            .get(key)
-            .is_some_and(|entry| entry.is_expired());
-        if expired {
-            self.entries.remove(key);
-            return None;
+    async fn get(&self, key: &StrictDnsKey) -> Option<StrictDnsValue> {
+        let entry = if let Some(e) = self.entries.get(key) {
+            e
+        } else {
+            self.entries.entry(key.clone()).or_default().downgrade()
+        };
+        let expired = entry.is_expired();
+        let leader = !entry
+            .notify_listen
+            .swap(true, std::sync::atomic::Ordering::Relaxed);
+        if expired && leader {
+            None
+        } else if entry.inner.is_none() && !leader {
+            let notify = entry.notify.clone();
+            drop(entry);
+            notify.notified().await;
+            Box::pin(self.get(key)).await
+        } else {
+            entry.inner.as_ref().map(|inner| inner.value.clone())
         }
-        self.entries.get(key).map(|entry| entry.value.clone())
     }
 
     #[inline]
@@ -75,21 +104,38 @@ impl StrictDnsCache {
                 if let Some(oldest_key) = self
                     .entries
                     .iter()
-                    .min_by_key(|r| r.expires_at)
+                    .min_by_key(|r| {
+                        r.inner
+                            .as_ref()
+                            .map_or(Instant::now(), |inner| inner.expires_at)
+                    })
                     .map(|r| r.key().clone())
                 {
-                    self.entries.remove(&oldest_key);
+                    let re = self.entries.remove(&oldest_key);
+                    if let Some((_, entry)) = re {
+                        entry.notify_hit();
+                    }
                 }
             }
         }
         let expires_at = Instant::now() + ttl;
-        self.entries
-            .insert(key, DnsCacheEntry { value, expires_at });
+        let mut new_entry = self.entries.entry(key).or_default();
+        new_entry.inner = Some(DnsCacheEntryInner { value, expires_at });
+        new_entry
+            .notify_listen
+            .store(false, std::sync::atomic::Ordering::Relaxed); // No more leader
+        new_entry.notify_hit();
     }
 
     #[inline]
     fn evict_expired(&self) {
-        self.entries.retain(|_, entry| !entry.is_expired());
+        self.entries.retain(|_, entry| {
+            let ne = !entry.is_expired();
+            if !ne {
+                entry.notify_hit();
+            }
+            ne
+        });
     }
 }
 
@@ -107,16 +153,26 @@ impl SrvCache {
     }
 
     #[inline]
-    fn get(&self, key: &SrvKey) -> Option<SrvValue> {
-        let expired = self
-            .entries
-            .get(key)
-            .is_some_and(|entry| entry.is_expired());
-        if expired {
-            self.entries.remove(key);
-            return None;
+    async fn get(&self, key: &SrvKey) -> Option<SrvValue> {
+        let entry = if let Some(e) = self.entries.get(key) {
+            e
+        } else {
+            self.entries.entry(key.clone()).or_default().downgrade()
+        };
+        let expired = entry.is_expired();
+        let leader = !entry
+            .notify_listen
+            .swap(true, std::sync::atomic::Ordering::Relaxed);
+        if expired && leader {
+            None
+        } else if entry.inner.is_none() && !leader {
+            let notify = entry.notify.clone();
+            drop(entry);
+            notify.notified().await;
+            Box::pin(self.get(key)).await
+        } else {
+            entry.inner.as_ref().map(|inner| inner.value.clone())
         }
-        self.entries.get(key).map(|entry| entry.value.clone())
     }
 
     #[inline]
@@ -124,24 +180,42 @@ impl SrvCache {
         if self.entries.len() >= MAX_CACHE_ENTRIES {
             self.evict_expired();
             if self.entries.len() >= MAX_CACHE_ENTRIES {
+                // Still at capacity — remove oldest entry
                 if let Some(oldest_key) = self
                     .entries
                     .iter()
-                    .min_by_key(|r| r.expires_at)
+                    .min_by_key(|r| {
+                        r.inner
+                            .as_ref()
+                            .map_or(Instant::now(), |inner| inner.expires_at)
+                    })
                     .map(|r| r.key().clone())
                 {
-                    self.entries.remove(&oldest_key);
+                    let re = self.entries.remove(&oldest_key);
+                    if let Some((_, entry)) = re {
+                        entry.notify_hit();
+                    }
                 }
             }
         }
         let expires_at = Instant::now() + ttl;
-        self.entries
-            .insert(key, DnsCacheEntry { value, expires_at });
+        let mut new_entry = self.entries.entry(key).or_default();
+        new_entry.inner = Some(DnsCacheEntryInner { value, expires_at });
+        new_entry
+            .notify_listen
+            .store(false, std::sync::atomic::Ordering::Relaxed); // No more leader
+        new_entry.notify_hit();
     }
 
     #[inline]
     fn evict_expired(&self) {
-        self.entries.retain(|_, entry| !entry.is_expired());
+        self.entries.retain(|_, entry| {
+            let ne = !entry.is_expired();
+            if !ne {
+                entry.notify_hit();
+            }
+            ne
+        });
     }
 }
 
@@ -179,13 +253,13 @@ fn cache() -> &'static DnsResultCache {
 ///
 /// Returns `Some(backends)` on cache hit, `None` on miss or expiry.
 #[inline]
-pub(crate) fn get_strict_dns(
+pub(crate) async fn get_strict_dns(
     hostname: &str,
     port: u16,
     dns_servers: &[IpAddr],
 ) -> Option<Vec<Arc<UpstreamInner>>> {
     let key = (hostname.to_string(), port, dns_servers.to_vec());
-    let result = cache().strict_dns.get(&key);
+    let result = cache().strict_dns.get(&key).await;
     if result.is_some() {
         DNS_CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     } else {
@@ -213,12 +287,12 @@ pub(crate) fn insert_strict_dns(
 ///
 /// Returns `Some(candidates)` on cache hit, `None` on miss or expiry.
 #[inline]
-pub(crate) fn get_srv(
+pub(crate) async fn get_srv(
     srv_name: &str,
     dns_servers: &[IpAddr],
 ) -> Option<Vec<(Arc<UpstreamInner>, u16, u16)>> {
     let key = (srv_name.to_string(), dns_servers.to_vec());
-    let result = cache().srv.get(&key);
+    let result = cache().srv.get(&key).await;
     if result.is_some() {
         DNS_CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     } else {
@@ -251,16 +325,17 @@ pub(crate) fn cleanup_expired() {
 mod tests {
     use super::*;
 
-    #[test]
-    #[inline]
-    fn test_strict_dns_cache_roundtrip() {
+    #[tokio::test]
+    async fn test_strict_dns_cache_roundtrip() {
         let hostname = "example.com".to_string();
         let port = 8080u16;
         let dns_servers = vec![];
         let upstreams = vec![];
 
         // Initially empty
-        assert!(get_strict_dns(&hostname, port, &dns_servers).is_none());
+        assert!(get_strict_dns(&hostname, port, &dns_servers)
+            .await
+            .is_none());
 
         // Insert with long TTL
         insert_strict_dns(
@@ -272,31 +347,29 @@ mod tests {
         );
 
         // Should hit
-        let cached = get_strict_dns(&hostname, port, &dns_servers);
+        let cached = get_strict_dns(&hostname, port, &dns_servers).await;
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().len(), 0);
     }
 
-    #[test]
-    #[inline]
-    fn test_srv_cache_roundtrip() {
+    #[tokio::test]
+    async fn test_srv_cache_roundtrip() {
         let srv_name = "_http._tcp.example.com".to_string();
         let dns_servers = vec![];
 
         // Initially empty
-        assert!(get_srv(&srv_name, &dns_servers).is_none());
+        assert!(get_srv(&srv_name, &dns_servers).await.is_none());
 
         // Insert with long TTL
         insert_srv(&srv_name, &dns_servers, vec![], Duration::from_secs(300));
 
         // Should hit
-        let cached = get_srv(&srv_name, &dns_servers);
+        let cached = get_srv(&srv_name, &dns_servers).await;
         assert!(cached.is_some());
     }
 
-    #[test]
-    #[inline]
-    fn test_cache_expiry() {
+    #[tokio::test]
+    async fn test_cache_expiry() {
         let hostname = "expired.example.com".to_string();
         let port = 80u16;
         let dns_servers = vec![];
@@ -305,12 +378,13 @@ mod tests {
         insert_strict_dns(&hostname, port, &dns_servers, vec![], Duration::ZERO);
 
         // Should miss (expired)
-        assert!(get_strict_dns(&hostname, port, &dns_servers).is_none());
+        assert!(get_strict_dns(&hostname, port, &dns_servers)
+            .await
+            .is_none());
     }
 
-    #[test]
-    #[inline]
-    fn test_cleanup_removes_expired() {
+    #[tokio::test]
+    async fn test_cleanup_removes_expired() {
         let hostname = "cleanup.example.com".to_string();
         let port = 80u16;
         let dns_servers = vec![];
@@ -322,6 +396,41 @@ mod tests {
         cleanup_expired();
 
         // Should be gone
-        assert!(get_strict_dns(&hostname, port, &dns_servers).is_none());
+        assert!(get_strict_dns(&hostname, port, &dns_servers)
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_concurrency() {
+        let hostname = "concurrent.example.com".to_string();
+        let port = 80u16;
+        let dns_servers = vec![];
+
+        let tasks = (0..10)
+            .map(|_| {
+                let hostname = hostname.clone();
+                let dns_servers = dns_servers.clone();
+                tokio::spawn(async move {
+                    assert!(get_strict_dns(&hostname, port, &dns_servers)
+                        .await
+                        .is_some());
+                })
+            })
+            .collect::<Vec<_>>();
+
+        // Sleep for some time to ensure tasks wait for cache
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        insert_strict_dns(
+            &hostname,
+            port,
+            &dns_servers,
+            vec![],
+            Duration::from_secs(300),
+        );
+
+        // Wait for all tasks to complete
+        futures_util::future::join_all(tasks).await;
     }
 }
