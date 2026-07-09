@@ -1007,6 +1007,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Get or create the retry budget for this config key
         let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
+            if let Some(e) = self.state.retry_budget_states.get(&config_key) {
+                return e.clone();
+            }
             self.state
                 .retry_budget_states
                 .entry(config_key.clone())
@@ -1528,17 +1531,17 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         if metrics.retry_budget_exhausted {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.retry.budget_exhausted",
-                    attributes: upstream_attrs.clone(),
-                    ty: MetricType::Counter,
-                    value: MetricValue::U64(1),
-                    unit: Some("{request}"),
-                    description: Some(
-                        "Number of requests where retry was refused due to retry budget exhaustion.",
-                    ),
-                    trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
-                }));
+                name: "ferron.proxy.retry.budget_exhausted",
+                attributes: upstream_attrs.clone(),
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some(
+                    "Number of requests where retry was refused due to retry budget exhaustion.",
+                ),
+                trace_context: current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
         }
         if let Some(tokens) = metrics.retry_budget_tokens {
             ctx.events
