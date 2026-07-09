@@ -1117,15 +1117,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             metrics_resolved_ip: bool,
             backend: &Arc<types::upstream::UpstreamInner>,
         ) -> Vec<(&'static str, MetricAttributeValue)> {
-            if !metrics_resolved_ip {
-                return Vec::new();
-            }
             let mut attrs = Vec::with_capacity(2);
-            if let Some(ref ip) = backend.connect_to {
-                attrs.push((
-                    "ferron.proxy.backend_resolved_ip",
-                    MetricAttributeValue::String(ip.to_string()),
-                ));
+            if metrics_resolved_ip {
+                if let Some(ref ip) = backend.connect_to {
+                    attrs.push((
+                        "ferron.proxy.backend_resolved_ip",
+                        MetricAttributeValue::String(ip.to_string()),
+                    ));
+                }
             }
             attrs.push((
                 "ferron.proxy.dns_status",
@@ -1289,6 +1288,24 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 trace_context: current_event_trace_context(ctx),
                 control_plane_metadata: None,
             }));
+
+        // Emit backend selected per request counter
+        let selected_backends_len = metrics.selected_backends.len();
+        if selected_backends_len > 0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.backends.selected_per_request",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(selected_backends_len as u64),
+                    unit: Some("{backend}"),
+                    description: Some(
+                        "Number of backends selected for a request (including retries).",
+                    ),
+                    trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
+                }));
+        }
 
         // Emit TLS handshake failures counter
         if metrics.tls_handshake_failures > 0 {

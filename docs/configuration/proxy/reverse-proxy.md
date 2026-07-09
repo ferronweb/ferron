@@ -594,9 +594,10 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` (when `metrics_resolved_ip true`) | Backends selected during load balancing |
-| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` (when `metrics_resolved_ip true`); `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
-| `ferron.proxy.requests` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` (when `metrics_resolved_ip true`), `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code` | Upstream proxy requests completed |
+| `ferron.proxy.backends.selected` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` | Backends selected during load balancing |
+| `ferron.proxy.backends.selected_per_request` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` | Backends selected per request (including retries) |
+| `ferron.proxy.backends.unhealthy` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status`; `ferron.proxy.health_check_type` (`"active"` for health check probe failures, `"circuit_breaker"` for opened request-time circuits) | Backends marked as unhealthy |
+| `ferron.proxy.requests` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status`, `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code` | Upstream proxy requests completed |
 | `ferron.proxy.tls_handshake_failures` | Counter | backend URL or unix socket path | TLS handshake failures with upstream backends |
 | `ferron.proxy.pool.waits` | Counter | backend URL or unix socket path | Times the connection pool was exhausted and a request had to wait |
 | `ferron.proxy.pool.wait_time` | Histogram | backend URL or unix socket path | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s |
@@ -605,7 +606,7 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.lb.warmup_state` | Gauge | backend URL or unix socket path | Whether the selected backend is in EWMA warm-up phase (1) or settled (0) |
 | `ferron.proxy.lb.selections` | Counter | backend URL or unix socket path; `ferron.proxy.lb.reason` (`"p2c_ewma"`); `ferron.proxy.lb.score` (combined adaptive score) | P2C+EWMA backend selection with combined score |
 | `ferron.proxy.lb.score` | Gauge | backend URL or unix socket path, resolved IP address | Combined load-balancer selection score for the selected backend. Lower = more preferred. Emitted for `two_random` (weighted connection count) and `p2c_ewma` (EWMA latency + connection penalty) algorithms. |
-| `ferron.proxy.backends.excluded` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status` (when `metrics_resolved_ip true`); `ferron.proxy.reason` (`"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
+| `ferron.proxy.backends.excluded` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status`; `ferron.proxy.reason` (`"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
 | `ferron.proxy.retry.count` | Counter | backend URL or unix socket path, `http.request.method`, `ferron.proxy.method_idempotent` | Number of retry attempts made for a request |
 | `ferron.proxy.retry.final` | Gauge | backend URL or unix socket path, `http.request.method`, `ferron.proxy.method_idempotent` | Whether the final retry attempt succeeded (`1`) or failed (`0`) |
 | `ferron.proxy.pool.hit` | Counter | backend URL or unix socket path | Pooled connection reused successfully |
