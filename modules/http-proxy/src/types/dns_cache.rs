@@ -50,7 +50,7 @@ struct DnsCacheEntry<V> {
 impl<V> DnsCacheEntry<V> {
     #[inline]
     fn is_expired(&self) -> bool {
-        self.inner.as_ref().map_or(true, |inner| inner.is_expired())
+        self.inner.as_ref().is_none_or(|inner| inner.is_expired())
     }
 
     #[inline]
