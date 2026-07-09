@@ -24,6 +24,10 @@
 - **DNS thundering herd prevention** — the DNS resolver now uses a singleflight mechanism to prevent multiple concurrent DNS queries for the same hostname, reducing load on DNS servers and improving performance.
 - **DNS resolution status metric attribute** — the `metrics_resolved_ip` directive now also emits a `ferron.proxy.dns_status` attribute on all proxy metrics and access logs when enabled. Values: `"resolved"` (DNS succeeded), `"nxdomain"` (domain not found), `"dns_error"` (other DNS failure), `"logical_dns"` (resolution deferred to connect time), `"static"` (DNS not applicable). This provides visibility into DNS resolution outcomes without requiring per-IP label explosion.
 
+#### Observability & tracing
+
+- **Native exponential histograms for OTLP latency metrics** — all OTLP histogram metrics now use Base2 Exponential Histograms instead of fixed linear buckets. This provides high-resolution percentile data across deep orders of magnitude (1ms to 100s), eliminating the need for manual bucket allocation and preserving tail-latency outliers that were previously masked by coarse bucketing. Affected metrics include `ferron.proxy.upstream.duration`, `ferron.proxy.pool.wait_time`, `ferron.proxy.tls.handshake_time`, `ferron.proxy.connect.latency`, `ferron.proxy.ttfb`, `http.server.request.duration`, and all other histogram instruments exported via OTLP.
+
 ### Fixed
 
 #### HTTP caching

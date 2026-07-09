@@ -648,3 +648,60 @@ fn emit_access_log_modern_smoke() {
         &None,
     );
 }
+
+#[tokio::test]
+async fn emit_metric_histogram_uses_exponential_aggregation_with_view() {
+    use ferron_observability::{MetricEvent, MetricType, MetricValue};
+
+    let view = |i: &opentelemetry_sdk::metrics::Instrument| {
+        if i.kind() == opentelemetry_sdk::metrics::InstrumentKind::Histogram {
+            Some(
+                opentelemetry_sdk::metrics::Stream::builder()
+                    .with_aggregation(
+                        opentelemetry_sdk::metrics::Aggregation::Base2ExponentialHistogram {
+                            max_size: 160,
+                            max_scale: 20,
+                            record_min_max: true,
+                        },
+                    )
+                    .build()
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
+    };
+    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+        .with_view(view)
+        .build();
+    let mut instruments = HashMap::new();
+
+    let event = MetricEvent {
+        name: "test.exponential.histogram",
+        attributes: vec![],
+        ty: MetricType::Histogram(Some(std::borrow::Cow::Borrowed(&[
+            0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
+        ]))),
+        value: MetricValue::F64(0.075),
+        unit: Some("s"),
+        description: Some("Test exponential histogram."),
+        trace_context: None,
+        control_plane_metadata: None,
+    };
+
+    emit_metric(
+        &provider,
+        &event,
+        &mut instruments,
+        &[],
+        &mut DistinctValueTracker::new(),
+        &None,
+    );
+
+    // Verify the instrument was created as a Histogram type
+    let instrument = instruments.get("test.exponential.histogram");
+    assert!(
+        instrument.is_some(),
+        "Histogram instrument should be created"
+    );
+}

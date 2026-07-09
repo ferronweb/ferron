@@ -255,6 +255,24 @@ fn build_metrics_provider(
                 .with_interval(std::time::Duration::from_secs(30))
                 .build(),
         )
+        .with_view(|i: &opentelemetry_sdk::metrics::Instrument| {
+            if i.kind() == opentelemetry_sdk::metrics::InstrumentKind::Histogram {
+                Some(
+                    opentelemetry_sdk::metrics::Stream::builder()
+                        .with_aggregation(
+                            opentelemetry_sdk::metrics::Aggregation::Base2ExponentialHistogram {
+                                max_size: 160,
+                                max_scale: 20,
+                                record_min_max: true,
+                            },
+                        )
+                        .build()
+                        .unwrap(),
+                )
+            } else {
+                None
+            }
+        })
         .with_resource(resource.clone())
         .build())
 }

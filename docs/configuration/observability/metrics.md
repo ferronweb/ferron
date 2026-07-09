@@ -30,6 +30,16 @@ Ferron uses OpenTelemetry metric types. Understanding the type helps you write c
 | `Gauge` | Can go up or down. Represents an absolute value at time of measurement. | Active connections, queue length, uptime |
 | `UpDownCounter` | Can go up or down. Represents a delta since the last measurement. | Memory usage, file descriptor count |
 
+## Exponential histograms
+
+When using the OTLP observability backend, all histogram metrics use **Base2 Exponential Histograms** instead of fixed linear buckets. This provides several advantages for latency-sensitive workloads:
+
+- **Automatic bucket allocation** — bucket boundaries are computed automatically using a base-2 exponential formula, eliminating the need to manually tune bucket boundaries.
+- **High resolution across orders of magnitude** — the default configuration uses 160 buckets covering the range from sub-millisecond to 100 seconds with less than 5% relative error, preserving tail-latency outliers (p99, p99.9) that would be masked by coarse fixed buckets.
+- **No configuration required** — the exponential histogram aggregation is applied automatically at the SDK layer via an OTel View. No configuration changes are needed.
+
+The Prometheus observability backend continues to use explicit bucket histograms with predefined boundaries.
+
 ## Process metrics
 
 The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
