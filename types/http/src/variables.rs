@@ -1,3 +1,5 @@
+use x509_parser::nom::AsBytes;
+
 use crate::HttpContext;
 
 /// Variable name constants to avoid magic strings throughout the codebase.
@@ -18,6 +20,7 @@ pub mod var {
     pub const AUTH_USER: &str = "auth.user";
     pub const TRACE_ID: &str = "trace.id";
     pub const TRACE_SPANID: &str = "trace.spanid";
+    pub const MTLS_CN: &str = "mtls.cn";
 }
 
 /// Canonicalize an IP address: convert IPv4-mapped IPv6 (`::ffff:x.x.x.x`) to IPv4.
@@ -43,6 +46,7 @@ pub fn canonicalize_ip(ip: std::net::IpAddr) -> String {
 /// - `request.host`, `request.scheme`, `request.path_info`
 /// - `server.ip`, `server.port`, `remote.ip`, `remote.port`
 /// - `auth.user`, `trace.id`, `trace.spanid`
+/// - `mtls.cn`
 /// - Custom variables stored in `ctx.variables` (e.g., `request.path_info`)
 ///
 /// Unresolved variables return the variable name itself as a fallback string.
@@ -92,6 +96,25 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
             crate::trace_context::current_event_trace_context(ctx)
                 .map_or(Default::default(), |ctx| hex::encode(ctx.span_id)),
         ),
+        var::MTLS_CN => {
+            let mtls_leaf = ctx
+                .extensions
+                .get::<crate::mtls::MtlsCertificates>()
+                .and_then(|certs| certs.0.first());
+            let mtls_leaf_parsed = mtls_leaf.and_then(|c| {
+                x509_parser::parse_x509_certificate(c.as_bytes())
+                    .ok()
+                    .map(|(_, cert)| cert)
+            });
+            let mtls_cn = mtls_leaf_parsed.and_then(|cert| {
+                cert.subject()
+                    .iter_common_name()
+                    .next()
+                    .and_then(|cn| cn.as_str().ok())
+                    .map(|s| s.to_string())
+            });
+            Some(mtls_cn.unwrap_or_default())
+        }
         n if n.starts_with(var::REQUEST_HEADER_PREFIX) => {
             let header_name = n
                 .trim_start_matches(var::REQUEST_HEADER_PREFIX)

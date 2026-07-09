@@ -605,6 +605,7 @@ dependencies = [
  "rustls-pki-types",
  "typemap_rev",
  "vibeio",
+ "x509-parser",
 ]
 
 [[package]]

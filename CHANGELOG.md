@@ -24,6 +24,10 @@
 
 - **Token-bucket retry budget** — the new `retry_budget` directive implements a token-bucket-based retry budget that limits retries to a configurable fraction of steady-state traffic. When enabled alongside `retry_connection true`, retries consume tokens from a shared pool that is replenished by successful requests. If the retry budget is exhausted, further retries are refused and the request immediately returns `503 Service Unavailable`, preventing cascading retry storms from amplifying backend failures into a self-inflicted DDoS. Supports `max_retry_rate` (default: 10%), `max_tokens` (default: 10), and `refill_rate` (default: 2.0 tokens/sec) subdirectives. New metrics: `ferron.proxy.retry.budget_exhausted` (Counter) and `ferron.proxy.retry.budget_tokens_available` (Gauge).
 
+#### HTTP server core
+
+- **Client certificate common name variable** — the `mtls.cn` variable is now available for interpolations in the server configuration, allowing to use the client certificate's common name in routing rules and conditionals.
+
 ### Changed
 
 #### HTTP caching
