@@ -396,11 +396,7 @@ fn validate_retry_budget_directives(
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(rb_entry) = block
-        .directives
-        .get("retry_budget")
-        .and_then(|d| d.first())
-    {
+    if let Some(rb_entry) = block.directives.get("retry_budget").and_then(|d| d.first()) {
         parent_used.insert("retry_budget".to_string());
         if let Some(rb_block) = rb_entry.children.as_ref() {
             let mut sub = std::collections::HashSet::new();
@@ -411,9 +407,10 @@ fn validate_retry_budget_directives(
             if let Some(entries) = rb_block.directives.get("max_retry_rate") {
                 for e in entries {
                     if let Some(val) = e.args.first() {
-                        let rate = val.as_number().map(|n| n as f64 / 100.0).or_else(|| {
-                            val.as_float()
-                        });
+                        let rate = val
+                            .as_number()
+                            .map(|n| n as f64 / 100.0)
+                            .or_else(|| val.as_float());
                         match rate {
                             Some(r) if (0.0..=1.0).contains(&r) => {}
                             _ => {
@@ -424,7 +421,7 @@ fn validate_retry_budget_directives(
                         }
                     } else {
                         return Err(
-                            "Invalid `retry_budget.max_retry_rate` — expected a number".into(),
+                            "Invalid `retry_budget.max_retry_rate` — expected a number".into()
                         );
                     }
                 }
@@ -450,9 +447,7 @@ fn validate_retry_budget_directives(
                             }
                         }
                     } else {
-                        return Err(
-                            "Invalid `retry_budget.refill_rate` — expected a number".into(),
-                        );
+                        return Err("Invalid `retry_budget.refill_rate` — expected a number".into());
                     }
                 }
             }

@@ -244,10 +244,7 @@ mod tests {
             }));
         }
 
-        let total: u64 = handles
-            .into_iter()
-            .map(|h| h.join().unwrap())
-            .sum();
+        let total: u64 = handles.into_iter().map(|h| h.join().unwrap()).sum();
         assert_eq!(total, 100, "exactly 100 of 200 should succeed");
     }
 }
