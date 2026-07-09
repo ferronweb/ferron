@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::thread::ThreadId;
 use std::time::Duration;
-use std::usize;
 
 use crossbeam_queue::SegQueue;
 use dashmap::DashMap;

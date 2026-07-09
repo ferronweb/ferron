@@ -39,6 +39,41 @@ use self::tls::{cached_tls_config, io_error_status};
 
 const LOG_TARGET: &str = "ferron-http-proxy";
 
+/// Categorize an HTTP method into a bounded set for metric labels.
+///
+/// Standard methods are kept as-is; unknown methods are collapsed into `_other`
+/// to prevent high-cardinality label explosion from custom/fuzzed HTTP methods.
+pub(crate) fn categorize_http_method(method: &http::Method) -> &'static str {
+    match *method {
+        http::Method::GET => "GET",
+        http::Method::HEAD => "HEAD",
+        http::Method::POST => "POST",
+        http::Method::PUT => "PUT",
+        http::Method::DELETE => "DELETE",
+        http::Method::CONNECT => "CONNECT",
+        http::Method::OPTIONS => "OPTIONS",
+        http::Method::TRACE => "TRACE",
+        http::Method::PATCH => "PATCH",
+        _ => "_other",
+    }
+}
+
+/// Whether the HTTP method is idempotent per RFC 9110 §9.2.2.
+///
+/// GET, HEAD, PUT, DELETE, OPTIONS, and TRACE are idempotent.
+/// POST, PATCH, CONNECT, and custom methods are not.
+pub(crate) fn is_method_idempotent(method: &http::Method) -> bool {
+    matches!(
+        *method,
+        http::Method::GET
+            | http::Method::HEAD
+            | http::Method::PUT
+            | http::Method::DELETE
+            | http::Method::OPTIONS
+            | http::Method::TRACE
+    )
+}
+
 /// Main proxy execution.
 ///
 /// Returns the HTTP response and collected metrics for post-request emission.

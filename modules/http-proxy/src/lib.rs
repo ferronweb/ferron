@@ -173,6 +173,12 @@ pub struct ProxyMetrics {
     /// Number of retry attempts made during this request.
     pub retry_count: u64,
 
+    // -- Method context for retry metrics --
+    /// HTTP request method (categorized, bounded cardinality).
+    pub request_method: Option<&'static str>,
+    /// Whether the request method is idempotent per RFC 9110 §9.2.2.
+    pub method_idempotent: Option<bool>,
+
     // -- Pool behavior --
     /// A pooled connection was available immediately without waiting.
     pub pool_hit: bool,
@@ -228,6 +234,8 @@ impl ProxyMetrics {
             excluded_already_tried: Vec::new(),
             excluded_overloaded: Vec::new(),
             retry_count: 0,
+            request_method: None,
+            method_idempotent: None,
             pool_hit: false,
             pool_miss: false,
             connect_time_secs: 0.0,
@@ -977,6 +985,16 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .cloned()
         };
 
+        // Capture HTTP method before execute_proxy() consumes ctx.req
+        let captured_method = ctx
+            .req
+            .as_ref()
+            .map(|r| proxy::categorize_http_method(r.method()));
+        let captured_idempotent = ctx
+            .req
+            .as_ref()
+            .map(|r| proxy::is_method_idempotent(r.method()));
+
         let result = proxy::execute_proxy(
             ctx,
             &config,
@@ -994,7 +1012,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         )
         .await;
 
-        let (response, metrics) = match result {
+        let (response, mut metrics) = match result {
             Ok((resp, m)) => (resp, m),
             Err(e) => {
                 ctx.events.emit(ferron_observability::Event::Log(
@@ -1038,6 +1056,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 return Ok(false);
             }
         };
+
+        // Attach captured method metadata to metrics
+        metrics.request_method = captured_method;
+        metrics.method_idempotent = captured_idempotent;
 
         ctx.res = Some(response);
 
@@ -1410,10 +1432,23 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // --- Retry metrics ---
         if metrics.retry_count > 0 {
+            let mut retry_attrs = upstream_attrs.clone();
+            if let Some(method) = metrics.request_method {
+                retry_attrs.push((
+                    "http.request.method",
+                    MetricAttributeValue::StaticStr(method),
+                ));
+            }
+            if let Some(idempotent) = metrics.method_idempotent {
+                retry_attrs.push((
+                    "ferron.proxy.method_idempotent",
+                    MetricAttributeValue::Bool(idempotent),
+                ));
+            }
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.retry.count",
-                    attributes: upstream_attrs.clone(),
+                    attributes: retry_attrs.clone(),
                     ty: MetricType::Counter,
                     value: MetricValue::U64(metrics.retry_count),
                     unit: Some("{attempt}"),
@@ -1421,12 +1456,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     control_plane_metadata: None,
                     trace_context: current_event_trace_context(ctx),
                 }));
-            let mut final_attrs = upstream_attrs.clone();
-            final_attrs.push(("ferron.proxy.retry.final", MetricAttributeValue::Bool(true)));
+            retry_attrs.push(("ferron.proxy.retry.final", MetricAttributeValue::Bool(true)));
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                 name: "ferron.proxy.retry.final",
-                attributes: final_attrs,
+                attributes: retry_attrs,
                 ty: MetricType::Gauge,
                 value: MetricValue::U64(1),
                 unit: Some("{request}"),
