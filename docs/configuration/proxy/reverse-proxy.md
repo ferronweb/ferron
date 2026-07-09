@@ -105,23 +105,6 @@ example.com {
 }
 ```
 
-#### How retry budgets work
-
-The retry budget uses a token-bucket algorithm shared across all requests for a given proxy configuration:
-
-1. The bucket starts full with `max_tokens` tokens.
-2. Each successful request deposits one token (up to capacity), replenishing retry capacity proportional to steady-state traffic.
-3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable`.
-4. Tokens are lazily refilled based on elapsed time and `refill_rate`.
-
-This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries — the remaining healthy backend is not overwhelmed.
-
-> [!note]
-> The retry budget is scoped per proxy configuration block. Different hosts or locations can have independent budgets. The budget does not add delays between retries — it limits the *count* of retries, not their timing. For delay-based retry control, use circuit breakers with `open_duration`.
-
-> [!tip]
-> Start with the defaults (`max_retry_rate 0.1`, `max_tokens 10`, `refill_rate 2.0`) for most workloads. Increase `max_retry_rate` only if you observe legitimate transient failures being refused. Increase `max_tokens` if your traffic pattern has bursty spikes that need more retry headroom.
-
 #### SSRF risk with interpolated upstream URLs
 
 The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (e.g., `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs, as an attacker can craft requests to redirect the proxy to internal services.
@@ -633,6 +616,23 @@ example.com {
 ```
 
 In this example, the strict DNS resolution for `myapp.example.com` is cached. Subsequent requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
+
+## Retry budgets
+
+The retry budget uses a token-bucket algorithm shared across all requests for a given proxy configuration:
+
+1. The bucket starts full with `max_tokens` tokens.
+2. Each successful request deposits one token (up to capacity), replenishing retry capacity proportional to steady-state traffic.
+3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable`.
+4. Tokens are lazily refilled based on elapsed time and `refill_rate`.
+
+This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries — the remaining healthy backend is not overwhelmed.
+
+> [!note]
+> The retry budget is scoped per proxy configuration block. Different hosts or locations can have independent budgets. The budget does not add delays between retries — it limits the *count* of retries, not their timing. For delay-based retry control, use circuit breakers with `open_duration`.
+
+> [!tip]
+> Start with the defaults (`max_retry_rate 0.1`, `max_tokens 10`, `refill_rate 2.0`) for most workloads. Increase `max_retry_rate` only if you observe legitimate transient failures being refused. Increase `max_tokens` if your traffic pattern has bursty spikes that need more retry headroom.
 
 ## Observability
 
