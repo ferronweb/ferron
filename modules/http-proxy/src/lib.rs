@@ -36,6 +36,7 @@ use ferron_observability::TraceAttributeValue;
 use parking_lot::RwLock;
 use rustc_hash::FxBuildHasher;
 use types::circuit::circuit_breaker_state_label;
+use types::retry_budget::SharedRetryBudget;
 
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
@@ -172,6 +173,10 @@ pub struct ProxyMetrics {
     // -- Retry metadata --
     /// Number of retry attempts made during this request.
     pub retry_count: u64,
+    /// Whether a retry was refused due to retry budget exhaustion.
+    pub retry_budget_exhausted: bool,
+    /// Available retry tokens after the request (if budget is configured).
+    pub retry_budget_tokens: Option<f64>,
 
     // -- Method context for retry metrics --
     /// HTTP request method (categorized, bounded cardinality).
@@ -234,6 +239,8 @@ impl ProxyMetrics {
             excluded_already_tried: Vec::new(),
             excluded_overloaded: Vec::new(),
             retry_count: 0,
+            retry_budget_exhausted: false,
+            retry_budget_tokens: None,
             request_method: None,
             method_idempotent: None,
             pool_hit: false,
@@ -453,6 +460,8 @@ struct ProxyState {
     /// Automatically invalidated on config reload (new Arc pointers).
     resolved_upstreams_cache:
         DashMap<Vec<usize>, Arc<Vec<Arc<types::upstream::UpstreamInner>>>, FxBuildHasher>,
+    /// Retry budget state, keyed by config pointer identity.
+    retry_budget_states: DashMap<Vec<usize>, SharedRetryBudget, FxBuildHasher>,
 }
 
 impl ProxyState {
@@ -469,6 +478,7 @@ impl ProxyState {
             active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
             metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
             resolved_upstreams_cache: DashMap::with_hasher(FxBuildHasher),
+            retry_budget_states: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
@@ -995,6 +1005,21 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .as_ref()
             .map(|r| proxy::is_method_idempotent(r.method()));
 
+        // Get or create the retry budget for this config key
+        let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
+            self.state
+                .retry_budget_states
+                .entry(config_key.clone())
+                .or_insert_with(|| {
+                    SharedRetryBudget::new(
+                        budget_config.max_tokens,
+                        budget_config.refill_rate,
+                        budget_config.max_retry_rate,
+                    )
+                })
+                .clone()
+        });
+
         let result = proxy::execute_proxy(
             ctx,
             &config,
@@ -1009,6 +1034,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             active_unhealthy_counter.as_deref(),
             Some(&self.state.resolved_upstreams_cache),
             &config_key,
+            retry_budget.as_ref(),
         )
         .await;
 
@@ -1061,6 +1087,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         metrics.request_method = captured_method;
         metrics.method_idempotent = captured_idempotent;
 
+        // Capture retry budget tokens after request completion
+        if let Some(ref budget) = retry_budget {
+            metrics.retry_budget_tokens = Some(budget.available_tokens());
+        }
+
         ctx.res = Some(response);
 
         // Inject backend identity into access log fields
@@ -1093,6 +1124,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             log_fields.insert(
                 "ferron.proxy.retry_count".into(),
                 CustomAccessLogField::U64(metrics.retry_count),
+            );
+            log_fields.insert(
+                "ferron.proxy.retry_budget_exhausted".into(),
+                CustomAccessLogField::Bool(metrics.retry_budget_exhausted),
             );
             // Inject circuit breaker state for the selected backend
             if let Some(cb_state) = self.state.circuit_breaker_state.get(backend) {
@@ -1489,6 +1524,36 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }));
         }
 
+        // --- Retry budget metrics ---
+        if metrics.retry_budget_exhausted {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.retry.budget_exhausted",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "Number of requests where retry was refused due to retry budget exhaustion.",
+                    ),
+                    trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
+                }));
+        }
+        if let Some(tokens) = metrics.retry_budget_tokens {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.retry.budget_tokens_available",
+                    attributes: upstream_attrs.clone(),
+                    ty: MetricType::Gauge,
+                    value: MetricValue::F64(tokens),
+                    unit: Some("{token}"),
+                    description: Some("Current available retry budget tokens."),
+                    trace_context: current_event_trace_context(ctx),
+                    control_plane_metadata: None,
+                }));
+        }
+
         // --- Pool hit / miss ---
         if metrics.pool_hit {
             ctx.events
@@ -1678,6 +1743,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             "ferron.proxy.retry_count",
             TraceAttributeValue::I64(metrics.retry_count as i64),
         );
+        if metrics.retry_budget_exhausted {
+            sa.insert(
+                "ferron.proxy.retry_budget_exhausted",
+                TraceAttributeValue::Bool(true),
+            );
+        }
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
             sa.insert(
                 "ferron.proxy.backend_url",

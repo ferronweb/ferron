@@ -24,6 +24,7 @@ use crate::types::circuit::CircuitBreakerStateMap;
 use crate::types::error::ProxyError;
 use crate::types::flapping::FlappingStateMap;
 use crate::types::health::HealthCheckStateMap;
+use crate::types::retry_budget::SharedRetryBudget;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
@@ -95,6 +96,7 @@ pub async fn execute_proxy(
         &dashmap::DashMap<Vec<usize>, Arc<Vec<Arc<UpstreamInner>>>, FxBuildHasher>,
     >,
     config_key: &[usize],
+    retry_budget: Option<&SharedRetryBudget>,
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();
 
@@ -246,6 +248,11 @@ pub async fn execute_proxy(
                     affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
                 );
 
+                // Record successful request in retry budget
+                if let Some(budget) = retry_budget {
+                    budget.record_request();
+                }
+
                 return Ok((resp, metrics));
             }
             Err(e) => {
@@ -262,6 +269,40 @@ pub async fn execute_proxy(
 
                 // Check if we should retry with another backend
                 if config.retry_connection {
+                    // Check retry budget if configured
+                    if let Some(budget) = retry_budget {
+                        if !budget.try_consume_retry_token() {
+                            // Budget exhausted — fail fast with 503
+                            metrics.retry_budget_exhausted = true;
+                            ctx.events.emit(Event::Log(LogEvent {
+                                level: LogLevel::Warn,
+                                message: format!(
+                                    "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
+                                    url = selected.upstream.proxy_to,
+                                    err = e
+                                ),
+                                summary: "Reverse proxy: retry budget exhausted".into(),
+                                target: LOG_TARGET,
+                                attributes: vec![(
+                                    "upstream.address",
+                                    LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                                ), (
+                                    "error.message",
+                                    LogAttributeValue::String(e.to_string()),
+                                )],
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                control_plane_metadata: None,
+                            }));
+                            // Collect active health check unhealthy metrics
+                            if let Some(counter) = active_unhealthy_counter {
+                                let guard = counter.read();
+                                metrics.active_unhealthy_backends =
+                                    guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                            }
+                            return Ok((HttpResponse::BuiltinError(503, None), metrics));
+                        }
+                        budget.record_retry();
+                    }
                     // Count how many healthy backends remain
                     let healthy_count = count_available_backends(
                         &upstreams,

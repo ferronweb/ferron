@@ -12,6 +12,7 @@ pub mod error;
 pub(crate) mod flapping;
 pub mod health;
 pub mod lb;
+pub mod retry_budget;
 pub mod srv;
 #[cfg(feature = "srv-lookup")]
 pub mod strict_dns;

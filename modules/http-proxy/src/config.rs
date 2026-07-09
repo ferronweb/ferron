@@ -39,6 +39,28 @@ pub enum HeaderAction {
     Append(HeaderName, String),
 }
 
+/// Retry budget configuration for the reverse proxy.
+#[derive(Clone)]
+pub struct RetryBudgetConfig {
+    /// Maximum retry rate as a fraction of steady-state traffic (0.0–1.0).
+    /// e.g. `0.1` means at most 10% of total requests may be retries.
+    pub max_retry_rate: f64,
+    /// Maximum number of tokens in the bucket (burst capacity).
+    pub max_tokens: u64,
+    /// Tokens added per second (steady-state traffic deposit rate).
+    pub refill_rate: f64,
+}
+
+impl Default for RetryBudgetConfig {
+    fn default() -> Self {
+        Self {
+            max_retry_rate: 0.1,
+            max_tokens: 10,
+            refill_rate: 2.0,
+        }
+    }
+}
+
 /// Circuit breaker configuration for the reverse proxy.
 #[derive(Clone)]
 pub struct CircuitBreakerConfig {
@@ -83,6 +105,10 @@ pub struct ProxyConfig {
     pub algorithm: LoadBalancerAlgorithm,
     pub circuit_breaker: CircuitBreakerConfig,
     pub retry_connection: bool,
+    /// Optional retry budget configuration. When `Some(...)`, retries are
+    /// gated by a token-bucket rate limiter. When `None`, retries are
+    /// unbounded (current behavior).
+    pub retry_budget: Option<RetryBudgetConfig>,
     pub keepalive: bool,
     pub http2: bool,
     pub http2_only: bool,
@@ -119,6 +145,7 @@ impl Default for ProxyConfig {
             algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
             circuit_breaker: CircuitBreakerConfig::default(),
             retry_connection: true,
+            retry_budget: None,
             keepalive: true,
             http2: false,
             http2_only: false,
@@ -296,6 +323,18 @@ fn parse_proxy_block(
                     cfg.retry_connection = val;
                 }
             }
+            "retry_budget" => {
+                if let Some(val) = entries.first().map(|e| e.get_flag()) {
+                    if val {
+                        cfg.retry_budget = Some(RetryBudgetConfig::default());
+                        if let Some(children) =
+                            entries.first().and_then(|e| e.children.as_ref())
+                        {
+                            parse_retry_budget(children, cfg.retry_budget.as_mut().unwrap())?;
+                        }
+                    }
+                }
+            }
             "keepalive" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.keepalive = val;
@@ -470,6 +509,65 @@ fn parse_active_health_check(
             "no_verification" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     health_check_config.no_verification = val;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_retry_budget(
+    entries: &ServerConfigurationBlock,
+    retry_budget_config: &mut RetryBudgetConfig,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    for (name, entries) in entries.directives.iter() {
+        match name.as_str() {
+            "max_retry_rate" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_number())
+                {
+                    let rate = val as f64 / 100.0;
+                    if (0.0..=1.0).contains(&rate) {
+                        retry_budget_config.max_retry_rate = rate;
+                    }
+                } else if let Some(val) = entries.first().and_then(|e| e.args.first()) {
+                    if let Some(rate) = val.as_float() {
+                        if (0.0..=1.0).contains(&rate) {
+                            retry_budget_config.max_retry_rate = rate;
+                        }
+                    }
+                }
+            }
+            "max_tokens" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val > 0 {
+                        retry_budget_config.max_tokens = val as u64;
+                    }
+                }
+            }
+            "refill_rate" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_number())
+                {
+                    if val >= 0 {
+                        retry_budget_config.refill_rate = val as f64;
+                    }
+                } else if let Some(val) = entries.first().and_then(|e| e.args.first()) {
+                    if let Some(rate) = val.as_float() {
+                        if rate >= 0.0 {
+                            retry_budget_config.refill_rate = rate;
+                        }
+                    }
                 }
             }
             _ => {}

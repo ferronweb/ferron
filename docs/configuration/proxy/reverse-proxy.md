@@ -21,6 +21,8 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when `record_5xx` is enabled. Slow responses count when `latency_threshold` is set. Supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, `flapping_window`, and `slow_start` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
+- `retry_budget [bool: boolean]` (`http-proxy`)
+  - This directive enables a token-bucket retry budget that limits retries to a fraction of steady-state traffic. When enabled alongside `retry_connection true`, retries consume tokens from a shared pool. Successful requests replenish the pool. If the retry budget is exhausted, further retries are refused and the request immediately returns `503 Service Unavailable`, preventing cascading retry storms from overwhelming remaining healthy backends. Supports `max_retry_rate`, `max_tokens`, and `refill_rate` nested directives. Default: `retry_budget false`
 - `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
   - This directive controls whether the `ferron.proxy.backend_resolved_ip` and `ferron.proxy.dns_status` attributes are included in proxy metrics and access logs. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only, keeping metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value, and a `ferron.proxy.dns_status` attribute indicates the DNS resolution outcome (`resolved`, `nxdomain`, `dns_error`, `logical_dns`, `static`). Enable only when per-IP metric granularity is required and the IP set is stable. Default: `metrics_resolved_ip false`
 
@@ -75,6 +77,50 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | `flapping_transitions` | `<count: integer>` | Number of circuit breaker state transitions within `flapping_window` required to mark an upstream as flapping. When flapping, individual transition logs are suppressed and a single warning is emitted. Set to `0` to disable flapping detection. | 3 |
 | `flapping_window` | `<duration: string>` | Time window for counting state transitions for flapping detection. | `10s` |
 | `slow_start` | `<duration: string>` | Duration of slow-start window after a backend's circuit breaker recovers (half-open → closed). During slow-start, the load balancer applies a decaying virtual connection penalty to prevent thundering herd — the recovered backend appears busier than it is until real traffic catches up. Set to `0` to disable. | `0` |
+
+#### Retry budget nested directives
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `max_retry_rate` | `<rate: float>` | Maximum retry rate as a fraction of total requests (0.0–1.0). When exceeded, further retries are refused with `503 Service Unavailable`. | `0.1` (10%) |
+| `max_tokens` | `<count: integer>` | Maximum number of tokens in the bucket (burst capacity). Controls how many retries can happen in a short burst before the rate limit applies. | `10` |
+| `refill_rate` | `<rate: float>` | Tokens added per second to the bucket. Higher values allow retries to recover faster after sustained traffic. | `2.0` |
+
+**Configuration example:**
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        algorithm round_robin
+        retry_connection true
+        retry_budget {
+            max_retry_rate 0.1
+            max_tokens 10
+            refill_rate 2.0
+        }
+    }
+}
+```
+
+#### How retry budgets work
+
+The retry budget uses a token-bucket algorithm shared across all requests for a given proxy configuration:
+
+1. The bucket starts full with `max_tokens` tokens.
+2. Each successful request deposits one token (up to capacity), replenishing retry capacity proportional to steady-state traffic.
+3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable`.
+4. Tokens are lazily refilled based on elapsed time and `refill_rate`.
+
+This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries — the remaining healthy backend is not overwhelmed.
+
+> [!note]
+> The retry budget is scoped per proxy configuration block. Different hosts or locations can have independent budgets. The budget does not add delays between retries — it limits the *count* of retries, not their timing. For delay-based retry control, use circuit breakers with `open_duration`.
+
+> [!tip]
+> Start with the defaults (`max_retry_rate 0.1`, `max_tokens 10`, `refill_rate 2.0`) for most workloads. Increase `max_retry_rate` only if you observe legitimate transient failures being refused. Increase `max_tokens` if your traffic pattern has bursty spikes that need more retry headroom.
 
 #### SSRF risk with interpolated upstream URLs
 
@@ -609,6 +655,8 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.backends.excluded` | Counter | backend URL or unix socket path, optionally resolved IP address and `ferron.proxy.dns_status`; `ferron.proxy.reason` (`"circuit_open"`, `"already_tried"`, `"overloaded"`) | Backend excluded from selection |
 | `ferron.proxy.retry.count` | Counter | backend URL or unix socket path, `http.request.method`, `ferron.proxy.method_idempotent` | Number of retry attempts made for a request |
 | `ferron.proxy.retry.final` | Gauge | backend URL or unix socket path, `http.request.method`, `ferron.proxy.method_idempotent` | Whether the final retry attempt succeeded (`1`) or failed (`0`) |
+| `ferron.proxy.retry.budget_exhausted` | Counter | backend URL or unix socket path | Number of requests where retry was refused due to retry budget exhaustion |
+| `ferron.proxy.retry.budget_tokens_available` | Gauge | backend URL or unix socket path | Current available retry budget tokens |
 | `ferron.proxy.pool.hit` | Counter | backend URL or unix socket path | Pooled connection reused successfully |
 | `ferron.proxy.pool.miss` | Counter | backend URL or unix socket path | Pooled connection unavailable, new connection established |
 | `ferron.proxy.pool.idle` | Gauge | backend URL or unix socket path; `worker` (thread identifier) | Current number of idle connections in the pool |

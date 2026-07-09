@@ -76,6 +76,7 @@ fn validate_proxy_block(
     ferron_core::validate_nested!(block, used(sub), algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
     validate_circuit_breaker_directives(block, ctx, &mut sub)?;
     ferron_core::validate_nested!(block, used(sub), retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+    validate_retry_budget_directives(block, ctx, &mut sub)?;
     ferron_core::validate_nested!(block, used(sub), keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
@@ -380,6 +381,84 @@ fn validate_circuit_breaker_directives(
 
             ferron_core::check_unused_subdirectives!(
                 cb_block,
+                sub,
+                &mut ctx.diagnostics,
+                ctx.scope.clone()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_retry_budget_directives(
+    block: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+    parent_used: &mut std::collections::HashSet<String>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(rb_entry) = block
+        .directives
+        .get("retry_budget")
+        .and_then(|d| d.first())
+    {
+        parent_used.insert("retry_budget".to_string());
+        if let Some(rb_block) = rb_entry.children.as_ref() {
+            let mut sub = std::collections::HashSet::new();
+
+            if rb_block.directives.contains_key("max_retry_rate") {
+                sub.insert("max_retry_rate".to_string());
+            }
+            if let Some(entries) = rb_block.directives.get("max_retry_rate") {
+                for e in entries {
+                    if let Some(val) = e.args.first() {
+                        let rate = val.as_number().map(|n| n as f64 / 100.0).or_else(|| {
+                            val.as_float()
+                        });
+                        match rate {
+                            Some(r) if (0.0..=1.0).contains(&r) => {}
+                            _ => {
+                                return Err(
+                                    "Invalid `retry_budget.max_retry_rate` — must be between 0.0 and 1.0 (or 0–100 as percentage)".into(),
+                                );
+                            }
+                        }
+                    } else {
+                        return Err(
+                            "Invalid `retry_budget.max_retry_rate` — expected a number".into(),
+                        );
+                    }
+                }
+            }
+            if rb_block.directives.contains_key("max_tokens") {
+                sub.insert("max_tokens".to_string());
+            }
+            validate_number(rb_block, "max_tokens", 1)?;
+            if rb_block.directives.contains_key("refill_rate") {
+                sub.insert("refill_rate".to_string());
+            }
+            if let Some(entries) = rb_block.directives.get("refill_rate") {
+                for e in entries {
+                    if let Some(val) = e.args.first() {
+                        let rate = val.as_number().map(|n| n as f64).or_else(|| val.as_float());
+                        match rate {
+                            Some(r) if r >= 0.0 => {}
+                            _ => {
+                                return Err(
+                                    "Invalid `retry_budget.refill_rate` — must be non-negative"
+                                        .into(),
+                                );
+                            }
+                        }
+                    } else {
+                        return Err(
+                            "Invalid `retry_budget.refill_rate` — expected a number".into(),
+                        );
+                    }
+                }
+            }
+
+            ferron_core::check_unused_subdirectives!(
+                rb_block,
                 sub,
                 &mut ctx.diagnostics,
                 ctx.scope.clone()
