@@ -259,9 +259,11 @@ impl Module for PrometheusObservabilityModule {
                 } => result.ok(),
                 _ = cancel_token.cancelled() => None,
             } {
-                ferron_core::admin::ADMIN_METRICS
-                    .observability_event_queue_len
-                    .fetch_sub(1, Ordering::Relaxed);
+                if msg.event.is_some() {
+                    ferron_core::admin::ADMIN_METRICS
+                        .observability_event_queue_len
+                        .fetch_sub(1, Ordering::Relaxed);
+                }
 
                 let config = match parse_prometheus_config(&msg.log_config) {
                     Ok(c) => c,
