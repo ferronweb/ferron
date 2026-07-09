@@ -3,7 +3,7 @@ title: "Configuration: Prometheus metrics"
 description: "Prometheus metrics export configuration for monitoring Ferron server performance and health."
 ---
 
-This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports Ferron's internal metrics in Prometheus format, enabling integration with Prometheus servers, Grafana dashboards, and other monitoring systems.
+This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports Ferron's internal metrics in Prometheus format, enabling integration with Prometheus servers, Grafana dashboards, and other monitoring systems that support OpenMetrics format.
 
 ## Directives
 
