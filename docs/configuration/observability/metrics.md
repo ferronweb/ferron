@@ -40,6 +40,22 @@ When using the OTLP observability backend, all histogram metrics use **Base2 Exp
 
 The Prometheus observability backend also supports native exponential histograms when `endpoint_native_histograms true` is configured and the output format is set to `"protobuf"`. In text format, it uses explicit bucket histograms with predefined boundaries.
 
+## Metric exemplars
+
+Ferron supports **metric exemplars** in the Prometheus observability backend. When a request carries an active trace context (W3C trace ID and span ID), the Prometheus module attaches an exemplar to the observation, linking it to the specific trace that triggered it.
+
+Each exemplar contains:
+
+- `trace_id` — the W3C trace ID of the request
+- `span_id` — the W3C span ID of the request
+
+Exemplars are available for **all counter metrics** by default. For histograms, exemplars are active only when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive. When native histograms are enabled, histogram metrics no longer carry exemplars.
+
+The OTLP observability backend does not currently support metric exemplars due to OpenTelemetry SDK limitations. Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate OTLP metrics using their semantic attributes, resource attributes, and timestamps.
+
+> [!note]
+> For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus#metric-exemplars).
+
 ## Process metrics
 
 The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
