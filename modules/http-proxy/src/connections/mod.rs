@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::thread::ThreadId;
 use std::time::Duration;
+use std::usize;
 
 use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
@@ -67,11 +68,14 @@ static PENDING_PULL_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static POOL_STATS: LazyLock<PoolStatsCollector> = LazyLock::new(PoolStatsCollector::new);
 
 pub struct PoolStatsCollector {
+    // AtomicUsize #1 - idle connections
+    // AtomicUsize #2 - outstanding connections
     inner: DashMap<
         (std::thread::ThreadId, Arc<UpstreamInner>),
         (AtomicUsize, AtomicUsize),
         FxBuildHasher,
     >,
+    local_limits: DashMap<Arc<UpstreamInner>, AtomicUsize, FxBuildHasher>,
 }
 
 impl PoolStatsCollector {
@@ -79,6 +83,7 @@ impl PoolStatsCollector {
     pub fn new() -> Self {
         Self {
             inner: DashMap::with_hasher(FxBuildHasher),
+            local_limits: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
@@ -116,6 +121,19 @@ impl PoolStatsCollector {
         }
     }
 
+    #[inline]
+    pub fn record_local_limit(&self, upstream: &Arc<UpstreamInner>, local_limit: usize) {
+        let entry = if let Some(entry) = self.local_limits.get(upstream) {
+            entry
+        } else {
+            self.local_limits
+                .entry(upstream.clone())
+                .or_insert_with(|| AtomicUsize::new(usize::MAX))
+                .downgrade()
+        };
+        entry.value().store(local_limit, Ordering::Relaxed);
+    }
+
     #[allow(clippy::type_complexity)]
     #[inline]
     pub fn snapshot(&self) -> Vec<((std::thread::ThreadId, Arc<UpstreamInner>), (usize, usize))> {
@@ -126,6 +144,19 @@ impl PoolStatsCollector {
                 let idle = entry.value().0.load(Ordering::Relaxed);
                 let outstanding = entry.value().1.load(Ordering::Relaxed);
                 (key, (idle, outstanding))
+            })
+            .collect()
+    }
+
+    #[allow(clippy::type_complexity)]
+    #[inline]
+    pub fn snapshot_local_limits(&self) -> Vec<(Arc<UpstreamInner>, usize)> {
+        self.local_limits
+            .iter()
+            .filter_map(|entry| {
+                let key = entry.key().clone();
+                let local_limit = entry.value().load(Ordering::Relaxed);
+                (local_limit != usize::MAX).then_some((key, local_limit))
             })
             .collect()
     }
@@ -173,6 +204,7 @@ impl ConnectionManager {
             .write()
             .expect("local_limits lock poisoned");
 
+        POOL_STATS.record_local_limit(&upstream, limit);
         limits.insert(upstream, limit);
         limit
     }

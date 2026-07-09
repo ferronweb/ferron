@@ -707,6 +707,50 @@ impl Module for ReverseProxyModule {
                     }));
                 }
 
+                let local_limit_snapshot = crate::connections::POOL_STATS.snapshot_local_limits();
+                for (upstream, limit) in local_limit_snapshot {
+                    let mut attrs = Vec::with_capacity(2);
+                    attrs.push((
+                        "ferron.proxy.backend_url",
+                        MetricAttributeValue::String(upstream.proxy_to.clone()),
+                    ));
+                    if let Some(ref unix_path) = upstream.proxy_unix {
+                        attrs.push((
+                            "ferron.proxy.backend_unix_path",
+                            MetricAttributeValue::String(unix_path.clone()),
+                        ));
+                    }
+                    pool_sink.emit(Event::Metric(MetricEvent {
+                        name: "ferron.proxy.pool.local_limit",
+                        attributes: vec![(
+                            "ferron.proxy.backend_url",
+                            MetricAttributeValue::String(upstream.proxy_to.clone()),
+                        )],
+                        ty: MetricType::Gauge,
+                        value: MetricValue::U64(limit as u64),
+                        unit: Some("{connection}"),
+                        description: Some(
+                            "Current per-upstream local connection limit for this worker.",
+                        ),
+                        trace_context: None,
+                        control_plane_metadata: None,
+                    }));
+                }
+
+                // Global limit snapshot
+                let global_limit =
+                    crate::GLOBAL_CONCURRENT_CONNECTIONS.load(std::sync::atomic::Ordering::Relaxed);
+                pool_sink.emit(Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.global_limit",
+                    attributes: Vec::new(),
+                    ty: MetricType::Gauge,
+                    value: MetricValue::U64(global_limit as u64),
+                    unit: Some("{connection}"),
+                    description: Some("Current global connection limit for reverse proxy."),
+                    trace_context: None,
+                    control_plane_metadata: None,
+                }));
+
                 // Emit DNS cache hit/miss counters
                 let hits = crate::types::dns_cache::DNS_CACHE_HITS
                     .swap(0, std::sync::atomic::Ordering::Relaxed);

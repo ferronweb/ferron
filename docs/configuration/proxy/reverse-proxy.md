@@ -612,6 +612,8 @@ In this example, the strict DNS resolution for `myapp.example.com` is cached. Su
 | `ferron.proxy.pool.miss` | Counter | backend URL or unix socket path | Pooled connection unavailable, new connection established |
 | `ferron.proxy.pool.idle` | Gauge | backend URL or unix socket path; `worker` (thread identifier) | Current number of idle connections in the pool |
 | `ferron.proxy.pool.outstanding` | Gauge | backend URL or unix socket path; `worker` (thread identifier) | Current number of outstanding (in-use) connections in the pool |
+| `ferron.proxy.pool.local_limit` | Gauge | backend URL or unix socket path | Current local connection limit for reverse proxy |
+| `ferron.proxy.pool.global_limit` | Gauge | — | Current global connection limit for reverse proxy |
 | `ferron.proxy.connect.latency` | Histogram | backend URL or unix socket path | Time to establish a TCP/TLS connection to the backend |
 | `ferron.proxy.ttfb` | Histogram | backend URL or unix socket path | Time to first response byte from the backend |
 | `ferron.proxy.health.success` | Counter | backend URL or unix socket path | Health check probe succeeded |

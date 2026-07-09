@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### Reverse proxying
+
+- **Pool connection limit metrics** — the `ferron.proxy.pool.local_limit` and `ferron.proxy.pool.global_limit` pool metrics are now available for monitoring connection pool usage.
+
 ### Changed
 
 #### HTTP caching
