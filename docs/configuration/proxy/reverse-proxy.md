@@ -623,7 +623,7 @@ The retry budget uses a token-bucket algorithm shared across all requests for a 
 
 1. The bucket starts full with `max_tokens` tokens.
 2. Each successful request deposits one token (up to capacity), replenishing retry capacity proportional to steady-state traffic.
-3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable`.
+3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable` with a `Retry-After` header indicating when the client should retry.
 4. Tokens are lazily refilled based on elapsed time and `refill_rate`.
 
 This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries — the remaining healthy backend is not overwhelmed.

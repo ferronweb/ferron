@@ -299,7 +299,17 @@ pub async fn execute_proxy(
                                 metrics.active_unhealthy_backends =
                                     guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                             }
-                            return Ok((HttpResponse::BuiltinError(503, None), metrics));
+                            // Add Retry-After header based on when the next token will be available
+                            let retry_after_secs = budget.time_until_available(1);
+                            let retry_after_value =
+                                retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
+                            let mut headers = http::HeaderMap::new();
+                            headers.insert(
+                                http::header::RETRY_AFTER,
+                                http::HeaderValue::from_str(&retry_after_value.to_string())
+                                    .expect("retry-after value should be valid"),
+                            );
+                            return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
                         }
                         budget.record_retry();
                     }
