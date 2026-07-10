@@ -32,9 +32,7 @@ body {
 .directory-listing thead th {
     background-color: var(--surface-alt);
     font-weight: 600;
-    font-size: 0.85em;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 1em;
     color: var(--muted);
 }
 

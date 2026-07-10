@@ -46,11 +46,10 @@ body {
 }
 
 .error-trace-label {
-    display: block;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.8em;
-    margin-bottom: 0.4em;
+    display: inline-block;
+    font-size: 1em;
+    margin-inline-end: 0.75em;
+    vertical-align: middle;
 }
 
 .error-trace-id {
@@ -66,6 +65,7 @@ body {
     color: var(--fg);
     user-select: all;
     word-break: break-all;
+    vertical-align: middle;
 }
 
 @media screen and (max-width: 512px) {
@@ -79,5 +79,11 @@ body {
 
     .error-description {
         font-size: 1em;
+    }
+
+    .error-trace-label {
+        margin: 0;
+        margin-bottom: 0.25em;
+        display: block;
     }
 }
