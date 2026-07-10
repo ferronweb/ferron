@@ -5,6 +5,7 @@ use ferron_http::util::anti_xss::anti_xss;
 pub fn generate_default_error_page(
     status_code: http::StatusCode,
     server_administrator_email: Option<&str>,
+    trace_id: Option<&str>,
 ) -> String {
     let status_code_name = match status_code.canonical_reason() {
         Some(reason) => format!("{} {}", status_code.as_u16(), reason),
@@ -70,15 +71,27 @@ pub fn generate_default_error_page(
     _ => "No description found for the status code.",
   };
 
+    let trace_block = trace_id.filter(|id| !id.is_empty()).map(|id| {
+        format!(
+            "<p class=\"error-trace\">\
+<span class=\"error-trace-label\">Trace ID</span>\
+<code class=\"error-trace-id\">{}</code>\
+</p>",
+            anti_xss(id)
+        )
+    });
+
+    let css_error = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/error.css"));
     format_page!(
         format!(
-            "<main class=\"error-container\">
-      <h1>
-          <span class=\"error-code\">{}</span>
-          {}
-      </h1>
-      <p class=\"error-description\">{}</p>
-  </main>",
+            "<main class=\"error-container\">\
+<h1>\
+<span class=\"error-code\">{}</span>\
+{}\
+</h1>\
+<p class=\"error-description\">{}</p>\
+{}\
+</main>",
             status_code.as_u16(),
             status_code
                 .canonical_reason()
@@ -86,12 +99,40 @@ pub fn generate_default_error_page(
                     "<span class=\"error-message\">{}</span>",
                     anti_xss(r)
                 )),
-            &anti_xss(status_code_description)
+            &anti_xss(status_code_description),
+            trace_block.as_deref().unwrap_or("")
         ),
         &status_code_name,
-        vec![
-            ferron_http::util::CSS_COMMON,
-            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/error.css"))
-        ]
+        vec![ferron_http::util::CSS_COMMON, css_error]
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_default_error_page;
+    use http::StatusCode;
+
+    #[test]
+    fn renders_error_code_and_description() {
+        let page = generate_default_error_page(StatusCode::NOT_FOUND, None, None);
+        assert!(page.contains("404"));
+        assert!(page.contains("Not Found"));
+        assert!(page.contains("error-code"));
+        assert!(!page.contains("<p class=\"error-trace\">"));
+    }
+
+    #[test]
+    fn renders_trace_id_when_present() {
+        let page =
+            generate_default_error_page(StatusCode::INTERNAL_SERVER_ERROR, None, Some("abc123"));
+        assert!(page.contains("<p class=\"error-trace\">"));
+        assert!(page.contains("abc123"));
+    }
+
+    #[test]
+    fn trace_id_is_escaped() {
+        let page = generate_default_error_page(StatusCode::FORBIDDEN, None, Some("<script>"));
+        assert!(!page.contains("<script>"));
+        assert!(page.contains("&lt;script&gt;"));
+    }
 }

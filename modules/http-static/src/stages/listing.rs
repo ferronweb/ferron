@@ -205,7 +205,9 @@ fn generate_directory_listing(
     let mut rows = Vec::new();
     if !path_without_slashes.is_empty() {
         rows.push(format!(
-            "<tr><td>⬆️ <a href=\"{}\">Return</a></td><td></td><td></td></tr>",
+            "<tr><td class=\"directory-filename\"><span class=\"directory-icon\">⬆️</span>\
+            <a href=\"{}\" class=\"directory-parent\">Parent directory</a></td>\
+             <td class=\"directory-size\">—</td><td class=\"directory-date\">—</td></tr>",
             anti_xss(&return_path)
         ));
     }
@@ -217,13 +219,13 @@ fn generate_directory_listing(
             let encoded_filename = urlencoding::encode(&filename);
             let href = format!("{}/{}", path_without_slashes, encoded_filename);
             let link = format!(
-                "⚠️ <a href=\"{}\">{}</a>",
+                "<span class=\"directory-icon\">⚠️</span><a href=\"{}\">{}</a>",
                 anti_xss(&href),
                 anti_xss(&filename)
             );
             rows.push(format!(
                 "<tr><td class=\"directory-filename\">{link}</td>\
-                 <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
+                 <td class=\"directory-size\">—</td><td class=\"directory-date\">—</td></tr>"
             ));
             continue;
         };
@@ -235,7 +237,7 @@ fn generate_directory_listing(
         let encoded_filename = urlencoding::encode(&filename);
         let href = format!("{}/{}{}", path_without_slashes, encoded_filename, suffix);
         let link = format!(
-            "{} <a href=\"{}\">{}</a>",
+            "<span class=\"directory-icon\">{}</span><a href=\"{}\">{}</a>",
             icon,
             anti_xss(&href),
             anti_xss(&filename)
@@ -244,14 +246,14 @@ fn generate_directory_listing(
         let size = if let Some(size) = metadata.size {
             anti_xss(&sizify(size, false))
         } else {
-            "-".to_string()
+            "—".to_string()
         };
 
         let date = if let Some(mtime) = metadata.modified {
             let dt: DateTime<Local> = mtime.into();
             anti_xss(&dt.format("%a %b %d %Y").to_string())
         } else {
-            "-".to_string()
+            "—".to_string()
         };
 
         rows.push(format!(
@@ -262,23 +264,26 @@ fn generate_directory_listing(
 
     if rows.len() <= min_rows {
         rows.push(
-            "<tr><td class=\"directory-filename\">🤷 No files found</td>\
+            "<tr><td class=\"directory-filename\">No files found</td>\
              <td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>"
                 .to_string(),
         );
     }
 
     let body = format!(
-        "<h1>Directory: {}</h1>\n<table>\n\
-         <tr><th class=\"directory-filename\">Filename</th>\
+        "<main>\n\
+         <header class=\"directory-header\">\
+         <h1>Index of <span class=\"directory-path\">{}</span></h1></header>\n\
+         <table class=\"directory-listing\">\n\
+         <thead><tr><th class=\"directory-filename\">Name</th>\
          <th class=\"directory-size\">Size</th>\
-         <th class=\"directory-date\">Date</th></tr>\n\
-         {}\n</table>{}",
+         <th class=\"directory-date\">Modified</th></tr></thead>\n\
+         <tbody>\n{}\n</tbody>\n</table>{}\n</main>",
         anti_xss(request_path),
         rows.join("\n"),
         description
             .map(|d| format!(
-                "<hr><pre class=\"directory-description\">{}</pre>",
+                "\n<pre class=\"directory-description\">{}</pre>",
                 anti_xss(&d)
             ))
             .unwrap_or_default()
@@ -289,7 +294,7 @@ fn generate_directory_listing(
 
     format_page!(
         body,
-        &format!("Directory: {request_path}"),
+        &format!("Index of {request_path}"),
         vec![css_common, css_directory]
     )
 }

@@ -1,66 +1,117 @@
 body {
-    max-width: 1024px;
+    max-width: 64em;
 }
 
-table {
-    border-collapse: collapse;
-    border-width: 1px;
-    border-style: solid;
-    border-color: #e2e8f0;
+.directory-header {
+    text-align: left;
+    margin-bottom: 1.5em;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.directory-header h1 {
+    font-size: 2em;
+    margin: 0;
+}
+
+.directory-path {
+    color: var(--muted);
+}
+
+.directory-listing {
+    border-spacing: 0;
     width: 100%;
     overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-all;
     word-break: break-word;
-    box-shadow:
-      0 1px 3px 0 rgba(0, 0, 0, 0.1),
-      0 1px 2px -1px rgb(0, 0, 0, 0.1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
 }
 
-tr {
-    border-width: 1px;
-    border-style: solid;
-    border-color: #e2e8f0;
+.directory-listing thead th {
+    background-color: var(--surface-alt);
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
 }
 
-th {
-    background-color: #fbf1ee;
+.directory-listing th,
+.directory-listing td {
+    padding: 0.5em 1em;
+    border-bottom: 1px solid var(--border);
 }
 
-th,
-td {
-    padding: 0.5em 0.75em;
+.directory-listing tbody tr:last-child td {
+    border-bottom: none;
 }
 
-table th.directory-filename,
-table td.directory-filename {
+.directory-listing tbody tr td {
+    transition: background-color 0.25s ease-in-out;
+}
+
+.directory-listing tbody tr:hover td {
+    background-color: var(--surface);
+}
+
+.directory-icon {
+    margin-right: 0.5em;
+}
+
+.directory-filename {
     text-align: left;
 }
 
-table th.directory-size,
-table td.directory-size {
-    text-align: center;
-}
-
-table th.directory-date,
-table td.directory-date {
+.directory-size {
     text-align: right;
+    white-space: nowrap;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 
-pre.directory-description {
-    font-size: 1.1em;
+.directory-date {
+    text-align: right;
+    white-space: nowrap;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 
-@media screen and (prefers-color-scheme: dark) {
-    table {
-        border-color: #2b303b;
+.directory-description {
+    margin-top: 1.5em;
+    padding: 1em 1.25em;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background-color: var(--surface);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 1em;
+}
+
+.directory-listing a {
+    color: var(--foreground);
+    font-weight: 600;
+    transition: color 0.1s ease-in-out;
+}
+
+.directory-listing a.directory-parent {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.directory-listing a:hover,
+.directory-listing a.directory-parent:hover {
+    color: var(--accent);
+}
+
+@media screen and (max-width: 512px) {
+    .directory-listing th,
+    .directory-listing td {
+        padding: 0.5em 0.65em;
     }
 
-    tr {
-        border-color: #2b303b;
-    }
-
-    th {
-        background-color: #1b1f26;
+    .directory-date {
+        display: none;
     }
 }

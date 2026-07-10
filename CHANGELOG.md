@@ -27,9 +27,13 @@
 #### HTTP server core
 
 - **Client certificate common name variable** — the `mtls.cn` variable is now available for interpolations in the server configuration, allowing to use the client certificate's common name in routing rules and conditionals.
-- **HTTP error page placeholders** — error page templates now support placeholders for trace context fields (e.g. `{{trace_id}}`).
+- **HTTP error page placeholders** — custom error page files now support optional placeholder substitution. Enable with `error_page_placeholders true`; the `{{trace.id}}` and `{{trace.spanid}}` placeholders are then replaced with the current request's trace ID and span ID before the page is served. Substitution reads the file into memory, bypassing the zerocopy/sendfile optimization for those responses.
 
 ### Changed
+
+#### Default pages
+
+- **Redesigned default error and directory listing pages** — the built-in error pages and static directory listings have been redesigned with a modern, minimal, neutral style (system fonts, subtle accent gradient, responsive layout, and automatic light/dark mode). All styling remains inlined with no external assets. Default error pages now display the request's trace ID when trace context is available, improving debuggability. The installation landing page (`wwwroot`) has also been refreshed to match.
 
 #### HTTP caching
 

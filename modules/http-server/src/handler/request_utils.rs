@@ -170,9 +170,10 @@ pub(super) fn builtin_error_response(
     status: u16,
     headers: Option<&HeaderMap>,
     admin_email: Option<String>,
+    trace_id: Option<&str>,
 ) -> Response<ResponseBody> {
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    let body = generate_default_error_page(status, admin_email.as_deref());
+    let body = generate_default_error_page(status, admin_email.as_deref(), trace_id);
     let mut builder = Response::builder().status(status);
     if let Some(headers) = headers {
         for (name, value) in headers {
@@ -190,7 +191,7 @@ pub(super) fn builtin_error_response(
                 .map_err(|e| match e {})
                 .boxed_unsync(),
         )
-        .unwrap_or_else(|_| builtin_error_response(500, None, admin_email))
+        .unwrap_or_else(|_| builtin_error_response(500, None, admin_email, trace_id))
 }
 
 #[inline]

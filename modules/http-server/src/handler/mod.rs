@@ -150,7 +150,7 @@ pub async fn bad_request_handler(
     {
         response
     } else {
-        builtin_error_response(status_code, None, None)
+        builtin_error_response(status_code, None, None, None)
     };
     response
         .headers_mut()
@@ -653,6 +653,9 @@ async fn request_handler_inner(
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
+                request_trace_context
+                    .as_ref()
+                    .map(|tc| tc.trace_id.as_str()),
             )),
             None,
             None,
@@ -695,6 +698,9 @@ async fn request_handler_inner(
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
+                request_trace_context
+                    .as_ref()
+                    .map(|tc| tc.trace_id.as_str()),
             )),
             None,
             None,
@@ -762,6 +768,9 @@ async fn request_handler_inner(
                         g.get_value("admin_email")
                             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     }),
+                    request_trace_context
+                        .as_ref()
+                        .map(|tc| tc.trace_id.as_str()),
                 )),
                 None,
                 None,
@@ -821,6 +830,9 @@ async fn request_handler_inner(
                                         v.as_string_with_interpolations(&HashMap::new())
                                     })
                                 }),
+                                request_trace_context
+                                    .as_ref()
+                                    .map(|tc| tc.trace_id.as_str()),
                             )),
                             None,
                             None,
@@ -877,6 +889,9 @@ async fn request_handler_inner(
                             g.get_value("admin_email")
                                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         }),
+                        request_trace_context
+                            .as_ref()
+                            .map(|tc| tc.trace_id.as_str()),
                     )),
                     None,
                     None,
@@ -949,6 +964,9 @@ async fn request_handler_inner(
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
+                request_trace_context
+                    .as_ref()
+                    .map(|tc| tc.trace_id.as_str()),
             )),
             None,
             None,
@@ -1078,6 +1096,7 @@ async fn request_handler_inner(
         .extensions
         .get::<trace_context::TraceContextKey>()
         .cloned();
+    let fallback_trace_id = trace_context.as_ref().map(|tc| tc.trace_id.clone());
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -1100,6 +1119,7 @@ async fn request_handler_inner(
                         status,
                         headers.as_ref(),
                         admin_email,
+                        fallback_trace_id.as_deref(),
                     ))
                 }
             }

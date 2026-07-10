@@ -1,8 +1,20 @@
+:root {
+    --bg: #ffffff;
+    --fg: #0f172a;
+    --muted: #64748b;
+    --accent: #b84f0a;
+    --accent-tint: #f4782533;
+    --border: #e2e8f0;
+    --surface: #f8fafc;
+    --radius: 12px;
+}
+
 html {
     margin: 0;
     padding: 0;
+    min-height: 100%;
     font-family:
-        Funnel Sans,
+        "Funnel Sans",
         system-ui,
         -apple-system,
         BlinkMacSystemFont,
@@ -16,25 +28,34 @@ html {
         sans-serif;
     background-image: radial-gradient(
         1024px 384px at 50% 0%,
-        #f4782533,
+        var(--accent-tint),
         transparent 100%
     );
     background-repeat: no-repeat;
-    background-color: #ffffff;
-    color: #0f172a;
+    background-color: var(--bg);
+    color: var(--fg);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 body {
-    margin: 1.5em auto;
-    padding: 1em;
+    margin: 0 auto;
+    padding: 2em 1.5em;
     box-sizing: border-box;
     font-size: 1.1em;
+    line-height: 1.6;
     width: 100%;
-    max-width: 1280px;
+    max-width: 1080px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5em;
+    align-items: start;
 }
 
 header {
+    grid-column: 1 / -1;
     text-align: center;
+    margin-bottom: 1em;
 }
 
 .logo {
@@ -42,30 +63,35 @@ header {
     background-image: url(./logo.png);
     background-size: 100%;
     background-repeat: no-repeat;
-    width: 192px;
-    height: 50px;
-}
-
-.column {
-    width: 50%;
-    padding: 0.75em;
-    box-sizing: border-box;
-    float: left;
-}
-
-.clearfix {
-    display: table;
-    clear: both;
+    width: 160px;
+    height: 41.6666px;
 }
 
 h1 {
     font-size: 2.75em;
-    margin-top: 0.5em;
-    margin-bottom: 0.25em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0.35em 0 0.25em;
+}
+
+h2 {
+    font-size: 1.35em;
+    margin-top: 0;
+}
+
+.clearfix {
+    display: none;
 }
 
 a {
-    color: #b84f0a;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover,
+a:focus {
+    text-decoration: underline;
 }
 
 @media screen and (max-width: 768px) {
@@ -79,32 +105,27 @@ a {
 
     body {
         font-size: 1em;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     h1 {
         font-size: 2.25em;
-        margin-bottom: 1em;
-    }
-
-    .column {
-        float: none;
-        width: 100%;
-        padding: 0;
     }
 }
 
 @media screen and (prefers-color-scheme: dark) {
-    html {
-        background-color: #14181f;
-        color: #f2f2f2;
+    :root {
+        --bg: #14181f;
+        --fg: #f2f2f2;
+        --muted: #94a3b8;
+        --accent: #f47825;
+        --accent-tint: #f478252d;
+        --border: #2b303b;
+        --surface: #1b1f26;
     }
 
     .logo {
         background-image: url(./logo-dark.png);
-    }
-
-    a {
-        color: #f47825;
     }
 }
 

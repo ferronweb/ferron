@@ -20,6 +20,7 @@ pub mod var {
     pub const AUTH_USER: &str = "auth.user";
     pub const TRACE_ID: &str = "trace.id";
     pub const TRACE_SPANID: &str = "trace.spanid";
+    #[cfg(feature = "mtls")]
     pub const MTLS_CN: &str = "mtls.cn";
 }
 
@@ -96,6 +97,7 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
             crate::trace_context::current_event_trace_context(ctx)
                 .map_or(Default::default(), |ctx| hex::encode(ctx.span_id)),
         ),
+        #[cfg(feature = "mtls")]
         var::MTLS_CN => {
             let mtls_leaf = ctx
                 .extensions
