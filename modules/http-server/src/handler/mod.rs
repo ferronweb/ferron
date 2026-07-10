@@ -141,6 +141,7 @@ pub async fn bad_request_handler(
         status_code,
         None,
         LayeredConfiguration::default(),
+        None,
         &events,
         request_span_key.as_deref(),
         control_plane_metadata.clone(),
@@ -635,6 +636,7 @@ async fn request_handler_inner(
             400,
             None,
             LayeredConfiguration::default(),
+            None,
             &events,
             request_span_key.as_deref(),
             host_control_plane_metadata.clone(),
@@ -743,6 +745,7 @@ async fn request_handler_inner(
                 400,
                 None,
                 LayeredConfiguration::default(),
+                None,
                 &events,
                 request_span_key.as_deref(),
                 host_control_plane_metadata.clone(),
@@ -800,6 +803,7 @@ async fn request_handler_inner(
                             400,
                             None,
                             LayeredConfiguration::default(),
+                            None,
                             &events,
                             request_span_key.as_deref(),
                             host_control_plane_metadata.clone(),
@@ -856,6 +860,7 @@ async fn request_handler_inner(
                     400,
                     None,
                     LayeredConfiguration::default(),
+                    None,
                     &events,
                     request_span_key.as_deref(),
                     host_control_plane_metadata.clone(),
@@ -927,6 +932,7 @@ async fn request_handler_inner(
             404,
             None,
             LayeredConfiguration::default(),
+            None,
             &events,
             request_span_key.as_deref(),
             host_control_plane_metadata.clone(),
@@ -1068,6 +1074,10 @@ async fn request_handler_inner(
     let auth_user = ctx.auth_user.clone();
     let final_remote = ctx.remote_address;
     let custom_fields = ctx.extensions.remove::<CustomAccessLogFields>();
+    let trace_context = ctx
+        .extensions
+        .get::<trace_context::TraceContextKey>()
+        .cloned();
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -1077,6 +1087,7 @@ async fn request_handler_inner(
                     status,
                     headers.clone(),
                     ctx.configuration.clone(),
+                    trace_context,
                     &events,
                     request_span_key.as_deref(),
                     resolved_control_plane_metadata.clone(),

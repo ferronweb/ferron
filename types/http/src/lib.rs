@@ -101,5 +101,6 @@ pub struct HttpErrorContext {
     pub error_code: u16,
     pub headers: Option<HeaderMap>,
     pub configuration: LayeredConfiguration,
+    pub trace_context: Option<crate::trace_context::TraceContext>,
     pub res: Option<Response<UnsyncBoxBody<bytes::Bytes, std::io::Error>>>,
 }

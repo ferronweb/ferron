@@ -222,11 +222,13 @@ pub(super) fn emit_error_with_trace(
     }));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_error_pipeline(
     error_pipeline: &Pipeline<HttpErrorContext>,
     error_code: u16,
     headers: Option<HeaderMap>,
     configuration: LayeredConfiguration,
+    trace_context: Option<ferron_http::trace_context::TraceContext>,
     events: &CompositeEventSink,
     parent_span_key: Option<&str>,
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
@@ -259,6 +261,7 @@ pub(super) async fn execute_error_pipeline(
         error_code,
         headers,
         configuration,
+        trace_context,
         res: None,
     };
 

@@ -27,6 +27,7 @@
 #### HTTP server core
 
 - **Client certificate common name variable** — the `mtls.cn` variable is now available for interpolations in the server configuration, allowing to use the client certificate's common name in routing rules and conditionals.
+- **HTTP error page placeholders** — error page templates now support placeholders for trace context fields (e.g. `{{trace_id}}`).
 
 ### Changed
 

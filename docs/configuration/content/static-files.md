@@ -80,6 +80,8 @@ example.com {
 
 - `error_page <status-code: integer>... <file-path: string>`
   - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path; all preceding arguments are status codes. Default: built-in error pages
+- `error_page_placeholders [bool: boolean]`
+  - When enabled, `{{trace.id}}` and `{{trace.spanid}}` in the error page file are replaced with the request's trace ID and span ID. Default: `false`
 
 **Configuration example:**
 
@@ -88,6 +90,7 @@ example.com {
     root /srv/www/example
     error_page 404 /custom/404.html
     error_page 500 502 503 504 /custom/50x.html
+    error_page_placeholders true
 }
 ```
 
@@ -97,6 +100,7 @@ example.com {
 > - The file path is absolute or relative to the current working directory.
 > - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
 > - Multiple status codes can be mapped to the same error page in a single directive.
+> - Placeholder substitution reads the file into memory and replaces `{{trace.id}}` and `{{trace.spanid}}` with the current request's trace context before serving. The zerocopy/sendfile optimization is bypassed when substitution is active.
 
 ### Symlink handling
 

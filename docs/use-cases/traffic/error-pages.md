@@ -18,6 +18,33 @@ example.com {
 
 Multiple status codes can be mapped to the same error page in a single directive.
 
+### Including trace information
+
+Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, the placeholders are replaced with the request's trace context before the page is served.
+
+```ferron
+example.com {
+    error_page 500 /custom/50x.html
+    error_page_placeholders true
+}
+```
+
+Example `50x.html`:
+
+```html
+<!DOCTYPE html>
+<html>
+<head><title>Internal Server Error</title></head>
+<body>
+    <h1>Something went wrong</h1>
+    <p>Trace ID: {{trace.id}}</p>
+</body>
+</html>
+```
+
+> [!note]
+> Placeholder substitution reads the file into memory, disabling the zerocopy/sendfile optimization for that response. This is negligible for typical error pages.
+
 ## Better UX for upstream failures
 
 When reverse proxying, enable error interception so Ferron can serve custom pages for backend errors:

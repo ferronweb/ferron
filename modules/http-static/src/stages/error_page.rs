@@ -50,6 +50,9 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
         let error_code = ctx.error_code;
         let config = &ctx.configuration;
 
+        // Check if placeholder substitution is enabled
+        let placeholders_enabled = config.get_flag("error_page_placeholders", true);
+
         // Collect all error_page entries across layers
         let entries = config.get_entries("error_page", true);
 
@@ -103,6 +106,44 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             }
 
             let file_length = meta.len();
+
+            // If placeholders are enabled and trace context is available,
+            // read the file into memory and perform substitution
+            if placeholders_enabled {
+                // FIXME: use streaming instead of buffering?
+                //        Though big error pages aren't as common...
+                if let Some(ref trace_context) = ctx.trace_context {
+                    if let Ok(content) = vibeio::fs::read_to_string(path).await {
+                        let content = content
+                            .replace("{{trace.id}}", &trace_context.trace_id)
+                            .replace("{{trace.spanid}}", &trace_context.span_id);
+                        let bytes = Bytes::from(content);
+
+                        let mut builder = Response::builder()
+                            .status(error_code)
+                            .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
+                            .header(header::CONTENT_LENGTH, bytes.len());
+
+                        if let Some(ref headers) = ctx.headers {
+                            for (name, value) in headers.iter() {
+                                builder = builder.header(name.clone(), value.clone());
+                            }
+                        }
+
+                        let body: UnsyncBoxBody<Bytes, io::Error> =
+                            http_body_util::Full::new(bytes)
+                                .map_err(|_| unreachable!())
+                                .boxed_unsync();
+
+                        let response = builder
+                            .body(body)
+                            .map_err(|e| PipelineError::custom(e.to_string()))?;
+
+                        ctx.res = Some(response);
+                        return Ok(false);
+                    }
+                }
+            }
 
             // Extract raw fd for zerocopy (unix) or handle (windows)
             #[cfg(unix)]

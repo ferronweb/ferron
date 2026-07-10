@@ -53,6 +53,10 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
             validate_directive!(config, used_directives, error_page, optional args(*) => [
                 ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _)
             ], {});
+
+            // Error page placeholder substitution
+            validate_directive!(config, used_directives, error_page_placeholders, optional
+                args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
         }
 
         if let Some(entries) = config.directives.get("file_cache_control") {
