@@ -209,6 +209,13 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 
 - **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages. This span is a child of `ferron.request`.
 
+### File resolution span
+
+- **`ferron.pipeline.file_resolve`** — wraps static file path resolution when a `root` directive is configured. This span is a child of `ferron.pipeline.execute`.
+  - Attributes: `ferron.file_resolve.request_path`, `ferron.file_resolve.root_path`, `ferron.file_resolve.outcome`
+  - On success: `ferron.file_resolve.resolved_path`
+  - On error: `ferron.file_resolve.last_candidate_path`
+
 ### Per-stage spans
 
 Each pipeline and file-serving stage generates its own forward (`ferron.stage.<stage_name>`) and inverse (`ferron.stage.<stage_name>.inverse`) span as a child of `ferron.pipeline.execute`, enabling flame graph analysis. Every per-stage span carries a `stage.name` attribute.

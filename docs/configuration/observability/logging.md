@@ -91,6 +91,10 @@ Pipeline modules contribute additional access log fields when active. These fiel
 | `ferron.fauth.result` | `http-fauth` | Forwarded auth outcome: `success` or `failure` |
 | `ferron.fauth.backend_url` | `http-fauth` | Auth backend URL contacted |
 | `ferron.static.file_path` | `http-static` | Absolute file path served |
+| `ferron.file_resolve.request_path` | `http-server` | Decoded request path being resolved (error paths only) |
+| `ferron.file_resolve.root_path` | `http-server` | Configured document root (error paths only) |
+| `ferron.file_resolve.outcome` | `http-server` | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only) |
+| `ferron.file_resolve.last_candidate_path` | `http-server` | Last filesystem path attempted before failure (error paths only) |
 | `ferron.response.action` | `http-response` | Response action: `abort`, `block`, or `status` |
 | `ferron.fproxy.mode` | `http-fproxy` | Forward proxy mode: `tunnel` or `proxy` |
 | `ferron.cgi.script_path` | `http-cgi` | Path to CGI script executed |

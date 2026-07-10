@@ -1,12 +1,17 @@
+use std::borrow::Cow;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{Pipeline, PipelineError};
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::file_descriptor::{ReusedFile, SymlinkMode};
 use ferron_http::{HttpContext, HttpFileContext, HttpResponse};
-use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
+    TraceEvent,
+};
 use http_body_util::BodyExt;
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
@@ -54,11 +59,40 @@ impl ResolvedHttpFile {
 
 #[derive(Debug)]
 pub(super) enum FilePipelineExecutionError {
-    Forbidden,
-    BadRequest,
+    Forbidden {
+        request_path: String,
+        last_candidate_path: Option<String>,
+    },
+    BadRequest {
+        request_path: String,
+    },
     Timeout,
     Io(io::Error),
     Pipeline(PipelineError),
+}
+
+impl std::fmt::Display for FilePipelineExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Forbidden {
+                request_path,
+                last_candidate_path,
+                ..
+            } => {
+                write!(f, "forbidden: {request_path}")?;
+                if let Some(candidate) = last_candidate_path {
+                    write!(f, " (last candidate: {candidate})")?;
+                }
+                Ok(())
+            }
+            Self::BadRequest { request_path } => {
+                write!(f, "bad request: {request_path}")
+            }
+            Self::Timeout => write!(f, "file resolution timeout"),
+            Self::Io(e) => write!(f, "file resolution I/O error: {e}"),
+            Self::Pipeline(e) => write!(f, "file pipeline error: {e}"),
+        }
+    }
 }
 
 pub(super) async fn execute_http_file_pipeline(
@@ -76,7 +110,9 @@ pub(super) async fn execute_http_file_pipeline(
         return Ok(());
     };
     let request_path = urlencoding::decode(&request_path_encoded)
-        .map_err(|_| FilePipelineExecutionError::BadRequest)?
+        .map_err(|_| FilePipelineExecutionError::BadRequest {
+            request_path: request_path_encoded.clone(),
+        })?
         .to_string();
     let Some(root_path) = resolve_webroot(ctx)? else {
         return Ok(());
@@ -85,93 +121,261 @@ pub(super) async fn execute_http_file_pipeline(
     let index_files = resolve_index_files(ctx);
     let disable_symlinks = resolve_disable_symlinks(ctx)?;
 
-    let Some(resolved_file) = resolve_http_file_target(
+    // Emit file resolution trace span
+    let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
+    let file_resolve_span_key = if has_traces {
+        let key = super::observability::next_span_key("file_resolve");
+        ctx.events.emit(Event::Trace(TraceEvent::StartSpan {
+            key: Cow::Owned(key.clone()),
+            name: Cow::Borrowed("ferron.pipeline.file_resolve"),
+            parent: parent_span_key.map(|k| Parent::ByKey(k.to_string())),
+            trace_context: None,
+            builder_attributes: vec![],
+            attributes: vec![
+                (
+                    "ferron.file_resolve.request_path",
+                    TraceAttributeValue::String(request_path.clone()),
+                ),
+                (
+                    "ferron.file_resolve.root_path",
+                    TraceAttributeValue::String(root_path.to_string_lossy().into_owned()),
+                ),
+            ],
+            links: vec![],
+            control_plane_metadata: control_plane_metadata.clone(),
+        }));
+        Some(key)
+    } else {
+        None
+    };
+
+    let resolution_result = resolve_http_file_target(
         &root_path,
         &request_path,
         Some(&index_files),
         disable_symlinks,
     )
-    .await?
-    else {
-        return Ok(());
-    };
+    .await;
 
-    if resolved_file.metadata.is_dir() {
-        let trailing_slash_redirect_enabled = ctx
-            .configuration
-            .get_value("trailing_slash_redirect", true)
-            .map(|v| v.as_boolean())
-            .unwrap_or(Some(true))
-            .unwrap_or(true);
-
-        if trailing_slash_redirect_enabled && !request_path.ends_with('/') {
-            let redirect_path = format!("{request_path}/");
-            let uri = match ctx.req.as_ref() {
-                Some(req) => {
-                    let mut uri_parts = req.uri().clone().into_parts();
-                    if let Some(path_and_query) = &uri_parts.path_and_query {
-                        let new_path_and_query = format!(
-                            "{redirect_path}{}",
-                            if let Some(q) = path_and_query.query() {
-                                format!("?{q}")
-                            } else {
-                                String::new()
-                            }
-                        );
-                        uri_parts.path_and_query = new_path_and_query.try_into().ok();
-                    }
-                    if uri_parts.path_and_query.is_some() {
-                        http::Uri::from_parts(uri_parts).ok()
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            };
-
-            if let Some(redirect_uri) = uri {
-                ctx.res = Some(HttpResponse::Custom(
-                    http::Response::builder()
-                        .status(http::StatusCode::MOVED_PERMANENTLY)
-                        .header(http::header::LOCATION, redirect_uri.to_string())
-                        .body(
-                            http_body_util::Empty::<bytes::Bytes>::new()
-                                .map_err(|_| unreachable!())
-                                .boxed_unsync(),
-                        )
-                        .expect("failed to build redirect response"),
-                ));
-                ctx.events.emit(Event::Metric(MetricEvent {
-                    name: "ferron.http.server.redirects",
+    match resolution_result {
+        Ok(Some(resolved_file)) => {
+            // End file resolution span with success attributes
+            if let Some(span_key) = file_resolve_span_key {
+                ctx.events.emit(Event::Trace(TraceEvent::EndSpan {
+                    key: Cow::Owned(span_key),
+                    name: Cow::Borrowed("ferron.pipeline.file_resolve"),
+                    error: None,
                     attributes: vec![
-                        ("http.response.status_code", MetricAttributeValue::I64(301)),
                         (
-                            "ferron.http.redirect.reason",
-                            MetricAttributeValue::StaticStr("trailing_slash"),
+                            "ferron.file_resolve.outcome",
+                            TraceAttributeValue::StaticStr("resolved"),
+                        ),
+                        (
+                            "ferron.file_resolve.resolved_path",
+                            TraceAttributeValue::String(
+                                resolved_file.file_path.to_string_lossy().into_owned(),
+                            ),
                         ),
                     ],
-                    ty: MetricType::Counter,
-                    value: MetricValue::U64(1),
-                    unit: Some("{redirect}"),
-                    description: Some("Number of HTTP redirects emitted by the server."),
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
+                    control_plane_metadata: control_plane_metadata.clone(),
                 }));
-                return Ok(());
             }
+
+            if resolved_file.metadata.is_dir() {
+                let trailing_slash_redirect_enabled = ctx
+                    .configuration
+                    .get_value("trailing_slash_redirect", true)
+                    .map(|v| v.as_boolean())
+                    .unwrap_or(Some(true))
+                    .unwrap_or(true);
+
+                if trailing_slash_redirect_enabled && !request_path.ends_with('/') {
+                    let redirect_path = format!("{request_path}/");
+                    let uri = match ctx.req.as_ref() {
+                        Some(req) => {
+                            let mut uri_parts = req.uri().clone().into_parts();
+                            if let Some(path_and_query) = &uri_parts.path_and_query {
+                                let new_path_and_query = format!(
+                                    "{redirect_path}{}",
+                                    if let Some(q) = path_and_query.query() {
+                                        format!("?{q}")
+                                    } else {
+                                        String::new()
+                                    }
+                                );
+                                uri_parts.path_and_query = new_path_and_query.try_into().ok();
+                            }
+                            if uri_parts.path_and_query.is_some() {
+                                http::Uri::from_parts(uri_parts).ok()
+                            } else {
+                                None
+                            }
+                        }
+                        None => None,
+                    };
+
+                    if let Some(redirect_uri) = uri {
+                        ctx.res = Some(HttpResponse::Custom(
+                            http::Response::builder()
+                                .status(http::StatusCode::MOVED_PERMANENTLY)
+                                .header(http::header::LOCATION, redirect_uri.to_string())
+                                .body(
+                                    http_body_util::Empty::<bytes::Bytes>::new()
+                                        .map_err(|_| unreachable!())
+                                        .boxed_unsync(),
+                                )
+                                .expect("failed to build redirect response"),
+                        ));
+                        ctx.events.emit(Event::Metric(MetricEvent {
+                            name: "ferron.http.server.redirects",
+                            attributes: vec![
+                                ("http.response.status_code", MetricAttributeValue::I64(301)),
+                                (
+                                    "ferron.http.redirect.reason",
+                                    MetricAttributeValue::StaticStr("trailing_slash"),
+                                ),
+                            ],
+                            ty: MetricType::Counter,
+                            value: MetricValue::U64(1),
+                            unit: Some("{redirect}"),
+                            description: Some("Number of HTTP redirects emitted by the server."),
+                            trace_context: ferron_http::trace_context::current_event_trace_context(
+                                ctx,
+                            ),
+                            control_plane_metadata: None,
+                        }));
+                        return Ok(());
+                    }
+                }
+            }
+
+            apply_resolved_file_to_context(
+                ctx,
+                resolved_file,
+                file_pipeline,
+                timeout,
+                root_path,
+                parent_span_key,
+                control_plane_metadata,
+            )
+            .await
+        }
+        Ok(None) => {
+            // File not found — end span with not_found outcome
+            if let Some(span_key) = file_resolve_span_key {
+                ctx.events.emit(Event::Trace(TraceEvent::EndSpan {
+                    key: Cow::Owned(span_key),
+                    name: Cow::Borrowed("ferron.pipeline.file_resolve"),
+                    error: None,
+                    attributes: vec![(
+                        "ferron.file_resolve.outcome",
+                        TraceAttributeValue::StaticStr("not_found"),
+                    )],
+                    control_plane_metadata: control_plane_metadata.clone(),
+                }));
+            }
+            Ok(())
+        }
+        Err(error) => {
+            // File resolution error — end span with error outcome and inject access log fields
+            let (outcome, last_candidate) = match &error {
+                FilePipelineExecutionError::Forbidden {
+                    last_candidate_path,
+                    ..
+                } => ("forbidden", last_candidate_path.clone()),
+                FilePipelineExecutionError::BadRequest { .. } => ("bad_request", None),
+                FilePipelineExecutionError::Io(_) => ("error", None),
+                _ => ("error", None),
+            };
+
+            if let Some(span_key) = file_resolve_span_key {
+                let mut attrs = vec![(
+                    "ferron.file_resolve.outcome",
+                    TraceAttributeValue::StaticStr(outcome),
+                )];
+                if let Some(ref candidate) = last_candidate {
+                    attrs.push((
+                        "ferron.file_resolve.last_candidate_path",
+                        TraceAttributeValue::String(candidate.clone()),
+                    ));
+                }
+                ctx.events.emit(Event::Trace(TraceEvent::EndSpan {
+                    key: Cow::Owned(span_key),
+                    name: Cow::Borrowed("ferron.pipeline.file_resolve"),
+                    error: Some(error.to_string()),
+                    attributes: attrs,
+                    control_plane_metadata: control_plane_metadata.clone(),
+                }));
+            }
+
+            // Inject access log fields for the resolution error
+            inject_resolution_error_fields(ctx, &error, &request_path, &root_path);
+
+            Err(error)
         }
     }
+}
 
-    apply_resolved_file_to_context(
-        ctx,
-        resolved_file,
-        file_pipeline,
-        timeout,
-        root_path,
-        parent_span_key,
-        control_plane_metadata,
-    )
-    .await
+fn inject_resolution_error_fields(
+    ctx: &mut HttpContext,
+    error: &FilePipelineExecutionError,
+    request_path: &str,
+    root_path: &Path,
+) {
+    match error {
+        FilePipelineExecutionError::Forbidden {
+            request_path: _,
+            last_candidate_path,
+        } => {
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.request_path".into(),
+                CustomAccessLogField::String(request_path.to_string()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.root_path".into(),
+                CustomAccessLogField::String(root_path.to_string_lossy().into_owned()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.outcome".into(),
+                CustomAccessLogField::String("forbidden".into()),
+            );
+            if let Some(candidate) = last_candidate_path {
+                custom_access_log_fields(ctx).insert(
+                    "ferron.file_resolve.last_candidate_path".into(),
+                    CustomAccessLogField::String(candidate.clone()),
+                );
+            }
+        }
+        FilePipelineExecutionError::BadRequest { .. } => {
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.request_path".into(),
+                CustomAccessLogField::String(request_path.to_string()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.root_path".into(),
+                CustomAccessLogField::String(root_path.to_string_lossy().into_owned()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.outcome".into(),
+                CustomAccessLogField::String("bad_request".into()),
+            );
+        }
+        FilePipelineExecutionError::Io(_) => {
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.request_path".into(),
+                CustomAccessLogField::String(request_path.to_string()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.root_path".into(),
+                CustomAccessLogField::String(root_path.to_string_lossy().into_owned()),
+            );
+            custom_access_log_fields(ctx).insert(
+                "ferron.file_resolve.outcome".into(),
+                CustomAccessLogField::String("error".into()),
+            );
+        }
+        _ => {}
+    }
 }
 
 async fn apply_resolved_file_to_context(
@@ -332,13 +536,17 @@ async fn resolve_http_file_target(
     let request_segments = request_path_segments(request_path)?;
     let mut candidate_depth = request_segments.len();
     let trailing_slash = request_path.ends_with('/') && request_path != "/";
+    let req_str = request_path.to_string();
 
     loop {
         let candidate_path = build_candidate_path(root_path, &request_segments[..candidate_depth]);
 
         // Check if path is still within root (simple check: no .. in normalized form)
         if !is_path_within_root(root_path, &candidate_path) {
-            return Err(FilePipelineExecutionError::Forbidden);
+            return Err(FilePipelineExecutionError::Forbidden {
+                request_path: req_str.clone(),
+                last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
+            });
         }
 
         // Check for symlinks if enabled
@@ -347,7 +555,10 @@ async fn resolve_http_file_target(
                 check_symlinks_in_path(&candidate_path, root_path, disable_symlinks).await
             {
                 if e.kind() == io::ErrorKind::PermissionDenied {
-                    return Err(FilePipelineExecutionError::Forbidden);
+                    return Err(FilePipelineExecutionError::Forbidden {
+                        request_path: req_str.clone(),
+                        last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
+                    });
                 }
                 // Continue with other checks
             }
@@ -360,6 +571,7 @@ async fn resolve_http_file_target(
                 std::slice::from_ref(idx),
                 root_path,
                 disable_symlinks,
+                &req_str,
             )
             .await?
             {
@@ -373,10 +585,15 @@ async fn resolve_http_file_target(
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden)
+                return Err(FilePipelineExecutionError::Forbidden {
+                    request_path: req_str,
+                    last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
+                })
             }
             Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
-                return Err(FilePipelineExecutionError::BadRequest)
+                return Err(FilePipelineExecutionError::BadRequest {
+                    request_path: req_str,
+                })
             }
             Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
                 candidate_depth -= 1;
@@ -393,6 +610,7 @@ async fn resolve_http_file_target(
                             &index_files[1..],
                             root_path,
                             disable_symlinks,
+                            &req_str,
                         )
                         .await?
                         {
@@ -418,10 +636,15 @@ async fn resolve_http_file_target(
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden)
+                return Err(FilePipelineExecutionError::Forbidden {
+                    request_path: req_str,
+                    last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
+                })
             }
             Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
-                return Err(FilePipelineExecutionError::BadRequest)
+                return Err(FilePipelineExecutionError::BadRequest {
+                    request_path: req_str,
+                })
             }
             Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
                 candidate_depth -= 1;
@@ -490,6 +713,7 @@ async fn try_resolve_index_files(
     index_files: &[String],
     root: &Path,
     disable_symlinks: SymlinkMode,
+    request_path: &str,
 ) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
     for index in index_files {
         let index_path = directory.join(index);
@@ -513,7 +737,10 @@ async fn try_resolve_index_files(
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden);
+                return Err(FilePipelineExecutionError::Forbidden {
+                    request_path: request_path.to_string(),
+                    last_candidate_path: Some(index_path.to_string_lossy().into_owned()),
+                });
             }
             Err(error) => {
                 return Err(FilePipelineExecutionError::Io(error));
@@ -533,7 +760,10 @@ async fn try_resolve_index_files(
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden);
+                return Err(FilePipelineExecutionError::Forbidden {
+                    request_path: request_path.to_string(),
+                    last_candidate_path: Some(index_path.to_string_lossy().into_owned()),
+                });
             }
             Err(error) => {
                 return Err(FilePipelineExecutionError::Io(error));
@@ -546,6 +776,7 @@ async fn try_resolve_index_files(
 
 fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipelineExecutionError> {
     let mut segments = Vec::new();
+    let req_str = request_path.to_string();
 
     for component in Path::new(request_path).components() {
         match component {
@@ -555,12 +786,18 @@ fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipeline
                 // Reject segments containing ':' to prevent Windows Alternate Data Stream
                 // (ADS) access (e.g., /file.txt::$DATA) and scheme injection.
                 if segment_str.contains(':') {
-                    return Err(FilePipelineExecutionError::Forbidden);
+                    return Err(FilePipelineExecutionError::Forbidden {
+                        request_path: req_str,
+                        last_candidate_path: None,
+                    });
                 }
                 segments.push(segment_str);
             }
             Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
-                return Err(FilePipelineExecutionError::Forbidden);
+                return Err(FilePipelineExecutionError::Forbidden {
+                    request_path: req_str,
+                    last_candidate_path: None,
+                });
             }
         }
     }
@@ -716,7 +953,10 @@ mod tests {
             .await
             .expect_err("traversal should be rejected");
 
-        assert!(matches!(error, FilePipelineExecutionError::Forbidden));
+        assert!(matches!(
+            error,
+            FilePipelineExecutionError::Forbidden { .. }
+        ));
     }
 
     #[cfg(unix)]
@@ -736,7 +976,10 @@ mod tests {
             .await
             .expect_err("symlink escape should be rejected");
 
-        assert!(matches!(error, FilePipelineExecutionError::Forbidden));
+        assert!(matches!(
+            error,
+            FilePipelineExecutionError::Forbidden { .. }
+        ));
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -750,7 +993,10 @@ mod tests {
                 .await
                 .expect_err("ADS access should be rejected");
 
-        assert!(matches!(error, FilePipelineExecutionError::Forbidden));
+        assert!(matches!(
+            error,
+            FilePipelineExecutionError::Forbidden { .. }
+        ));
     }
 
     #[test]

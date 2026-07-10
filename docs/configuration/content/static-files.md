@@ -159,6 +159,16 @@ Ferron reuses file handles (and I/O errors) for static file responses to reduce 
 
 ### Trace spans
 
+The file resolution span (`ferron.pipeline.file_resolve`) captures the resolution process before any file-serving stage runs:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `ferron.file_resolve.request_path` | string | The decoded request URI path. |
+| `ferron.file_resolve.root_path` | string | The configured document root. |
+| `ferron.file_resolve.outcome` | string | `resolved`, `not_found`, `forbidden`, `bad_request`, or `error`. |
+| `ferron.file_resolve.resolved_path` | string | The resolved filesystem path (success only). |
+| `ferron.file_resolve.last_candidate_path` | string | The last path attempted before failure (error only). |
+
 The static file stage sets the following attributes on its `ferron.stage.static_file` span:
 
 | Attribute | Type | Description |

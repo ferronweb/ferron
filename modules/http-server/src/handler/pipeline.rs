@@ -148,10 +148,10 @@ pub async fn execute_pipeline_stages(
             .await
             {
                 Ok(()) => {}
-                Err(FilePipelineExecutionError::Forbidden) => {
+                Err(FilePipelineExecutionError::Forbidden { .. }) => {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
                 }
-                Err(FilePipelineExecutionError::BadRequest) => {
+                Err(FilePipelineExecutionError::BadRequest { .. }) => {
                     ctx.res = Some(HttpResponse::BuiltinError(400, None));
                 }
                 Err(FilePipelineExecutionError::Timeout) => {
