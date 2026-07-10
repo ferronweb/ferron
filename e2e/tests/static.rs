@@ -454,7 +454,7 @@ async fn test_directory_listing() {
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let text = response.text().await.unwrap();
-    assert!(text.contains("Index of") && text.contains("dirlisting"));
+    assert!(text.contains("Directory: ") && text.contains("dirlisting"));
 
     // Disabled
     let response = ctx

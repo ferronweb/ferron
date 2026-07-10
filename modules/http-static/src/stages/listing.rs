@@ -273,7 +273,7 @@ fn generate_directory_listing(
     let body = format!(
         "<main>\n\
          <header class=\"directory-header\">\
-         <h1>Index of <span class=\"directory-path\">{}</span></h1></header>\n\
+         <h1>Directory: <span class=\"directory-path\">{}</span></h1></header>\n\
          <table class=\"directory-listing\">\n\
          <thead><tr><th class=\"directory-filename\">Name</th>\
          <th class=\"directory-size\">Size</th>\
@@ -294,7 +294,7 @@ fn generate_directory_listing(
 
     format_page!(
         body,
-        &format!("Index of {request_path}"),
+        &format!("Directory: {request_path}"),
         vec![css_common, css_directory]
     )
 }
