@@ -112,7 +112,7 @@ The `metrics-reload` module emits a counter metric around configuration reload l
 |--------|------|------------|-------------|
 | `ferron.reloads` | Counter | `ferron.reload.successful` (bool), `error.message` (string, on failure) | Number of configuration reloads performed, annotated with success or failure |
 
-## HTTP and proxy metrics
+## HTTP metrics
 
 Ferron also emits common request-path metrics:
 
