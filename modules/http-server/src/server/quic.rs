@@ -549,6 +549,16 @@ async fn handle_http3_connection(
                     "error.message",
                     LogAttributeValue::String(error.to_string()),
                 ),
+                (
+                    "client.address",
+                    LogAttributeValue::String(
+                        handler_state.remote_address.ip().to_canonical().to_string(),
+                    ),
+                ),
+                (
+                    "server.address",
+                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                ),
             ],
         );
     }
