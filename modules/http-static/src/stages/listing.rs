@@ -9,8 +9,14 @@ use bytes::Bytes;
 use chrono::{DateTime, Local};
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
+use ferron_http::span::HttpContextSpanExt;
+use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::anti_xss::anti_xss;
 use ferron_http::{format_page, HttpFileContext, HttpResponse};
+use ferron_observability::{
+    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+};
 use http::{header, HeaderValue, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 
@@ -54,6 +60,16 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(true);
         }
 
+        let dir_path_str = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "ferron.static.dir_path",
+            TraceAttributeValue::String(dir_path_str.clone()),
+        );
+        custom_access_log_fields(&mut ctx.http).insert(
+            "ferron.static.dir_path".into(),
+            CustomAccessLogField::String(dir_path_str),
+        );
+
         let Some(request) = ctx.http.req.take() else {
             return Ok(true);
         };
@@ -82,6 +98,9 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
                 .expect("failed to build OPTIONS response");
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(res));
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(204));
+            emit_listing_response_metric(ctx, 204, "options");
             return Ok(false);
         }
 
@@ -94,6 +113,9 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             );
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(405, Some(allow_headers)));
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(405));
+            emit_listing_response_metric(ctx, 405, "method_not_allowed");
             return Ok(false);
         }
 
@@ -101,6 +123,9 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         if !ctx.http.configuration.get_flag("directory_listing", true) {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(403, None));
+            ctx.get_span_attributes()
+                .insert("http.response.status_code", TraceAttributeValue::I64(403));
+            emit_listing_response_metric(ctx, 403, "listing_disabled");
             return Ok(false);
         }
 
@@ -146,8 +171,33 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
 
         ctx.http.req = Some(request);
         ctx.http.res = Some(HttpResponse::Custom(response));
+        ctx.get_span_attributes()
+            .insert("http.response.status_code", TraceAttributeValue::I64(200));
+        emit_listing_response_metric(ctx, 200, "listing");
         Ok(false)
     }
+}
+
+fn emit_listing_response_metric(ctx: &HttpFileContext, status_code: u16, outcome: &'static str) {
+    ctx.http.events.emit(Event::Metric(MetricEvent {
+        name: "ferron.static.responses",
+        attributes: vec![
+            (
+                "http.response.status_code",
+                MetricAttributeValue::I64(status_code as i64),
+            ),
+            (
+                "ferron.static.outcome",
+                MetricAttributeValue::StaticStr(outcome),
+            ),
+        ],
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{response}"),
+        description: Some("Number of static file responses by outcome."),
+        trace_context: current_event_trace_context(&ctx.http),
+        control_plane_metadata: None,
+    }));
 }
 
 /// File type emoji icon based on extension

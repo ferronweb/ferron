@@ -177,6 +177,13 @@ The static file stage sets the following attributes on its `ferron.stage.static_
 | `ferron.static.file_path` | string | The file path relative to the document root. |
 | `ferron.static.precompressed` | bool | Whether a precompressed variant of the file was served. |
 
+The directory listing stage sets the following attributes on its `ferron.stage.directory_listing` span:
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `http.response.status_code` | int | HTTP status code of the response. |
+| `ferron.static.dir_path` | string | The directory path being listed. |
+
 ## Best practices
 
 The following best-practice check is reported by `ferron doctor` for directives on this page.
