@@ -4,18 +4,15 @@ use ferron_core::config::layer::LayeredConfiguration;
 
 /// Output format for JSON error responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum JsonErrorFormat {
     /// RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail` fields.
+    #[default]
     Problem,
     /// Simple `application/json` with `error`, `status`, `detail` fields.
     Simple,
 }
 
-impl Default for JsonErrorFormat {
-    fn default() -> Self {
-        Self::Problem
-    }
-}
 
 /// Parsed configuration for the `json_errors` directive.
 pub struct JsonErrorConfig {
