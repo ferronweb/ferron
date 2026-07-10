@@ -86,12 +86,6 @@ h2 {
 
 a {
     color: var(--accent);
-    text-decoration: none;
-}
-
-a:hover,
-a:focus {
-    text-decoration: underline;
 }
 
 @media screen and (max-width: 768px) {

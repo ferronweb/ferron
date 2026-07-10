@@ -101,7 +101,9 @@ body {
 }
 
 .directory-listing a:hover,
-.directory-listing a.directory-parent:hover {
+.directory-listing a:focus,
+.directory-listing a.directory-parent:hover,
+.directory-listing a.directory-parent:focus {
     color: var(--accent);
 }
 
