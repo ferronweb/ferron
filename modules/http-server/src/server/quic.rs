@@ -557,7 +557,9 @@ async fn handle_http3_connection(
                 ),
                 (
                     "server.address",
-                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.local_address.ip().to_canonical().to_string(),
+                    ),
                 ),
             ],
         );

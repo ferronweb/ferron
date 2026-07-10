@@ -289,7 +289,7 @@ impl TcpListenerHandle {
                                       ),
                                       (
                                           "server.address",
-                                          LogAttributeValue::String(local_addr.ip().to_string()),
+                                          LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
                                       )],
                                   );
                                   emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
@@ -342,7 +342,7 @@ impl TcpListenerHandle {
                                     ),
                                     (
                                         "server.address",
-                                        LogAttributeValue::String(local_addr.ip().to_string()),
+                                        LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
                                     )];
                                     if e.to_string().to_lowercase().contains("resolve")
                                       || e.to_string().to_lowercase().contains("resolution") {
@@ -485,7 +485,7 @@ impl TcpListenerHandle {
                                             ),
                                             (
                                                 "server.address",
-                                                LogAttributeValue::String(local_addr.ip().to_string()),
+                                                LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
                                             )],
                                         );
                                     }
@@ -524,7 +524,7 @@ impl TcpListenerHandle {
                                                                     ),
                                                                     (
                                                                         "server.address",
-                                                                        LogAttributeValue::String(local_addr.ip().to_string()),
+                                                                        LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
                                                                     )],
                                                                 );
                                                             }
@@ -551,7 +551,7 @@ impl TcpListenerHandle {
                                         ),
                                         (
                                             "server.address",
-                                            LogAttributeValue::String(local_addr.ip().to_string()),
+                                            LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
                                         ),
                                     ],
                                 );
@@ -808,7 +808,9 @@ async fn handle_http1_connection_zerocopy<S>(
                 ),
                 (
                     "server.address",
-                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.local_address.ip().to_canonical().to_string(),
+                    ),
                 ),
             ],
         );
@@ -910,7 +912,9 @@ async fn handle_http1_connection<S>(
                 ),
                 (
                     "server.address",
-                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.local_address.ip().to_canonical().to_string(),
+                    ),
                 ),
             ],
         );
@@ -1012,7 +1016,9 @@ async fn handle_http2_connection<S>(
                 ),
                 (
                     "server.address",
-                    LogAttributeValue::String(handler_state.local_address.ip().to_string()),
+                    LogAttributeValue::String(
+                        handler_state.local_address.ip().to_canonical().to_string(),
+                    ),
                 ),
             ],
         );
