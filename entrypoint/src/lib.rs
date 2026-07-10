@@ -56,6 +56,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_http_scgi::ScgiModuleLoader),
         Box::new(ferron_http_fcgi::FcgiModuleLoader::default()),
         Box::new(ferron_http_static::StaticFileModuleLoader),
+        Box::new(ferron_http_jsonerror::HttpJsonErrorModuleLoader),
         Box::new(ferron_http_headers::HttpHeadersModuleLoader),
         Box::new(ferron_http_proxy::ReverseProxyModuleLoader::default()),
         Box::new(ferron_http_fproxy::ForwardProxyModuleLoader),

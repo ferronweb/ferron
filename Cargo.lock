@@ -1255,6 +1255,7 @@ dependencies = [
  "ferron-http-fcgi",
  "ferron-http-fproxy",
  "ferron-http-headers",
+ "ferron-http-jsonerror",
  "ferron-http-map",
  "ferron-http-proxy",
  "ferron-http-ratelimit",
@@ -1521,6 +1522,23 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+]
+
+[[package]]
+name = "ferron-http-jsonerror"
+version = "3.0.0-beta.6"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "rustc-hash",
+ "serde_json",
+ "tokio",
+ "typemap_rev",
 ]
 
 [[package]]

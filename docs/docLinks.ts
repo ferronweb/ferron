@@ -447,6 +447,12 @@ export default [
     label: "Abuse protection",
   },
   {
+    href: "/docs/v3/configuration/content/json-error",
+    target: "_self",
+    sub: true,
+    label: "JSON error responses",
+  },
+  {
     label: "Observability",
   },
   {

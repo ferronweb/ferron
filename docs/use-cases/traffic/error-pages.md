@@ -65,3 +65,13 @@ app.example.com {
 
 > [!note]
 > The file path is absolute or relative to the current working directory. If the specified error page file does not exist, the directive is skipped and the built-in error page is used instead.
+
+## JSON error responses
+
+You can serve JSON error responses using the `json_errors` directive (for example for RESTful APIs):
+
+```ferron
+api.example.com {
+    json_errors
+}
+```
