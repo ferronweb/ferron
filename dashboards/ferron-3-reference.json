@@ -1,0 +1,1709 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "name": "Annotations & Alerts",
+        "type": "dashboard",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        }
+      }
+    ]
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Core L7 Matrix \u2014 RED method (always on)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Traffic rate by status class",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (http_response_status_code) (rate(ferron_http_server_request_count_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{http_response_status_code}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Active requests",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(http_server_active_requests{job=\"$job\",instance=~\"$instance\"})",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "5xx error ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_http_server_request_count_total{job=\"$job\",instance=~\"$instance\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum(rate(ferron_http_server_request_count_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "4xx error ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_http_server_request_count_total{job=\"$job\",instance=~\"$instance\",http_response_status_code=~\"4..\"}[$__rate_interval])) / sum(rate(ferron_http_server_request_count_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request latency (p50 / p95 / p99)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "B",
+          "legendFormat": "p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "C",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Resiliency primitives \u2014 retry budget & rate limiting",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Retry budget exhausted /s",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_proxy_backend_url) (rate(ferron_proxy_retry_budget_exhausted_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{ferron_proxy_backend_url}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retry budget tokens available",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_retry_budget_tokens_available{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}",
+          "refId": "A",
+          "legendFormat": "{{ferron_proxy_backend_url}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retry final failures (1=success 0=fail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_proxy_backend_url) (ferron_proxy_retry_final{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"} == 0)",
+          "refId": "A",
+          "legendFormat": "{{ferron_proxy_backend_url}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate-limit rejected /s (by zone)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_ratelimit_zone) (rate(ferron_ratelimit_rejected_total{job=\"$job\",instance=~\"$instance\",ferron_ratelimit_zone=~\"$ratelimit_zone\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "zone {{ferron_ratelimit_zone}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate-limit allowed vs throttled /s (by zone)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_ratelimit_zone) (rate(ferron_ratelimit_allowed_total{job=\"$job\",instance=~\"$instance\",ferron_ratelimit_zone=~\"$ratelimit_zone\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "allowed {{ferron_ratelimit_zone}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_ratelimit_zone) (rate(ferron_ratelimit_throttled_total{job=\"$job\",instance=~\"$instance\",ferron_ratelimit_zone=~\"$ratelimit_zone\"}[$__rate_interval]))",
+          "refId": "B",
+          "legendFormat": "throttled {{ferron_ratelimit_zone}}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Infrastructure saturation \u2014 USE method (pools, circuit, host)",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Connection pool saturation (outstanding vs limits)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_proxy_backend_url) (ferron_proxy_pool_outstanding{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"})",
+          "refId": "A",
+          "legendFormat": "outstanding {{ferron_proxy_backend_url}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_pool_local_limit{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}",
+          "refId": "B",
+          "legendFormat": "local_limit {{ferron_proxy_backend_url}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_pool_global_limit{job=\"$job\",instance=~\"$instance\"}",
+          "refId": "C",
+          "legendFormat": "global_limit"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool wait time p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(ferron_proxy_pool_wait_time_seconds$metric_type{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "wait p95"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool waits /s (exhaustion events)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 51
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_proxy_backend_url) (rate(ferron_proxy_pool_waits_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{ferron_proxy_backend_url}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Connection pool hit ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 51
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_proxy_pool_hit_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])) / (sum(rate(ferron_proxy_pool_hit_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])) + sum(rate(ferron_proxy_pool_miss_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top backends by outstanding connections (noisy neighbors)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ],
+        "cellValuesDisplay": {}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "topk(10, sum by (ferron_proxy_backend_url) (ferron_proxy_pool_outstanding{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Circuit breaker state & unhealthy backends",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_circuit_state{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}",
+          "refId": "A",
+          "legendFormat": "state {{ferron_proxy_backend_url}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_proxy_backend_url) (rate(ferron_proxy_backends_unhealthy_total{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval]))",
+          "refId": "B",
+          "legendFormat": "unhealthy/s {{ferron_proxy_backend_url}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_lb_active_connections{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}",
+          "refId": "C",
+          "legendFormat": "active_conn {{ferron_proxy_backend_url}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Host saturation (CPU utilization & file descriptors)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "process_cpu_utilization_ratio{job=\"$job\",instance=~\"$instance\"}",
+          "refId": "A",
+          "legendFormat": "cpu_util"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "process_unix_file_descriptor_count{job=\"$job\",instance=~\"$instance\"}",
+          "refId": "B",
+          "legendFormat": "fd_delta"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "process_memory_usage_bytes{job=\"$job\",instance=~\"$instance\"}",
+          "refId": "C",
+          "legendFormat": "mem_bytes"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Edge cache \u2014 hits, evictions, DNS cache, egress",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Cache hit ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.8
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_cache_requests_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\",ferron_cache_result=\"hit\"}[$__rate_interval])) / sum(rate(ferron_cache_requests_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache entries (by zone)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_cache_entries{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}",
+          "refId": "A",
+          "legendFormat": "entries {{ferron_cache_zone}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache evictions /s (by reason)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 84
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_cache_reason) (rate(ferron_cache_evictions_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{ferron_cache_reason}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Egress bandwidth \u2014 static file bytes/s",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 84
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_static_bytes_sent_sum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "bytes/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DNS cache TTL remaining (min/avg/max)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 92
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_dns_cache_ttl_remaining_seconds{job=\"$job\",instance=~\"$instance\",aggregation=\"min\"}",
+          "refId": "A",
+          "legendFormat": "min"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_dns_cache_ttl_remaining_seconds{job=\"$job\",instance=~\"$instance\",aggregation=\"avg\"}",
+          "refId": "B",
+          "legendFormat": "avg"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_dns_cache_ttl_remaining_seconds{job=\"$job\",instance=~\"$instance\",aggregation=\"max\"}",
+          "refId": "C",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DNS cache entries & hit ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 92
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "ferron_proxy_dns_cache_entries{job=\"$job\",instance=~\"$instance\"}",
+          "refId": "A",
+          "legendFormat": "entries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_proxy_dns_cache_hit_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])) / (sum(rate(ferron_proxy_dns_cache_hit_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])) + sum(rate(ferron_proxy_dns_cache_miss_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "B",
+          "legendFormat": "hit_ratio"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["ferron", "reference", "red", "use"],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Job",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_http_server_request_count_total, job)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "allValue": "",
+        "current": {
+          "text": "ferron",
+          "value": "ferron"
+        },
+        "hide": 0
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_http_server_request_count_total{job=\"$job\"}, instance)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "name": "backend",
+        "label": "Upstream backend",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_proxy_pool_hit_total{job=\"$job\"}, ferron_proxy_backend_url)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "name": "ferron_host",
+        "label": "Host (tenant)",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_tls_handshake_total{job=\"$job\"}, ferron_host)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "name": "cache_zone",
+        "label": "Cache zone",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_cache_requests_total{job=\"$job\"}, ferron_cache_zone)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "name": "ratelimit_zone",
+        "label": "Rate-limit zone",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$data_source"
+        },
+        "query": "label_values(ferron_ratelimit_allowed_total{job=\"$job\"}, ferron_ratelimit_zone)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "allowCustomValue": false,
+        "type": "custom",
+        "current": {
+          "text": "classic",
+          "value": "_bucket"
+        },
+        "description": "Metric type based on Prometheus settings (native or classic)",
+        "hide": "dontHide",
+        "includeAll": false,
+        "label": "Metric type",
+        "multi": false,
+        "name": "metric_type",
+        "options": [],
+        "query": "[{\"text\":\"classic\",\"value\":\"_bucket\"},{\"text\":\"native\",\"value\":\"\"}]",
+        "skipUrlSync": false,
+        "valuesFormat": "json"
+      },
+      {
+        "allowCustomValue": true,
+        "type": "datasource",
+        "hide": "dontHide",
+        "includeAll": false,
+        "label": "Data source",
+        "multi": false,
+        "name": "data_source",
+        "options": [],
+        "pluginId": "prometheus",
+        "refresh": "onDashboardLoad",
+        "regex": "",
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Ferron 3 \u2014 Reference Dashboard",
+  "uid": "ferron3-reference",
+  "version": 1,
+  "weekStart": ""
+}

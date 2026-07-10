@@ -480,6 +480,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/configuration/observability/grafana-dashboard",
+    target: "_self",
+    label: "Grafana reference dashboard",
+    sub: true,
+  },
+  {
     href: "/docs/v3/configuration/observability/control-plane",
     target: "_self",
     label: "Cross-plane traceability",
