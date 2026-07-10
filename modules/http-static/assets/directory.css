@@ -4,6 +4,7 @@ body {
 
 .directory-header {
     text-align: left;
+    margin-top: 1em;
     margin-bottom: 1.5em;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -105,6 +106,12 @@ body {
 .directory-listing a.directory-parent:hover,
 .directory-listing a.directory-parent:focus {
     color: var(--accent);
+}
+
+@media screen and (max-width: 768px) {
+    .directory-header {
+        margin-top: 0;
+    }
 }
 
 @media screen and (max-width: 512px) {
