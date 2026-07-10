@@ -74,6 +74,42 @@ Each access log entry contains the following fields:
 
 Pipeline modules can also contribute additional access log fields when active. These fields are only present when the corresponding module handles the request.
 
+| Field | Module | Description |
+|---|---|---|
+| `ferron.proxy.backend_url` | `http-proxy` | Backend URL that served the proxied request |
+| `ferron.proxy.backend_resolved_ip` | `http-proxy` | Resolved IP address of the backend (strict DNS only) |
+| `ferron.proxy.backend_unix_path` | `http-proxy` | Unix socket path of the backend (if applicable) |
+| `ferron.proxy.connection_reused` | `http-proxy` | Whether a pooled connection was reused |
+| `ferron.proxy.retry_count` | `http-proxy` | Number of retry attempts (0 if none) |
+| `ferron.proxy.circuit_breaker_state` | `http-proxy` | Circuit breaker state of the backend: `closed`, `open`, or `half_open` |
+| `ferron.cache.result` | `http-cache` | Cache outcome: `hit`, `miss`, `stale`, `bypass`, `revalidate`, `purge`, `purge_rejected` |
+| `ferron.cache.zone` | `http-cache` | Cache zone identifier |
+| `ferron.ratelimit.result` | `http-ratelimit` | Rate limit decision: `allowed` or `rejected` |
+| `ferron.ratelimit.zone` | `http-ratelimit` | Rate limit zone identifier |
+| `ferron.ratelimit.retry_after_secs` | `http-ratelimit` | Seconds until next request allowed (rejection only) |
+| `ferron.abuseban.action` | `http-abuseban` | Action taken: `rejected` or `skip` |
+| `ferron.abuseban.reason` | `http-abuseban` | Ban reason (rejection only) |
+| `ferron.abuseban.remaining_secs` | `http-abuseban` | Seconds remaining on ban (rejection only) |
+| `ferron.basicauth.result` | `http-basicauth` | Auth outcome: `skip`, `failure`, or `success` |
+| `ferron.fauth.result` | `http-fauth` | Forwarded auth outcome: `success` or `failure` |
+| `ferron.fauth.backend_url` | `http-fauth` | Auth backend URL contacted |
+| `ferron.static.file_path` | `http-static` | Absolute file path served |
+| `ferron.static.file_path_precompressed` | `http-static` | The precompressed file path (if applicable) |
+| `ferron.static.dir_path` | `http-static` | Directory path when a listing is served |
+| `ferron.file_resolve.request_path` | `http-server` | Decoded request path being resolved (error paths only) |
+| `ferron.file_resolve.root_path` | `http-server` | Configured document root (error paths only) |
+| `ferron.file_resolve.outcome` | `http-server` | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only) |
+| `ferron.file_resolve.last_candidate_path` | `http-server` | Last filesystem path attempted before failure (error paths only) |
+| `ferron.response.action` | `http-response` | Response action: `abort`, `block`, or `status` |
+| `ferron.fproxy.mode` | `http-fproxy` | Forward proxy mode: `tunnel` or `proxy` |
+| `ferron.cgi.script_path` | `http-cgi` | Path to CGI script executed |
+| `ferron.cgi.exit_code` | `http-cgi` | CGI process exit code |
+| `ferron.fcgi.backend_url` | `http-fcgi` | FastCGI backend URL |
+| `ferron.fcgi.script_filename` | `http-fcgi` | Script filename (file mode) |
+| `ferron.scgi.backend_url` | `http-scgi` | SCGI backend URL |
+| `ferron.compression.algorithm` | `http-compression` | Compression algorithm: `gzip`, `br`, `deflate`, `zstd`, or `identity` |
+| `ferron.rewrite.applied` | `http-rewrite` | Whether a URL rewrite was applied |
+
 > [!info]
 > For a list of module-contributed access log fields, see respective module-related documentation.
 

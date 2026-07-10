@@ -518,6 +518,18 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     if let Ok(file) = ReusedFile::open(&precomp_path).await {
                         if let Ok(meta) = file.metadata() {
                             if meta.is_file() {
+                                ctx.get_span_attributes().insert(
+                                    "ferron.static.file_path_precompressed",
+                                    TraceAttributeValue::String(
+                                        precomp_path.to_string_lossy().to_string(),
+                                    ),
+                                );
+                                custom_access_log_fields(&mut ctx.http).insert(
+                                    "ferron.static.file_path_precompressed".into(),
+                                    CustomAccessLogField::String(
+                                        precomp_path.to_string_lossy().to_string(),
+                                    ),
+                                );
                                 file_path = precomp_path;
                                 file_length = meta.len();
                                 is_precompressed_file = true;
