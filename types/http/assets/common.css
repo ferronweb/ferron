@@ -79,6 +79,16 @@ a {
     color: var(--accent);
 }
 
+@media screen and (max-width: 768px) {
+    html {
+        background-image: radial-gradient(
+            1024px 384px at 50% 0%,
+            #f478251a,
+            transparent 100%
+        );
+    }
+}
+
 @media screen and (max-width: 512px) {
     body {
         padding: 1em;
