@@ -91,16 +91,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
-        let file_path_str = ctx.file_path.to_string_lossy().to_string();
-        ctx.get_span_attributes().insert(
-            "ferron.static.file_path",
-            TraceAttributeValue::String(file_path_str.clone()),
-        );
-        custom_access_log_fields(&mut ctx.http).insert(
-            "ferron.static.file_path".into(),
-            CustomAccessLogField::String(file_path_str),
-        );
-
         // Skip if root is not configured
         if ctx.http.configuration.get_value("root", true).is_none() {
             return Ok(true);
@@ -125,6 +115,16 @@ impl Stage<HttpFileContext> for StaticFileStage {
             ctx.file = Some(file);
             return Ok(true);
         }
+
+        let file_path_str = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "ferron.static.file_path",
+            TraceAttributeValue::String(file_path_str.clone()),
+        );
+        custom_access_log_fields(&mut ctx.http).insert(
+            "ferron.static.file_path".into(),
+            CustomAccessLogField::String(file_path_str),
+        );
 
         let method = request.method().clone();
 

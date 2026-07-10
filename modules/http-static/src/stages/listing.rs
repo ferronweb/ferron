@@ -60,16 +60,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(true);
         }
 
-        let dir_path_str = ctx.file_path.to_string_lossy().to_string();
-        ctx.get_span_attributes().insert(
-            "ferron.static.dir_path",
-            TraceAttributeValue::String(dir_path_str.clone()),
-        );
-        custom_access_log_fields(&mut ctx.http).insert(
-            "ferron.static.dir_path".into(),
-            CustomAccessLogField::String(dir_path_str),
-        );
-
         let Some(request) = ctx.http.req.take() else {
             return Ok(true);
         };
@@ -86,6 +76,16 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             ctx.file = Some(file);
             return Ok(true);
         }
+
+        let dir_path_str = ctx.file_path.to_string_lossy().to_string();
+        ctx.get_span_attributes().insert(
+            "ferron.static.dir_path",
+            TraceAttributeValue::String(dir_path_str.clone()),
+        );
+        custom_access_log_fields(&mut ctx.http).insert(
+            "ferron.static.dir_path".into(),
+            CustomAccessLogField::String(dir_path_str),
+        );
 
         let method = request.method().clone();
 
