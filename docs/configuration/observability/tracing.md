@@ -218,7 +218,7 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 
 ### Per-stage spans
 
-Each pipeline and file-serving stage generates its own forward (`ferron.stage.<stage_name>`) and inverse (`ferron.stage.<stage_name>.inverse`) span as a child of `ferron.pipeline.execute`, enabling flame graph analysis. Every per-stage span carries a `stage.name` attribute.
+Each pipeline and file-serving stage generates its own forward (`ferron.stage.<stage_name>`) and inverse (`ferron.stage.<stage_name>.inverse`) span as a child of `ferron.pipeline.execute`, enabling flame graph analysis. Every per-stage span carries a `ferron.stage.name` attribute.
 
 ### Error pipeline span
 

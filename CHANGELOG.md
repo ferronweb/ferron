@@ -46,6 +46,7 @@
 - **Prometheus text format content-type** — the Prometheus text endpoint now serves `application/openmetrics-text; version=1.0.0` instead of `text/plain; version=0.0.4`, matching the OpenMetrics specification used by prometheus-client. Prometheus scrapers that do not support OpenMetrics content negotiation may need to be updated.
 - **Native exponential histograms for OTLP latency metrics** — all OTLP histogram metrics now use Base2 Exponential Histograms instead of fixed linear buckets. This provides high-resolution percentile data across deep orders of magnitude (1ms to 100s), eliminating the need for manual bucket allocation and preserving tail-latency outliers that were previously masked by coarse bucketing. Affected metrics include `ferron.proxy.upstream.duration`, `ferron.proxy.pool.wait_time`, `ferron.proxy.tls.handshake_time`, `ferron.proxy.connect.latency`, `ferron.proxy.ttfb`, `http.server.request.duration`, and all other histogram instruments exported via OTLP.
 - **QUIC client/server address logging** — QUIC connection error logs now include the client and server IP addresses, making it easier to trace connections and identify potential bottlenecks.
+- **`stage.name` in traces renamed to `ferron.stage.name`** — renamed `stage.name` to `ferron.stage.name` traces to ensure consistency with other Ferron-specific attributes.
 
 #### Reverse proxying
 

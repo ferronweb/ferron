@@ -109,7 +109,7 @@ where
             trace_context: None,
             builder_attributes: vec![],
             attributes: vec![(
-                "stage.name",
+                "ferron.stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
             )],
             links: vec![],
@@ -158,7 +158,7 @@ where
             trace_context: None,
             builder_attributes: vec![],
             attributes: vec![(
-                "stage.name",
+                "ferron.stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
             )],
             links: vec![],
