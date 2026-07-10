@@ -30,7 +30,7 @@ impl FcgiFileStage {
 #[async_trait::async_trait(?Send)]
 impl Stage<HttpFileContext> for FcgiFileStage {
     fn name(&self) -> &str {
-        "fcgi_pass"
+        "fcgi"
     }
 
     fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
