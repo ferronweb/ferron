@@ -132,6 +132,14 @@ When `rewrite_log` is enabled, each rewrite operation is logged to the error log
 |-----------------------|-------|------------|
 | URL rewritten         | INFO  | `ferron.rewrite.from` (string) — original request path + query string, `ferron.rewrite.to` (string) — rewritten path + query string |
 
+### Access log fields
+
+The rewrite module contributes the following field to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.rewrite.applied` | bool | Whether a URL rewrite was applied. |
+
 ### Trace spans
 
 The rewrite stage sets the following attributes on its `ferron.stage.rewrite` span:

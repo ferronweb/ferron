@@ -227,6 +227,15 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ## Observability
 
+### Access log fields
+
+The forwarded authentication module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.fauth.result` | string | Forwarded auth outcome: `success` or `failure`. |
+| `ferron.fauth.backend_url` | string | Auth backend URL contacted. |
+
 ### Trace spans
 
 The forwarded authentication stage sets the following attributes on its `ferron.stage.forwarded_auth` span:

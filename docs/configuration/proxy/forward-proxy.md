@@ -153,6 +153,14 @@ proxy.example.com {
 | Forward proxy: unsupported scheme | WARN | `url.scheme` (string) — the unsupported scheme, `error.type` (string) |
 | Forward proxy: missing host | WARN | `error.type` (string) |
 
+### Access log fields
+
+The forward proxy module contributes the following field to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.fproxy.mode` | string | Forward proxy mode: `tunnel` (CONNECT) or `proxy` (standard). |
+
 ### Trace spans
 
 The forward proxy stage sets the following attributes on its `ferron.stage.forward_proxy` span:

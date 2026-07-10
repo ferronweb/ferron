@@ -216,6 +216,15 @@ This enables end-to-end distributed tracing with CGI scripts. For example, a PHP
 | `ferron.cgi.process.duration` | Histogram | — | Duration of CGI process execution |
 | `ferron.cgi.stderr_errors` | Counter | — | Number of CGI requests that produced non-empty stderr output |
 
+### Access log fields
+
+The CGI module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.cgi.script_path` | string | Path to CGI script executed. |
+| `ferron.cgi.exit_code` | int | CGI process exit code. |
+
 ### Trace spans
 
 The CGI stage sets the following attributes on its `ferron.stage.cgi` span:

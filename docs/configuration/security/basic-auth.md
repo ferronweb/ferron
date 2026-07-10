@@ -237,6 +237,14 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ## Observability
 
+### Access log fields
+
+The basic authentication module contributes the following field to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.basicauth.result` | string | Auth outcome: `skip`, `failure`, or `success`. |
+
 ### Trace spans
 
 The basic authentication stage sets the following attributes on its `ferron.stage.basicauth` span:

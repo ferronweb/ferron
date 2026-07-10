@@ -703,7 +703,20 @@ This prevents retry storms: when multiple backends fail simultaneously, the retr
 | Upstream circuit transitioned to half-open | INFO  | `upstream.address` (string) — backend server URL, `ferron.proxy.circuit.open_duration_ms` — open duration in milliseconds |
 | Upstream response truncated | WARN  | `ferron.proxy.backend_url` (string) — backend server URL, `upstream.bytes_received` (int) — bytes received, `upstream.content_length` (int) — expected Content-Length |
 
-### Trace spans
+#### Access log fields
+
+The reverse proxy module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.proxy.backend_url` | string | Backend URL that served the proxied request. |
+| `ferron.proxy.backend_resolved_ip` | string | Resolved IP address of the backend (strict DNS only). |
+| `ferron.proxy.backend_unix_path` | string | Unix socket path of the backend (if applicable). |
+| `ferron.proxy.connection_reused` | bool | Whether a pooled connection was reused. |
+| `ferron.proxy.retry_count` | int | Number of retry attempts (0 if none). |
+| `ferron.proxy.circuit_breaker_state` | string | Circuit breaker state of the backend: `closed`, `open`, or `half_open`. |
+
+## Trace spans
 
 The reverse proxy stage sets the following attributes on its `ferron.stage.reverse_proxy` span:
 

@@ -84,6 +84,14 @@ When compression is possible (based on file size and extension), the server adds
 
 ## Observability
 
+### Access log fields
+
+The compression module contributes the following field to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.compression.algorithm` | string | Compression algorithm: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
+
 ### Trace spans
 
 The dynamic compression stage sets the following attributes on its `ferron.stage.dynamic_compression` span:

@@ -306,6 +306,15 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 | `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
 | `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |
 
+### Access log fields
+
+The FastCGI module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.fcgi.backend_url` | string | FastCGI backend URL. |
+| `ferron.fcgi.script_filename` | string | Script filename (file mode). |
+
 ### Trace spans
 
 The FastCGI stage sets the following attributes on its `ferron.stage.fcgi_pass` span:

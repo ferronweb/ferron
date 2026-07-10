@@ -251,6 +251,16 @@ The abuse protection module emits the following metrics:
 | Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
 | Ban triggered         | WARN  | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
 
+### Access log fields
+
+The abuse protection module contributes the following fields to the HTTP access log line:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ferron.abuseban.action` | string | Action taken: `skip` (not banned) or `rejected` (banned). |
+| `ferron.abuseban.reason` | string | Ban reason (rejection only). |
+| `ferron.abuseban.remaining_secs` | int | Seconds remaining on ban (rejection only). |
+
 ### Trace spans
 
 The abuse protection stage sets the following attributes on its `ferron.stage.abuse_protection` span:
