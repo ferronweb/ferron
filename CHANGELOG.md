@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### Configuration validation
+
+- **Duplicate `observability` block warning fix** — fixed duplicate `observability` block warnings (they're now only displayed once) for `ferron doctor`.
+
 ## Ferron 3.0.0-beta.7
 
 **Released in July 11, 2026**

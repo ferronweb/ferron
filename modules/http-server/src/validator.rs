@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use cidr::IpCidr;
-use ferron_core::builtin::validate_observability_directives;
 use ferron_core::config::validator::{validate_scoped_block, ConfigurationValidatorContext};
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
@@ -146,9 +145,6 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         validate_directive!(config, ctx.used_directives, admin_email, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
-
-        // Observability directives
-        validate_observability_directives(config, ctx)?;
 
         // Index file names
         validate_directive!(config, ctx.used_directives, index, optional args(?), {});
