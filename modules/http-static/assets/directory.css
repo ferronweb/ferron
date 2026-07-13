@@ -1,4 +1,4 @@
-body {
+.body-main {
     max-width: 64em;
 }
 
@@ -25,12 +25,11 @@ body {
     overflow-wrap: break-word;
     word-break: break-word;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
     overflow: hidden;
 }
 
 .directory-listing thead th {
-    background-color: var(--surface-alt);
+    background-color: var(--surface);
     font-weight: 600;
     font-size: 1em;
     color: var(--muted);
@@ -51,7 +50,7 @@ body {
 }
 
 .directory-listing tbody tr:hover td {
-    background-color: var(--surface);
+    background-color: color-mix(in srgb, var(--surface) 50%, transparent);
 }
 
 .directory-icon {
@@ -80,7 +79,6 @@ body {
     margin-top: 1.5em;
     padding: 1em 1.25em;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
     background-color: var(--surface);
     overflow-x: auto;
     white-space: pre-wrap;

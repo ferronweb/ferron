@@ -4,58 +4,70 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+        <link rel="stylesheet" href="assets/font.css" />
         <link rel="stylesheet" href="assets/style.css" />
         <title>Ferron is installed successfully! 🥳</title>
     </head>
 
     <body>
-        <header>
-            <span class="logo"></span>
-            <h1>Ferron is installed successfully! 🥳</h1>
-        </header>
-        <section class="column">
-            <h2>If you're just visiting this website</h2>
-            <p>
-                Thank you for visiting the website! Right now, the website is
-                either not yet set up or is having problems. Stay tuned!
-            </p>
-            <p>
-                If you'd like to let the administrators know that you've seen
-                this page instead of the expected content, you should notify
-                them (for example via email).
-            </p>
-            <p>
-                For example, if the website is <i>example.com</i>, you can send
-                an email message to the website's administrator at
-                <i>webmaster@example.com</i>.
-            </p>
-            <p>
-                <strong
-                    >Note: Ferron probably isn't responsible for this website or
-                    its content, they just provide the software for the website
-                    to be running.</strong
-                >
-                If you have issues with this website, contact the website's
-                administrator, not Ferron.
-            </p>
-        </section>
-        <section class="column">
-            <h2>If you're an administrator of this website</h2>
-            <p>
-                If you see this page, this means the web server's installation
-                is successful. You can now add contents of your website to the
-                webroot directory (likely <i>/var/www/ferron</i> on Linux, or
-                <i>C:\Program Files\Ferron\wwwroot</i> on Windows).
-            </p>
-            <p>
-                You can also configure the web server according to
-                <a href="https://ferron.sh/docs/v3">Ferron's documentation.</a>
-                The configuration file is likely located at
-                <i>/etc/ferron/ferron.conf</i> on Linux or
-                <i>C:\ProgramData\Ferron\ferron.conf</i> on Windows.
-            </p>
-            <p><strong>Thank you for installing Ferron!</strong></p>
-        </section>
-        <div class="clearfix"></div>
+        <div class="body-bg"></div>
+        <div class="body-main">
+            <header>
+                <span class="logo"></span>
+                <!-- There could be "Ferron is installed successfully! 🥳" (more familiar),
+                     but the new heading would be more consistent with new Ferron 3 branding -->
+                <h1>Ferron is ready to serve.</h1>
+            </header>
+            <section class="column">
+                <h2>Production-ready infrastructure</h2>
+                <p>
+                    Ferron is a high-performance web server and reverse proxy
+                    designed for production environments where reliability and
+                    debuggability are important. It provides a robust foundation
+                    for serving content and managing complex routing with
+                    minimal configuration overhead.
+                </p>
+                <p>
+                    By prioritizing <strong>ease of setup</strong> and
+                    <strong>ease of debugging</strong>, Ferron ensures that your
+                    infrastructure remains predictable under load and
+                    transparent when it matters most.
+                </p>
+                <p>
+                    If you're visiting this page, it means the server is active
+                    but the webroot directory is currently empty.
+                </p>
+            </section>
+            <section class="column">
+                <h2>Installation complete</h2>
+                <p>
+                    The Ferron web server is successfully installed and running.
+                    You can now deploy your website content to the webroot
+                    directory:
+                </p>
+                <p>
+                    <code>/var/www/ferron</code>
+                    (Linux) <br />
+                    <code>C:\Program Files\Ferron\wwwroot</code>
+                    (Windows)
+                </p>
+                <p>
+                    Configure your server using the
+                    <a href="https://ferron.sh/docs/v3"
+                        >official documentation</a
+                    >. The configuration file is typically located at:
+                </p>
+                <p>
+                    <code>/etc/ferron/ferron.conf</code>
+                    (Linux) <br />
+                    <code>C:\ProgramData\Ferron\ferron.conf</code>
+                    (Windows)
+                </p>
+                <p>
+                    <strong>Thank you for choosing Ferron.</strong>
+                </p>
+            </section>
+            <div class="clearfix"></div>
+        </div>
     </body>
 </html>

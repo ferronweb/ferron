@@ -17,7 +17,10 @@ macro_rules! format_page {
 {}
 </head>
 <body>
+<div class=\"body-bg\"></div>
+<div class=\"body-main\">
 {}
+</div>
 </body>
 </html>
 ",

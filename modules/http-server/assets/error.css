@@ -1,4 +1,4 @@
-body {
+.body-main {
     min-height: 100vh;
     max-width: 40em;
     display: flex;
@@ -60,7 +60,6 @@ body {
     font-size: 0.95em;
     padding: 0.35em 0.7em;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
     background-color: var(--surface);
     color: var(--fg);
     user-select: all;

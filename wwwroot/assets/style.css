@@ -1,12 +1,11 @@
 :root {
-    --bg: #ffffff;
-    --fg: #0f172a;
-    --muted: #64748b;
-    --accent: #b84f0a;
-    --accent-tint: #f4782533;
-    --border: #e2e8f0;
-    --surface: #f8fafc;
-    --radius: 12px;
+    --bg: #f3f3f0;
+    --fg: #1b1f22;
+    --muted: #5b6268;
+    --accent: #3e8e86;
+    --border: #c7cbc7;
+    --surface: #e4e9e6;
+    --dot: #6b7278;
 }
 
 html {
@@ -14,7 +13,7 @@ html {
     padding: 0;
     min-height: 100%;
     font-family:
-        "Funnel Sans",
+        "IBM Plex Sans",
         system-ui,
         -apple-system,
         BlinkMacSystemFont,
@@ -26,12 +25,6 @@ html {
         "Open Sans",
         "Helvetica Neue",
         sans-serif;
-    background-image: radial-gradient(
-        1024px 384px at 50% 0%,
-        var(--accent-tint),
-        transparent 100%
-    );
-    background-repeat: no-repeat;
     background-color: var(--bg);
     color: var(--fg);
     -webkit-text-size-adjust: 100%;
@@ -39,17 +32,12 @@ html {
 }
 
 body {
-    margin: 0 auto;
-    padding: 2em 1.5em;
-    box-sizing: border-box;
-    font-size: 1.1em;
-    line-height: 1.6;
-    width: 100%;
-    max-width: 1280px;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.5em;
-    align-items: start;
+    position: relative;
+}
+
+pre,
+code {
+    font-family: "IBM Plex Mono", monospace;
 }
 
 header {
@@ -60,11 +48,11 @@ header {
 
 .logo {
     display: inline-block;
-    background-image: url(./logo.png);
+    background-image: url(./logo.svg);
     background-size: 100%;
     background-repeat: no-repeat;
     width: 160px;
-    height: 41.6666px;
+    height: 31px;
 }
 
 h1 {
@@ -84,18 +72,48 @@ h2 {
 }
 
 a {
+    font-weight: 600;
+    color: var(--fg);
+    transition: color 0.1s ease;
+}
+
+a:hover,
+a:focus {
     color: var(--accent);
 }
 
-@media screen and (max-width: 768px) {
-    html {
-        background-image: radial-gradient(
-            1024px 384px at 50% 0%,
-            #f478251a,
-            transparent 100%
-        );
-    }
+.body-bg {
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--dot) 30%, transparent) 1px,
+        transparent 1px
+    );
+    background-size: 12px 12px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    min-height: 256px;
+    width: 100%;
+    -webkit-mask-image: linear-gradient(to top, transparent 1px, black 100%);
+    mask-image: linear-gradient(to top, transparent 1px, black 100%);
+}
 
+.body-main {
+    margin: 0 auto;
+    padding: 2em 1.5em;
+    box-sizing: border-box;
+    font-size: 1.1em;
+    line-height: 1.6;
+    width: 100%;
+    max-width: 1280px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5em;
+    align-items: start;
+    position: relative;
+}
+
+@media screen and (max-width: 768px) {
     body {
         font-size: 1em;
         grid-template-columns: minmax(0, 1fr);
@@ -108,94 +126,16 @@ a {
 
 @media screen and (prefers-color-scheme: dark) {
     :root {
-        --bg: #14181f;
-        --fg: #f2f2f2;
-        --muted: #94a3b8;
-        --accent: #f47825;
-        --accent-tint: #f478252d;
-        --border: #2b303b;
-        --surface: #1b1f26;
+        --bg: #14171a;
+        --fg: #f3f3f0;
+        --muted: #c7cbc7;
+        --accent: #3e8e86;
+        --border: #4a5258;
+        --surface: #272d30;
+        --dot: #4a5258;
     }
 
     .logo {
-        background-image: url(./logo-dark.png);
+        background-image: url(./logodark.svg);
     }
-}
-
-/*
-Copyright 2025 The Funnel Project Authors (https://github.com/Dicotype/Funnel)
-
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
-*/
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-Regular.woff2) format("woff2");
-    font-weight: normal;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-Bold.woff2) format("woff2");
-    font-weight: bold;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-Italic.woff2) format("woff2");
-    font-weight: normal;
-    font-style: italic;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-BoldItalic.woff2) format("woff2");
-    font-weight: bold;
-    font-style: italic;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-ExtraBold.woff2) format("woff2");
-    font-weight: 800;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-ExtraBoldItalic.woff2) format("woff2");
-    font-weight: 800;
-    font-style: italic;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-Light.woff2) format("woff2");
-    font-weight: 300;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-LightItalic.woff2) format("woff2");
-    font-weight: 300;
-    font-style: italic;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-Medium.woff2) format("woff2");
-    font-weight: 500;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Funnel Sans";
-    src: url(./FunnelSans-MediumItalic.woff2) format("woff2");
-    font-weight: 500;
-    font-style: italic;
 }

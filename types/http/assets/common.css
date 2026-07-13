@@ -1,25 +1,22 @@
 :root {
-    --bg: #ffffff;
-    --fg: #0f172a;
-    --muted: #64748b;
-    --accent: #b84f0a;
-    --accent-tint: #f4782533;
-    --border: #e2e8f0;
-    --surface: #f8fafc;
-    --surface-alt: #fbf1ee;
-    --radius: 12px;
+    --bg: #f3f3f0;
+    --fg: #1b1f22;
+    --muted: #5b6268;
+    --accent: #3e8e86;
+    --border: #c7cbc7;
+    --surface: #e4e9e6;
+    --dot: #6b7278;
 }
 
 @media screen and (prefers-color-scheme: dark) {
     :root {
-        --bg: #14181f;
-        --fg: #f2f2f2;
-        --muted: #94a3b8;
-        --accent: #f47825;
-        --accent-tint: #f478251a;
-        --border: #2b303b;
-        --surface: #1b1f26;
-        --surface-alt: #1b1f26;
+        --bg: #14171a;
+        --fg: #f3f3f0;
+        --muted: #c7cbc7;
+        --accent: #3e8e86;
+        --border: #4a5258;
+        --surface: #272d30;
+        --dot: #4a5258;
     }
 }
 
@@ -55,13 +52,30 @@ html {
     color: var(--fg);
 }
 
-body {
-    box-sizing: border-box;
+.body-bg {
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--dot) 30%, transparent) 1px,
+        transparent 1px
+    );
+    background-size: 12px 12px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    min-height: 256px;
     width: 100%;
-    max-width: 1280px;
+    -webkit-mask-image: linear-gradient(to top, transparent 1px, black 100%);
+    mask-image: linear-gradient(to top, transparent 1px, black 100%);
+}
+
+.body-main {
     margin: 0 auto;
     padding: 1.5em;
     line-height: 1.6;
+    width: 100%;
+    max-width: 1280px;
+    position: relative;
+    box-sizing: border-box;
 }
 
 header {
@@ -79,18 +93,8 @@ a {
     color: var(--accent);
 }
 
-@media screen and (max-width: 768px) {
-    html {
-        background-image: radial-gradient(
-            1024px 384px at 50% 0%,
-            #f478251a,
-            transparent 100%
-        );
-    }
-}
-
 @media screen and (max-width: 512px) {
-    body {
+    .body-main {
         padding: 1em;
     }
 
