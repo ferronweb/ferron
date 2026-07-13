@@ -5,7 +5,7 @@
     --accent: #3e8e86;
     --border: #c7cbc7;
     --surface: #e4e9e6;
-    --dot: #6b7278;
+    --dot: #a4a9a4;
 }
 
 html {
@@ -32,6 +32,8 @@ html {
 }
 
 body {
+    margin: 0;
+    padding: 0;
     position: relative;
 }
 
@@ -114,9 +116,8 @@ a:focus {
 }
 
 @media screen and (max-width: 768px) {
-    body {
+    .body-main {
         font-size: 1em;
-        grid-template-columns: minmax(0, 1fr);
     }
 
     h1 {
