@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changed
+
+#### Default pages
+
+- **Redesigned default error and directory listing pages** — the built-in error pages and static directory listings have been redesigned to match new Ferron 3 branding (see https://ferron.sh/blog/ferron-new-look). The installation landing page (`wwwroot`) has also been refreshed to match.
+
 ### Fixed
 
 #### Configuration validation
