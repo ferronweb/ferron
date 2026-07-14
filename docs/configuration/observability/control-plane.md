@@ -39,7 +39,7 @@ Each `span_links` block defines one link with:
 | `trace_id` | string | yes | 32 hex characters (the trace ID of the linked span) |
 | `span_id` | string | yes | 16 hex characters (the span ID of the linked span) |
 | `sampled` | boolean | no | Whether the linked span was sampled (default: `false`) |
-| `attributes` | block | no | Key-value pairs describing the relationship (e.g. `relationship "triggers"`) |
+| `attributes` | block | no | Key-value pairs describing the relationship (e.g. `relationship triggers`) |
 
 ## Precedence
 
@@ -76,14 +76,14 @@ Metadata values support variable interpolation, allowing you to reference reques
 {
     control_plane {
         metadata {
-            cluster "production-us-east-1"
-            controller "ferron-ingress"
+            cluster production-us-east-1
+            controller ferron-ingress
         }
     }
 }
 
 *:80 {
-    root "/var/www/ferron"
+    root /var/www/ferron
 }
 ```
 
@@ -93,7 +93,7 @@ Metadata values support variable interpolation, allowing you to reference reques
 {
     control_plane {
         metadata {
-            cluster "production"
+            cluster production
         }
     }
 }
@@ -101,15 +101,15 @@ Metadata values support variable interpolation, allowing you to reference reques
 api.example.com:80 {
     control_plane {
         metadata {
-            service "api-gateway"
-            version "v2"
+            service api-gateway
+            version v2
         }
         span_links {
             trace_id "0af7651916cd43dd8448eb211c80319c"
             span_id "00f067aa0ba902b7"
-            sampled true
+            sampled
             attributes {
-                relationship "deploys"
+                relationship deploys
             }
         }
     }
@@ -126,26 +126,26 @@ A Kubernetes ingress controller would write the server configuration with metada
 {
     control_plane {
         metadata {
-            cluster "prod-us-east-1"
+            cluster prod-us-east-1
         }
         span_links {
             trace_id "0af7651916cd43dd8448eb211c80319c"
             span_id "00f067aa0ba902b7"
-            sampled true
+            sampled
             attributes {
-                relationship "manages"
-                resource_type "ingress"
-                resource_name "my-app"
-                resource_namespace "default"
+                relationship manages
+                resource_type ingress
+                resource_name my-app
+                resource_namespace default
             }
         }
     }
-    root "/var/www/my-app"
+    root /var/www/my-app
     observability {
         provider otlp
-        service_name "my-app"
+        service_name my-app
         traces "http://otlp-collector:4318/v1/traces" {
-            protocol "http/protobuf"
+            protocol http/protobuf
         }
     }
 }
@@ -159,7 +159,7 @@ This enables operators to:
 
 ### Observability signal examples
 
-When metadata `{ org_id "acme" team "platform" }` is configured:
+When metadata `{ org_id acme team platform }` is configured:
 
 | Signal | Appearance |
 |--------|------------|

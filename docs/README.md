@@ -69,9 +69,9 @@ Prefix the first line with `# INVALID` followed by a brief explanation:
 ```ferron
 # INVALID: bogus TLS provider
 example.com {
-  tls {
-    provider bogus
-  }
+    tls {
+        provider bogus
+    }
 }
 ```
 

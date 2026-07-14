@@ -5,6 +5,9 @@ description: "Using ferron-fmt to format, check, and style Ferron configuration 
 
 This page documents the `ferron-fmt` tool, a formatter for Ferron configuration files. It formats `.conf` files with configurable indentation, quote style, and other styling options.
 
+> [!tip]
+> The idiomatic Ferron 3 configuration style uses bare strings without quotes (when possible), 4-space indentation, bare boolean flags, and raw string literals for regex patterns. The `ferron-fmt` formatter defaults to this style.
+
 ## What it does
 
 `ferron-fmt` parses a Ferron configuration file and rewrites it with consistent formatting. It handles:
@@ -121,7 +124,7 @@ example.com {
 
 ### Auto (default)
 
-Bare strings when possible, double-quoted when necessary:
+Bare strings when possible, double-quoted when necessary — this produces idiomatic Ferron 3 configuration style:
 
 ```bash
 ferron-fmt --quote-style auto ferron.conf

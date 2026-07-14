@@ -76,7 +76,7 @@ example.com {
     root /var/www
 
     rewrite "^/static/(.*)" "/assets/$1" {
-        file true
+        file
         directory false
     }
 }

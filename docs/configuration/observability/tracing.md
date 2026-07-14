@@ -100,8 +100,8 @@ The incoming `traceparent` and `baggage` are ignored. Ferron generates a fresh t
 ```ferron
 http {
     trace {
-        generate true
-        trust_request true
+        generate
+        trust_request
     }
 }
 ```
@@ -246,7 +246,7 @@ The `trace_sampling` directive (in `http` block) controls which traces are sampl
 example.com {
     http {
         trace {
-            generate true
+            generate
         }
 
         # Sample 10% of root spans, respect parent for child spans

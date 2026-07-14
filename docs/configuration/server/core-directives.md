@@ -65,14 +65,14 @@ This page documents directives that belong in top-level global blocks:
 ### Runtime
 
 - `io_uring <bool>`
-  - This directive specifies whether `io_uring` is enabled for the primary runtime when available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: `io_uring true`
+  - This directive specifies whether `io_uring` is enabled for the primary runtime when available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
 
 **Configuration example:**
 
 ```ferron
 {
     runtime {
-        io_uring true
+        io_uring
     }
 }
 ```
@@ -88,7 +88,7 @@ This page documents directives that belong in top-level global blocks:
 - `backlog <size: integer>`
   - This directive specifies the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
 - `multipath <bool>`
-  - This directive specifies whether Multipath TCP (MPTCP) is enabled for the listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket; if the kernel does not support MPTCP or it is disabled, a warning is logged and the listener falls back to standard TCP. Default: `multipath false`
+  - This directive specifies whether Multipath TCP (MPTCP) is enabled for the listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket; if the kernel does not support MPTCP or it is disabled, a warning is logged and the listener falls back to standard TCP. Default: disabled
 
 **Configuration example:**
 
@@ -98,7 +98,7 @@ This page documents directives that belong in top-level global blocks:
         listen "127.0.0.1"
         send_buf 65536
         recv_buf 131072
-        multipath true
+        multipath
     }
 }
 ```

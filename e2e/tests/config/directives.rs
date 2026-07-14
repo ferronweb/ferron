@@ -22,7 +22,7 @@ async fn test_host_configuration() {
       }
 
       match WORDPRESS_SCAN {
-        request.uri ~ "(?i)^/wp-(?:login\.php|admin/?)(?:$|[?#])"
+        request.uri ~ r"(?i)^/wp-(?:login\.php|admin/?)(?:$|[?#])"
       }
 
       match SOMESCANNER_SCAN {
@@ -50,7 +50,7 @@ async fn test_host_configuration() {
 
         handle_error 404 {
           status 302 {
-            regex "^/(?!basic\.txt(?:$|[?#]))"
+            regex r"^/(?!basic\.txt(?:$|[?#]))"
             location "/basic.txt"
           }
         }

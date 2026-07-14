@@ -20,7 +20,7 @@ admin.example.com:443 {
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 
-        client_auth true
+        client_auth
         client_auth_ca "/etc/ssl/internal-client-ca.pem"
     }
 
@@ -96,7 +96,7 @@ admin.example.com:443 {
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 
-        client_auth true
+        client_auth
         client_auth_ca "/etc/ssl/internal-client-ca.pem"
     }
 

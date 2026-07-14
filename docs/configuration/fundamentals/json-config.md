@@ -24,13 +24,13 @@ Given a `ferron.conf` file:
 
 ```ferron
 {
-  runtime {
-    io_uring true
-  }
+    runtime {
+        io_uring
+    }
 }
 
 *:8080 {
-  root /var/www/html
+    root /var/www/html
 }
 ```
 
@@ -170,7 +170,7 @@ Blocks appear at multiple levels:
 
 - **Global configuration** — server-wide settings
 - **Port/host configuration** — protocol and host-specific settings
-- **Nested directives** — child blocks within directive entries (e.g., `runtime { io_uring true }`)
+- **Nested directives** — child blocks within directive entries (e.g., `runtime { io_uring }`)
 
 ### Directive entries
 

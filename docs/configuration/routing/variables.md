@@ -29,7 +29,7 @@ This page documents the `set_var` and `log_field` directives, which set interpol
 example.com {
     set_var request.uri.path "\.pdf$" is_pdf
     set_var remote.ip "^192\.168\." network_type {
-        value "private"
+        value private
     }
 }
 ```
@@ -71,10 +71,10 @@ Requests to `/document.pdf` set `is_pdf` to `"1"`, requests to `/photo.jpg` set 
 ```ferron
 http * {
     set_var request.uri.path "\.pdf$" file_type {
-        value "pdf"
+        value pdf
     }
     set_var request.uri.path "\.txt$" file_type {
-        value "text"
+        value text
     }
 }
 ```
@@ -84,7 +84,7 @@ http * {
 ```ferron
 http * {
     set_var request.header.user_agent "mobile" is_mobile {
-        case_insensitive true
+        case_insensitive
     }
 }
 ```
@@ -96,7 +96,7 @@ This matches user agents containing "mobile" regardless of capitalization (e.g.,
 ```ferron
 http * {
     set_var request.header.x_forwarded_for "." has_xff {
-        negate true
+        negate
     }
 }
 ```
@@ -111,7 +111,7 @@ The variable `has_xff` is set to `"1"` when the `X-Forwarded-For` header is **no
 http * {
     set_var request.uri.path "\.pdf$" is_pdf
     set_var remote.ip "^192\.168\." network_type {
-        value "private"
+        value private
     }
 
     log_field file_type is_pdf
@@ -139,7 +139,7 @@ Variables set by `set_var` can be used in any directive that supports interpolat
 ```ferron
 http * {
     set_var remote.ip "^10\." is_internal {
-        value "true"
+        value true
     }
 
     location /admin {

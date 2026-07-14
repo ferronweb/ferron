@@ -15,7 +15,7 @@ Ferron uses `.conf` files parsed by the `config-ferronconf` adapter. A configura
 
 {
     runtime {
-        io_uring true
+        io_uring
     }
 
     tcp {
@@ -71,9 +71,8 @@ Ferron configuration supports these value types:
 Several directives accept boolean values. For convenience, these can be written as **flags** with no arguments, which is equivalent to `true`:
 
 ```ferron
-# These are equivalent:
+# This is a bare flag, equivalent to setting the value to true:
 directory_listing
-directory_listing true
 
 # To explicitly disable, use false:
 directory_listing false
@@ -94,6 +93,46 @@ Several directives accept duration values. The following formats are supported:
 | (none) | Seconds (default) | `12` | 12 seconds |
 
 Plain numbers without a suffix are treated as seconds.
+
+### Raw string literals
+
+For values that contain regex patterns or other content where escape processing is undesirable, use raw string literals (`r"..."` or `r'...'`). Raw strings process no escape sequences — backslashes are treated literally:
+
+```ferron
+match api_request {
+    request.uri.path ~ r"^/api/v1(?:/|$)"
+}
+```
+
+Without raw strings, the same regex would require escaping backslashes:
+
+```ferron
+match api_request {
+    request.uri.path ~ "^/api/v1(?:/|$)"
+}
+```
+
+> [!warning]
+> Invalid escape sequences in quoted strings (e.g., `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regex patterns.
+
+> [!note]
+> Raw strings do not support interpolation (`{{...}}`). Use regular strings if variable substitution is needed.
+
+## Line continuations
+
+Long directives can be split across multiple lines using `\` at the end of the line. The continuation must be indented:
+
+```ferron
+proxy http://localhost:3000 \
+    http://localhost:3001
+```
+
+Line continuations can include trailing comments:
+
+```ferron
+proxy http://localhost:3000 \ # first backend
+    http://localhost:3001
+```
 
 ## Comments
 
@@ -158,7 +197,7 @@ Ferron applies inheritance by block context:
 > Where validation and runtime behavior differ, the directive pages call that out explicitly.
 
 > [!note]
-> Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d` — plain numbers without a suffix are treated as seconds. Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
+> Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d` — plain numbers without a suffix are treated as seconds. Boolean directives are written as bare flags (equivalent to `true`), or explicitly as `false` when disabling.
 
 ### Hot-reload support
 

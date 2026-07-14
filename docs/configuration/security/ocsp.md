@@ -39,7 +39,7 @@ example.com {
         cert "cert.pem"
         key "key.pem"
         ocsp {
-            enabled true
+            enabled
         }
     }
 }

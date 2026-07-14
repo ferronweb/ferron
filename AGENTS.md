@@ -103,6 +103,13 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
 - **Docker**: three variants — `Dockerfile` (distroless + musl), `Dockerfile.alpine` (musl), `Dockerfile.debian` (glibc).
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
+- **Idiomatic Ferron 3 configuration style**: When writing `.conf` examples in documentation, follow the new ferronconf spec conventions:
+  - **No semicolons** — directives are terminated by newlines, not semicolons.
+  - **4-space indentation** — consistent across all examples.
+  - **Bare strings preferred** — omit quotes unless the value contains spaces, special characters, or would be ambiguous.
+  - **Boolean flags** — write `directive` (bare, no value) when the intent is `true`; write `directive false` only when disabling.
+  - **Raw string literals** — use `r"..."` or `r'...'` for regex patterns to avoid double-backslash escaping.
+  - **Quoted strings** — single and double quotes are interchangeable; use whichever is clearer in context.
 
 ## Documentation principles
 

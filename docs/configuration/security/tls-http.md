@@ -46,7 +46,7 @@ example.com {
         refresh_interval "30m"
 
         ocsp {
-            enabled true
+            enabled
         }
     }
 }
@@ -188,7 +188,7 @@ example.com {
         url "https://cert-manager.internal.example.com/api/cert/example.com"
 
         ocsp {
-            enabled true
+            enabled
         }
     }
 }

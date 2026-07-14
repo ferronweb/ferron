@@ -37,9 +37,9 @@ This page documents the `map` directive, which creates variables whose values ar
 ```ferron
 http * {
     map request.uri.path category {
-        default "uncategorized"
-        exact "/api/*" "api"
-        exact "/blog/*" "blog"
+        default uncategorized
+        exact /api/* api
+        exact /blog/* blog
     }
 }
 ```
@@ -58,10 +58,10 @@ When evaluating a `map` block, entries are checked in this order:
 ```ferron
 http * {
     map request.uri.path category {
-        default "uncategorized"
-        exact "/api/*" "api"
-        exact "/blog/*" "blog"
-        exact "/docs" "docs"
+        default uncategorized
+        exact /api/* api
+        exact /blog/* blog
+        exact /docs docs
     }
 }
 
@@ -114,22 +114,22 @@ The `case_insensitive` option applies to individual `regex` entries. Alternative
 ```ferron
 http * {
     map request.uri.path site_section {
-        default "default"
-        exact "/public/*" "public"
+        default default
+        exact /public/* public
     }
 }
 
 example.com {
     # Overrides the global map for this host
     map request.uri.path site_section {
-        default "example-default"
-        exact "/special/*" "special"
+        default example-default
+        exact /special/* special
     }
 
     location /admin {
         # Overrides at location level
         map request.uri.path site_section {
-            default "admin"
+            default admin
         }
     }
 }

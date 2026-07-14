@@ -102,7 +102,7 @@ api.example.com {
         ecdh_curve x25519
         ecdh_curve secp256r1
 
-        client_auth true
+        client_auth
         client_auth_ca "/etc/ssl/internal-ca/ca-bundle.pem"
     }
 }

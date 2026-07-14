@@ -24,7 +24,7 @@ By default, validation prints diagnostics as log messages:
 
 ```ferron
 *:443 {
-  tlss
+    tlss
 }
 ```
 
@@ -89,7 +89,7 @@ A directive in the configuration is not recognized by any loaded module. This is
 
 ```ferron
 example.com {
-  non_existent_directive true
+    non_existent_directive
 }
 ```
 
@@ -114,9 +114,9 @@ A recognized directive has invalid arguments or a misconfigured value. This is a
 ```ferron
 # INVALID: bogus TLS provider
 example.com {
-  tls {
-    provider bogus
-  }
+    tls {
+        provider bogus
+    }
 }
 ```
 

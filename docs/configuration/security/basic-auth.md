@@ -65,7 +65,7 @@ example.com {
         }
 
         brute_force_protection {
-            enabled true
+            enabled
             max_attempts 5
             lockout_duration "15m"
             window "5m"

@@ -50,7 +50,7 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 
 ### Native histograms
 
-When `endpoint_native_histograms true` is set and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms provide high-resolution percentile data across deep orders of magnitude (1ms to 100s) without requiring manual bucket allocation.
+When `endpoint_native_histograms` is set and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms provide high-resolution percentile data across deep orders of magnitude (1ms to 100s) without requiring manual bucket allocation.
 
 Text format always exposes classic bucket histograms regardless of this setting, since the OpenMetrics text format does not support native histograms.
 

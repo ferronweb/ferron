@@ -251,7 +251,7 @@ example.com {
         circuit_breaker {
             max_fails 3
             window "5s"
-            record_5xx true
+            record_5xx
         }
     }
 }
@@ -294,7 +294,7 @@ example.com {
             window "30s"
             open_duration "10s"
             consecutive_passes 1
-            record_5xx true
+            record_5xx
         }
     }
 }

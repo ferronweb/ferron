@@ -1094,7 +1094,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
             provider inwx
             username "YOUR_INWX_USERNAME"
             password "YOUR_INWX_PASSWORD"
-            sandbox "false"
+            sandbox false
         }
     }
 }

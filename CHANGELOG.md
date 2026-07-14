@@ -4,7 +4,26 @@
 
 **Not yet released**
 
+### Breaking changes
+
+#### Configuration format
+
+- **Invalid escape sequences in quoted strings are now parse errors** — previously, unknown escape sequences (e.g., `\z`, `\$`) were silently passed through. They now produce a lexer error. Use raw string literals (`r"..."`) if you need literal backslashes in values (e.g., regex patterns).
+
+### Added
+
+#### Configuration format
+
+- **Raw string literals** — new `r"..."` syntax for strings with no escape processing. Raw strings are ideal for regex patterns where backslashes should be treated literally (e.g., `r"^/api/v1(?:/|$)"` instead of `"^/api/v1(?:/|$)"`). Raw strings do not support interpolation.
+- **Line continuation** — a backslash (`\`) at the end of a line joins it with the next line, allowing long directives to be split across multiple lines (e.g., `proxy http://localhost:3000 \` followed by `    http://localhost:3001`).
+- **Semicolons as optional delimiters** — semicolons (`;`) can now appear between statements and between host patterns as optional delimiters, providing compatibility with tools that generate semicolon-terminated output.
+
 ### Changed
+
+#### Configuration format
+
+- **Idiomatic configuration style** — documentation now uses the new ferronconf idiomatic style: bare strings without quotes, bare boolean flags (e.g., `io_uring` instead of `io_uring true`), raw string literals for regex patterns (`r"..."`), and consistent 4-space indentation.
+- **Expanded bare string character set** — bare strings now accept `.`, `:`, `*`, `-`, `+`, `/`, `%`, `&`, `?`, `@` directly without quoting, reducing the need for quoted strings in directive values.
 
 #### Default pages
 

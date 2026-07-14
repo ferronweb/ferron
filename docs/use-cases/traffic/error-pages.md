@@ -25,7 +25,7 @@ Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}
 ```ferron
 example.com {
     error_page 500 /custom/50x.html
-    error_page_placeholders true
+    error_page_placeholders
 }
 ```
 

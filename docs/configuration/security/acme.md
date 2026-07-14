@@ -112,7 +112,7 @@ example.com {
         post_obtain_command "/var/lib/post_obtain_command.sh"
 
         ocsp {
-            enabled true
+            enabled
         }
     }
 }
