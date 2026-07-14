@@ -1,6 +1,7 @@
 mod config;
 mod formatter;
 mod quoting;
+mod source_analysis;
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -99,8 +100,12 @@ fn main() {
         }
     };
 
+    // Analyze source for raw strings and line continuations
+    let analysis = source_analysis::analyze_input(&input);
+
     // Format
-    let formatted = formatter::format_config(&config, &fmt_config);
+    let formatted =
+        formatter::format_config_with_analysis(&config, &fmt_config, Some(&analysis), Some(&input));
 
     // Check mode
     if cli.check {

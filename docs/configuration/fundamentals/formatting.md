@@ -16,6 +16,8 @@ This page documents the `ferron-fmt` tool, a formatter for Ferron configuration 
 - **Directive sorting** — optional alphabetical sorting of directives within blocks
 - **Comment preservation** — inline and trailing comments are preserved
 - **Quoting normalization** — bare strings when possible, double-quoted when necessary (e.g., for values that would be ambiguous)
+- **Raw string preservation** — `r"..."` syntax is preserved for strings that were originally raw
+- **Line continuation preservation** — `\` at end of line is preserved at the same position
 
 This tool can be used to ensure consistent formatting across multiple Ferron configuration files.
 
@@ -235,6 +237,40 @@ ferron-fmt --max-blank-lines 1 ferron.conf
 ```
 
 This collapses consecutive blank lines beyond the limit.
+
+## Raw strings
+
+The formatter preserves raw string syntax (`r"..."`) for strings that were originally written as raw strings in the input. Raw strings are output with no escape processing, making them ideal for regex patterns:
+
+```ferron
+match api_request {
+    request.uri.path ~ r"^/api/v1(?:/|$)"
+}
+```
+
+Running the formatter on this input keeps the `r"..."` syntax intact. Regular quoted strings (`"..."`) are not converted to raw strings.
+
+> [!note]
+> Raw strings do not support interpolation. The formatter will not convert interpolated strings to raw strings.
+
+## Line continuations
+
+The formatter preserves line continuations (`\` at end of line) that were present in the original input. This is useful for splitting long directives across multiple lines:
+
+```ferron
+proxy http://localhost:3000 \
+    http://localhost:3001
+```
+
+After formatting, the continuation is preserved at the same position. Line continuations with trailing comments are also preserved:
+
+```ferron
+proxy http://localhost:3000 \ # first backend
+    http://localhost:3001
+```
+
+> [!note]
+> Line continuations are only preserved when the formatter reads from a file or stdin. When formatting a pre-parsed AST directly (programmatic API), continuations are not available and the output uses single-line values.
 
 ## See also
 

@@ -2122,9 +2122,9 @@ dependencies = [
 
 [[package]]
 name = "ferronconf"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9700c251b8346e2f6b641704b8996aa5c68c88604c6a9c17aa998dab818ba7c2"
+checksum = "cc8ec25ac697f5ec1ef78f4c9d2feba31d7063eec3c7345ef49e0cba79e25048"
 dependencies = [
  "indenter",
  "visibility",

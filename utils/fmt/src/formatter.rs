@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use ferronconf::{
@@ -6,24 +7,50 @@ use ferronconf::{
 };
 
 use crate::config::FormatConfig;
-use crate::quoting::format_string_value;
+use crate::quoting::{format_string_value, format_string_value_raw};
+use crate::source_analysis::SourceAnalysis;
 
 /// Formats a `Config` AST into a formatted string.
-pub fn format_config(config: &Config, config_fmt: &FormatConfig) -> String {
+///
+/// If `source` is provided, line continuations from the original input are preserved.
+/// If `source_analysis` is provided, raw strings (`r"..."`) are preserved.
+pub fn format_config_with_analysis(
+    config: &Config,
+    config_fmt: &FormatConfig,
+    source_analysis: Option<&SourceAnalysis>,
+    source: Option<&str>,
+) -> String {
     let mut output = String::new();
-    let mut formatter = Formatter::new(config_fmt);
+    let mut formatter = Formatter::new(config_fmt, source_analysis, source);
     formatter.format_config(config, &mut output);
     output
 }
 
+/// Formats a `Config` AST into a formatted string (backward-compatible).
+#[allow(dead_code)]
+pub fn format_config(config: &Config, config_fmt: &FormatConfig) -> String {
+    format_config_with_analysis(config, config_fmt, None, None)
+}
+
 struct Formatter<'a> {
     config: &'a FormatConfig,
+    source_analysis: Option<&'a SourceAnalysis>,
+    source: Option<&'a str>,
     depth: usize,
 }
 
 impl<'a> Formatter<'a> {
-    fn new(config: &'a FormatConfig) -> Self {
-        Self { config, depth: 0 }
+    fn new(
+        config: &'a FormatConfig,
+        source_analysis: Option<&'a SourceAnalysis>,
+        source: Option<&'a str>,
+    ) -> Self {
+        Self {
+            config,
+            source_analysis,
+            source,
+            depth: 0,
+        }
     }
 
     fn indent(&self) -> String {
@@ -78,12 +105,21 @@ impl<'a> Formatter<'a> {
         trailing_comments: &std::collections::HashMap<usize, String>,
         idx: usize,
     ) {
+        let gaps_with_continuations = self.find_directive_continuation_gaps(d);
+
         output.push_str(&self.indent());
         output.push_str(&d.name);
-        for arg in &d.args {
-            output.push(' ');
+
+        for (arg_idx, arg) in d.args.iter().enumerate() {
+            if gaps_with_continuations.contains(&arg_idx) {
+                output.push_str(" \\\n");
+                output.push_str(&self.indent());
+            } else {
+                output.push(' ');
+            }
             self.format_value(arg, output);
         }
+
         if let Some(block) = &d.block {
             output.push_str(" {\n");
             self.depth += 1;
@@ -94,6 +130,219 @@ impl<'a> Formatter<'a> {
         }
         self.format_trailing_comment(trailing_comments, idx, output);
         output.push('\n');
+    }
+
+    /// Finds which argument gaps in a directive had line continuations in the original source.
+    ///
+    /// Returns a set of argument indices: if `arg_idx` is in the set, a `\` should be
+    /// inserted after argument `arg_idx` (i.e., between `arg_idx` and `arg_idx + 1`).
+    fn find_directive_continuation_gaps(&self, d: &ferronconf::Directive) -> HashSet<usize> {
+        let mut gaps = HashSet::new();
+
+        let (Some(source), Some(analysis)) = (self.source, self.source_analysis) else {
+            return gaps;
+        };
+
+        let span = d.span;
+        let start_line = span.line;
+        let start_col = span.column;
+
+        // Find the byte offset of the directive start in the source
+        let source_lines: Vec<&str> = source.lines().collect();
+        if start_line == 0 || start_line > source_lines.len() {
+            return gaps;
+        }
+
+        let directive_line = &source_lines[start_line - 1];
+        if start_col == 0 || start_col > directive_line.len() {
+            return gaps;
+        }
+        let directive_start_byte = directive_line[..start_col - 1].len();
+
+        // Scan the directive region for continuations
+        let mut byte_offset = directive_start_byte;
+        let mut current_line = start_line;
+        let mut paren_depth: i32 = 0;
+        let mut in_string = false;
+
+        while byte_offset < source.len() && current_line <= source_lines.len() {
+            let line = &source_lines[current_line - 1];
+            let col_offset = if current_line == start_line {
+                start_col - 1
+            } else {
+                0
+            };
+
+            let bytes = line.as_bytes();
+            let mut i = col_offset;
+
+            while i < bytes.len() {
+                let b = bytes[i];
+
+                if in_string {
+                    if b == b'\\' && i + 1 < bytes.len() {
+                        i += 2;
+                        continue;
+                    }
+                    if b == b'"' {
+                        in_string = false;
+                    }
+                    i += 1;
+                    continue;
+                }
+
+                match b {
+                    b'"' => {
+                        in_string = true;
+                    }
+                    b'{' => {
+                        paren_depth += 1;
+                    }
+                    b'}' => {
+                        paren_depth -= 1;
+                        if paren_depth < 0 {
+                            // Exited the directive
+                            return gaps;
+                        }
+                    }
+                    b'\\' => {
+                        // Check for line continuation
+                        let mut j = i + 1;
+                        // Skip whitespace after `\`
+                        while j < bytes.len()
+                            && bytes[j].is_ascii_whitespace()
+                            && bytes[j] != b'\n'
+                            && bytes[j] != b'\r'
+                        {
+                            j += 1;
+                        }
+                        // Skip optional comment
+                        if j < bytes.len() && bytes[j] == b'#' {
+                            while j < bytes.len() && bytes[j] != b'\n' && bytes[j] != b'\r' {
+                                j += 1;
+                            }
+                        }
+                        // If we reached end of line, it's a continuation
+                        if j >= bytes.len() || bytes[j] == b'\n' || bytes[j] == b'\r' {
+                            // Found a continuation at (current_line, i + 1)
+                            // Map to argument gap by counting tokens before this position
+                            let col = i + 1; // 1-indexed
+                            if analysis.has_continuation(current_line, col) {
+                                let gap = self.count_tokens_before(d, current_line, col);
+                                gaps.insert(gap);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            // Move to next line
+            byte_offset += line.len() + 1; // +1 for newline
+            current_line += 1;
+        }
+
+        gaps
+    }
+
+    /// Counts how many of the directive's tokens (name + args) appear before
+    /// the given (line, column) position in the source.
+    fn count_tokens_before(&self, d: &ferronconf::Directive, line: usize, column: usize) -> usize {
+        let source = match self.source {
+            Some(s) => s,
+            None => return 0,
+        };
+
+        let name_span = d.span;
+
+        let source_lines: Vec<&str> = source.lines().collect();
+        if name_span.line == 0 || name_span.line > source_lines.len() {
+            return 0;
+        }
+
+        let name_line = &source_lines[name_span.line - 1];
+        if name_span.column == 0 || name_span.column > name_line.len() {
+            return 0;
+        }
+
+        let start_byte = {
+            let line_offset: usize = source_lines[..name_span.line - 1]
+                .iter()
+                .map(|l| l.len() + 1)
+                .sum();
+            line_offset + name_span.column - 1
+        };
+
+        let end_byte = {
+            let line_offset: usize = source_lines[..line - 1].iter().map(|l| l.len() + 1).sum();
+            line_offset + column - 1
+        };
+
+        if end_byte <= start_byte {
+            return 0;
+        }
+
+        let region = &source[start_byte..end_byte.min(source.len())];
+
+        // Count tokens in this region (skip whitespace, skip continuation backslashes)
+        let mut token_count = 0;
+        let mut chars = region.chars().peekable();
+        let mut in_string = false;
+
+        while let Some(c) = chars.next() {
+            if in_string {
+                if c == '\\' {
+                    chars.next();
+                    continue;
+                }
+                if c == '"' {
+                    in_string = false;
+                }
+                continue;
+            }
+
+            if c == '"' {
+                in_string = true;
+                token_count += 1;
+            } else if c.is_whitespace()
+                || c == '\\'
+                || c == '{'
+                || c == '}'
+                || c == ','
+                || c == ';'
+                || c == '#'
+            {
+                continue;
+            } else {
+                token_count += 1;
+                while let Some(&next) = chars.peek() {
+                    if next.is_whitespace()
+                        || next == '{'
+                        || next == '}'
+                        || next == ','
+                        || next == ';'
+                        || next == '#'
+                        || next == '"'
+                        || next == '\\'
+                    {
+                        break;
+                    }
+                    chars.next();
+                }
+            }
+        }
+
+        // token_count is the number of tokens before the continuation position.
+        // Token 0 = directive name, token 1 = first arg, etc.
+        // Gap after arg[i] = between token i+1 and token i+2.
+        if token_count == 0 {
+            0
+        } else if token_count <= d.args.len() {
+            token_count - 1
+        } else {
+            d.args.len().saturating_sub(1)
+        }
     }
 
     fn format_host_block(
@@ -230,8 +479,14 @@ impl<'a> Formatter<'a> {
 
     fn format_value(&self, value: &Value, output: &mut String) {
         match value {
-            Value::String(s, _) => {
-                if self.config.normalize_quotes {
+            Value::String(s, span) => {
+                let is_raw = self
+                    .source_analysis
+                    .map(|a| a.is_raw(span.line, span.column))
+                    .unwrap_or(false);
+                if is_raw {
+                    output.push_str(&format_string_value_raw(s, self.config.quote_style, true));
+                } else if self.config.normalize_quotes {
                     output.push_str(&format_string_value(s, self.config.quote_style));
                 } else {
                     // Preserve original quoting style
@@ -306,8 +561,14 @@ impl<'a> Formatter<'a> {
             Operand::Identifier(parts, _) => {
                 output.push_str(&parts.join("."));
             }
-            Operand::String(s, _) => {
-                if self.config.normalize_quotes {
+            Operand::String(s, span) => {
+                let is_raw = self
+                    .source_analysis
+                    .map(|a| a.is_raw(span.line, span.column))
+                    .unwrap_or(false);
+                if is_raw {
+                    output.push_str(&format_string_value_raw(s, self.config.quote_style, true));
+                } else if self.config.normalize_quotes {
                     output.push_str(&format_string_value(s, self.config.quote_style));
                 } else {
                     output.push('"');
@@ -328,16 +589,20 @@ impl<'a> Formatter<'a> {
 /// Checks if two configs produce the same formatted output (idempotency test helper).
 #[allow(dead_code)]
 pub fn format_is_idempotent(input: &str, config_fmt: &FormatConfig) -> bool {
+    let analysis = crate::source_analysis::analyze_input(input);
     let config1 = match Config::from_str(input) {
         Ok(c) => c,
         Err(_) => return false,
     };
-    let formatted1 = format_config(&config1, config_fmt);
+    let formatted1 =
+        format_config_with_analysis(&config1, config_fmt, Some(&analysis), Some(input));
+    let analysis2 = crate::source_analysis::analyze_input(&formatted1);
     let config2 = match Config::from_str(&formatted1) {
         Ok(c) => c,
         Err(_) => return false,
     };
-    let formatted2 = format_config(&config2, config_fmt);
+    let formatted2 =
+        format_config_with_analysis(&config2, config_fmt, Some(&analysis2), Some(&formatted1));
     formatted1 == formatted2
 }
 
@@ -673,5 +938,76 @@ example.com:443 {
         assert!(output.contains("proxy http://localhost:3000"));
         // Verify it round-trips (format the output again should be same)
         assert!(format_is_idempotent(&output, &default_config()));
+    }
+
+    #[test]
+    fn test_format_raw_string_preserved() {
+        let input = "match test {\n    request.uri.path ~ r\"^/api/v1$\"\n}";
+        let config = Config::from_str(input).unwrap();
+        let analysis = crate::source_analysis::analyze_input(input);
+        let output =
+            format_config_with_analysis(&config, &default_config(), Some(&analysis), Some(input));
+        assert!(output.contains("r\"^/api/v1$\""));
+        assert!(!output.contains("\"\\^/api/v1\\$\""));
+    }
+
+    #[test]
+    fn test_format_raw_string_idempotent() {
+        let input = "match test {\n    request.uri.path ~ r\"^/api/v1$\"\n}\n";
+        assert!(format_is_idempotent(input, &default_config()));
+    }
+
+    #[test]
+    fn test_format_raw_string_not_confused_with_quoted() {
+        // A regular quoted string should NOT become raw
+        let input = "match test {\n    request.uri.path ~ \"hello world\"\n}";
+        let config = Config::from_str(input).unwrap();
+        let analysis = crate::source_analysis::analyze_input(input);
+        let output =
+            format_config_with_analysis(&config, &default_config(), Some(&analysis), Some(input));
+        // "hello world" contains a space so it stays quoted, but should NOT become raw
+        assert!(output.contains("\"hello world\""));
+        assert!(!output.contains("r\""));
+    }
+
+    #[test]
+    fn test_format_line_continuation_preserved() {
+        let input = "proxy http://localhost:3000 \\\n    http://localhost:3001\n";
+        let config = Config::from_str(input).unwrap();
+        let analysis = crate::source_analysis::analyze_input(input);
+        let output =
+            format_config_with_analysis(&config, &default_config(), Some(&analysis), Some(input));
+        assert!(output.contains("\\\n"));
+        assert!(output.contains("http://localhost:3000 \\"));
+    }
+
+    #[test]
+    fn test_format_line_continuation_with_comment() {
+        let input = "proxy http://localhost:3000 \\ # first\n    http://localhost:3001\n";
+        let config = Config::from_str(input).unwrap();
+        let analysis = crate::source_analysis::analyze_input(input);
+        let output =
+            format_config_with_analysis(&config, &default_config(), Some(&analysis), Some(input));
+        assert!(output.contains("\\"));
+    }
+
+    #[test]
+    fn test_format_no_continuation_without_source() {
+        // Without source text, no continuations are preserved
+        let input = "proxy http://localhost:3000 \\\n    http://localhost:3001\n";
+        let config = Config::from_str(input).unwrap();
+        let output = format_config(&config, &default_config());
+        assert!(!output.contains("\\\n"));
+        assert!(output.contains("proxy http://localhost:3000 http://localhost:3001"));
+    }
+
+    #[test]
+    fn test_format_raw_string_in_directive() {
+        let input = "proxy http://localhost:3000 r\"^/api\"\n";
+        let config = Config::from_str(input).unwrap();
+        let analysis = crate::source_analysis::analyze_input(input);
+        let output =
+            format_config_with_analysis(&config, &default_config(), Some(&analysis), Some(input));
+        assert!(output.contains("r\"^/api\""));
     }
 }

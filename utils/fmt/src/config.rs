@@ -49,8 +49,6 @@ pub enum QuoteStyle {
     Auto,
     /// Always use double-quoted strings.
     AlwaysDouble,
-    /// Always use bare strings (error if not possible).
-    AlwaysBare,
 }
 
 impl FormatConfig {
