@@ -215,6 +215,20 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf
 ```
 
+### Configuration drift hints
+
+When hot-reload is disabled (the default), Ferron can still detect when configuration source files have changed on disk but have not been reloaded. This is called **configuration drift** — a signal that the running configuration may not match the file on disk.
+
+Drift is detected via lightweight periodic mtime comparison (no re-parsing). When drift is detected, a warn-level log is emitted and the `ferron.admin.config_drift` gauge metric is set to `1`. When the configuration is reloaded and drift is resolved, an info-level log is emitted and the metric resets to `0`.
+
+Drift hints are **enabled by default**. To disable them:
+
+```bash
+ferron run --config-params 'drift_hints=false;file=ferron.conf' --config-adapter ferronconf
+```
+
+The drift state is also exposed via the admin API's `GET /status` endpoint as `config_drift` and `config_drift_hints_enabled` fields.
+
 ## See also
 
 - [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals)

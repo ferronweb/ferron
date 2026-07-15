@@ -20,6 +20,10 @@ pub struct StatusResponse {
     pub config_file_hash: String,
     /// Last modification time of the configuration source (epoch seconds).
     pub config_file_mtime: u64,
+    /// Whether configuration drift is currently detected.
+    pub config_drift: bool,
+    /// Whether configuration drift hints are enabled.
+    pub config_drift_hints_enabled: bool,
 }
 
 impl StatusResponse {
@@ -45,6 +49,10 @@ impl StatusResponse {
                 .load(Ordering::Relaxed),
             config_file_hash: config_hash,
             config_file_mtime: mtime_epoch,
+            config_drift: ADMIN_METRICS.config_drift.load(Ordering::Relaxed),
+            config_drift_hints_enabled: ADMIN_METRICS
+                .config_drift_hints_enabled
+                .load(Ordering::Relaxed),
         }
     }
 }

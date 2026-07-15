@@ -428,6 +428,16 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ferron run --config-params 'watch=1;file=ferron.json' --config-adapter json
 ```
 
+### Configuration drift hints
+
+When hot-reload is disabled (the default), Ferron can still detect when the JSON configuration file has changed on disk but has not been reloaded. Drift hints are enabled by default; disable with `drift_hints=false`:
+
+```bash
+ferron run --config-params 'drift_hints=false;file=ferron.json' --config-adapter json
+```
+
+See [Configuration drift hints](/docs/v3/configuration/fundamentals/syntax#configuration-drift-hints) for details.
+
 ## See also
 
 - [Configuration validation](/docs/v3/configuration/fundamentals/validation)

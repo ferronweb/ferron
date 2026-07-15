@@ -18,6 +18,7 @@ impl ferron_core::config::adapter::ConfigurationWatcher for DisabledConfiguratio
 pub(super) struct FerronConfConfigurationWatcher {
     _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
     change_rx: mpsc::Receiver<DebounceEventResult>,
+    files: Vec<PathBuf>,
 }
 
 impl FerronConfConfigurationWatcher {
@@ -39,6 +40,7 @@ impl FerronConfConfigurationWatcher {
         Ok(Self {
             _debouncer: debouncer,
             change_rx: rx,
+            files,
         })
     }
 }
@@ -51,5 +53,20 @@ impl ferron_core::config::adapter::ConfigurationWatcher for FerronConfConfigurat
             Some(Err(e)) => Err(Box::new(e)),
             None => Err("Watcher channel closed".into()),
         }
+    }
+
+    fn check_drift(&self, metadata: &ferron_core::config::adapter::ConfigurationMetadata) -> bool {
+        // Re-stat all loaded files and compare mtimes against the metadata
+        let mut latest_mtime = std::time::UNIX_EPOCH;
+        for file_path in &self.files {
+            if let Ok(m) = std::fs::metadata(file_path) {
+                if let Ok(mtime) = m.modified() {
+                    if mtime > latest_mtime {
+                        latest_mtime = mtime;
+                    }
+                }
+            }
+        }
+        latest_mtime != metadata.config_mtime
     }
 }

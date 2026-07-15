@@ -767,6 +767,15 @@ fn load_modules(
         .set(registry.clone())
         .ok();
 
+    // Read drift_hints setting from config adapter params (default: true)
+    let drift_hints_enabled = config_adapter_params
+        .get("drift_hints")
+        .map(|v| v != "false" && v != "0")
+        .unwrap_or(true);
+    ferron_core::admin::ADMIN_METRICS
+        .config_drift_hints_enabled
+        .store(drift_hints_enabled, std::sync::atomic::Ordering::Relaxed);
+
     loop {
         let reload_state: Arc<(CancellationToken, ReloadState)> = Default::default();
         RELOAD_STATE.swap(reload_state.clone()).0.cancel();
@@ -820,6 +829,19 @@ fn load_modules(
                     let mut config_mtime = ferron_core::admin::ADMIN_METRICS.config_mtime.write();
                     *config_mtime = metadata.config_mtime;
                 }
+                // Store drift metadata and clear drift flag after successful reload
+                {
+                    let mut drift_meta = ferron_core::admin::ADMIN_METRICS
+                        .config_drift_metadata
+                        .write();
+                    *drift_meta = Some(ferron_core::admin::ConfigurationDriftMetadata {
+                        config_files: metadata.config_files,
+                        config_mtime: metadata.config_mtime,
+                    });
+                }
+                ferron_core::admin::ADMIN_METRICS
+                    .config_drift
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
 
                 reload_state.1.set_state(None);
 

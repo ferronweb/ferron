@@ -83,6 +83,7 @@ The `metrics-admin` module collects metrics exposed via admin API automatically 
 | `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
 | `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
 | `ferron.admin.config_mtime` | Gauge | — | Last modification time of the configuration source (epoch seconds) |
+| `ferron.admin.config_drift` | Gauge | — | Whether configuration drift is detected (1 = drift, 0 = no drift) |
 
 ### Admin API request metrics
 
@@ -157,6 +158,7 @@ The table below maps core metrics to practical alerting thresholds. Adjust thres
 | High error rate | `ferron.http.server.connection_errors` | Rate > 10/s for 1m |
 | Connection saturation | `ferron.admin.connections_active` | Approaching configured limit |
 | Config reload failures | `ferron.admin.reloads` | Count > 0 with error attribute |
+| Config drift detected | `ferron.admin.config_drift` | Value = 1 for > 1m |
 | Export backpressure | `ferron.admin.observability_events_dropped` | Rate > 0 |
 | Queue buildup | `ferron.admin.observability_event_queue_len` | > 1000 |
 | Memory growth | `process.memory.usage` | Sustained increase over hours |

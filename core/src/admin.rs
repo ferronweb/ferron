@@ -3,6 +3,7 @@
 //! Provides atomic counters for tracking server metrics
 //! across the data plane (HTTP server) and control plane (admin API).
 
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::LazyLock;
 use std::time::{Instant, SystemTime};
@@ -71,6 +72,20 @@ pub struct AdminMetrics {
     pub config_hash: parking_lot::RwLock<String>,
     /// Last modification time of the configuration source.
     pub config_mtime: parking_lot::RwLock<SystemTime>,
+    /// Whether configuration drift is currently detected.
+    pub config_drift: AtomicBool,
+    /// Whether configuration drift hints are enabled.
+    pub config_drift_hints_enabled: AtomicBool,
+    /// Configuration metadata for drift detection (files + mtime from last load).
+    pub config_drift_metadata: parking_lot::RwLock<Option<ConfigurationDriftMetadata>>,
+}
+
+/// Metadata used for configuration drift detection.
+pub struct ConfigurationDriftMetadata {
+    /// Files that were loaded in the last successful configuration load.
+    pub config_files: Vec<std::path::PathBuf>,
+    /// Last modification time recorded at the last successful load.
+    pub config_mtime: SystemTime,
 }
 
 impl AdminMetrics {
@@ -88,6 +103,9 @@ impl AdminMetrics {
             runtime_metrics: parking_lot::RwLock::new(RuntimeMetrics::default()),
             config_hash: parking_lot::RwLock::new(String::new()),
             config_mtime: parking_lot::RwLock::new(DEFAULT_MTIME),
+            config_drift: AtomicBool::new(false),
+            config_drift_hints_enabled: AtomicBool::new(false),
+            config_drift_metadata: parking_lot::RwLock::new(None),
         }
     }
 }
@@ -101,3 +119,21 @@ impl Default for AdminMetrics {
 
 /// Global singleton for admin metrics.
 pub static ADMIN_METRICS: LazyLock<AdminMetrics> = LazyLock::new(AdminMetrics::new);
+
+/// Check whether configuration files have drifted from their last loaded state.
+///
+/// Re-stats all files in the metadata and compares their mtimes against the
+/// recorded mtime. Returns `true` if any file has changed.
+pub fn check_config_drift(metadata: &ConfigurationDriftMetadata) -> bool {
+    let mut latest_mtime = std::time::UNIX_EPOCH;
+    for file_path in &metadata.config_files {
+        if let Ok(m) = std::fs::metadata(file_path) {
+            if let Ok(mtime) = m.modified() {
+                if mtime > latest_mtime {
+                    latest_mtime = mtime;
+                }
+            }
+        }
+    }
+    latest_mtime != metadata.config_mtime
+}

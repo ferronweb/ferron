@@ -5,6 +5,7 @@
 //! - Watching for configuration changes to support reload
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
@@ -26,6 +27,14 @@ pub trait ConfigurationWatcher: Send + Sync {
     ///
     /// Returns an error if watching fails (e.g., file deleted, permission denied).
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+
+    /// Check whether the configuration source has drifted since the last load.
+    ///
+    /// This performs a lightweight check (e.g., re-stat files) without
+    /// re-parsing the configuration. Returns `true` if the source has changed.
+    fn check_drift(&self, _metadata: &ConfigurationMetadata) -> bool {
+        false
+    }
 }
 
 /// Metadata about the loaded configuration source.
@@ -37,6 +46,8 @@ pub struct ConfigurationMetadata {
     pub config_hash: String,
     /// Last modification time of the configuration source.
     pub config_mtime: SystemTime,
+    /// Files that were loaded to produce this configuration.
+    pub config_files: Vec<PathBuf>,
 }
 
 /// Result type for `ConfigurationAdapter::adapt()`.

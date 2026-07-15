@@ -54,6 +54,7 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         let metadata = ConfigurationMetadata {
             config_hash,
             config_mtime,
+            config_files: vec![PathBuf::from(filename)],
         };
 
         Ok((
@@ -83,6 +84,7 @@ impl ferron_core::config::adapter::ConfigurationWatcher for DisabledConfiguratio
 struct JsonConfigurationWatcher {
     _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
     change_rx: mpsc::Receiver<DebounceEventResult>,
+    path: PathBuf,
 }
 
 impl JsonConfigurationWatcher {
@@ -103,6 +105,7 @@ impl JsonConfigurationWatcher {
         Ok(Self {
             _debouncer: debouncer,
             change_rx: rx,
+            path,
         })
     }
 }
@@ -115,6 +118,13 @@ impl ferron_core::config::adapter::ConfigurationWatcher for JsonConfigurationWat
             Some(Err(e)) => Err(Box::new(e)),
             None => Err("Watcher channel closed".into()),
         }
+    }
+
+    fn check_drift(&self, metadata: &ferron_core::config::adapter::ConfigurationMetadata) -> bool {
+        let current_mtime = std::fs::metadata(&self.path)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        current_mtime != metadata.config_mtime
     }
 }
 

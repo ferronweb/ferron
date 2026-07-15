@@ -69,7 +69,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
 
         let watcher: Box<dyn ferron_core::config::adapter::ConfigurationWatcher> = if watch_enabled
         {
-            Box::new(FerronConfConfigurationWatcher::new(loaded_files)?)
+            Box::new(FerronConfConfigurationWatcher::new(loaded_files.clone())?)
         } else {
             Box::new(DisabledConfigurationWatcher)
         };
@@ -77,6 +77,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
         let metadata = ConfigurationMetadata {
             config_hash,
             config_mtime: latest_mtime,
+            config_files: loaded_files,
         };
 
         Ok((translate_configuration(&statements)?, watcher, metadata))

@@ -1,8 +1,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferron_core::admin::{AdminMetrics, ADMIN_METRICS};
-use ferron_observability::{CompositeEventSink, Event, MetricEvent, MetricType, MetricValue};
+use ferron_core::admin::{check_config_drift, AdminMetrics, ADMIN_METRICS};
+use ferron_observability::{
+    CompositeEventSink, Event, LogEvent, MetricEvent, MetricType, MetricValue,
+};
 
 /// Runs the background admin API metrics collection loop.
 ///
@@ -18,6 +20,7 @@ pub async fn collect_admin_metrics(
         }
 
         emit_metrics(&event_sink, &ADMIN_METRICS);
+        emit_drift_check(&event_sink, &ADMIN_METRICS);
     }
 }
 
@@ -202,4 +205,76 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
             control_plane_metadata: None,
         }));
     }
+
+    // --- Config drift metric ---
+    {
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.config_drift",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(
+                if metrics
+                    .config_drift
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    1
+                } else {
+                    0
+                },
+            ),
+            unit: Some("{drift}"),
+            description: Some("Whether configuration drift is detected (1 = drift, 0 = no drift)."),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    }
+}
+
+/// Check for configuration drift and emit log events on state transitions.
+fn emit_drift_check(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
+    if !metrics
+        .config_drift_hints_enabled
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        return;
+    }
+
+    let drift_metadata = metrics.config_drift_metadata.read();
+    let Some(metadata) = drift_metadata.as_ref() else {
+        return;
+    };
+    let is_drift = check_config_drift(metadata);
+    drop(drift_metadata);
+
+    let was_drift = metrics
+        .config_drift
+        .load(std::sync::atomic::Ordering::Relaxed);
+
+    if is_drift && !was_drift {
+        // Transition: no drift -> drift detected
+        event_sink.emit(Event::Log(LogEvent {
+            level: ferron_observability::LogLevel::Warn,
+            message: "Configuration drift detected: configuration source has changed but has not been reloaded".to_string(),
+            summary: "Configuration drift detected".into(),
+            target: "ferron-metrics-admin",
+            attributes: vec![],
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    } else if !is_drift && was_drift {
+        // Transition: drift -> no drift (resolved after reload)
+        event_sink.emit(Event::Log(LogEvent {
+            level: ferron_observability::LogLevel::Info,
+            message: "Configuration drift resolved: configuration has been reloaded".to_string(),
+            summary: "Configuration drift resolved".into(),
+            target: "ferron-metrics-admin",
+            attributes: vec![],
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    }
+
+    metrics
+        .config_drift
+        .store(is_drift, std::sync::atomic::Ordering::Relaxed);
 }
