@@ -315,6 +315,7 @@ fn validate_provider(
             opt_str(ctx, "session_token");
             opt_str(ctx, "hosted_zone_id");
             opt_bool(ctx, "private_zone_only");
+            opt_str(ctx, "endpoint");
         }
         "tencentcloud" => {
             req_str(config, ctx, provider, "secret_id")?;

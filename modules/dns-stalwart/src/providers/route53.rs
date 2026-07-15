@@ -23,6 +23,7 @@ impl Provider<DnsContext<'static>> for Route53DnsProvider {
             session_token: opt_string(ctx, "session_token"),
             hosted_zone_id: opt_string(ctx, "hosted_zone_id"),
             private_zone_only: opt_bool(ctx, "private_zone_only"),
+            endpoint: opt_string(ctx, "endpoint"),
         };
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(

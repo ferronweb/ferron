@@ -1666,6 +1666,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 | `session_token` | `<string>` | AWS session token for temporary credentials. | — (optional) |
 | `hosted_zone_id` | `<string>` | Route 53 hosted zone ID. Ferron resolves the zone automatically if omitted. | — (optional) |
 | `private_zone_only` | `<bool>` | Set to `true` to target a private hosted zone only. | `false` |
+| `endpoint` | `<string>` | Route 53 endpoint URL. | — (optional) |
 
 **Configuration example:**
 
