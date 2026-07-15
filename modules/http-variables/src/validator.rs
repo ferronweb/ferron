@@ -155,14 +155,17 @@ impl VariablesValidator {
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         name: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if entry.args.len() != 1 {
+        if !(0..=1).contains(&entry.args.len()) {
             return Err(format!(
-                "Invalid `{name}` inside set_var block — must have exactly one argument"
+                "Invalid `{name}` inside set_var block — must have zero or one argument"
             )
             .into());
         }
 
-        if !matches!(&entry.args[0], ServerConfigurationValue::Boolean(_, _)) {
+        if !matches!(
+            entry.args.first(),
+            Some(ServerConfigurationValue::Boolean(_, _)) | None
+        ) {
             return Err(
                 format!("Invalid `{name}` inside set_var block — must be a boolean").into(),
             );

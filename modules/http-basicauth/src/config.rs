@@ -98,11 +98,7 @@ fn parse_users_block(block: &ServerConfigurationBlock, users: &mut HashMap<Strin
 
 fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForceConfig) {
     // Parse `enabled` — optional flag
-    if let Some(enabled_val) = block.get_value("enabled") {
-        if let Some(enabled) = enabled_val.as_boolean() {
-            bfc.enabled = enabled;
-        }
-    }
+    bfc.enabled = block.get_flag("enabled");
 
     // Parse `max_attempts` — optional, default 5
     if let Some(max_attempts_val) = block.get_value("max_attempts") {

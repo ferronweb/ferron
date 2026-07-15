@@ -229,13 +229,7 @@ fn parse_map_block(block: &ServerConfigurationBlock) -> (Vec<MapEntry>, Option<S
                     (entry.args[0].as_str(), entry.args[1].as_str())
                 {
                     let case_insensitive = if let Some(ref children) = entry.children {
-                        children
-                            .directives
-                            .get("case_insensitive")
-                            .and_then(|e| e.first())
-                            .and_then(|e| e.args.first())
-                            .and_then(|v| v.as_boolean())
-                            .unwrap_or(false)
+                        children.get_flag("case_insensitive")
                     } else {
                         false
                     };

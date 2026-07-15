@@ -131,20 +131,12 @@ fn parse_set_var_block(
     }
     if let Some(entries) = block.directives.get("case_insensitive") {
         if let Some(entry) = entries.first() {
-            *case_insensitive = entry
-                .args
-                .first()
-                .and_then(|v| v.as_boolean())
-                .unwrap_or(false);
+            *case_insensitive = entry.get_flag();
         }
     }
     if let Some(entries) = block.directives.get("negate") {
         if let Some(entry) = entries.first() {
-            *negate = entry
-                .args
-                .first()
-                .and_then(|v| v.as_boolean())
-                .unwrap_or(false);
+            *negate = entry.get_flag();
         }
     }
 }

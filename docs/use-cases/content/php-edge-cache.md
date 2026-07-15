@@ -73,7 +73,7 @@ example.com {
     }
 
     match EXCLUDE_WORDPRESS_CACHE {
-        request.uri.path !~ "^/(?:wp-(?:admin|login\.php)|wc-api)\b"
+        request.uri.path !~ r"^/(?:wp-(?:admin|login\.php)|wc-api)\b"
     }
 
     if EXCLUDE_WORDPRESS_CACHE {

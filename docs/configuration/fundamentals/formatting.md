@@ -261,15 +261,21 @@ Running the formatter on this input keeps the `r"..."` syntax intact. Regular qu
 The formatter preserves line continuations (`\` at end of line) that were present in the original input. This is useful for splitting long directives across multiple lines:
 
 ```ferron
-proxy http://localhost:3000 \
-    http://localhost:3001
+example.com {
+    # This is just an example directive
+    example_proxy http://localhost:3000 \
+      http://localhost:3001
+}
 ```
 
 After formatting, the continuation is preserved at the same position. Line continuations with trailing comments are also preserved:
 
 ```ferron
-proxy http://localhost:3000 \ # first backend
-    http://localhost:3001
+example.com {
+    # This is just an example directive
+    example_proxy http://localhost:3000 \ # first backend
+      http://localhost:3001
+}
 ```
 
 > [!note]

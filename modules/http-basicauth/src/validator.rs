@@ -197,7 +197,7 @@ impl BasicAuthValidator {
         if let Some(entries) = block.directives.get("enabled") {
             sub.insert("enabled".to_string());
             for entry in entries {
-                let enabled = entry.args.first().and_then(|v| v.as_boolean());
+                let enabled = entry.args.first().map_or(Some(false), |v| v.as_boolean());
                 if enabled.is_none() {
                     return Err(
                         "Invalid `brute_force_protection` — `enabled` must be a boolean value"

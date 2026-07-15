@@ -123,15 +123,21 @@ match api_request {
 Long directives can be split across multiple lines using `\` at the end of the line. The continuation must be indented:
 
 ```ferron
-proxy http://localhost:3000 \
-    http://localhost:3001
+example.com {
+    # This is just an example directive
+    example_proxy http://localhost:3000 \
+      http://localhost:3001
+}
 ```
 
 Line continuations can include trailing comments:
 
 ```ferron
-proxy http://localhost:3000 \ # first backend
-    http://localhost:3001
+example.com {
+    # This is just an example directive
+    example_proxy http://localhost:3000 \ # first backend
+      http://localhost:3001
+}
 ```
 
 ## Comments

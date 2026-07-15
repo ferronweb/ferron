@@ -27,8 +27,8 @@ This page documents the `set_var` and `log_field` directives, which set interpol
 
 ```ferron
 example.com {
-    set_var request.uri.path "\.pdf$" is_pdf
-    set_var remote.ip "^192\.168\." network_type {
+    set_var request.uri.path r"\.pdf$" is_pdf
+    set_var remote.ip r"^192\.168\." network_type {
         value private
     }
 }
@@ -58,8 +58,8 @@ example.com {
 
 ```ferron
 http * {
-    set_var request.uri.path "\.pdf$" is_pdf
-    set_var request.uri.path "\.(jpg|png|gif)$" is_image
+    set_var request.uri.path r"\.pdf$" is_pdf
+    set_var request.uri.path r"\.(jpg|png|gif)$" is_image
     set_var request.method "^POST$" is_post
 }
 ```
@@ -70,10 +70,10 @@ Requests to `/document.pdf` set `is_pdf` to `"1"`, requests to `/photo.jpg` set 
 
 ```ferron
 http * {
-    set_var request.uri.path "\.pdf$" file_type {
+    set_var request.uri.path r"\.pdf$" file_type {
         value pdf
     }
-    set_var request.uri.path "\.txt$" file_type {
+    set_var request.uri.path r"\.txt$" file_type {
         value text
     }
 }
@@ -109,8 +109,8 @@ The variable `has_xff` is set to `"1"` when the `X-Forwarded-For` header is **no
 
 ```ferron
 http * {
-    set_var request.uri.path "\.pdf$" is_pdf
-    set_var remote.ip "^192\.168\." network_type {
+    set_var request.uri.path r"\.pdf$" is_pdf
+    set_var remote.ip r"^192\.168\." network_type {
         value private
     }
 
@@ -138,8 +138,8 @@ Variables set by `set_var` can be used in any directive that supports interpolat
 
 ```ferron
 http * {
-    set_var remote.ip "^10\." is_internal {
-        value true
+    set_var remote.ip r"^10\." is_internal {
+        value "true"
     }
 
     location /admin {
