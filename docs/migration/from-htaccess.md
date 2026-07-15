@@ -74,8 +74,12 @@ example.com {
     header "Referrer-Policy" "strict-origin-when-cross-origin"
     header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
 
+    condition WP_ADMIN {
+        request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
+    }
+    
     # Protect the admin area by IP.
-    location /wp-admin {
+    if WP_ADMIN {
         allow "203.0.113.0/24"
         block "0.0.0.0/0"
     }
@@ -249,7 +253,7 @@ example.com {
 }
 ```
 
-Place these inside a `location` block to protect a single path (such as `/wp-admin` or `/administrator`).
+Place these inside a `location` or `if` block to protect a single path (such as `/wp-admin` or `/administrator`).
 
 > [!important]
 > If Ferron sits behind a reverse proxy or load balancer, configure `client_ip_from_header` with a `trusted_proxy` list so the IP rules evaluate the real client IP rather than the proxy's address.
@@ -387,7 +391,11 @@ Ferron's `basic_auth` does **not** read `htpasswd` files. It expects **hashed** 
 example.com {
     root /var/www/html
 
-    location /wp-admin {
+    condition WP_ADMIN {
+        request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
+    }
+    
+    if WP_ADMIN {
         basic_auth {
             realm "Admin Area"
             users {
@@ -401,16 +409,18 @@ example.com {
 Brute-force protection is enabled by default; you can tune it:
 
 ```ferron
-basic_auth {
-    realm "Admin Area"
-    users {
-        admin "$argon2id$v=19$m=19456,t=2,p=1$..."
-    }
-    brute_force_protection {
-        enabled
-        max_attempts 5
-        lockout_duration "15m"
-        window "5m"
+example.com {
+    basic_auth {
+        realm "Admin Area"
+        users {
+            admin "$argon2id$v=19$m=19456,t=2,p=1$..."
+        }
+        brute_force_protection {
+            enabled
+            max_attempts 5
+            lockout_duration "15m"
+            window "5m"
+        }
     }
 }
 ```
@@ -436,7 +446,11 @@ example.com {
     root /var/www/html
     mime_type ".pdf" "application/octet-stream"
 
-    location /downloads {
+    match DOWNLOADS {
+        request.uri.path ~ r"^/downloads(?:/|$)"
+    }
+    
+    if DOWNLOADS {
         header +Content-Disposition "attachment"
     }
 }
@@ -454,15 +468,19 @@ Apache uses `mod_expires`:
 </IfModule>
 ```
 
-Ferron does not compute `Expires` from durations, but you can set `Cache-Control` directly and let the client derive expiry. Use `file_cache_control` for all static files and `header` for per-type overrides (matching by `location` or `match`):
+Ferron does not compute `Expires` from durations, but you can set `Cache-Control` directly and let the client derive expiry. Use `file_cache_control` for static files:
 
 ```ferron
 example.com {
     root /var/www/html
     file_cache_control "public, max-age=604800"   # 1 week default
 
-    location /assets {
-        header +Cache-Control "public, max-age=2592000"   # 30 days
+    match ASSETS {
+        request.uri.path ~ r"^/assets(?:/|$)"
+    }
+    
+    if ASSETS {
+        file_cache_control "public, max-age=2592000"   # 30 days
     }
 }
 ```
