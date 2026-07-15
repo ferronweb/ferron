@@ -65,6 +65,11 @@ fn would_parse_as_number(s: &str) -> bool {
         index + 1
     };
 
+    // Check if IP address
+    if s[index..].chars().find(|c| !c.is_ascii_digit()) == Some('.') {
+        return false;
+    }
+
     // At this point, we know the string starts with a digit or decimal point
     //
     // 12.3  123abc 123.abc
