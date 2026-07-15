@@ -79,6 +79,11 @@ export default [
     label: "From Ferron 2",
   },
   {
+    href: "/docs/v3/migration/from-htaccess",
+    target: "_self",
+    label: "From Apache .htaccess (PHP)",
+  },
+  {
     label: "Common use cases",
     category: true,
   },
