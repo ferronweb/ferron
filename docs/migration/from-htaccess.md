@@ -342,11 +342,13 @@ Ferron's `directory_listing` is disabled by default. Enable it to mirror `+Index
 example.com {
     root /var/www/html
     directory_listing            # mirrors Options +Indexes
-    index index.php index.html
+
+    # Optionally
+    #index index.php index.html
 }
 ```
 
-`index` controls the files tried when a directory is requested (Ferron defaults to `index.html index.htm index.xhtml`; add `index.php` for PHP entry points).
+`index` controls the files tried when a directory is requested (Ferron defaults to `index.html index.htm index.xhtml`; `index.php` is included as well for PHP entry points when using PHP-FPM).
 
 ## Security and other response headers
 
