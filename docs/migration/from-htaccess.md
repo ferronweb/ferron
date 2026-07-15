@@ -65,8 +65,8 @@ example.com {
     https_redirect
 
     # Custom error pages.
-    error_page 404 /404.html
-    error_page 500 502 503 504 /50x.html
+    error_page 404 /var/www/html/404.html
+    error_page 500 502 503 504 /var/www/html/50x.html
 
     # Baseline security headers.
     header "X-Content-Type-Options" "nosniff"
