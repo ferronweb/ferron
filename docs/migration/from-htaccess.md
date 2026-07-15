@@ -74,7 +74,7 @@ example.com {
     header "Referrer-Policy" "strict-origin-when-cross-origin"
     header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
 
-    condition WP_ADMIN {
+    match WP_ADMIN {
         request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
     }
     
@@ -391,7 +391,7 @@ Ferron's `basic_auth` does **not** read `htpasswd` files. It expects **hashed** 
 example.com {
     root /var/www/html
 
-    condition WP_ADMIN {
+    match WP_ADMIN {
         request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
     }
     
