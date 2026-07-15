@@ -18,13 +18,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: 2.x
           path: ferron
 
       - name: Checkout Ferron website
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ferronweb/ferron.sh
           token: ${{ secrets.GIT_TOKEN }}
