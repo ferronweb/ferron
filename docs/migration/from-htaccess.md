@@ -296,15 +296,15 @@ ErrorDocument 404 /404.html
 ErrorDocument 500 /50x.html
 ```
 
-Ferron uses `error_page`, mapping one or more status codes to a file path relative to the document root (or absolute):
+Ferron uses `error_page`, mapping one or more status codes to an absolute file path:
 
 ```ferron
 example.com {
     root /var/www/html
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 
-    error_page 404 /404.html
-    error_page 500 502 503 504 /50x.html
+    error_page 404 /var/www/html/404.html
+    error_page 500 502 503 504 /var/www/html/50x.html
 }
 ```
 
@@ -318,8 +318,8 @@ example.com {
         }
     }
 
-    error_page 502 /502.html
-    error_page 503 /503.html
+    error_page 502 /var/www/html/502.html
+    error_page 503 /var/www/html/503.html
 }
 ```
 
