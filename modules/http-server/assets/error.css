@@ -67,6 +67,12 @@
     vertical-align: middle;
 }
 
+@supports (background-color: color-mix(in srgb, var(--surface) 60%, transparent)) {
+    .error-trace-id {
+        background-color: color-mix(in srgb, var(--surface) 60%, transparent);
+    }
+}
+
 @media screen and (max-width: 512px) {
     .error-code {
         font-size: 4em;

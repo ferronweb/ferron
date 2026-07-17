@@ -3,9 +3,9 @@
     --fg: #1b1f22;
     --muted: #5b6268;
     --accent: #3e8e86;
-    --border: #c7cbc7;
+    --border: #d8d9d5;
     --surface: #e4e9e6;
-    --dot: #a4a9a4;
+    --dot: #bcc3bf;
 }
 
 @media screen and (prefers-color-scheme: dark) {
@@ -13,10 +13,10 @@
         --bg: #14171a;
         --fg: #f3f3f0;
         --muted: #c7cbc7;
-        --accent: #3e8e86;
-        --border: #4a5258;
+        --accent: #46968e;
+        --border: #2c3337;
         --surface: #272d30;
-        --dot: #4a5258;
+        --dot: #2c3337;
     }
 }
 
@@ -54,7 +54,7 @@ html {
 
 .body-bg {
     background-image: radial-gradient(
-        color-mix(in srgb, var(--dot) 30%, transparent) 1px,
+        color-mix(in srgb, var(--dot) 60%, transparent) 1px,
         transparent 1px
     );
     background-size: 12px 12px;
