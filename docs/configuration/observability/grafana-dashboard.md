@@ -83,7 +83,7 @@ A CDN or PHP-accelerator operator keeps this row pinned; an API gateway user can
 ### Import the JSON
 
 1. In Grafana, **Dashboards → New → Import**, then upload `dashboards/ferron-3-reference.json`.
-2. Pick your Prometheus/Mimir datasource when prompted (the file defaults to the `mimir` datasource uid; adjust if yours differs).
+2. Pick your Prometheus/Mimir datasource.
 
 ### Or provision it
 
