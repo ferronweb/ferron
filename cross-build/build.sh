@@ -402,6 +402,25 @@ WRAPPER
 	# For bindgen
 	export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${sysroot} --target=${llvm_target} -I${sysroot}/include -I${sysroot}/usr/include"
 
+	# CMake (aws-lc-sys) auto-detects CMAKE_SYSTEM_PROCESSOR as "ppc64" for
+	# little-endian powerpc targets, but aws-lc only enables the ppc64le HW
+	# crypto assembly (aesp8-ppc.S / ghashp8-ppc.S) when the processor matches
+	# "powerpc64le|ppc64le". Without it, ARCH falls back to "generic" and the
+	# aes_hw_* / gcm_*p8 symbols are never defined, causing link errors.
+	# Force the processor via a toolchain file read by aws-lc-sys through the
+	# CMAKE_TOOLCHAIN_FILE_<target> env var.
+	if [[ "${target}" == "powerpc64le-unknown-linux-gnu" ]]; then
+		local tc_file="${sysroot}/powerpc64le-toolchain.cmake"
+		cat > "${tc_file}" <<TOOLCHAIN
+set(CMAKE_SYSTEM_NAME Linux CACHE STRING "" FORCE)
+set(CMAKE_SYSTEM_PROCESSOR powerpc64le CACHE STRING "" FORCE)
+set(CMAKE_C_COMPILER "${cc_bin}" CACHE FILEPATH "" FORCE)
+set(CMAKE_CXX_COMPILER "${cxx_bin}" CACHE FILEPATH "" FORCE)
+set(CMAKE_ASM_COMPILER "${cc_bin}" CACHE FILEPATH "" FORCE)
+TOOLCHAIN
+		export CMAKE_TOOLCHAIN_FILE_powerpc64le_unknown_linux_gnu="${tc_file}"
+	fi
+
 	local cc_var="CC_${target//-/_}"
 	local cxx_var="CXX_${target//-/_}"
 	log_info "  CC: ${!cc_var}"
