@@ -100,7 +100,7 @@ jobs:
           targets: "${{ matrix.target }}"
 
       - name: Setup sysroot cache
-        if: matrix.cross-build == 'true'
+        if: matrix.cross-build == true
         uses: actions/cache@v5
         with:
           path: |
@@ -125,7 +125,7 @@ jobs:
         uses: ilammy/setup-nasm@v1
 
       - name: Install packages for cross-compilation
-        if: matrix.cross-build == 'true'
+        if: matrix.cross-build == true
         uses: eclipse-score/apt-install@main
         with:
           packages: debootstrap clang lld libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake
@@ -137,13 +137,13 @@ jobs:
           cargo binstall --no-confirm bindgen-cli --force
 
       - name: Build binaries (cross)
-        if: matrix.cross-build == 'true'
+        if: matrix.cross-build == true
         shell: bash
         run: |
           ./cross-build/build.sh ${{ matrix.target }}
 
       - name: Build binaries (native)
-        if: matrix.cross-build != 'true'
+        if: matrix.cross-build != true
         shell: bash
         run: |
           cargo build --target ${{ matrix.target }} --verbose
