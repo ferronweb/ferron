@@ -329,6 +329,11 @@ prepare_sysroot() {
 		log_error "gcc did not contain crtbeginT.o (unexpected layout)"
 		return 1
 	fi
+	# Install libatomic.a from gcc
+	if [[ -f "${gcc}/lib/libatomic.a" ]]; then
+		cp "${gcc}/lib/libatomic.a" "${sysroot_dir}/lib/"
+		log_info "  Copied libatomic.a"
+	fi
 	rm -rf "${tmp_dir}"
 
 	log_info "musl sysroot prepared successfully: ${sysroot_dir}"
