@@ -10,28 +10,41 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
-    # Install packages for cross-compiling software
-    apt update && DEBIAN_FRONTEND=noninteractive \
-    apt install -y debootstrap clang lld libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake && \
-    cargo install bindgen-cli
-
-# Install the right Rust target
-RUN \
-    # Determine the target
-    TARGET_TRIPLE="" && \
+    # Install packages for cross-compiling software with musl libc
+    apt update && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     case "$TARGETPLATFORM" in \
-    "linux/386") TARGET_TRIPLE="i686-unknown-linux-gnu";; \
-    "linux/amd64") TARGET_TRIPLE="x86_64-unknown-linux-gnu";; \
-    "linux/arm64") TARGET_TRIPLE="aarch64-unknown-linux-gnu";; \
-    "linux/arm/v7") TARGET_TRIPLE="armv7-unknown-linux-gnueabihf";; \
+    "linux/386") DEBIAN_FRONTEND=noninteractive apt install -y gcc-i686-linux-gnu g++-i686-linux-gnu ;; \
+    "linux/amd64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-x86-64-linux-gnu g++-x86-64-linux-gnu ;; \
+    "linux/arm64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu ;; \
+    "linux/arm/v7") DEBIAN_FRONTEND=noninteractive apt install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf ;; \
     "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
     esac \
+    fi && \
+    # Install cmake, bindgen CLI, and required dependencies
+    DEBIAN_FRONTEND=noninteractive apt install -y cmake clang libclang-dev && \
+    cargo install bindgen-cli
+
+# Install the right Rust target and configure Cargo
+RUN \
+    # Determine the target
+    if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    TARGET_TRIPLE="" && \
+    TARGET_GCC="" && \
+    case "$TARGETPLATFORM" in \
+    "linux/386") TARGET_TRIPLE="i686-unknown-linux-gnu" && TARGET_GCC="i686-linux-gnu-gcc" ;; \
+    "linux/amd64") TARGET_TRIPLE="x86_64-unknown-linux-gnu" && TARGET_GCC="x86_64-linux-gnu-gcc" ;; \
+    "linux/arm64") TARGET_TRIPLE="aarch64-unknown-linux-gnu" && TARGET_GCC="aarch64-linux-gnu-gcc" ;; \
+    "linux/arm/v7") TARGET_TRIPLE="armv7-unknown-linux-gnueabihf" && TARGET_GCC="arm-linux-gnueabihf-gcc" ;; \
+    "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
+    esac && \
+    # Install the Rustup target
+    rustup target add $TARGET_TRIPLE && \
+    # Configure Cargo
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml; \
     else \
     TARGET_TRIPLE="$(rustc --print host-tuple)"; \
     fi && \
-    # Install the Rust target
-    rustup target add $TARGET_TRIPLE && \
     # Save target triple
     echo "$TARGET_TRIPLE" > /tmp/target_triple
 
@@ -45,14 +58,11 @@ COPY . .
 RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/cross-build/sysroots/prepared \
     # Set target triple and path
     TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
-    # Prepare the sysroot
-    ./cross-build/sysroots/prepare-gnu.sh $TARGET_TRIPLE && \
     # Build Ferron binaries
-    ./cross-build/build.sh $TARGET_TRIPLE --pgo && \
+    cargo build --release --target $TARGET_TRIPLE && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-fmt $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-kdl2ferron $TARGET_PATH/ferron-serve .dist
 

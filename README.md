@@ -105,6 +105,12 @@ just package-windows # Windows installer
 just installer # Linux installer
 ```
 
+Cross-build optimized binaries for Ferron (see [README for the build files](./cross-build/README.md); available on Linux only):
+
+```sh
+just cross-build
+```
+
 ## Configuration
 
 The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).

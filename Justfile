@@ -4,6 +4,11 @@ set windows-shell := ["powershell.exe", "-c"]
 build:
     cargo build -r
 
+# Cross-build the optimized binaries for the project (+ optional PGO)
+[linux]
+cross-build target pgo="false":
+    ./cross-build/build.sh {{ target }} {{ if pgo == "true" { "--pgo" } else { "" } }}
+
 # Run the project for testing
 run:
     cargo run --bin ferron
