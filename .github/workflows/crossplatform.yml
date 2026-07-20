@@ -78,7 +78,7 @@ jobs:
             cross-build: true
           - target: x86_64-unknown-freebsd
             runner: ubuntu-latest
-            cross-build: true
+            cross-rs: true
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
           - target: i686-pc-windows-msvc
@@ -130,14 +130,21 @@ jobs:
         with:
           packages: debootstrap clang lld libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake
 
+      - name: Install Cross
+        if: matrix.cross-rs == true
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross --force
+
       - name: Install bindgen-cli
         shell: bash
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm bindgen-cli --force
 
-      - name: Build binaries (cross)
-        if: matrix.cross-build == true
+      - name: Build binaries (cross-build)
+        if: matrix.cross-build == true && matrix.cross-rs != true
         shell: bash
         run: |
           # Before building, a sysroot has to be prepared
@@ -151,8 +158,14 @@ jobs:
           fi
           ./cross-build/build.sh ${{ matrix.target }}
 
+      - name: Build binaries (cross-rs)
+        if: matrix.cross-rs == true && matrix.cross-build != true
+        shell: bash
+        run: |
+          cross build --target ${{ matrix.target }} --verbose
+
       - name: Build binaries (native)
-        if: matrix.cross-build != true
+        if: matrix.cross-build != true && matrix.cross-rs != true
         shell: bash
         run: |
           cargo build --target ${{ matrix.target }} --verbose
