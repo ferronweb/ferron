@@ -147,7 +147,7 @@ jobs:
           fi
           if ! [ -d ./cross-build/sysroots/prepared/${LIBC}-${{ matrix.target }} ]; then
             # Sysroot doesn't exist, prepare it
-            ./cross-build/sysroots/prepare-${LIBC}.sh ${{ matrix.target }} $LIBC
+            ./cross-build/sysroots/prepare-${LIBC}.sh ${{ matrix.target }}
           fi
           ./cross-build/build.sh ${{ matrix.target }}
 
