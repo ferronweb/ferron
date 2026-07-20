@@ -126,7 +126,7 @@ jobs:
 
       - name: Install packages for cross-compilation
         if: matrix.cross-build == 'true'
-        uses: eclipse-score/apt-install
+        uses: eclipse-score/apt-install@main
         with:
           packages: debootstrap clang lld libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake
 
