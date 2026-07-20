@@ -330,8 +330,8 @@ prepare_sysroot() {
 		return 1
 	fi
 	# Install libatomic.a from gcc
-	if [[ -f "${gcc_dir}/lib/libatomic.a" ]]; then
-		cp "${gcc_dir}/lib/libatomic.a" "${sysroot_dir}/lib/"
+	if [[ -f "${gcc_dir}/usr/lib/libatomic.a" ]]; then
+		cp "${gcc_dir}/usr/lib/libatomic.a" "${sysroot_dir}/lib/"
 		log_info "  Copied libatomic.a"
 	fi
 	rm -rf "${tmp_dir}"
