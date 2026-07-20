@@ -250,6 +250,8 @@ setup_env_gnu() {
 	host=$(host_arch)
 	local llvm_target
 	llvm_target=$(rust_to_llvm_target "${target}")
+	local clang="${CLANG:-clang}"
+	local clangxx="${CLANGXX:-clang++}"
 
 	log_info "Setting up GNU build environment"
 	log_info "  Sysroot: ${sysroot}"
@@ -326,7 +328,7 @@ for arg in "\$@"; do
             filtered_args="\$filtered_args \$arg" ;;
     esac
 done
-exec clang --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} \$filtered_args
+exec ${clang} --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} \$filtered_args
 WRAPPER
 		# CXX wrapper: compile + link, strip profiling flags
 		cat > "${cxx_wrapper}" <<WRAPPER
@@ -340,7 +342,7 @@ for arg in "\$@"; do
             filtered_args="\$filtered_args \$arg" ;;
     esac
 done
-exec clang++ --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} \$filtered_args
+exec ${clangxx} --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} \$filtered_args
 WRAPPER
 		# AR/RANLIB wrappers
 		cat > "${ar_wrapper}" <<WRAPPER
@@ -367,7 +369,7 @@ WRAPPER
 		fi
 		cat > "${linker_wrapper}" <<WRAPPER
 #!/bin/bash
-exec clang --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} "\$@"
+exec ${clang} --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} "\$@"
 WRAPPER
 		chmod +x "${linker_wrapper}"
 
@@ -411,6 +413,8 @@ setup_env_musl() {
 	local sysroot="$2"
 	local llvm_target
 	llvm_target=$(rust_to_llvm_target "${target}")
+	local clang="${CLANG:-clang}"
+	local clangxx="${CLANGXX:-clang++}"
 
 	log_info "Setting up musl build environment"
 	log_info "  Sysroot: ${sysroot}"
@@ -482,9 +486,9 @@ for a in "\$@"; do
   filtered_args="\$filtered_args \$a"
 done
 if [[ \$link -eq 1 ]]; then
-  exec clang --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
+  exec ${clang} --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
 else
-  exec clang --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
+  exec ${clang} --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
 fi
 WRAPPER
 	cat > "${cxx_wrapper}" <<WRAPPER
@@ -499,9 +503,9 @@ for a in "\$@"; do
   filtered_args="\$filtered_args \$a"
 done
 if [[ \$link -eq 1 ]]; then
-  exec clang++ --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
+  exec ${clangxx} --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
 else
-  exec clang++ --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
+  exec ${clangxx} --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
 fi
 WRAPPER
 	chmod +x "${cc_wrapper}" "${cxx_wrapper}"
@@ -521,7 +525,7 @@ WRAPPER
 	# dependency and keeps the build fully clang/lld-based
 	cat > "${linker_wrapper}" <<WRAPPER
 #!/bin/bash
-exec clang --target=${llvm_target} --sysroot="${sysroot}" -L"${sysroot}/lib" -fuse-ld=lld "\$@"
+exec ${clang} --target=${llvm_target} --sysroot="${sysroot}" -L"${sysroot}/lib" -fuse-ld=lld "\$@"
 WRAPPER
 	chmod +x "${linker_wrapper}"
 

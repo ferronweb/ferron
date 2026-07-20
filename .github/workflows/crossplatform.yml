@@ -156,6 +156,8 @@ jobs:
             # Sysroot doesn't exist, prepare it
             ./cross-build/sysroots/prepare-${LIBC}.sh ${{ matrix.target }}
           fi
+          export CLANG=/usr/bin/clang-20
+          export CLANGXX=/usr/bin/clang++-20
           ./cross-build/build.sh ${{ matrix.target }}
 
       - name: Build binaries (cross-rs)
