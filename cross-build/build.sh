@@ -482,9 +482,9 @@ for a in "\$@"; do
   filtered_args="\$filtered_args \$a"
 done
 if [[ \$link -eq 1 ]]; then
-  exec clang --sysroot=${sysroot} --gcc-install-dir="${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
+  exec clang --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
 else
-  exec clang --sysroot=${sysroot} --gcc-install-dir="${sysroot}/lib" --target=${llvm_target} \$filtered_args
+  exec clang --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
 fi
 WRAPPER
 	cat > "${cxx_wrapper}" <<WRAPPER
@@ -499,9 +499,9 @@ for a in "\$@"; do
   filtered_args="\$filtered_args \$a"
 done
 if [[ \$link -eq 1 ]]; then
-  exec clang++ --sysroot=${sysroot} --gcc-install-dir="${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
+  exec clang++ --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} -fuse-ld=lld \$filtered_args
 else
-  exec clang++ --sysroot=${sysroot} --gcc-install-dir="${sysroot}/lib" --target=${llvm_target} \$filtered_args
+  exec clang++ --sysroot=${sysroot} -L"${sysroot}/lib" --target=${llvm_target} \$filtered_args
 fi
 WRAPPER
 	chmod +x "${cc_wrapper}" "${cxx_wrapper}"
@@ -521,7 +521,7 @@ WRAPPER
 	# dependency and keeps the build fully clang/lld-based
 	cat > "${linker_wrapper}" <<WRAPPER
 #!/bin/bash
-exec clang --target=${llvm_target} --sysroot="${sysroot}" --gcc-install-dir="${sysroot}/lib" -fuse-ld=lld "\$@"
+exec clang --target=${llvm_target} --sysroot="${sysroot}" -L"${sysroot}/lib" -fuse-ld=lld "\$@"
 WRAPPER
 	chmod +x "${linker_wrapper}"
 
