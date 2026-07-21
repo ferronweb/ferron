@@ -385,6 +385,20 @@ main() {
 	local target_arch
 	target_arch=$(target_to_arch "${target}")
 
+	# Set LD_LIBRARY_PATH
+	if [[ -d "${QEMU_LD_PREFIX:-}" ]]; then
+	    # Obtain paths from etc/ld.so.conf and etc/ld.so.conf.d/*, if available
+		# Ignore empty lines and lines starting from "#" (comments)
+		# Also, trim lines
+		local sysroot_ld_library_paths
+		sysroot_ld_library_paths=$(obtain_sysroot_ld_library_paths $QEMU_LD_PREFIX)
+		if [[ -z "${sysroot_ld_library_paths}" ]]; then
+			ld_library_path="$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
+		else
+		    ld_library_path="${sysroot_ld_library_paths}:$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
+		fi
+	fi
+
 	if [[ "${host}" != "${target_arch}" ]]; then
 		local qemu_binary
 		qemu_binary=$(target_to_qemu_binary "${target}")
@@ -398,20 +412,22 @@ main() {
 			exit 1
 		fi
 		binary="${qemu_binary} ${binary}"
+	else
+	    # Prepend host LD_LIBRARY_PATH before sysroot LD_LIBRARY_PATH
+		# to prevent libc assertion issues
+	    local host_ld_library_paths
+	    host_ld_library_paths=$(obtain_sysroot_ld_library_paths /)
+	    if [[ -z "${host_ld_library_paths}" ]]; then
+		    host_ld_library_paths="/usr/local/lib:/lib:/usr/lib"
+	    else
+			host_ld_library_paths="${host_ld_library_paths}:/usr/local/lib:/lib:/usr/lib"
+		fi
+		if [[ -n "${host_ld_library_paths}" ]]; then
+			ld_library_path="${host_ld_library_paths}:${ld_library_path}"
+		fi
 	fi
 
-	# Set LD_LIBRARY_PATH
-	if [[ -d "${QEMU_LD_PREFIX:-}" ]]; then
-	    # Obtain paths from etc/ld.so.conf and etc/ld.so.conf.d/*, if available
-		# Ignore empty lines and lines starting from "#" (comments)
-		# Also, trim lines
-		local sysroot_ld_library_paths
-		sysroot_ld_library_paths=$(obtain_sysroot_ld_library_paths $QEMU_LD_PREFIX)
-		if [[ -z "${sysroot_ld_library_paths}" ]]; then
-			ld_library_path="$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
-		else
-		    ld_library_path="${sysroot_ld_library_paths}:$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
-		fi
+	if [[ -n "${ld_library_path}" ]]; then
 		log_info "LD_LIBRARY_PATH: ${ld_library_path}"
 	fi
 
@@ -452,6 +468,9 @@ main() {
 		cross_compiled="true"
 	fi
 	create_ferron_config "${config_file}" "${bench_dir}" "${ferron_port}" "${tls_port}" "${cert_dir}" "${backend_port}" "${cross_compiled}"
+
+    # Raise file descriptor limit to prevent file descriptor exhaustion
+    ulimit -n $(ulimit -n -H)
 
 	# Start backend server
 	start_backend_server "${bench_dir}" "${backend_port}"
