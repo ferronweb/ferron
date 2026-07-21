@@ -91,7 +91,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: 3.x
+          ref: develop-3.x #ref: 3.x
           fetch-depth: 0
 
       - name: Install Rust
@@ -318,7 +318,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: 3.x
+          ref: develop-3.x #ref: 3.x
           fetch-depth: 0
 
       - name: Log in to Docker Hub
