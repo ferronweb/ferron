@@ -184,7 +184,7 @@ create_ferron_config() {
 	local cross_compiled="$7"
 
 	if [[ "${cross_compiled}" == "true" ]]; then
-		# Disable io_uring and use static file mode for cross-compiled binaries
+		# Disable io_uring for cross-compiled binaries
 		# (tokio file I/O crashes under QEMU under high concurrency)
 		cat > "${config_file}" <<EOF
 {
@@ -517,6 +517,12 @@ main() {
     			curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt" 2>/dev/null &
     			curl_pids+=($!)
 		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}"
+			done
 		done
 
 		log_info "  Scenario: Large static files (1MB) - HTTP/1.1"
@@ -525,22 +531,40 @@ main() {
 				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1m.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}"
+			done
 		done
 
 		log_info "  Scenario: Reverse proxy (HTTP/1.1)"
-		for i in $(seq 1 20); do
+		for i in $(seq 1 200); do
 		    for j in $(seq 1 20); do
 				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}"
+			done
 		done
 
 		log_info "  Scenario: Reverse proxy (HTTP/2 + TLS)"
-		for i in $(seq 1 20); do
+		for i in $(seq 1 200); do
 		    for j in $(seq 1 20); do
 				curl --http2 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}"
+			done
 		done
 
 		log_info "Waiting for curl processes to complete"
