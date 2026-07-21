@@ -578,7 +578,7 @@ WRAPPER
 	export RUSTFLAGS="${RUSTFLAGS:-} -Clink-self-contained=no -Clink-args=-L${sysroot}/lib -Clink-args=-lc++abi -Ctarget-feature=+crt-static"
 
 	# musl-specific env
-	export RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1
+	export CARGO_CFG_LIBC_UNSTABLE_MUSL_V1_2_3=1
 
 	log_info "  CC: ${cc_wrapper}"
 	log_info "  CXX: ${cxx_wrapper}"

@@ -98,7 +98,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Build Ferron binaries
-    RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 \
+    CARGO_CFG_LIBC_UNSTABLE_MUSL_V1_2_3=1 \
     CC="/tmp/musl-gcc" \
     CXX="clang++" \
     # There has to be "-U TCMALLOC_INTERNAL_METHODS_ONLY", otherwise linking fails
