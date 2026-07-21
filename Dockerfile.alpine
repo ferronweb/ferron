@@ -52,7 +52,14 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     # Prepare the sysroot
     ./cross-build/sysroots/prepare-musl.sh $TARGET_TRIPLE && \
     # Build Ferron binaries
-    ./cross-build/build.sh $TARGET_TRIPLE --pgo && \
+    # Check if PGO would be enabled based on target triple
+    if [ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
+      || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]; then \
+      ./cross-build/build.sh $TARGET_TRIPLE --pgo; \
+    else \
+      # These targets would fail with PGO, due to missing libprofiler_builtins
+      ./cross-build/build.sh $TARGET_TRIPLE; \
+    fi && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-fmt $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-kdl2ferron $TARGET_PATH/ferron-serve .dist
 
