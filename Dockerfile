@@ -34,7 +34,18 @@ RUN \
     # Install the Rust target
     rustup target add $TARGET_TRIPLE && \
     # Save target triple
-    echo "$TARGET_TRIPLE" > /tmp/target_triple
+    echo "$TARGET_TRIPLE" > /tmp/target_triple && \
+    # Create base port directory
+    mkdir -p /tmp/cross_build_baseport_cached
+
+RUN --mount=type=cache,sharing=locked,target=/tmp/cross_build_baseport_cached \
+    # Determine the base port
+    BASE_PORT="$(cat /tmp/cross_build_baseport_cached/base_port 2>&1 || true)" && \
+    # If base port is missing or greater than 32735 (32768 - 32 - 1), set to 18080,
+    # otherwise increment by 32
+    BASE_PORT="$(echo "$BASE_PORT" | awk '{print ($1 > 32735) ? 18080 : $1 + 32}')" && \
+    echo "$BASE_PORT" > /tmp/cross_build_baseport_cached/base_port && \
+    echo "$BASE_PORT" > /tmp/cross_build_baseport
 
 # Set the working directory
 WORKDIR /usr/src/ferron
@@ -56,9 +67,11 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     # Check if PGO would be enabled based on target triple
     if [ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
       || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]; then \
+      BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
       ./cross-build/build.sh $TARGET_TRIPLE --pgo; \
     else \
       # These targets would fail with PGO, due to missing libprofiler_builtins
+      BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
       ./cross-build/build.sh $TARGET_TRIPLE; \
     fi && \
     # Copy executables out of the cache

@@ -49,6 +49,7 @@ Environment variables:
   CLANG                   Override clang compiler (default: auto-detect)
   CLANGXX                 Override clang++ compiler (default: auto-detect)
   LLVM_PROFDATA           Override llvm-profdata tool (default: auto-detect)
+  BENCH_BASE_PORT         Override base port for benchmarking (default: 8080)
 EOF
 }
 
@@ -674,7 +675,8 @@ pgo_build() {
 	# Run the benchmark script
 	local bench_script="${SCRIPT_DIR}/benchmarks/run.sh"
 	if [[ -x "${bench_script}" ]]; then
-		"${bench_script}" "${built_binary}" "${target}" --duration "${bench_duration}" --pgo-data-dir "${pgo_data_dir}"
+	    local base_port="${BENCH_BASE_PORT:-18080}"
+		"${bench_script}" "${built_binary}" "${target}" --duration "${bench_duration}" --pgo-data-dir "${pgo_data_dir}" --port "${base_port}"
 	else
 		log_error "Benchmark script not found or not executable: ${bench_script}"
 		log_error "Run benchmarks manually, then merge profiles:"
