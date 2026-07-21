@@ -301,16 +301,19 @@ setup_env_gnu() {
 
 		local dynamic_linker_path="/lib/${gnu_arch}-linux-gnu/ld-linux-${gnu_arch}.so"
 		# find dynamic linker extension (.2, .1)
+		# Search for:
+		# 1. /lib64/ld*.so*
+		# 2. /lib/ld*.so*
+		# 3. /lib/${gnu_arch}-linux-gnu/ld*.so*
 		local dynamic_linker_filename
-		dynamic_linker_filename=$((ls -1 ${sysroot}/lib/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		dynamic_linker_filename=$((ls -1 ${sysroot}/lib64/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
 		if [[ -n "${dynamic_linker_filename}" ]]; then
-			dynamic_linker_path="/lib/${dynamic_linker_filename}"
+			dynamic_linker_path="/lib64/${dynamic_linker_filename}"
 		fi
-		# Fallbacks
 		if [[ -z "${dynamic_linker_filename}" ]]; then
-		    dynamic_linker_filename=$((ls -1 ${sysroot}/lib64/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		    dynamic_linker_filename=$((ls -1 ${sysroot}/lib/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
 		    if [[ -n "${dynamic_linker_filename}" ]]; then
-    			dynamic_linker_path="/lib64/${dynamic_linker_filename}"
+    			dynamic_linker_path="/lib/${dynamic_linker_filename}"
 			fi
 		fi
 		if [[ -z "${dynamic_linker_filename}" ]]; then
