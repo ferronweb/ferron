@@ -319,7 +319,6 @@ setup_env_gnu() {
 				dynamic_linker_path="/lib/${gnu_arch}-linux-gnu/${dynamic_linker_filename}"
 			fi
 		fi
-		echo "dynamic_linker_path: ${dynamic_linker_path}"
 
 		# CC wrapper: compile + link, strip profiling flags (only Rust needs PGO instrumentation)
 		cat > "${cc_wrapper}" <<WRAPPER
