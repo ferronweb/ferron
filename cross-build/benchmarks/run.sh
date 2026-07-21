@@ -518,7 +518,7 @@ main() {
     			curl_pids+=($!)
 		    done
 			# Wait for first 5 curl processes to complete
-			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
 				wait "${pid}"
@@ -532,7 +532,7 @@ main() {
 			    curl_pids+=($!)
 		    done
 			# Wait for first 5 curl processes to complete
-			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
 				wait "${pid}"
@@ -546,7 +546,7 @@ main() {
 			    curl_pids+=($!)
 		    done
 			# Wait for first 5 curl processes to complete
-			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
 				wait "${pid}"
@@ -560,7 +560,7 @@ main() {
 			    curl_pids+=($!)
 		    done
 			# Wait for first 5 curl processes to complete
-			local curl_pid_to_wait="${curl_pids[@]:0:5}"
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
 				wait "${pid}"
