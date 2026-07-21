@@ -303,16 +303,23 @@ setup_env_gnu() {
 		# find dynamic linker extension (.2, .1)
 		local dynamic_linker_filename
 		dynamic_linker_filename=$((ls -1 ${sysroot}/lib/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		if [[ -n "${dynamic_linker_filename}" ]]; then
+			dynamic_linker_path="/lib/${dynamic_linker_filename}"
+		fi
+		# Fallbacks
+		if [[ -z "${dynamic_linker_filename}" ]]; then
+		    dynamic_linker_filename=$((ls -1 ${sysroot}/lib64/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		    if [[ -n "${dynamic_linker_filename}" ]]; then
+    			dynamic_linker_path="/lib64/${dynamic_linker_filename}"
+			fi
+		fi
 		if [[ -z "${dynamic_linker_filename}" ]]; then
 			dynamic_linker_filename=$(ls -1 ${sysroot}/lib/${gnu_arch}-linux-gnu/ld*.so* 2>/dev/null | tail -n 1 | sed 's|.*/||')
 			if [[ -n "${dynamic_linker_filename}" ]]; then
 				dynamic_linker_path="/lib/${gnu_arch}-linux-gnu/${dynamic_linker_filename}"
 			fi
-		else
-			if [[ -n "${dynamic_linker_filename}" ]]; then
-				dynamic_linker_path="/lib/${dynamic_linker_filename}"
-			fi
 		fi
+		echo "dynamic_linker_path: ${dynamic_linker_path}"
 
 		# CC wrapper: compile + link, strip profiling flags (only Rust needs PGO instrumentation)
 		cat > "${cc_wrapper}" <<WRAPPER
