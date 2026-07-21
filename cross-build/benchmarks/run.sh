@@ -197,6 +197,17 @@ create_ferron_config() {
 
 *:${ferron_port} {
     root ${bench_dir}
+    location /proxy {
+        proxy http://127.0.0.1:${backend_port}
+    }
+}
+
+*:${tls_port} {
+    tls ${cert_dir}/cert.pem ${cert_dir}/key.pem
+    root ${bench_dir}
+    location /proxy {
+        proxy http://127.0.0.1:${backend_port}
+    }
 }
 EOF
 	else
@@ -390,7 +401,7 @@ main() {
 	fi
 
 	# Set LD_LIBRARY_PATH
-	if [[ -d "$QEMU_LD_PREFIX" ]]; then
+	if [[ -d "${QEMU_LD_PREFIX:-}" ]]; then
 	    # Obtain paths from etc/ld.so.conf and etc/ld.so.conf.d/*, if available
 		# Ignore empty lines and lines starting from "#" (comments)
 		# Also, trim lines
@@ -508,7 +519,7 @@ main() {
 		log_info "  Scenario: Reverse proxy (HTTP/2 + TLS)"
 		for i in $(seq 1 20); do
 		    for j in $(seq 1 20); do
-				curl --http2 -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+				curl --http2 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
 		done
