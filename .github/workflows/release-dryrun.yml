@@ -186,6 +186,7 @@ jobs:
           fi
           export CLANG=/usr/bin/clang-20
           export CLANGXX=/usr/bin/clang++-20
+          export LLVM_PROFDATA=/usr/bin/llvm-profdata-20
           if [ "${{ matrix.pgo }}" = "true" ]; then
             ./cross-build/build.sh ${{ matrix.target }} --pgo
           else

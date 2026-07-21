@@ -48,6 +48,7 @@ Environment variables:
   SYSROOT_DIR             Override sysroot directory
   CLANG                   Override clang compiler (default: auto-detect)
   CLANGXX                 Override clang++ compiler (default: auto-detect)
+  LLVM_PROFDATA           Override llvm-profdata tool (default: auto-detect)
 EOF
 }
 
@@ -608,6 +609,7 @@ pgo_build() {
 	local pgo_data_dir="/tmp/ferron-pgo-data-$$"
 	local bench_duration="$2"
 	local debug="$3"
+	local llvm_profdata="${LLVM_PROFDATA:-llvm-profdata}"
 
 	log_step "Phase 1: Building with PGO instrumentation"
 
@@ -671,7 +673,7 @@ pgo_build() {
 		return 1
 	fi
 
-	if ! command -v llvm-profdata &>/dev/null; then
+	if ! command -v ${llvm_profdata} &>/dev/null; then
 		log_error "llvm-profdata not found. Required for PGO profile merging."
 		log_error "Install llvm:"
 		log_error "  Arch:       sudo pacman -S llvm"
@@ -680,7 +682,7 @@ pgo_build() {
 		return 1
 	fi
 
-	llvm-profdata merge \
+	${llvm_profdata} merge \
 		-output="${pgo_data_dir}/merged.profdata" \
 		"${pgo_data_dir}"/*.profraw
 
