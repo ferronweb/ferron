@@ -40,39 +40,48 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: i686-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: i686-unknown-linux-musl
             runner: ubuntu-latest
             cross-build: true
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: aarch64-unknown-linux-musl
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: armv7-unknown-linux-gnueabihf
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: armv7-unknown-linux-musleabihf
             runner: ubuntu-latest
             cross-build: true
           - target: riscv64gc-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: riscv64gc-unknown-linux-musl
             runner: ubuntu-latest
             cross-build: true
           - target: s390x-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: powerpc64le-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true
+            pgo: true
           - target: x86_64-unknown-freebsd
             runner: ubuntu-latest
             cross-rs: true
@@ -177,7 +186,11 @@ jobs:
           fi
           export CLANG=/usr/bin/clang-20
           export CLANGXX=/usr/bin/clang++-20
-          ./cross-build/build.sh ${{ matrix.target }} --pgo
+          if [ "${{ matrix.pgo }}" = "true" ]; then
+            ./cross-build/build.sh ${{ matrix.target }} --pgo
+          else
+            ./cross-build/build.sh ${{ matrix.target }}
+          fi
 
       - name: Build binaries (cross-rs)
         if: matrix.cross-rs == true && matrix.cross-build != true
