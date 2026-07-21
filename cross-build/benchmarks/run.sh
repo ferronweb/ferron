@@ -208,11 +208,17 @@ EOF
 
 *:${ferron_port} {
     root ${bench_dir}
+    location /proxy {
+        proxy http://127.0.0.1:${backend_port}
+    }
 }
 
 *:${tls_port} {
     tls ${cert_dir}/cert.pem ${cert_dir}/key.pem
     root ${bench_dir}
+    location /proxy {
+        proxy http://127.0.0.1:${backend_port}
+    }
 }
 EOF
 	fi
@@ -470,18 +476,46 @@ main() {
 	local lua_dir="${SCRIPT_DIR}/scenarios"
 
 	if [[ "${cross_compiled}" == "true" ]]; then
+	    local curl_pids=()
 		# Use curl loops for cross-compiled binaries — wrk's high concurrency
 		# triggers tokio::fs crashes under QEMU
 		log_info "Running curl-based PGO training (cross-compiled target)"
 
 		log_info "  Scenario: Small static files (1KB) - HTTP/1.1"
 		for i in $(seq 1 200); do
-			curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt" 2>/dev/null
+		    for j in $(seq 1 20); do
+    			curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt" 2>/dev/null &
+    			curl_pids+=($!)
+		    done
 		done
 
 		log_info "  Scenario: Large static files (1MB) - HTTP/1.1"
 		for i in $(seq 1 20); do
-			curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1m.txt" 2>/dev/null
+		    for j in $(seq 1 20); do
+				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1m.txt" 2>/dev/null &
+			    curl_pids+=($!)
+		    done
+		done
+
+		log_info "  Scenario: Reverse proxy (HTTP/1.1)"
+		for i in $(seq 1 20); do
+		    for j in $(seq 1 20); do
+				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/proxy/static/1k.txt" 2>/dev/null &
+			    curl_pids+=($!)
+		    done
+		done
+
+		log_info "  Scenario: Reverse proxy (HTTP/2 + TLS)"
+		for i in $(seq 1 20); do
+		    for j in $(seq 1 20); do
+				curl --http2 -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+			    curl_pids+=($!)
+		    done
+		done
+
+		log_info "Waiting for curl processes to complete"
+		for pid in "${curl_pids[@]}"; do
+			wait "${pid}"
 		done
 	else
 		# Scenario 1: Small static files (HTTP/1.1)
@@ -500,14 +534,14 @@ main() {
 
 		# Scenario 3: Reverse proxy (HTTP/1.1)
 		run_wrk \
-			"http://127.0.0.1:${ferron_port}/static/1k.txt" \
+			"http://127.0.0.1:${ferron_port}/proxy/static/1k.txt" \
 			"${lua_dir}/proxy-http1.lua" \
 			"${duration}" \
 			"Reverse proxy - HTTP/1.1"
 
 		# Scenario 4: Reverse proxy (HTTP/2 + TLS)
 		run_h2load \
-			"https://127.0.0.1:${tls_port}/static/1k.txt" \
+			"https://127.0.0.1:${tls_port}/proxy/static/1k.txt" \
 			"${duration}" \
 			"Reverse proxy - HTTP/2 + TLS"
 	fi

@@ -2,7 +2,7 @@
 -- Requests static files through the reverse proxy
 
 request = function()
-    local paths = { "/static/1k.txt", "/static/1m.txt" }
+    local paths = { "/proxy/static/1k.txt", "/proxy/static/1m.txt" }
     local path = paths[math.random(#paths)]
 
     -- Add cache-busting query parameter
