@@ -81,11 +81,6 @@ host_arch() {
 	esac
 }
 
-# Returns the rustc host target triple (e.g. x86_64-unknown-linux-gnu)
-rustc_host_target() {
-	rustc -vV 2>/dev/null | grep '^host:' | cut -d' ' -f2
-}
-
 # Ad hoc conversion from rust target to llvm target
 rust_to_llvm_target() {
     local llvm_target
@@ -362,15 +357,6 @@ WRAPPER
 		# Linker wrapper: use --gcc-install-dir to prevent clang from finding host cross-GCC specs
 		# --gcc-install-dir tells clang to use CRT files from our sysroot, not from the host
 		local linker_wrapper="${wrapper_dir}/clang-linker"
-		# For native builds (target == rustc host), point the dynamic linker at the
-		# host loader so the resulting binaries (including build scripts) can RUN on the
-		# build machine. The binary is still compiled/linked against the Debian glibc
-		# 2.31 sysroot, so it remains portable to any glibc >= 2.31 system.
-		local rustc_host
-		rustc_host=$(rustc_host_target)
-		if [[ "${target}" == "${rustc_host}" && -e "/lib64/ld-linux-x86-64.so.2" ]]; then
-			dynamic_linker_path="/lib64/ld-linux-x86-64.so.2"
-		fi
 		cat > "${linker_wrapper}" <<WRAPPER
 #!/bin/bash
 exec ${clang} --sysroot="${sysroot}" --target=${llvm_target} --gcc-install-dir="${gcc_install_dir}" -fuse-ld=lld -Wl,-dynamic-linker=${dynamic_linker_path} "\$@"
