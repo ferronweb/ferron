@@ -334,6 +334,26 @@ prepare_sysroot() {
 		done
 	fi
 
+	# Create runtime symlinks from /lib/ for shared objects found in the multiarch
+	# lib/<gnu_arch>/ directory. The runtime linker searches /lib/ (and other
+	# compiled-in paths) but Debian stores runtime .so.N files under the
+	# multiarch path (e.g. /lib/i386-linux-gnu/). Without these symlinks QEMU
+	# user-mode falls back to the host's 32-bit libraries (if installed), which
+	# may be a different glibc version and cause symbol-version mismatches.
+	local gnu_lib_dir="${sysroot_dir}/lib/${gnu_arch}"
+	if [[ -d "${gnu_lib_dir}" ]]; then
+		for lib in "${gnu_lib_dir}"/*.so.*; do
+			if [[ -f "${lib}" || -L "${lib}" ]]; then
+				local lib_name
+				lib_name=$(basename "${lib}")
+				local target_link="${sysroot_dir}/lib/${lib_name}"
+				if [[ ! -e "${target_link}" && ! -L "${target_link}" ]]; then
+					ln -sf "${gnu_arch}/${lib_name}" "${target_link}" 2>/dev/null || true
+				fi
+			fi
+		done
+	fi
+
 	# Fix libc.so linker scripts to use correct dynamic linker path
 	log_info "Fixing linker scripts..."
 	local libc_linker_script
