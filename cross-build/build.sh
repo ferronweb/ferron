@@ -35,6 +35,7 @@ Options:
   -s, --sysroot-dir DIR   Custom sysroot directory (default: auto-detect)
   -o, --output-dir DIR    Output directory (default: dist/)
   -b, --bench-duration SEC Benchmark duration for PGO (default: 30)
+  -d, --debug             Enable debug build (default: release)
   -h, --help              Show this help message
 
 Examples:
@@ -45,6 +46,8 @@ Examples:
 Environment variables:
   RUSTFLAGS               Extra Rust compiler flags (will be extended for PGO)
   SYSROOT_DIR             Override sysroot directory
+  CLANG                   Override clang compiler (default: auto-detect)
+  CLANGXX                 Override clang++ compiler (default: auto-detect)
 EOF
 }
 
@@ -604,6 +607,7 @@ pgo_build() {
 	local target="$1"
 	local pgo_data_dir="/tmp/ferron-pgo-data-$$"
 	local bench_duration="$2"
+	local debug="$3"
 
 	log_step "Phase 1: Building with PGO instrumentation"
 
@@ -612,12 +616,20 @@ pgo_build() {
 	local instrument_rustflags="-Cprofile-generate=${pgo_data_dir}"
 	# Append to (not replace) the existing RUSTFLAGS so target-specific flags
 	# set by setup_env_* (e.g. musl's -lc++abi / -L<sysroot>/lib) are preserved.
-	RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build --release --target "${target}" \
-		--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	if [[ "${debug}" == "true" ]]; then
+		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	else
+		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build --release --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	fi
 
 	log_step "Phase 2: Running PGO training benchmarks"
 
 	local built_binary="${PROJECT_ROOT}/target/${target}/release/ferron"
+	if [[ "${debug}" == "true" ]]; then
+		built_binary="${PROJECT_ROOT}/target/${target}/debug/ferron"
+	fi
 	if [[ ! -f "${built_binary}" ]]; then
 		log_error "Built binary not found: ${built_binary}"
 		return 1
@@ -678,8 +690,13 @@ pgo_build() {
 
 	local optimize_rustflags="-Cprofile-use=${pgo_data_dir}/merged.profdata"
 	# Append to (not replace) the existing RUSTFLAGS — see phase 1 note.
-	RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build --release --target "${target}" \
-		--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	if [[ "${debug}" == "true" ]]; then
+		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	else
+		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build --release --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	fi
 
 	log_info "PGO build complete"
 
@@ -692,11 +709,17 @@ pgo_build() {
 
 regular_build() {
 	local target="$1"
+	local debug="$2"
 
 	log_step "Building Ferron"
 
-	cargo build --release --target "${target}" \
-		--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	if [[ "${debug}" == "true" ]]; then
+		cargo build --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	else
+		cargo build --release --target "${target}" \
+			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
+	fi
 
 	log_info "Build complete"
 }
@@ -704,7 +727,11 @@ regular_build() {
 copy_binaries() {
 	local target="$1"
 	local output_dir="$2"
+	local debug="$3"
 	local target_dir="${PROJECT_ROOT}/target/${target}/release"
+	if [[ "${debug}" == "true" ]]; then
+		target_dir="${PROJECT_ROOT}/target/${target}/debug"
+	fi
 	local binaries=(
 		"ferron"
 		"ferron-fmt"
@@ -738,6 +765,7 @@ copy_binaries() {
 main() {
 	local target=""
 	local pgo=false
+	local debug=false
 	local sysroot_dir=""
 	local output_dir="${PROJECT_ROOT}/dist"
 	local bench_duration=30
@@ -763,6 +791,10 @@ main() {
 			-h | --help)
 				usage
 				exit 0
+				;;
+			-d | --debug)
+				debug=true
+				shift
 				;;
 			-*)
 				log_error "Unknown option: $1"
@@ -838,15 +870,15 @@ main() {
 
 	# Build
 	if [[ "${pgo}" == "true" ]]; then
-		pgo_build "${target}" "${bench_duration}"
+		pgo_build "${target}" "${bench_duration}" "${debug}"
 	else
-		regular_build "${target}"
+		regular_build "${target}" "${debug}"
 	fi
 
 	# Copy binaries
 	local target_output="${output_dir}/${target}"
 	mkdir -p "${target_output}"
-	copy_binaries "${target}" "${target_output}"
+	copy_binaries "${target}" "${target_output}" "${debug}"
 
 	log_step "Build Summary"
 	log_info "Target: ${target}"
