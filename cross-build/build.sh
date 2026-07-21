@@ -611,6 +611,30 @@ pgo_build() {
 	mkdir -p "${pgo_data_dir}"
 
 	local instrument_rustflags="-Cprofile-generate=${pgo_data_dir}"
+
+	# s390x workaround: pre-compiled profiler builtins use .ctors (ignored by
+	# QEMU user-mode). Compile a wrapper that initializes the profiler via
+	# .init_array instead.
+	if [[ "${target}" == "s390x-unknown-linux-gnu" || "${target}" == "s390x-unknown-linux-musl" ]]; then
+		local profiler_fix_src="${SCRIPT_DIR}/profiler_init_fix.c"
+		local profiler_fix_obj="${pgo_data_dir}/profiler_init_fix.o"
+		if [[ -f "${profiler_fix_src}" ]]; then
+			log_info "  Building s390x profiler init wrapper"
+			local clang="${CLANG:-clang}"
+			local sysroot
+			sysroot=$(detect_sysroot "${target}")
+			# Use the build's own clang wrapper if available, otherwise use
+			# the cross-compiler directly.
+			if command -v "${target}-clang" &>/dev/null; then
+				"${target}-clang" -c -o "${profiler_fix_obj}" "${profiler_fix_src}" 2>&1
+			else
+				"${clang}" --target="${target}" --sysroot="${sysroot}" \
+					-fuse-ld=lld -c -o "${profiler_fix_obj}" "${profiler_fix_src}" 2>&1
+			fi
+			instrument_rustflags+=" -C link-arg=${profiler_fix_obj}"
+			log_info "  Added profiler init wrapper: ${profiler_fix_obj}"
+		fi
+	fi
 	# Append to (not replace) the existing RUSTFLAGS so target-specific flags
 	# set by setup_env_* (e.g. musl's -lc++abi / -L<sysroot>/lib) are preserved.
 	if [[ "${debug}" == "true" ]]; then
