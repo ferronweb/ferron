@@ -639,11 +639,11 @@ pgo_build() {
 	# Set QEMU_LD_PREFIX for cross-compiled binaries
 	if [[ "${host}" != "${target_arch}" ]]; then
 		ensure_qemu_user "${target}"
-		local sysroot
-		sysroot=$(detect_sysroot "${target}")
-		export QEMU_LD_PREFIX="${sysroot}"
-		log_info "  QEMU_LD_PREFIX: ${QEMU_LD_PREFIX}"
 	fi
+	local sysroot
+	sysroot=$(detect_sysroot "${target}")
+	export QEMU_LD_PREFIX="${sysroot}"
+	log_info "  QEMU_LD_PREFIX: ${QEMU_LD_PREFIX}"
 
 	# Run the benchmark script
 	local bench_script="${SCRIPT_DIR}/benchmarks/run.sh"

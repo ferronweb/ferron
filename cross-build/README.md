@@ -22,7 +22,7 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 ### Required
 
 - **Rust toolchain** with `rustup`
-- **curl** (for Alpine package downloads)
+- **curl** (for Alpine package downloads, and cross-compiled PGO)
 - **clang**
 - **lld**
 
@@ -39,19 +39,19 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 
 **Arch Linux:**
 ```bash
-sudo pacman -S lld clang openssl python llvm qemu-user-static qemu-user-static-binfmt
+sudo pacman -S lld clang openssl python llvm qemu-user-static qemu-user-static-binfmt curl
 # h2load and wrk are in AUR if not found:
 yay -S nghttp2 wrk
 ```
 
 **Debian/Ubuntu:**
 ```bash
-sudo apt install lld clang libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static
+sudo apt install lld clang libclang-dev wrk nghttp2-client openssl python3 llvm curl qemu-user-static
 ```
 
 **Fedora:**
 ```bash
-sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm qemu-user-static
+sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm curl qemu-user-static
 ```
 
 ## Target Matrix

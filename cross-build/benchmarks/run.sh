@@ -104,6 +104,43 @@ target_to_arch() {
 	echo "${1}" | cut -d'-' -f1
 }
 
+obtain_sysroot_ld_library_paths() {
+	# Also, interpret "include /path/to/ld.so.conf/*" as a path to include
+	local sysroot="$1"
+	sysroot="${sysroot%/}" # Remove trailing "/" from sysroot
+	local ld_library_paths=()
+    local ld_so_conf_files
+    if [[ -f "${sysroot}/etc/ld.so.conf" ]]; then
+        ld_so_conf_files=("${sysroot}/etc/ld.so.conf")
+    else
+        ld_so_conf_files=($(find "${sysroot}/etc/ld.so.conf.d/" -type f))
+    fi
+    local ld_so_conf_file="${ld_so_conf_files[0]:-}"
+    ld_so_conf_files=(${ld_so_conf_files[@]:1})
+    while [[ -n "${ld_so_conf_file}" ]]; do
+        local sanitized_ld_so_conf
+        sanitized_ld_so_conf=$(cat "${ld_so_conf_file}" | grep -vE '^(#.*)?$')
+        # Extract includes
+        local ld_so_conf_includes
+        local ld_so_conf_includes_str
+        ld_so_conf_includes_str=$(echo "${sanitized_ld_so_conf}" | grep -E '^include' | sed -E 's/^include\s*//' | xargs)
+        IFS=' ' read -r -a ld_so_conf_includes <<< "${ld_so_conf_includes_str}"
+        ld_so_conf_includes=( "${ld_so_conf_includes[@]/#/${sysroot}}" ) # Prepend sysroot to include paths
+        # Extract non-include lines
+        local ld_so_conf_paths
+        local ld_so_conf_paths_str
+        ld_so_conf_paths_str=$(echo "${sanitized_ld_so_conf}" | grep -vE '^include' | xargs)
+        IFS=' ' read -r -a ld_so_conf_paths <<< "${ld_so_conf_paths_str}"
+        ld_so_conf_paths=( "${ld_so_conf_paths[@]/#/${sysroot}}" ) # Prepend sysroot to library paths
+
+        ld_library_paths+=(${ld_so_conf_paths[@]})
+        ld_so_conf_files+=(${ld_so_conf_includes[@]})
+        ld_so_conf_file="${ld_so_conf_files[0]:-}"
+        ld_so_conf_files=(${ld_so_conf_files[@]:1})
+    done
+    echo "$(IFS=':'; echo -n "${ld_library_paths[*]}")"
+}
+
 generate_self_signed_cert() {
 	local cert_dir="$1"
 	mkdir -p "${cert_dir}"
@@ -253,6 +290,7 @@ main() {
 	local duration=30
 	local base_port=18080
 	local pgo_data_dir=""
+	local ld_library_path="${LD_LIBRARY_PATH:-}"
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -345,6 +383,21 @@ main() {
 		binary="${qemu_binary} ${binary}"
 	fi
 
+	# Set LD_LIBRARY_PATH
+	if [[ -d "$QEMU_LD_PREFIX" ]]; then
+	    # Obtain paths from etc/ld.so.conf and etc/ld.so.conf.d/*, if available
+		# Ignore empty lines and lines starting from "#" (comments)
+		# Also, trim lines
+		local sysroot_ld_library_paths
+		sysroot_ld_library_paths=$(obtain_sysroot_ld_library_paths $QEMU_LD_PREFIX)
+		if [[ -z "${sysroot_ld_library_paths}" ]]; then
+			ld_library_path="$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
+		else
+		    ld_library_path="${sysroot_ld_library_paths}:$QEMU_LD_PREFIX/usr/local/lib:$QEMU_LD_PREFIX/lib:$QEMU_LD_PREFIX/usr/lib"
+		fi
+		log_info "LD_LIBRARY_PATH: ${ld_library_path}"
+	fi
+
 	# Setup temporary directory
 	local work_dir
 	work_dir=$(mktemp -d)
@@ -393,8 +446,13 @@ main() {
 	log_step "Starting Ferron"
 
 	# shellcheck disable=SC2086
-	${binary} run -c "${config_file}" &
-	FERRON_PID=$!
+	if [[ -z "${ld_library_path}" ]]; then
+		${binary} run -c "${config_file}" &
+		FERRON_PID=$!
+	else
+		LD_LIBRARY_PATH="${ld_library_path}" ${binary} run -c "${config_file}" &
+		FERRON_PID=$!
+	fi
 	log_info "Ferron started (PID: ${FERRON_PID})"
 
 	# Wait for ferron to start listening
