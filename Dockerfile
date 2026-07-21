@@ -12,7 +12,8 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     # Install packages for cross-compiling software
     apt update && DEBIAN_FRONTEND=noninteractive \
-    apt install -y debootstrap clang lld libclang-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake && \
+    apt install -y debootstrap clang lld libclang-dev wrk \
+    nghttp2-client openssl python3 llvm qemu-user-static cmake curl && \
     cargo install bindgen-cli
 
 # Install the right Rust target
