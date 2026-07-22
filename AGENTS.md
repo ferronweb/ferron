@@ -10,7 +10,7 @@ Rust workspace (resolver "2"). Key directories:
 - `modules/*` — feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, etc.
 - `types/*` — shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
 - `e2e/` — end-to-end tests via testcontainers (requires Docker + protoc in PATH)
-- `docs/` — user-facing docs; sidebar in `docs/docLinks.ts`; synced to separate website repo on push to `3.x`
+- `docs/` — user-facing docs; sidebar in `docs/links.json`; synced to separate website repo on push to `3.x`
 - `doctest/` — standalone harness that runs doc examples against the built binary
 - `utils/` — CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
 

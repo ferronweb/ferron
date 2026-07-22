@@ -30,7 +30,7 @@ docs/
 │   ├── security/                  # auth, TLS, ACME, DNS, OCSP, session tickets
 │   ├── content/                   # static files, compression, cache, CGI, FastCGI, SCGI, buffering, headers, rate limit, abuse
 │   └── observability/             # logging, metrics, tracing, OTLP, Prometheus
-├── docLinks.ts                    # Sidebar link definitions (internal use by the website)
+├── links.json                     # Sidebar link definitions (internal use by the website)
 └── README.md                      # This file
 ```
 
@@ -106,7 +106,7 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 
 ## Sidebar
 
-The sidebar navigation is defined in `docLinks.ts`. Add new pages there to make them discoverable on the documentation website.
+The sidebar navigation is defined in `links.json`. Add new pages there to make them discoverable on the documentation website.
 
 **Fields:**
 
