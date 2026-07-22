@@ -24,6 +24,7 @@ struct ResolvedHttpFile {
     path_info: Option<String>,
     etag: String,
     file: ReusedFile,
+    is_index_file: bool,
 }
 
 impl std::fmt::Debug for ResolvedHttpFile {
@@ -181,7 +182,9 @@ pub(super) async fn execute_http_file_pipeline(
                 }));
             }
 
-            if resolved_file.metadata.is_dir() {
+            // Check trailing slash redirection if resolved file is a directory,
+            // or if it's an index file (which would be in a directory, just not in the URL)
+            if resolved_file.metadata.is_dir() || resolved_file.is_index_file {
                 let trailing_slash_redirect_enabled = ctx
                     .configuration
                     .get_value("trailing_slash_redirect", true)
@@ -630,6 +633,7 @@ async fn resolve_http_file_target(
                     ),
                     etag: String::new(),
                     file: reused_file,
+                    is_index_file: false,
                 };
                 resolved.etag = resolved.compute_etag();
                 return Ok(Some(resolved));
@@ -754,6 +758,7 @@ async fn try_resolve_index_files(
                     path_info: None,
                     etag: String::new(),
                     file: reused_file,
+                    is_index_file: true,
                 }));
             }
             Ok(_) => continue,

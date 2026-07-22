@@ -10,6 +10,12 @@
 
 - **Configuration drift hints** — new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
 
+### Fixed
+
+#### HTTP server core
+
+- **Trailing slash redirects** — trailing slash redirection logic now correctly handle index files (e.g., `index.html`) and redirects to the correct URL (with trailing slash) rather than serving two URLs (both with and without trailing slash)
+
 ## Ferron 3.0.0-beta.8
 
 **Released in July 15, 2026**
@@ -138,19 +144,19 @@
 - **Eviction reason structured logs** — cache eviction events now emit debug-level structured log entries with `eviction.reason` (`ttl_expired` or `capacity_reached_lru`), `eviction.count`, and `ferron.cache.zone` attributes, providing precise eviction timelines alongside the existing cumulative metrics.
 - **Cross-plane traceability** — the new `control_plane` directive allows embedding arbitrary key-value metadata and static OpenTelemetry span links in the server configuration at global, host, or location levels. Metadata values are automatically included as `ferron.control_plane.*` attributes on all observability signals (OTLP traces, logs, metrics, access logs) and as `[key=value]` prefixes in console and file logs. Span links establish causal relationships between control plane events and data plane traces without requiring a parent-child relationship. The most specific level wins (location > host > global), and metadata values support variable interpolation.
 
-### HTTP caching
+#### HTTP caching
 
 - **`vary_cookies` directive** — the cache module now supports a `vary_cookies` directive that accepts an explicit list of cookie names for cache key differentiation. When set, only the listed cookies are included in the cache key, preventing high-entropy tracking or session cookies from fragmenting the cache and collapsing hit rates.
 
-## Changed
+### Changed
 
-### Reverse proxy
+#### Reverse proxy
 
 - **`localhost` resolution in reverse proxy** — `localhost` is no longer exempt from STRICT_DNS-style DNS resolution; it is treated as a regular hostname and resolved via A and AAAA records.
 
-## Fixed
+### Fixed
 
-### Reverse proxy
+#### Reverse proxy
 
 - **Circuit breaker recording fix** — recent failures are now recorded correctly in the circuit breaker state, allowing circuit breaker logic to function as expected.
 

@@ -198,3 +198,112 @@ async fn test_trailing_slash_redirect_disabled() {
         response
     );
 }
+
+#[tokio::test]
+async fn test_trailing_slash_redirect_noindex() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = crate::common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = crate::common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    // Create a directory in the webroot
+    crate::common::create_dir(webroot_dir.path().join("subdir")).unwrap();
+    crate::common::write_file(
+        webroot_dir.path().join("subdir/index.html"),
+        b"index file content",
+    )
+    .unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+*:80 {
+    root "/var/www/ferron"
+}
+"#
+            .as_bytes(),
+        )
+        .unwrap();
+    config_file.flush().unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .expect("Failed to create container");
+
+    let port = container
+        .get_host_port_ipv4(80)
+        .await
+        .expect("Failed to get host port");
+
+    let response = raw_http_get_full("127.0.0.1", port, "/subdir", "").await;
+    let status = get_status(&response);
+
+    assert!(
+        status == 301 || status == 308 || status == 302 || status == 307,
+        "Expected a redirect (301/308/302/307), got status: {}\nFull response: {}",
+        status,
+        response
+    );
+}
+
+#[tokio::test]
+async fn test_trailing_slash_redirect_index() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = crate::common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = crate::common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    // Create a directory in the webroot
+    crate::common::create_dir(webroot_dir.path().join("subdir")).unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+*:80 {
+    root "/var/www/ferron"
+}
+"#
+            .as_bytes(),
+        )
+        .unwrap();
+    config_file.flush().unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .expect("Failed to create container");
+
+    let port = container
+        .get_host_port_ipv4(80)
+        .await
+        .expect("Failed to get host port");
+
+    let response = raw_http_get_full("127.0.0.1", port, "/subdir", "").await;
+    let status = get_status(&response);
+
+    assert!(
+        status == 301 || status == 308 || status == 302 || status == 307,
+        "Expected a redirect (301/308/302/307), got status: {}\nFull response: {}",
+        status,
+        response
+    );
+}
