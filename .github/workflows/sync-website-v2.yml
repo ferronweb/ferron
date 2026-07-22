@@ -31,8 +31,25 @@ jobs:
           ref: main
           path: website
 
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          FERRON_VERSION_CARGO="$(cat ferron/ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_CHANGELOG="$(cat ferron/CHANGELOG.md | grep '^## Ferron ' | sed 's/^## Ferron //' | grep -v UNRELEASED | head -n 1)"
+          if [ "$FERRON_VERSION_CARGO" != "" ]; then
+            echo "Version determined from Cargo.toml file"
+            echo "FERRON_VERSION=$FERRON_VERSION_CARGO" >> $GITHUB_ENV
+          elif  [ "$FERRON_VERSION_CHANGELOG" != "" ]; then
+            echo "Version determined from the changelog"
+            echo "FERRON_VERSION=$FERRON_VERSION_CHANGELOG" >> $GITHUB_ENV
+          else
+            echo "Can't determine the server version!" 2>&1
+            exit 1
+          fi
+
       - name: Sync website
         run: |
+          # Docs
           rm -rf website/src/content/docs/index
           cp -r ferron/docs website/src/content/docs/index
           cat << EOF > website/src/content/docs/index/README.md
@@ -42,12 +59,21 @@ jobs:
 
           If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
           EOF
+
+          # Changelog
           cat << EOF > website/src/content/changelogs/index.md
           ---
           subject: Ferron 2
           ---
           EOF
           cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/index.md
+
+          # Download JSON
+          cp website/src/content/downloads/v2.json v2.json
+          FERRON_VERSION="${{ env.FERRON_VERSION }}"
+          jq --arg a "$FERRON_VERSION" --arg b "$(LC_ALL=C date +'%B %-d, %Y')" '.version = $a | .releaseDate = $b' v2.json > website/src/content/downloads/v2.json
+
+          # Commit & push
           cd website
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
