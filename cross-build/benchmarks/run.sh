@@ -521,7 +521,7 @@ main() {
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
-				wait "${pid}"
+				wait "${pid}" || true
 			done
 		done
 
@@ -535,7 +535,7 @@ main() {
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
-				wait "${pid}"
+				wait "${pid}" || true
 			done
 		done
 
@@ -549,7 +549,7 @@ main() {
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
-				wait "${pid}"
+				wait "${pid}" || true
 			done
 		done
 
@@ -563,13 +563,13 @@ main() {
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
-				wait "${pid}"
+				wait "${pid}" || true
 			done
 		done
 
 		log_info "Waiting for curl processes to complete"
 		for pid in "${curl_pids[@]}"; do
-			wait "${pid}"
+			wait "${pid}" || true
 		done
 	else
 		# Scenario 1: Small static files (HTTP/1.1)
