@@ -6,6 +6,7 @@ on:
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
+      - "Cross.toml"
       - "bin/**"
       - "core/**"
       - "cross-build/**"
@@ -18,6 +19,7 @@ on:
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
+      - "Cross.toml"
       - "bin/**"
       - "core/**"
       - "cross-build/**"
