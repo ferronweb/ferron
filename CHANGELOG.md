@@ -15,6 +15,7 @@
 #### HTTP server core
 
 - **Trailing slash redirects** — trailing slash redirection logic now correctly handle index files (e.g., `index.html`) and redirects to the correct URL (with trailing slash) rather than serving two URLs (both with and without trailing slash)
+- **Connection accept fix for `poll`** — previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
 
 ## Ferron 3.0.0-beta.8
 
