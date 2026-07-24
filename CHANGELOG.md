@@ -10,6 +10,12 @@
 
 - **Configuration drift hints** — new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
 
+### Changed
+
+#### HTTP server core
+
+- **PGO for GNU/Linux and some Linux with musl** — PGO (profiled-guided optimization) is now enabled for GNU/Linux targets and some Linux targets with musl libc (64-bit x86, ARM64), for pre-built Ferron binaries. This mainly improves tail (p90/p99/max) latency for web requests.
+
 ### Fixed
 
 #### HTTP server core
