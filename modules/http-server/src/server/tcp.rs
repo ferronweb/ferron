@@ -2,6 +2,10 @@
 
 use std::io;
 use std::net::SocketAddr;
+#[cfg(unix)]
+use std::os::fd::{AsRawFd, BorrowedFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsRawSocket, BorrowedSocket};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -160,6 +164,25 @@ impl TcpListenerHandle {
                         }
                     };
                     let _ = socket.set_nodelay(true);
+
+                    // Set TCP buffer sizes on the accepted socket, not just the listener socket.
+                    {
+                        #[cfg(unix)]
+                        let socket_handle = unsafe { BorrowedFd::borrow_raw(socket.as_raw_fd()) };
+                        #[cfg(windows)]
+                        let socket_handle = unsafe { BorrowedSocket::borrow_raw(socket.as_raw_socket()) };
+                        let sock2 = socket2::SockRef::from(&socket_handle);
+                        if let Some(send_buffer_size) = options.send_buffer_size {
+                            sock2
+                                .set_send_buffer_size(send_buffer_size)
+                                .unwrap_or_default();
+                        }
+                        if let Some(recv_buffer_size) = options.recv_buffer_size {
+                            sock2
+                                .set_recv_buffer_size(recv_buffer_size)
+                                .unwrap_or_default();
+                        }
+                    }
 
                     let Ok(socket) = socket.into_poll() else {
                         let global_observability =
