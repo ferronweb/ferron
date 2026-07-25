@@ -32,7 +32,7 @@ pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
             let authority = authority.to_owned();
             let headers = request.headers_mut();
             if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
-                headers.append(http::header::HOST, authority_value);
+                headers.insert(http::header::HOST, authority_value);
             }
         }
     }
