@@ -10,7 +10,6 @@ serde_json = "1"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio-util = "0.7.18"
 anyhow = "1.0.102"
-malloc-best-effort = "0.1.4"
 backtrace = "0.3.76"
 shadow-rs = { version = "2.0.0", default-features = false }
 
@@ -64,6 +63,12 @@ windows-service = "0.8"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+mimalloc = { version = "0.1.52", features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+mimalloc = { version = "0.1.52" }
 
 [build-dependencies]
 shadow-rs = { version = "2.0.0", default-features = false, features = [

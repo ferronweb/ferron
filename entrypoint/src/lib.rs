@@ -19,7 +19,7 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{ReloadState, RELOAD_STATE, RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
-use malloc_best_effort::BEMalloc;
+use mimalloc::MiMalloc;
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
@@ -29,7 +29,7 @@ use crate::cli::{parse_config_params, Cli, Commands};
 use crate::panic::install_panic_hook;
 
 #[global_allocator]
-static GLOBAL: BEMalloc = BEMalloc::new();
+static GLOBAL: MiMalloc = MiMalloc;
 
 shadow_rs::shadow!(build);
 
@@ -83,10 +83,8 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
     ]
 }
 
-/// Initializes the application by setting up the global allocator and installing the panic hook.
+/// Initializes the application (before loading the web server) by installing the panic hook.
 pub fn init() {
-    BEMalloc::init();
-
     install_panic_hook();
 }
 
