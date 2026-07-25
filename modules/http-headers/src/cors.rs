@@ -62,7 +62,30 @@ pub fn apply_cors_headers(
 
     // Vary: Origin
     if !cors.origins.is_empty() && !cors.origins.iter().any(|o| o == "*") {
-        headers.insert(VARY, HeaderValue::from_static("origin"));
+        // Append "origin" to "Vary" header list, instead of replacing
+        // to not break HTTP caching
+        match headers.entry(VARY) {
+            http::header::Entry::Vacant(e) => {
+                e.insert(HeaderValue::from_static("Origin"));
+            }
+            http::header::Entry::Occupied(mut o) => {
+                let mut varying = o
+                    .iter()
+                    .filter_map(|v| str::from_utf8(v.as_bytes()).ok())
+                    .map(|v| v.split(",")) // header names in "Vary" are separated by commas
+                    .flatten()
+                    .map(|v| v.trim()) // They might (or not) have spaces after splitting; trim
+                    .filter(|v| !v.is_empty()) // Empty header names would be of no use
+                    .collect::<Vec<_>>();
+                if !varying.iter().any(|v| v.eq_ignore_ascii_case("Origin")) {
+                    varying.push("Origin");
+                    let value_str = varying.join(", ");
+                    let value = HeaderValue::from_str(&value_str)
+                        .unwrap_or(HeaderValue::from_static("Origin"));
+                    o.insert(value);
+                }
+            }
+        };
     }
 
     // Access-Control-Allow-Credentials
