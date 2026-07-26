@@ -145,6 +145,9 @@ async fn install_certified_key(
     // of the just-mounted chain. Wildcard SANs (e.g. `*.example.com`) and
     // multi-SAN certificates would benefit from per-SNI labels in a
     // follow-up; for now the primary domain is used.
+    //
+    // TODO: remove the comment above? Seems redundant and similar pattern
+    // is used in other TLS modules anyawy.
     if let Some(leaf) = config
         .certified_key_lock
         .read()
