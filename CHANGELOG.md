@@ -24,6 +24,7 @@
 - **Connection accept fix for `poll`** — previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
 - **HTTP/2 host header handling correctness** — previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
 - **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
+- **Symlink ownership check** — previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
 
 ## Ferron 3.0.0-beta.8
 

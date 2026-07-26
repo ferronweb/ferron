@@ -694,13 +694,21 @@ async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> 
                         ));
                     }
                     SymlinkMode::IfNotOwner => {
-                        // For IfNotOwner mode, we currently treat it the same as On
-                        // because vibeio::fs::Metadata doesn't expose UID information.
-                        // Future enhancement: access raw std::fs::Metadata for UID comparison.
-                        return Err(io::Error::new(
-                            io::ErrorKind::PermissionDenied,
-                            "symlinks not allowed",
-                        ));
+                        // The UID check is Unix-specific, skip it on other platforms
+                        // Based on NGINX disable_symlinks if_not_owner (UID comparison basically)
+                        let mut same_owner = false;
+                        #[cfg(unix)]
+                        {
+                            if let Ok(canonical_metadata) = vibeio::fs::metadata(&current).await {
+                                same_owner = metadata.uid() == canonical_metadata.uid();
+                            }
+                        }
+                        if !same_owner {
+                            return Err(io::Error::new(
+                                io::ErrorKind::PermissionDenied,
+                                "different-owner symlinks not allowed",
+                            ));
+                        }
                     }
                     SymlinkMode::Off => {} // Already checked above
                 }
