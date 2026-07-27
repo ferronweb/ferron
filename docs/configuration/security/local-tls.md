@@ -7,10 +7,10 @@ This page documents the `local` TLS provider, which generates and manages locall
 
 ## Directives
 
-| Directive | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | `local` | — | Must be set to `"local"` |
-| `cache` | `<string>` | platform data dir | Path for certificate caching |
+| Directive  | Type       | Default           | Description                  |
+| ---------- | ---------- | ----------------- | ---------------------------- |
+| `provider` | `local`    | —                 | Must be set to `"local"`     |
+| `cache`    | `<string>` | platform data dir | Path for certificate caching |
 
 **Configuration example:**
 
@@ -72,6 +72,8 @@ By default, certificates are stored in:
 
 - **Linux/macOS**: `~/.local/share/ferron-local-tls/`
 - **Windows**: `%LOCALAPPDATA%\ferron-local-tls\`
+
+If the cache directory couldn't be used, a temporary fallback location is used instead.
 
 You can customize the cache location with the `cache` directive:
 

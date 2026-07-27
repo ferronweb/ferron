@@ -120,6 +120,10 @@ impl ModuleLoader for LocalTlsModuleLoader {
                     None
                 }
             })
+            .or_else(|| {
+                // Create a temporary directory to avoid polluting the current working directory
+                tempfile::tempdir().ok().map(|d| d.path().to_path_buf())
+            })
             .unwrap_or_else(|| PathBuf::from(".ferron-local-tls"));
 
         registry = registry.with_provider::<TcpTlsContext, _>(move || {
