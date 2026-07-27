@@ -1,7 +1,7 @@
 //! Configuration validator for `buffer_request` and `buffer_response` directives.
 //!
 //! Validates that both directives, if present, contain either an integer
-//! (buffer size in bytes) or `#null` (disabled).
+//! (buffer size in bytes) or `false` (disabled).
 
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
