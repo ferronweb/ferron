@@ -32,9 +32,9 @@ pub struct HttpCompressionModuleLoader;
 impl ModuleLoader for HttpCompressionModuleLoader {
     fn register_global_configuration_validators(
         &mut self,
-        _registry: &mut Vec<Box<dyn ConfigurationValidator>>,
+        registry: &mut Vec<Box<dyn ConfigurationValidator>>,
     ) {
-        // No global validators — dynamic_compressed is a per-host directive
+        registry.push(Box::new(DynamicCompressionConfigurationValidator));
     }
 
     fn register_per_protocol_configuration_validators(
