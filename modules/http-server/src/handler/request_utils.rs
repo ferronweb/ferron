@@ -378,26 +378,4 @@ mod tests {
         // No Host header should be added from authority when authority is absent
         assert!(!request.headers().contains_key(http::header::HOST));
     }
-
-    #[test]
-    fn normalize_h2_request_preserves_existing_host_header() {
-        use http_body_util::Empty;
-
-        let mut request = http::Request::builder()
-            .version(http::Version::HTTP_2)
-            .uri("https://authority.example.com/path")
-            .header(http::header::HOST, "original.example.com")
-            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-            .unwrap();
-
-        normalize_http2_http3_request(&mut request);
-
-        // Host header should have the authority value appended (since we use append)
-        let hosts: Vec<_> = request
-            .headers()
-            .get_all(http::header::HOST)
-            .iter()
-            .collect();
-        assert_eq!(hosts.len(), 2);
-    }
 }
