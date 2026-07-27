@@ -52,6 +52,110 @@ impl Default for ForwardedAuthenticationModuleLoader {
 }
 
 impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "auth_to",
+                    usage: "auth_to <url> | auth_to { ... }",
+                    description: "This directive enables forwarded authentication proxying with backend, copy, and timeout settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_auth_to")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "auth_to_concurrent_conns",
+                    usage: "auth_to_concurrent_conns <limit>",
+                    description: "This directive sets the global limit for concurrent auth-to backend connections.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "url",
+                    usage: "url <url>",
+                    description: "This directive sets the forwarded authentication backend URL.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "unix",
+                    usage: "unix <path>",
+                    description: "This directive sets the Unix socket path for the auth backend.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "limit",
+                    usage: "limit <count>",
+                    description: "This directive sets the per-backend connection limit for auth.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "idle_timeout",
+                    usage: "idle_timeout <duration>",
+                    description: "This directive sets the idle timeout for auth backend connections.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "no_verification",
+                    usage: "no_verification [bool]",
+                    description: "This directive disables TLS certificate verification for the auth backend.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "copy",
+                    usage: "copy <header>...",
+                    description: "This directive copies headers from the auth response to the original request.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "last",
+                    usage: "last [bool]",
+                    description: "This directive stops processing further auth_to entries on match.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,

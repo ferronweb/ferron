@@ -963,6 +963,66 @@ impl ModuleLoader for PrometheusObservabilityModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "endpoint_listen",
+                    usage: "endpoint_listen <address>",
+                    description: "This directive specifies the listen address for the Prometheus metrics endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "endpoint_format",
+                    usage: "endpoint_format <format>",
+                    description: "This directive specifies the format of the Prometheus metrics endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "endpoint_auth_token",
+                    usage: "endpoint_auth_token <token>",
+                    description: "This directive sets the authentication token for the Prometheus metrics endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "endpoint_native_histograms",
+                    usage: "endpoint_native_histograms [bool]",
+                    description: "This directive enables native histograms on the Prometheus metrics endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "baggage",
+                    usage: "baggage { ... }",
+                    description: "This directive configures baggage key promotion for Prometheus. Contains key blocks with attribute and max_distinct.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut HashMap<

@@ -513,6 +513,99 @@ impl ModuleLoader for LogFileObservabilityModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "access_log",
+                    usage: "access_log <path>",
+                    description: "This directive specifies the path to the access log file.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "access_log_rotate_size",
+                    usage: "access_log_rotate_size <size>",
+                    description: "This directive specifies the maximum size of the access log file before rotation.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "access_log_rotate_keep",
+                    usage: "access_log_rotate_keep <count>",
+                    description: "This directive specifies the number of rotated access log files to keep.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "error_log",
+                    usage: "error_log <path>",
+                    description: "This directive specifies the path to the error log file.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "error_log_rotate_size",
+                    usage: "error_log_rotate_size <size>",
+                    description: "This directive specifies the maximum size of the error log file before rotation.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "error_log_rotate_keep",
+                    usage: "error_log_rotate_keep <count>",
+                    description: "This directive specifies the number of rotated error log files to keep.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "format",
+                    usage: "format { ... }",
+                    description: "This directive configures the access log format. Delegates to a log format sub-block (text or json).",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "error_format",
+                    usage: "error_format { ... }",
+                    description: "This directive configures the error log format. Delegates to a log format sub-block (text or json).",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut HashMap<

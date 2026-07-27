@@ -38,6 +38,33 @@ impl ModuleLoader for HttpBufferModuleLoader {
         registry.push(Box::new(HttpBufferConfigurationValidator));
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "buffer_request",
+                    usage: "buffer_request <size>",
+                    description: "This directive sets the request body buffer size in bytes. Disabled by default.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "buffer_response",
+                    usage: "buffer_response <size>",
+                    description: "This directive sets the response body buffer size in bytes. Disabled by default.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

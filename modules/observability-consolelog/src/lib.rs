@@ -308,6 +308,21 @@ impl ModuleLoader for ConsoleObservabilityModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry.register(
+            Directive {
+                name: "format",
+                usage: "format { ... }",
+                description: "This directive configures the log format for the console provider. Delegates to a log format sub-block (text or json).",
+                applicable_protocols: None,
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("observability"),
+        );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

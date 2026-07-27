@@ -769,6 +769,176 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "challenge",
+                    usage: "challenge <type>",
+                    description: "This directive specifies the ACME challenge type. Supported: http-01, dns-01.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "contact",
+                    usage: "contact <email>",
+                    description: "This directive specifies the ACME account contact email address for certificate expiry and account notices.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "directory",
+                    usage: "directory <uri>",
+                    description: "This directive specifies the ACME directory URI.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "profile",
+                    usage: "profile <name>",
+                    description: "This directive specifies the ACME profile name.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "eab",
+                    usage: "eab <key_id> <mac_key>",
+                    description: "This directive specifies External Account Binding credentials for the ACME account.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "cache",
+                    usage: "cache <path>",
+                    description: "This directive specifies the directory path for the ACME certificate cache.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "save",
+                    usage: "save <path>...",
+                    description: "This directive specifies one or more paths to save obtained ACME certificates.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "post_obtain_command",
+                    usage: "post_obtain_command <command>",
+                    description: "This directive specifies a command to run after obtaining an ACME certificate.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "no_verification",
+                    usage: "no_verification [bool]",
+                    description: "This directive disables TLS certificate verification for the ACME directory.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand",
+                    usage: "on_demand [bool]",
+                    description: "This directive enables automatic certificate issuance on demand for unknown hostnames.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask",
+                    usage: "on_demand_ask <url>",
+                    description: "This directive specifies the approval endpoint URL for on-demand certificate requests.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask_auth",
+                    usage: "on_demand_ask_auth <header>",
+                    description: "This directive sets the Authorization header value for the on-demand approval endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask_no_verification",
+                    usage: "on_demand_ask_no_verification [bool]",
+                    description: "This directive disables TLS verification for the on-demand approval endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "dns",
+                    usage: "dns [bool] | dns { ... }",
+                    description: "This directive enables DNS-01 challenges or specifies a DNS provider block for ACME.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "fallback",
+                    usage: "fallback { ... }",
+                    description: "This directive defines fallback ACME provider settings including directory, contact, profile, and eab.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

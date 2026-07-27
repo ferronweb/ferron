@@ -198,6 +198,9 @@ fn main_inner(loaders: Vec<Box<dyn ModuleLoader>>) -> Result<(), Box<dyn std::er
         Commands::Version => {
             print_version();
         }
+        Commands::Directives => {
+            print_directives(loaders)?;
+        }
     }
 
     Ok(())
@@ -911,6 +914,18 @@ fn print_version() {
     if shadow_rs::is_debug() {
         println!("WARNING: This is a debug build. It is not recommended for production use.");
     }
+}
+
+fn print_directives(
+    mut loaders: Vec<Box<dyn ModuleLoader>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut directive_registry = ferron_core::directives::DirectiveRegistry::new();
+    for loader in &mut loaders {
+        loader.register_directives(&mut directive_registry);
+    }
+    let json = serde_json::to_string_pretty(&directive_registry)?;
+    println!("{}", json);
+    Ok(())
 }
 
 #[allow(clippy::type_complexity)]

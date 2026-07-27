@@ -362,6 +362,88 @@ impl ModuleLoader for TlsHttpModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "url",
+                    usage: "url <url>",
+                    description: "This directive specifies the URL of the remote TLS certificate endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "refresh_interval",
+                    usage: "refresh_interval <duration>",
+                    description: "This directive specifies how often to refresh TLS certificates from the remote endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "no_verification",
+                    usage: "no_verification [bool]",
+                    description: "This directive disables TLS certificate verification for the remote certificate endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand",
+                    usage: "on_demand [bool]",
+                    description: "This directive enables automatic certificate fetching on demand for unknown hostnames.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask",
+                    usage: "on_demand_ask <url>",
+                    description: "This directive specifies the approval endpoint URL for on-demand certificate requests.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask_auth",
+                    usage: "on_demand_ask_auth <header>",
+                    description: "This directive sets the Authorization header value for the on-demand approval endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            )
+            .register(
+                Directive {
+                    name: "on_demand_ask_no_verification",
+                    usage: "on_demand_ask_no_verification [bool]",
+                    description: "This directive disables TLS verification for the on-demand approval endpoint.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("tls"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

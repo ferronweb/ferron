@@ -377,6 +377,99 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
         Ok(())
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "format",
+                    usage: "format { ... }",
+                    description: "This directive configures the log format for the OTLP provider. Delegates to a log format sub-block (text or json).",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "logs",
+                    usage: "logs <endpoint>",
+                    description: "This directive specifies the OTLP logs endpoint. Contains optional protocol and authorization sub-directives.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "metrics",
+                    usage: "metrics <endpoint>",
+                    description: "This directive specifies the OTLP metrics endpoint. Contains optional protocol and authorization sub-directives.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "traces",
+                    usage: "traces <endpoint>",
+                    description: "This directive specifies the OTLP traces endpoint. Contains optional protocol and authorization sub-directives.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "service_name",
+                    usage: "service_name <name>",
+                    description: "This directive specifies the service name for OTLP telemetry data.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "no_verification",
+                    usage: "no_verification",
+                    description: "This directive disables TLS certificate verification for OTLP endpoints.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "log_style",
+                    usage: "log_style <style>",
+                    description: "This directive specifies the log style for OTLP. Supported: legacy, modern.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "baggage",
+                    usage: "baggage { ... }",
+                    description: "This directive configures baggage key promotion for OTLP. Contains key blocks with attribute, signals, and max_distinct.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

@@ -37,6 +37,21 @@ impl ModuleLoader for HttpCompressionModuleLoader {
         registry.push(Box::new(DynamicCompressionConfigurationValidator));
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry.register(
+            Directive {
+                name: "dynamic_compressed",
+                usage: "dynamic_compressed [bool]",
+                description: "This directive enables on-the-fly compression for dynamic responses using Zstandard, Brotli, gzip, or Deflate.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::default(),
+        );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

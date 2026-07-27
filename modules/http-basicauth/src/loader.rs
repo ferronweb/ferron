@@ -20,6 +20,66 @@ impl ModuleLoader for HttpBasicAuthModuleLoader {
         registry.push(Box::new(BasicAuthValidator));
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "basic_auth",
+                    usage: "basic_auth { ... }",
+                    description: "This directive configures HTTP basic authentication with realm and user credentials.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_basic_auth")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "basic_auth_concurrency",
+                    usage: "basic_auth_concurrency <limit>",
+                    description: "This directive sets the global limit for concurrent password verification tasks.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "realm",
+                    usage: "realm <name>",
+                    description: "This directive sets the authentication realm name for basic auth.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_basic_auth"),
+            )
+            .register(
+                Directive {
+                    name: "users",
+                    usage: "users { <username> <hash> ... }",
+                    description: "This directive maps usernames to hashed passwords for basic auth.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_basic_auth"),
+            )
+            .register(
+                Directive {
+                    name: "brute_force_protection",
+                    usage: "brute_force_protection { enabled ...; max_attempts ...; lockout_duration ...; window ... }",
+                    description: "This directive configures IP-based brute force lockout protection for basic auth.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_basic_auth"),
+            );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<

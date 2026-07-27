@@ -37,6 +37,55 @@ use ferron_http::HttpContext;
 pub struct HttpReplaceModuleLoader;
 
 impl ModuleLoader for HttpReplaceModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "replace",
+                    usage: "replace <search> <replacement> { ... }",
+                    description: "This directive replaces byte sequences in response bodies with optional once flag.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_replace")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "once",
+                    usage: "once [bool]",
+                    description: "This directive limits replacement to the first occurrence only.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_replace"),
+            )
+            .register(
+                Directive {
+                    name: "replace_last_modified",
+                    usage: "replace_last_modified [bool]",
+                    description: "This directive enables replacement of the Last-Modified header.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "replace_filter_types",
+                    usage: "replace_filter_types <mime-type>...",
+                    description: "This directive restricts replacement to responses with specified MIME types.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ConfigurationValidator>>,

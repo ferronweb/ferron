@@ -38,6 +38,110 @@ impl Default for FcgiModuleLoader {
 }
 
 impl ferron_core::loader::ModuleLoader for FcgiModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "fcgi",
+                    usage: "fcgi [bool] | fcgi { ... }",
+                    description: "This directive enables FastCGI proxying with backend, extension, environment, and connection settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_fcgi")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "fcgi_php",
+                    usage: "fcgi_php <url> | fcgi_php false",
+                    description: "This directive enables PHP-FPM support as a shorthand for fcgi with .php extension.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "fcgi_concurrent_conns",
+                    usage: "fcgi_concurrent_conns <limit>",
+                    description: "This directive sets the global limit for concurrent FastCGI connections.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "backend",
+                    usage: "backend <url>",
+                    description: "This directive specifies the FastCGI backend URL.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            )
+            .register(
+                Directive {
+                    name: "extension",
+                    usage: "extension <.ext>...",
+                    description: "This directive registers file extensions as FastCGI script handlers.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            )
+            .register(
+                Directive {
+                    name: "environment",
+                    usage: "environment <name> <value>",
+                    description: "This directive sets a FastCGI environment variable.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            )
+            .register(
+                Directive {
+                    name: "pass",
+                    usage: "pass [bool]",
+                    description: "This directive passes files that match extensions to the backend for processing.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            )
+            .register(
+                Directive {
+                    name: "keepalive",
+                    usage: "keepalive [bool]",
+                    description: "This directive enables keepalive connections to the FastCGI backend.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            )
+            .register(
+                Directive {
+                    name: "limit",
+                    usage: "limit <count>",
+                    description: "This directive sets the per-backend connection pool limit for FastCGI.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_fcgi"),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,

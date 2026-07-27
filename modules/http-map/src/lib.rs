@@ -25,6 +25,33 @@ use crate::validator::MapValidator;
 pub struct HttpMapModuleLoader;
 
 impl ModuleLoader for HttpMapModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "map",
+                    usage: "map <source> <destination> { ... }",
+                    description: "This directive maps a source variable to a destination variable using match rules with default value support.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_map")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "default",
+                    usage: "default <value>",
+                    description: "This directive sets the default value for a map block when no pattern matches.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_map"),
+            );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<

@@ -14,6 +14,7 @@
 pub mod config;
 pub mod admin;
 pub mod builtin;
+pub mod directives;
 pub mod loader;
 pub mod logging;
 pub mod pipeline;

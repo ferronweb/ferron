@@ -8,6 +8,7 @@ use vibeio::net::PollTcpStream;
 
 pub mod builder;
 pub mod config;
+pub mod directives;
 #[cfg(feature = "observability")]
 pub mod observability;
 pub mod tickets;

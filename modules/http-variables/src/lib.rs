@@ -29,6 +29,66 @@ use crate::validator::VariablesValidator;
 pub struct HttpVariablesModuleLoader;
 
 impl ModuleLoader for HttpVariablesModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "set_var",
+                    usage: "set_var <source> <regex> <variable> { ... }",
+                    description: "This directive extracts values from request fields using regex and assigns them to custom variables with optional value, case_insensitive, and negate options.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_set_var")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "log_field",
+                    usage: "log_field <name> <source>",
+                    description: "This directive defines a custom log field by extracting data from request or response sources.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "value",
+                    usage: "value <string>",
+                    description: "This directive sets the variable value returned when set_var matches.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_set_var"),
+            )
+            .register(
+                Directive {
+                    name: "case_insensitive",
+                    usage: "case_insensitive [bool]",
+                    description: "This directive enables case-insensitive regex matching for set_var.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_set_var"),
+            )
+            .register(
+                Directive {
+                    name: "negate",
+                    usage: "negate [bool]",
+                    description: "This directive inverts the set_var match condition.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_set_var"),
+            );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<&'static str, Vec<Box<dyn ConfigurationValidator>>>,

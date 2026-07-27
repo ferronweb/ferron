@@ -65,6 +65,77 @@ pub fn get_secondary_runtime_handle(runtime: &Runtime) -> tokio::runtime::Handle
 pub struct ForwardProxyModuleLoader;
 
 impl ModuleLoader for ForwardProxyModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "forward_proxy",
+                    usage: "forward_proxy [bool] | forward_proxy { ... }",
+                    description: "This directive enables the forward proxy module with domain allowlist, CONNECT method, IP/CIDR deny list, port allowlist, and HTTP version settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_forward_proxy")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "allow_domains",
+                    usage: "allow_domains <domain>...",
+                    description: "This directive sets the allowed destination domain patterns for the forward proxy.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_forward_proxy"),
+            )
+            .register(
+                Directive {
+                    name: "connect_method",
+                    usage: "connect_method [bool]",
+                    description: "This directive enables or disables the HTTP CONNECT tunnel method.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_forward_proxy"),
+            )
+            .register(
+                Directive {
+                    name: "deny_ips",
+                    usage: "deny_ips <ip-or-cidr>...",
+                    description: "This directive specifies IPs or CIDR ranges blocked by the forward proxy.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_forward_proxy"),
+            )
+            .register(
+                Directive {
+                    name: "allow_ports",
+                    usage: "allow_ports <port>...",
+                    description: "This directive specifies destination ports allowed by the forward proxy.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_forward_proxy"),
+            )
+            .register(
+                Directive {
+                    name: "http_version",
+                    usage: "http_version <version>",
+                    description: "This directive sets the HTTP version used by the forward proxy (1.0 or 1.1).",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_forward_proxy"),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,

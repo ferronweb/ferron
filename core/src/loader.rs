@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::config::adapter::ConfigurationAdapter;
 use crate::config::validator::ConfigurationValidatorScopedKey;
+use crate::directives::DirectiveRegistry;
 
 /// Trait for modules to register their components and configuration.
 ///
@@ -118,4 +119,9 @@ pub trait ModuleLoader {
     ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
+
+    /// Register directives for `ferron directive` subcommand,
+    /// used for editor support.
+    #[allow(unused_variables)]
+    fn register_directives(&mut self, registry: &mut DirectiveRegistry) {}
 }

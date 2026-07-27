@@ -118,6 +118,9 @@ pub enum Commands {
     /// Prints version and build information
     #[command(name = "version")]
     Version,
+    /// Prints available configuration directives in JSON
+    #[command(name = "directives")]
+    Directives,
 }
 
 #[cfg(windows)]

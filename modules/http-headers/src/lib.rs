@@ -274,6 +274,99 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
 pub struct HttpHeadersModuleLoader;
 
 impl ModuleLoader for HttpHeadersModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "header",
+                    usage: "header <name> <value> | header +<name> <value> | header -<name>",
+                    description: "This directive sets, appends to, or removes HTTP response headers with support for variable interpolation.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "cors",
+                    usage: "cors { ... }",
+                    description: "This directive configures CORS with origins, methods, headers, credentials, max_age, and expose_headers settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_cors")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "origins",
+                    usage: "origins <origin>...",
+                    description: "This directive sets allowed CORS origins.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            )
+            .register(
+                Directive {
+                    name: "methods",
+                    usage: "methods <method>...",
+                    description: "This directive sets allowed CORS HTTP methods.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            )
+            .register(
+                Directive {
+                    name: "headers",
+                    usage: "headers <header>...",
+                    description: "This directive sets allowed CORS request headers.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            )
+            .register(
+                Directive {
+                    name: "credentials",
+                    usage: "credentials [bool]",
+                    description: "This directive enables CORS credentials (Access-Control-Allow-Credentials).",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            )
+            .register(
+                Directive {
+                    name: "max_age",
+                    usage: "max_age <duration>",
+                    description: "This directive sets the CORS preflight cache duration.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            )
+            .register(
+                Directive {
+                    name: "expose_headers",
+                    usage: "expose_headers <header>...",
+                    description: "This directive sets CORS exposed response headers (Access-Control-Expose-Headers).",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_cors"),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ConfigurationValidator>>,

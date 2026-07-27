@@ -177,6 +177,21 @@ impl ModuleLoader for JsonFormatObservabilityModuleLoader {
             })
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry.register(
+            Directive {
+                name: "fields",
+                usage: "fields <name>...",
+                description: "This directive specifies the log field names to include in JSON output. Empty means all fields.",
+                applicable_protocols: None,
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("observability"),
+        );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

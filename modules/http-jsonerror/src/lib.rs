@@ -31,6 +31,55 @@ impl ModuleLoader for HttpJsonErrorModuleLoader {
         registry.push(Box::new(JsonErrorConfigurationValidator));
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "json_errors",
+                    usage: "json_errors [bool] | json_errors { ... }",
+                    description: "This directive enables JSON error responses with optional format, type URI, and trace ID settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_json_errors")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "format",
+                    usage: "format <type>",
+                    description: "This directive sets the JSON error response format. Supported: problem, simple.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_json_errors"),
+            )
+            .register(
+                Directive {
+                    name: "type_uri",
+                    usage: "type_uri <uri>",
+                    description: "This directive sets the type URI for RFC 9457 Problem Details error responses.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_json_errors"),
+            )
+            .register(
+                Directive {
+                    name: "trace_id",
+                    usage: "trace_id [bool]",
+                    description: "This directive enables trace ID inclusion in JSON error responses.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_json_errors"),
+            );
+    }
+
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut HashMap<&'static str, Vec<Box<dyn ConfigurationValidator>>>,

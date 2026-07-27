@@ -340,6 +340,44 @@ impl ModuleLoader for TextFormatObservabilityModuleLoader {
             })
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "fields",
+                    usage: "fields <name>...",
+                    description: "This directive specifies the log field names to include in text output. Empty means all fields.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "access_pattern",
+                    usage: "access_pattern <pattern>",
+                    description: "This directive specifies the access log format pattern for text output.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "timestamp_format",
+                    usage: "timestamp_format <format>",
+                    description: "This directive specifies the timestamp format for text log output.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
+            );
+    }
+
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut HashMap<

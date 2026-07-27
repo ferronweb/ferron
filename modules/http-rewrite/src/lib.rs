@@ -53,6 +53,77 @@ impl Default for RewriteEngine {
 pub struct HttpRewriteModuleLoader;
 
 impl ModuleLoader for HttpRewriteModuleLoader {
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "rewrite",
+                    usage: "rewrite <regex> <replacement> { ... }",
+                    description: "This directive rewrites request URIs using a regex pattern with optional last, directory, file, and allow_double_slashes options.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_rewrite")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "rewrite_log",
+                    usage: "rewrite_log [bool]",
+                    description: "This directive enables logging of rewrite rule evaluations.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "last",
+                    usage: "last [bool]",
+                    description: "This directive stops processing further rewrite rules on match.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rewrite"),
+            )
+            .register(
+                Directive {
+                    name: "directory",
+                    usage: "directory [bool]",
+                    description: "This directive restricts the rewrite rule to apply only when the path is a directory.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rewrite"),
+            )
+            .register(
+                Directive {
+                    name: "file",
+                    usage: "file [bool]",
+                    description: "This directive restricts the rewrite rule to apply only when the path is a file.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rewrite"),
+            )
+            .register(
+                Directive {
+                    name: "allow_double_slashes",
+                    usage: "allow_double_slashes [bool]",
+                    description: "This directive preserves double slashes in the rewritten URL.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rewrite"),
+            );
+    }
+
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,

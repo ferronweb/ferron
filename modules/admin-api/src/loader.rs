@@ -29,6 +29,110 @@ impl ModuleLoader for AdminApiModuleLoader {
         registry.push(Box::new(AdminConfigurationValidator));
     }
 
+    fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
+        use ferron_core::directives::{Directive, DirectiveSubblock};
+        registry
+            .register(
+                Directive {
+                    name: "admin",
+                    usage: "admin [bool] | admin { ... }",
+                    description: "This directive enables or configures the admin API listener with endpoint-specific settings.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: Some(DirectiveSubblock::custom("admin")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "listen",
+                    usage: "listen <address>",
+                    description: "This directive specifies the listen address for the admin API.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "auth_token",
+                    usage: "auth_token <token>",
+                    description: "This directive sets the authentication token for the admin API endpoints.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "health",
+                    usage: "health [bool]",
+                    description: "This directive enables the /health endpoint for the admin API.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "status",
+                    usage: "status [bool]",
+                    description: "This directive enables the /status endpoint for the admin API.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "config",
+                    usage: "config [bool]",
+                    description: "This directive enables the /config endpoint for the admin API.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "reload",
+                    usage: "reload [bool]",
+                    description: "This directive enables the POST /reload endpoint to trigger configuration reloads.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "reload_get",
+                    usage: "reload_get [bool]",
+                    description: "This directive enables the GET /reload endpoint to retrieve reload status.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            )
+            .register(
+                Directive {
+                    name: "runtime",
+                    usage: "runtime [bool]",
+                    description: "This directive enables the /runtime endpoint for runtime variable inspection.",
+                    applicable_protocols: None,
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("admin"),
+            );
+    }
+
     fn register_modules(
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
