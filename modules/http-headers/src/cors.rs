@@ -72,8 +72,7 @@ pub fn apply_cors_headers(
                 let mut varying = o
                     .iter()
                     .filter_map(|v| str::from_utf8(v.as_bytes()).ok())
-                    .map(|v| v.split(",")) // header names in "Vary" are separated by commas
-                    .flatten()
+                    .flat_map(|v| v.split(",")) // header names in "Vary" are separated by commas
                     .map(|v| v.trim()) // They might (or not) have spaces after splitting; trim
                     .filter(|v| !v.is_empty()) // Empty header names would be of no use
                     .collect::<Vec<_>>();
