@@ -30,15 +30,15 @@ pub fn resolve_affinity_index(
         | crate::types::affinity::AffinityType::Header(_)
         | crate::types::affinity::AffinityType::Ip
         | crate::types::affinity::AffinityType::Hash { .. } => {
-            let mut guard = ring.upgradable_read();
+            let mut guard = ring.read();
             if guard.needs_rebuild(backends) {
-                guard.with_upgraded(|g| {
-                    if !g.needs_rebuild(backends) {
-                        // The ring is already up-to-date, no need to rebuild.
-                        return;
-                    }
-                    g.rebuild(backends);
-                })
+                drop(guard);
+                let mut guard_w = ring.write();
+                if guard_w.needs_rebuild(backends) {
+                    guard_w.rebuild(backends);
+                }
+                drop(guard_w);
+                guard = ring.read();
             }
             guard.get(affinity_key, excluded_backend_indexes)
         }
