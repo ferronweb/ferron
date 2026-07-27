@@ -22,17 +22,17 @@ Run from repository root unless noted.
 
 ### Build and test
 
-| Command | Purpose |
-|---------|---------|
-| `cargo build --workspace` | Build all crates |
-| `cargo test --workspace` | Unit + inline tests |
-| `cargo test -p <crate>` | Single crate |
-| `cargo fmt --all --check` | Formatting (no `.rustfmt.toml` — uses defaults) |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Lint |
-| `cargo shear` | Check unused dependencies (CI) |
-| `cargo run --manifest-path doctest/Cargo.toml` | Test doc examples |
-| `cd e2e && cargo test` | E2E tests (needs Docker + protoc) |
-| `rumdl fmt docs && rumdl check --fix docs` | Lint docs Markdown |
+| Command                                                 | Purpose                                         |
+| ------------------------------------------------------- | ----------------------------------------------- |
+| `cargo build --workspace`                               | Build all crates                                |
+| `cargo test --workspace`                                | Unit + inline tests                             |
+| `cargo test -p <crate>`                                 | Single crate                                    |
+| `cargo fmt --all --check`                               | Formatting (no `.rustfmt.toml` — uses defaults) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lint                                            |
+| `cargo shear`                                           | Check unused dependencies (CI)                  |
+| `cargo run --manifest-path doctest/Cargo.toml`          | Test doc examples                               |
+| `cd e2e && cargo test`                                  | E2E tests (needs Docker + protoc)               |
+| `rumdl fmt docs && rumdl check --fix docs`              | Lint docs Markdown                              |
 
 ### Run server
 
@@ -85,6 +85,7 @@ Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.
 ## Testing structure
 
 Three tiers:
+
 1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files.
 2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH. Build the test image first: `docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .`
 3. **Fuzz**: `fuzz/` — nightly `cargo-fuzz`. Excluded from main workspace.
@@ -109,7 +110,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
   - **4-space indentation** — consistent across all examples.
   - **Bare strings preferred** — omit quotes unless the value contains spaces, special characters, or would be ambiguous.
   - **Boolean flags** — write `directive` (bare, no value) when the intent is `true`; write `directive false` only when disabling.
-  - **Raw string literals** — use `r"..."` or `r'...'` for regex patterns to avoid double-backslash escaping.
+  - **Raw string literals** — use `r"..."` for regex patterns to avoid double-backslash escaping.
   - **Quoted strings** — single and double quotes are interchangeable; use whichever is clearer in context.
 
 ## Documentation principles
