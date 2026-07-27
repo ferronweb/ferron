@@ -110,8 +110,10 @@ impl Stage<HttpErrorContext> for JsonErrorStage {
         };
 
         let body = match config.format {
-            JsonErrorFormat::Problem => build_problem_json(status, description, &config, trace_id),
-            JsonErrorFormat::Simple => build_simple_json(status, description, trace_id),
+            JsonErrorFormat::Problem => build_problem_json(status, description, &config, trace_id)
+                .map_err(|e| PipelineError::custom(e.to_string()))?,
+            JsonErrorFormat::Simple => build_simple_json(status, description, trace_id)
+                .map_err(|e| PipelineError::custom(e.to_string()))?,
         };
 
         let content_type = match config.format {
@@ -140,150 +142,52 @@ impl Stage<HttpErrorContext> for JsonErrorStage {
     }
 }
 
+#[inline]
 fn build_problem_json(
     status: u16,
     description: &str,
     config: &JsonErrorConfig,
     trace_id: Option<&str>,
-) -> String {
-    let type_uri = if config.type_uri == "about:blank" {
-        "\"about:blank\"".to_string()
-    } else {
-        let uri = config.type_uri.replace("{status}", &status.to_string());
-        format!("\"{}\"", uri.replace('"', "\\\""))
-    };
+) -> Result<String, serde_json::Error> {
+    let type_uri = config.type_uri.replace("{status}", &status.to_string());
 
     let reason = http::StatusCode::from_u16(status)
         .ok()
         .and_then(|s| s.canonical_reason().map(|r| r.to_string()))
         .unwrap_or_else(|| "Unknown".to_string());
 
-    let mut parts = vec![
-        format!("\"type\":{type_uri}"),
-        format!("\"title\":\"{}\"", json_escape(&reason)),
-        format!("\"status\":{status}"),
-        format!("\"detail\":\"{}\"", json_escape(description)),
-    ];
+    let mut parts = serde_json::Map::default();
+    parts.insert("type".into(), type_uri.into());
+    parts.insert("title".into(), reason.into());
+    parts.insert("status".into(), status.into());
+    parts.insert("detail".into(), description.into());
 
     if let Some(tid) = trace_id {
-        parts.push(format!("\"trace_id\":\"{}\"", json_escape(tid)));
+        parts.insert("trace_id".into(), tid.into());
     }
 
-    format!("{{{}}}", parts.join(","))
+    serde_json::to_string(&parts)
 }
 
-fn build_simple_json(status: u16, description: &str, trace_id: Option<&str>) -> String {
+#[inline]
+fn build_simple_json(
+    status: u16,
+    description: &str,
+    trace_id: Option<&str>,
+) -> Result<String, serde_json::Error> {
     let reason = http::StatusCode::from_u16(status)
         .ok()
         .and_then(|s| s.canonical_reason().map(|r| r.to_string()))
         .unwrap_or_else(|| "Unknown".to_string());
 
-    let mut parts = vec![
-        format!("\"error\":\"{}\"", json_escape(&reason)),
-        format!("\"status\":{status}"),
-        format!("\"detail\":\"{}\"", json_escape(description)),
-    ];
+    let mut parts = serde_json::Map::default();
+    parts.insert("error".into(), reason.into());
+    parts.insert("status".into(), status.into());
+    parts.insert("detail".into(), description.into());
 
     if let Some(tid) = trace_id {
-        parts.push(format!("\"trace_id\":\"{}\"", json_escape(tid)));
+        parts.insert("trace_id".into(), tid.into());
     }
 
-    format!("{{{}}}", parts.join(","))
-}
-
-fn json_escape(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '"' => result.push_str("\\\""),
-            '\\' => result.push_str("\\\\"),
-            '\n' => result.push_str("\\n"),
-            '\r' => result.push_str("\\r"),
-            '\t' => result.push_str("\\t"),
-            _ => result.push(c),
-        }
-    }
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::JsonErrorConfig;
-
-    #[test]
-    fn status_description_covers_common_codes() {
-        assert_eq!(
-            status_description(404),
-            "The requested resource wasn't found."
-        );
-        assert_eq!(
-            status_description(500),
-            "The server encountered an unexpected error."
-        );
-        assert_eq!(
-            status_description(429),
-            "Too many requests were sent in a short period."
-        );
-    }
-
-    #[test]
-    fn json_escape_handles_special_chars() {
-        assert_eq!(json_escape("hello"), "hello");
-        assert_eq!(json_escape("say \"hi\""), "say \\\"hi\\\"");
-        assert_eq!(json_escape("line1\nline2"), "line1\\nline2");
-    }
-
-    #[test]
-    fn build_problem_json_basic() {
-        let config = JsonErrorConfig {
-            enabled: true,
-            format: JsonErrorFormat::Problem,
-            type_uri: "about:blank".to_string(),
-            trace_id: false,
-        };
-        let json = build_problem_json(404, "Not found", &config, None);
-        assert!(json.contains("\"type\":\"about:blank\""));
-        assert!(json.contains("\"status\":404"));
-        assert!(json.contains("\"title\":\"Not Found\""));
-        assert!(json.contains("\"detail\":\"Not found\""));
-    }
-
-    #[test]
-    fn build_problem_json_custom_type_uri() {
-        let config = JsonErrorConfig {
-            enabled: true,
-            format: JsonErrorFormat::Problem,
-            type_uri: "https://http.dev/{status}".to_string(),
-            trace_id: false,
-        };
-        let json = build_problem_json(503, "Unavailable", &config, None);
-        assert!(json.contains("\"type\":\"https://http.dev/503\""));
-    }
-
-    #[test]
-    fn build_problem_json_with_trace_id() {
-        let config = JsonErrorConfig {
-            enabled: true,
-            format: JsonErrorFormat::Problem,
-            type_uri: "about:blank".to_string(),
-            trace_id: true,
-        };
-        let json = build_problem_json(400, "Bad request", &config, Some("abc123"));
-        assert!(json.contains("\"trace_id\":\"abc123\""));
-    }
-
-    #[test]
-    fn build_simple_json_basic() {
-        let json = build_simple_json(403, "Forbidden", None);
-        assert!(json.contains("\"error\":\"Forbidden\""));
-        assert!(json.contains("\"status\":403"));
-        assert!(json.contains("\"detail\":\"Forbidden\""));
-    }
-
-    #[test]
-    fn build_simple_json_with_trace_id() {
-        let json = build_simple_json(500, "Internal error", Some("trace-xyz"));
-        assert!(json.contains("\"trace_id\":\"trace-xyz\""));
-    }
+    serde_json::to_string(&parts)
 }

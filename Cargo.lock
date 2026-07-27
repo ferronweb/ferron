@@ -1519,6 +1519,7 @@ dependencies = [
  "ferron-http",
  "http",
  "http-body-util",
+ "serde_json",
 ]
 
 [[package]]
