@@ -1,16 +1,17 @@
 use std::collections::HashMap;
-use std::error::Error;
 use std::str::FromStr;
 
-use ferron_core::config::validator::{ConfigurationValidator, ConfigurationValidatorContext};
+use ferron_core::config::validator::{
+    entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
+    ConfigurationValidatorContext,
+};
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
-    ServerConfigurationInterpolatedStringPart, ServerConfigurationSpan, ServerConfigurationValue,
+    ServerConfigurationInterpolatedStringPart, ServerConfigurationValue,
 };
 use ferron_core::util::parse_duration;
 use http::header::HeaderName;
 
-/// Configuration validator for the reverse proxy module.
 pub struct ProxyConfigurationValidator;
 
 impl ConfigurationValidator for ProxyConfigurationValidator {
@@ -18,20 +19,25 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
         if is_global {
-            // Validate global concurrent_conns directive
             if let Some(entries) = config.directives.get("concurrent_conns") {
                 used_directives.insert("concurrent_conns".to_string());
                 for e in entries {
                     if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
                         if val < 0 {
-                            return Err("Invalid `concurrent_conns` — must be non-negative".into());
+                            return Err(ConfigurationValidationError::from(
+                                "Invalid `concurrent_conns` — must be non-negative",
+                            )
+                            .with_span(entry_span(e)));
                         }
                     } else {
-                        return Err("Invalid `concurrent_conns` — expected a number".into());
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `concurrent_conns` — expected a number",
+                        )
+                        .with_span(entry_span(e)));
                     }
                 }
             }
@@ -47,16 +53,20 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
 fn validate_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
     ctx: &mut ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     for entry in entries {
         if entry.args.len() > 1 {
-            return Err(
-                "The `proxy` directive may have at most one shorthand upstream argument".into(),
-            );
+            return Err(ConfigurationValidationError::from(
+                "The `proxy` directive may have at most one shorthand upstream argument",
+            )
+            .with_span(entry_span(entry)));
         }
         for arg in &entry.args {
             if arg.as_string_with_interpolations(&HashMap::new()).is_none() {
-                return Err("Invalid proxy upstream URL — expected a string".into());
+                return Err(ConfigurationValidationError::from(
+                    "Invalid proxy upstream URL — expected a string",
+                )
+                .with_span(entry_span(entry)));
             }
             warn_user_controlled_upstream(arg, entry, ctx);
         }
@@ -70,7 +80,7 @@ fn validate_proxy_entries(
 fn validate_proxy_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     ferron_core::validate_nested!(block, used(sub), algorithm, args(1) => [ServerConfigurationValue::String(_, _)]);
@@ -109,56 +119,83 @@ fn validate_number(
     block: &ServerConfigurationBlock,
     name: &str,
     min: i64,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(entries) = block.directives.get(name) {
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
                 if val < min {
-                    return Err(format!("Invalid `{name}` — must be >= {min}").into());
+                    return Err(ConfigurationValidationError::from(format!(
+                        "Invalid `{name}` — must be >= {min}"
+                    ))
+                    .with_span(entry_span(e)));
                 }
             } else {
-                return Err(format!("Invalid `{name}` — expected a number").into());
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` — expected a number"
+                ))
+                .with_span(entry_span(e)));
             }
         }
     }
     Ok(())
 }
 
-fn validate_duration(block: &ServerConfigurationBlock, name: &str) -> Result<(), Box<dyn Error>> {
+fn validate_duration(
+    block: &ServerConfigurationBlock,
+    name: &str,
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(entries) = block.directives.get(name) {
-        for e in entries {
-            if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
-                parse_duration(val).map_err(|e| format!("Invalid `{name}` duration: {e}"))?;
+        for entry in entries {
+            if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
+                parse_duration(val).map_err(|parse_err| {
+                    ConfigurationValidationError::from(format!("Invalid `{name}` duration: {parse_err}"))
+                        .with_span(entry_span(entry))
+                })?;
             } else {
-                return Err(format!("Invalid `{name}` — expected a duration string").into());
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` — expected a duration string"
+                ))
+                .with_span(entry_span(entry)));
             }
         }
     }
     Ok(())
 }
 
-fn validate_request_header(block: &ServerConfigurationBlock) -> Result<(), Box<dyn Error>> {
+fn validate_request_header(
+    block: &ServerConfigurationBlock,
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(entries) = block.directives.get("request_header") {
-        for e in entries {
-            if e.args.is_empty() {
-                return Err("request_header requires at least one argument".into());
+        for entry in entries {
+            if entry.args.is_empty() {
+                return Err(ConfigurationValidationError::from(
+                    "request_header requires at least one argument",
+                )
+                .with_span(entry_span(entry)));
             }
-            let first = e.args[0]
-                .as_str()
-                .ok_or("The header name must be a string")?;
+            let first = entry.args[0].as_str().ok_or_else(|| {
+                ConfigurationValidationError::from("The header name must be a string")
+                    .with_span(entry_span(entry))
+            })?;
             let (name, needs_value) = match first.chars().next() {
                 Some('+') => (&first[1..], true),
                 Some('-') => (&first[1..], false),
                 _ => (first, true),
             };
-            HeaderName::from_str(name).map_err(|e| format!("Invalid header name '{name}': {e}"))?;
+            HeaderName::from_str(name).map_err(|parse_err| {
+                ConfigurationValidationError::from(format!("Invalid header name '{name}': {parse_err}"))
+                    .with_span(entry_span(entry))
+            })?;
             if needs_value
-                && e.args
+                && entry.args
                     .get(1)
                     .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     .is_none()
             {
-                return Err("request_header requires a value for add/replace operations".into());
+                return Err(ConfigurationValidationError::from(
+                    "request_header requires a value for add/replace operations",
+                )
+                .with_span(entry_span(entry)));
             }
         }
     }
@@ -169,7 +206,7 @@ fn validate_upstream_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(entries) = block.directives.get("upstream") {
         parent_used.insert("upstream".to_string());
         for e in entries {
@@ -178,7 +215,10 @@ fn validate_upstream_directives(
                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 .is_none()
             {
-                return Err("The `upstream` directive requires a URL argument".into());
+                return Err(ConfigurationValidationError::from(
+                    "The `upstream` directive requires a URL argument",
+                )
+                .with_span(entry_span(e)));
             }
             if let Some(value) = e.args.first() {
                 warn_user_controlled_upstream(value, e, ctx);
@@ -194,7 +234,7 @@ fn validate_upstream_directives(
 fn validate_upstream_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     validate_active_check_directives(block, ctx, &mut sub)?;
@@ -216,30 +256,35 @@ fn validate_upstream_block(
     ferron_core::validate_nested!(block, used(sub), logical_dns, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), dns_servers, args(1) => [ServerConfigurationValue::String(_, _)]);
     if block.directives.contains_key("connection_timeout") {
-        sub.insert("idle_timeout".to_string());
+        sub.insert("connection_timeout".to_string());
     }
     validate_duration(block, "connection_timeout")?;
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
-        return Err("Unix sockets are not supported on this platform".into());
+        return Err(ConfigurationValidationError::from(
+            "Unix sockets are not supported on this platform",
+        )
+        .with_span(first_entry_span(block, "unix")));
     }
 
     ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
     Ok(())
 }
 
-/// Validate SRV upstream directives.
 #[cfg(feature = "srv-lookup")]
 fn validate_srv_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(entries) = block.directives.get("srv") {
         parent_used.insert("srv".to_string());
         for e in entries {
             if e.args.first().and_then(|v| v.as_str()).is_none() {
-                return Err("The `srv` directive requires an SRV record name argument".into());
+                return Err(ConfigurationValidationError::from(
+                    "The `srv` directive requires an SRV record name argument",
+                )
+                .with_span(entry_span(e)));
             }
             if let Some(srv_block) = &e.children {
                 validate_srv_block(srv_block, ctx)?;
@@ -253,7 +298,7 @@ fn validate_srv_directives(
 fn validate_srv_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     if block.directives.contains_key("limit") {
@@ -278,7 +323,7 @@ fn validate_active_check_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(ac_entry) = block.directives.get("active_check").and_then(|d| d.first()) {
         parent_used.insert("active_check".to_string());
         if let Some(active_block) = ac_entry.children.as_ref() {
@@ -335,7 +380,7 @@ fn validate_circuit_breaker_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(cb_entry) = block
         .directives
         .get("circuit_breaker")
@@ -395,7 +440,7 @@ fn validate_retry_budget_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
     parent_used: &mut std::collections::HashSet<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(rb_entry) = block.directives.get("retry_budget").and_then(|d| d.first()) {
         parent_used.insert("retry_budget".to_string());
         if let Some(rb_block) = rb_entry.children.as_ref() {
@@ -414,15 +459,17 @@ fn validate_retry_budget_directives(
                         match rate {
                             Some(r) if (0.0..=1.0).contains(&r) => {}
                             _ => {
-                                return Err(
-                                    "Invalid `retry_budget.max_retry_rate` — must be between 0.0 and 1.0 (or 0–100 as percentage)".into(),
-                                );
+                                return Err(ConfigurationValidationError::from(
+                                    "Invalid `retry_budget.max_retry_rate` — must be between 0.0 and 1.0 (or 0–100 as percentage)",
+                                )
+                                .with_span(entry_span(e)));
                             }
                         }
                     } else {
-                        return Err(
-                            "Invalid `retry_budget.max_retry_rate` — expected a number".into()
-                        );
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `retry_budget.max_retry_rate` — expected a number",
+                        )
+                        .with_span(entry_span(e)));
                     }
                 }
             }
@@ -440,14 +487,17 @@ fn validate_retry_budget_directives(
                         match rate {
                             Some(r) if r >= 0.0 => {}
                             _ => {
-                                return Err(
-                                    "Invalid `retry_budget.refill_rate` — must be non-negative"
-                                        .into(),
-                                );
+                                return Err(ConfigurationValidationError::from(
+                                    "Invalid `retry_budget.refill_rate` — must be non-negative",
+                                )
+                                .with_span(entry_span(e)));
                             }
                         }
                     } else {
-                        return Err("Invalid `retry_budget.refill_rate` — expected a number".into());
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `retry_budget.refill_rate` — expected a number",
+                        )
+                        .with_span(entry_span(e)));
                     }
                 }
             }
@@ -462,29 +512,6 @@ fn validate_retry_budget_directives(
     }
 
     Ok(())
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}
-
-fn first_entry_span(
-    block: &ServerConfigurationBlock,
-    directive: &str,
-) -> Option<ServerConfigurationSpan> {
-    block
-        .directives
-        .get(directive)
-        .and_then(|entries| entries.first())
-        .and_then(entry_span)
 }
 
 fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {

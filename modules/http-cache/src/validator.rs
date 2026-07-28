@@ -1,8 +1,9 @@
 use cidr::IpCidr;
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-    ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use http::header::HeaderName;
 
@@ -30,7 +31,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
         if is_global {
@@ -39,14 +40,15 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                 for entry in entries {
                     if !entry.args.is_empty() {
                         return Err(
-                            "Invalid `cache` - global cache configuration only supports block form"
-                                .into(),
+                            ConfigurationValidationError::from("Invalid `cache` - global cache configuration only supports block form")
+                                .with_span(entry_span(entry)),
                         );
                     }
 
                     let Some(children) = &entry.children else {
                         return Err(
-                            "Invalid `cache` - global cache configuration requires a block".into(),
+                            ConfigurationValidationError::from("Invalid `cache` - global cache configuration requires a block")
+                                .with_span(entry_span(entry)),
                         );
                     };
 
@@ -59,8 +61,8 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                     )?;
                     if !children.directives.contains_key("max_entries") {
                         return Err(
-                            "Invalid `cache` - global cache configuration requires `max_entries`"
-                                .into(),
+                            ConfigurationValidationError::from("Invalid `cache` - global cache configuration requires `max_entries`")
+                                .with_span(children.span.clone()),
                         );
                     }
 
@@ -87,7 +89,8 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                 if let Some(children) = &entry.children {
                     if !entry.args.is_empty() {
                         return Err(
-                            "Invalid `cache` - block form does not accept boolean arguments".into(),
+                            ConfigurationValidationError::from("Invalid `cache` - block form does not accept boolean arguments")
+                                .with_span(entry_span(entry)),
                         );
                     }
 
@@ -101,12 +104,14 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                 } else {
                     if entry.args.len() > 1 {
                         return Err(
-                            "Invalid `cache` - expected at most one boolean argument".into()
+                            ConfigurationValidationError::from("Invalid `cache` - expected at most one boolean argument")
+                                .with_span(entry_span(entry)),
                         );
                     }
                     if let Some(value) = entry.args.first() {
                         if value.as_boolean().is_none() {
-                            return Err("Invalid `cache` - expected a boolean value".into());
+                            return Err(ConfigurationValidationError::from("Invalid `cache` - expected a boolean value")
+                                .with_span(entry_span(entry)));
                         }
                     }
                 }
@@ -123,7 +128,7 @@ fn validate_cache_block(
     allowed_directives: &[&str],
     parent_has_basic_auth: bool,
     is_global: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     for allowed in allowed_directives {
@@ -135,7 +140,8 @@ fn validate_cache_block(
             for entry in entries {
                 if entry.children.is_some() {
                     return Err(
-                        format!("Invalid `{allowed}` - nested blocks are not supported").into(),
+                        ConfigurationValidationError::from(format!("Invalid `{allowed}` - nested blocks are not supported"))
+                            .with_span(entry_span(entry)),
                     );
                 }
             }
@@ -143,6 +149,12 @@ fn validate_cache_block(
     }
 
     ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
+
+    if let Some(entries) = block.directives.get("max_entries") {
+        for entry in entries {
+            validate_single_non_negative_integer(entry, "max_entries")?;
+        }
+    }
 
     if let Some(entries) = block.directives.get("max_entries") {
         for entry in entries {
@@ -232,7 +244,8 @@ fn validate_cache_block(
                 validate_purge_propagation_block(children, ctx)?;
             } else {
                 return Err(
-                    "Invalid `purge_propagation` - expected a block with nested directives".into(),
+                    ConfigurationValidationError::from("Invalid `purge_propagation` - expected a block with nested directives")
+                        .with_span(entry_span(entry)),
                 );
             }
         }
@@ -241,15 +254,18 @@ fn validate_cache_block(
     if let Some(entries) = block.directives.get("zone") {
         for entry in entries {
             if !is_global && entry.children.is_some() {
-                return Err("Invalid `zone` - expected a string argument, not a block".into());
+                return Err(ConfigurationValidationError::from("Invalid `zone` - expected a string argument, not a block")
+                    .with_span(entry_span(entry)));
             }
             if entry.args.len() != 1 {
                 return Err(
-                    "Invalid `zone` - expected exactly one string argument (the zone name)".into(),
+                    ConfigurationValidationError::from("Invalid `zone` - expected exactly one string argument (the zone name)")
+                        .with_span(entry_span(entry)),
                 );
             }
             if entry.args.first().and_then(|v| v.as_str()).is_none() {
-                return Err("Invalid `zone` - expected a string value".into());
+                return Err(ConfigurationValidationError::from("Invalid `zone` - expected a string value")
+                    .with_span(entry_span(entry)));
             }
         }
     }
@@ -262,7 +278,7 @@ const PURGE_PROPAGATION_DIRECTIVES: &[&str] = &["control_plane_url", "shared_sec
 fn validate_purge_propagation_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     for allowed in PURGE_PROPAGATION_DIRECTIVES {
@@ -271,17 +287,21 @@ fn validate_purge_propagation_block(
             for entry in entries {
                 if entry.children.is_some() {
                     return Err(
-                        format!("Invalid `{allowed}` - nested blocks are not supported").into(),
+                        ConfigurationValidationError::from(format!("Invalid `{allowed}` - nested blocks are not supported"))
+                            .with_span(entry_span(entry)),
                     );
                 }
                 if entry.args.len() != 1 {
-                    return Err(format!(
+                    return Err(ConfigurationValidationError::from(format!(
                         "Invalid `{allowed}` - expected exactly one string argument"
-                    )
-                    .into());
+                    ))
+                    .with_span(entry_span(entry)));
                 }
                 if entry.args.first().and_then(|v| v.as_str()).is_none() {
-                    return Err(format!("Invalid `{allowed}` - expected a string value").into());
+                    return Err(
+                        ConfigurationValidationError::from(format!("Invalid `{allowed}` - expected a string value"))
+                            .with_span(entry_span(entry)),
+                    );
                 }
             }
         }
@@ -314,28 +334,18 @@ fn validate_purge_propagation_block(
     Ok(())
 }
 
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}
-
 fn validate_boolean_entry(
     entry: &ServerConfigurationDirectiveEntry,
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if entry.args.len() > 1 {
-        return Err(format!("Invalid `{name}` - expected at most one boolean argument").into());
+        return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected at most one boolean argument"))
+            .with_span(entry_span(entry)));
     }
     if let Some(value) = entry.args.first() {
         if value.as_boolean().is_none() {
-            return Err(format!("Invalid `{name}` - expected a boolean value").into());
+            return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected a boolean value"))
+                .with_span(entry_span(entry)));
         }
     }
     Ok(())
@@ -344,17 +354,18 @@ fn validate_boolean_entry(
 fn validate_single_non_negative_integer(
     entry: &ServerConfigurationDirectiveEntry,
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if entry.args.len() != 1 {
-        return Err(format!("Invalid `{name}` - expected exactly one integer argument").into());
+        return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected exactly one integer argument"))
+            .with_span(entry_span(entry)));
     }
-    let value = entry
-        .args
-        .first()
-        .and_then(ServerConfigurationValue::as_number)
-        .ok_or_else(|| format!("Invalid `{name}` - expected an integer value"))?;
+    let value = entry.args.first().and_then(ServerConfigurationValue::as_number).ok_or_else(|| {
+        ConfigurationValidationError::from(format!("Invalid `{name}` - expected an integer value"))
+            .with_span(entry_span(entry))
+    })?;
     if value < 0 {
-        return Err(format!("Invalid `{name}` - expected a non-negative integer").into());
+        return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected a non-negative integer"))
+            .with_span(entry_span(entry)));
     }
     Ok(())
 }
@@ -362,18 +373,25 @@ fn validate_single_non_negative_integer(
 fn validate_cidr_list(
     entries: &[ServerConfigurationDirectiveEntry],
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     for entry in entries {
         if entry.args.is_empty() {
-            return Err(format!("Invalid `{name}` - expected at least one IP or CIDR").into());
+            return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected at least one IP or CIDR"))
+                .with_span(entry_span(entry)));
         }
         for arg in &entry.args {
-            let value = arg
-                .as_str()
-                .ok_or_else(|| format!("Invalid `{name}` - expected string IP/CIDR values"))?;
-            value
-                .parse::<IpCidr>()
-                .map_err(|_| format!("Invalid `{name}` - invalid IP or CIDR `{value}`"))?;
+            let value = arg.as_str().ok_or_else(|| {
+                ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` - expected string IP/CIDR values"
+                ))
+                .with_span(entry_span(entry))
+            })?;
+            value.parse::<IpCidr>().map_err(|_| {
+                ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` - invalid IP or CIDR `{value}`"
+                ))
+                .with_span(entry_span(entry))
+            })?;
         }
     }
     Ok(())
@@ -382,17 +400,25 @@ fn validate_cidr_list(
 fn validate_header_name_list(
     entries: &[ServerConfigurationDirectiveEntry],
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     for entry in entries {
         if entry.args.is_empty() {
-            return Err(format!("Invalid `{name}` - expected at least one header name").into());
+            return Err(ConfigurationValidationError::from(format!("Invalid `{name}` - expected at least one header name"))
+                .with_span(entry_span(entry)));
         }
         for arg in &entry.args {
-            let value = arg
-                .as_str()
-                .ok_or_else(|| format!("Invalid `{name}` - expected string header names"))?;
-            HeaderName::from_bytes(value.trim().as_bytes())
-                .map_err(|_| format!("Invalid `{name}` - invalid header name `{value}`"))?;
+            let value = arg.as_str().ok_or_else(|| {
+                ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` - expected string header names"
+                ))
+                .with_span(entry_span(entry))
+            })?;
+            HeaderName::from_bytes(value.trim().as_bytes()).map_err(|_| {
+                ConfigurationValidationError::from(format!(
+                    "Invalid `{name}` - invalid header name `{value}`"
+                ))
+                .with_span(entry_span(entry))
+            })?;
         }
     }
     Ok(())
@@ -403,18 +429,23 @@ const GLOBAL_ZONE_DIRECTIVES: &[&str] = &["max_entries"];
 fn validate_global_zone_block(
     entry: &ServerConfigurationDirectiveEntry,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     // zone must have exactly one string argument (the zone name)
     if entry.args.len() != 1 {
-        return Err("Invalid `zone` - expected exactly one string argument (the zone name)".into());
+        return Err(
+            ConfigurationValidationError::from("Invalid `zone` - expected exactly one string argument (the zone name)")
+                .with_span(entry_span(entry)),
+        );
     }
     if entry.args.first().and_then(|v| v.as_str()).is_none() {
-        return Err("Invalid `zone` - expected a string value".into());
+        return Err(ConfigurationValidationError::from("Invalid `zone` - expected a string value")
+            .with_span(entry_span(entry)));
     }
 
     // zone must be a block
     let Some(children) = &entry.children else {
-        return Err("Invalid `zone` - expected a block with nested directives".into());
+        return Err(ConfigurationValidationError::from("Invalid `zone` - expected a block with nested directives")
+            .with_span(entry_span(entry)));
     };
 
     // Validate allowed subdirectives inside the zone block
@@ -425,7 +456,8 @@ fn validate_global_zone_block(
             for entry in entries {
                 if entry.children.is_some() {
                     return Err(
-                        format!("Invalid `{allowed}` - nested blocks are not supported").into(),
+                        ConfigurationValidationError::from(format!("Invalid `{allowed}` - nested blocks are not supported"))
+                            .with_span(entry_span(entry)),
                     );
                 }
             }

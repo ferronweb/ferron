@@ -11,8 +11,10 @@ use clap::Parser;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::validator::{
-    ConfigurationValidatorContext, ConfigurationValidatorDiagnosticKind,
+    ConfigurationValidatorContext, ConfigurationValidatorDiagnostic,
+    ConfigurationValidatorDiagnosticKind,
 };
+use ferron_core::config::ServerConfigurationSpan;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
@@ -441,7 +443,7 @@ fn run_configuration_validators(
             let diagnostic = validator_ctx.create_diagnostic(
                 ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                 err.to_string(),
-                config.global_config.span.clone(),
+                err.span.or(config.global_config.span.clone()),
             );
             all_diagnostics.extend(validator_ctx.diagnostics);
             all_diagnostics.push(diagnostic);
@@ -451,20 +453,20 @@ fn run_configuration_validators(
             };
         }
     }
-    let unused_global_directives: Vec<String> = config
+    let unused_global_directives: Vec<(String, Option<ServerConfigurationSpan>)> = config
         .global_config
         .directives
-        .keys()
-        .filter(|d| !validator_ctx.used_directives.contains(*d))
-        .cloned()
+        .iter()
+        .filter(|d| !validator_ctx.used_directives.contains(d.0))
+        .flat_map(|d| d.1.iter().map(|s| (d.0.clone(), s.span.clone())))
         .collect();
-    for directive in unused_global_directives {
+    for (directive, span) in unused_global_directives {
         validator_ctx
             .diagnostics
             .push(validator_ctx.create_diagnostic(
                 ConfigurationValidatorDiagnosticKind::UnknownDirective,
                 format!("`{directive}` is unused in the block"),
-                config.global_config.span.clone(),
+                span.or(config.global_config.span.clone()),
             ));
     }
     all_diagnostics.append(&mut validator_ctx.diagnostics);
@@ -488,7 +490,7 @@ fn run_configuration_validators(
                         let diagnostic = validator_ctx.create_diagnostic(
                             ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                             err.to_string(),
-                            block.1.span.clone(),
+                            err.span.or(block.1.span.clone()),
                         );
                         all_diagnostics.extend(validator_ctx.diagnostics);
                         all_diagnostics.push(diagnostic);
@@ -498,20 +500,20 @@ fn run_configuration_validators(
                         };
                     }
                 }
-                let unused_directives: Vec<String> = block
+                let unused_directives: Vec<(String, Option<ServerConfigurationSpan>)> = block
                     .1
                     .directives
-                    .keys()
-                    .filter(|d| !validator_ctx.used_directives.contains(*d))
-                    .cloned()
+                    .iter()
+                    .filter(|d| !validator_ctx.used_directives.contains(d.0))
+                    .flat_map(|d| d.1.iter().map(|s| (d.0.clone(), s.span.clone())))
                     .collect();
-                for directive in unused_directives {
+                for (directive, span) in unused_directives {
                     validator_ctx
                         .diagnostics
                         .push(validator_ctx.create_diagnostic(
                             ConfigurationValidatorDiagnosticKind::UnknownDirective,
                             format!("`{directive}` is unused in the block"),
-                            block.1.span.clone(),
+                            span.or(block.1.span.clone()),
                         ));
                 }
                 all_diagnostics.append(&mut validator_ctx.diagnostics);
@@ -684,9 +686,37 @@ fn validate(
         loader.register_scoped_configuration_validators(&mut scoped_validator_registry);
     }
 
-    let (config, _, _) = config_adapter
-        .adapt(&config_adapter_params)
-        .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
+    let (config, _, _) = {
+        let result = config_adapter.adapt(&config_adapter_params);
+        if !json {
+            result.map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?
+        } else {
+            let resultv = match result {
+                Ok(resultv) => resultv,
+                Err(e) => {
+                    let validation_result = ConfigurationValidationResult {
+                        valid: false,
+                        diagnostics: vec![ConfigurationValidatorDiagnostic {
+                            kind: ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            message: e.to_string(),
+                            span: e.span,
+                            scope: None,
+                        }],
+                    };
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&validation_result).map_err(
+                            |e| anyhow::anyhow!(
+                                "Failed to prepare JSON configuration validation result {e}"
+                            )
+                        )?
+                    );
+                    std::process::exit(1);
+                }
+            };
+            resultv
+        }
+    };
 
     let mut validation_result = run_configuration_validators(
         &mut loaders,

@@ -1,12 +1,10 @@
-//! Configuration validation for the `set_var` and `log_field` directives.
-
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
-/// Recognized sub-directives inside a `set_var { ... }` block.
 const SET_VAR_BLOCK_DIRECTIVES: &[&str] = &["value", "case_insensitive", "negate"];
 
-/// Validator for `set_var` and `log_field` configuration.
 #[derive(Default)]
 pub struct VariablesValidator;
 
@@ -15,7 +13,7 @@ impl ConfigurationValidator for VariablesValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if let Some(entries) = config.directives.get("set_var") {
             ctx.used_directives.insert("set_var".to_string());
             for entry in entries {
@@ -39,17 +37,15 @@ impl VariablesValidator {
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Must have exactly 3 positional arguments: source, regex, variable
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 3 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `set_var` — must have exactly three arguments (source, regex, variable), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
-        // All three args must be strings
         for (i, arg) in entry.args.iter().enumerate() {
             let label = match i {
                 0 => "source",
@@ -62,31 +58,22 @@ impl VariablesValidator {
                 ServerConfigurationValue::String(_, _)
                     | ServerConfigurationValue::InterpolatedString(_, _)
             ) {
-                return Err(
-                    format!("Invalid `set_var` — the {label} argument must be a string").into(),
-                );
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `set_var` — the {label} argument must be a string"
+                ))
+                .with_span(entry_span(entry)));
             }
         }
 
-        // Validate regex compiles
         if let ServerConfigurationValue::String(pattern, span) = &entry.args[1] {
             if let Err(e) = fancy_regex::Regex::new(pattern) {
-                let location = span.as_ref().map_or_else(String::new, |s| {
-                    format!(
-                        " (file '{}', line {}, column {})",
-                        s.file.as_deref().unwrap_or("unknown"),
-                        s.line,
-                        s.column
-                    )
-                });
-                return Err(format!(
-                    "Invalid `set_var` — failed to compile regular expression{location}: {e}"
-                )
-                .into());
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `set_var` — failed to compile regular expression: {e}"
+                ))
+                .with_span(span.clone()));
             }
         }
 
-        // Validate optional block
         if let Some(children) = &entry.children {
             self.validate_set_var_block(children, ctx)?;
         }
@@ -98,15 +85,17 @@ impl VariablesValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
         for (key, entries) in block.directives.iter() {
             if !SET_VAR_BLOCK_DIRECTIVES.contains(&key.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `set_var` — unknown sub-directive `{key}` inside set_var block (recognized: {})",
                     SET_VAR_BLOCK_DIRECTIVES.join(", ")
-                )
-                .into());
+                ))
+                .with_span(entry_span(
+                    entries.first().expect("non-empty block directives"),
+                )));
             }
 
             sub.insert(key.clone());
@@ -130,13 +119,13 @@ impl VariablesValidator {
     fn validate_value_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 1 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `value` inside set_var block — must have exactly one argument, got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
         if !matches!(
@@ -144,7 +133,10 @@ impl VariablesValidator {
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `value` inside set_var block — the value must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `value` inside set_var block — the value must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -154,21 +146,22 @@ impl VariablesValidator {
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if !(0..=1).contains(&entry.args.len()) {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `{name}` inside set_var block — must have zero or one argument"
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
         if !matches!(
             entry.args.first(),
             Some(ServerConfigurationValue::Boolean(_, _)) | None
         ) {
-            return Err(
-                format!("Invalid `{name}` inside set_var block — must be a boolean").into(),
-            );
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `{name}` inside set_var block — must be a boolean"
+            ))
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -178,34 +171,35 @@ impl VariablesValidator {
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         _ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Must have exactly 2 positional arguments: field_name, source
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 2 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `log_field` — must have exactly two arguments (field name and source), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
-        // First arg (field name) must be a string
         if !matches!(
             &entry.args[0],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `log_field` — the field name must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `log_field` — the field name must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
-        // Second arg (source) can be a plain string or interpolated string
         if !matches!(
             &entry.args[1],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err(
-                "Invalid `log_field` — the source must be a string or interpolated string".into(),
-            );
+            return Err(ConfigurationValidationError::from(
+                "Invalid `log_field` — the source must be a string or interpolated string",
+            )
+            .with_span(entry_span(entry)));
         }
 
         Ok(())

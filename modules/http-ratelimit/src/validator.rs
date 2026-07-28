@@ -1,4 +1,6 @@
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
 use crate::key_extractor::KeyExtractor;
@@ -35,7 +37,7 @@ impl ConfigurationValidator for RateLimitValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
 
         if let Some(entries) = config.directives.get("rate_limit") {
@@ -65,7 +67,7 @@ impl RateLimitValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         // Check if this block defines named zones
         let has_zones = block.directives.contains_key("zone");
 
@@ -75,20 +77,23 @@ impl RateLimitValidator {
                 for entry in entries {
                     // Zone must have exactly one string argument
                     if entry.args.len() != 1 {
-                        return Err(
-                            "Invalid `zone` — expected exactly one string argument (the zone name)"
-                                .into(),
-                        );
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `zone` — expected exactly one string argument (the zone name)",
+                        )
+                        .with_span(entry_span(entry)));
                     }
                     if entry.args.first().and_then(|v| v.as_str()).is_none() {
-                        return Err("Invalid `zone` — expected a string value".into());
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `zone` — expected a string value",
+                        )
+                        .with_span(entry_span(entry)));
                     }
                     // Zone definition should not have a block
                     if entry.children.is_some() {
-                        return Err(
-                            "Invalid `zone` — zone definition should not have a nested block"
-                                .into(),
-                        );
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `zone` — zone definition should not have a nested block",
+                        )
+                        .with_span(entry_span(entry)));
                     }
                 }
             }
@@ -105,7 +110,7 @@ impl RateLimitValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         self.validate_rate_limit_block(block, ctx, HOST_RATE_LIMIT_DIRECTIVES)
     }
 
@@ -115,23 +120,26 @@ impl RateLimitValidator {
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
         allowed_directives: &[&str],
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !allowed_directives.contains(&directive_name.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in rate_limit block"
-                )
-                .into());
+                ))
+                .with_span(first_entry_span(block, directive_name)));
             }
         }
 
         // Validate `rate` — required, must be a positive integer
         let rate_entry = block.directives.get("rate");
         if rate_entry.is_none() {
-            return Err("Invalid `rate_limit` — missing required `rate` directive".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `rate_limit` — missing required `rate` directive",
+            )
+            .with_span(block.span.clone()));
         }
 
         for entry in rate_entry.into_iter().flatten() {
@@ -152,14 +160,15 @@ impl RateLimitValidator {
             sub.insert("key".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
-                    let key_str = value
-                        .as_str()
-                        .ok_or("Invalid `key` — must be a string value")?;
+                    let key_str = value.as_str().ok_or_else(|| {
+                        ConfigurationValidationError::from("Invalid `key` — must be a string value")
+                            .with_span(entry_span(entry))
+                    })?;
                     if KeyExtractor::from_str(key_str).is_none() {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid `key` — must be one of: remote_address, uri, request.header.<name> (got '{key_str}')"
-                        )
-                        .into());
+                        ))
+                        .with_span(entry_span(entry)));
                     }
                 }
             }
@@ -169,17 +178,20 @@ impl RateLimitValidator {
         if let Some(entries) = block.directives.get("deny_status") {
             sub.insert("deny_status".to_string());
             for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    let n = value
-                        .as_number()
-                        .ok_or("Invalid `deny_status` — must be an integer value")?;
-                    if !(100..=599).contains(&n) {
-                        return Err(
-                            "Invalid `deny_status` — must be a valid HTTP status code (100-599)"
-                                .into(),
-                        );
+                    if let Some(value) = entry.args.first() {
+                        let n = value.as_number().ok_or_else(|| {
+                            ConfigurationValidationError::from(
+                                "Invalid `deny_status` — must be an integer value",
+                            )
+                            .with_span(entry_span(entry))
+                        })?;
+                        if !(100..=599).contains(&n) {
+                            return Err(ConfigurationValidationError::from(
+                                "Invalid `deny_status` — must be a valid HTTP status code (100-599)",
+                            )
+                            .with_span(entry_span(entry)));
+                        }
                     }
-                }
             }
         }
 
@@ -206,7 +218,10 @@ impl RateLimitValidator {
                 if !entry.args.is_empty()
                     && entry.args.first().and_then(|a| a.as_boolean()).is_none()
                 {
-                    return Err("Invalid `throttle` — expected a boolean value".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `throttle` — expected a boolean value",
+                    )
+                    .with_span(entry_span(entry)));
                 }
             }
         }
@@ -216,16 +231,22 @@ impl RateLimitValidator {
             sub.insert("zone".to_string());
             for entry in entries {
                 if entry.children.is_some() {
-                    return Err("Invalid `zone` — expected a string argument, not a block".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `zone` — expected a string argument, not a block",
+                    )
+                    .with_span(entry_span(entry)));
                 }
                 if entry.args.len() != 1 {
-                    return Err(
-                        "Invalid `zone` — expected exactly one string argument (the zone name)"
-                            .into(),
-                    );
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `zone` — expected exactly one string argument (the zone name)",
+                    )
+                    .with_span(entry_span(entry)));
                 }
                 if entry.args.first().and_then(|v| v.as_str()).is_none() {
-                    return Err("Invalid `zone` — expected a string value".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `zone` — expected a string value",
+                    )
+                    .with_span(entry_span(entry)));
                 }
             }
         }
@@ -245,16 +266,20 @@ impl RateLimitValidator {
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
         min: i64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let value = entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
-        let n = value
-            .as_number()
-            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let value = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!("Invalid `{name}` — must be an integer value"))
+                .with_span(entry_span(entry))
+        })?;
+        let n = value.as_number().ok_or_else(|| {
+            ConfigurationValidationError::from(format!("Invalid `{name}` — must be an integer value"))
+                .with_span(entry_span(entry))
+        })?;
         if n < min {
-            return Err(format!("Invalid `{name}` — must be >= {min}").into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be >= {min}"
+            ))
+            .with_span(entry_span(entry)));
         }
         Ok(())
     }

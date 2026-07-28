@@ -1,3 +1,4 @@
+use ferron_core::config::validator::{entry_span, ConfigurationValidationError};
 use ferron_core::config::ServerConfigurationValue;
 
 pub struct CgiConfigurationValidator;
@@ -7,7 +8,7 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let used_directives = &mut ctx.used_directives;
         ferron_core::validate_directive!(config, used_directives, cgi, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {
             let mut sub = std::collections::HashSet::new();
@@ -18,10 +19,10 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
                 sub.insert(stringify!(interpreter).to_string());
                 for directive in directives {
                     if directive.args.len() < 2 {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid directive '{}': 'interpreter' subdirective requires at least two arguments",
                             stringify!(cgi)
-                        ).into());
+                        )).with_span(entry_span(directive)));
                     }
 
                     let mut strings_only = true;
@@ -34,26 +35,24 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
                     if !strings_only {
                         if !matches!(directive.args[0], ServerConfigurationValue::String(_, _))
                         {
-                            return Err(format!(
+                            return Err(ConfigurationValidationError::from(format!(
                                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                                 stringify!(cgi),
                                 stringify!(interpreter),
                                 0
-                            )
-                            .into());
+                            )).with_span(entry_span(directive)));
                         }
                         if !matches!(
                             directive.args[1],
                             ServerConfigurationValue::Boolean(false, _)
                         )
                         {
-                            return Err(format!(
+                            return Err(ConfigurationValidationError::from(format!(
                                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                                 stringify!(cgi),
                                 stringify!(interpreter),
                                 1
-                            )
-                            .into());
+                            )).with_span(entry_span(directive)));
                         };
                     }
                 }

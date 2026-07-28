@@ -1,4 +1,6 @@
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    ConfigurationValidator, ConfigurationValidationError, entry_span, first_entry_span,
+};
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
     ServerConfigurationValue,
@@ -12,7 +14,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let mut concurrent_conns_warn: Option<ServerConfigurationSpan> = None;
         let mut no_verification_warn: Option<ServerConfigurationSpan> = None;
@@ -26,13 +28,15 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                     used_directives.insert(stringify!(auth_to_concurrent_conns).to_string());
                     for directive in directives {
                         if directive.args.len() != 1 {
-                            return Err(format!(
-                                "Invalid directive '{}': expected {} argument(s), got {}",
-                                stringify!(auth_to_concurrent_conns),
-                                1,
-                                directive.args.len()
-                            )
-                            .into());
+                            return Err(
+                                ConfigurationValidationError::from(format!(
+                                    "Invalid directive '{}': expected {} argument(s), got {}",
+                                    stringify!(auth_to_concurrent_conns),
+                                    1,
+                                    directive.args.len()
+                                ))
+                                .with_span(entry_span(directive)),
+                            );
                         }
                         if !matches!(
                             directive.args[0],
@@ -41,11 +45,13 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                             directive.args[0],
                             ServerConfigurationValue::Boolean(false, _)
                         ) {
-                            return Err(format!(
-                                "Invalid directive '{}': invalid type",
-                                stringify!(auth_to_concurrent_conns)
-                            )
-                            .into());
+                            return Err(
+                                ConfigurationValidationError::from(format!(
+                                    "Invalid directive '{}': invalid type",
+                                    stringify!(auth_to_concurrent_conns)
+                                ))
+                                .with_span(entry_span(directive)),
+                            );
                         }
                         if matches!(
                             directive.args[0],
@@ -88,29 +94,6 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
 
         Ok(())
     }
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}
-
-fn first_entry_span(
-    block: &ServerConfigurationBlock,
-    directive: &str,
-) -> Option<ServerConfigurationSpan> {
-    block
-        .directives
-        .get(directive)
-        .and_then(|entries| entries.first())
-        .and_then(entry_span)
 }
 
 fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {

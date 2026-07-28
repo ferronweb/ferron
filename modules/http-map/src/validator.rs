@@ -1,5 +1,7 @@
 use fancy_regex::Regex;
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 /// Recognized sub-directives inside a `map { ... }` block.
@@ -17,7 +19,7 @@ impl ConfigurationValidator for MapValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if let Some(entries) = config.directives.get("map") {
             ctx.used_directives.insert("map".to_string());
             for entry in entries {
@@ -34,42 +36,44 @@ impl MapValidator {
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Must have exactly 2 positional arguments: source and destination
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 2 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `map` — must have exactly two arguments (source variable and destination variable), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
-        // First arg must be a string (source variable)
         if !matches!(
             &entry.args[0],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err(
-                "Invalid `map` — the source must be a plain string or interpolated string".into(),
-            );
+            return Err(ConfigurationValidationError::from(
+                "Invalid `map` — the source must be a plain string or interpolated string",
+            )
+            .with_span(entry_span(entry)));
         }
 
-        // Second arg must be a string (destination variable name)
         if !matches!(
             &entry.args[1],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `map` — the destination variable name must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `map` — the destination variable name must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
-        // Must have a child block
         let Some(children) = &entry.children else {
-            return Err("Invalid `map` — a nested block with mapping entries is required".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `map` — a nested block with mapping entries is required",
+            )
+            .with_span(entry_span(entry)));
         };
 
-        // Validate the child block
         self.validate_map_block(children, ctx)?;
 
         Ok(())
@@ -79,15 +83,17 @@ impl MapValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
         for (key, entries) in block.directives.iter() {
             if !MAP_BLOCK_DIRECTIVES.contains(&key.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `map` — unknown sub-directive `{key}` inside map block (recognized: {})",
                     MAP_BLOCK_DIRECTIVES.join(", ")
-                )
-                .into());
+                ))
+                .with_span(entry_span(
+                    entries.first().expect("non-empty block directives"),
+                )));
             }
 
             sub.insert(key.clone());
@@ -112,13 +118,13 @@ impl MapValidator {
     fn validate_default_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 1 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `default` inside map block — must have exactly one argument (the default value), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
         if !matches!(
@@ -126,7 +132,10 @@ impl MapValidator {
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `default` inside map block — the value must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `default` inside map block — the value must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -135,13 +144,13 @@ impl MapValidator {
     fn validate_exact_entry(
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 2 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `exact` inside map block — must have exactly two arguments (pattern and result), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
         if !matches!(
@@ -149,7 +158,10 @@ impl MapValidator {
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `exact` inside map block — the pattern must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `exact` inside map block — the pattern must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
         if !matches!(
@@ -157,7 +169,10 @@ impl MapValidator {
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `exact` inside map block — the result must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `exact` inside map block — the result must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -167,51 +182,46 @@ impl MapValidator {
         &self,
         entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if entry.args.len() != 2 {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `regex` inside map block — must have exactly two arguments (pattern and result), got {}",
                 entry.args.len()
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
-        // First arg must be a string (regex pattern)
         if !matches!(
             &entry.args[0],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `regex` inside map block — the pattern must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `regex` inside map block — the pattern must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
-        // Second arg must be a string (result)
         if !matches!(
             &entry.args[1],
             ServerConfigurationValue::String(_, _)
                 | ServerConfigurationValue::InterpolatedString(_, _)
         ) {
-            return Err("Invalid `regex` inside map block — the result must be a string".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `regex` inside map block — the result must be a string",
+            )
+            .with_span(entry_span(entry)));
         }
 
-        // Validate regex compiles
         if let ServerConfigurationValue::String(pattern, span) = &entry.args[0] {
             if let Err(e) = Regex::new(pattern) {
-                let location = span.as_ref().map_or_else(String::new, |s| {
-                    format!(
-                        " (file '{}', line {}, column {})",
-                        s.file.as_deref().unwrap_or("unknown"),
-                        s.line,
-                        s.column
-                    )
-                });
-                return Err(format!(
-                    "Invalid `regex` inside map block — failed to compile regular expression{location}: {e}"
-                ).into());
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `regex` inside map block — failed to compile regular expression: {e}"
+                ))
+                .with_span(span.clone()));
             }
         }
 
-        // Validate optional block
         if let Some(ref children) = entry.children {
             self.validate_regex_block_options(children, ctx)?;
         }
@@ -223,15 +233,17 @@ impl MapValidator {
         &self,
         children: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
         for (key, nested_entries) in children.directives.iter() {
             if !REGEX_OPTIONS.contains(&key.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `regex` inside map block — unknown option `{key}` (recognized options: {})",
                     REGEX_OPTIONS.join(", ")
-                )
-                .into());
+                ))
+                .with_span(entry_span(
+                    nested_entries.first().expect("non-empty block directives"),
+                )));
             }
             sub.insert(key.clone());
             for nested_entry in nested_entries {
@@ -239,18 +251,18 @@ impl MapValidator {
                     continue;
                 }
                 if nested_entry.args.len() != 1 {
-                    return Err(format!(
+                    return Err(ConfigurationValidationError::from(format!(
                         "Invalid `{key}` inside regex block — must have zero or one argument"
-                    )
-                    .into());
+                    ))
+                    .with_span(entry_span(nested_entry)));
                 }
                 match &nested_entry.args[0] {
                     ServerConfigurationValue::Boolean(_, _) => {}
                     _ => {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid `{key}` inside regex block — must be a boolean"
-                        )
-                        .into());
+                        ))
+                        .with_span(entry_span(nested_entry)));
                     }
                 }
             }

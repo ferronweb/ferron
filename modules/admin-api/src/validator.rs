@@ -13,7 +13,7 @@ impl ConfigurationValidator for AdminConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
 

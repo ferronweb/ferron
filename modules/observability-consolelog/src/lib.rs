@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
-use ferron_core::config::validator::{validate_scoped_block_flat, ConfigurationValidator};
+use ferron_core::config::validator::{
+    validate_scoped_block_flat, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
@@ -344,7 +346,7 @@ impl ConfigurationValidator for ConsoleObservabilityConfigValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         // Log format
         validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
 

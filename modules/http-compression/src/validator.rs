@@ -11,7 +11,7 @@ impl ferron_core::config::validator::ConfigurationValidator
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let used_directives = &mut ctx.used_directives;
         // Dynamic content compression (on-the-fly)
         validate_directive!(config, used_directives, dynamic_compressed, optional

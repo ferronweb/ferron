@@ -11,7 +11,7 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         // Prometheus endpoint configuration
         validate_directive!(config, validator_ctx.used_directives, endpoint_listen, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, endpoint_format, optional args(1) => [ServerConfigurationValue::String(_, _)], {});
@@ -62,7 +62,7 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
 fn validate_baggage_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(key_entries) = block.directives.get("key") {
         for key_entry in key_entries {
             // Each `key` must have exactly 1 string argument (the baggage key name)

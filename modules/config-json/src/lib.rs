@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
-use ferron_core::config::adapter::{ConfigurationAdapter, ConfigurationMetadata};
+use ferron_core::config::adapter::{
+    ConfigurationAdapter, ConfigurationAdapterError, ConfigurationMetadata,
+};
+use ferron_core::config::ServerConfigurationSpan;
 use ferron_core::loader::ModuleLoader;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
@@ -21,7 +24,7 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
             Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
             ConfigurationMetadata,
         ),
-        Box<dyn std::error::Error>,
+        ConfigurationAdapterError,
     > {
         let filename = params.get("file").ok_or(anyhow::anyhow!(
             "'file' parameter is required for 'json' configuration adapter"
@@ -58,8 +61,14 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         };
 
         Ok((
-            serde_json::from_str(&file_contents).map_err(|e| {
-                anyhow::anyhow!("Failed to parse configuration file '{filename}': {e}",)
+            serde_json::from_str(&file_contents).map_err(|e| ConfigurationAdapterError {
+                inner: anyhow::anyhow!("Failed to parse configuration file '{filename}': {e}",)
+                    .into_boxed_dyn_error(),
+                span: Some(ServerConfigurationSpan {
+                    line: e.line(),
+                    column: e.column(),
+                    file: Some(filename.to_string()),
+                }),
             })?,
             watcher,
             metadata,

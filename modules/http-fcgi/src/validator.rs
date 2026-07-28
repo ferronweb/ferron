@@ -1,3 +1,4 @@
+use ferron_core::config::validator::{entry_span, ConfigurationValidationError};
 use ferron_core::config::ServerConfigurationValue;
 
 pub struct FcgiConfigurationValidator;
@@ -7,22 +8,21 @@ impl ferron_core::config::validator::ConfigurationValidator for FcgiConfiguratio
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
         if is_global {
-            // Manual validation for fcgi_concurrent_conns directive
             if let Some(directives) = config.directives.get(stringify!(fcgi_concurrent_conns)) {
                 used_directives.insert(stringify!(fcgi_concurrent_conns).to_string());
                 for directive in directives {
                     if directive.args.len() != 1 {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid directive '{}': expected {} argument(s), got {}",
                             stringify!(fcgi_concurrent_conns),
                             1,
                             directive.args.len()
-                        )
-                        .into());
+                        ))
+                        .with_span(entry_span(directive)));
                     }
                     if !matches!(directive.args[0], ServerConfigurationValue::Number(n,_) if n > 0)
                         && !matches!(
@@ -30,11 +30,11 @@ impl ferron_core::config::validator::ConfigurationValidator for FcgiConfiguratio
                             ServerConfigurationValue::Boolean(false, _)
                         )
                     {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid directive '{}': invalid type",
                             stringify!(fcgi_concurrent_conns)
-                        )
-                        .into());
+                        ))
+                        .with_span(entry_span(directive)));
                     }
                 }
             };
@@ -50,7 +50,6 @@ impl ferron_core::config::validator::ConfigurationValidator for FcgiConfiguratio
             ferron_core::check_unused_subdirectives!(fcgi, sub, &mut ctx.diagnostics, ctx.scope.clone());
         });
 
-        // Alias for PHP-FPM
         ferron_core::validate_directive!(config, used_directives, fcgi_php, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
 
         Ok(())

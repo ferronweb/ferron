@@ -1,12 +1,7 @@
 use cidr::IpCidr;
-use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-    ServerConfigurationValue,
-};
-use ferron_core::validate_directive;
+use ferron_core::config::validator::{entry_span, ConfigurationValidationError, ConfigurationValidator};
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue};
 
-/// Recognized directives inside an `abuse_protection { ... }` block.
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "enabled",
     "ban_duration",
@@ -17,13 +12,10 @@ const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "allowlist",
 ];
 
-/// Recognized directives inside a threshold block.
 const THRESHOLD_DIRECTIVES: &[&str] = &["events", "window"];
 
-/// Recognized directives inside an `error_rate_threshold { ... }` block.
 const ERROR_RATE_THRESHOLD_DIRECTIVES: &[&str] = &["events", "window", "status_codes"];
 
-/// Validator for `abuse_protection` configuration blocks.
 #[derive(Default)]
 pub struct AbuseProtectionValidator;
 
@@ -32,8 +24,7 @@ impl ConfigurationValidator for AbuseProtectionValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Check if this block contains an `abuse_protection` directive
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if let Some(entries) = config.directives.get("abuse_protection") {
             ctx.used_directives.insert("abuse_protection".to_string());
             for entry in entries {
@@ -49,7 +40,7 @@ impl ConfigurationValidator for AbuseProtectionValidator {
             }
         }
 
-        validate_directive!(config, ctx.used_directives, abuse_event, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
+        ferron_core::validate_directive!(config, ctx.used_directives, abuse_event, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
 
         Ok(())
     }
@@ -60,32 +51,35 @@ impl AbuseProtectionValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
-        // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(format!(
+                let entry = block.directives[directive_name.as_str()]
+                    .first()
+                    .expect("non-empty block directives");
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in abuse_protection block"
-                )
-                .into());
+                ))
+                .with_span(entry_span(entry)));
             }
         }
 
-        // Validate `enabled` — optional, must be a boolean
         if let Some(entries) = block.directives.get("enabled") {
             sub.insert("enabled".to_string());
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     if value.as_boolean().is_none() {
-                        return Err("Invalid `enabled` — must be a boolean".into());
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `enabled` — must be a boolean",
+                        )
+                        .with_span(entry_span(entry)));
                     }
                 }
             }
         }
 
-        // Validate `ban_duration` — optional, must be a duration
         if let Some(entries) = block.directives.get("ban_duration") {
             sub.insert("ban_duration".to_string());
             for entry in entries {
@@ -93,7 +87,6 @@ impl AbuseProtectionValidator {
             }
         }
 
-        // Validate threshold blocks
         for threshold_name in &[
             "rate_limit_threshold",
             "brute_force_threshold",
@@ -109,7 +102,6 @@ impl AbuseProtectionValidator {
             }
         }
 
-        // Validate error_rate_threshold blocks
         if let Some(entries) = block.directives.get("error_rate_threshold") {
             sub.insert("error_rate_threshold".to_string());
             for entry in entries {
@@ -123,14 +115,23 @@ impl AbuseProtectionValidator {
             sub.insert("allowlist".to_string());
             for entry in entries {
                 if entry.args.is_empty() {
-                    return Err("Invalid `allowlist` — expected at least one IP or CIDR".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `allowlist` — expected at least one IP or CIDR",
+                    )
+                    .with_span(entry_span(entry)));
                 }
                 for arg in &entry.args {
-                    let value = arg
-                        .as_str()
-                        .ok_or("Invalid `allowlist` — expected string IP/CIDR values")?;
+                    let value = arg.as_str().ok_or_else(|| {
+                        ConfigurationValidationError::from(
+                            "Invalid `allowlist` — expected string IP/CIDR values",
+                        )
+                        .with_span(entry_span(entry))
+                    })?;
                     value.parse::<IpCidr>().map_err(|_| {
-                        format!("Invalid `allowlist` — invalid IP or CIDR `{value}`")
+                        ConfigurationValidationError::from(format!(
+                            "Invalid `allowlist` — invalid IP or CIDR `{value}`"
+                        ))
+                        .with_span(entry_span(entry))
                     })?;
                     if value == "0.0.0.0/0" || value == "::/0" {
                         ctx.add_best_practice_violation(
@@ -155,40 +156,35 @@ impl AbuseProtectionValidator {
         &self,
         block: &ServerConfigurationBlock,
         threshold_name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Check all directives are recognized
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         for directive_name in block.directives.keys() {
             if !THRESHOLD_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(format!(
-                    "Invalid `{directive_name}` — unknown directive in {} block",
-                    threshold_name
-                )
-                .into());
+                let entry = block.directives[directive_name.as_str()]
+                    .first()
+                    .expect("non-empty block directives");
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `{directive_name}` — unknown directive in {threshold_name} block"
+                ))
+                .with_span(entry_span(entry)));
             }
         }
 
-        // Validate `events` — required, must be a positive integer
         let events_entry = block.directives.get("events");
         if events_entry.is_none() {
-            return Err(format!(
-                "Invalid `{}` — missing required `events` directive",
-                threshold_name
-            )
-            .into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `{threshold_name}` — missing required `events` directive"
+            )));
         }
 
         for entry in events_entry.into_iter().flatten() {
             self.validate_number_entry(entry, "events", 1)?;
         }
 
-        // Validate `window` — required, must be a positive integer
         let window_entry = block.directives.get("window");
         if window_entry.is_none() {
-            return Err(format!(
-                "Invalid `{}` — missing required `window` directive",
-                threshold_name
-            )
-            .into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `{threshold_name}` — missing required `window` directive"
+            )));
         }
 
         for entry in window_entry.into_iter().flatten() {
@@ -201,49 +197,57 @@ impl AbuseProtectionValidator {
     fn validate_error_rate_threshold_block(
         &self,
         block: &ServerConfigurationBlock,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Check all directives are recognized
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         for directive_name in block.directives.keys() {
             if !ERROR_RATE_THRESHOLD_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(format!(
+                let entry = block.directives[directive_name.as_str()]
+                    .first()
+                    .expect("non-empty block directives");
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in error_rate_threshold block"
-                )
-                .into());
+                ))
+                .with_span(entry_span(entry)));
             }
         }
 
-        // Validate `events` — optional, must be a positive integer (default: 50)
         if let Some(entries) = block.directives.get("events") {
             for entry in entries {
                 self.validate_number_entry(entry, "events", 1)?;
             }
         }
 
-        // Validate `window` — optional, must be a duration (default: 60s)
         if let Some(entries) = block.directives.get("window") {
             for entry in entries {
                 self.validate_duration_entry(entry, "window")?;
             }
         }
 
-        // Validate `status_codes` — optional, must have at least one valid status code
         if let Some(entries) = block.directives.get("status_codes") {
             for entry in entries {
                 if entry.args.is_empty() {
-                    return Err("Invalid `status_codes` — expected at least one status code".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `status_codes` — expected at least one status code",
+                    )
+                    .with_span(entry_span(entry)));
                 }
                 for arg in &entry.args {
-                    let value = arg
-                        .as_str()
-                        .ok_or("Invalid `status_codes` — expected string status code values")?;
+                    let value = arg.as_str().ok_or_else(|| {
+                        ConfigurationValidationError::from(
+                            "Invalid `status_codes` — expected string status code values",
+                        )
+                        .with_span(entry_span(entry))
+                    })?;
                     let code: u16 = value.parse().map_err(|_| {
-                        format!("Invalid `status_codes` — invalid status code `{value}`")
+                        ConfigurationValidationError::from(format!(
+                            "Invalid `status_codes` — invalid status code `{value}`"
+                        ))
+                        .with_span(entry_span(entry))
                     })?;
                     if !(100..=599).contains(&code) {
-                        return Err(format!(
+                        return Err(ConfigurationValidationError::from(format!(
                             "Invalid `status_codes` — status code `{value}` must be between 100 and 599"
-                        )
-                        .into());
+                        ))
+                        .with_span(entry_span(entry)));
                     }
                 }
             }
@@ -252,51 +256,51 @@ impl AbuseProtectionValidator {
         Ok(())
     }
 
-    /// Validate that an entry has exactly one number argument >= min_value.
     fn validate_number_entry(
         &self,
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
         min: i64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let value = entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
-        let n = value
-            .as_number()
-            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let value = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be an integer value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
+        let n = value.as_number().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be an integer value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
         if n < min {
-            return Err(format!("Invalid `{name}` — must be >= {min}").into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be >= {min}"
+            ))
+            .with_span(entry_span(entry)));
         }
         Ok(())
     }
 
-    /// Validate that an entry has exactly one duration argument.
     fn validate_duration_entry(
         &self,
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `{name}` — must be a duration value"))?
-            .as_duration()
-            .ok_or(format!("Invalid `{name}` — must be a duration value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let arg = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be a duration value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
+        arg.as_duration().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be a duration value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
 
         Ok(())
     }
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
 }

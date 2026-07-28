@@ -10,7 +10,12 @@ use std::time::SystemTime;
 
 use async_trait::async_trait;
 
+use super::validator::ConfigurationValidationError;
 use crate::config::ServerConfiguration;
+
+/// An error that occurred while adapting configuration from a source,
+/// with an optional span.
+pub type ConfigurationAdapterError = ConfigurationValidationError;
 
 /// Watches for changes in a configuration source.
 ///
@@ -60,7 +65,7 @@ pub type AdaptResult = Result<
         Box<dyn ConfigurationWatcher>,
         ConfigurationMetadata,
     ),
-    Box<dyn std::error::Error>,
+    ConfigurationAdapterError,
 >;
 
 /// Adapter for loading server configuration from a specific source.
@@ -76,7 +81,7 @@ pub type AdaptResult = Result<
 ///     fn adapt(
 ///         &self,
 ///         params: &HashMap<String, String>,
-///     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>, ConfigurationMetadata), Box<dyn std::error::Error>> {
+///     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>, ConfigurationMetadata), ConfigurationAdapterError> {
 ///         let path = params.get("path").ok_or("missing path")?;
 ///         let config = load_yaml_config(path)?;
 ///         let watcher = FileWatcher::new(path.into());

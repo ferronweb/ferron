@@ -1,4 +1,4 @@
-use ferron_core::config::validator::{validate_scoped_block_flat, ConfigurationValidator};
+use ferron_core::config::validator::{entry_span, validate_scoped_block_flat, ConfigurationValidator};
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::{validate_directive, validate_nested};
 
@@ -9,7 +9,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
 
         validate_directive!(config, validator_ctx.used_directives, logs, optional args(1) => [ServerConfigurationValue::String(_, _)], {
@@ -66,7 +66,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             // Check the value is recognized
             if let Some(value) = config.get_value("log_style").and_then(|v| v.as_str()) {
                 if crate::config::parse_log_style(value).is_none() {
-                    let err: Box<dyn std::error::Error> = format!(
+                    let err: ferron_core::config::validator::ConfigurationValidationError = format!(
                             "Invalid `log_style` value '{}': must be 'legacy' or 'modern'",
                             value
                         ).into();
@@ -85,7 +85,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
         {
             // When `log_style modern` is set, the `format` directive is ignored.
             // Error out, so the operator knows.
-            let err: Box<dyn std::error::Error> =
+            let err: ferron_core::config::validator::ConfigurationValidationError =
                 "The `format` directive would be ignored when `log_style` is `modern`".into();
             Err(err)?;
         } else if log_style == crate::config::LogStyle::Legacy {
@@ -119,25 +119,25 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
 fn validate_baggage_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     if let Some(key_entries) = block.directives.get("key") {
         for key_entry in key_entries {
             // Each `key` must have exactly 1 string argument (the baggage key name)
             if key_entry.args.len() != 1 {
-                let err: Box<dyn std::error::Error> = format!(
+                let err: ferron_core::config::validator::ConfigurationValidationError = format!(
                     "Invalid `baggage key` directive: \
                     expected 1 argument (the baggage key name), got {};",
                     key_entry.args.len()
                 )
                 .into();
-                Err(err)?
+                Err(err.with_span(entry_span(key_entry)))?
             }
             if !matches!(&key_entry.args[0], ServerConfigurationValue::String(_, _)) {
-                let err: Box<dyn std::error::Error> =
+                let err: ferron_core::config::validator::ConfigurationValidationError =
                     "Invalid `baggage key` directive: argument must be a string"
                         .to_string()
                         .into();
-                Err(err)?;
+                Err(err.with_span(entry_span(key_entry)))?;
             }
 
             // Validate children of the key block
@@ -154,19 +154,19 @@ fn validate_baggage_block(
                         for arg in &signal_entry.args {
                             if let Some(name) = arg.as_str() {
                                 if name != "traces" && name != "logs" && name != "metrics" {
-                                    let err: Box<dyn std::error::Error> = format!(
+                                    let err: ferron_core::config::validator::ConfigurationValidationError = format!(
                                         "Invalid signal name '{}' in `baggage key` block: must be one of 'traces', 'logs', 'metrics'",
                                         name
                                     )
                                     .into();
-                                    Err(err)?;
+                                    Err(err.with_span(entry_span(signal_entry)))?;
                                 }
                             } else {
-                                let err: Box<dyn std::error::Error> =
+                                let err: ferron_core::config::validator::ConfigurationValidationError =
                                     "Invalid `signals` value: must be a string"
                                         .to_string()
                                         .into();
-                                Err(err)?;
+                                Err(err.with_span(entry_span(signal_entry)))?;
                             }
                         }
                     }
@@ -177,21 +177,21 @@ fn validate_baggage_block(
                     sub.insert("max_distinct".to_string());
                     for max_entry in max_entries {
                         if max_entry.args.len() != 1 {
-                            let err: Box<dyn std::error::Error> =
+                            let err: ferron_core::config::validator::ConfigurationValidationError =
                                 "Invalid `max_distinct` directive: expected exactly 1 argument"
                                     .to_string()
                                     .into();
-                            Err(err)?;
+                            Err(err.with_span(entry_span(max_entry)))?;
                         } else if !matches!(
                             &max_entry.args[0],
                             ServerConfigurationValue::Number(_, _)
                                 | ServerConfigurationValue::Boolean(false, _)
                         ) {
-                            let err: Box<dyn std::error::Error> =
+                            let err: ferron_core::config::validator::ConfigurationValidationError =
                                 "Invalid `max_distinct` value: must be a number or `false`"
                                     .to_string()
                                     .into();
-                            Err(err)?;
+                            Err(err.with_span(entry_span(max_entry)))?;
                         }
                         if max_entry.args[0].as_boolean().is_some_and(|v| !v) {
                             validator_ctx.add_best_practice_violation(

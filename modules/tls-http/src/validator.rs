@@ -13,7 +13,7 @@ impl ConfigurationValidator for TlsHttpConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         validate_tls_common!(config, validator_ctx);
 
         validate_directive!(config, validator_ctx.used_directives, url, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});

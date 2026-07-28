@@ -1,6 +1,6 @@
 use std::sync::{Arc, OnceLock};
 
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{ConfigurationValidationError, ConfigurationValidator};
 use ferron_core::config_validator_scoped_key;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
@@ -213,7 +213,7 @@ impl ConfigurationValidator for TlsManualConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         validate_tls_common!(config, validator_ctx);
 
         Ok(())

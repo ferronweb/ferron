@@ -1,4 +1,7 @@
-use ferron_core::config::validator::{ConfigurationValidator, ConfigurationValidatorContext};
+use ferron_core::config::validator::{
+    first_entry_span, ConfigurationValidationError, ConfigurationValidator,
+    ConfigurationValidatorContext,
+};
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
     ServerConfigurationValue,
@@ -11,7 +14,7 @@ impl ConfigurationValidator for DnsStalwartConfigurationValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let provider = config
             .get_value("provider")
             .and_then(|v| v.as_str())
@@ -27,7 +30,7 @@ fn validate_provider(
     config: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
     provider: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     // Mark provider as used
     ctx.used_directives.insert("provider".to_string());
 
@@ -362,10 +365,13 @@ fn validate_provider(
             let has_username = config.get_value("username").is_some();
             let has_password = config.get_value("password").is_some();
             if !(has_api_key || has_username && has_password) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "No API key or username/password provided for '{provider}' DNS provider"
-                )
-                .into());
+                ))
+                .with_span(
+                    first_entry_span(config, "api_key")
+                        .or_else(|| first_entry_span(config, "username")),
+                ));
             }
         }
         "rfc2136" => {
@@ -406,14 +412,15 @@ fn req_str(
     ctx: &mut ConfigurationValidatorContext,
     provider: &str,
     key: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     ctx.used_directives.insert(key.to_string());
     match config.get_value(key) {
         Some(ServerConfigurationValue::String(_, _))
         | Some(ServerConfigurationValue::InterpolatedString(_, _)) => Ok(()),
-        _ => Err(
-            format!("Missing or invalid directive '{key}' for '{provider}' DNS provider").into(),
-        ),
+        _ => Err(ConfigurationValidationError::from(format!(
+            "Missing or invalid directive '{key}' for '{provider}' DNS provider"
+        ))
+        .with_span(first_entry_span(config, key))),
     }
 }
 
@@ -439,7 +446,7 @@ fn req_enum(
     provider: &str,
     key: &str,
     allowed: &[&str],
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     ctx.used_directives.insert(key.to_string());
     let value = match config.get_value(key) {
         Some(ServerConfigurationValue::String(s, _)) => s.as_str(),
@@ -448,22 +455,22 @@ fn req_enum(
             return Ok(());
         }
         _ => {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Missing or invalid directive '{key}' for '{provider}' DNS provider"
-            )
-            .into());
+            ))
+            .with_span(first_entry_span(config, key)));
         }
     };
     if !allowed.contains(&value) {
-        return Err(format!(
+        return Err(ConfigurationValidationError::from(format!(
             "Invalid value '{value}' for directive '{key}' in '{provider}' DNS provider: must be one of {}",
             allowed
                 .iter()
                 .map(|v| format!("'{v}'"))
                 .collect::<Vec<_>>()
                 .join(", ")
-        )
-        .into());
+        ))
+        .with_span(first_entry_span(config, key)));
     }
     Ok(())
 }

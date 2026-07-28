@@ -1,7 +1,8 @@
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-    ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use ferron_core::validate_directive;
 
@@ -20,7 +21,7 @@ impl ConfigurationValidator for BasicAuthValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         if is_global {
             validate_directive!(config, ctx.used_directives, basic_auth_concurrency, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)], {});
@@ -57,17 +58,17 @@ impl BasicAuthValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !BASICAUTH_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in basic_auth block. \
                      Recognized directives: realm, users, brute_force_protection"
-                )
-                .into());
+                ))
+                .with_span(first_entry_span(block, directive_name)));
             }
         }
 
@@ -82,16 +83,20 @@ impl BasicAuthValidator {
         // Validate `users` block — required, must have at least one user with a hash
         let users_entries = block.directives.get("users");
         if users_entries.is_none() {
-            return Err("Invalid `basic_auth` — missing required `users` block".into());
+            return Err(ConfigurationValidationError::from(
+                "Invalid `basic_auth` — missing required `users` block",
+            )
+            .with_span(block.span.clone()));
         }
 
         for users_entry in users_entries.into_iter().flatten() {
             if let Some(ref users_block) = users_entry.children {
                 self.validate_users_block(users_block, ctx)?;
             } else {
-                return Err(
-                    "Invalid `basic_auth` — `users` must be a block form: `users {{ ... }}`".into(),
-                );
+                return Err(ConfigurationValidationError::from(
+                    "Invalid `basic_auth` — `users` must be a block form: `users {{ ... }}`",
+                )
+                .with_span(entry_span(users_entry)));
             }
         }
         sub.insert("users".to_string());
@@ -119,11 +124,12 @@ impl BasicAuthValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         if block.directives.is_empty() {
-            return Err(
-                "Invalid `basic_auth` — `users` block must contain at least one user".into(),
-            );
+            return Err(ConfigurationValidationError::from(
+                "Invalid `basic_auth` — `users` block must contain at least one user",
+            )
+            .with_span(block.span.clone()));
         }
 
         for (username, entries) in block.directives.iter() {
@@ -154,7 +160,7 @@ impl BasicAuthValidator {
     fn validate_password_hash(
         hash: &str,
         username: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         // Check for known hash prefixes
         let is_valid = hash.starts_with("$argon2id$")
             || hash.starts_with("$argon2i$")
@@ -164,13 +170,12 @@ impl BasicAuthValidator {
             || hash.starts_with("$scrypt$");
 
         if !is_valid {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
                  Supported formats: Argon2 ($argon2id$, $argon2i$, $argon2d$), \
                  PBKDF2 ($pbkdf2$, $pbkdf2-sha256$), or scrypt ($scrypt$). \
                  Plaintext passwords are not allowed for security reasons."
-            )
-            .into());
+            )));
         }
 
         Ok(())
@@ -180,16 +185,16 @@ impl BasicAuthValidator {
         &self,
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
         for directive_name in block.directives.keys() {
             if !BRUTE_FORCE_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(format!(
+                return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in brute_force_protection block. \
                      Recognized directives: enabled, max_attempts, lockout_duration, window"
-                )
-                .into());
+                ))
+                .with_span(first_entry_span(block, directive_name)));
             }
         }
 
@@ -199,10 +204,10 @@ impl BasicAuthValidator {
             for entry in entries {
                 let enabled = entry.args.first().map_or(Some(false), |v| v.as_boolean());
                 if enabled.is_none() {
-                    return Err(
-                        "Invalid `brute_force_protection` — `enabled` must be a boolean value"
-                            .into(),
-                    );
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `brute_force_protection` — `enabled` must be a boolean value",
+                    )
+                    .with_span(entry_span(entry)));
                 }
                 if enabled == Some(false) {
                     ctx.add_best_practice_violation(
@@ -251,14 +256,19 @@ impl BasicAuthValidator {
         &self,
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let value = entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let value = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must have a value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
 
         if value.as_str().is_none() {
-            return Err(format!("Invalid `basic_auth` — {name} must be a string value").into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must be a string value"
+            ))
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -269,18 +279,26 @@ impl BasicAuthValidator {
         &self,
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let value = entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let value = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must have a value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
 
-        let n = value.as_number().ok_or(format!(
-            "Invalid `basic_auth` — {name} must be an integer value"
-        ))?;
+        let n = value.as_number().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must be an integer value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
 
         if n <= 0 {
-            return Err(format!("Invalid `basic_auth` — {name} must be a positive integer").into());
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must be a positive integer"
+            ))
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -291,31 +309,23 @@ impl BasicAuthValidator {
         &self,
         entry: &ServerConfigurationDirectiveEntry,
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let value = entry
-            .args
-            .first()
-            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let value = entry.args.first().ok_or_else(|| {
+            ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} must have a value"
+            ))
+            .with_span(entry_span(entry))
+        })?;
 
         if value.as_str().is_none() && value.as_number().is_none() {
-            return Err(format!(
+            return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — {name} must be a duration string (e.g., '15m', '1h') or a number"
-            )
-            .into());
+            ))
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
     }
 }
 
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}
+

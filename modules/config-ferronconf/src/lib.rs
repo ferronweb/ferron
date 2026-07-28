@@ -3,7 +3,9 @@ use std::hash::Hasher;
 use std::time::SystemTime;
 
 use anyhow::anyhow;
-use ferron_core::config::adapter::{ConfigurationAdapter, ConfigurationMetadata};
+use ferron_core::config::adapter::{
+    ConfigurationAdapter, ConfigurationAdapterError, ConfigurationMetadata,
+};
 use ferron_core::config::ServerConfiguration;
 use ferron_core::loader::ModuleLoader;
 
@@ -32,7 +34,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
             Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
             ConfigurationMetadata,
         ),
-        Box<dyn std::error::Error>,
+        ConfigurationAdapterError,
     > {
         let filename = params.get("file").ok_or(anyhow!(
             "'file' parameter is required for 'ferronconf' configuration adapter"

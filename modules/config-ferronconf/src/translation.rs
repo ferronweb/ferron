@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use ferron_core::config::adapter::ConfigurationAdapterError;
 use ferron_core::config::{
     ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
     ServerConfigurationHostFilters, ServerConfigurationInterpolatedStringPart,
@@ -128,7 +129,7 @@ pub(super) fn load_top_level_statements(
     path: &Path,
     include_stack: &mut Vec<PathBuf>,
     loaded_files: &mut Vec<PathBuf>,
-) -> anyhow::Result<Vec<SourceStatement>> {
+) -> Result<Vec<SourceStatement>, ConfigurationAdapterError> {
     let path = fs::canonicalize(path)
         .with_context(|| format!("Failed to resolve configuration file '{}'", path.display()))?;
 
@@ -138,7 +139,10 @@ pub(super) fn load_top_level_statements(
             .map(|entry| entry.display().to_string())
             .collect::<Vec<_>>();
         cycle.push(path.display().to_string());
-        anyhow::bail!("Include cycle detected: {}", cycle.join(" -> "));
+        Err(anyhow::anyhow!(
+            "Include cycle detected: {}",
+            cycle.join(" -> ")
+        ))?;
     }
 
     if !loaded_files.iter().any(|loaded| loaded == &path) {
@@ -147,11 +151,17 @@ pub(super) fn load_top_level_statements(
 
     let source = fs::read_to_string(&path)
         .with_context(|| format!("Failed to read configuration file '{}'", path.display()))?;
-    let config = Config::from_str(&source).map_err(|e| {
-        anyhow::anyhow!(
+    let config = Config::from_str(&source).map_err(|e| ConfigurationAdapterError {
+        inner: anyhow::anyhow!(
             "Failed to parse configuration file '{}': {e}",
             path.display()
         )
+        .into_boxed_dyn_error(),
+        span: Some(ServerConfigurationSpan {
+            line: e.span.line,
+            column: e.span.column,
+            file: Some(path.display().to_string()),
+        }),
     })?;
 
     include_stack.push(path.clone());

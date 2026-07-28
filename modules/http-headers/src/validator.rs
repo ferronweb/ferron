@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::error::Error;
 use std::str::FromStr;
 
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{
+    entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-    ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use http::header::HeaderName;
 
@@ -17,7 +17,7 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let _is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
         // Validate header directives
@@ -25,27 +25,36 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
             used_directives.insert("header".to_string());
             for e in entries {
                 if e.args.is_empty() {
-                    return Err("Invalid `header` — requires at least one argument".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `header` — requires at least one argument",
+                    )
+                    .with_span(entry_span(e)));
                 }
-                let first = e.args[0]
-                    .as_str()
-                    .ok_or("Invalid `header` — name must be a string")?;
+                let first = e.args[0].as_str().ok_or_else(|| {
+                    ConfigurationValidationError::from("Invalid `header` — name must be a string")
+                        .with_span(entry_span(e))
+                })?;
                 let (name, needs_value) = match first.chars().next() {
                     Some('+') => (&first[1..], true),
                     Some('-') => (&first[1..], false),
                     _ => (first, true),
                 };
-                HeaderName::from_str(name)
-                    .map_err(|e| format!("Invalid `header` — invalid header name '{name}': {e}"))?;
+                HeaderName::from_str(name).map_err(|err| {
+                    ConfigurationValidationError::from(format!(
+                        "Invalid `header` — invalid header name '{name}': {err}"
+                    ))
+                    .with_span(entry_span(e))
+                })?;
                 if needs_value
                     && e.args
                         .get(1)
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         .is_none()
                 {
-                    return Err(
-                        "Invalid `header` — requires a value for add/replace operations".into(),
-                    );
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `header` — requires a value for add/replace operations",
+                    )
+                    .with_span(entry_span(e)));
                 }
             }
         }
@@ -67,7 +76,7 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
 fn validate_cors_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
     ferron_core::validate_nested!(block, used(sub), origins, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, used(sub), methods, args(*) => [ServerConfigurationValue::String(_, _)]);
@@ -106,25 +115,3 @@ fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool>
         .map(ServerConfigurationDirectiveEntry::get_flag)
 }
 
-fn first_entry_span(
-    block: &ServerConfigurationBlock,
-    directive: &str,
-) -> Option<ServerConfigurationSpan> {
-    block
-        .directives
-        .get(directive)
-        .and_then(|entries| entries.first())
-        .and_then(entry_span)
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}

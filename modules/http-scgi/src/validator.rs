@@ -7,7 +7,7 @@ impl ferron_core::config::validator::ConfigurationValidator for ScgiConfiguratio
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let used_directives = &mut ctx.used_directives;
         ferron_core::validate_directive!(config, used_directives, scgi, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(_, _)], {
             let mut sub = std::collections::HashSet::new();

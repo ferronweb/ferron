@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ferron_core::config::validator::ConfigurationValidator;
+use ferron_core::config::validator::{ConfigurationValidationError, ConfigurationValidator};
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
@@ -217,7 +217,7 @@ impl ConfigurationValidator for JsonFormatLogFormatConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         validate_directive!(config, validator_ctx.used_directives, fields, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
         Ok(())
@@ -231,7 +231,7 @@ impl ConfigurationValidator for JsonFormatLogApplicationFormatConfigurationValid
         &self,
         _config: &ferron_core::config::ServerConfigurationBlock,
         _validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         Ok(())
     }
 }

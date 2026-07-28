@@ -16,7 +16,7 @@ impl ConfigurationValidator for HttpTraceIdConfigurationValidator {
         &self,
         config: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let used_directives = &mut ctx.used_directives;
         validate_directive!(config, used_directives, trace_id_header, optional
           args(1) => [ServerConfigurationValue::Boolean(_, _)]

@@ -15,7 +15,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let is_global = ctx.is_global;
         // Global-only directives (default port configuration)
         if is_global {

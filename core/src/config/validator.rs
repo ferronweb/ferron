@@ -5,7 +5,10 @@
 
 use serde::Serialize;
 
-use crate::config::ServerConfigurationSpan;
+use crate::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
+    ServerConfigurationValue,
+};
 
 /// A key for scoped configuration validators.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -48,7 +51,7 @@ pub trait ConfigurationValidator {
         &self,
         config: &crate::config::ServerConfigurationBlock,
         validator_ctx: &mut ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> Result<(), ConfigurationValidationError>;
 }
 
 /// Context for tracking used directives and other data during configuration validation.
@@ -107,7 +110,7 @@ pub fn validate_scoped_block(
     provider_field: &'static str,
     provider_namespace: &'static str,
     default_provider: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ConfigurationValidationError> {
     let mut local_ctx = ConfigurationValidatorContext {
         used_directives: std::collections::HashSet::new(),
         is_global: false, // Inapplicable for scoped configurations
@@ -166,7 +169,7 @@ pub fn validate_scoped_block_flat(
     provider_field: &'static str,
     provider_namespace: &'static str,
     default_provider: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ConfigurationValidationError> {
     let mut local_ctx = ConfigurationValidatorContext {
         used_directives: std::collections::HashSet::new(),
         is_global: false, // Inapplicable for scoped configurations
@@ -277,4 +280,98 @@ impl Serialize for ConfigurationValidatorDiagnosticKind {
     {
         serializer.collect_str(self)
     }
+}
+
+/// An error that occurred while validating configuration from a source,
+/// with an optional span.
+#[derive(Debug)]
+pub struct ConfigurationValidationError {
+    /// The underlying error that occurred.
+    pub inner: Box<dyn std::error::Error>,
+    /// The span of the configuration that caused the error, if known.
+    pub span: Option<ServerConfigurationSpan>,
+}
+
+impl std::error::Error for ConfigurationValidationError {}
+
+impl std::fmt::Display for ConfigurationValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&*self.inner, f)
+    }
+}
+
+impl From<anyhow::Error> for ConfigurationValidationError {
+    fn from(inner: anyhow::Error) -> Self {
+        Self {
+            inner: inner.into_boxed_dyn_error(),
+            span: None,
+        }
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for ConfigurationValidationError {
+    fn from(inner: Box<dyn std::error::Error>) -> Self {
+        Self { inner, span: None }
+    }
+}
+
+impl From<std::io::Error> for ConfigurationValidationError {
+    fn from(inner: std::io::Error) -> Self {
+        Self {
+            inner: Box::new(inner),
+            span: None,
+        }
+    }
+}
+
+impl From<String> for ConfigurationValidationError {
+    fn from(inner: String) -> Self {
+        Self {
+            inner: anyhow::anyhow!(inner).into_boxed_dyn_error(),
+            span: None,
+        }
+    }
+}
+
+impl From<&'static str> for ConfigurationValidationError {
+    fn from(inner: &'static str) -> Self {
+        Self {
+            inner: anyhow::anyhow!(inner).into_boxed_dyn_error(),
+            span: None,
+        }
+    }
+}
+
+impl ConfigurationValidationError {
+    pub fn with_span(mut self, span: Option<ServerConfigurationSpan>) -> Self {
+        self.span = span;
+        self
+    }
+}
+
+/// Extract the source location span from a directive entry, falling back to the
+/// first argument's span if the entry itself has no span.
+pub fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
+    entry.span.clone().or_else(|| {
+        entry.args.first().and_then(|value| match value {
+            ServerConfigurationValue::String(_, span)
+            | ServerConfigurationValue::Number(_, span)
+            | ServerConfigurationValue::Float(_, span)
+            | ServerConfigurationValue::Boolean(_, span)
+            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
+        })
+    })
+}
+
+/// Extract the source location span for the first entry of a named directive
+/// inside a configuration block.
+pub fn first_entry_span(
+    block: &ServerConfigurationBlock,
+    directive: &str,
+) -> Option<ServerConfigurationSpan> {
+    block
+        .directives
+        .get(directive)
+        .and_then(|entries| entries.first())
+        .and_then(entry_span)
 }

@@ -1,14 +1,12 @@
-use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
 
-use ferron_core::config::validator::{ConfigurationValidator, ConfigurationValidatorContext};
-use ferron_core::config::{
-    ServerConfigurationDirectiveEntry, ServerConfigurationSpan, ServerConfigurationValue,
+use ferron_core::config::validator::{
+    entry_span, ConfigurationValidationError, ConfigurationValidator, ConfigurationValidatorContext,
 };
+use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
 use ipnet::IpNet;
 
-/// Configuration validator for the forward proxy module.
 pub struct ForwardProxyConfigurationValidator;
 
 impl ConfigurationValidator for ForwardProxyConfigurationValidator {
@@ -16,7 +14,7 @@ impl ConfigurationValidator for ForwardProxyConfigurationValidator {
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let used_directives = &mut ctx.used_directives;
         if let Some(entries) = config.directives.get("forward_proxy") {
             used_directives.insert("forward_proxy".to_string());
@@ -29,21 +27,23 @@ impl ConfigurationValidator for ForwardProxyConfigurationValidator {
 fn validate_forward_proxy_entries(
     entries: &[ServerConfigurationDirectiveEntry],
     ctx: &mut ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     for entry in entries {
-        // Validate args: at most one boolean (the enable toggle)
         if entry.args.len() > 1 {
-            return Err(
-                "The `forward_proxy` directive may have at most one boolean argument".into(),
-            );
+            return Err(ConfigurationValidationError::from(
+                "The `forward_proxy` directive may have at most one boolean argument",
+            )
+            .with_span(entry_span(entry)));
         }
         if let Some(arg) = entry.args.first() {
             if arg.as_boolean().is_none() {
-                return Err("Invalid `forward_proxy` — expected a boolean".into());
+                return Err(ConfigurationValidationError::from(
+                    "Invalid `forward_proxy` — expected a boolean",
+                )
+                .with_span(entry_span(entry)));
             }
         }
 
-        // Validate block children
         if let Some(block) = &entry.children {
             validate_forward_proxy_block(block, ctx)?;
         }
@@ -54,7 +54,7 @@ fn validate_forward_proxy_entries(
 fn validate_forward_proxy_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
 
     ferron_core::validate_nested!(block, used(sub), allow_domains, args(*) => [ServerConfigurationValue::String(_, _)]);
@@ -81,36 +81,48 @@ fn validate_forward_proxy_block(
         add_deny_ips_best_practice_diagnostics(entries, ctx);
     }
 
-    // -- manual validation ---------------
-    // allow_ports — accepts numeric arguments
     if let Some(entries) = block.directives.get("allow_ports") {
         sub.insert("allow_ports".to_string());
         for e in entries {
             if e.args.is_empty() {
-                return Err("The `allow_ports` directive requires at least one argument".into());
+                return Err(ConfigurationValidationError::from(
+                    "The `allow_ports` directive requires at least one argument",
+                )
+                .with_span(entry_span(e)));
             }
             for arg in &e.args {
                 if let Some(val) = arg.as_number() {
                     if val <= 0 || val > 65535 {
-                        return Err("Invalid `allow_ports` — must be between 1 and 65535".into());
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `allow_ports` — must be between 1 and 65535",
+                        )
+                        .with_span(entry_span(e)));
                     }
                 } else {
-                    return Err("Invalid `allow_ports` — expected a number".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `allow_ports` — expected a number",
+                    )
+                    .with_span(entry_span(e)));
                 }
             }
         }
     }
 
-    // http_version — enum
     if let Some(entries) = block.directives.get("http_version") {
         sub.insert("http_version".to_string());
         for e in entries {
             if let Some(val) = e.args.first().and_then(|v| v.as_str()) {
                 if val != "1.0" && val != "1.1" {
-                    return Err("Invalid `http_version` — expected 1.0 or 1.1".into());
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `http_version` — expected 1.0 or 1.1",
+                    )
+                    .with_span(entry_span(e)));
                 }
             } else {
-                return Err("Invalid `http_version` — expected a string".into());
+                return Err(ConfigurationValidationError::from(
+                    "Invalid `http_version` — expected a string",
+                )
+                .with_span(entry_span(e)));
             }
         }
     }
@@ -121,17 +133,26 @@ fn validate_forward_proxy_block(
 
 fn validate_denied_ips(
     entries: &[ServerConfigurationDirectiveEntry],
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     for entry in entries {
         if entry.args.is_empty() {
-            return Err("The `deny_ips` directive requires at least one IP or CIDR".into());
+            return Err(ConfigurationValidationError::from(
+                "The `deny_ips` directive requires at least one IP or CIDR",
+            )
+            .with_span(entry_span(entry)));
         }
         for arg in &entry.args {
             let Some(value) = arg.as_str() else {
-                return Err("Invalid `deny_ips` — expected string IP/CIDR values".into());
+                return Err(ConfigurationValidationError::from(
+                    "Invalid `deny_ips` — expected string IP/CIDR values",
+                )
+                .with_span(entry_span(entry)));
             };
             if value.parse::<IpNet>().is_err() && value.parse::<IpAddr>().is_err() {
-                return Err(format!("Invalid `deny_ips` — invalid IP or CIDR `{value}`").into());
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `deny_ips` — invalid IP or CIDR `{value}`"
+                ))
+                .with_span(entry_span(entry)));
             }
         }
     }
@@ -172,16 +193,4 @@ fn add_deny_ips_best_practice_diagnostics(
             entries.first().and_then(entry_span),
         );
     }
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
 }

@@ -1,4 +1,4 @@
-use crate::config::validator::validate_scoped_block;
+use crate::config::validator::{validate_scoped_block, ConfigurationValidationError};
 use crate::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
     ServerConfigurationValue,
@@ -12,7 +12,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
         &self,
         config: &crate::config::ServerConfigurationBlock,
         ctx: &mut crate::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ConfigurationValidationError> {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
 
@@ -115,39 +115,49 @@ fn validate_control_plane_directives(
                         ctx.scope.clone()
                     );
                     // Validate trace_id format (32 hex chars)
-                    if let Some(tid_val) = link_children.get_value("trace_id") {
-                        if let Some(tid) = tid_val.as_str() {
-                            if tid.len() != 32 || !tid.chars().all(|c| c.is_ascii_hexdigit()) {
-                                ctx.diagnostics.push(ctx.create_diagnostic(
+                    if let Some(tid_d) = link_children.directives.get("trace_id") {
+                        for tid_e in tid_d {
+                            let Some(tid_val) = tid_e.get_value() else {
+                                continue;
+                            };
+                            if let Some(tid) = tid_val.as_str() {
+                                if tid.len() != 32 || !tid.chars().all(|c| c.is_ascii_hexdigit()) {
+                                    ctx.diagnostics.push(ctx.create_diagnostic(
                                     crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                                     format!("`trace_id` in `control_plane.span_links` must be exactly 32 hex characters, got `{tid}`"),
-                                    link_children.span.clone(),
+                                    entry_span(tid_e),
                                 ));
-                            }
-                        } else {
-                            ctx.diagnostics.push(ctx.create_diagnostic(
+                                }
+                            } else {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
                                 crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                                 "`trace_id` in `control_plane.span_links` must be a string".to_string(),
-                                link_children.span.clone(),
+                                entry_span(tid_e),
                             ));
+                            }
                         }
                     }
                     // Validate span_id format (16 hex chars)
-                    if let Some(sid_val) = link_children.get_value("span_id") {
-                        if let Some(sid) = sid_val.as_str() {
-                            if sid.len() != 16 || !sid.chars().all(|c| c.is_ascii_hexdigit()) {
-                                ctx.diagnostics.push(ctx.create_diagnostic(
+                    if let Some(sid_d) = link_children.directives.get("span_id") {
+                        for sid_e in sid_d {
+                            let Some(sid_val) = sid_e.get_value() else {
+                                continue;
+                            };
+                            if let Some(sid) = sid_val.as_str() {
+                                if sid.len() != 16 || !sid.chars().all(|c| c.is_ascii_hexdigit()) {
+                                    ctx.diagnostics.push(ctx.create_diagnostic(
                                     crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                                     format!("`span_id` in `control_plane.span_links` must be exactly 16 hex characters, got `{sid}`"),
-                                    link_children.span.clone(),
+                                    entry_span(sid_e),
                                 ));
-                            }
-                        } else {
-                            ctx.diagnostics.push(ctx.create_diagnostic(
+                                }
+                            } else {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
                                 crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
                                 "`span_id` in `control_plane.span_links` must be a string".to_string(),
-                                link_children.span.clone(),
+                                entry_span(sid_e),
                             ));
+                            }
                         }
                     }
                     // Validate sampled is a boolean if present
@@ -174,7 +184,7 @@ fn validate_control_plane_directives(
 pub fn validate_observability_directives(
     config: &crate::config::ServerConfigurationBlock,
     ctx: &mut crate::config::validator::ConfigurationValidatorContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ConfigurationValidationError> {
     // Observability settings
     validate_directive!(config, ctx.used_directives, observability, optional
         args(1) => [ServerConfigurationValue::Boolean(_, _)],

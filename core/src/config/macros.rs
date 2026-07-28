@@ -97,10 +97,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 for (idx, arg) in directive.args.iter().enumerate() {
                     if !matches!(arg, $($pattern)+) {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': argument type mismatch at position {}",
                             stringify!($name), idx
-                        ).into());
+                        ).into(),
+                span: $directive.span.clone(),
+            });
                     }
                 }
                 let __empty = Default::default();
@@ -117,10 +120,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 for (idx, arg) in directive.args.iter().enumerate() {
                     if !matches!(arg, $($pattern)+) {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': argument type mismatch at position {}",
                             stringify!($name), idx
-                        ).into());
+                        ).into(),
+                span: directive.span.clone(),
+            });
                     }
                 }
                 let $name = directive.children.as_ref();
@@ -253,10 +259,13 @@ macro_rules! validate_directive {
                     }
                 )+
                 if !matched {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': argument count or type mismatch (expected one of the valid signatures)",
                         stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -286,10 +295,13 @@ macro_rules! validate_directive {
                     }
                 )+
                 if !matched && !directive.args.is_empty() {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': argument count or type mismatch (expected one of the valid signatures)",
                         stringify!($name)
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -304,10 +316,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $count, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -322,10 +337,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $count, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
                 let __empty = Default::default();
@@ -341,10 +359,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s), got {}",
                         stringify!($name), $min, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -359,10 +380,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s), got {}",
                         stringify!($name), $min, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
                 let __empty = Default::default();
@@ -378,10 +402,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s), got {}",
                         stringify!($name), $max, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -396,10 +423,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s), got {}",
                         stringify!($name), $max, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
                 let __empty = Default::default();
@@ -415,10 +445,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {}-{} argument(s), got {}",
                         stringify!($name), $range.min().unwrap_or(0), $range.max().unwrap_or(0), directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -433,10 +466,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {}-{} argument(s), got {}",
                         stringify!($name), $range.min().unwrap_or(0), $range.max().unwrap_or(0), directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
                 let __empty = Default::default();
@@ -475,10 +511,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != 0 && directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $count, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -494,10 +533,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 if directive.args.len() != 0 {
                     if directive.args.len() != $count {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': expected {} argument(s), got {}",
                             stringify!($name), $count, directive.args.len()
-                        ).into());
+                        ).into(),
+                span: directive.span.clone(),
+            });
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
@@ -514,10 +556,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != 0 && directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s), got {}",
                         stringify!($name), $min, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -533,10 +578,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 if directive.args.len() != 0 {
                     directive.args.len() < $min {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': expected at least {} argument(s), got {}",
                             stringify!($name), $min, directive.args.len()
-                        ).into());
+                        ).into(),
+                span: $directive.span.clone(),
+            });
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
@@ -553,10 +601,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != 0 && directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s), got {}",
                         stringify!($name), $max, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -572,10 +623,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 if directive.args.len() != 0 {
                     if directive.args.len() > $max {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': expected at most {} argument(s), got {}",
                             stringify!($name), $max, directive.args.len()
-                        ).into());
+                        ).into(),
+                span: $directive.span.clone(),
+            });
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
@@ -592,10 +646,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 if directive.args.len() != 0 && !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $range, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -611,10 +668,13 @@ macro_rules! validate_directive {
             for directive in directives {
                 if directive.args.len() != 0 {
                     if !$range.contains(&directive.args.len()) {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': expected {} argument(s), got {}",
                             stringify!($name), $range, directive.args.len()
-                        ).into());
+                        ).into(),
+                span: $directive.span.clone(),
+            });
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
@@ -679,7 +739,10 @@ macro_rules! validate_args {
     // Single pattern (may include "or" patterns like Type1 | Type2)
     ($directive:expr, [$pattern:pat $(if $guard:expr)?]) => {
         if !$directive.args.is_empty() && !matches!($directive.args[0], $pattern $(if $guard)?) {
-            return Err("Invalid directive: argument type mismatch at position 0".into());
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: "Invalid directive: argument type mismatch at position 0".into(),
+                span: $directive.span.clone(),
+            });
         }
     };
 
@@ -691,19 +754,25 @@ macro_rules! validate_args {
     // Internal: process multiple patterns with index counter
     (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
         if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
-            return Err(format!(
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                 "Invalid directive: argument type mismatch at position {}",
                 $idx
-            ).into());
+            ).into(),
+                span: $directive.span.clone(),
+            });
         }
     };
 
     (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
         if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
-            return Err(format!(
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                 "Invalid directive: argument type mismatch at position {}",
                 $idx
-            ).into());
+            ).into(),
+                span: $directive.span.clone(),
+            });
         }
         $crate::validate_args!(@multi $directive, $idx + 1, [$($rest)+])
     };
@@ -804,10 +873,13 @@ macro_rules! validate_nested {
             for directive in directives {
                 for (idx, arg) in directive.args.iter().enumerate() {
                     if !matches!(arg, $($pattern $(if $guard)?)+) {
-                        return Err(format!(
+                        return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                             "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                             stringify!($block), stringify!($name), idx
-                        ).into());
+                        ).into(),
+                span: directive.span.clone(),
+            });
                     }
                 }
             }
@@ -819,10 +891,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $count, stringify!($name), directive.args.len()
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -834,10 +909,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $min, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -849,10 +927,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $max, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -864,10 +945,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $range, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -886,10 +970,13 @@ macro_rules! validate_nested {
     // Internal helper to check argument types
     (@check_args $block:expr, $directive:ident, [$pattern:pat $(if $guard:expr)?], $subdirective_name:ident) => {
         if !$directive.args.is_empty() && !matches!($directive.args[0], $pattern $(if $guard)?) {
-            return Err(format!(
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position 0",
                 stringify!($block), stringify!($subdirective_name)
-            ).into());
+            ).into(),
+                span: $directive.span.clone(),
+            });
         }
     };
 
@@ -899,19 +986,25 @@ macro_rules! validate_nested {
 
     (@check_args_impl $block:expr, $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?], $subdirective_name:ident) => {
         if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
-            return Err(format!(
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                 stringify!($block), stringify!($subdirective_name), $idx
-            ).into());
+            ).into(),
+                span: $directive.span.clone(),
+            });
         }
     };
 
     (@check_args_impl $block:expr, $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+], $subdirective_name:ident) => {
         if !$directive.args.is_empty() && !matches!($directive.args[$idx], $pattern $(if $guard)?) {
-            return Err(format!(
+            return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                 "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
                 stringify!($block), stringify!($subdirective_name), $idx
-            ).into());
+            ).into(),
+                span: $directive.span.clone(),
+            });
         }
         $crate::validate_nested!(@check_args_impl $block, $directive, $idx + 1, [$($rest)+], $subdirective_name)
     };
@@ -921,16 +1014,22 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $count, stringify!($name), directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
             }
         }
@@ -940,16 +1039,22 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $min, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
             }
         }
@@ -959,16 +1064,22 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $max, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 if  !directive.args.is_empty() && !matches!(directive.args[0], $pattern $(if $guard)?) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
             }
         }
@@ -978,16 +1089,22 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $range, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 if !directive.args.is_empty() && !matches!(directive.args[0], $pattern $(if $guard)?) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
             }
         }
@@ -997,10 +1114,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if !directive.args.is_empty() &&  !matches!(directive.args[0], $pattern $(if $guard)?) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
             }
         }
@@ -1022,10 +1142,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if !directive.args.is_empty() {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected no arguments in '{}' subdirective",
                         stringify!($name), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 let __empty = Default::default();
                 let $name = directive.children.as_ref().unwrap_or(&__empty);
@@ -1053,10 +1176,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() != $count {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $count, stringify!($name), directive.args.len()
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -1068,10 +1194,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() < $min {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at least {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $min, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -1083,10 +1212,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if directive.args.len() > $max {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected at most {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $max, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -1098,10 +1230,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
                         stringify!($block), $range, $name, directive.args.len()
-                    ).into());
+                    ).into(),
+                span: $directive.span.clone(),
+            });
                 }
                 $crate::validate_nested!(@check_args $block, directive, [$($pattern $(if $guard)?),+], $name);
             }
@@ -1146,10 +1281,13 @@ macro_rules! validate_nested {
                     }
                 )+
                 if !matched {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': argument count or type mismatch in '{}' subdirective (expected one of the valid signatures)",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
             }
         }
@@ -1175,10 +1313,13 @@ macro_rules! validate_nested {
                     }
                 )+
                 if !matched {
-                    return Err(format!(
+                    return Err($crate::config::validator::ConfigurationValidationError {
+                inner: format!(
                         "Invalid directive '{}': argument count or type mismatch in '{}' subdirective (expected one of the valid signatures)",
                         stringify!($block), stringify!($name)
-                    ).into());
+                    ).into(),
+                span: directive.span.clone(),
+            });
                 }
             }
         }

@@ -13,7 +13,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         {
             let used_directives = &mut ctx.used_directives;
             // Static file compression (on-the-fly)
