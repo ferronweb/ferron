@@ -144,17 +144,18 @@ pub fn validate_scoped_block(
 
     let result = provider_validator.validate_block(block, &mut local_ctx);
     ctx.diagnostics.append(&mut local_ctx.diagnostics);
-    for unused_directive in block
+    for (unused_directive, span) in block
         .directives
-        .keys()
-        .filter(|dn| !local_ctx.used_directives.contains(*dn))
+        .iter()
+        .filter(|d| !local_ctx.used_directives.contains(d.0))
+        .flat_map(|d| d.1.iter().map(|s| (d.0.clone(), s.span.clone())))
     {
         ctx.diagnostics.push(local_ctx.create_diagnostic(
             ConfigurationValidatorDiagnosticKind::UnknownDirective,
             format!(
                 "`{unused_directive}` is unused in the block for `{provider_namespace}` namespace"
             ),
-            block.span.clone(),
+            span.or(block.span.clone()),
         ));
     }
     result

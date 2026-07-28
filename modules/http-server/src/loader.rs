@@ -1,6 +1,6 @@
 //! Module loader implementation
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use ferron_core::builtin::BuiltinConfigurationValidator;
@@ -86,6 +86,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
     ) {
         let default_port = resolve_default_http_port(config);
         let mut blocks = Vec::new();
+        let mut pending_blocks = VecDeque::new();
         if let Some(ports) = config.ports.get("http") {
             for port in ports {
                 // Skip host blocks that won't create any listeners
@@ -116,7 +117,37 @@ impl ModuleLoader for BasicHttpModuleLoader {
                             format!("port {}", effective_port.unwrap())
                         }
                     };
-                    blocks.push((block_name, host));
+                    blocks.push((block_name.clone(), host));
+                    // Check "if", "if_not", "location", "handle_error" subblocks to pass into validator
+                    let subblock_names: &'static [&'static str] =
+                        &["if", "if_not", "location", "handle_error"];
+                    for subblock_name in subblock_names {
+                        if let Some(subblocks) = host.directives.get(*subblock_name) {
+                            for subblock in subblocks {
+                                if let Some(children) = &subblock.children {
+                                    pending_blocks.push_back((
+                                        format!("{} {}", block_name, subblock_name),
+                                        children,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        while let Some((block_name, host)) = pending_blocks.pop_front() {
+            blocks.push((block_name.clone(), host));
+            let subblock_names: &'static [&'static str] =
+                &["if", "if_not", "location", "handle_error"];
+            for subblock_name in subblock_names {
+                if let Some(subblocks) = host.directives.get(*subblock_name) {
+                    for subblock in subblocks {
+                        if let Some(children) = &subblock.children {
+                            pending_blocks
+                                .push_back((format!("{} {}", block_name, subblock_name), children));
+                        }
+                    }
                 }
             }
         }

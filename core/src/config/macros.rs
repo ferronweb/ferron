@@ -1357,17 +1357,18 @@ macro_rules! validate_nested {
 #[macro_export]
 macro_rules! check_unused_subdirectives {
     ($block:expr, $used:expr, $diagnostics:expr, $scope:expr) => {
-        for directive_name in $block.directives.keys() {
-            if !$used.contains(directive_name) {
-                $diagnostics.push(
-                    $crate::config::validator::ConfigurationValidatorDiagnostic {
-                        kind: $crate::config::validator::ConfigurationValidatorDiagnosticKind::UnknownDirective,
-                        message: format!("`{directive_name}` is unused in the block"),
-                        span: $block.span.clone(),
-                        scope: $scope.clone(),
-                    }
-                );
-            }
+        for (directive_name, span) in $block.directives
+            .iter()
+            .filter(|d| !$used.contains(d.0))
+            .flat_map(|d| d.1.iter().map(|s| (d.0.clone(), s.span.clone()))) {
+            $diagnostics.push(
+                $crate::config::validator::ConfigurationValidatorDiagnostic {
+                    kind: $crate::config::validator::ConfigurationValidatorDiagnosticKind::UnknownDirective,
+                    message: format!("`{directive_name}` is unused in the block"),
+                    span: span.or($block.span.clone()),
+                    scope: $scope.clone(),
+                }
+            );
         }
     };
 }
