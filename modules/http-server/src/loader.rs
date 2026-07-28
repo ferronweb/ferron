@@ -275,7 +275,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 evaluated when the given condition matches.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
-                    subblock_link: None,
+                    subblock_link: Some(DirectiveSubblock::default()),
                 },
                 DirectiveSubblock::default(),
             )
@@ -287,7 +287,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 evaluated when the given condition does not match.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
-                    subblock_link: None,
+                    subblock_link: Some(DirectiveSubblock::default()),
                 },
                 DirectiveSubblock::default(),
             )
@@ -299,7 +299,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 request path patterns.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
-                    subblock_link: None,
+                    subblock_link: Some(DirectiveSubblock::default()),
                 },
                 DirectiveSubblock::default(),
             )
@@ -311,7 +311,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 specific HTTP status codes.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
-                    subblock_link: None,
+                    subblock_link: Some(DirectiveSubblock::default()),
                 },
                 DirectiveSubblock::default(),
             )
