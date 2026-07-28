@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 use cidr::IpCidr;
-use ferron_core::config::validator::{validate_scoped_block, ConfigurationValidatorContext};
+use ferron_core::config::validator::{
+    entry_span, first_entry_span, validate_scoped_block, ConfigurationValidationError,
+    ConfigurationValidatorContext,
+};
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
-    ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use ferron_core::{check_unused_subdirectives, validate_directive, validate_nested};
 
@@ -165,29 +167,30 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 .insert("client_ip_from_header".to_string());
             for entry in entries {
                 if entry.args.len() != 1 {
-                    return Err(format!(
+                    return Err(ConfigurationValidationError::from(format!(
                         "Invalid directive 'client_ip_from_header': expected 1 argument, got {}",
                         entry.args.len()
-                    )
-                    .into());
+                    ))
+                    .with_span(entry_span(entry)));
                 }
                 if !matches!(
                     entry.args.first(),
                     Some(ServerConfigurationValue::String(_, _))
                         | Some(ServerConfigurationValue::InterpolatedString(_, _))
                 ) {
-                    return Err(
-                        "Invalid directive 'client_ip_from_header': argument type mismatch".into(),
-                    );
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid directive 'client_ip_from_header': argument type mismatch",
+                    )
+                    .with_span(entry_span(entry)));
                 }
 
                 if let Some(children) = &entry.children {
                     for directive_name in children.directives.keys() {
                         if directive_name != "trusted_proxy" {
-                            return Err(format!(
+                            return Err(ConfigurationValidationError::from(format!(
                                 "Invalid directive 'client_ip_from_header': unknown nested directive '{directive_name}'"
-                            )
-                            .into());
+                            ))
+                            .with_span(entry_span(entry)));
                         }
                     }
 
@@ -196,10 +199,10 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                         let mut has_trusted_proxy = false;
                         for trusted_proxy_entry in trusted_proxy_entries {
                             if trusted_proxy_entry.args.is_empty() {
-                                return Err(
-                                    "Invalid directive 'trusted_proxy': expected at least one IP or CIDR"
-                                        .into(),
-                                );
+                                return Err(ConfigurationValidationError::from(
+                                    "Invalid directive 'trusted_proxy': expected at least one IP or CIDR",
+                                )
+                                .with_span(entry_span(trusted_proxy_entry)));
                             }
 
                             for arg in &trusted_proxy_entry.args {
@@ -208,10 +211,10 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                     ServerConfigurationValue::String(_, _)
                                         | ServerConfigurationValue::InterpolatedString(_, _)
                                 ) {
-                                    return Err(
-                                        "Invalid directive 'trusted_proxy': argument type mismatch"
-                                            .into(),
-                                    );
+                                    return Err(ConfigurationValidationError::from(
+                                        "Invalid directive 'trusted_proxy': argument type mismatch",
+                                    )
+                                    .with_span(entry_span(trusted_proxy_entry)));
                                 }
 
                                 let expanded = match arg.as_string_with_interpolations(&HashMap::<
@@ -221,17 +224,17 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                 )) {
                                     Some(value) => value,
                                     None => {
-                                        return Err(
-                                            "Invalid directive 'trusted_proxy': argument type mismatch"
-                                                .into(),
-                                        );
+                                        return Err(ConfigurationValidationError::from(
+                                            "Invalid directive 'trusted_proxy': argument type mismatch",
+                                        )
+                                        .with_span(entry_span(trusted_proxy_entry)));
                                     }
                                 };
                                 if expanded.parse::<IpCidr>().is_err() {
-                                    return Err(format!(
+                                    return Err(ConfigurationValidationError::from(format!(
                                         "Invalid directive 'trusted_proxy': '{expanded}' is not a valid IP or CIDR"
-                                    )
-                                    .into());
+                                    ))
+                                    .with_span(entry_span(trusted_proxy_entry)));
                                 }
                                 has_trusted_proxy = true;
                                 if expanded == "0.0.0.0/0" || expanded == "::/0" {
@@ -289,9 +292,10 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                 ctx.scope.clone()
                             );
                         } else {
-                            return Err(
-                                format!("Invalid directive '{name}': block is missing").into()
-                            );
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid directive '{name}': block is missing"
+                            ))
+                            .with_span(entry_span(entry)));
                         }
                     }
                 }
@@ -305,29 +309,6 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
         Ok(())
     }
-}
-
-fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigurationSpan> {
-    entry.span.clone().or_else(|| {
-        entry.args.first().and_then(|value| match value {
-            ServerConfigurationValue::String(_, span)
-            | ServerConfigurationValue::Number(_, span)
-            | ServerConfigurationValue::Float(_, span)
-            | ServerConfigurationValue::Boolean(_, span)
-            | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
-        })
-    })
-}
-
-fn first_entry_span(
-    block: &ServerConfigurationBlock,
-    directive: &str,
-) -> Option<ServerConfigurationSpan> {
-    block
-        .directives
-        .get(directive)
-        .and_then(|entries| entries.first())
-        .and_then(entry_span)
 }
 
 fn first_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
