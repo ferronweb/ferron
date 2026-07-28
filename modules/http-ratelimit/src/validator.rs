@@ -178,20 +178,20 @@ impl RateLimitValidator {
         if let Some(entries) = block.directives.get("deny_status") {
             sub.insert("deny_status".to_string());
             for entry in entries {
-                    if let Some(value) = entry.args.first() {
-                        let n = value.as_number().ok_or_else(|| {
-                            ConfigurationValidationError::from(
-                                "Invalid `deny_status` — must be an integer value",
-                            )
-                            .with_span(entry_span(entry))
-                        })?;
-                        if !(100..=599).contains(&n) {
-                            return Err(ConfigurationValidationError::from(
-                                "Invalid `deny_status` — must be a valid HTTP status code (100-599)",
-                            )
-                            .with_span(entry_span(entry)));
-                        }
+                if let Some(value) = entry.args.first() {
+                    let n = value.as_number().ok_or_else(|| {
+                        ConfigurationValidationError::from(
+                            "Invalid `deny_status` — must be an integer value",
+                        )
+                        .with_span(entry_span(entry))
+                    })?;
+                    if !(100..=599).contains(&n) {
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `deny_status` — must be a valid HTTP status code (100-599)",
+                        )
+                        .with_span(entry_span(entry)));
                     }
+                }
             }
         }
 
@@ -268,12 +268,16 @@ impl RateLimitValidator {
         min: i64,
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let value = entry.args.first().ok_or_else(|| {
-            ConfigurationValidationError::from(format!("Invalid `{name}` — must be an integer value"))
-                .with_span(entry_span(entry))
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be an integer value"
+            ))
+            .with_span(entry_span(entry))
         })?;
         let n = value.as_number().ok_or_else(|| {
-            ConfigurationValidationError::from(format!("Invalid `{name}` — must be an integer value"))
-                .with_span(entry_span(entry))
+            ConfigurationValidationError::from(format!(
+                "Invalid `{name}` — must be an integer value"
+            ))
+            .with_span(entry_span(entry))
         })?;
         if n < min {
             return Err(ConfigurationValidationError::from(format!(

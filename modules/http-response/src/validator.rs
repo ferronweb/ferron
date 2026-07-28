@@ -67,14 +67,10 @@ impl ConfigurationValidator for HttpResponseValidator {
                     .with_span(entry_span(entry)));
                 }
 
-                let status_code = entry.args[0]
-                    .as_number()
-                    .ok_or_else(|| {
-                        ConfigurationValidationError::from(
-                            "Invalid `status` — code must be an integer",
-                        )
+                let status_code = entry.args[0].as_number().ok_or_else(|| {
+                    ConfigurationValidationError::from("Invalid `status` — code must be an integer")
                         .with_span(entry_span(entry))
-                    })?;
+                })?;
 
                 if !(100..=599).contains(&status_code) {
                     return Err(ConfigurationValidationError::from(format!(
@@ -92,9 +88,11 @@ impl ConfigurationValidator for HttpResponseValidator {
                                 if let Some(child_entries) = children.directives.get(child_name) {
                                     for child_entry in child_entries {
                                         if child_entry.args.is_empty() {
-                                            return Err(ConfigurationValidationError::from(format!(
+                                            return Err(ConfigurationValidationError::from(
+                                                format!(
                                                 "Invalid `{child_name}` — requires a string value"
-                                            ))
+                                            ),
+                                            )
                                             .with_span(entry_span(child_entry)));
                                         }
                                         if child_entry.args[0].as_str().is_none()
@@ -107,9 +105,11 @@ impl ConfigurationValidator for HttpResponseValidator {
                                                     ),
                                                 ))
                                         {
-                                            return Err(ConfigurationValidationError::from(format!(
+                                            return Err(ConfigurationValidationError::from(
+                                                format!(
                                                 "Invalid `{child_name}` — value must be a string"
-                                            ))
+                                            ),
+                                            )
                                             .with_span(entry_span(child_entry)));
                                         }
                                     }
@@ -122,7 +122,8 @@ impl ConfigurationValidator for HttpResponseValidator {
                     // Validate regex if present
                     if let Some(regex_entries) = children.directives.get("regex") {
                         for regex_entry in regex_entries {
-                            if let Some(regex_str) = regex_entry.args.first().and_then(|v| v.as_str())
+                            if let Some(regex_str) =
+                                regex_entry.args.first().and_then(|v| v.as_str())
                             {
                                 if fancy_regex::Regex::new(regex_str).is_err() {
                                     return Err(ConfigurationValidationError::from(format!(

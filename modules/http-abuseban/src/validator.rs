@@ -1,6 +1,10 @@
 use cidr::IpCidr;
-use ferron_core::config::validator::{entry_span, ConfigurationValidationError, ConfigurationValidator};
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+use ferron_core::config::validator::{
+    entry_span, ConfigurationValidationError, ConfigurationValidator,
+};
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+};
 
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "enabled",

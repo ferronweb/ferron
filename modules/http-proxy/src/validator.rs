@@ -148,8 +148,10 @@ fn validate_duration(
         for entry in entries {
             if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
                 parse_duration(val).map_err(|parse_err| {
-                    ConfigurationValidationError::from(format!("Invalid `{name}` duration: {parse_err}"))
-                        .with_span(entry_span(entry))
+                    ConfigurationValidationError::from(format!(
+                        "Invalid `{name}` duration: {parse_err}"
+                    ))
+                    .with_span(entry_span(entry))
                 })?;
             } else {
                 return Err(ConfigurationValidationError::from(format!(
@@ -183,11 +185,14 @@ fn validate_request_header(
                 _ => (first, true),
             };
             HeaderName::from_str(name).map_err(|parse_err| {
-                ConfigurationValidationError::from(format!("Invalid header name '{name}': {parse_err}"))
-                    .with_span(entry_span(entry))
+                ConfigurationValidationError::from(format!(
+                    "Invalid header name '{name}': {parse_err}"
+                ))
+                .with_span(entry_span(entry))
             })?;
             if needs_value
-                && entry.args
+                && entry
+                    .args
                     .get(1)
                     .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     .is_none()

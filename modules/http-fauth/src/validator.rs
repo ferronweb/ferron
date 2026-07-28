@@ -1,5 +1,5 @@
 use ferron_core::config::validator::{
-    ConfigurationValidator, ConfigurationValidationError, entry_span, first_entry_span,
+    entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
@@ -28,15 +28,13 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                     used_directives.insert(stringify!(auth_to_concurrent_conns).to_string());
                     for directive in directives {
                         if directive.args.len() != 1 {
-                            return Err(
-                                ConfigurationValidationError::from(format!(
-                                    "Invalid directive '{}': expected {} argument(s), got {}",
-                                    stringify!(auth_to_concurrent_conns),
-                                    1,
-                                    directive.args.len()
-                                ))
-                                .with_span(entry_span(directive)),
-                            );
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid directive '{}': expected {} argument(s), got {}",
+                                stringify!(auth_to_concurrent_conns),
+                                1,
+                                directive.args.len()
+                            ))
+                            .with_span(entry_span(directive)));
                         }
                         if !matches!(
                             directive.args[0],
@@ -45,13 +43,11 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                             directive.args[0],
                             ServerConfigurationValue::Boolean(false, _)
                         ) {
-                            return Err(
-                                ConfigurationValidationError::from(format!(
-                                    "Invalid directive '{}': invalid type",
-                                    stringify!(auth_to_concurrent_conns)
-                                ))
-                                .with_span(entry_span(directive)),
-                            );
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid directive '{}': invalid type",
+                                stringify!(auth_to_concurrent_conns)
+                            ))
+                            .with_span(entry_span(directive)));
                         }
                         if matches!(
                             directive.args[0],

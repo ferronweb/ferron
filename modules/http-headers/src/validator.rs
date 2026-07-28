@@ -114,4 +114,3 @@ fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool>
         .and_then(|entries| entries.first())
         .map(ServerConfigurationDirectiveEntry::get_flag)
 }
-

@@ -1,4 +1,6 @@
-use ferron_core::config::validator::{entry_span, validate_scoped_block_flat, ConfigurationValidator};
+use ferron_core::config::validator::{
+    entry_span, validate_scoped_block_flat, ConfigurationValidator,
+};
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::{validate_directive, validate_nested};
 
