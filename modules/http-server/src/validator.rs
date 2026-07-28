@@ -264,17 +264,38 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         }
 
         // Conditional directives
-        if config.has_directive("if") {
-            ctx.used_directives.insert("if".to_string());
-        }
-        if config.has_directive("if_not") {
-            ctx.used_directives.insert("if_not".to_string());
-        }
-        if config.has_directive("location") {
-            ctx.used_directives.insert("location".to_string());
-        }
-        if config.has_directive("handle_error") {
-            ctx.used_directives.insert("handle_error".to_string());
+        if !is_global {
+            let conditional_directive_names: &'static [&'static str] =
+                &["if", "if_not", "location", "handle_error"];
+            for name in conditional_directive_names {
+                if let Some(entries) = config.directives.get(*name) {
+                    ctx.used_directives.insert(name.to_string());
+                    for entry in entries {
+                        let mut new_ctx = ConfigurationValidatorContext {
+                            used_directives: Default::default(),
+                            is_global: false,
+                            scoped_validators: ctx.scoped_validators.clone(),
+                            diagnostics: Vec::new(),
+                            scope: ctx.scope.clone(),
+                        };
+                        // Validate inside conditionals too
+                        if let Some(children) = &entry.children {
+                            self.validate_block(children, &mut new_ctx)?;
+                            ctx.diagnostics.extend(new_ctx.diagnostics);
+                            check_unused_subdirectives!(
+                                children,
+                                new_ctx.used_directives,
+                                &mut ctx.diagnostics,
+                                ctx.scope.clone()
+                            );
+                        } else {
+                            return Err(
+                                format!("Invalid directive '{name}': block is missing").into()
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         // HTTP-only deployment check (per-host only)
