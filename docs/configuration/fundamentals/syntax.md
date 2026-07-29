@@ -7,11 +7,11 @@ This page covers the Ferron configuration file format, how blocks and directives
 
 ## Ferron configuration files
 
-Ferron uses `.conf` files parsed by the `config-ferronconf` adapter. A configuration file is made of top-level statements that define global blocks, host blocks, matchers, and snippets.
+Ferron uses `.conf` (or `.ferron`) files parsed by the `config-ferronconf` adapter. A configuration file is made of top-level statements that define global blocks, host blocks, matchers, and snippets.
 
 ```ferron
 # Uncomment to include additional configuration files
-#include "/etc/ferron/conf.d/**/*.conf"
+#include "/etc/ferron/conf.d/**/*.ferron"
 
 {
     runtime {
@@ -84,13 +84,13 @@ This shorthand can useful for simple on/off toggles where the intent is clear.
 
 Several directives accept duration values. The following formats are supported:
 
-| Suffix | Unit | Example | Result |
-|--------|------|---------|--------|
-| `h` or `H` | Hours | `12h`, `1H` | 12 hours |
-| `m` or `M` | Minutes | `30m`, `30M` | 30 minutes |
-| `s` or `S` | Seconds | `90s`, `90S` | 90 seconds |
-| `d` or `D` | Days | `1d`, `1D` | 1 day |
-| (none) | Seconds (default) | `12` | 12 seconds |
+| Suffix     | Unit              | Example      | Result     |
+| ---------- | ----------------- | ------------ | ---------- |
+| `h` or `H` | Hours             | `12h`, `1H`  | 12 hours   |
+| `m` or `M` | Minutes           | `30m`, `30M` | 30 minutes |
+| `s` or `S` | Seconds           | `90s`, `90S` | 90 seconds |
+| `d` or `D` | Days              | `1d`, `1D`   | 1 day      |
+| (none)     | Seconds (default) | `12`         | 12 seconds |
 
 Plain numbers without a suffix are treated as seconds.
 

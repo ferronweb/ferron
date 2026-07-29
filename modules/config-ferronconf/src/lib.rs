@@ -87,7 +87,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
 
     #[inline]
     fn file_extension(&self) -> Vec<&'static str> {
-        vec!["conf"]
+        vec!["conf", "ferron"]
     }
 }
 
