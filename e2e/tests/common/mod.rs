@@ -108,6 +108,7 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
             && dest != "e2e"
             && dest != ".git"
             && dest != "Dockerfile"
+            && dest != "cross-build"
             && !dest.starts_with("Dockerfile.")
         {
             builder = builder.with_file(entry, format!("./{dest}"));
