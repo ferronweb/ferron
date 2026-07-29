@@ -269,6 +269,12 @@
     "label": "Conditionals and variables"
   },
   {
+    "href": "/docs/v3/configuration/fundamentals/editor-support",
+    "target": "_self",
+    "sub": true,
+    "label": "Editor support"
+  },
+  {
     "label": "Server"
   },
   {
