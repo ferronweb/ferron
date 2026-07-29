@@ -112,7 +112,7 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
 }
 
 /// Resolve capture group references ($1, $2, etc.) in the result value.
-fn resolve_captures(value: &str, captures: &fancy_regex::Captures) -> String {
+fn resolve_captures(value: &str, captures: &fancy_regex::Captures<'_, str>) -> String {
     let mut result = String::new();
     let mut chars = value.chars().peekable();
 

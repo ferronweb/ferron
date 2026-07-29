@@ -46,7 +46,7 @@ app.get("/", (_req, res) => {
   res.send("Hello from auth backend!");
 });
 
-app.all("*", (_req, res) => {
+app.all("*splat", (_req, res) => {
   res.send("Hello from auth backend!");
 });
 

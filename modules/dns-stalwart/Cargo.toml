@@ -8,7 +8,7 @@ ferron-core = { path = "../../core" }
 ferron-dns = { path = "../../types/dns" }
 dns-update = "0.5.0"
 async-trait = "0.1.89"
-base64 = "0.22.1"
+base64 = "0.23.0"
 hex = "0.4.3"
 anyhow = "1.0.102"
 hyper = "1.9.0"

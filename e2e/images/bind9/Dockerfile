@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Install BIND 9 and utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
