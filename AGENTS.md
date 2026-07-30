@@ -22,17 +22,18 @@ Run from repository root unless noted.
 
 ### Build and test
 
-| Command                                                 | Purpose                                         |
-| ------------------------------------------------------- | ----------------------------------------------- |
-| `cargo build --workspace`                               | Build all crates                                |
-| `cargo test --workspace`                                | Unit + inline tests                             |
-| `cargo test -p <crate>`                                 | Single crate                                    |
-| `cargo fmt --all --check`                               | Formatting (no `.rustfmt.toml` — uses defaults) |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Lint                                            |
-| `cargo shear`                                           | Check unused dependencies (CI)                  |
-| `cargo run --manifest-path doctest/Cargo.toml`          | Test doc examples                               |
-| `cd e2e && cargo test`                                  | E2E tests (needs Docker + protoc)               |
-| `rumdl fmt docs && rumdl check --fix docs`              | Lint docs Markdown                              |
+| Command                                                 | Purpose                                                                 |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `cargo build --workspace`                               | Build all crates                                                        |
+| `cargo test --workspace`                                | Unit + inline tests                                                     |
+| `cargo test -p <crate>`                                 | Single crate                                                            |
+| `cargo fmt --all --check`                               | Formatting (no `.rustfmt.toml` — uses defaults)                         |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lint                                                                    |
+| `cargo shear`                                           | Check unused dependencies (CI)                                          |
+| `cargo run --manifest-path doctest/Cargo.toml`          | Test doc examples                                                       |
+| `cd e2e && cargo test`                                  | E2E tests (needs Docker + protoc)                                       |
+| `rumdl fmt docs && rumdl check --fix docs`              | Lint docs Markdown                                                      |
+| `npx aislop scan`                                       | Scan for possible AI-generated issues (false positives possible though) |
 
 ### Run server
 
