@@ -1,0 +1,37 @@
+version: 1
+engines:
+  format: true
+  lint: true
+  code-quality: true
+  ai-slop: true
+  architecture: false
+  security: true
+quality:
+  maxFunctionLoc: 80
+  maxFileLoc: 400
+  maxNesting: 5
+  maxParams: 6
+lint:
+  typecheck: false
+  expoDoctor: false
+security:
+  audit: true
+  auditTimeout: 25000
+scoring:
+  weights:
+    format: 0.3
+    lint: 0.6
+    code-quality: 0.8
+    ai-slop: 1
+    architecture: 1
+    security: 1.5
+  thresholds:
+    good: 75
+    ok: 50
+  smoothing: 20
+  maxPerRule: 40
+ci:
+  failBelow: 80
+  format: json
+telemetry:
+  enabled: true

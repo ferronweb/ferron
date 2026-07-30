@@ -1,0 +1,60 @@
+name: Scan for AI slop
+
+on:
+  push:
+    branches: ["develop-3.x"]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for AI slop
+        id: aislop
+        uses: scanaislop/aislop@v1
+        with:
+          version: latest
+
+      - name: Deal with the AI slop PR
+        if: ${{ failure() && steps.aislop.outcome == 'failure' && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // This could be a seahorse emoji, but there apparently isn't one,
+            // so include various "seahorse" emojis that AI thinks they are.
+            //
+            // Also, the AI autocomplete gave me some other "seahorse" emojis...
+            // And Zeta (Zed's autocomplete model) seems to give me squids...
+            const seahorseEmojis = [
+              "🦑", "🦞", "🦀", "🦭", "🌊", "🐎", "🐴", "🦄", // Generic
+              "🦐", "🐟️", "🐠", "🧜‍♂", "🐙",
+              "🐉", // ChatGPT
+              "🫏", "🫵", // Gemini
+              "🦧", "🏚️", "🦟", "🦠", "🐲", "😄", "😮" // My imagination :D
+            ];
+            const beginningPhrases = [
+              "Wait... ", "OK, but: ", "Oh no... ", "What is this!? ", "Here's a question for you: ",
+              "Really? By the way: "
+            ];
+            const prNumber = context.payload.pull_request?.number;
+            if (prNumber) {
+              // Choose a random seahorse emoji, since there are multiple candidates... :')
+              const seahorseEmoji = seahorseEmojis[Math.floor(Math.random() * seahorseEmojis.length)];
+              const beginningPhrase = beginningPhrases[Math.floor(Math.random() * beginningPhrases.length)];
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: ['seahorse'],
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `${beginningPhrase}Is ${seahorseEmoji} a seahorse emoji?`,
+              });
+            }
