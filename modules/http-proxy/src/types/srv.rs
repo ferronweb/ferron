@@ -66,7 +66,7 @@ pub async fn resolve_srv_inner(
     }
 
     // Get the secondary runtime handle (captured globally during Module::start)
-    let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
+    let (handle, event_sink) = match crate::runtime_handle::try_get_secondary_runtime_handle() {
         Some(h) => h,
         None => {
             ferron_core::log_warn!("SRV resolution skipped — secondary runtime not yet available");
@@ -77,7 +77,7 @@ pub async fn resolve_srv_inner(
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
         .spawn(async move {
-            let resolver = match crate::get_or_create_resolver(&dns_servers) {
+            let resolver = match crate::runtime_handle::get_or_create_resolver(&dns_servers) {
                 Some(r) => r,
                 None => {
                     event_sink.emit(ferron_observability::Event::Log(

@@ -767,20 +767,80 @@ impl ModuleLoader for TlsAcmeModuleLoader {
 
     fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
         let tls = ferron_core::directives::DirectiveSubblock::custom("tls");
-        register_acme_directive(registry, "challenge", "challenge <type>", "This directive specifies the ACME challenge type. Supported: http-01, dns-01.", tls);
+        register_acme_directive(
+            registry,
+            "challenge",
+            "challenge <type>",
+            "This directive specifies the ACME challenge type. Supported: http-01, dns-01.",
+            tls,
+        );
         register_acme_directive(registry, "contact", "contact <email>", "This directive specifies the ACME account contact email address for certificate expiry and account notices.", tls);
-        register_acme_directive(registry, "directory", "directory <uri>", "This directive specifies the ACME directory URI.", tls);
-        register_acme_directive(registry, "profile", "profile <name>", "This directive specifies the ACME profile name.", tls);
-        register_acme_directive(registry, "eab", "eab <key_id> <mac_key>", "This directive specifies External Account Binding credentials for the ACME account.", tls);
-        register_acme_directive(registry, "cache", "cache <path>", "This directive specifies the directory path for the ACME certificate cache.", tls);
-        register_acme_directive(registry, "save", "save <path>...", "This directive specifies one or more paths to save obtained ACME certificates.", tls);
-        register_acme_directive(registry, "post_obtain_command", "post_obtain_command <command>", "This directive specifies a command to run after obtaining an ACME certificate.", tls);
-        register_acme_directive(registry, "no_verification", "no_verification [bool]", "This directive disables TLS certificate verification for the ACME directory.", tls);
+        register_acme_directive(
+            registry,
+            "directory",
+            "directory <uri>",
+            "This directive specifies the ACME directory URI.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "profile",
+            "profile <name>",
+            "This directive specifies the ACME profile name.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "eab",
+            "eab <key_id> <mac_key>",
+            "This directive specifies External Account Binding credentials for the ACME account.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "cache",
+            "cache <path>",
+            "This directive specifies the directory path for the ACME certificate cache.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "save",
+            "save <path>...",
+            "This directive specifies one or more paths to save obtained ACME certificates.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "post_obtain_command",
+            "post_obtain_command <command>",
+            "This directive specifies a command to run after obtaining an ACME certificate.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "no_verification",
+            "no_verification [bool]",
+            "This directive disables TLS certificate verification for the ACME directory.",
+            tls,
+        );
         register_acme_directive(registry, "on_demand", "on_demand [bool]", "This directive enables automatic certificate issuance on demand for unknown hostnames.", tls);
         register_acme_directive(registry, "on_demand_ask", "on_demand_ask <url>", "This directive specifies the approval endpoint URL for on-demand certificate requests.", tls);
         register_acme_directive(registry, "on_demand_ask_auth", "on_demand_ask_auth <header>", "This directive sets the Authorization header value for the on-demand approval endpoint.", tls);
-        register_acme_directive(registry, "on_demand_ask_no_verification", "on_demand_ask_no_verification [bool]", "This directive disables TLS verification for the on-demand approval endpoint.", tls);
-        register_acme_directive(registry, "dns", "dns [bool] | dns { ... }", "This directive enables DNS-01 challenges or specifies a DNS provider block for ACME.", tls);
+        register_acme_directive(
+            registry,
+            "on_demand_ask_no_verification",
+            "on_demand_ask_no_verification [bool]",
+            "This directive disables TLS verification for the on-demand approval endpoint.",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "dns",
+            "dns [bool] | dns { ... }",
+            "This directive enables DNS-01 challenges or specifies a DNS provider block for ACME.",
+            tls,
+        );
         register_acme_directive(registry, "fallback", "fallback { ... }", "This directive defines fallback ACME provider settings including directory, contact, profile, and eab.", tls);
     }
 

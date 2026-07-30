@@ -278,9 +278,7 @@ pub fn resolve_directory(config: &ServerConfigurationBlock) -> String {
         .and_then(|entries| entries.first())
         .and_then(|entry| entry.args.first())
         .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
-        .unwrap_or_else(|| {
-            LETS_ENCRYPT_PRODUCTION.to_string()
-        })
+        .unwrap_or_else(|| LETS_ENCRYPT_PRODUCTION.to_string())
 }
 
 /// Parses the EAB key from configuration.

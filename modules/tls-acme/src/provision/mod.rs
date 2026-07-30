@@ -3,29 +3,18 @@
 //! Handles account creation/loading, order placement, challenge solving,
 //! certificate finalization, and caching.
 
-use std::future::Future;
-use std::net::IpAddr;
-use std::ops::Sub;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+mod account;
+mod cert_install;
+mod challenge;
+mod validity;
 
-use bytes::Bytes;
-use hyper::Request;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client as HyperClient;
-use hyper_util::rt::TokioExecutor;
-use instant_acme::{
-    Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse,
-    CertificateIdentifier, ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder,
-    OrderStatus, RetryPolicy,
-};
-use rustls::sign::CertifiedKey;
-use rustls::ClientConfig;
+use std::net::IpAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
+use instant_acme::{Account, AuthorizationStatus, Identifier, NewOrder, OrderStatus, RetryPolicy};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use tokio::io::AsyncWriteExt;
-use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
 use crate::challenge::tlsalpn01::TlsAlpn01Resolver;
@@ -33,252 +22,10 @@ use crate::config::{build_rustls_client_config, AcmeConfig};
 use crate::emit_log;
 use crate::errors::acme_error_to_string;
 
-const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
-
-/// Checks if a TLS certificate is still valid (not needing renewal).
-pub fn check_certificate_validity(
-    certificate: &CertificateDer,
-    renewal_info: Option<&instant_acme::RenewalInfo>,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    if let Some(renewal_info) = renewal_info {
-        return Ok(SystemTime::now() < renewal_info.suggested_window.start);
-    }
-    let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-    let validity = x509_certificate.validity();
-    if let Some(time_to_expiration) = validity.time_to_expiration() {
-        let time_before_expiration =
-            if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-                (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
-            } else {
-                SECONDS_BEFORE_RENEWAL
-            };
-        if time_to_expiration >= Duration::from_secs(time_before_expiration) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// Checks if the current certificate is valid. If a cached cert is valid, installs it.
-pub async fn check_certificate_validity_or_install_cached(
-    config: &mut AcmeConfig,
-    event_sink: &Arc<ferron_observability::CompositeEventSink>,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    // Check if currently loaded cert is still valid
-    if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
-        if let Some(certificate) = certified_key.cert.first() {
-            if let Some(acme_account) = &config.account {
-                if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
-                    if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
-                        if SystemTime::now() < renewal_info.0.suggested_window.start {
-                            return Ok(true);
-                        }
-                    }
-                }
-            } else if check_certificate_validity(certificate, None)? {
-                return Ok(true);
-            }
-        }
-    }
-
-    let certificate_cache_key =
-        get_certificate_cache_key(&config.domains, config.profile.as_deref());
-    if let Some(serialized_data) = config.certificate_cache.get(&certificate_cache_key).await {
-        if let Ok(data) = serde_json::from_slice::<CertificateCacheData>(&serialized_data) {
-            if let Ok(certs) = CertificateDer::pem_slice_iter(data.certificate_chain_pem.as_bytes())
-                .collect::<Result<Vec<_>, _>>()
-            {
-                if let Some(certificate) = certs.first() {
-                    let is_valid = if let Some(acme_account) = &config.account {
-                        if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
-                            if let Ok(renewal_info) =
-                                acme_account.renewal_info(&certificate_id).await
-                            {
-                                SystemTime::now() < renewal_info.0.suggested_window.start
-                            } else {
-                                check_certificate_validity(certificate, None).unwrap_or(false)
-                            }
-                        } else {
-                            check_certificate_validity(certificate, None).unwrap_or(false)
-                        }
-                    } else {
-                        check_certificate_validity(certificate, None).unwrap_or(false)
-                    };
-
-                    if is_valid {
-                        if let Ok(private_key) =
-                            PrivateKeyDer::from_pem_slice(data.private_key_pem.as_bytes())
-                        {
-                            install_certified_key(config, certs, private_key, &data, event_sink)
-                                .await?;
-                            return Ok(true);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(false)
-}
-
-/// Installs a certified key into the config and optionally saves to disk.
-async fn install_certified_key(
-    config: &AcmeConfig,
-    certs: Vec<CertificateDer<'static>>,
-    private_key: PrivateKeyDer<'static>,
-    cache_data: &CertificateCacheData,
-    event_sink: &Arc<ferron_observability::CompositeEventSink>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let domains = config.domains.join(", ");
-    let chain_len = certs.len();
-
-    let signing_key = rustls::crypto::aws_lc_rs::default_provider()
-        .key_provider
-        .load_private_key(private_key)?;
-
-    *config.certified_key_lock.write().await =
-        Some(Arc::new(CertifiedKey::new(certs, signing_key)));
-
-    // Emit the unified `ferron.tls.certificate_not_after` gauge for the leaf
-    // of the just-mounted chain. Wildcard SANs (e.g. `*.example.com`) and
-    // multi-SAN certificates would benefit from per-SNI labels in a
-    // follow-up; for now the primary domain is used.
-    //
-    // TODO: remove the comment above? Seems redundant and similar pattern
-    // is used in other TLS modules anyawy.
-    if let Some(leaf) = config
-        .certified_key_lock
-        .read()
-        .await
-        .as_deref()
-        .and_then(|ck| ck.cert.first())
-    {
-        ferron_tls::observability::emit_certificate_not_after(
-            event_sink,
-            "acme",
-            config.domains.first().map(String::as_str).unwrap_or(""),
-            leaf,
-        );
-    }
-
-    emit_log(
-        event_sink,
-        ferron_observability::LogLevel::Debug,
-        "ACME certificate installed",
-        &format!("Certificate installed for {domains}, chain length: {chain_len}"),
-        "ferron-tls-acme",
-        vec![
-            (
-                "ferron.acme.domains",
-                ferron_observability::LogAttributeValue::String(domains.clone()),
-            ),
-            (
-                "ferron.acme.chain_length",
-                ferron_observability::LogAttributeValue::I64(chain_len as i64),
-            ),
-        ],
-    );
-
-    // Save to files if configured
-    if let Some((cert_path, key_path)) = &config.save_paths {
-        tokio::fs::write(cert_path, &cache_data.certificate_chain_pem).await?;
-
-        let mut open_options = tokio::fs::OpenOptions::new();
-        open_options.write(true).create(true).truncate(true);
-
-        #[cfg(unix)]
-        open_options.mode(0o600);
-
-        let mut file = open_options.open(key_path).await?;
-        file.write_all(cache_data.private_key_pem.as_bytes())
-            .await?;
-        file.flush().await.unwrap_or_default();
-
-        if let Some(command) = &config.post_obtain_command {
-            emit_log(
-                event_sink,
-                ferron_observability::LogLevel::Info,
-                "ACME post-obtain command started",
-                &format!("Post-obtain command started for {domains}"),
-                "ferron-tls-acme",
-                vec![(
-                    "ferron.acme.domains",
-                    ferron_observability::LogAttributeValue::String(domains.clone()),
-                )],
-            );
-
-            let Some(parts) = shlex::split(command) else {
-                emit_log(
-                    event_sink,
-                    ferron_observability::LogLevel::Warn,
-                    "ACME post-obtain command malformed",
-                    &format!("Post-obtain command has malformed quoting for {domains}"),
-                    "ferron-tls-acme",
-                    vec![(
-                        "ferron.acme.domains",
-                        ferron_observability::LogAttributeValue::String(domains.clone()),
-                    )],
-                );
-                return Ok(());
-            };
-
-            if let Some((program, args)) = parts.split_first() {
-                let mut cmd = tokio::process::Command::new(program);
-                for arg in args {
-                    cmd.arg(arg);
-                }
-                cmd.env("FERRON_ACME_DOMAIN", config.domains.join(","))
-                    .env("FERRON_ACME_CERT_PATH", cert_path)
-                    .env("FERRON_ACME_KEY_PATH", key_path)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null());
-
-                match cmd.spawn() {
-                    Ok(mut child) => {
-                        let _ = child.wait().await;
-                    }
-                    Err(e) => {
-                        emit_log(
-                            event_sink,
-                            ferron_observability::LogLevel::Warn,
-                            "ACME post-obtain command failed",
-                            &format!("Post-obtain command failed for {domains}: {e}"),
-                            "ferron-tls-acme",
-                            vec![
-                                (
-                                    "ferron.acme.domains",
-                                    ferron_observability::LogAttributeValue::String(
-                                        domains.clone(),
-                                    ),
-                                ),
-                                (
-                                    "error.message",
-                                    ferron_observability::LogAttributeValue::String(e.to_string()),
-                                ),
-                            ],
-                        );
-                    }
-                }
-            } else {
-                emit_log(
-                    event_sink,
-                    ferron_observability::LogLevel::Warn,
-                    "ACME post-obtain command empty",
-                    &format!("Post-obtain command is empty for {domains}"),
-                    "ferron-tls-acme",
-                    vec![(
-                        "ferron.acme.domains",
-                        ferron_observability::LogAttributeValue::String(domains.clone()),
-                    )],
-                );
-            }
-        }
-    }
-
-    Ok(())
-}
+use self::account::{create_new_account, HttpsClientForAcme};
+use self::cert_install::install_certified_key;
+use self::challenge::cleanup_challenge_data;
+use self::validity::check_certificate_validity_or_install_cached;
 
 /// Provisions a TLS certificate using ACME for the given config.
 /// Returns `true` if a certificate was provisioned, `false` otherwise.
@@ -301,7 +48,7 @@ pub async fn provision_certificate(
     let mut acme_account: Option<Account> = None;
     let mut selected_directory: Option<String> = None;
     let mut selected_contact: Option<Vec<String>> = None;
-    let mut selected_eab_key: Option<Option<Arc<ExternalAccountKey>>> = None;
+    let mut selected_eab_key: Option<Option<Arc<instant_acme::ExternalAccountKey>>> = None;
     let mut selected_profile: Option<Option<String>> = None;
     let mut selected_account_cache_key: Option<String> = None;
     let mut selected_certificate_cache_key: Option<String> = None;
@@ -319,13 +66,14 @@ pub async fn provision_certificate(
         let account_cache_key = get_account_cache_key(&contact, &directory);
         let certificate_cache_key = get_certificate_cache_key(&config.domains, profile.as_deref());
 
-        let account_builder =
-            Account::builder_with_http(Box::new(HttpsClientForAcme::new(client_config)));
+        let account_builder = instant_acme::Account::builder_with_http(Box::new(
+            HttpsClientForAcme::new(client_config),
+        ));
 
         let account_result =
             if let Some(credentials_bytes) = config.account_cache.get(&account_cache_key).await {
                 if let Ok(credentials) =
-                    serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
+                    serde_json::from_slice::<instant_acme::AccountCredentials>(&credentials_bytes)
                 {
                     emit_log(
                         event_sink,
@@ -509,8 +257,9 @@ pub async fn provision_certificate(
             );
             config.account_cache.remove(&account_cache_key).await;
             let client_config = build_rustls_client_config(false)?;
-            let account_builder =
-                Account::builder_with_http(Box::new(HttpsClientForAcme::new(client_config)));
+            let account_builder = instant_acme::Account::builder_with_http(Box::new(
+                HttpsClientForAcme::new(client_config),
+            ));
             let new_account = create_new_account(
                 config,
                 &directory,
@@ -953,149 +702,4 @@ pub async fn provision_certificate(
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(true)
-}
-
-/// Cleans up challenge data after certificate issuance.
-async fn cleanup_challenge_data(
-    config: &AcmeConfig,
-    dns_01_domains: &[String],
-    event_sink: &Arc<ferron_observability::CompositeEventSink>,
-) {
-    match config.challenge_type {
-        instant_acme::ChallengeType::TlsAlpn01 => {
-            *config.tls_alpn_01_data_lock.write().await = None;
-        }
-        instant_acme::ChallengeType::Http01 => {
-            *config.http_01_data_lock.write().await = None;
-        }
-        instant_acme::ChallengeType::Dns01 => {
-            if let Some(ref dns_client) = config.dns_client {
-                for domain in dns_01_domains {
-                    let challenge_domain = format!("_acme-challenge.{domain}");
-                    let _ = dns_client
-                        .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
-                        .await;
-                    emit_log(
-                        event_sink,
-                        ferron_observability::LogLevel::Debug,
-                        "ACME DNS-01 record cleanup",
-                        &format!("DNS-01 record cleanup completed for {challenge_domain}"),
-                        "ferron-tls-acme",
-                        vec![(
-                            "ferron.acme.dns_challenge_domain",
-                            ferron_observability::LogAttributeValue::String(challenge_domain),
-                        )],
-                    );
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Creates a new ACME account and caches it.
-#[allow(clippy::too_many_arguments)]
-async fn create_new_account(
-    config: &AcmeConfig,
-    directory: &str,
-    contact: &[String],
-    eab_key: Option<&Arc<ExternalAccountKey>>,
-    profile: Option<&str>,
-    builder: instant_acme::AccountBuilder,
-    account_cache_key: &str,
-    event_sink: &Arc<ferron_observability::CompositeEventSink>,
-) -> Result<Account, Box<dyn std::error::Error + Send + Sync>> {
-    let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
-    let (account, credentials) = builder
-        .create(
-            &NewAccount {
-                contact: &contact_refs,
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            directory.to_string(),
-            eab_key.map(|e| e.as_ref()),
-        )
-        .await?;
-
-    if let Err(err) = config
-        .account_cache
-        .set(account_cache_key, serde_json::to_vec(&credentials)?)
-        .await
-    {
-        emit_log(
-            event_sink,
-            ferron_observability::LogLevel::Warn,
-            "ACME account cache save failed",
-            &format!("Failed to save ACME account cache: {}", err),
-            "ferron-tls-acme",
-            vec![(
-                "error.message",
-                ferron_observability::LogAttributeValue::String(err.to_string()),
-            )],
-        );
-    }
-
-    let contact = contact
-        .first()
-        .map(|s| s.as_str())
-        .unwrap_or("none")
-        .to_string();
-    emit_log(
-        event_sink,
-        ferron_observability::LogLevel::Info,
-        "ACME account created",
-        &format!(
-            "ACME account created for directory {}, contact: {}",
-            directory, contact,
-        ),
-        "ferron-tls-acme",
-        vec![
-            (
-                "ferron.acme.directory",
-                ferron_observability::LogAttributeValue::String(directory.to_string()),
-            ),
-            (
-                "ferron.acme.contact",
-                ferron_observability::LogAttributeValue::String(contact),
-            ),
-            (
-                "ferron.acme.profile",
-                ferron_observability::LogAttributeValue::String(
-                    profile.map_or("".to_string(), |p| p.to_string()),
-                ),
-            ),
-        ],
-    );
-
-    Ok(account)
-}
-
-/// HTTPS client wrapper for instant-acme's HttpClient trait.
-struct HttpsClientForAcme(
-    HyperClient<hyper_rustls::HttpsConnector<HttpConnector>, BodyWrapper<Bytes>>,
-);
-
-impl HttpsClientForAcme {
-    fn new(tls_config: ClientConfig) -> Self {
-        Self(
-            HyperClient::builder(TokioExecutor::new()).build(
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_tls_config(tls_config)
-                    .https_or_http()
-                    .enable_http1()
-                    .enable_http2()
-                    .build(),
-            ),
-        )
-    }
-}
-
-impl HttpClient for HttpsClientForAcme {
-    fn request(
-        &self,
-        req: Request<BodyWrapper<Bytes>>,
-    ) -> Pin<Box<dyn Future<Output = Result<BytesResponse, instant_acme::Error>> + Send>> {
-        HttpClient::request(&self.0, req)
-    }
 }

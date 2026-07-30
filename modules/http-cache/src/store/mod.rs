@@ -1,0 +1,385 @@
+mod key;
+mod purge;
+mod tests;
+pub mod types;
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+
+use ahash::{AHashMap, AHashSet, RandomState};
+use http::header::{self, HeaderMap};
+use quick_cache::sync::Cache;
+use quick_cache::{DefaultHashBuilder, Lifecycle, UnitWeighter};
+use rustc_hash::FxBuildHasher;
+use tokio::sync::Notify;
+
+use crate::lscache::PurgeOperation;
+use crate::policy::{recalculate_freshness, CacheScope};
+
+pub use self::key::build_entry_key;
+pub use self::purge::strip_store_headers;
+pub use self::types::{LookupEntry, LookupHit, StoreStats, StoredEntry, StoredVariant, VaryRule};
+
+pub struct CacheStore {
+    entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
+    variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
+    max_entries: AtomicUsize,
+    inflight: dashmap::DashMap<String, InflightEntry, FxBuildHasher>,
+    active_locks: AtomicUsize,
+}
+
+/// Tracks an in-flight upstream fetch for a specific cache key.
+struct InflightEntry {
+    notify: Arc<Notify>,
+}
+
+#[derive(Clone, Default)]
+struct StoreLifecycle;
+
+#[derive(Default)]
+struct StoreRequestState {
+    size_evictions: usize,
+}
+
+impl Lifecycle<String, StoredEntry> for StoreLifecycle {
+    type RequestState = StoreRequestState;
+
+    #[inline]
+    fn on_evict(&self, state: &mut Self::RequestState, _key: String, _val: StoredEntry) {
+        state.size_evictions += 1;
+    }
+}
+
+impl CacheStore {
+    #[inline]
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            entries: Cache::with(
+                max_entries.max(1),
+                max_entries as u64,
+                UnitWeighter,
+                DefaultHashBuilder::default(),
+                StoreLifecycle,
+            ),
+            variants_by_base: dashmap::DashMap::with_hasher(RandomState::new()),
+            max_entries: AtomicUsize::new(max_entries),
+            inflight: dashmap::DashMap::with_hasher(FxBuildHasher),
+            active_locks: AtomicUsize::new(0),
+        }
+    }
+
+    #[inline]
+    pub fn set_max_entries(&self, max_entries: usize) {
+        self.max_entries.store(max_entries, Ordering::Relaxed);
+        self.entries.set_capacity(max_entries as u64);
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Return the number of active in-flight upstream fetches currently
+    /// being coordinated by the singleflight mechanism.
+    #[inline]
+    pub fn active_locks(&self) -> usize {
+        self.active_locks.load(Ordering::Relaxed)
+    }
+
+    /// Try to become the in-flight fetch leader for `cache_key`.
+    #[inline]
+    pub fn begin_fetch(&self, cache_key: &str) -> (bool, Arc<Notify>) {
+        let mut is_leader = false;
+        let entry = self
+            .inflight
+            .entry(cache_key.to_string())
+            .or_insert_with(|| {
+                is_leader = true;
+                InflightEntry {
+                    notify: Arc::new(Notify::new()),
+                }
+            });
+        let notify = entry.notify.clone();
+        if is_leader {
+            self.active_locks.fetch_add(1, Ordering::Relaxed);
+        }
+        (is_leader, notify)
+    }
+
+    /// Complete an in-flight fetch: remove the entry and wake all waiters.
+    #[inline]
+    pub fn complete_fetch(&self, cache_key: &str) {
+        if let Some((_, entry)) = self.inflight.remove(cache_key) {
+            entry.notify.notify_waiters();
+            self.active_locks.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    #[inline]
+    pub fn lookup(
+        &self,
+        base_key: &str,
+        headers: &HeaderMap,
+        cookies: &AHashMap<String, String>,
+        private_key: Option<&str>,
+    ) -> (
+        Option<(LookupEntry, String, LookupHit)>,
+        StoreStats,
+        usize,
+        bool,
+    ) {
+        let stats = StoreStats {
+            expired_evictions: self.cleanup_expired(),
+            ..Default::default()
+        };
+
+        let Some(variants) = self.variants_by_base.get(base_key) else {
+            return (None, stats, self.entries.len(), false);
+        };
+        let variants = variants.value().clone();
+        let has_variants = true;
+
+        let mut candidate_keys = Vec::with_capacity(variants.len());
+        if let Some(private_key) = private_key {
+            for variant in variants
+                .iter()
+                .filter(|variant| variant.scope == CacheScope::Private)
+            {
+                candidate_keys.push(build_entry_key(
+                    base_key,
+                    variant.scope,
+                    Some(private_key),
+                    &variant.vary,
+                    headers,
+                    cookies,
+                ));
+            }
+        }
+        for variant in variants
+            .iter()
+            .filter(|variant| variant.scope == CacheScope::Public)
+        {
+            candidate_keys.push(build_entry_key(
+                base_key,
+                variant.scope,
+                None,
+                &variant.vary,
+                headers,
+                cookies,
+            ));
+        }
+
+        // First pass: look for fresh entries
+        for key in &candidate_keys {
+            if let Some(entry) = self.entries.get(key) {
+                let age = entry.created_at.elapsed();
+                if age <= entry.ttl {
+                    return (
+                        Some((
+                            LookupEntry {
+                                scope: entry.scope,
+                                status: entry.status,
+                                headers: entry.headers.clone(),
+                                body: entry.body.clone(),
+                                lsc_cookies: entry.lsc_cookies.clone(),
+                                age,
+                                etag: entry.etag.clone(),
+                                last_modified: entry.last_modified.clone(),
+                                stale_while_revalidate: entry.stale_while_revalidate,
+                                stale_if_error: entry.stale_if_error,
+                                must_revalidate: entry.must_revalidate,
+                                ttl: entry.ttl,
+                            },
+                            key.clone(),
+                            LookupHit::Fresh,
+                        )),
+                        stats,
+                        self.entries.len(),
+                        false,
+                    );
+                }
+            }
+        }
+
+        // Second pass: look for stale entries within the SWR window
+        for key in &candidate_keys {
+            if let Some(entry) = self.entries.get(key) {
+                let age = entry.created_at.elapsed();
+                let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+                if age <= entry.ttl + swr_window && !entry.must_revalidate {
+                    return (
+                        Some((
+                            LookupEntry {
+                                scope: entry.scope,
+                                status: entry.status,
+                                headers: entry.headers.clone(),
+                                body: entry.body.clone(),
+                                lsc_cookies: entry.lsc_cookies.clone(),
+                                age,
+                                etag: entry.etag.clone(),
+                                last_modified: entry.last_modified.clone(),
+                                stale_while_revalidate: entry.stale_while_revalidate,
+                                stale_if_error: entry.stale_if_error,
+                                must_revalidate: entry.must_revalidate,
+                                ttl: entry.ttl,
+                            },
+                            key.clone(),
+                            LookupHit::StaleWhileRevalidate,
+                        )),
+                        stats,
+                        self.entries.len(),
+                        false,
+                    );
+                }
+            }
+        }
+
+        (None, stats, self.entries.len(), has_variants)
+    }
+
+    #[inline]
+    pub fn insert_with_request(
+        &self,
+        mut entry: StoredEntry,
+        private_key: Option<&str>,
+        request_headers: &HeaderMap,
+        request_cookies: &AHashMap<String, String>,
+    ) -> (StoreStats, usize) {
+        let mut stats = StoreStats {
+            expired_evictions: self.cleanup_expired(),
+            ..Default::default()
+        };
+
+        let max_entries = self.max_entries.load(Ordering::Relaxed);
+        if max_entries == 0 {
+            return (stats, self.entries.len());
+        }
+
+        let key = build_entry_key(
+            &entry.base_key,
+            entry.scope,
+            private_key,
+            &entry.vary,
+            request_headers,
+            request_cookies,
+        );
+
+        entry.access_at = 0;
+        if entry.scope == CacheScope::Private {
+            entry.private_key = private_key.map(str::to_string);
+        }
+
+        {
+            let variant = StoredVariant {
+                scope: entry.scope,
+                vary: entry.vary.clone(),
+            };
+            let mut variants = self
+                .variants_by_base
+                .entry(entry.base_key.clone())
+                .or_default();
+            if !variants.contains(&variant) {
+                variants.push(variant);
+            }
+        }
+
+        let mut request_state = StoreRequestState::default();
+        self.entries
+            .insert_with_lifecycle(key, entry, &mut request_state);
+        stats.size_evictions = request_state.size_evictions;
+        (stats, self.entries.len())
+    }
+
+    #[inline]
+    pub fn purge(
+        &self,
+        operations: &[PurgeOperation],
+        current_private_key: Option<&str>,
+    ) -> (StoreStats, usize) {
+        let mut stats = StoreStats::default();
+        let mut keys_to_remove = AHashSet::default();
+
+        for (key, entry) in self.entries.iter() {
+            if operations
+                .iter()
+                .any(|operation| purge::entry_matches_purge(&entry, operation, current_private_key))
+            {
+                keys_to_remove.insert(key);
+            }
+        }
+
+        let mut affected_base_keys = AHashSet::default();
+        stats.purged = keys_to_remove.len();
+        for key in keys_to_remove {
+            if let Some((_, entry)) = self.entries.remove(&key) {
+                affected_base_keys.insert(entry.base_key);
+            }
+        }
+
+        for base_key in &affected_base_keys {
+            let has_remaining = self
+                .entries
+                .iter()
+                .any(|(_, entry)| entry.base_key == *base_key);
+            if !has_remaining {
+                self.variants_by_base.remove(base_key);
+            }
+        }
+
+        (stats, self.entries.len())
+    }
+
+    #[inline]
+    fn cleanup_expired(&self) -> usize {
+        let expired_keys: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|(_, entry)| {
+                let elapsed = entry.created_at.elapsed();
+                let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+                elapsed > entry.ttl + swr_window
+            })
+            .map(|(key, _)| key)
+            .collect();
+
+        let mut count = 0;
+        for key in expired_keys {
+            if self.entries.remove(&key).is_some() {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    /// Update headers on an existing cache entry without replacing the body.
+    #[inline]
+    pub fn update_entry_headers_by_key(
+        &self,
+        cache_key: &str,
+        new_headers: HeaderMap,
+        litespeed_override_cache_control: bool,
+    ) -> Option<HeaderMap> {
+        let mut entry = self.entries.get(cache_key)?;
+        entry.headers.extend(new_headers);
+        entry.etag = entry.headers.get(header::ETAG).cloned();
+        entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
+        entry.created_at = Instant::now();
+
+        let ls_control = crate::lscache::parse_litespeed_cache_control(&entry.headers);
+        let (ttl, stale_while_revalidate, stale_if_error, must_revalidate) = recalculate_freshness(
+            entry.scope,
+            &entry.headers,
+            ls_control.as_ref(),
+            litespeed_override_cache_control,
+        );
+        entry.ttl = ttl;
+        entry.stale_while_revalidate = stale_while_revalidate;
+        entry.stale_if_error = stale_if_error;
+        entry.must_revalidate = must_revalidate;
+
+        let entry2 = entry.clone();
+        let _ = self.entries.replace(cache_key.to_string(), entry2, false);
+        Some(entry.headers.clone())
+    }
+}
