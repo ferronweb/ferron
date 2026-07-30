@@ -1,8 +1,6 @@
 use std::error::Error;
 
-use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationValue,
-};
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 use super::types::{CircuitBreakerConfig, RetryBudgetConfig};
 use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealthCheckConfig};
