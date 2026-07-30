@@ -475,12 +475,12 @@ mod tests {
 
         // Banned IP rejected
         let mut ctx1 = make_context(banned_addr, config.clone());
-        let first_result = stage.run(&mut ctx1).await.unwrap();
-        assert!(!first_result);
+        let result1 = stage.run(&mut ctx1).await.unwrap();
+        assert!(!result1);
 
         let mut ctx2 = make_context(allowed_addr, config);
-        let second_result = stage.run(&mut ctx2).await.unwrap();
-        assert!(second_result);
+        let result2 = stage.run(&mut ctx2).await.unwrap();
+        assert!(result2);
     }
 
     #[test]

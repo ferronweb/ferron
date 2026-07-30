@@ -35,9 +35,9 @@ fn test_local_tls_cache_reuse() {
         ip: None,
     };
 
-    let first_result = provision_local_cert(&cache, &filters, None).unwrap();
-    let second_result = provision_local_cert(&cache, &filters, None).unwrap();
+    let result1 = provision_local_cert(&cache, &filters, None).unwrap();
+    let result2 = provision_local_cert(&cache, &filters, None).unwrap();
 
     // Certificates should be identical if cached
-    assert_eq!(first_result.cert, second_result.cert);
+    assert_eq!(result1.cert, result2.cert);
 }
