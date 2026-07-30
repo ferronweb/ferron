@@ -30,9 +30,11 @@ else:
     OCSP_CRT = CA_CRT
     OCSP_KEY = CA_KEY
 
+
 def write_pem(path, data):
     with open(path, "wb") as f:
         f.write(data)
+
 
 def generate():
     # If certs already present, skip generation
@@ -145,6 +147,7 @@ def generate():
             ),
         )
 
+
 def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
     ocsp_cert = x509.load_pem_x509_certificate(open(OCSP_CRT, "rb").read())
     ocsp_key = serialization.load_pem_private_key(
@@ -209,6 +212,7 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
 
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
 
+
 def parse_ocsp_request(data):
     # data is raw DER
     req = x509_ocsp.load_der_ocsp_request(data)
@@ -219,16 +223,20 @@ def parse_ocsp_request(data):
     serial_number = req.serial_number
     return hash, issuer_name_hash, issuer_key_hash, serial_number
 
+
 app = Flask(__name__)
+
 
 @app.route("/ready", methods=["GET"])
 def ready():
     return "OK\n", 200
 
+
 @app.route("/", methods=["POST"])
 def ocsp():
     try:
         req_der = request.get_data()
+        # Parse OCSP request and validate CertID
         try:
             hash, issuer_name_hash, issuer_key_hash, serial = parse_ocsp_request(
                 req_der
@@ -237,6 +245,7 @@ def ocsp():
             print("Failed to parse OCSP request:", e)
             return ("", 400)
 
+        # Load CA cert to compute expected hashes
         ca_pem = open(CA_CRT, "rb").read()
         ca_asn = x509.load_pem_x509_certificate(ca_pem)
         issuer_name_der = ca_asn.subject.public_bytes()
@@ -267,6 +276,7 @@ def ocsp():
             print("Issuer binding does not match CA cert")
             return ("", 400)
 
+        # Load server cert to compare serial
         server_cert = x509.load_pem_x509_certificate(
             open(SERVER_NOCHAIN_CRT, "rb").read()
         )
@@ -293,7 +303,9 @@ def ocsp():
         print("ocsp error:", e)
         return ("", 500)
 
+
 if __name__ == "__main__":
     os.makedirs(CERT_DIR, exist_ok=True)
     generate()
+    # Run Flask server
     app.run(host="0.0.0.0", port=5000)
