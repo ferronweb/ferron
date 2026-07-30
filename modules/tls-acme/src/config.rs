@@ -20,8 +20,6 @@ use tokio::sync::RwLock;
 use crate::cache::AcmeCache;
 use crate::challenge::{Http01DataLock, TlsAlpn01DataLock};
 
-const LETS_ENCRYPT_PRODUCTION: &str = "https://acme-v02.api.letsencrypt.org/directory";
-
 /// Shared type for SNI resolver locks used in on-demand mode.
 pub type SniResolverLock =
     Arc<RwLock<std::collections::HashMap<String, Arc<dyn rustls::server::ResolvesServerCert>>>>;
@@ -279,7 +277,8 @@ pub fn resolve_directory(config: &ServerConfigurationBlock) -> String {
         .and_then(|entry| entry.args.first())
         .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
         .unwrap_or_else(|| {
-            LETS_ENCRYPT_PRODUCTION.to_string()
+            // Let's Encrypt Production
+            "https://acme-v02.api.letsencrypt.org/directory".to_string()
         })
 }
 

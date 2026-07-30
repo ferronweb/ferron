@@ -25,13 +25,6 @@ pub async fn collect_admin_metrics(
 }
 
 fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
-    emit_core_metrics(event_sink, metrics);
-    emit_reload_metrics(event_sink, metrics);
-    emit_runtime_metrics(event_sink, metrics);
-    emit_config_metrics(event_sink, metrics);
-}
-
-fn emit_core_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.admin.uptime",
         attributes: vec![],
@@ -72,9 +65,7 @@ fn emit_core_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         trace_context: None,
         control_plane_metadata: None,
     }));
-}
 
-fn emit_reload_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.admin.reloads",
         attributes: vec![],
@@ -145,54 +136,52 @@ fn emit_reload_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) 
             control_plane_metadata: None,
         }));
     }
-}
 
-fn emit_runtime_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
-    let runtime_metrics = metrics.runtime_metrics.read();
+    {
+        let runtime_metrics = metrics.runtime_metrics.read();
 
-    event_sink.emit(Event::Metric(MetricEvent {
-        name: "ferron.admin.runtime.primary_threads",
-        attributes: vec![],
-        ty: MetricType::Gauge,
-        value: MetricValue::U64(runtime_metrics.primary_threads as u64),
-        unit: Some("{thread}"),
-        description: Some("Number of primary threads."),
-        trace_context: None,
-        control_plane_metadata: None,
-    }));
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.primary_threads",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(runtime_metrics.primary_threads as u64),
+            unit: Some("{thread}"),
+            description: Some("Number of primary threads."),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
 
-    event_sink.emit(Event::Metric(MetricEvent {
-        name: "ferron.admin.runtime.io_uring_supported",
-        attributes: vec![],
-        ty: MetricType::Gauge,
-        value: MetricValue::U64(if runtime_metrics.io_uring_supported {
-            1
-        } else {
-            0
-        }),
-        unit: Some("{enabled}"),
-        description: Some("Whether io_uring is supported."),
-        trace_context: None,
-        control_plane_metadata: None,
-    }));
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.io_uring_supported",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(if runtime_metrics.io_uring_supported {
+                1
+            } else {
+                0
+            }),
+            unit: Some("{enabled}"),
+            description: Some("Whether io_uring is supported."),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
 
-    event_sink.emit(Event::Metric(MetricEvent {
-        name: "ferron.admin.runtime.io_uring_runtime_enabled",
-        attributes: vec![],
-        ty: MetricType::Gauge,
-        value: MetricValue::U64(if runtime_metrics.io_uring_runtime_enabled {
-            1
-        } else {
-            0
-        }),
-        unit: Some("{enabled}"),
-        description: Some("Whether io_uring is enabled at runtime."),
-        trace_context: None,
-        control_plane_metadata: None,
-    }));
-}
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.runtime.io_uring_runtime_enabled",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(if runtime_metrics.io_uring_runtime_enabled {
+                1
+            } else {
+                0
+            }),
+            unit: Some("{enabled}"),
+            description: Some("Whether io_uring is enabled at runtime."),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    }
 
-fn emit_config_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
     {
         let config_mtime = metrics.config_mtime.read();
         let mtime_epoch = config_mtime
@@ -214,25 +203,27 @@ fn emit_config_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) 
         }));
     }
 
-    event_sink.emit(Event::Metric(MetricEvent {
-        name: "ferron.admin.config_drift",
-        attributes: vec![],
-        ty: MetricType::Gauge,
-        value: MetricValue::U64(
-            if metrics
-                .config_drift
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                1
-            } else {
-                0
-            },
-        ),
-        unit: Some("{drift}"),
-        description: Some("Whether configuration drift is detected (1 = drift, 0 = no drift)."),
-        trace_context: None,
-        control_plane_metadata: None,
-    }));
+    {
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.admin.config_drift",
+            attributes: vec![],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(
+                if metrics
+                    .config_drift
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    1
+                } else {
+                    0
+                },
+            ),
+            unit: Some("{drift}"),
+            description: Some("Whether configuration drift is detected (1 = drift, 0 = no drift)."),
+            trace_context: None,
+            control_plane_metadata: None,
+        }));
+    }
 }
 
 /// Check for configuration drift and emit log events on state transitions.

@@ -48,95 +48,89 @@ impl FormatPattern {
         let mut literal_buf = String::new();
 
         while let Some(c) = chars.next() {
-            if c != '%' {
+            if c == '%' {
+                // Flush literal buffer
+                if !literal_buf.is_empty() {
+                    tokens.push(FormatToken::Literal(std::mem::take(&mut literal_buf)));
+                }
+
+                match chars.peek() {
+                    Some(&'%') => {
+                        // Escaped percent
+                        chars.next();
+                        literal_buf.push('%');
+                    }
+                    Some(&'{') => {
+                        // %{...}x style token
+                        chars.next(); // consume '{'
+                        let mut inner = String::new();
+                        loop {
+                            match chars.next() {
+                                Some('}') => break,
+                                Some(c) => inner.push(c),
+                                None => {
+                                    // Unterminated, treat as literal
+                                    literal_buf.push_str("%{");
+                                    literal_buf.push_str(&inner);
+                                    break;
+                                }
+                            }
+                        }
+
+                        match chars.peek() {
+                            Some(&'i') => {
+                                // Header: %{Header-Name}i
+                                chars.next();
+                                tokens.push(FormatToken::Header(inner));
+                            }
+                            Some(&'t') => {
+                                // Timestamp with format: %{format}t
+                                chars.next();
+                                tokens.push(FormatToken::Timestamp(Some(inner)));
+                            }
+                            _ => {
+                                // Unknown, treat as literal
+                                literal_buf.push_str("%{");
+                                literal_buf.push_str(&inner);
+                            }
+                        }
+                    }
+                    Some(&c) if c.is_alphabetic() || c == '_' => {
+                        // Field name: %field_name
+                        let mut field_name = String::new();
+                        field_name.push(c);
+                        chars.next();
+                        while let Some(&nc) = chars.peek() {
+                            if nc.is_alphanumeric() || nc == '_' {
+                                field_name.push(nc);
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        if field_name == "t" {
+                            // Timestamp without format: %t
+                            tokens.push(FormatToken::Timestamp(None));
+                        } else {
+                            tokens.push(FormatToken::Field(field_name));
+                        }
+                    }
+                    _ => {
+                        // Unknown or end, treat as literal
+                        literal_buf.push('%');
+                    }
+                }
+            } else {
                 literal_buf.push(c);
-                continue;
             }
-
-            if !literal_buf.is_empty() {
-                tokens.push(FormatToken::Literal(std::mem::take(&mut literal_buf)));
-            }
-
-            Self::parse_token(&mut chars, &mut tokens, &mut literal_buf);
         }
 
+        // Flush remaining literal
         if !literal_buf.is_empty() {
             tokens.push(FormatToken::Literal(literal_buf));
         }
 
         tokens
-    }
-
-    fn parse_token(
-        chars: &mut std::iter::Peekable<std::str::Chars>,
-        tokens: &mut Vec<FormatToken>,
-        literal_buf: &mut String,
-    ) {
-        match chars.peek() {
-            Some(&'%') => {
-                chars.next();
-                literal_buf.push('%');
-            }
-            Some(&'{') => Self::parse_braced_token(chars, tokens, literal_buf),
-            Some(&c) if c.is_alphabetic() || c == '_' => Self::parse_field_token(chars, tokens),
-            _ => literal_buf.push('%'),
-        }
-    }
-
-    fn parse_braced_token(
-        chars: &mut std::iter::Peekable<std::str::Chars>,
-        tokens: &mut Vec<FormatToken>,
-        literal_buf: &mut String,
-    ) {
-        chars.next();
-        let mut inner = String::new();
-        loop {
-            match chars.next() {
-                Some('}') => break,
-                Some(c) => inner.push(c),
-                None => {
-                    literal_buf.push_str("%{");
-                    literal_buf.push_str(&inner);
-                    return;
-                }
-            }
-        }
-
-        match chars.peek() {
-            Some(&'i') => {
-                chars.next();
-                tokens.push(FormatToken::Header(inner));
-            }
-            Some(&'t') => {
-                chars.next();
-                tokens.push(FormatToken::Timestamp(Some(inner)));
-            }
-            _ => {
-                literal_buf.push_str("%{");
-                literal_buf.push_str(&inner);
-            }
-        }
-    }
-
-    fn parse_field_token(
-        chars: &mut std::iter::Peekable<std::str::Chars>,
-        tokens: &mut Vec<FormatToken>,
-    ) {
-        let mut field_name = String::new();
-        field_name.push(chars.next().expect("peeked value must be present"));
-        while let Some(&nc) = chars.peek() {
-            if nc.is_alphanumeric() || nc == '_' {
-                field_name.push(nc);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        if field_name == "t" {
-            tokens.push(FormatToken::Timestamp(None));
-        } else {
-            tokens.push(FormatToken::Field(field_name));
-        }
     }
 
     /// Format the pattern using the provided field values

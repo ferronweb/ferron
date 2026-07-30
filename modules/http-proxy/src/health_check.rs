@@ -234,6 +234,7 @@ async fn execute_probe_request(
             if url.contains("://") {
                 return Err(e);
             } else {
+                // Maybe let's try prepending "http://"?
                 let url = format!("http://{url}");
                 url.parse::<http::Uri>()
                     .map_err(|e| format!("Invalid URL: {e}"))?
