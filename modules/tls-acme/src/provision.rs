@@ -439,9 +439,15 @@ pub async fn provision_certificate(
         anyhow::anyhow!("No valid ACME account obtained after trying all providers")
     })?;
 
-    let directory = selected_directory.unwrap();
-    let account_cache_key = selected_account_cache_key.unwrap();
-    let certificate_cache_key = selected_certificate_cache_key.unwrap();
+    let directory = selected_directory.ok_or_else(|| {
+        anyhow::anyhow!("No valid ACME directory obtained after trying all providers")
+    })?;
+    let account_cache_key = selected_account_cache_key.ok_or_else(|| {
+        anyhow::anyhow!("No valid ACME account cache key obtained after trying all providers")
+    })?;
+    let certificate_cache_key = selected_certificate_cache_key.ok_or_else(|| {
+        anyhow::anyhow!("No valid ACME certificate cache key obtained after trying all providers")
+    })?;
 
     config.account.replace(acme_account.clone());
     if let Some(contact) = selected_contact {

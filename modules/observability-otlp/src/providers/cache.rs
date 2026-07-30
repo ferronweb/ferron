@@ -267,7 +267,7 @@ fn build_metrics_provider(
                             },
                         )
                         .build()
-                        .unwrap(),
+                        .ok()?,
                 )
             } else {
                 None

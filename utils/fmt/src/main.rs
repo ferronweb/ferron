@@ -133,6 +133,8 @@ fn main() {
             process::exit(1);
         }
     } else {
-        io::stdout().write_all(formatted.as_bytes()).unwrap();
+        io::stdout()
+            .write_all(formatted.as_bytes())
+            .expect("failed to write output");
     }
 }

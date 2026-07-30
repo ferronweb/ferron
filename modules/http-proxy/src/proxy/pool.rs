@@ -94,6 +94,8 @@ pub async fn try_send_with_pool(
     if is_ready {
         metrics.connection_reused = true;
         metrics.pool_hit = true;
+        // Here, `item.inner_mut()` is guaranteed to be `Some`,
+        // because if it would be `None`, `is_ready` would be always `false`
         let wrapper = item.inner_mut().take().unwrap();
         return send_via_wrapper(
             ctx,

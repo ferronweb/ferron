@@ -38,6 +38,8 @@ thread_local! {
 impl CorrelationContext {
     pub fn new() -> Self {
         Self {
+            // Here, 65536 (const) is always non-zero,
+            // so it shouldn't panic when converting to NonZeroUsize
             active_spans: lru::LruCache::new(65536.try_into().unwrap()),
         }
     }

@@ -326,10 +326,11 @@ fn parse_proxy_block(
             "retry_budget" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     if val {
-                        cfg.retry_budget = Some(RetryBudgetConfig::default());
+                        let mut retry_budget = RetryBudgetConfig::default();
                         if let Some(children) = entries.first().and_then(|e| e.children.as_ref()) {
-                            parse_retry_budget(children, cfg.retry_budget.as_mut().unwrap())?;
+                            parse_retry_budget(children, &mut retry_budget)?;
                         }
+                        cfg.retry_budget = Some(retry_budget);
                     }
                 }
             }

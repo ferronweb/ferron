@@ -23,11 +23,10 @@ pub fn build_preflight_response(
     origin: &str,
     request_method: &str,
     request_headers: Option<&str>,
-) -> Response<Full<Bytes>> {
+) -> http::Result<Response<Full<Bytes>>> {
     let mut response = Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .body(Full::new(Bytes::new()))
-        .unwrap();
+        .body(Full::new(Bytes::new()))?;
 
     apply_cors_headers(
         response.headers_mut(),
@@ -36,7 +35,7 @@ pub fn build_preflight_response(
         request_method,
         request_headers,
     );
-    response
+    Ok(response)
 }
 
 /// Apply CORS headers to an existing response.
