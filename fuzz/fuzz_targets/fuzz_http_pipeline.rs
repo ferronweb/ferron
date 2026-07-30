@@ -95,14 +95,14 @@ fuzz_target!(|input: &[u8]| {
     let resolver: Arc<ThreeStageResolver> = Arc::new(ThreeStageResolver::new());
     let events = CompositeEventSink::new(vec![]);
 
-    let local_address: SocketAddr = "127.0.0.1:80".parse().expect("hardcoded local address");
-    let remote_address: SocketAddr = "127.0.0.1:12345".parse().expect("hardcoded remote address");
+    let local_address: SocketAddr = "127.0.0.1:80".parse().unwrap();
+    let remote_address: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
     // Use a tokio runtime to execute the async handler
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .expect("tokio runtime should build");
+        .unwrap();
 
     rt.block_on(async {
         let _result = request_handler(
