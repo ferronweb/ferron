@@ -2,9 +2,6 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::read_kdl::read_kdl_file;
 
-const LETS_ENCRYPT_PRODUCTION: &str = "https://acme-v02.api.letsencrypt.org/directory";
-const LETS_ENCRYPT_STAGING: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
-
 /// Migration diagnostics for Ferron 2 to Ferron 3 conversion
 #[derive(Debug, Clone, Default)]
 pub struct MigrationDiagnostics {
@@ -327,9 +324,9 @@ pub fn process_block(
                 let val = node.entries.first().and_then(|e| match &e.value {
                     kdlite::dom::Value::String(s) => Some(s.to_string()),
                     kdlite::dom::Value::Bool(b) => Some(if *b {
-                        LETS_ENCRYPT_PRODUCTION.to_string()
+                        "https://acme-v02.api.letsencrypt.org/directory".to_string()
                     } else {
-                        LETS_ENCRYPT_STAGING.to_string()
+                        "https://acme-staging-v02.api.letsencrypt.org/directory".to_string()
                     }),
                     _ => None,
                 });

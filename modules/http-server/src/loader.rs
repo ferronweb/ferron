@@ -179,12 +179,402 @@ impl ModuleLoader for BasicHttpModuleLoader {
     }
 
     fn register_directives(&mut self, registry: &mut DirectiveRegistry) {
-        use ferron_core::directives::DirectiveSubblock;
-
-        register_http_server_base_directives(registry);
-        register_http_server_conditional_directives(registry);
-        register_http_server_http_protocol_directives(registry);
-        register_http_server_trace_directives(registry);
+        registry
+            .register(
+                Directive {
+                    name: "default_http_port",
+                    usage: "default_http_port <port>",
+                    description: "This directive specifies the default HTTP port when no \
+                port is specified in a host block. Must be a positive integer <= 65535, \
+                or false to disable the default HTTP listener entirely. Default: 80",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "default_https_port",
+                    usage: "default_https_port <port>",
+                    description: "This directive specifies the default HTTPS port used for \
+                HTTP-to-HTTPS redirects and URL generation. Must be a positive integer \
+                <= 65535, or false to disable. Default: 443",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "tls",
+                    usage: "tls [bool] | tls <cert> <key> | tls { ... }",
+                    description: "This directive configures TLS for the host. Accepts a \
+                boolean to disable, cert and key paths as a shorthand for the manual \
+                provider, or a block with provider-specific configuration.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("tls")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "root",
+                    usage: "root <path>",
+                    description: "This directive specifies the webroot directory for \
+                static file serving.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "admin_email",
+                    usage: "admin_email <email>",
+                    description: "This directive specifies the server administrator's email \
+                address. Used in built-in error responses. Interpolation is supported.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "index",
+                    usage: "index <files>...",
+                    description: "This directive specifies the index file names for \
+                directory requests.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "trailing_slash_redirect",
+                    usage: "trailing_slash_redirect [bool]",
+                    description: "This directive specifies whether requests for directories \
+                without a trailing slash are redirected to include one.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "https_redirect",
+                    usage: "https_redirect [bool]",
+                    description: "This directive specifies whether automatic HTTP-to-HTTPS \
+                redirects are enabled. Uses 308 Permanent Redirect. \
+                Default: true (when TLS is enabled)",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "client_ip_from_header",
+                    usage: "client_ip_from_header <header> { trusted_proxy ... }",
+                    description: "This directive specifies the header to read the client IP \
+                from. Supported values: x-forwarded-for, forwarded.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("client_ip")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "if",
+                    usage: "if <condition> { ... }",
+                    description: "This directive defines a conditional block that is \
+                evaluated when the given condition matches.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::default()),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "if_not",
+                    usage: "if_not <condition> { ... }",
+                    description: "This directive defines a conditional block that is \
+                evaluated when the given condition does not match.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::default()),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "location",
+                    usage: "location <path> { ... }",
+                    description: "This directive defines a location block that matches \
+                request path patterns.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::default()),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "handle_error",
+                    usage: "handle_error <codes>... { ... }",
+                    description: "This directive defines custom error page handling for \
+                specific HTTP status codes.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::default()),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "http",
+                    usage: "http { ... }",
+                    description: "This directive specifies per-host HTTP protocol settings \
+                in a nested block.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http")),
+                },
+                DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "protocols",
+                    usage: "protocols <name>...",
+                    description: "This directive specifies the enabled HTTP protocols. \
+                Supported values: h1 (HTTP/1.1), h2 (HTTP/2), h3 (HTTP/3, experimental). \
+                Default: h1 h2",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "options_allowed_methods",
+                    usage: "options_allowed_methods <methods>",
+                    description: "This directive specifies the HTTP methods advertised in \
+                the Allow header for OPTIONS * requests. \
+                Default: GET, HEAD, POST, OPTIONS",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "timeout",
+                    usage: "timeout <duration>",
+                    description: "This directive specifies the pipeline execution timeout. \
+                Accepts a duration string (e.g. 30m, 90s), a number in milliseconds, or \
+                false to disable. Default: 5m",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "url_sanitize",
+                    usage: "url_sanitize [bool]",
+                    description: "This directive specifies whether URL path sanitization is \
+                enabled. When enabled, dangerous sequences such as path traversal attempts, \
+                null bytes, and invalid percent-encodings are removed or normalized. \
+                Default: enabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "url_reject_backslash",
+                    usage: "url_reject_backslash [bool]",
+                    description: "This directive specifies whether URLs containing \
+                backslashes are rejected. When enabled, requests with literal \\ or \
+                percent-encoded backslashes in the path are rejected with 400. \
+                Default: enabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: true,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h1_enable_early_hints",
+                    usage: "h1_enable_early_hints [bool]",
+                    description: "This directive specifies whether HTTP/1.1 early hints \
+                (103 Early Hints) support is enabled. Default: disabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "early_hints",
+                    usage: "early_hints { ... }",
+                    description: "This directive configures 103 Early Hints for HTTP/1.x.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h2_initial_window_size",
+                    usage: "h2_initial_window_size <size>",
+                    description: "This directive specifies the HTTP/2 initial flow-control \
+                window size.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h2_max_frame_size",
+                    usage: "h2_max_frame_size <size>",
+                    description: "This directive specifies the HTTP/2 maximum frame size.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h2_max_concurrent_streams",
+                    usage: "h2_max_concurrent_streams <count>",
+                    description: "This directive specifies the HTTP/2 maximum concurrent \
+                streams.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h2_max_header_list_size",
+                    usage: "h2_max_header_list_size <size>",
+                    description: "This directive specifies the HTTP/2 maximum header list \
+                size.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "h2_enable_connect_protocol",
+                    usage: "h2_enable_connect_protocol [bool]",
+                    description: "This directive specifies whether the HTTP/2 extended \
+                CONNECT protocol is enabled. Default: disabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "trace",
+                    usage: "trace { generate ...; trust_request ... }",
+                    description: "This directive configures W3C Trace Context generation \
+                and trust settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("trace")),
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "trace_sampling",
+                    usage: "trace_sampling <trace_sampling_mode> { ... }",
+                    description: "This directive configures trace sampling behavior.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "protocol_proxy",
+                    usage: "protocol_proxy [bool]",
+                    description: "This directive specifies whether PROXY protocol v1/v2 \
+                parsing is enabled for incoming TCP connections. When enabled, Ferron reads \
+                the PROXY protocol header before processing the HTTP request. \
+                Default: disabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http"),
+            )
+            .register(
+                Directive {
+                    name: "trusted_proxy",
+                    usage: "trusted_proxy <ip-or-cidr>...",
+                    description: "This directive specifies trusted reverse-proxy IPs or \
+                CIDR ranges allowed to supply forwarded client IP headers. Repeatable — \
+                each occurrence adds one entry.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("client_ip"),
+            )
+            .register(
+                Directive {
+                    name: "generate",
+                    usage: "generate [bool]",
+                    description: "This directive specifies whether trace IDs are generated \
+                for requests that do not carry a W3C traceparent header. Default: enabled",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("trace"),
+            )
+            .register(
+                Directive {
+                    name: "trust_request",
+                    usage: "trust_request [bool]",
+                    description: "This directive specifies whether the incoming W3C \
+                traceparent header is trusted and propagated through the pipeline.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("trace"),
+            );
         ferron_tls::directives::register_tls_common_directives(
             registry,
             DirectiveSubblock::custom("tls"),
@@ -339,76 +729,6 @@ impl ModuleLoader for BasicHttpModuleLoader {
         self.cache = new_cache;
         Ok(())
     }
-}
-
-fn reg(
-    registry: &mut DirectiveRegistry,
-    name: &'static str,
-    usage: &'static str,
-    description: &'static str,
-    global_only: bool,
-    link: Option<DirectiveSubblock>,
-    parent: DirectiveSubblock,
-) {
-    registry.register(
-        Directive {
-            name,
-            usage,
-            description,
-            applicable_protocols: Some(&["http"]),
-            global_only,
-            subblock_link: link,
-        },
-        parent,
-    );
-}
-
-fn register_http_server_base_directives(registry: &mut DirectiveRegistry) {
-    let d = DirectiveSubblock::default();
-    reg(registry, "default_http_port", "default_http_port <port>", "This directive specifies the default HTTP port when no port is specified in a host block. Must be a positive integer <= 65535, or false to disable the default HTTP listener entirely. Default: 80", true, None, d);
-    reg(registry, "default_https_port", "default_https_port <port>", "This directive specifies the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. Must be a positive integer <= 65535, or false to disable. Default: 443", true, None, d);
-    reg(registry, "tls", "tls [bool] | tls <cert> <key> | tls { ... }", "This directive configures TLS for the host. Accepts a boolean to disable, cert and key paths as a shorthand for the manual provider, or a block with provider-specific configuration.", false, Some(DirectiveSubblock::custom("tls")), d);
-    reg(registry, "root", "root <path>", "This directive specifies the webroot directory for static file serving.", false, None, d);
-    reg(registry, "admin_email", "admin_email <email>", "This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported.", false, None, d);
-    reg(registry, "index", "index <files>...", "This directive specifies the index file names for directory requests.", false, None, d);
-    reg(registry, "trailing_slash_redirect", "trailing_slash_redirect [bool]", "This directive specifies whether requests for directories without a trailing slash are redirected to include one.", false, None, d);
-    reg(registry, "https_redirect", "https_redirect [bool]", "This directive specifies whether automatic HTTP-to-HTTPS redirects are enabled. Uses 308 Permanent Redirect. Default: true (when TLS is enabled)", false, None, d);
-    reg(registry, "client_ip_from_header", "client_ip_from_header <header> { trusted_proxy ... }", "This directive specifies the header to read the client IP from. Supported values: x-forwarded-for, forwarded.", false, Some(DirectiveSubblock::custom("client_ip")), d);
-}
-
-fn register_http_server_conditional_directives(registry: &mut DirectiveRegistry) {
-    let d = DirectiveSubblock::default();
-    reg(registry, "if", "if <condition> { ... }", "This directive defines a conditional block that is evaluated when the given condition matches.", false, Some(d), d);
-    reg(registry, "if_not", "if_not <condition> { ... }", "This directive defines a conditional block that is evaluated when the given condition does not match.", false, Some(d), d);
-    reg(registry, "location", "location <path> { ... }", "This directive defines a location block that matches request path patterns.", false, Some(d), d);
-    reg(registry, "handle_error", "handle_error <codes>... { ... }", "This directive defines custom error page handling for specific HTTP status codes.", false, Some(d), d);
-}
-
-fn register_http_server_http_protocol_directives(registry: &mut DirectiveRegistry) {
-    let http = DirectiveSubblock::custom("http");
-    reg(registry, "http", "http { ... }", "This directive specifies per-host HTTP protocol settings in a nested block.", false, Some(http), DirectiveSubblock::default());
-    reg(registry, "protocols", "protocols <name>...", "This directive specifies the enabled HTTP protocols. Supported values: h1 (HTTP/1.1), h2 (HTTP/2), h3 (HTTP/3, experimental). Default: h1 h2", false, None, http);
-    reg(registry, "options_allowed_methods", "options_allowed_methods <methods>", "This directive specifies the HTTP methods advertised in the Allow header for OPTIONS * requests. Default: GET, HEAD, POST, OPTIONS", false, None, http);
-    reg(registry, "timeout", "timeout <duration>", "This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. 30m, 90s), a number in milliseconds, or false to disable. Default: 5m", false, None, http);
-    reg(registry, "url_sanitize", "url_sanitize [bool]", "This directive specifies whether URL path sanitization is enabled. When enabled, dangerous sequences such as path traversal attempts, null bytes, and invalid percent-encodings are removed or normalized. Default: enabled", true, Some(http), http);
-    reg(registry, "url_reject_backslash", "url_reject_backslash [bool]", "This directive specifies whether URLs containing backslashes are rejected. When enabled, requests with literal \\ or percent-encoded backslashes in the path are rejected with 400. Default: enabled", true, Some(http), http);
-    reg(registry, "h1_enable_early_hints", "h1_enable_early_hints [bool]", "This directive specifies whether HTTP/1.1 early hints (103 Early Hints) support is enabled. Default: disabled", false, None, http);
-    reg(registry, "early_hints", "early_hints { ... }", "This directive configures 103 Early Hints for HTTP/1.x.", false, Some(http), http);
-    reg(registry, "h2_initial_window_size", "h2_initial_window_size <size>", "This directive specifies the HTTP/2 initial flow-control window size.", false, None, http);
-    reg(registry, "h2_max_frame_size", "h2_max_frame_size <size>", "This directive specifies the HTTP/2 maximum frame size.", false, None, http);
-    reg(registry, "h2_max_concurrent_streams", "h2_max_concurrent_streams <count>", "This directive specifies the HTTP/2 maximum concurrent streams.", false, None, http);
-    reg(registry, "h2_max_header_list_size", "h2_max_header_list_size <size>", "This directive specifies the HTTP/2 maximum header list size.", false, None, http);
-    reg(registry, "h2_enable_connect_protocol", "h2_enable_connect_protocol [bool]", "This directive specifies whether the HTTP/2 extended CONNECT protocol is enabled. Default: disabled", false, None, http);
-    reg(registry, "protocol_proxy", "protocol_proxy [bool]", "This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header before processing the HTTP request. Default: disabled", false, None, http);
-    reg(registry, "trusted_proxy", "trusted_proxy <ip-or-cidr>...", "This directive specifies trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. Repeatable — each occurrence adds one entry.", false, None, DirectiveSubblock::custom("client_ip"));
-}
-
-fn register_http_server_trace_directives(registry: &mut DirectiveRegistry) {
-    let trace = DirectiveSubblock::custom("trace");
-    reg(registry, "trace", "trace { generate ...; trust_request ... }", "This directive configures W3C Trace Context generation and trust settings.", false, Some(trace), DirectiveSubblock::custom("http"));
-    reg(registry, "trace_sampling", "trace_sampling <trace_sampling_mode> { ... }", "This directive configures trace sampling behavior.", false, None, DirectiveSubblock::custom("http"));
-    reg(registry, "generate", "generate [bool]", "This directive specifies whether trace IDs are generated for requests that do not carry a W3C traceparent header. Default: enabled", false, None, trace);
-    reg(registry, "trust_request", "trust_request [bool]", "This directive specifies whether the incoming W3C traceparent header is trusted and propagated through the pipeline.", false, None, trace);
 }
 
 #[cfg(test)]
