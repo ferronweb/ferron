@@ -77,7 +77,7 @@ fn parse_http_request(
     let body = http_body_util::Empty::<Bytes>::new()
         .map_err(|e| -> std::io::Error { match e {} })
         .boxed_unsync();
-    builder.body(body).ok()
+    Some(builder.body(body).ok()?)
 }
 
 fuzz_target!(|input: &[u8]| {

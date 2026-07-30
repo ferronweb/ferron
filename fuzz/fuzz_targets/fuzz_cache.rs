@@ -64,9 +64,9 @@ fuzz_target!(|data: &[u8]| {
     }
 
     for (i, tag) in tags.iter().enumerate() {
-        for other_tag in tags.iter().skip(i + 1) {
+        for j in (i + 1)..tags.len() {
             assert!(
-                !(other_tag.scope == tag.scope && other_tag.name == tag.name),
+                !(tags[j].scope == tag.scope && tags[j].name == tag.name),
                 "duplicate tag ({:?}, {})",
                 tag.scope,
                 tag.name
