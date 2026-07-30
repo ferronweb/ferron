@@ -11,6 +11,7 @@ on:
       - "entrypoint/**"
       - "modules/**"
       - "types/**"
+      - "utils/**"
       - ".github/workflows/rust.yml"
   pull_request:
     branches: ["develop-3.x"]
@@ -22,6 +23,7 @@ on:
       - "entrypoint/**"
       - "modules/**"
       - "types/**"
+      - "utils/**"
       - ".github/workflows/rust.yml"
 
 env:
