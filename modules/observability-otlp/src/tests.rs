@@ -608,10 +608,9 @@ fn otel_access_attribute_visitor_maps_to_otel_semantic_conventions() {
     assert!(attrs.contains_key("http.server.request.duration"));
     assert!(attrs.contains_key("http.request.header.user_agent"));
     // Dropped in modern mode.
-    assert!(!attrs.contains_key("timestamp"));
-    assert!(!attrs.contains_key("trace_id"));
-    assert!(!attrs.contains_key("client_ip_canonical"));
-    assert!(!attrs.contains_key("server_ip_canonical"));
+    for key in &["timestamp", "trace_id", "client_ip_canonical", "server_ip_canonical"] {
+        assert!(!attrs.contains_key(*key), "key {key} should be absent in modern mode");
+    }
 }
 
 #[test]

@@ -33,11 +33,6 @@ pub fn is_valid_bare_string(s: &str) -> bool {
     s.chars().all(is_bare_char)
 }
 
-/// Returns true if the string contains interpolation syntax.
-fn has_interpolation(s: &str) -> bool {
-    s.contains("{{")
-}
-
 fn would_parse_as_number(s: &str) -> bool {
     // "-123", "+123", "123", "-12.3", "12.3", "+12.3" would be interpreted as numbers
     // Also "-123.0-123.0" (jammed tokens) would cause this function to return "true", since
@@ -94,7 +89,7 @@ pub fn should_quote(s: &str, style: QuoteStyle) -> bool {
             // - Contains interpolation
             // - Contains characters not valid in bare strings
             // - Would be ambiguous with other token types (true, false, numbers)
-            if s.is_empty() || has_interpolation(s) || !is_valid_bare_string(s) {
+            if s.is_empty() || s.contains("{{") || !is_valid_bare_string(s) {
                 return true;
             }
             // Would be parsed as a different token type

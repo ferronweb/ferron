@@ -1040,9 +1040,8 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c07b2767be6aead1916e05cc9a655c7d34737eb071cda3f05f67031b29891c8"
+version = "0.5.5"
+source = "git+https://github.com/stalwartlabs/dns-update?rev=bae0b909c9419f2b6d155cfd750adcc0d1d17188#bae0b909c9419f2b6d155cfd750adcc0d1d17188"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -4122,9 +4121,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.40.1"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2474bd2e5029e7ccb6abb2ba48cf2383a333851dedf495901544281590c7da7f"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
