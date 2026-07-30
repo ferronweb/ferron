@@ -85,6 +85,7 @@ fuzz_target!(|input: &[u8]| {
         return;
     };
 
+    // Build the same minimal pipeline that the real server uses
     let pipeline: Arc<Pipeline<HttpContext>> = Arc::new(
         Pipeline::new()
             .add_stage(Arc::new(ClientIpFromHeaderStage))

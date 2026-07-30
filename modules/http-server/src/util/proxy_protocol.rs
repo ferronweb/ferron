@@ -65,6 +65,7 @@ where
     // Choose which buffer to parse
     let buffer = dynamic_buffer.as_deref().unwrap_or(&buffer[..]);
 
+    // Parse the header
     let header = HeaderResult::parse(buffer);
     match header {
         HeaderResult::V1(Ok(header)) => {

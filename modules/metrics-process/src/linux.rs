@@ -78,6 +78,7 @@ pub async fn collect_process_metrics(
     event_sink: Arc<CompositeEventSink>,
     cancel_token: tokio_util::sync::CancellationToken,
 ) {
+    // Get the number of logical CPUs for utilization normalization
     let parallelism = num_cpus::get();
 
     let mut state = ProcessState::default();

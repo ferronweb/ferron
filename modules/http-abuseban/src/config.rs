@@ -103,6 +103,7 @@ fn parse_abuse_protection_block(
         }
     }
 
+    // Parse error_rate_threshold blocks
     let mut error_rate_thresholds = Vec::new();
     if let Some(entries) = block.directives.get("error_rate_threshold") {
         for entry in entries {

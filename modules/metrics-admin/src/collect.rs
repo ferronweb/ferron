@@ -107,6 +107,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         control_plane_metadata: None,
     }));
 
+    // --- Reload metrics ---
     {
         let reload_metrics = metrics.reload_metrics.read();
 
@@ -137,6 +138,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         }));
     }
 
+    // --- Runtime metrics ---
     {
         let runtime_metrics = metrics.runtime_metrics.read();
 
@@ -182,6 +184,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         }));
     }
 
+    // --- Config metadata metrics ---
     {
         let config_mtime = metrics.config_mtime.read();
         let mtime_epoch = config_mtime
@@ -203,6 +206,7 @@ fn emit_metrics(event_sink: &CompositeEventSink, metrics: &AdminMetrics) {
         }));
     }
 
+    // --- Config drift metric ---
     {
         event_sink.emit(Event::Metric(MetricEvent {
             name: "ferron.admin.config_drift",

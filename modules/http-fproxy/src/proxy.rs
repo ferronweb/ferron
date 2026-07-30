@@ -91,6 +91,7 @@ async fn handle_connect(
         }
     };
 
+    // Parse host and port
     let (host, port) = parse_host_port(&connect_address, 443)?;
 
     // ACL: check port

@@ -321,6 +321,8 @@ mod tests {
         config
     }
 
+    // --- set_var tests ---
+
     #[tokio::test]
     async fn sets_variable_on_match() {
         let config = make_set_var_config("request.uri.path", r"\.pdf$", "is_pdf", None);

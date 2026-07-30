@@ -217,20 +217,24 @@ impl<C> StageRegistry<C> {
     pub fn get_ordered_factories(&self) -> Vec<StageFactory<C>> {
         let stages = self.stages.read();
 
+        // Build name-to-index mapping
         let name_to_idx: HashMap<&str, usize> = stages
             .iter()
             .enumerate()
             .map(|(i, stage)| (stage.name.as_str(), i))
             .collect();
 
+        // Build adjacency list and in-degree count
         let mut graph: HashMap<usize, HashSet<usize>> = HashMap::new();
         let mut in_degree: HashMap<usize, usize> = HashMap::new();
 
+        // Initialize all nodes
         for i in 0..stages.len() {
             in_degree.entry(i).or_insert(0);
             graph.entry(i).or_default();
         }
 
+        // Build edges based on constraints
         for (i, stage) in stages.iter().enumerate() {
             for constraint in &stage.constraints {
                 match constraint {
@@ -455,6 +459,7 @@ impl Registry {
             }
         }
 
+        // Create new registry for this type
         let registry = Arc::new(StageRegistry::<C>::new());
         registry.register(factory);
 
@@ -519,6 +524,7 @@ impl Registry {
             }
         }
 
+        // Create new registry for this type
         let registry = Arc::new(ProviderRegistry::<C>::new());
         registry.register(factory);
 

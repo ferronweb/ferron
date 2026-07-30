@@ -56,6 +56,7 @@ impl ConfigurationValidator for HttpResponseValidator {
         validate_ip_directive(config, used_directives, "block")?;
         validate_ip_directive(config, used_directives, "allow")?;
 
+        // Validate `status` directives
         if let Some(entries) = config.directives.get("status") {
             used_directives.insert("status".to_string());
             for entry in entries {
@@ -78,6 +79,7 @@ impl ConfigurationValidator for HttpResponseValidator {
                     .with_span(entry_span(entry)));
                 }
 
+                // Validate child block directives
                 if let Some(children) = &entry.children {
                     for child_name in children.directives.keys() {
                         match child_name.as_str() {
@@ -136,6 +138,7 @@ impl ConfigurationValidator for HttpResponseValidator {
             }
         }
 
+        // Validate `early_hints` directives
         ferron_core::validate_directive!(config, used_directives, early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {
             let mut sub = std::collections::HashSet::new();
             ferron_core::validate_nested!(early_hints, used(sub), link, args(*) => [ServerConfigurationValue::String(_, _)]);

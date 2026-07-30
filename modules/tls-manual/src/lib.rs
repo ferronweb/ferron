@@ -96,6 +96,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
     }
 
     fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
+        // Parse TLS configuration from the config block
         let tls_config = TlsServerConfig::from_config(ctx.config)
             .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
 
@@ -103,14 +104,17 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         let config_builder =
             build_server_config_builder(&tls_config.crypto, &tls_config.client_auth)?;
 
+        // Parse ticket key configuration
         let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
+        // Load certificates
         let certs = load_certs(&tls_config.cert_path.ok_or(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "'cert' TLS parameter missing or invalid".to_string(),
         ))?)
         .map_err(|e| std::io::Error::other(format!("Error while loading TLS certificate: {e}")))?;
 
+        // Load private key
         let private_key = load_private_key(&tls_config.key_path.ok_or(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "'cert' TLS parameter missing or invalid".to_string(),
@@ -124,6 +128,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
             observability::emit_certificate_not_after(&sink, "manual", &resolve_host(ctx), leaf);
         }
 
+        // Build the config with certificates
         let mut config_with_tickets =
             config_builder.with_single_cert(certs.clone(), private_key.clone_key())?;
 

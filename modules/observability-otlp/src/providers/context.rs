@@ -163,6 +163,7 @@ pub(crate) fn build_parent_context(
     );
     let mut context = Context::new().with_remote_span_context(parent_ctx);
     if let Some(baggage) = baggage {
+        // Parse baggage values
         let mut baggage_vec = Vec::new();
         for item in baggage.split(',') {
             let item = item.trim();

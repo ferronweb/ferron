@@ -121,6 +121,7 @@ pub fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<Str
     for &sfx in COMP_SUFFIXES.iter() {
         let combined = format!("-{}", sfx);
         if trimmed.ends_with(&combined) {
+            // Remove compression suffix
             let mut base = trimmed[..trimmed.len() - combined.len()].to_string();
             // Remove optional "-precompress" marker if present
             if base.ends_with("-precompress") {

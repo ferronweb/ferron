@@ -51,6 +51,7 @@ impl Body for MultipartByterangeBody {
     ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let had_current_stream = self.current_stream.is_some();
 
+        // Check for data from the current file stream
         {
             let this = self.as_mut().project();
 

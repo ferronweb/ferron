@@ -61,6 +61,7 @@ impl BasicAuthValidator {
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
+        // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !BASICAUTH_DIRECTIVES.contains(&directive_name.as_str()) {
                 return Err(ConfigurationValidationError::from(format!(
@@ -100,6 +101,7 @@ impl BasicAuthValidator {
         }
         sub.insert("users".to_string());
 
+        // Validate `brute_force_protection` block — optional
         if let Some(bfp_entries) = block.directives.get("brute_force_protection") {
             sub.insert("brute_force_protection".to_string());
             for bfp_entry in bfp_entries {
@@ -159,6 +161,7 @@ impl BasicAuthValidator {
         hash: &str,
         username: &str,
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        // Check for known hash prefixes
         let is_valid = hash.starts_with("$argon2id$")
             || hash.starts_with("$argon2i$")
             || hash.starts_with("$argon2d$")

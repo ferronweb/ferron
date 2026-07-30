@@ -88,6 +88,7 @@ fn validate_baggage_block(
                 continue;
             }
 
+            // Validate children of the key block
             if let Some(children) = &key_entry.children {
                 let mut sub = std::collections::HashSet::new();
 

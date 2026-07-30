@@ -238,6 +238,7 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             None => return Ok(()),
         };
 
+        // Extract the response, compress, and put it back
         let response = match ctx.res {
             Some(HttpResponse::Custom(_)) => {
                 // Take the response out temporarily
@@ -256,6 +257,7 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             return Ok(());
         }
 
+        // Get content type for compressibility check
         let content_type = response
             .headers()
             .get(header::CONTENT_TYPE)
@@ -270,6 +272,7 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             return Ok(());
         }
 
+        // Check for browsers with known compression bugs
         let user_agent = state.user_agent.as_deref().unwrap_or("");
         if has_broken_compression(user_agent, content_type) {
             ctx.res = Some(HttpResponse::Custom(response));
@@ -301,11 +304,13 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         // Prevent zerocopy from interfering with the module
         parts.extensions.clear();
 
+        // Update Vary header
         update_vary_header(&mut parts.headers);
 
         // Remove Content-Length (compressed size differs from original)
         parts.headers.remove(header::CONTENT_LENGTH);
 
+        // Update ETag with compression suffix
         if let Some(etag_suffix) = compression.etag_suffix() {
             if let Some(etag) = parts.headers.get_mut(header::ETAG) {
                 if let Ok(etag_str) = etag.to_str() {
@@ -356,6 +361,7 @@ fn has_broken_compression(user_agent: &str, content_type: Option<&str>) -> bool 
         if user_agent.contains(" MSIE ") {
             return false;
         }
+        // Check for specific broken versions
         let first_char = stripped.chars().next();
         if matches!(first_char, Some('0')) {
             let second_char = stripped.chars().nth(1);

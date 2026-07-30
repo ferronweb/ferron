@@ -93,13 +93,16 @@ impl RateLimitEngine {
         let zone_id = resolve_zone_id(&ctx.configuration, &ctx.hostname);
 
         for config in &rules {
+            // Extract key from request
             let key = match config.key.extract(ctx) {
                 Some(k) => k,
                 None => continue, // Can't extract key — skip this rule
             };
 
+            // Get or create registry for this rule in the resolved zone
             let registry = self.get_or_create_registry(config, &zone_id);
 
+            // Get or create bucket
             let Some(bucket) = registry.get_or_create(&key) else {
                 // Registry at capacity — apply backpressure
                 ferron_core::log_warn!("Rate limit registry at capacity — applying backpressure");

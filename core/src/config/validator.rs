@@ -119,6 +119,7 @@ pub fn validate_scoped_block(
         scope: ctx.scope.clone(),
     };
 
+    // Validate provider and get scoped validator
     let Some(provider) = block
         .get_value(provider_field)
         .and_then(|s| s.as_str())
@@ -178,6 +179,7 @@ pub fn validate_scoped_block_flat(
         scope: ctx.scope.clone(),
     };
 
+    // Validate provider and get scoped validator
     let Some(provider) = block
         .get_value(provider_field)
         .and_then(|s| s.as_str())

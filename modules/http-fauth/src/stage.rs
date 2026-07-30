@@ -110,6 +110,7 @@ impl ForwardedAuthenticationStage {
     ) -> Result<Request<ProxyBody>, Box<dyn std::error::Error>> {
         let original_request = ctx.req.as_ref().ok_or("No request in context")?;
 
+        // Build the URI for the auth request
         let path = original_request.uri().path();
         let query = original_request
             .uri()
@@ -118,6 +119,7 @@ impl ForwardedAuthenticationStage {
             .unwrap_or_default();
         let auth_uri = format!("{}{}{}", config.backend_url, path, query);
 
+        // Create the auth request
         let mut auth_request = Request::builder()
             .uri(auth_uri)
             .method(original_request.method().clone());
@@ -198,6 +200,7 @@ impl ForwardedAuthenticationStage {
             }
         };
 
+        // Create connection pool key
         let pool_key = ConnpoolKey {
             url: config.backend_url.clone(),
             unix_socket: config.unix_socket.clone(),
@@ -209,6 +212,7 @@ impl ForwardedAuthenticationStage {
         }
         let local_limit = self.client.get_local_limit(&pool_key.url).await;
 
+        // Get connection from pool
         let mut conn_item = match self
             .client
             .get_connection(&pool_key, config.no_verification, local_limit)
@@ -250,6 +254,7 @@ impl ForwardedAuthenticationStage {
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     control_plane_metadata: None,
                 }));
+                // Return connection to pool even on error
                 self.client.return_connection(pool_key, conn_item);
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);
@@ -269,6 +274,7 @@ impl ForwardedAuthenticationStage {
 
                 for header_name in &config.copy_headers {
                     if auth_headers.contains_key(header_name) {
+                        // Remove existing headers
                         while request_headers.remove(header_name).is_some() {}
                         // Copy all values from auth response
                         for header_value in auth_headers.get_all(header_name) {
@@ -278,6 +284,7 @@ impl ForwardedAuthenticationStage {
                 }
             }
 
+            // Return connection to pool
             self.client.return_connection(pool_key, conn_item);
 
             ctx.events.emit(Event::Log(LogEvent {
@@ -318,6 +325,7 @@ impl ForwardedAuthenticationStage {
                 },
             )));
 
+            // Return connection to pool
             self.client.return_connection(pool_key, conn_item);
 
             ctx.events.emit(Event::Log(LogEvent {

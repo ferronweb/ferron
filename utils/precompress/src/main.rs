@@ -264,6 +264,7 @@ fn compress_asset(path: &PathBuf) -> Result<(), std::io::Error> {
 
 /// The main entry point of the application
 fn main() {
+    // Parse command-line arguments
     let args = parse_arguments();
 
     // Obtain command-line arguments
@@ -301,6 +302,7 @@ fn main() {
         });
     }
 
+    // Initialize the thread pool
     let thread_pool = match rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build()

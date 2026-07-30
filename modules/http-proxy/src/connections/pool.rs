@@ -134,6 +134,7 @@ where
 
         state.idle_total = state.idle_total.saturating_sub(evicted);
 
+        // Clean up empty keys.
         state.idle.retain(|_, conns| !conns.is_empty());
     }
 
@@ -283,6 +284,7 @@ where
             return None;
         }
 
+        // Increment outstanding.
         state.outstanding += 1;
 
         // Increment local outstanding if applicable.
@@ -308,6 +310,7 @@ where
         let outstanding_before = state.outstanding;
         let idle_total_before = state.idle_total;
 
+        // Decrement outstanding.
         state.outstanding = outstanding_before.saturating_sub(1);
 
         // Check if we can store the connection.

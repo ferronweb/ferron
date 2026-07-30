@@ -10,6 +10,7 @@ impl ConfigurationValidator for LogFileObservabilityConfigurationValidator {
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        // Log format
         validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
         validate_scoped_block_flat(
             config,

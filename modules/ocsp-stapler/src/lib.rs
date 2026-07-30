@@ -67,6 +67,7 @@ impl ModuleLoader for OcspStaplerModuleLoader {
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Build the composite event sink from observability providers
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         modules.push(Arc::new(OcspStaplerModule { event_sink }));
         Ok(())

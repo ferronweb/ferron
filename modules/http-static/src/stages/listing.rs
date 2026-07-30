@@ -89,6 +89,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
 
         let method = request.method().clone();
 
+        // Handle OPTIONS
         if method == Method::OPTIONS {
             let res = Response::builder()
                 .status(StatusCode::NO_CONTENT)
@@ -141,6 +142,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         let maindesc_path = ctx.file_path.join(".maindesc");
         let description = vibeio::fs::read_to_string(&maindesc_path).await.ok();
 
+        // Get original request path for links
         let request_path = (ctx.http.original_uri.as_ref().unwrap_or(request.uri())).path();
 
         let html = generate_directory_listing(entries, request_path, description);
@@ -244,6 +246,7 @@ fn generate_directory_listing(
         path_without_slashes = &path_without_slashes[..path_without_slashes.len() - 1];
     }
 
+    // Build return path
     let mut path_parts: Vec<&str> = path_without_slashes.split('/').collect();
     path_parts.pop();
     path_parts.push("");

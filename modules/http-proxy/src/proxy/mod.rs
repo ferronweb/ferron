@@ -133,6 +133,7 @@ pub async fn execute_proxy(
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
+    // Extract affinity key and resolve affinity index
     let affinity_key = extract_affinity_key(&config.affinity, ctx);
 
     // Backend selection loop — retries on connection failure when retry_connection is enabled
@@ -219,6 +220,7 @@ pub async fn execute_proxy(
                     );
                 }
 
+                // Update EWMA latency for P2C+EWMA algorithm
                 if metrics.upstream_time_secs > 0.0
                     && matches!(algorithm, LoadBalancerAlgorithmInner::P2cEwma)
                 {
