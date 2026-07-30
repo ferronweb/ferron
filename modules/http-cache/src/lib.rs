@@ -39,206 +39,10 @@ pub struct HttpCacheModuleLoader {
 impl ModuleLoader for HttpCacheModuleLoader {
     #[inline]
     fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
-        use ferron_core::directives::{Directive, DirectiveSubblock};
-        registry
-            .register(
-                Directive {
-                    name: "cache",
-                    usage: "cache [bool] | cache { ... }",
-                    description: "This directive enables or configures HTTP response caching with zone, policy, and purge settings.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: Some(DirectiveSubblock::custom("http_cache")),
-                },
-                DirectiveSubblock::default(),
-            )
-            .register(
-                Directive {
-                    name: "max_entries",
-                    usage: "max_entries <count>",
-                    description: "This directive sets the maximum number of cache entries.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "max_response_size",
-                    usage: "max_response_size <bytes>",
-                    description: "This directive sets the maximum response body size in bytes for caching.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "zone",
-                    usage: "zone <name> | zone <name> { ... }",
-                    description: "This directive assigns a host to a named cache zone or defines a named zone at global scope.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "vary",
-                    usage: "vary <header>...",
-                    description: "This directive adds request header names to include in the cache key.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "vary_cookies",
-                    usage: "vary_cookies <cookie>...",
-                    description: "This directive adds cookie names to include in the cache key.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "ignore",
-                    usage: "ignore <header>...",
-                    description: "This directive strips response headers from the cached representation.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "litespeed_override_cache_control",
-                    usage: "litespeed_override_cache_control [bool]",
-                    description: "This directive allows X-LiteSpeed-Cache-Control to override standard Cache-Control headers.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "emit_litespeed_headers",
-                    usage: "emit_litespeed_headers [bool]",
-                    description: "This directive enables X-LiteSpeed-Cache response headers on cached responses.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "ignore_request_cache_control",
-                    usage: "ignore_request_cache_control [bool]",
-                    description: "This directive ignores client Cache-Control and Pragma headers.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "enable_stale_while_revalidate",
-                    usage: "enable_stale_while_revalidate [bool]",
-                    description: "This directive enables serving stale responses while revalidating in the background.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "enable_stale_if_error",
-                    usage: "enable_stale_if_error [bool]",
-                    description: "This directive enables serving stale responses when the backend is unavailable.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "purge_method",
-                    usage: "purge_method [bool]",
-                    description: "This directive enables PURGE HTTP method for cache invalidation.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "purge_allowed_ips",
-                    usage: "purge_allowed_ips <ip-or-cidr>...",
-                    description: "This directive restricts cache PURGE requests to specific IPs or CIDR ranges.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "purge_propagation",
-                    usage: "purge_propagation [bool] | purge_propagation { ... }",
-                    description: "This directive enables multi-instance purge propagation with control-plane settings.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "control_plane_url",
-                    usage: "control_plane_url <url>",
-                    description: "This directive sets the control-plane URL for purge propagation.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "shared_secret",
-                    usage: "shared_secret <value>",
-                    description: "This directive sets the shared secret for inter-node purge authentication.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            )
-            .register(
-                Directive {
-                    name: "node_id",
-                    usage: "node_id <id>",
-                    description: "This directive sets the node identifier for purge propagation.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_cache"),
-            );
+        register_cache_policy_directives(registry);
+        register_cache_litespeed_directives(registry);
+        register_cache_stale_directives(registry);
+        register_cache_purge_directives(registry);
     }
 
     fn register_global_configuration_validators(
@@ -282,6 +86,224 @@ impl ModuleLoader for HttpCacheModuleLoader {
         }
         Ok(())
     }
+}
+
+fn register_cache_policy_directives(registry: &mut ferron_core::directives::DirectiveRegistry) {
+    use ferron_core::directives::{Directive, DirectiveSubblock};
+    registry
+        .register(
+            Directive {
+                name: "cache",
+                usage: "cache [bool] | cache { ... }",
+                description: "This directive enables or configures HTTP response caching with zone, policy, and purge settings.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: Some(DirectiveSubblock::custom("http_cache")),
+            },
+            DirectiveSubblock::default(),
+        )
+        .register(
+            Directive {
+                name: "max_entries",
+                usage: "max_entries <count>",
+                description: "This directive sets the maximum number of cache entries.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "max_response_size",
+                usage: "max_response_size <bytes>",
+                description: "This directive sets the maximum response body size in bytes for caching.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "zone",
+                usage: "zone <name> | zone <name> { ... }",
+                description: "This directive assigns a host to a named cache zone or defines a named zone at global scope.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "vary",
+                usage: "vary <header>...",
+                description: "This directive adds request header names to include in the cache key.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "vary_cookies",
+                usage: "vary_cookies <cookie>...",
+                description: "This directive adds cookie names to include in the cache key.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "ignore",
+                usage: "ignore <header>...",
+                description: "This directive strips response headers from the cached representation.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        );
+}
+
+fn register_cache_litespeed_directives(registry: &mut ferron_core::directives::DirectiveRegistry) {
+    use ferron_core::directives::{Directive, DirectiveSubblock};
+    registry
+        .register(
+            Directive {
+                name: "litespeed_override_cache_control",
+                usage: "litespeed_override_cache_control [bool]",
+                description: "This directive allows X-LiteSpeed-Cache-Control to override standard Cache-Control headers.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "emit_litespeed_headers",
+                usage: "emit_litespeed_headers [bool]",
+                description: "This directive enables X-LiteSpeed-Cache response headers on cached responses.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "ignore_request_cache_control",
+                usage: "ignore_request_cache_control [bool]",
+                description: "This directive ignores client Cache-Control and Pragma headers.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        );
+}
+
+fn register_cache_stale_directives(registry: &mut ferron_core::directives::DirectiveRegistry) {
+    use ferron_core::directives::{Directive, DirectiveSubblock};
+    registry
+        .register(
+            Directive {
+                name: "enable_stale_while_revalidate",
+                usage: "enable_stale_while_revalidate [bool]",
+                description: "This directive enables serving stale responses while revalidating in the background.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "enable_stale_if_error",
+                usage: "enable_stale_if_error [bool]",
+                description: "This directive enables serving stale responses when the backend is unavailable.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        );
+}
+
+fn register_cache_purge_directives(registry: &mut ferron_core::directives::DirectiveRegistry) {
+    use ferron_core::directives::{Directive, DirectiveSubblock};
+    registry
+        .register(
+            Directive {
+                name: "purge_method",
+                usage: "purge_method [bool]",
+                description: "This directive enables PURGE HTTP method for cache invalidation.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "purge_allowed_ips",
+                usage: "purge_allowed_ips <ip-or-cidr>...",
+                description: "This directive restricts cache PURGE requests to specific IPs or CIDR ranges.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "purge_propagation",
+                usage: "purge_propagation [bool] | purge_propagation { ... }",
+                description: "This directive enables multi-instance purge propagation with control-plane settings.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "control_plane_url",
+                usage: "control_plane_url <url>",
+                description: "This directive sets the control-plane URL for purge propagation.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "shared_secret",
+                usage: "shared_secret <value>",
+                description: "This directive sets the shared secret for inter-node purge authentication.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "node_id",
+                usage: "node_id <id>",
+                description: "This directive sets the node identifier for purge propagation.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
+        );
 }
 
 #[derive(Default)]
