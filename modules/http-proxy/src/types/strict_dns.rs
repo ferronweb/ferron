@@ -60,8 +60,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 
     if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers).await {
         if cached.is_empty() {
-            if let Some((_, event_sink)) = crate::runtime_handle::try_get_secondary_runtime_handle()
-            {
+            if let Some((_, event_sink)) = crate::try_get_secondary_runtime_handle() {
                 // Log a warning if no upstreams were resolved
                 event_sink.emit(ferron_observability::Event::Log(
                     ferron_observability::LogEvent {
@@ -84,7 +83,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     }
 
     // Get the secondary runtime handle (captured globally during Module::start)
-    let (handle, event_sink) = match crate::runtime_handle::try_get_secondary_runtime_handle() {
+    let (handle, event_sink) = match crate::try_get_secondary_runtime_handle() {
         Some(h) => h,
         None => {
             ferron_core::log_warn!(
@@ -96,7 +95,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 
     let result = handle
         .spawn(async move {
-            let resolver = match crate::runtime_handle::get_or_create_resolver(&dns_servers) {
+            let resolver = match crate::get_or_create_resolver(&dns_servers) {
                 Some(r) => r,
                 None => {
                     event_sink.emit(ferron_observability::Event::Log(

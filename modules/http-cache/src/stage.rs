@@ -1,26 +1,30 @@
-mod key;
-mod metrics;
-mod purge_propagation;
-mod response_helpers;
-#[cfg(test)]
-mod tests;
-
+use std::convert::TryFrom;
+use std::io;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
-use http::header::{self, HeaderValue};
+use ferron_observability::{
+    Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue, TraceAttributeValue,
+};
+use futures_util::stream::{self, StreamExt};
+use http::header::{self, HeaderName, HeaderValue};
 use http::{HeaderMap, Method, Response, StatusCode};
-use http_body_util::{BodyExt, Empty, Full};
+use http_body::{Body as _, Frame};
+use http_body_util::combinators::UnsyncBoxBody;
+use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
+#[cfg(test)]
+use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
 use crate::config::{
@@ -29,30 +33,25 @@ use crate::config::{
 use crate::lscache::{
     collect_lsc_cookies, parse_litespeed_cache_control, parse_litespeed_purge,
     parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector, LS_CACHE,
+    LS_CACHE_CONTROL, LS_COOKIE, LS_PURGE, LS_TAG, LS_VARY,
 };
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
 };
-use crate::store::{CacheStore, LookupEntry, StoreStats, StoredEntry};
+use crate::store::{
+    strip_store_headers, CacheStore, LookupEntry, StoreStats, StoredEntry, VaryRule,
+};
 use crate::SECONDARY_RUNTIME;
 
-use self::key::{
-    build_base_key, build_private_cache_key, build_vary_rule, cache_key_fingerprint, parse_cookies,
-};
-use self::metrics::{
-    emit_eviction_metrics, emit_purge_metric, emit_request_metric, emit_singleflight_metrics,
-    emit_store_metric,
-};
-use self::purge_propagation::{propagate_purge_webhook, PURGE_SOURCE_HEADER};
-use self::response_helpers::{
-    annotate_response_headers, append_lsc_cookies_as_set_cookie, build_cached_response,
-    collect_body_with_limit, response_from_parts, response_from_streaming_parts,
-    strip_internal_headers, CacheHeaderState, CollectBodyOutcome,
-};
-
 const LOG_TARGET: &str = "ferron-http-cache";
-const CACHE_STATUS_HEADER: http::header::HeaderName =
-    http::header::HeaderName::from_static("cache-status");
+const CACHE_STATUS_HEADER: HeaderName = HeaderName::from_static("cache-status");
+const PRIVATE_COOKIE_NAMES: &[&str] = &["frontend", "phpsessid", "xf_session", "lsc_private"];
+const PURGE_SOURCE_HEADER: HeaderName = HeaderName::from_static("x-purge-source");
+/// Header sent in outbound purge webhooks to identify the originating edge node.
+/// The external control-plane uses this to avoid broadcasting back to the origin.
+#[allow(dead_code)]
+const PURGE_ORIGIN_HEADER: HeaderName = HeaderName::from_static("x-purge-origin");
+const PURGE_SECRET_HEADER: HeaderName = HeaderName::from_static("x-purge-secret");
 
 struct RequestStateKey;
 
@@ -115,6 +114,14 @@ impl Drop for InflightGuard {
     }
 }
 
+enum CollectBodyOutcome {
+    Complete(Option<Bytes>),
+    Overflow {
+        prefix: Bytes,
+        remainder: UnsyncBoxBody<Bytes, io::Error>,
+    },
+}
+
 /// Tracks the config generation at which a zone's `max_entries` was last applied.
 struct ZoneGeneration {
     generation: AtomicU64,
@@ -151,6 +158,9 @@ impl HttpCacheStage {
             .value()
             .clone();
 
+        // Only update max_entries when the config generation changes.
+        // This prevents per-request LRU eviction when different host blocks
+        // specify different capacities for the same zone.
         let current_gen = ferron_core::admin::ADMIN_METRICS
             .reload_metrics
             .read()
@@ -163,11 +173,14 @@ impl HttpCacheStage {
 
         if should_update {
             let new_max = match zone_id {
+                // Named zones: read max_entries from the global zone definition.
                 CacheZoneId::Named(name) => {
                     crate::config::parse_global_zone_max_entries(configuration, name)
                         .unwrap_or(crate::config::DEFAULT_MAX_CACHE_ENTRIES)
                 }
+                // Global zone: read from the global cache block's max_entries.
                 CacheZoneId::Global => parse_max_entries(configuration),
+                // Per-host zones: read from the host's layered config.
                 CacheZoneId::Host(_) => parse_max_entries(configuration),
             };
             store.set_max_entries(new_max);
@@ -181,6 +194,261 @@ impl HttpCacheStage {
         }
 
         store
+    }
+
+    #[inline]
+    fn emit_request_metric(
+        &self,
+        ctx: &HttpContext,
+        zone_id: &CacheZoneId,
+        result: &'static str,
+        scope: Option<CacheScope>,
+        items: usize,
+    ) {
+        let mut attrs = vec![
+            (
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            ),
+            (
+                "ferron.cache.result",
+                MetricAttributeValue::StaticStr(result),
+            ),
+        ];
+        if let Some(scope) = scope {
+            attrs.push((
+                "ferron.cache.scope",
+                MetricAttributeValue::StaticStr(scope.as_str()),
+            ));
+        }
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.requests",
+            attributes: attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of cache lookups handled by the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.entries",
+            attributes: vec![(
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            )],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(items as u64),
+            unit: Some("{entry}"),
+            description: Some("Number of entries currently stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+    }
+
+    #[inline]
+    fn emit_store_metric(
+        &self,
+        ctx: &HttpContext,
+        zone_id: &CacheZoneId,
+        scope: CacheScope,
+        status_code: u16,
+    ) {
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.stores",
+            attributes: vec![
+                (
+                    "ferron.cache.zone",
+                    MetricAttributeValue::String(zone_id.label().to_string()),
+                ),
+                (
+                    "ferron.cache.scope",
+                    MetricAttributeValue::StaticStr(scope.as_str()),
+                ),
+                (
+                    "http.response.status_code",
+                    MetricAttributeValue::I64(status_code as i64),
+                ),
+            ],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{response}"),
+            description: Some("Number of responses stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+    }
+
+    #[inline]
+    fn emit_singleflight_metrics(&self, ctx: &HttpContext, store: &CacheStore) {
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.coalesced_requests",
+            attributes: Vec::new(),
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some(
+                "Number of requests intercepted by the singleflight deduplication layer.",
+            ),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.singleflight_active_locks",
+            attributes: Vec::new(),
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(store.active_locks() as u64),
+            unit: Some("{lock}"),
+            description: Some(
+                "Number of active in-flight upstream fetches coordinated by singleflight.",
+            ),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+    }
+
+    #[inline]
+    fn emit_eviction_metrics(&self, ctx: &HttpContext, zone_id: &CacheZoneId, stats: StoreStats) {
+        if stats.expired_evictions > 0 {
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.cache.evictions",
+                attributes: vec![
+                    (
+                        "ferron.cache.zone",
+                        MetricAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                    (
+                        "ferron.cache.reason",
+                        MetricAttributeValue::StaticStr("expired"),
+                    ),
+                ],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(stats.expired_evictions as u64),
+                unit: Some("{entry}"),
+                description: Some("Number of cache entries evicted from the HTTP cache."),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
+            ctx.events.emit(Event::Log(LogEvent {
+                level: LogLevel::Debug,
+                target: LOG_TARGET,
+                message: format!(
+                    "Evicted {} expired cache entries from zone {}",
+                    stats.expired_evictions,
+                    zone_id.label()
+                ),
+                summary: "Cache entries evicted".into(),
+                attributes: vec![
+                    (
+                        "eviction.reason",
+                        LogAttributeValue::String("ttl_expired".into()),
+                    ),
+                    (
+                        "eviction.count",
+                        LogAttributeValue::I64(stats.expired_evictions as i64),
+                    ),
+                    (
+                        "ferron.cache.zone",
+                        LogAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                ],
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
+        }
+        if stats.size_evictions > 0 {
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.cache.evictions",
+                attributes: vec![
+                    (
+                        "ferron.cache.zone",
+                        MetricAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                    (
+                        "ferron.cache.reason",
+                        MetricAttributeValue::StaticStr("size"),
+                    ),
+                ],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(stats.size_evictions as u64),
+                unit: Some("{entry}"),
+                description: Some("Number of cache entries evicted from the HTTP cache."),
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
+            ctx.events.emit(Event::Log(LogEvent {
+                level: LogLevel::Debug,
+                target: LOG_TARGET,
+                message: format!(
+                    "Evicted {} cache entries (capacity) from zone {}",
+                    stats.size_evictions,
+                    zone_id.label()
+                ),
+                summary: "Cache entries evicted".into(),
+                attributes: vec![
+                    (
+                        "eviction.reason",
+                        LogAttributeValue::String("capacity_reached_lru".into()),
+                    ),
+                    (
+                        "eviction.count",
+                        LogAttributeValue::I64(stats.size_evictions as i64),
+                    ),
+                    (
+                        "ferron.cache.zone",
+                        LogAttributeValue::String(zone_id.label().to_string()),
+                    ),
+                ],
+                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                control_plane_metadata: None,
+            }));
+        }
+    }
+
+    #[inline]
+    fn emit_purge_metric(
+        &self,
+        ctx: &HttpContext,
+        zone_id: &CacheZoneId,
+        scope: CacheScope,
+        purged: usize,
+        items: usize,
+    ) {
+        if purged == 0 {
+            return;
+        }
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.purges",
+            attributes: vec![
+                (
+                    "ferron.cache.zone",
+                    MetricAttributeValue::String(zone_id.label().to_string()),
+                ),
+                (
+                    "ferron.cache.scope",
+                    MetricAttributeValue::StaticStr(scope.as_str()),
+                ),
+            ],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(purged as u64),
+            unit: Some("{entry}"),
+            description: Some("Number of cache entries purged via LSCache-compatible controls."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.entries",
+            attributes: vec![(
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_id.label().to_string()),
+            )],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(items as u64),
+            unit: Some("{entry}"),
+            description: Some("Number of entries currently stored in the HTTP cache."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+            control_plane_metadata: None,
+        }));
     }
 }
 
@@ -273,6 +541,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             if !config.purge_method {
                 // PURGE not enabled — fall through to 405 from downstream stages
             } else {
+                // Security check: must be authenticated or from an allowed IP
                 let ip_allowed = if !config.purge_allowed_ips.is_empty() {
                     config
                         .purge_allowed_ips
@@ -301,6 +570,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     return Ok(false);
                 }
 
+                // Purge both public and private scopes matching the URL
                 let mut purged = 0;
                 for scope in [CacheScope::Public, CacheScope::Private] {
                     let purge_ops = vec![PurgeOperation {
@@ -310,7 +580,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }];
                     let (stats, items) = store.purge(&purge_ops, None);
                     if stats.purged > 0 {
-                        emit_purge_metric(ctx, &zone_id, scope, stats.purged, items);
+                        self.emit_purge_metric(ctx, &zone_id, scope, stats.purged, items);
                     }
                     purged += stats.purged;
                 }
@@ -325,6 +595,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                     control_plane_metadata: None,
                 }));
 
+                // Propagate purge to external control-plane unless this is a
+                // propagated request (X-Purge-Source: propagation).
                 let is_propagated = request_headers
                     .get(&PURGE_SOURCE_HEADER)
                     .and_then(|v| v.to_str().ok())
@@ -404,6 +676,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
                     );
                 }
+                // Don't insert RequestState — run_inverse will skip
                 return Ok(false);
             }
         }
@@ -424,7 +697,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 let scope = entry.scope;
 
                 if request_policy.reason == "request-revalidation" {
-                    emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
+                    self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                     LookupResult::Revalidate {
                         entry: Box::new(entry),
                         cache_key,
@@ -443,7 +716,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                             items,
                         }
                     } else {
-                        emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
+                        // SWR disabled — treat stale entry as revalidation
+                        self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                         LookupResult::Revalidate {
                             entry: Box::new(entry),
                             cache_key,
@@ -451,8 +725,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     }
                 } else {
-                    emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
-                    emit_eviction_metrics(ctx, &zone_id, stats);
+                    self.emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
+                    self.emit_eviction_metrics(ctx, &zone_id, stats);
                     {
                         let sa = ctx.get_span_attributes();
                         sa.insert(
@@ -497,13 +771,16 @@ impl Stage<HttpContext> for HttpCacheStage {
                 }
             } else {
                 if had_expired {
+                    // Thundering herd protection: coalesce concurrent requests
                     let coalesce_start = std::time::Instant::now();
                     let (is_leader, notify) = store.begin_fetch(&base_key);
 
                     if !is_leader {
+                        // Another request is already fetching this key.
+                        // Wait for it to complete, then re-check the cache.
                         notify.notified().await;
                         let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
-                        emit_singleflight_metrics(ctx, &store);
+                        self.emit_singleflight_metrics(ctx, &store);
 
                         let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
                             &base_key,
@@ -512,9 +789,16 @@ impl Stage<HttpContext> for HttpCacheStage {
                             private_key.as_deref(),
                         );
                         if let Some((entry, _, _)) = retry_lookup {
+                            // Leader populated the cache — serve from cache
                             let scope = entry.scope;
-                            emit_eviction_metrics(ctx, &zone_id, retry_stats);
-                            emit_request_metric(ctx, &zone_id, "hit", Some(scope), retry_items);
+                            self.emit_eviction_metrics(ctx, &zone_id, retry_stats);
+                            self.emit_request_metric(
+                                ctx,
+                                &zone_id,
+                                "hit",
+                                Some(scope),
+                                retry_items,
+                            );
                             {
                                 let sa = ctx.get_span_attributes();
                                 sa.insert(
@@ -565,17 +849,20 @@ impl Stage<HttpContext> for HttpCacheStage {
                             });
                             return Ok(false);
                         }
+                        // Leader's response was non-cacheable — proceed normally
                         LookupResult::Miss {
                             stats: retry_stats,
                             inflight_key: None,
                         }
                     } else {
+                        // We are the leader — proceed to downstream, guard will notify on drop
                         LookupResult::Miss {
                             stats,
                             inflight_key: Some(base_key.clone()),
                         }
                     }
                 } else {
+                    // First-time request or non-expiry miss — no coalescing
                     LookupResult::Miss {
                         stats,
                         inflight_key: None,
@@ -605,6 +892,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             _ => None,
         };
 
+        // Inject conditional headers for revalidation
         if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
             if let Some(ref mut request) = ctx.req {
                 if let Some(etag) = &entry.etag {
@@ -720,9 +1008,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                 if inflight_key.is_some() {
                     let mut stats = *stats;
                     stats.expired_evictions += 1;
-                    emit_eviction_metrics(ctx, &state.zone_id, stats);
+                    self.emit_eviction_metrics(ctx, &state.zone_id, stats);
                 } else {
-                    emit_eviction_metrics(ctx, &state.zone_id, *stats);
+                    // Serve stale response immediately
+                    self.emit_eviction_metrics(ctx, &state.zone_id, *stats);
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
@@ -736,6 +1025,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         )?)
                     });
 
+                    // Annotate with stale-while-revalidate Cache-Status
                     if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
                         annotate_response_headers(
                             resp.headers_mut(),
@@ -747,7 +1037,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                     }
 
-                    emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
+                    self.emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                     {
                         let sa = ctx.get_span_attributes();
                         sa.insert(
@@ -780,12 +1070,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                 }
             }
             LookupResult::Revalidate { stats, .. } => {
-                emit_eviction_metrics(ctx, &state.zone_id, *stats);
+                self.emit_eviction_metrics(ctx, &state.zone_id, *stats);
             }
             LookupResult::Miss {
                 stats,
                 inflight_key: _,
-            } => emit_eviction_metrics(ctx, &state.zone_id, *stats),
+            } => self.emit_eviction_metrics(ctx, &state.zone_id, *stats),
             LookupResult::Bypass => {}
         }
 
@@ -799,6 +1089,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 response
             }
             None => {
+                // No response would implicitly mean "404 Not Found"
                 let mut response = Response::new(None);
                 *response.status_mut() = StatusCode::NOT_FOUND;
                 response
@@ -816,6 +1107,8 @@ impl Stage<HttpContext> for HttpCacheStage {
         } = state.lookup_result
         {
             if response.status() == StatusCode::NOT_MODIFIED {
+                // Update the cached entry's headers with fresh ones from upstream
+                // (e.g., new Date, Cache-Control) but keep the stored body intact.
                 let mut fresh_headers = response.headers().clone();
                 strip_internal_headers(&mut fresh_headers);
                 if let Some(new_fresh_headers) = state.store.update_entry_headers_by_key(
@@ -830,6 +1123,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     fresh_headers = new_fresh_headers;
                 }
 
+                // Reconstruct a response using fresh headers + cached body
                 let mut builder = Response::builder().status(cached_entry.status);
                 for (name, value) in &fresh_headers {
                     builder = builder.header(name, value);
@@ -868,7 +1162,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     state.config.emit_litespeed_headers,
                 );
 
-                emit_request_metric(
+                self.emit_request_metric(
                     ctx,
                     &state.zone_id,
                     "revalidated",
@@ -881,6 +1175,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         }
 
+        // Handle stale-if-error — serve stale response on upstream 5xx
         if response.status().is_server_error() && state.config.enable_stale_if_error {
             if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
                 state.store.lookup(
@@ -894,6 +1189,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     if !stale_entry.must_revalidate
                         && stale_entry.age <= stale_entry.ttl + sie_duration
                     {
+                        // Serve the stale response instead of the error
                         let stale_response = if let Some(body) = stale_entry.body {
                             let mut builder = Response::builder().status(stale_entry.status);
                             let mut headers = stale_entry.headers.clone();
@@ -938,7 +1234,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 .map_err(|e| PipelineError::custom(e.to_string()))?
                         };
 
-                        emit_request_metric(
+                        self.emit_request_metric(
                             ctx,
                             &state.zone_id,
                             "hit",
@@ -1002,7 +1298,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             let (stats, items) = state.store.purge(&purge_ops, state.private_key.as_deref());
             for operation in &purge_ops {
                 purge_scope = Some(operation.scope);
-                emit_purge_metric(ctx, &state.zone_id, operation.scope, stats.purged, items);
+                self.emit_purge_metric(ctx, &state.zone_id, operation.scope, stats.purged, items);
             }
             if stats.purged > 0 {
                 ctx.events.emit(Event::Log(LogEvent {
@@ -1021,7 +1317,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                     control_plane_metadata: None,
                 }));
 
+                // Propagate each purged path to the external control-plane.
                 if let Some(url) = &state.config.purge_propagation.control_plane_url {
+                    // Collect unique paths from purge operations for propagation.
                     let mut paths: Vec<String> = Vec::new();
                     for op in &purge_ops {
                         for sel in &op.selectors {
@@ -1138,7 +1436,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             let vary_rule_cloned = vary_rule.clone().expect("vary rule must exist");
             let tags = parse_litespeed_tags(response.headers(), scope);
             let (mut parts, mut body) = response.into_parts();
-            parts.extensions.clear();
+            parts.extensions.clear(); // Prevent zerocopy from interfering with cache
             strip_internal_headers(&mut parts.headers);
             append_lsc_cookies_as_set_cookie(&mut parts.headers, &lsc_cookies);
             let body_result =
@@ -1165,7 +1463,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     for header_name in &state.config.ignored_store_headers {
                         stored_headers.remove(header_name);
                     }
-                    crate::store::strip_store_headers(&mut stored_headers);
+                    strip_store_headers(&mut stored_headers);
                     let etag = stored_headers.get(header::ETAG).cloned();
                     let last_modified = stored_headers.get(header::LAST_MODIFIED).cloned();
                     let stored_entry = StoredEntry {
@@ -1177,9 +1475,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         body: body_bytes,
                         lsc_cookies: lsc_cookies.clone(),
                         created_at: std::time::Instant::now(),
-                        ttl: decision
-                            .ttl
-                            .unwrap_or_else(|| std::time::Duration::from_secs(0)),
+                        ttl: decision.ttl.unwrap_or_else(|| Duration::from_secs(0)),
                         access_at: 0,
                         private_key: None,
                         tags,
@@ -1196,8 +1492,8 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &state.request_headers,
                         &state.request_cookies,
                     );
-                    emit_eviction_metrics(ctx, &state.zone_id, stats);
-                    emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
+                    self.emit_eviction_metrics(ctx, &state.zone_id, stats);
+                    self.emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
 
                     if let LookupResult::StaleWhileRevalidate {
                         entry,
@@ -1206,6 +1502,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         ..
                     } = &state.lookup_result
                     {
+                        // Serve stale response immediately
                         ctx.res = Some(if entry.body.is_none() {
                             HttpResponse::BuiltinError(
                                 entry.status.as_u16(),
@@ -1219,6 +1516,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             )?)
                         });
 
+                        // Annotate with stale-while-revalidate Cache-Status
                         if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
                             annotate_response_headers(
                                 resp.headers_mut(),
@@ -1230,7 +1528,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             );
                         }
 
-                        emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
+                        self.emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                         return Ok(());
                     }
 
@@ -1238,7 +1536,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         match &mut outgoing_response {
                             HttpResponse::Custom(r) => r.headers_mut(),
                             HttpResponse::BuiltinError(_, Some(h)) => h,
-                            _ => unreachable!(),
+                            _ => unreachable!(), // These would never be constructed...
                         },
                         CacheHeaderState::Miss {
                             stored: true,
@@ -1246,7 +1544,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
+                    self.emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
                     ctx.res = Some(outgoing_response);
                     {
                         let sa = ctx.get_span_attributes();
@@ -1291,7 +1589,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
+                    self.emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
                     ctx.res = Some(HttpResponse::Custom(response));
                     {
                         let sa = ctx.get_span_attributes();
@@ -1332,7 +1630,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             } else {
                 "miss"
             };
-            emit_request_metric(
+            self.emit_request_metric(
                 ctx,
                 &state.zone_id,
                 result,
@@ -1374,7 +1672,69 @@ impl Stage<HttpContext> for HttpCacheStage {
     }
 }
 
+enum CacheHeaderState<'a> {
+    Hit { scope: CacheScope, age: Duration },
+    StaleWhileRevalidate { scope: CacheScope, age: Duration },
+    Revalidated,
+    Miss { stored: bool, detail: &'a str },
+    Bypass { detail: &'a str },
+}
+
+fn build_cached_response(
+    entry: LookupEntry,
+    head_only: bool,
+    emit_ls_cache: bool,
+) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
+    let body_len = entry.body.as_ref().map(|body| body.len());
+    let mut response = Response::new(if head_only {
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync()
+    } else if let Some(body) = entry.body {
+        Full::new(body)
+            .map_err(|error: std::convert::Infallible| match error {})
+            .boxed_unsync()
+    } else {
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync()
+    });
+    *response.status_mut() = entry.status;
+    let mut headers = entry.headers.clone();
+    headers.remove(&LS_CACHE);
+    headers.remove(header::AGE);
+    headers.remove(CACHE_STATUS_HEADER);
+    append_lsc_cookies_as_set_cookie(&mut headers, &entry.lsc_cookies);
+    annotate_response_headers(
+        &mut headers,
+        CacheHeaderState::Hit {
+            scope: entry.scope,
+            age: entry.age,
+        },
+        emit_ls_cache,
+    );
+
+    if head_only && !headers.contains_key(header::CONTENT_LENGTH) {
+        if let Some(body_len) = body_len {
+            let value = HeaderValue::from_str(&body_len.to_string())
+                .map_err(|error| PipelineError::custom(error.to_string()))?;
+            headers.insert(header::CONTENT_LENGTH, value);
+        }
+    }
+
+    *response.headers_mut() = headers;
+    Ok(response)
+}
+
 /// Resolve the cache zone ID for a request.
+///
+/// Resolution order:
+/// 1. If the host specifies `zone "name"` → `CacheZoneId::Named(name)`
+/// 2. If the host specifies `max_entries` in its cache block (without `zone`)
+///    → `CacheZoneId::Host(hostname)` — the host wants its own capacity
+/// 3. If a global `cache { max_entries = N }` block exists (no explicit `zone`
+///    blocks in it) → `CacheZoneId::Global` (all hosts share one store)
+/// 4. Otherwise → `CacheZoneId::Host(hostname)` (per-host store)
 fn resolve_zone_id(
     hostname: &Option<String>,
     config: &CacheConfig,
@@ -1383,10 +1743,533 @@ fn resolve_zone_id(
     if let Some(ref zone) = config.zone {
         zone.clone()
     } else if has_host_max_entries(configuration) {
+        // Host specifies max_entries → implicit per-host zone
         CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
     } else if crate::config::has_global_zone(configuration) {
         CacheZoneId::Global
     } else {
         CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
+    }
+}
+
+fn build_base_key(
+    encrypted: bool,
+    headers: &HeaderMap,
+    original_uri: Option<&http::Uri>,
+    fallback_uri: &http::Uri,
+) -> String {
+    let uri = original_uri.unwrap_or(fallback_uri);
+    let scheme = if encrypted { "https" } else { "http" };
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    let path_and_query = uri
+        .path_and_query()
+        .map(|value| value.as_str())
+        .unwrap_or("/");
+    let mut key = String::with_capacity(scheme.len() + host.len() + path_and_query.len() + 3);
+    key.push_str(scheme);
+    key.push_str("://");
+    key.push_str(host);
+    key.push_str(path_and_query);
+    key
+}
+
+fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
+    let mut cookies = AHashMap::default();
+    for value in headers.get_all(header::COOKIE) {
+        let Some(text) = value.to_str().ok() else {
+            continue;
+        };
+        for cookie in text.split(';') {
+            let Some((name, value)) = cookie.split_once('=') else {
+                continue;
+            };
+            let name = name.trim();
+            let value = value.trim();
+            if !name.is_empty() {
+                cookies.insert(name.to_string(), value.to_string());
+            }
+        }
+    }
+    cookies
+}
+
+fn build_private_cache_key(
+    cookies: &AHashMap<String, String>,
+    remote_ip: std::net::IpAddr,
+    auth_user: Option<&str>,
+) -> String {
+    let mut components = Vec::with_capacity(cookies.len() + 2);
+    components.push(format!("ip={remote_ip}"));
+    if let Some(auth_user) = auth_user {
+        components.push(format!("auth={auth_user}"));
+    }
+
+    let mut matched_private_cookie = false;
+    for (name, value) in cookies {
+        // Check if the cookie is a private cookie based on its name.
+        let is_private = is_private_cookie_name(name);
+        if is_private && value.len() >= 16 {
+            matched_private_cookie = true;
+            components.push(format!("cookie:{name}={value}"));
+        }
+    }
+
+    if !matched_private_cookie {
+        for (name, value) in cookies {
+            components.push(format!("cookie:{name}={value}"));
+        }
+    }
+
+    components.sort_unstable();
+    components.join("\0")
+}
+
+fn build_vary_rule(
+    headers: &HeaderMap,
+    config: &CacheConfig,
+    ls_vary: &crate::lscache::LiteSpeedVary,
+) -> Result<Option<VaryRule>, PipelineError> {
+    let mut header_names: AHashSet<HeaderName> = config.vary_headers.iter().cloned().collect();
+    for value in headers.get_all(header::VARY) {
+        let Some(text) = value.to_str().ok() else {
+            continue;
+        };
+        for token in text.split(',') {
+            let token = token.trim();
+            if token == "*" {
+                return Ok(None);
+            }
+            if token.is_empty() {
+                continue;
+            }
+            let name = HeaderName::from_bytes(token.as_bytes())
+                .map_err(|error| PipelineError::custom(error.to_string()))?;
+            header_names.insert(name);
+        }
+    }
+    let mut header_names: Vec<_> = header_names.into_iter().collect();
+    header_names.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+
+    let mut cookie_names: AHashSet<String> = ls_vary.cookies.iter().cloned().collect();
+    for name in &config.vary_cookies {
+        cookie_names.insert(name.clone());
+    }
+    let mut cookie_names: Vec<_> = cookie_names.into_iter().collect();
+    cookie_names.sort_unstable();
+
+    Ok(Some(VaryRule {
+        header_names,
+        cookie_names,
+        value: None,
+    }))
+}
+
+async fn collect_body_with_limit(
+    body: Option<&mut UnsyncBoxBody<Bytes, io::Error>>,
+    max_size: usize,
+) -> Result<CollectBodyOutcome, PipelineError> {
+    let Some(body) = body else {
+        return Ok(CollectBodyOutcome::Complete(None));
+    };
+    let initial_capacity = body
+        .size_hint()
+        .upper()
+        .and_then(|upper| usize::try_from(upper).ok())
+        .map(|cap| cap.min(max_size))
+        .unwrap_or(0);
+    let mut buffer = BytesMut::with_capacity(initial_capacity);
+    while let Some(frame) = body.frame().await {
+        let frame = frame.map_err(|error| PipelineError::custom(error.to_string()))?;
+        if let Some(data) = frame.data_ref() {
+            buffer.extend_from_slice(data);
+            if buffer.len() > max_size {
+                let remainder = std::mem::replace(
+                    body,
+                    Empty::<Bytes>::new()
+                        .map_err(|error| match error {})
+                        .boxed_unsync(),
+                );
+                return Ok(CollectBodyOutcome::Overflow {
+                    prefix: buffer.freeze(),
+                    remainder,
+                });
+            }
+        }
+    }
+
+    Ok(CollectBodyOutcome::Complete(Some(buffer.freeze())))
+}
+
+fn response_from_parts(
+    parts: http::response::Parts,
+    body: Bytes,
+    head_only: bool,
+) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
+    let body = if head_only {
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync()
+    } else {
+        Full::new(body)
+            .map_err(|error: std::convert::Infallible| match error {})
+            .boxed_unsync()
+    };
+    Ok(Response::from_parts(parts, body))
+}
+
+#[inline]
+fn response_from_streaming_parts(
+    parts: http::response::Parts,
+    prefix: Bytes,
+    remainder: UnsyncBoxBody<Bytes, io::Error>,
+) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
+    let prefix_stream = stream::once(async move { Ok(Frame::data(prefix)) });
+    let chained = prefix_stream.chain(BodyStream::new(remainder));
+    let body = StreamBody::new(chained).boxed_unsync();
+    Ok(Response::from_parts(parts, body))
+}
+
+fn annotate_response_headers(
+    headers: &mut HeaderMap,
+    state: CacheHeaderState<'_>,
+    emit_ls_cache: bool,
+) {
+    if emit_ls_cache {
+        headers.remove(&LS_CACHE);
+    }
+    headers.remove(CACHE_STATUS_HEADER);
+    headers.remove(header::AGE);
+
+    match state {
+        CacheHeaderState::Hit { scope, age } => {
+            if emit_ls_cache {
+                let ls_value = if scope == CacheScope::Private {
+                    "hit,private"
+                } else {
+                    "hit"
+                };
+                headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            }
+            if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
+                headers.insert(header::AGE, age_value);
+            }
+            let mut value = String::with_capacity(48 + scope.as_str().len());
+            value.push_str("FerronCache; hit; detail=");
+            value.push_str(scope.as_str());
+            value.push_str("; age=");
+            value.push_str(&age.as_secs().to_string());
+            if let Ok(value) = HeaderValue::from_str(&value) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+        CacheHeaderState::StaleWhileRevalidate { scope, age } => {
+            if emit_ls_cache {
+                let ls_value = if scope == CacheScope::Private {
+                    "hit,private"
+                } else {
+                    "hit"
+                };
+                headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            }
+            if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
+                headers.insert(header::AGE, age_value);
+            }
+            let mut value = String::with_capacity(70 + scope.as_str().len());
+            value.push_str("FerronCache; hit; detail=stale-while-revalidate,");
+            value.push_str(scope.as_str());
+            value.push_str("; age=");
+            value.push_str(&age.as_secs().to_string());
+            if let Ok(value) = HeaderValue::from_str(&value) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+        CacheHeaderState::Revalidated => {
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("hit"));
+            }
+            if let Ok(value) = HeaderValue::from_str("FerronCache; fwd=hit; detail=revalidated") {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+        CacheHeaderState::Miss { stored, detail } => {
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("miss"));
+            }
+            let mut value = String::with_capacity(40 + detail.len());
+            value.push_str("FerronCache; fwd=miss; stored=");
+            value.push_str(if stored { "true" } else { "false" });
+            value.push_str("; detail=");
+            value.push_str(detail);
+            if let Ok(value) = HeaderValue::from_str(&value) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+        CacheHeaderState::Bypass { detail } => {
+            if emit_ls_cache {
+                headers.insert(&LS_CACHE, HeaderValue::from_static("bypass"));
+            }
+            let mut value = String::with_capacity(32 + detail.len());
+            value.push_str("FerronCache; fwd=bypass; detail=");
+            value.push_str(detail);
+            if let Ok(value) = HeaderValue::from_str(&value) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+    }
+}
+
+#[inline]
+fn strip_internal_headers(headers: &mut HeaderMap) {
+    headers.remove(&LS_CACHE_CONTROL);
+    headers.remove(&LS_TAG);
+    headers.remove(&LS_PURGE);
+    headers.remove(&LS_VARY);
+    headers.remove(&LS_COOKIE);
+    headers.remove(&LS_CACHE);
+    headers.remove(CACHE_STATUS_HEADER);
+}
+
+#[inline]
+fn append_lsc_cookies_as_set_cookie(headers: &mut HeaderMap, lsc_cookies: &[HeaderValue]) {
+    headers.remove(&LS_COOKIE);
+    for cookie in lsc_cookies {
+        headers.append(header::SET_COOKIE, cookie.clone());
+    }
+}
+
+#[inline]
+fn is_private_cookie_name(name: &str) -> bool {
+    PRIVATE_COOKIE_NAMES
+        .iter()
+        .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        || starts_with_ignore_ascii_case(name, "wp_woocommerce_session_")
+}
+
+#[inline]
+fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
+    value
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+}
+
+/// Return a truncated representation of a cache key for use in access logs.
+/// The full key can be long (scheme://host/path + vary components); this
+/// provides enough to identify the resource without bloating log lines.
+fn cache_key_fingerprint(key: &str) -> String {
+    const MAX_LEN: usize = 48;
+    if key.len() <= MAX_LEN {
+        key.to_string()
+    } else {
+        format!("{}...", &key[..MAX_LEN])
+    }
+}
+
+/// Build an HTTPS client for outbound purge propagation webhooks.
+fn build_propagation_client() -> Result<
+    hyper_util::client::legacy::Client<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+        http_body_util::Full<bytes::Bytes>,
+    >,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
+    use hyper_rustls::HttpsConnectorBuilder;
+
+    let root_store = build_root_cert_store()?;
+
+    let tls_config = rustls::ClientConfig::builder_with_provider(
+        rustls::crypto::aws_lc_rs::default_provider().into(),
+    )
+    .with_safe_default_protocol_versions()?
+    .with_root_certificates(root_store)
+    .with_no_client_auth();
+
+    let https = HttpsConnectorBuilder::new()
+        .with_tls_config(tls_config)
+        .https_or_http()
+        .enable_http1()
+        .enable_http2()
+        .build();
+
+    Ok(
+        hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+            .build(https),
+    )
+}
+
+fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn std::error::Error + Send + Sync>>
+{
+    let mut root_store = rustls::RootCertStore::empty();
+    let mut found_any = false;
+
+    match rustls_native_certs::load_native_certs() {
+        cert_result if !cert_result.errors.is_empty() => {
+            ferron_core::log_warn!(
+                "native root CA certificate loading errors: {:?}",
+                cert_result.errors
+            );
+        }
+        cert_result if cert_result.certs.is_empty() => {
+            ferron_core::log_warn!("no native root CA certificates found");
+        }
+        cert_result => {
+            for cert in cert_result.certs {
+                if let Err(err) = root_store.add(cert) {
+                    ferron_core::log_warn!("native certificate parsing failed: {:?}", err);
+                } else {
+                    found_any = true;
+                }
+            }
+        }
+    }
+
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    if !found_any {
+        ferron_core::log_warn!("using webpki-roots as fallback (no native root CAs available)");
+    }
+
+    if root_store.is_empty() {
+        return Err("No root certificates available".into());
+    }
+
+    Ok(root_store)
+}
+
+/// Send a purge webhook to the external control-plane service.
+///
+/// The webhook is a `POST` with a JSON body containing the purged path and the
+/// originating node ID. The control-plane is expected to fan out `PURGE`
+/// requests to all other registered edges.
+async fn propagate_purge_webhook(
+    url: &str,
+    shared_secret: Option<&str>,
+    node_id: Option<&str>,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = build_propagation_client()?;
+
+    let body = serde_json::json!({
+        "path": path,
+        "origin": node_id.unwrap_or("unknown"),
+    });
+
+    let mut request = http::Request::builder()
+        .method(http::Method::POST)
+        .uri(url)
+        .header(http::header::CONTENT_TYPE, "application/json");
+
+    if let Some(secret) = shared_secret {
+        request = request.header(&PURGE_SECRET_HEADER, secret);
+    }
+
+    let request = request.body(http_body_util::Full::new(bytes::Bytes::from(
+        serde_json::to_vec(&body)?,
+    )))?;
+
+    let response = tokio::time::timeout(Duration::from_secs(5), client.request(request)).await??;
+
+    if !response.status().is_success() {
+        return Err(format!("control-plane returned HTTP {}", response.status()).into());
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_observability::CompositeEventSink;
+    use http::Request;
+    use std::net::SocketAddr;
+
+    #[inline]
+    fn test_context(path: &str) -> HttpContext {
+        let request = Request::builder()
+            .uri(path)
+            .header(header::HOST, "example.com")
+            .body(
+                Empty::<Bytes>::new()
+                    .map_err(|error: std::convert::Infallible| match error {})
+                    .boxed_unsync(),
+            )
+            .unwrap();
+
+        HttpContext {
+            req: Some(request),
+            res: None,
+            events: CompositeEventSink::new(Vec::new()),
+            configuration: LayeredConfiguration::default(),
+            hostname: Some("example.com".to_string()),
+            variables: FxHashMap::default(),
+            previous_error: None,
+            original_uri: None,
+            routing_uri: None,
+            encrypted: true,
+            local_address: "127.0.0.1:443".parse::<SocketAddr>().unwrap(),
+            remote_address: "127.0.0.2:12345".parse::<SocketAddr>().unwrap(),
+            auth_user: None,
+            https_port: Some(443),
+            extensions: typemap_rev::TypeMap::new(),
+        }
+    }
+
+    #[test]
+    #[inline]
+    fn parses_private_key_from_cookies() {
+        let mut cookies = AHashMap::default();
+        cookies.insert("PHPSESSID".to_string(), "1234567890abcdef".to_string());
+        let key = build_private_cache_key(&cookies, "127.0.0.1".parse().unwrap(), Some("user"));
+        assert!(key.contains("auth=user"));
+        assert!(key.contains("cookie:PHPSESSID=1234567890abcdef"));
+    }
+
+    #[tokio::test]
+    #[inline]
+    async fn hit_response_uses_empty_body_for_head() {
+        let entry = LookupEntry {
+            scope: CacheScope::Public,
+            status: http::StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: Some(Bytes::from_static(b"hello")),
+            lsc_cookies: Vec::new(),
+            age: Duration::from_secs(5),
+            etag: None,
+            last_modified: None,
+            stale_while_revalidate: None,
+            stale_if_error: None,
+            must_revalidate: false,
+            ttl: Duration::from_secs(60),
+        };
+        let response = build_cached_response(entry, true, false).unwrap();
+        let collected = response.into_body().collect().await.unwrap().to_bytes();
+        assert!(collected.is_empty());
+    }
+
+    #[test]
+    #[inline]
+    fn base_key_uses_scheme_host_and_path() {
+        let ctx = test_context("/test?q=1");
+        let request = ctx.req.as_ref().unwrap();
+        let key = build_base_key(ctx.encrypted, request.headers(), None, request.uri());
+        assert_eq!(key, "https://example.com/test?q=1");
+    }
+
+    #[test]
+    #[inline]
+    fn base_key_prefers_original_uri() {
+        let mut ctx = test_context("/rewritten/path");
+        ctx.original_uri = Some("/canonical/path".parse().unwrap());
+        let request = ctx.req.as_ref().unwrap();
+        let key = build_base_key(
+            ctx.encrypted,
+            request.headers(),
+            ctx.original_uri.as_ref(),
+            request.uri(),
+        );
+        assert_eq!(key, "https://example.com/canonical/path");
     }
 }

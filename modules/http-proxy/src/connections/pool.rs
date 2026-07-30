@@ -490,17 +490,17 @@ mod tests {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(2));
 
         // Fill the pool
-        let first_item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
-        let second_item = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
+        let item1 = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let item2 = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
 
         assert_eq!(pool.outstanding_count(), 2);
 
         // Should be at limit for new connections.
-        let third_item = pool.pull("key3".to_string(), |_| (true, true));
-        assert!(third_item.is_none());
+        let item3 = pool.pull("key3".to_string(), |_| (true, true));
+        assert!(item3.is_none());
 
-        drop(first_item);
-        drop(second_item);
+        drop(item1);
+        drop(item2);
 
         assert_eq!(pool.outstanding_count(), 0);
     }
@@ -512,24 +512,24 @@ mod tests {
         let limit_key = "upstream-a".to_string();
 
         // Pull two items with local limit
-        let first_item = pool
+        let item1 = pool
             .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)), |_| {
                 (true, true)
             })
             .unwrap();
-        let second_item = pool
+        let item2 = pool
             .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 2)), |_| {
                 (true, true)
             })
             .unwrap();
 
         // Third should fail local limit
-        let third_item =
+        let item3 =
             pool.pull_with_local_limit("key1".to_string(), Some((limit_key, 2)), |_| (true, true));
-        assert!(third_item.is_none());
+        assert!(item3.is_none());
 
-        drop(first_item);
-        drop(second_item);
+        drop(item1);
+        drop(item2);
     }
 
     #[test]
@@ -566,8 +566,8 @@ mod tests {
         assert_eq!(pool.max_size(), Some(2));
 
         // Fill the pool
-        let first_item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
-        let second_item = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
+        let item1 = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let item2 = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
         assert!(pool.pull("key3".to_string(), |_| (true, true)).is_none()); // At limit
 
         // Increase capacity
@@ -575,10 +575,10 @@ mod tests {
         assert_eq!(pool.max_size(), Some(5));
 
         // Should now be able to pull more
-        let third_item = pool.pull("key3".to_string(), |_| (true, true)).unwrap();
-        drop(first_item);
-        drop(second_item);
-        drop(third_item);
+        let item3 = pool.pull("key3".to_string(), |_| (true, true)).unwrap();
+        drop(item1);
+        drop(item2);
+        drop(item3);
     }
 
     #[test]
@@ -623,7 +623,7 @@ mod tests {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
 
         let limit_key = "upstream-a".to_string();
-        let first_item = pool
+        let item1 = pool
             .pull_with_local_limit("key1".to_string(), Some((limit_key.clone(), 1)), |_| {
                 (true, true)
             })
@@ -634,7 +634,7 @@ mod tests {
             .pull_with_local_limit("key2".to_string(), Some((limit_key, 1)), |_| (true, true))
             .is_none());
 
-        drop(first_item);
+        drop(item1);
     }
 
     #[test]

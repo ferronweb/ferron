@@ -129,10 +129,7 @@ pub async fn try_send_with_pool(
             Some(mut item) => {
                 metrics.connection_reused = true;
                 metrics.pool_hit = true;
-                let wrapper = item
-                    .inner_mut()
-                    .take()
-                    .expect("pending item should have inner value");
+                let wrapper = item.inner_mut().take().expect("pending item should have inner value");
                 return send_via_wrapper(
                     ctx,
                     config,
