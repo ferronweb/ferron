@@ -10,11 +10,9 @@ app = Flask(__name__)
 _received = []
 _decoded_spans = []
 
-
 @app.route("/ready", methods=["GET"])
 def ready():
     return "OK\n", 200
-
 
 @app.route("/received", methods=["GET"])
 def received():
@@ -26,14 +24,12 @@ def received():
         }
     ), 200
 
-
 def _decode_spans(data):
     """Decode an ExportTraceServiceRequest protobuf and extract span info."""
     try:
         req = ExportTraceServiceRequest()
         req.ParseFromString(data)
         for resource_spans in req.resource_spans:
-            # Extract resource attributes
             resource_attrs = {}
             for attr in resource_spans.resource.attributes:
                 key = attr.key
@@ -70,7 +66,6 @@ def _decode_spans(data):
     except Exception as e:
         print("error decoding trace protobuf:", e)
 
-
 @app.route("/v1/traces", methods=["POST"])
 @app.route("/v1/metrics", methods=["POST"])
 @app.route("/v1/logs", methods=["POST"])
@@ -90,7 +85,6 @@ def receive():
     except Exception as e:
         print("error receiving OTLP payload:", e)
         return "", 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=4318)
