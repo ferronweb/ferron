@@ -14,7 +14,7 @@ on:
       - "utils/**"
       - ".github/workflows/aislop.yml"
   pull_request_target:
-    types: ["opened"]
+    types: ["opened", "synchronize"]
     branches: ["develop-3.x"]
     paths:
       - "Cargo.lock"
