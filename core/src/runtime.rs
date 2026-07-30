@@ -43,7 +43,7 @@ impl Runtime {
         // Spawn multiple threads (with pinning to each CPU core) to run primary tasks
         let core_ids = core_affinity::get_core_ids();
         let available_parallelism = core_ids.as_ref().map_or_else(
-            || std::thread::available_parallelism().map_or(1, |ap| ap.get()),
+            || std::thread::available_parallelism().unwrap().get(),
             |core_ids| core_ids.len(),
         );
         let mut primary_task_channels = Vec::with_capacity(available_parallelism);

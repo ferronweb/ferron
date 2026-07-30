@@ -91,25 +91,30 @@ impl ModuleLoader for BasicHttpModuleLoader {
             for port in ports {
                 // Skip host blocks that won't create any listeners
                 let effective_port = port.port.or(default_port);
-                let Some(effective_port) = effective_port else {
+                if effective_port.is_none() {
                     // Both defaults disabled and no explicit port — skip
                     continue;
-                };
+                }
 
                 for (filters, host) in &port.hosts {
                     // Build descriptive block name based on filters
                     let block_name = match (&filters.host, &filters.ip) {
                         (Some(hostname), Some(ip)) => {
-                            format!("port {} host {} ip {}", effective_port, hostname, ip)
+                            format!(
+                                "port {} host {} ip {}",
+                                effective_port.unwrap(),
+                                hostname,
+                                ip
+                            )
                         }
                         (Some(hostname), None) => {
-                            format!("port {} host {}", effective_port, hostname)
+                            format!("port {} host {}", effective_port.unwrap(), hostname)
                         }
                         (None, Some(ip)) => {
-                            format!("port {} ip {}", effective_port, ip)
+                            format!("port {} ip {}", effective_port.unwrap(), ip)
                         }
                         (None, None) => {
-                            format!("port {}", effective_port)
+                            format!("port {}", effective_port.unwrap())
                         }
                     };
                     blocks.push((block_name.clone(), host));

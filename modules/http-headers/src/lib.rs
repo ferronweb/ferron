@@ -86,8 +86,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
 
             if cors::is_preflight(req.method(), req.headers()) {
                 let response =
-                    cors::build_preflight_response(cors, origin, request_method, request_headers)
-                        .map_err(|e| PipelineError::Custom(e.to_string()))?;
+                    cors::build_preflight_response(cors, origin, request_method, request_headers);
                 let response = response.map(|b| b.map_err(|e| match e {}).boxed_unsync());
                 let status_code = response.status().as_u16();
                 ctx.res = Some(HttpResponse::Custom(response));

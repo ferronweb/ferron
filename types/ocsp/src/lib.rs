@@ -66,7 +66,7 @@ impl std::error::Error for AlreadyInitialized {}
 /// the background task.
 struct GlobalState {
     sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
-    receiver: parking_lot::Mutex<Option<mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>>>,
+    receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<Vec<CertificateDer<'static>>>>>,
     cache: OcspCache,
     host_map: OcspHostMap,
     cancel_token: CancellationToken,
@@ -80,7 +80,7 @@ fn get_or_init_global() -> &'static GlobalState {
         let (sender, receiver) = mpsc::unbounded_channel();
         GlobalState {
             sender,
-            receiver: parking_lot::Mutex::new(Some(receiver)),
+            receiver: std::sync::Mutex::new(Some(receiver)),
             cache: Arc::new(RwLock::new(HashMap::new())),
             host_map: Arc::new(RwLock::new(HashMap::new())),
             cancel_token: CancellationToken::new(),
@@ -115,7 +115,12 @@ pub fn take_ocsp_startup_state() -> Result<
     AlreadyInitialized,
 > {
     let state = get_or_init_global();
-    let receiver = state.receiver.lock().take().ok_or(AlreadyInitialized)?;
+    let receiver = state
+        .receiver
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or(AlreadyInitialized)?;
     let cache = state.cache.clone();
     let host_map = state.host_map.clone();
     let cancel_token = state.cancel_token.clone();
