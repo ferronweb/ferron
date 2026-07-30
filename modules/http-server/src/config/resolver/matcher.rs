@@ -32,6 +32,7 @@ impl CompiledMatcherExpr {
             ServerConfigurationMatcherOperator::Regex
                 | ServerConfigurationMatcherOperator::NotRegex
         ) {
+            // Extract the regex pattern from the right operand
             let pattern = match &expr.right {
                 ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
                 ServerConfigurationMatcherOperand::Identifier(_name) => {
@@ -119,6 +120,7 @@ pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &Htt
                     || (right.contains(',') && !right.split(',').any(|s| s.trim().is_empty()));
 
                 if is_accept_language {
+                    // Parse as Accept-Language header with q-values
                     let accepted_languages: Vec<String> =
                         ferron_http::util::parse_q_value_header::parse_q_value_header(&right);
                     accepted_languages.iter().any(|lang| {

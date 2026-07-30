@@ -269,6 +269,7 @@ fn run_daemon(
     if let Some(ref pid_path) = pid_file {
         daemon::write_pid_file(pid_path)?;
 
+        // Set up cleanup on shutdown
         let pid_path = pid_path.clone();
         std::thread::spawn(move || {
             let Ok(rt) = tokio::runtime::Builder::new_current_thread().build() else {
@@ -282,6 +283,7 @@ fn run_daemon(
         });
     }
 
+    // Set up signal handlers
     daemon::setup_signal_handlers()?;
     log_info!("Signal handlers installed (SIGINT, SIGTERM -> shutdown, SIGHUP -> reload)");
 
@@ -308,6 +310,7 @@ fn winservice(subcommand: WinServiceCommands) -> Result<(), Box<dyn std::error::
             config_adapter,
             verbose,
         } => {
+            // Build service arguments
             let mut args = Vec::new();
 
             if let Some(path) = config_path {
@@ -423,6 +426,7 @@ fn run_configuration_validators(
 ) -> ConfigurationValidationResult {
     let mut all_diagnostics = Vec::new();
 
+    // Run global validators
     let mut validator_ctx = ConfigurationValidatorContext {
         used_directives: HashSet::new(),
         is_global: true,
@@ -467,6 +471,7 @@ fn run_configuration_validators(
     }
     all_diagnostics.append(&mut validator_ctx.diagnostics);
 
+    // Run per-protocol validators
     let mut config_blocks_registry = HashMap::new();
     for loader in loaders {
         loader.register_per_protocol_configuration_blocks(config, &mut config_blocks_registry);
@@ -554,6 +559,7 @@ pub(crate) fn run(
     service: bool,
     mut loaders: Vec<Box<dyn ModuleLoader>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logger
     let log_level = if verbose {
         LogLevel::Debug
     } else {
@@ -586,6 +592,7 @@ pub(crate) fn run(
     let _ = service; // silence unused variable warning
 
     if !ferron_core::logging::is_init() {
+        // Initialize stdio logger for console mode
         ferron_core::logging::init_stdio_logger(log_level)?;
     }
 
@@ -830,6 +837,7 @@ fn load_modules(
                     .as_mut()
                     .expect("runtime should be initialized at this point");
 
+                // Start all modules
                 for module in modules {
                     log_debug!("Starting module: {}", module.name());
                     module.start(runtime)?;
@@ -913,10 +921,12 @@ fn load_modules(
             log_info!("Shutting down the server...");
             return Ok(());
         } else {
+            // Increment reload counter for admin API /status endpoint
             ferron_core::admin::ADMIN_METRICS
                 .reloads
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             {
+                // Update reload metrics
                 let mut reload_metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.write();
                 reload_metrics.last_reload_time = std::time::SystemTime::now();
             }

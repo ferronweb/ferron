@@ -537,6 +537,7 @@ impl Stage<HttpContext> for HttpCacheStage {
         let method_cacheable = matches!(request.method(), &Method::GET | &Method::HEAD);
         let method_purge = request.method() == "PURGE";
 
+        // Handle PURGE method — cache invalidation
         if method_purge {
             if !config.purge_method {
                 // PURGE not enabled — fall through to 405 from downstream stages
@@ -1100,6 +1101,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         };
 
+        // Handle 304 Not Modified from upstream during revalidation
         if let LookupResult::Revalidate {
             entry: ref cached_entry,
             ref cache_key,

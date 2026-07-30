@@ -78,6 +78,7 @@ impl AdminApiModule {
         self.full_config.store(full_config);
         self.events.store(Arc::new(events));
 
+        // Create a new reload token
         self.reload_token.store(Arc::new(CancellationToken::new()));
 
         Ok(())

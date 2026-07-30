@@ -1,16 +1,20 @@
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --- determine Markdown files in docs directory ---
     let docs_files = glob::glob("./docs/**/*.md")?;
 
     for file in docs_files {
+        // --- read and parse each Markdown file ---
         let file = file?;
         let contents = std::fs::read_to_string(&file)?;
         let parsed = markdown::to_mdast(&contents, &markdown::ParseOptions::gfm())
             .map_err(|e| anyhow::anyhow!(e))?;
 
+        // --- find "ferron" code blocks in the parsed Markdown ---
         let ferron_code_blocks = find_ferron_code_blocks(&parsed);
         for (block, pos) in ferron_code_blocks {
+            // --- ignore blocks declared invalid ---
             if let Some(first_line) = block.lines().next() {
                 let first_line_lower = first_line.trim().to_ascii_lowercase();
                 if first_line_lower.starts_with("# invalid:") || first_line_lower == "# invalid" {
@@ -18,9 +22,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
+            // --- write temporary config file with the code block ---
             let temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(&temp_file, block)?;
 
+            // --- run ferron with the temporary config file ---
             let output = std::process::Command::new(get_ferron_bin_path())
                 .arg("validate")
                 .arg("-c")

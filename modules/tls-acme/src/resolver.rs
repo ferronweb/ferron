@@ -203,6 +203,7 @@ impl TcpTlsResolver for TcpTlsAcmeResolver {
     ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error> {
         let client_hello = io.client_hello();
 
+        // Check for TLS-ALPN-01 ACME challenge
         let is_acme_challenge = self.tls_alpn_01_resolvers.is_some()
             && client_hello
                 .alpn()

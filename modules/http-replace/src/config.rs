@@ -87,6 +87,7 @@ fn parse_replace_rules(config: &LayeredConfiguration) -> Vec<ReplaceRule> {
             None => continue,
         };
 
+        // Check for `once` option in child block
         let once = if let Some(children) = &entry.children {
             children
                 .get_value("once")

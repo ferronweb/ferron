@@ -1357,6 +1357,7 @@ impl Module for ReverseProxyModule {
                     control_plane_metadata: None,
                 }));
 
+                // Emit DNS cache hit/miss counters
                 let hits = crate::types::dns_cache::DNS_CACHE_HITS
                     .swap(0, std::sync::atomic::Ordering::Relaxed);
                 let misses = crate::types::dns_cache::DNS_CACHE_MISSES
@@ -1386,6 +1387,7 @@ impl Module for ReverseProxyModule {
                     }));
                 }
 
+                // Emit aggregated DNS cache TTL remaining gauge
                 if let Some(ttl_stats) = crate::types::dns_cache::strict_dns_ttl_stats() {
                     pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
@@ -1531,6 +1533,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         self.state
             .ensure_health_check_task(&config_key, &config.upstreams);
 
+        // Update the metrics_resolved_ip flag from config
         self.state.metrics_resolved_ip.store(
             config.metrics_resolved_ip,
             std::sync::atomic::Ordering::Relaxed,
@@ -1571,6 +1574,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .clone()
         };
 
+        // Get the active unhealthy counter for this config
         let active_unhealthy_counter = {
             self.state
                 .active_unhealthy_counters
@@ -1589,6 +1593,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .as_ref()
             .map(|r| proxy::is_method_idempotent(r.method()));
 
+        // Get or create the retry budget for this config key
         let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
             if let Some(e) = self.state.retry_budget_states.get(&config_key) {
                 return e.clone();
@@ -1730,6 +1735,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .metrics_resolved_ip
             .load(std::sync::atomic::Ordering::Relaxed);
 
+        // Emit per-backend selected metrics
         use ferron_observability::{MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 
         // Helper: build resolved IP and DNS status attributes for proxy metrics.
@@ -1778,6 +1784,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit per-backend circuit breaker unhealthy metrics
         for backend in &metrics.circuit_breaker_unhealthy_backends {
             let mut attrs = Vec::with_capacity(5);
             attrs.push((
@@ -1808,6 +1815,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit per-backend active health check unhealthy metrics
         for (backend_url, count) in &metrics.active_unhealthy_backends {
             let attrs = vec![
                 (
@@ -1863,6 +1871,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         control_plane_metadata: None,
                     }));
             }
+            // Emit per-request flapping gauge for the selected backend
             if let Some(flapping) = self.state.flapping_state.get(&backend.proxy_to) {
                 let is_flapping = flapping.is_flapping();
                 ctx.events
@@ -1906,6 +1915,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 control_plane_metadata: None,
             }));
 
+        // Emit backend selected per request counter
         let selected_backends_len = metrics.selected_backends.len();
         if selected_backends_len > 0 {
             ctx.events
@@ -1923,6 +1933,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit TLS handshake failures counter
         if metrics.tls_handshake_failures > 0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -1937,6 +1948,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit pool waits counter
         if metrics.pool_waits > 0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -1953,6 +1965,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit pool wait time histogram
         if metrics.pool_wait_time_secs > 0.0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -1967,6 +1980,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit upstream duration histogram
         if metrics.upstream_time_secs > 0.0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -1981,6 +1995,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // Emit TLS handshake duration histogram
         if metrics.tls_handshake_time_secs > 0.0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -1995,6 +2010,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // --- Backend exclusion reasons ---
         fn emit_backend_excluded(
             events: &ferron_observability::CompositeEventSink,
             backend: &Arc<types::upstream::UpstreamInner>,
@@ -2057,6 +2073,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             );
         }
 
+        // --- Retry metrics ---
         if metrics.retry_count > 0 {
             let mut retry_attrs = upstream_attrs.clone();
             if let Some(method) = metrics.request_method {
@@ -2098,6 +2115,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }));
         }
 
+        // --- Retry budget metrics ---
         if metrics.retry_budget_exhausted {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -2127,6 +2145,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // --- Pool hit / miss ---
         if metrics.pool_hit {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -2156,6 +2175,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // --- Upstream response truncation ---
         if metrics.upstream_response_truncated {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -2172,6 +2192,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
+        // --- Connection latency histograms ---
         if metrics.connect_time_secs > 0.0 {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -2257,6 +2278,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     control_plane_metadata: None,
                 }));
 
+                // Emit routing decision counter with reason
                 if ewma_latency > 0.0 {
                     let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
                     let mut sel_attrs = upstream_attrs.clone();
@@ -2279,6 +2301,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }
             }
 
+            // Emit LB selection score gauge for P2C-based algorithms
             if !metrics.candidate_scores.is_empty() {
                 ctx.events
                     .emit(ferron_observability::Event::Metric(MetricEvent {

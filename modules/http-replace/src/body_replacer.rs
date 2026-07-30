@@ -124,6 +124,7 @@ where
                 }
             }
 
+            // Handle remaining bytes that might contain a partial match
             if combined_bytes.len() - last_beg_index < this.searched.len() {
                 // Keep in buffer - might be partial match
                 *this.buffer = Some(combined_bytes[last_beg_index..].to_vec());
@@ -139,6 +140,7 @@ where
 
             Poll::Ready(Some(Ok(Frame::data(Bytes::from(replaced)))))
         } else if let Err(frame_raw) = data_result {
+            // Handle trailer frames
             let trailers_result = frame_raw.into_trailers();
             if let Ok(trailers) = trailers_result {
                 Poll::Ready(Some(Ok(Frame::trailers(trailers))))

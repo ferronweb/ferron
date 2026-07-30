@@ -167,6 +167,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 .downgrade()
         };
 
+        // Extract the Authorization header
         let auth_header = ctx
             .req
             .as_ref()
@@ -190,6 +191,7 @@ impl Stage<HttpContext> for BasicAuthStage {
             }
         };
 
+        // Parse the Basic auth credentials
         let (username, password) = match Self::parse_basic_auth_header(auth_header) {
             Some(parts) => parts,
             None => {
@@ -210,6 +212,7 @@ impl Stage<HttpContext> for BasicAuthStage {
         };
         let ip = ctx.remote_address.ip().to_canonical();
 
+        // Check brute-force lockout
         if engine.is_locked(ip) {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,

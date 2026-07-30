@@ -175,6 +175,7 @@ impl FormatPattern {
 fn parse_config(
     log_config: &ferron_core::config::ServerConfigurationBlock,
 ) -> (FormatPattern, Option<String>, Arc<Vec<String>>) {
+    // Parse access_pattern or use default ECLF
     let pattern_str = log_config
         .directives
         .get("access_pattern")
@@ -183,6 +184,7 @@ fn parse_config(
         .and_then(|arg| arg.as_string_with_interpolations(&std::collections::HashMap::new()))
         .unwrap_or_else(|| DEFAULT_ECLF_PATTERN.to_string());
 
+    // Parse timestamp_format
     let timestamp_format = log_config
         .directives
         .get("timestamp_format")

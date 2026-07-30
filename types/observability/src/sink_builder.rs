@@ -33,6 +33,7 @@ pub fn build_composite_sink(
     let control_plane_metadata = ControlPlaneConfig::from_block(global_config).map(|c| c.metadata);
 
     if let Some(observability_registry) = registry.get_provider_registry::<ObservabilityContext>() {
+        // Extract observability blocks from the global config
         let extractor = ObservabilityConfigExtractor::new(global_config.as_ref());
         let observability_blocks = extractor.extract_observability_blocks()?;
 

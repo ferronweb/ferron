@@ -88,6 +88,7 @@ pub fn maybe_set_affinity_cookie(
         return resp;
     };
 
+    // Build Set-Cookie header value
     let mut cookie_value = format!(
         "{}={}; Path={}",
         cookie_cfg.name, backend_id, cookie_cfg.path

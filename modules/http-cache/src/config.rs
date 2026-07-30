@@ -346,12 +346,14 @@ pub fn parse_global_zone_max_entries(
         if let Some(children) = &entry.children {
             if let Some(zone_entries) = children.directives.get("zone") {
                 for zone_entry in zone_entries {
+                    // Check that this zone entry matches the name
                     if zone_entry
                         .args
                         .first()
                         .and_then(|v| v.as_str())
                         .is_some_and(|name| name == zone_name)
                     {
+                        // Parse the zone block's max_entries
                         if let Some(zone_block) = &zone_entry.children {
                             if let Some(max_entries_entries) =
                                 zone_block.directives.get("max_entries")

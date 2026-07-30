@@ -95,6 +95,7 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
         .and_then(|v| v.as_number())
         .filter(|&n| n > 0)? as u64;
 
+    // Parse optional directives with defaults
     let burst = block
         .get_value("burst")
         .and_then(|v| v.as_number())

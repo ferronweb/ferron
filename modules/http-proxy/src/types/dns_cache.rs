@@ -247,6 +247,8 @@ fn cache() -> &'static DnsResultCache {
     DNS_RESULT_CACHE.get_or_init(DnsResultCache::new)
 }
 
+// --- Strict DNS cache API ---
+
 /// Look up a cached strict DNS result.
 ///
 /// Returns `Some(backends)` on cache hit, `None` on miss or expiry.
@@ -278,6 +280,8 @@ pub(crate) fn insert_strict_dns(
     let key = (hostname.to_string(), port, dns_servers.to_vec());
     cache().strict_dns.insert(key, value, ttl);
 }
+
+// --- SRV cache API ---
 
 /// Look up a cached SRV result.
 ///
@@ -429,6 +433,7 @@ mod tests {
         // Insert with zero TTL
         insert_strict_dns(&hostname, port, &dns_servers, vec![], Duration::ZERO);
 
+        // Run cleanup
         cleanup_expired();
 
         // Should be gone

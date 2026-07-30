@@ -149,6 +149,7 @@ impl Stage<HttpContext> for HttpBufferStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        // Parse request buffer size
         let request_buffer_size: Option<usize> = ctx
             .configuration
             .get_value("buffer_request", true)

@@ -72,6 +72,7 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
                         }
                     }
 
+                    // Validate zone blocks at global scope
                     if let Some(zone_entries) = children.directives.get("zone") {
                         for zone_entry in zone_entries {
                             validate_global_zone_block(zone_entry, ctx)?;
@@ -475,6 +476,7 @@ fn validate_global_zone_block(
         .with_span(entry_span(entry)));
     };
 
+    // Validate allowed subdirectives inside the zone block
     let mut sub = std::collections::HashSet::new();
     for allowed in GLOBAL_ZONE_DIRECTIVES {
         if let Some(entries) = children.directives.get(*allowed) {

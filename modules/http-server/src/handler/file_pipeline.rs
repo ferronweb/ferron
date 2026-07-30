@@ -122,6 +122,7 @@ pub(super) async fn execute_http_file_pipeline(
     let index_files = resolve_index_files(ctx);
     let disable_symlinks = resolve_disable_symlinks(ctx)?;
 
+    // Emit file resolution trace span
     let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
     let file_resolve_span_key = if has_traces {
         let key = super::observability::next_span_key("file_resolve");
@@ -729,6 +730,7 @@ async fn try_resolve_index_files(
     for index in index_files {
         let index_path = directory.join(index);
 
+        // Check path is within root
         if !is_path_within_root(root, &index_path) {
             continue;
         }

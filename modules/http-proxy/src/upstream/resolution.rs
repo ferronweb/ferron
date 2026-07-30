@@ -63,6 +63,7 @@ pub fn determine_proxy_to(
         return None;
     }
 
+    // Build unhealthy set — health checks + already-tried backends
     let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
     for (i, u) in upstreams.iter().enumerate() {
         if let Some(state_map) = health_check_state {

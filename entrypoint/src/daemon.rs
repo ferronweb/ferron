@@ -45,6 +45,7 @@ pub fn daemonize() -> Result<bool> {
         }
     }
 
+    // Create a new session and become the session leader
     unistd::setsid().context("Failed to create new session")?;
     log_debug!("Created new session, SID: {}", unistd::getsid(None)?);
 
@@ -218,15 +219,20 @@ mod tests {
         let pid_file = temp_dir.join("ferron_test.pid");
         let pid_path = pid_file.to_string_lossy();
 
+        // Clean up any existing file
         let _ = fs::remove_file(&pid_file);
 
+        // Write PID file
         write_pid_file(&pid_path).unwrap();
 
+        // Check PID file exists
         assert!(pid_file.exists());
 
+        // Check PID file content
         let running = check_pid_file(&pid_path).unwrap();
         assert!(running);
 
+        // Remove PID file
         remove_pid_file(&pid_path).unwrap();
         assert!(!pid_file.exists());
     }

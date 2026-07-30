@@ -744,6 +744,7 @@ pub async fn fetch_tls_cert_loop(
             continue;
         }
 
+        // Get TLS certificate chain and private key from response
         let body_bytes = match response.into_body().collect().await {
             Ok(body) => body.to_bytes(),
             Err(e) => {

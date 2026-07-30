@@ -35,6 +35,7 @@ fn parse_arguments() -> ArgMatches {
 
 /// The main entry point of the application
 fn main() {
+    // Parse command-line arguments
     let args = parse_arguments();
 
     // Obtain command-line arguments
@@ -82,6 +83,7 @@ fn main() {
     }
     output_content.push_str(&ferronconf_config.to_string());
 
+    // Write the converted server configuration
     if let Err(err) = fs::write(output_pathbuf, output_content) {
         eprintln!("Error writing the server configuration: {err}");
         std::process::exit(1);

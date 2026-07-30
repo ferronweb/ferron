@@ -186,6 +186,7 @@ fn parse_map_block(block: &ServerConfigurationBlock) -> (Vec<MapEntry>, Option<S
     let mut entries = Vec::new();
     let mut default = None;
 
+    // Parse `default` directive
     if let Some(default_entries) = block.directives.get("default") {
         if let Some(entry) = default_entries.first() {
             if let Some(value) = entry.args.first().and_then(|v| v.as_str()) {
@@ -194,6 +195,7 @@ fn parse_map_block(block: &ServerConfigurationBlock) -> (Vec<MapEntry>, Option<S
         }
     }
 
+    // Parse `exact` directives
     if let Some(exact_entries) = block.directives.get("exact") {
         for entry in exact_entries {
             if entry.args.len() == 2 {
@@ -219,6 +221,7 @@ fn parse_map_block(block: &ServerConfigurationBlock) -> (Vec<MapEntry>, Option<S
         }
     }
 
+    // Parse `regex` directives
     if let Some(regex_entries) = block.directives.get("regex") {
         for entry in regex_entries {
             if entry.args.len() >= 2 {

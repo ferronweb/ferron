@@ -333,6 +333,7 @@ fn test_select_backend_index_weighted_round_robin_smooth_distribution() {
 fn test_weighted_round_robin_state_resize() {
     let state = WeightedRoundRobinState::new();
 
+    // Start with 2 backends
     let weights1 = [3u32, 1];
     let idx1 = state.next(&weights1);
     assert!(idx1 < 2);
@@ -378,6 +379,10 @@ fn test_resolve_affinity_index_ip_affinity() {
     );
     assert_eq!(idx, idx2);
 }
+
+// ============================================================================
+// Weighted Least Connections Tests
+// ============================================================================
 
 #[test]
 fn test_select_backend_index_least_connections_fewer_connections() {
@@ -481,6 +486,10 @@ fn test_select_backend_index_least_connections_weighted_uneven_distribution() {
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 2);
 }
+
+// ---------------------------------------------------------------------------
+// P2C+EWMA tests
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_select_backend_index_p2c_ewma_basic() {

@@ -176,6 +176,7 @@ fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
         }
     }
 
+    // Parse `allow` directives
     let allow_entries = config.get_entries("allow", false);
     for entry in &allow_entries {
         for arg in &entry.args {
@@ -217,6 +218,7 @@ fn parse_status_rules(
         let mut location = None;
         let mut body = None;
 
+        // Check for child block with additional props
         if let Some(children) = &entry.children {
             url = children.get_value("url").and_then(|v| {
                 if let Some(ctx) = ctx {

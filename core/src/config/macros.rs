@@ -244,11 +244,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 let mut matched = false;
+                // Check first variation
                 if directive.args.len() == $count1 {
                     if $crate::validate_args!(@check directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
+                // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
                         if $crate::validate_args!(@check directive, [$($patternN),+]) {
@@ -278,11 +280,13 @@ macro_rules! validate_directive {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
                 let mut matched = false;
+                // Check first variation
                 if directive.args.len() == $count1 {
                     if $crate::validate_args!(@check directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
+                // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
                         if $crate::validate_args!(@check directive, [$($patternN),+]) {
@@ -1262,11 +1266,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 let mut matched = false;
+                // Check first variation
                 if directive.args.len() == $count1 {
                     if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
+                // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
                         if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
@@ -1292,11 +1298,13 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
                 let mut matched = false;
+                // Check first variation
                 if directive.args.len() == $count1 {
                     if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
+                // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
                         if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {

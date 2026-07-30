@@ -148,6 +148,7 @@ fn main() {
         .expect("Failed to write to temporary file");
     let tmp_path = tmpfile.path().to_owned();
 
+    // Execute ferron
     let mut ferron_cmd = std::env::current_exe().expect("Failed to get current executable path");
     ferron_cmd.pop();
     ferron_cmd.push("ferron");

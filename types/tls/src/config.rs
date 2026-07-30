@@ -288,6 +288,8 @@ impl TlsServerConfig {
     }
 }
 
+// --- helpers ---
+
 /// Collect all string values for a multi-value directive (e.g. `cipher_suite`).
 fn collect_multi_values(config: &ServerConfigurationBlock, name: &str) -> Vec<String> {
     config

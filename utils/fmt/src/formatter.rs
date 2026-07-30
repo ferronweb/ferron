@@ -206,6 +206,7 @@ impl<'a> Formatter<'a> {
                         }
                     }
                     b'\\' => {
+                        // Check for line continuation
                         let mut j = i + 1;
                         // Skip whitespace after `\`
                         while j < bytes.len()
