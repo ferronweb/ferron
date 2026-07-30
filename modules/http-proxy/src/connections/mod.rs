@@ -178,7 +178,6 @@ impl ConnectionManager {
     /// Creates a new `ConnectionManager` with the given global limit.
     #[inline]
     pub fn with_global_limit(global_limit: usize) -> Self {
-        // Initialize thread-local pools lazily on first access
         let available_parallelism = std::thread::available_parallelism()
             .ok()
             .map(|p| p.get())
@@ -230,7 +229,6 @@ impl ConnectionManager {
             new_limit
         };
 
-        // Update the stored global limit
         self.global_limit_per_thread
             .store(per_thread, Ordering::Relaxed);
     }

@@ -212,7 +212,6 @@ pub async fn establish_connection(
         let stream = vibeio::net::TcpStream::connect(addr).await?.into_poll()?;
 
         let tls_config = if no_verification {
-            // Create config without certificate verification
             Arc::new(
                 ClientConfig::builder()
                     .dangerous()
@@ -297,7 +296,6 @@ impl ForwardedAuthClient {
         let url = &key.url;
         let unix_socket = &key.unix_socket;
 
-        // Handle Unix socket connections
         if let Some(unix_path) = unix_socket {
             #[cfg(not(unix))]
             {
@@ -321,7 +319,6 @@ impl ForwardedAuthClient {
                         .ok_or_else(|| anyhow::anyhow!("missing host"))?
                         .to_owned();
                     let tls_config = if no_verification {
-                        // Create config without certificate verification
                         Arc::new(
                             ClientConfig::builder()
                                 .dangerous()
@@ -358,7 +355,6 @@ impl ForwardedAuthClient {
                 }
             }
         } else {
-            // Handle TCP connections
             establish_connection(url, no_verification, self.tls_config.clone()).await
         }
     }

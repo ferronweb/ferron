@@ -65,7 +65,6 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
         }
 
         validate_directive!(config, validator_ctx.used_directives, log_style, optional args(1) => [ServerConfigurationValue::String(_, _)], {
-            // Check the value is recognized
             if let Some(value) = config.get_value("log_style").and_then(|v| v.as_str()) {
                 if crate::config::parse_log_style(value).is_none() {
                     let err: ferron_core::config::validator::ConfigurationValidationError = format!(
@@ -142,7 +141,6 @@ fn validate_baggage_block(
                 Err(err.with_span(entry_span(key_entry)))?;
             }
 
-            // Validate children of the key block
             if let Some(children) = &key_entry.children {
                 let mut sub = std::collections::HashSet::new();
 

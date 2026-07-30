@@ -300,7 +300,6 @@ impl Stage<HttpContext> for HttpResponseStage {
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![
             StageConstraint::After("client_ip_from_header".to_string()),
-            // Run before content-handling stages
             StageConstraint::Before("reverse_proxy".to_string()),
             StageConstraint::Before("static_file".to_string()),
         ]
@@ -381,7 +380,6 @@ impl Stage<HttpContext> for EarlyHintsStage {
             return Ok(true);
         }
 
-        // Build Link headers
         let mut headers = HeaderMap::new();
         for link in &config.early_hints.links {
             if let Ok(value) = HeaderValue::from_str(link) {

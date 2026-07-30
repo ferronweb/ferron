@@ -45,7 +45,6 @@ async fn bearer_auth_middleware(
         return next.run(request).await;
     }
 
-    // Extract Authorization header
     let auth_header = request
         .headers()
         .get(http::header::AUTHORIZATION)

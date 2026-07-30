@@ -75,7 +75,6 @@ impl Stage<HttpContext> for HttpTraceIdStage {
             return Ok(());
         };
 
-        // Get trace ID
         let Some(trace_id) = current_event_trace_context(ctx)
             .and_then(|tctx| HeaderValue::from_bytes(&tctx.trace_id).ok())
         else {

@@ -85,7 +85,6 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsLocalProvider {
         // Provision the local certificate (CA + leaf)
         let certified_key = provision_local_cert(&self.cache, &ctx.domain, event_sink().as_ref())?;
 
-        // Build the ServerConfig
         let config_builder =
             build_server_config_builder(&tls_config.crypto, &tls_config.client_auth)?;
 

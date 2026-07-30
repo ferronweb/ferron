@@ -57,10 +57,6 @@ impl std::fmt::Display for AlreadyInitialized {
 
 impl std::error::Error for AlreadyInitialized {}
 
-// ---------------------------------------------------------------------------
-// Global state
-// ---------------------------------------------------------------------------
-
 /// Eagerly-created global state. The channel is created on first access so
 /// certs can be queued via the sender even before `init_ocsp_service` spawns
 /// the background task.
@@ -137,10 +133,6 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
     })
 }
 
-// ---------------------------------------------------------------------------
-// Shared handle
-// ---------------------------------------------------------------------------
-
 /// Cheap to clone (`Arc`-backed channels and locks).
 #[derive(Clone)]
 pub struct OcspServiceHandle {
@@ -167,10 +159,6 @@ impl OcspServiceHandle {
         self.preload(cert);
     }
 }
-
-// ---------------------------------------------------------------------------
-// OcspStapler — ResolvesServerCert wrapper
-// ---------------------------------------------------------------------------
 
 /// Wraps an inner `ResolvesServerCert` and attaches OCSP responses from the
 /// shared cache.
@@ -234,7 +222,6 @@ impl ResolvesServerCert for OcspStapler {
                         original_key = Arc::new(original_key_mut);
                     }
 
-                    // Emit per-host stapling hit metric
                     if let Some(ref event_sink) = self.event_sink {
                         let host = self
                             .host_map

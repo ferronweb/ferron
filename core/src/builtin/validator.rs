@@ -99,7 +99,6 @@ fn validate_control_plane_directives(
                 }
             }
         }
-        // Validate `span_links` sub-blocks
         if let Some(span_links_entries) = control_plane.directives.get("span_links") {
             for link_entry in span_links_entries {
                 if let Some(link_children) = link_entry.children.as_ref() {

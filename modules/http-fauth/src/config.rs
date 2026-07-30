@@ -42,7 +42,6 @@ pub fn parse_forwarded_auth_from_context(
 ) -> Result<Vec<ForwardedAuthConfig>, Box<dyn std::error::Error>> {
     let block = &ctx.configuration;
 
-    // Get auth_to directive
     let auth_to_entries = block.get_entries("auth_to", false);
     let mut parsed_auth_to_entries = Vec::with_capacity(auth_to_entries.len());
 
@@ -63,7 +62,6 @@ pub fn parse_forwarded_auth_from_context(
 
         let mut last = false;
 
-        // Parse nested directives
         if let Some(children) = &auth_to_entry.children {
             // Parse backend URL (if not set)
             if backend_url.is_none() {
@@ -80,7 +78,6 @@ pub fn parse_forwarded_auth_from_context(
                 }
             }
 
-            // Parse unix socket
             if let Some(unix_entries) = children.directives.get("unix") {
                 if let Some(entry) = unix_entries.first() {
                     if let Some(path) = entry
@@ -93,7 +90,6 @@ pub fn parse_forwarded_auth_from_context(
                 }
             }
 
-            // Parse connection limit
             if let Some(limit_entries) = children.directives.get("limit") {
                 if let Some(entry) = limit_entries.first() {
                     if entry.args.len() == 1 {
@@ -106,7 +102,6 @@ pub fn parse_forwarded_auth_from_context(
                 }
             }
 
-            // Parse idle timeout
             if let Some(idle_timeout_entries) = children.directives.get("idle_timeout") {
                 if let Some(entry) = idle_timeout_entries.first() {
                     if entry.args.len() == 1 {
@@ -127,12 +122,10 @@ pub fn parse_forwarded_auth_from_context(
                 }
             }
 
-            // Parse no_verification
             if children.get_flag("no_verification") {
                 config.no_verification = true;
             }
 
-            // Parse copy headers
             if let Some(copy_entries) = children.directives.get("copy") {
                 for entry in copy_entries {
                     for arg in &entry.args {

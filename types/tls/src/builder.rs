@@ -160,14 +160,12 @@ pub fn build_ticketer(config: &ServerConfigurationBlock) -> Option<Arc<dyn Produ
             return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
         }
     } else {
-        // Validate existing file
         if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
             ferron_core::log_warn!("Invalid ticket keys file: {e}");
             return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
         }
     }
 
-    // Load keys and create rotator
     match load_ticket_keys(&rot_config.file) {
         Ok(raw_keys) => {
             ferron_core::log_info!(

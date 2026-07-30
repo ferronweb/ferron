@@ -166,7 +166,6 @@ fn add_non_public_domain_diagnostics(
     config: &ServerConfigurationBlock,
     ctx: &mut ConfigurationValidatorContext,
 ) {
-    // Check explicit domains directive
     if let Some(entries) = config.directives.get("domains") {
         for entry in entries {
             for arg in &entry.args {
@@ -184,7 +183,6 @@ fn add_non_public_domain_diagnostics(
         }
     }
 
-    // Check scope for on_demand or implicit domain contexts
     if let Some(scope) = &ctx.scope {
         if let Some(hostname) = extract_hostname_from_scope(scope) {
             if is_non_public_domain(&hostname) {

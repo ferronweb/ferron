@@ -97,7 +97,6 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 };
 
                 for (filters, host) in &port.hosts {
-                    // Build descriptive block name based on filters
                     let block_name = match (&filters.host, &filters.ip) {
                         (Some(hostname), Some(ip)) => {
                             format!("port {} host {} ip {}", effective_port, hostname, ip)
@@ -696,12 +695,6 @@ impl ModuleLoader for BasicHttpModuleLoader {
 
             for port_config in port_configs_new {
                 let port = port_config.port.expect("invalid HTTP server module state");
-                // https_port is used by the redirect stage to construct the target URL.
-                // For implicit port configs (expanded to separate HTTP/HTTPS listeners),
-                // use the HTTPS default so redirects target the HTTPS listener.
-                // For explicit port configs (single listener), set it equal to the listener
-                // port so the redirect stage skips (no separate HTTPS listener exists).
-                // If default_https_port is false, set to None to disable redirects.
                 let is_explicit_port = port_configs.iter().any(|pc| pc.port == Some(port));
                 let https_port = if is_explicit_port {
                     Some(port) // Same port → redirect stage will skip

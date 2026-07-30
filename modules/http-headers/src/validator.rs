@@ -20,7 +20,6 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let _is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
-        // Validate header directives
         if let Some(entries) = config.directives.get("header") {
             used_directives.insert("header".to_string());
             for e in entries {
@@ -59,7 +58,6 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
             }
         }
 
-        // Validate cors directives
         if let Some(entries) = config.directives.get("cors") {
             used_directives.insert("cors".to_string());
             for e in entries {

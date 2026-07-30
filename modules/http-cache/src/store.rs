@@ -1064,7 +1064,6 @@ mod tests {
         let (is_leader3, _notify3) = store.begin_fetch(key);
         assert!(!is_leader3, "third caller should be follower");
 
-        // Clean up
         store.complete_fetch(key);
     }
 

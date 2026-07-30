@@ -91,7 +91,6 @@ fn main() {
         }
     };
 
-    // Parse
     let config = match ferronconf::Config::from_str(&input) {
         Ok(c) => c,
         Err(e) => {
@@ -107,7 +106,6 @@ fn main() {
     let formatted =
         formatter::format_config_with_analysis(&config, &fmt_config, Some(&analysis), Some(&input));
 
-    // Check mode
     if cli.check {
         if input == formatted {
             process::exit(0);
@@ -116,7 +114,6 @@ fn main() {
         }
     }
 
-    // Write output
     if cli.in_place {
         if let Some(path) = &cli.file {
             if let Err(e) = std::fs::write(path, &formatted) {

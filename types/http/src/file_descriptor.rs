@@ -96,7 +96,6 @@ impl FdPool {
 
         let mut evicted = 0u64;
 
-        // Remove ALL expired handles in one pass.
         let mut expired_paths: Vec<PathBuf> = Vec::new();
         for (path, item) in &mut self.entries {
             let before = item.handles.len();
@@ -180,7 +179,6 @@ impl ReusedFile {
     /// Open a file, reusing a pooled handle if available.
     #[inline]
     pub async fn open(path: impl AsRef<Path>) -> io::Result<Self> {
-        // Check for errors
         let cached_error = FD_REUSE_CACHE.with(|c| {
             let mut cache = c.borrow_mut();
             let path_key = path.as_ref().to_path_buf();
@@ -222,7 +220,6 @@ impl ReusedFile {
                     FD_POOL_STATS.with(|s| s.expirations.fetch_add(1, Ordering::Relaxed));
                 }
             }
-            // Clean up empty entries
             if let Some(item) = cache.entries.get(&path_key) {
                 if item.handles.is_empty() {
                     cache.entries.remove(&path_key);
@@ -372,7 +369,6 @@ impl Drop for ReusedFile {
                 let _ = std_inner.into_raw_handle();
             }
 
-            // Return the handle to the per-thread pool
             let path_buf = self.path.clone();
             Self::return_handle_to_pool(inner, path_buf);
         }

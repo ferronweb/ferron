@@ -123,7 +123,6 @@ impl RateLimitValidator {
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
         let mut sub = std::collections::HashSet::new();
 
-        // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !allowed_directives.contains(&directive_name.as_str()) {
                 return Err(ConfigurationValidationError::from(format!(

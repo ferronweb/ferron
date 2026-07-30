@@ -38,10 +38,6 @@ type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 /// Maps certificate leaf bytes to hostname for per-host OCSP metrics.
 type OcspHostMap = Arc<RwLock<HashMap<Vec<u8>, String>>>;
 
-// ---------------------------------------------------------------------------
-// HTTPS client construction
-// ---------------------------------------------------------------------------
-
 /// Build an `HttpsConnector` with native certificate store and webpki-roots fallback
 fn build_https_connector() -> Result<
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
@@ -124,7 +120,6 @@ fn verify_ocsp_signature(
 
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
-                // Get curve OID
                 let curve_oid: Option<ObjectIdentifier> = issuer_cert
                     .public_key()
                     .algorithm
@@ -271,7 +266,6 @@ fn verify_single_res(
     leaf_cert: &X509Certificate,
     issuer_cert: &X509Certificate,
 ) -> anyhow::Result<()> {
-    // Check for issue name hash
     if single_res.cert_id.issuer_name_hash.as_ref()
         != hash_oid(
             issuer_cert.subject().as_raw(),
@@ -283,7 +277,6 @@ fn verify_single_res(
         ));
     }
 
-    // Check for issue key hash
     if single_res.cert_id.issuer_key_hash.as_ref()
         != hash_oid(
             issuer_cert.public_key().subject_public_key.data.as_ref(),
@@ -293,7 +286,6 @@ fn verify_single_res(
         return Err(anyhow::anyhow!("Issuer key hash mismatch in OCSP response"));
     }
 
-    // Check for serial number
     let serial_number = &leaf_cert.tbs_certificate.serial;
     let serial_int = BigInt::from_biguint(num_bigint::Sign::Plus, serial_number.to_owned());
     if single_res.cert_id.serial_number != rasn::types::Integer::from(serial_int) {
@@ -366,7 +358,6 @@ pub async fn background_ocsp_task(
             },
         };
 
-        // Process newly received cert
         if let Some(chain) = received_certified_key {
             if let Some(leaf) = chain.first() {
                 let key: Vec<u8> = leaf.to_vec();
@@ -390,7 +381,6 @@ pub async fn background_ocsp_task(
             }
         }
 
-        // Fetch OCSP for certs whose next_update has passed
         let now = SystemTime::now();
         let updates_to_fetch: Vec<Vec<u8>> = next_updates
             .iter()
@@ -611,7 +601,6 @@ pub async fn background_ocsp_task(
             }
         }
 
-        // Emit gauge metrics each cycle
         let stapled_count = cache.read().iter().filter(|(_, v)| v.is_some()).count();
         emit_metric(
             &event_sink,
@@ -726,7 +715,6 @@ async fn fetch_ocsp_response(
         }
     }
 
-    // Return the original SHA-256 error or success
     response
 }
 
@@ -775,7 +763,6 @@ async fn fetch_ocsp_response_inner(
     let body_bytes = res.collect().await?.to_bytes();
     let response_der = body_bytes.to_vec();
 
-    // Parse response
     let response: OcspResponse = rasn::der::decode(&response_der)
         .map_err(|e| anyhow::anyhow!("Failed to decode OCSP response: {e}"))?;
 

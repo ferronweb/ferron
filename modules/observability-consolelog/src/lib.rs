@@ -347,7 +347,6 @@ impl ConfigurationValidator for ConsoleObservabilityConfigValidator {
         config: &ferron_core::config::ServerConfigurationBlock,
         validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), ConfigurationValidationError> {
-        // Log format
         validate_scoped_block_flat(config, validator_ctx, "format", "logformat", Some("text"))?;
 
         Ok(())

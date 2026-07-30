@@ -203,7 +203,6 @@ impl TcpListenerHandle {
                         continue;
                     };
 
-                    // Load the current config for this connection
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
@@ -416,7 +415,6 @@ impl TcpListenerHandle {
                                         .alpn_protocol()
                                         .map(|protocol| protocol.to_vec());
 
-                                    // Extract TLS connection parameters
                                     let protocol_version_str = tls_stream
                                         .get_ref()
                                         .1
@@ -433,7 +431,6 @@ impl TcpListenerHandle {
                                         .unwrap_or("unknown")
                                         .to_string();
 
-                                    // Emit TLS handshake metrics
                                     emit_handshake_duration(
                                         &tls_observability,
                                         &host,
@@ -513,7 +510,6 @@ impl TcpListenerHandle {
                                         );
                                     }
 
-                                    // Decrement active connections on drop
                                     emit_connections_active(&tls_observability, &host, -1);
                                 }
                             } else {

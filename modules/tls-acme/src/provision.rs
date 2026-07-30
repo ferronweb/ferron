@@ -81,7 +81,6 @@ pub async fn check_certificate_validity_or_install_cached(
         }
     }
 
-    // Check cache
     let certificate_cache_key =
         get_certificate_cache_key(&config.domains, config.profile.as_deref());
     if let Some(serialized_data) = config.certificate_cache.get(&certificate_cache_key).await {
@@ -295,13 +294,10 @@ pub async fn provision_certificate(
     providers.extend(provider_list.fallbacks.iter().cloned());
     drop(provider_list);
 
-    // Step 0: Check if current cert is still valid or cached
-    // (This check is provider-agnostic)
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
         return Ok(false);
     }
 
-    // Step 1: Iterate over providers, trying each until success or all exhausted
     let mut acme_account: Option<Account> = None;
     let mut selected_directory: Option<String> = None;
     let mut selected_contact: Option<Vec<String>> = None;
@@ -313,19 +309,16 @@ pub async fn provision_certificate(
     for (idx, provider) in providers.iter().enumerate() {
         let provider_name = if idx == 0 { "primary" } else { "fallback" };
 
-        // Extract provider fields
         let directory = provider.directory.clone();
         let contact = provider.contact.clone();
         let eab_key = provider.eab_key.clone();
         let profile = provider.profile.clone();
 
-        // Build the TLS client config
         let client_config = config.rustls_client_config.clone();
 
         let account_cache_key = get_account_cache_key(&contact, &directory);
         let certificate_cache_key = get_certificate_cache_key(&config.domains, profile.as_deref());
 
-        // Check cache for account credentials
         let account_builder =
             Account::builder_with_http(Box::new(HttpsClientForAcme::new(client_config)));
 
@@ -460,7 +453,6 @@ pub async fn provision_certificate(
         config.profile = profile;
     }
 
-    // Step 3: Create a new ACME order
     let acme_identifiers: Vec<Identifier> = config
         .domains
         .iter()
@@ -557,7 +549,6 @@ pub async fn provision_certificate(
         }
     };
 
-    // Step 4: Solve challenges
     let mut dns_01_domains = Vec::new();
     let mut authorizations = order.authorizations();
     while let Some(auth) = authorizations.next().await {
@@ -693,7 +684,6 @@ pub async fn provision_certificate(
             }
             instant_acme::ChallengeType::Dns01 => {
                 if let Some(ref dns_client) = config.dns_client {
-                    // Remove any existing challenge record first
                     let challenge_domain = format!("_acme-challenge.{identifier}");
                     let _ = dns_client
                         .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
@@ -791,7 +781,6 @@ pub async fn provision_certificate(
         );
     }
 
-    // Step 5: Wait for order to be ready
     let order_status = match order.poll_ready(&RetryPolicy::default()).await {
         Ok(status) => status,
         Err(e) => {
@@ -867,7 +856,6 @@ pub async fn provision_certificate(
         }
     }
 
-    // Step 6: Finalize and obtain certificate
     let private_key_pem = match order.finalize().await {
         Ok(pem) => pem,
         Err(e) => {
@@ -962,7 +950,6 @@ pub async fn provision_certificate(
 
     config.account.replace(acme_account);
 
-    // Step 7: Cleanup challenge data
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(true)

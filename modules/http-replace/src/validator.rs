@@ -37,7 +37,6 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
                     .with_span(entry_span(entry)))?;
                 }
 
-                // Validate `once` option in child block
                 if let Some(children) = &entry.children {
                     let mut sub = std::collections::HashSet::new();
                     if let Some(once_entries) = children.directives.get("once") {
@@ -74,7 +73,6 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
             used_directives.insert("replace".to_string());
         }
 
-        // Validate `replace_last_modified` directives
         if let Some(entries) = config.directives.get("replace_last_modified") {
             for entry in entries {
                 if entry.args.is_empty() {
@@ -96,7 +94,6 @@ impl ConfigurationValidator for ReplaceConfigurationValidator {
             used_directives.insert("replace_last_modified".to_string());
         }
 
-        // Validate `replace_filter_types` directives
         if let Some(entries) = config.directives.get("replace_filter_types") {
             for entry in entries {
                 if entry.args.is_empty() {

@@ -599,7 +599,6 @@ pub async fn send_via_wrapper(
         // This prevents the PoolItem's Drop from running, and instead we manually
         // return the connection via PoolReturnInfo when TrackedBody is dropped.
 
-        // Extract backend URL before consuming item
         let backend_url = item.key().map(|k| k.0.proxy_to.clone()).unwrap_or_default();
 
         let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
@@ -613,7 +612,6 @@ pub async fn send_via_wrapper(
             None
         };
 
-        // Extract Content-Length for truncation detection
         let expected_length = parts
             .headers
             .get(http::header::CONTENT_LENGTH)

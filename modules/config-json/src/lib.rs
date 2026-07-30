@@ -36,7 +36,6 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         let hash = xxhash_rust::xxh3::xxh3_64(file_contents.as_bytes());
         let config_hash = format!("{:016x}", hash);
 
-        // Get file modification time
         let config_mtime = std::fs::metadata(filename)
             .and_then(|m| m.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);

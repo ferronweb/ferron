@@ -477,7 +477,6 @@ impl BasicHttpModule {
             if https_port.is_some() && port_config.port == https_port {
                 if let Some(tls) = host_config.1.directives.get("tls") {
                     for tls1 in tls {
-                        // Handle explicit `tls false` — skip TLS entirely
                         if tls1
                             .args
                             .first()
@@ -542,7 +541,6 @@ impl BasicHttpModule {
                         cp_metadata,
                         cp_span_links,
                     );
-                    // Initialize observability sinks for first time
                     {
                         let mut context = ObservabilityContext {
                             sink: None,
@@ -904,7 +902,6 @@ impl BasicHttpModule {
         // Cancel the old reload token to trigger graceful shutdown of existing connections
         let old_config = self.config.load();
 
-        // Build new configuration and atomically swap it
         let new_config = Self::build_config(
             registry,
             &port_config,

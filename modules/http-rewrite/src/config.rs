@@ -128,7 +128,6 @@ fn parse_rewrite_entry(
         regex
     };
 
-    // Parse optional block options
     let (is_directory, is_file, last, allow_double_slashes) =
         if let Some(children) = &entry.children {
             parse_rewrite_options(children)
@@ -248,7 +247,6 @@ pub fn apply_rewrite_rules(url: &str, rules: &[RewriteRule], root: Option<&str>)
             }
         }
 
-        // Check file/directory constraints
         if !rule.is_file || !rule.is_directory {
             if let Some(root) = root {
                 let (joined, metadata) = resolve_path_metadata(&rewritten, root);
@@ -278,7 +276,6 @@ pub fn apply_rewrite_rules(url: &str, rules: &[RewriteRule], root: Option<&str>)
             .replace(&rewritten, &rule.replacement)
             .to_string();
 
-        // Validate rewritten URL starts with '/'
         if !rewritten.starts_with('/') {
             return RewriteResult::InvalidRewrite;
         }

@@ -154,7 +154,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             #[cfg(not(unix))]
             let raw_fd: Option<i64> = None;
 
-            // Build response
             let mut builder = Response::builder()
                 .status(error_code)
                 .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))

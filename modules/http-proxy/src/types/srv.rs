@@ -61,7 +61,6 @@ pub async fn resolve_srv_inner(
     let connection_timeout = srv_data.connection_timeout;
     let idle_timeout = srv_data.idle_timeout;
 
-    // Check cache first
     if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers).await {
         return cached;
     }
@@ -78,7 +77,6 @@ pub async fn resolve_srv_inner(
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
         .spawn(async move {
-            // Get or create a cached resolver for these DNS servers
             let resolver = match crate::get_or_create_resolver(&dns_servers) {
                 Some(r) => r,
                 None => {
@@ -132,7 +130,6 @@ pub async fn resolve_srv_inner(
                 .valid_until()
                 .saturating_duration_since(std::time::Instant::now());
 
-            // Parse the SRV records into upstream candidates
             let mut candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
                 srv_records
                     .answers()

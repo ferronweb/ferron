@@ -67,7 +67,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             }
         };
 
-        // Handle CORS preflight
         if let (Some(cors), Some(req)) = (config.cors.as_ref(), ctx.req.as_ref()) {
             let origin = req
                 .headers()

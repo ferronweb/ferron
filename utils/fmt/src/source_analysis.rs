@@ -100,7 +100,6 @@ fn analyze_continuation_positions(input: &str) -> HashSet<(usize, usize)> {
         }
 
         if c == '"' {
-            // Check for raw string prefix
             if i > 0 && chars[i - 1] == 'r' {
                 // This is the `"` of a raw string — skip to closing `"`
                 in_quoted = true; // reuse flag to skip content

@@ -53,13 +53,11 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
     let connection_timeout = cfg.connection_timeout;
     let idle_timeout = cfg.idle_timeout;
 
-    // Parse hostname and port from the URL
     let (hostname, port) = match parse_host_port(&url) {
         Some(v) => v,
         None => return Vec::new(),
     };
 
-    // Check cache first
     if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers).await {
         if cached.is_empty() {
             if let Some((_, event_sink)) = crate::try_get_secondary_runtime_handle() {
@@ -97,7 +95,6 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 
     let result = handle
         .spawn(async move {
-            // Get or create a cached resolver for these DNS servers
             let resolver = match crate::get_or_create_resolver(&dns_servers) {
                 Some(r) => r,
                 None => {
@@ -237,7 +234,6 @@ pub fn parse_host_port(url: &str) -> Option<(String, u16)> {
         return Some((ipv6.to_string(), port));
     }
 
-    // Handle hostname:port or IPv4:port
     let (host, port_str) = match rest.rfind(':') {
         Some(pos) => (&rest[..pos], &rest[pos + 1..]),
         None => (rest, ""),

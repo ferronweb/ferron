@@ -128,7 +128,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         let method = request.method().clone();
 
-        // Handle OPTIONS
         if method == Method::OPTIONS {
             let res = Response::builder()
                 .status(StatusCode::NO_CONTENT)
@@ -439,7 +438,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let mut precompressed_exts: Vec<&str> = Vec::new();
 
         if compression_possible {
-            // Check for browsers with known compression bugs
             let user_agent = request
                 .headers()
                 .get(header::USER_AGENT)
@@ -498,7 +496,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Handle precompressed files
         let mut file_path = ctx.file_path.clone();
         let mut file_length = metadata.len();
         let mut is_precompressed_file = false;
@@ -583,7 +580,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             true
         };
 
-        // Handle Range requests
         if let Some(range_val) = request.headers().get(header::RANGE) {
             if let Ok(range_str) = range_val.to_str() {
                 if if_range_matches {
@@ -887,7 +883,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             Some(std_file as i64)
         };
 
-        // GET body — stream file content
         let body: UnsyncBoxBody<Bytes, io::Error> = if is_precompressed_file {
             // Precompressed file — stream as-is
             StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
@@ -931,7 +926,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
         ctx.get_span_attributes()
             .insert("http.response.status_code", TraceAttributeValue::I64(200));
 
-        // Emit static file metrics
         let compression_label = match used_compression {
             Compression::Brotli => "br",
             Compression::Zstd => "zstd",

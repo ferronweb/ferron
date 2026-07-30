@@ -485,7 +485,6 @@ pub fn parse_acme_config(
         .map(|c| vec![format!("mailto:{c}")])
         .unwrap_or_default();
 
-    // Parse the provider list with fallback support
     let provider_list = AcmeProviderList::from_block(config)?;
 
     let on_demand = config.get_flag("on_demand");
@@ -514,7 +513,6 @@ pub fn parse_acme_config(
 
     let post_obtain_command = first_value(config, "post_obtain_command");
 
-    // Build the TLS client config for ACME communication
     let client_config = build_rustls_client_config(no_verification)?;
 
     if on_demand {

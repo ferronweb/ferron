@@ -174,7 +174,6 @@ impl Default for ProxyConfig {
 fn parse_expected_status(s: &str) -> Result<ExpectedStatusCodes, Box<dyn Error + Send + Sync>> {
     let s = s.trim();
 
-    // Check for common shorthands
     if s == "2xx" {
         return Ok(ExpectedStatusCodes::Successful);
     }
@@ -252,7 +251,6 @@ pub fn parse_proxy_config(
         return Ok(None);
     }
 
-    // Check for global concurrent_conns
     if let Some(conns_entries) = ctx
         .configuration
         .get_entries("proxy_concurrent_conns", true)
@@ -1082,7 +1080,6 @@ fn parse_request_header_entry(
                 .push(HeaderAction::Append(header_name, value));
         }
         Some('-') => {
-            // Remove header
             let name = &first_arg[1..];
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;

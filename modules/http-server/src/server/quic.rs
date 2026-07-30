@@ -446,7 +446,6 @@ async fn accept_quic(
 
 #[inline]
 fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
-    // Create a new socket
     let listener_socket2 = socket2::Socket::new(
         if address.is_ipv6() {
             socket2::Domain::IPV6

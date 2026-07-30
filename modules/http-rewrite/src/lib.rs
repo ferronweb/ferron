@@ -209,7 +209,6 @@ impl Stage<HttpContext> for RewriteStage {
             req.uri().query().map_or(String::new(), |q| format!("?{q}"))
         );
 
-        // Extract root directory for file/directory constraint checks
         let root = ctx
             .configuration
             .get_value("root", true)
@@ -259,7 +258,6 @@ impl Stage<HttpContext> for RewriteStage {
             RewriteResult::Rewritten(url) => url,
         };
 
-        // Check rewrite_log
         let should_log = is_rewrite_log_enabled(&ctx.configuration);
 
         // Store original URI if not already set

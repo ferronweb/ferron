@@ -183,7 +183,6 @@ impl Stage<HttpFileContext> for FcgiFileStage {
 
         let request_start = Instant::now();
 
-        // Get connection from pool
         let mut conn_item = match self
             .client
             .get_connection(scgi_to_fixed, config.keepalive, local_limit)
@@ -296,7 +295,6 @@ impl Stage<HttpFileContext> for FcgiFileStage {
         });
 
         if !config.keepalive {
-            // Remove connection from pool
             conn_item.inner_mut().take();
         }
 

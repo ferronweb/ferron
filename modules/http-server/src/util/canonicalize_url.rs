@@ -222,7 +222,6 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
 /// - Absolute paths beginning with `/`
 /// - The special asterisk form `*` used for server-wide OPTIONS requests
 pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, CanonicalizationError> {
-    // Step 0: Asterisk short-circuit
     if raw_path == "*" {
         return Ok(CanonicalizedPath {
             routing: "*".to_owned(),
@@ -231,8 +230,6 @@ pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, Canonicali
         });
     }
 
-    // Step 1: Syntax validation
-    // Must start with `/`
     if !raw_path.starts_with('/') {
         return Err(CanonicalizationError::MalformedPath);
     }
@@ -244,28 +241,23 @@ pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, Canonicali
         }
     }
 
-    // Step 2: Structural segmentation
-    // Split on literal `/` only
     let segments: Vec<&str> = raw_path.split('/').collect();
 
     // Track trailing slash: present if path ends with `/` and is not just `"/"`
     let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
 
-    // Step 3: Per-segment validation and decoding
     let mut routing_segments: Vec<String> = Vec::with_capacity(segments.len());
     let mut forwarding_segments: Vec<String> = Vec::with_capacity(segments.len());
 
     for (idx, segment) in segments.iter().enumerate() {
         // The first segment is always empty (before the leading `/`)
         if idx == 0 {
-            // Validate encoding even for the empty first segment
             validate_segment_encoding(segment)?;
             routing_segments.push(String::new());
             forwarding_segments.push(String::new());
             continue;
         }
 
-        // Validate percent-encoding
         validate_segment_encoding(segment)?;
 
         // Decode the segment
@@ -274,13 +266,9 @@ pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, Canonicali
         forwarding_segments.push(encoded);
     }
 
-    // Step 4: Dot-segment resolution (skip the first empty segment representing root)
-    // We resolve dots on segments[1..] and keep the root empty segment
     let dot_segments = &routing_segments[1..];
     let resolved = resolve_dot_segments(dot_segments)?;
 
-    // Step 5: Canonical reconstruction
-    // routing: join resolved decoded segments, prepend `/`, add trailing slash if flagged
     let mut routing = String::with_capacity(raw_path.len());
     routing.push('/');
     for (i, seg) in resolved.iter().enumerate() {

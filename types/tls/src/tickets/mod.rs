@@ -228,7 +228,6 @@ pub fn generate_initial_ticket_keys(filename: &str, num_keys: usize) -> std::io:
         data.extend_from_slice(&key);
     }
 
-    // Write atomically: write to temp file, then rename
     let tmp_path = path.with_extension("keys.tmp");
     {
         let mut file = fs::File::create(&tmp_path)?;
@@ -302,7 +301,6 @@ pub fn persist_ticket_keys(filename: &str, keys: &[TicketKeyComponents]) -> std:
         data.extend_from_slice(hmac_key);
     }
 
-    // Write atomically
     let tmp_path = path.with_extension("keys.tmp");
     {
         let mut file = fs::File::create(&tmp_path)?;
@@ -373,7 +371,6 @@ pub fn validate_ticket_keys_file(filename: &str) -> std::io::Result<usize> {
     let metadata = fs::metadata(filename)?;
     let file_size = metadata.len();
 
-    // Validate file size
     if file_size == 0 {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -445,7 +442,6 @@ pub fn load_ticket_keys(filename: &str) -> std::io::Result<Vec<TicketKeyComponen
     // Read the entire file
     let data = fs::read(filename)?;
 
-    // Validate file size
     if data.is_empty() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -483,10 +479,8 @@ pub fn load_ticket_keys(filename: &str) -> std::io::Result<Vec<TicketKeyComponen
         );
     }
 
-    // Parse keys
     let mut keys = Vec::new();
     for (i, chunk) in data.chunks_exact(TICKET_KEY_RECORD_SIZE).enumerate() {
-        // Stop at maximum
         if keys.len() >= MAX_TICKET_KEYS {
             break;
         }
@@ -556,10 +550,6 @@ fn parse_ticket_key_record(
     Ok((key_name, aes_key, hmac_key))
 }
 
-// ============================================================================
-// Custom ProducesTickets Implementation for Automatic Key Rotation
-// ============================================================================
-
 /// A ticket key with all its components.
 #[derive(Clone)]
 pub struct TicketKey {
@@ -610,14 +600,12 @@ struct CustomTicketEncryptor {
 impl CustomTicketEncryptor {
     /// Create a new encryptor from a ticket key.
     fn new(key: &TicketKey) -> Result<Self, aws_lc_rs::error::Unspecified> {
-        // Create AES keys for both encryption and decryption
         let aes_unbound = UnboundCipherKey::new(&AES_256, &key.aes_key)?;
         let encrypt_key = PaddedBlockEncryptingKey::cbc_pkcs7(aes_unbound)?;
 
         let aes_unbound = UnboundCipherKey::new(&AES_256, &key.aes_key)?;
         let decrypt_key = PaddedBlockDecryptingKey::cbc_pkcs7(aes_unbound)?;
 
-        // Create HMAC key
         let hmac_key = HmacKey::new(hmac::HMAC_SHA256, &key.hmac_key);
 
         Ok(Self {
@@ -641,10 +629,8 @@ impl CustomTicketEncryptor {
         // Encrypt in-place (adds PKCS#7 padding automatically, generates random IV)
         let decrypt_ctx = self.encrypt_key.encrypt(&mut in_out).ok()?;
 
-        // Extract IV from the DecryptionContext
         let iv: &[u8] = (&decrypt_ctx).try_into().ok()?;
 
-        // Build ticket: IV || Ciphertext
         let mut ticket = iv.to_vec();
         ticket.extend_from_slice(&in_out);
 
@@ -740,7 +726,6 @@ impl TicketKeyRotator {
 
         let lifetime = rotation_interval.map(|d| d.as_secs() as u32);
 
-        // Create encryptor from the first key
         let current = CustomTicketEncryptor::new(&keys[0])?;
 
         // If we have multiple keys, create previous encryptor
@@ -789,7 +774,6 @@ impl TicketKeyRotator {
             hmac_key: new_key[48..80].try_into().ok()?,
         };
 
-        // Create new encryptor
         let new_encryptor = CustomTicketEncryptor::new(&new_ticket_key).ok()?;
 
         // Persist the new key to file

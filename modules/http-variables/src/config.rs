@@ -92,7 +92,6 @@ fn parse_set_var_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<SetV
     let pattern_str = entry.args[1].as_str()?.to_string();
     let variable = entry.args[2].as_str()?.to_string();
 
-    // Parse optional block subdirectives
     let mut value = "1".to_string();
     let mut case_insensitive = false;
     let mut negate = false;

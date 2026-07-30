@@ -336,7 +336,6 @@ fn process_probe_result(
         false
     };
 
-    // Emit health check metrics
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
     let duration_secs = result.response_time.as_secs_f64();
     let health_attrs = vec![(
@@ -550,7 +549,6 @@ pub fn spawn_health_check_task(
         }
 
         for probe_config in &probe_configs {
-            // Log health check initialization
             let (upstream_type, config, _) = probe_config;
             let upstream_desc = match upstream_type {
                 UpstreamHealthCheckType::Static(url) => format!("Static({})", url),

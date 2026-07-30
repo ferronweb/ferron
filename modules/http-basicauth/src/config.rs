@@ -56,14 +56,12 @@ pub fn parse_basicauth_config(config: &LayeredConfiguration) -> Option<BasicAuth
 }
 
 fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAuthConfig) {
-    // Parse optional `realm`
     if let Some(realm_val) = block.get_value("realm") {
         if let Some(realm_str) = realm_val.as_str() {
             config.realm = realm_str.to_string();
         }
     }
 
-    // Parse `users` block
     if let Some(users_entries) = block.directives.get("users") {
         for users_entry in users_entries {
             if let Some(ref users_block) = users_entry.children {
@@ -72,7 +70,6 @@ fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAut
         }
     }
 
-    // Parse `brute_force_protection` block
     if let Some(bfp_entries) = block.directives.get("brute_force_protection") {
         for bfp_entry in bfp_entries {
             if let Some(ref bfp_block) = bfp_entry.children {
@@ -97,10 +94,8 @@ fn parse_users_block(block: &ServerConfigurationBlock, users: &mut HashMap<Strin
 }
 
 fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForceConfig) {
-    // Parse `enabled` — optional flag
     bfc.enabled = block.get_flag("enabled");
 
-    // Parse `max_attempts` — optional, default 5
     if let Some(max_attempts_val) = block.get_value("max_attempts") {
         if let Some(n) = max_attempts_val.as_number() {
             if n > 0 {

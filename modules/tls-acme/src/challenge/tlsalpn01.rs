@@ -71,7 +71,6 @@ impl ResolvesServerCert for TlsAlpn01Resolver {
             return None;
         }
 
-        // Get the SNI hostname
         let server_name = client_hello.server_name()?;
 
         // Search through all resolvers for a matching challenge

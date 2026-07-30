@@ -143,7 +143,6 @@ impl<'a> ObservabilityConfigExtractor<'a> {
     ) -> Result<Vec<ServerConfigurationBlock>, Box<dyn std::error::Error>> {
         let mut blocks = Vec::new();
 
-        // Extract explicit observability blocks
         if let Some(observability_directives) = self.config.directives.get("observability") {
             for directive in observability_directives {
                 // Check if enabled
@@ -170,7 +169,6 @@ impl<'a> ObservabilityConfigExtractor<'a> {
             }
         }
 
-        // Extract alias directives
         for alias_name in OBSERVABILITY_ALIAS_DIRECTIVES {
             if let Some(alias_directives) = self.config.directives.get(*alias_name) {
                 for directive in alias_directives {

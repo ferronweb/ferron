@@ -48,7 +48,6 @@ impl JsonErrorConfig {
             result.enabled = entry.get_flag();
 
             if let Some(children) = &entry.children {
-                // Parse `format` subdirective
                 if let Some(val) = children.get_value("format").and_then(|v| v.as_str()) {
                     match val {
                         "problem" => result.format = JsonErrorFormat::Problem,
@@ -57,7 +56,6 @@ impl JsonErrorConfig {
                     }
                 }
 
-                // Parse `type_uri` subdirective
                 if let Some(val) = children.get_value("type_uri").and_then(|v| v.as_str()) {
                     result.type_uri = val.to_string();
                 }

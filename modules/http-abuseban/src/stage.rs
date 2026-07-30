@@ -34,7 +34,6 @@ impl AbuseProtectionStage {
             .extensions
             .insert::<AbuseRegistryConfig>(config.registry_config.clone());
 
-        // Get the client IP address from the context
         let client_ip = context.remote_address.ip().to_canonical();
 
         // Check if this IP is banned
@@ -48,7 +47,6 @@ impl AbuseProtectionStage {
                 .ban_reason(client_ip, &config.registry_config)
                 .unwrap_or_else(|| "IP address temporarily banned".to_string());
 
-            // Build error response with Retry-After header
             let mut headers = HeaderMap::new();
             headers.insert(
                 http::header::RETRY_AFTER,
@@ -58,7 +56,6 @@ impl AbuseProtectionStage {
 
             context.res = Some(HttpResponse::BuiltinError(403, Some(headers)));
 
-            // Log ban rejection
             context.events.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Debug,
@@ -84,7 +81,6 @@ impl AbuseProtectionStage {
                 },
             ));
 
-            // Emit metric for ban rejection
             context.events.emit(ferron_observability::Event::Metric(
                 ferron_observability::MetricEvent {
                     name: "ferron.abuseban.rejected",
@@ -185,7 +181,6 @@ impl AbuseProtectionStage {
             return Ok(());
         }
 
-        // Extract status code from the response
         let status_code = match &ctx.res {
             Some(HttpResponse::Custom(response)) => response.status().as_u16(),
             Some(HttpResponse::BuiltinError(status, _)) => *status,
@@ -483,7 +478,6 @@ mod tests {
         let result1 = stage.run(&mut ctx1).await.unwrap();
         assert!(!result1);
 
-        // Clean IP allowed
         let mut ctx2 = make_context(allowed_addr, config);
         let result2 = stage.run(&mut ctx2).await.unwrap();
         assert!(result2);

@@ -59,7 +59,6 @@ impl EventSink for OtlpEventSink {
                         .fetch_add(1, Ordering::Relaxed);
                 }
                 Err(_) => {
-                    // Increment global dropped-events metric
                     ferron_core::admin::ADMIN_METRICS
                         .observability_events_dropped
                         .fetch_add(1, Ordering::Relaxed);
@@ -94,7 +93,6 @@ impl EventSink for OtlpEventSink {
                         .fetch_add(1, Ordering::Relaxed);
                 }
                 Err(_) => {
-                    // Increment global dropped-events metric
                     ferron_core::admin::ADMIN_METRICS
                         .observability_events_dropped
                         .fetch_add(1, Ordering::Relaxed);

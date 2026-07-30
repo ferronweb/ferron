@@ -98,7 +98,6 @@ impl Stage<HttpContext> for HttpReplaceStage {
         vec![
             // Run after compression to avoid corrupting compressed data
             StageConstraint::After("dynamic_compression".to_string()),
-            // Run before caching so cached content is already replaced
             StageConstraint::Before("cache".to_string()),
         ]
     }
@@ -179,7 +178,6 @@ impl Stage<HttpContext> for HttpReplaceStage {
             return Ok(());
         }
 
-        // Check MIME type filter
         let content_type = response.headers().get(CONTENT_TYPE);
         if !Self::matches_mime_type(content_type, &config.filter_types) {
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -205,7 +203,6 @@ impl Stage<HttpContext> for HttpReplaceStage {
         // Apply replacement
         let mut replaced_response = Self::apply_replacement(response, &config.rules);
 
-        // Handle Last-Modified header
         if !config.preserve_last_modified {
             replaced_response.headers_mut().remove(LAST_MODIFIED);
         }

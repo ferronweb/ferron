@@ -139,7 +139,6 @@ impl ModuleLoader for AdminApiModuleLoader {
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Initialize admin metrics
         let _ = ADMIN_METRICS.deref();
 
         let admin_config = AdminConfig::from_global(&config.global_config);

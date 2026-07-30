@@ -35,7 +35,6 @@ impl std::fmt::Display for AcmeCause {
 pub fn parse_acme_cause(detail: &str) -> AcmeCause {
     let s = detail.to_lowercase();
 
-    // --- DNS errors (most specific first) ---
     if s.contains("no such host") || s.contains("nxdomain") {
         return AcmeCause::DnsNxDomain;
     }
@@ -43,7 +42,6 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         return AcmeCause::DnsServFail;
     }
 
-    // --- Connection / network errors ---
     if s.contains("timeout") || s.contains("timed out") || s.contains("deadline exceeded") {
         return AcmeCause::Timeout;
     }
@@ -54,7 +52,6 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         return AcmeCause::ConnectionReset;
     }
 
-    // --- TLS errors ---
     if s.contains("tls")
         || s.contains("handshake failure")
         || s.contains("certificate verify failed")
@@ -62,8 +59,6 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         return AcmeCause::TlsHandshakeFailed;
     }
 
-    // --- HTTP response errors ---
-    // Simple heuristic: look for common status codes in text
     if contains_http_status(&s, 400..=499) {
         return AcmeCause::Http4xx;
     }
@@ -71,7 +66,6 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         return AcmeCause::Http5xx;
     }
 
-    // --- ACME semantic / validation errors ---
     if s.contains("did not match")
         || s.contains("invalid response")
         || s.contains("key authorization")
@@ -79,7 +73,6 @@ pub fn parse_acme_cause(detail: &str) -> AcmeCause {
         return AcmeCause::InvalidResponse;
     }
 
-    // --- Forbidden by policy ---
     if s.contains("forbidden") || s.contains("not allowed") {
         return AcmeCause::Forbidden;
     }

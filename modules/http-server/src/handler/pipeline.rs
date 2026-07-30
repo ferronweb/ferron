@@ -56,7 +56,6 @@ pub async fn execute_pipeline_stages(
         }
     }
 
-    // Start pipeline execution span
     if let (true, Some(request_span_key), Some(pipeline_span_key)) =
         (has_traces, request_span_key, pipeline_span_key.as_ref())
     {

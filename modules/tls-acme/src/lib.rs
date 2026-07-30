@@ -198,7 +198,6 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 // Add to configs list
                 task_state.configs.blocking_write().push(acme_config);
 
-                // Build TLS resolver
                 let tls_alpn_resolvers = if challenge_type == ChallengeType::TlsAlpn01 {
                     Some(task_state.tls_alpn_01_resolvers.clone())
                 } else {
@@ -207,7 +206,6 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
 
                 let alpn_protocols = ctx.alpn.clone().unwrap_or_default();
 
-                // Parse OCSP and ticket key configuration
                 let ocsp_config = ferron_tls::config::OcspConfig::from_config(ctx.config);
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
@@ -244,7 +242,6 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
 
                 let alpn_protocols = ctx.alpn.clone().unwrap_or_default();
 
-                // Parse OCSP and ticket key configuration
                 let ocsp_config = ferron_tls::config::OcspConfig::from_config(ctx.config);
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
@@ -758,7 +755,6 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         // from nested dns { } blocks in TLS configurations.
         GLOBAL_REGISTRY.set(registry.clone()).ok();
 
-        // Build the composite event sink from observability providers
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         set_event_sink(event_sink);
 
@@ -984,7 +980,6 @@ fn resolve_dns_client_from_config(
         return Ok(None);
     };
 
-    // Get the provider name from the dns block
     let provider_name = dns_block
         .get_value("provider")
         .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))

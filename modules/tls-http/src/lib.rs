@@ -142,7 +142,6 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
     }
 
     fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
-        // Parse TLS configuration from the config block
         let tls_config = TlsServerConfig::from_config(ctx.config)
             .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
         let http_config = TlsHttpConfig::from_config(ctx.config)
@@ -152,7 +151,6 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
         let config_builder =
             build_server_config_builder(&tls_config.crypto, &tls_config.client_auth)?;
 
-        // Parse ticket key configuration
         let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
         let error_message = Arc::new(parking_lot::RwLock::new(None));
 
@@ -346,7 +344,6 @@ impl ModuleLoader for TlsHttpModuleLoader {
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Build the composite event sink from observability providers
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
 
         // Store the event sink in the global task state for on-demand mode

@@ -52,10 +52,8 @@ pub fn run_service(
     let loaders_ptr = Box::into_raw(Box::new(loaders));
     let _ = MODULE_LOADERS.set(std::sync::Mutex::new(loaders_ptr as usize));
 
-    // Define the service entry point
     define_windows_service!(ffi_service_entry, service_main);
 
-    // Start the service dispatcher
     service_dispatcher::start(SERVICE_NAME, ffi_service_entry)?;
 
     Ok(())
@@ -105,7 +103,6 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
         ))?
     };
 
-    // Log the configuration
     ferron_core::log_info!("{} service started", SERVICE_NAME,);
 
     // Tell the service we're running
@@ -141,7 +138,6 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
         let _ = std::env::set_current_dir(program_dir);
     }
 
-    // Run the application with the parsed configuration
     let server_result = crate::run(
         config_path,
         config_params,
@@ -155,7 +151,6 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
         ferron_core::log_error!("Server error: {}", e);
     }
 
-    // Update service status to stopped
     status.current_state = ServiceState::Stopped;
     status_handle.set_service_status(status)?;
 

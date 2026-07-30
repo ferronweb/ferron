@@ -156,7 +156,6 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             TraceAttributeValue::String(https_url),
         );
 
-        // Stop the pipeline — response is ready.
         Ok(false)
     }
 }

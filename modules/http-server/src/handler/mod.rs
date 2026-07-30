@@ -273,7 +273,6 @@ pub async fn request_handler(
     };
     let request_span_key =
         if let Some(request_span_key) = has_traces.then(|| next_span_key("request")) {
-            // Start tracing span
             let method = method
                 .as_ref()
                 .expect("trace events require request metadata to be initialized");
@@ -355,7 +354,6 @@ pub async fn request_handler(
         .requests_total
         .fetch_add(1, Ordering::Relaxed);
 
-    // Increment active requests counter
     if let Some(metric_attrs) = metric_attrs.as_ref() {
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.active_requests",
@@ -450,7 +448,6 @@ pub async fn request_handler(
             )
         });
 
-        // Build request_count-specific attributes
         let extra_capacity = if error_type_attr.is_some() { 2 } else { 1 };
         let base_len = metric_attrs.len();
         let mut request_count_attrs = Vec::with_capacity(base_len + extra_capacity);
@@ -460,7 +457,6 @@ pub async fn request_handler(
             request_count_attrs.push(attr.clone());
         }
 
-        // Build duration-specific attributes
         let mut duration_attrs = Vec::with_capacity(base_len + extra_capacity);
         duration_attrs.extend(metric_attrs.iter().cloned());
         duration_attrs.push(status_code_attr.clone());
@@ -480,7 +476,6 @@ pub async fn request_handler(
             control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
-        // Emit request duration histogram
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.request.duration",
             attributes: duration_attrs,
@@ -492,7 +487,6 @@ pub async fn request_handler(
             control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
-        // Emit request count
         events.emit(Event::Metric(MetricEvent {
             name: "ferron.http.server.request_count",
             attributes: request_count_attrs,
@@ -504,7 +498,6 @@ pub async fn request_handler(
             control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
-        // Emit access log
         events.emit(Event::Access(Arc::new(HttpAccessLog {
             path: path.expect("request metadata should be initialized when events are enabled"),
             path_and_query: path_and_query
@@ -1034,7 +1027,6 @@ async fn request_handler_inner(
     )
     .await;
 
-    // Handle error configurations for 4xx and 5xx responses
     if let HttpResponse::BuiltinError(status, _) = ctx
         .res
         .as_ref()

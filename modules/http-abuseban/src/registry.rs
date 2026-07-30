@@ -440,7 +440,6 @@ impl AbuseRecorder for AbuseRegistry {
         };
 
         if result == EventResult::BanTriggered {
-            // Log ban rejection
             ctx.events.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
@@ -468,7 +467,6 @@ impl AbuseRecorder for AbuseRegistry {
                 },
             ));
 
-            // Emit metric for ban rejection
             ctx.events.emit(ferron_observability::Event::Metric(
                 ferron_observability::MetricEvent {
                     name: "ferron.abuseban.triggered",
