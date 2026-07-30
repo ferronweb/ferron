@@ -242,9 +242,9 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         let response = match ctx.res {
             Some(HttpResponse::Custom(_)) => {
                 // Take the response out temporarily
-                let response = ctx.res.take();
+                let response = ctx.res.take().unwrap();
                 match response {
-                    Some(HttpResponse::Custom(resp)) => resp,
+                    HttpResponse::Custom(resp) => resp,
                     _ => unreachable!(),
                 }
             }

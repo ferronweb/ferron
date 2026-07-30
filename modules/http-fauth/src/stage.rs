@@ -238,7 +238,7 @@ impl ForwardedAuthenticationStage {
         let auth_response = match conn_item
             .inner_mut()
             .as_mut()
-            .unwrap() // Here, connection is guaranteed to be available
+            .unwrap()
             .client
             .send_request(auth_request)
             .await

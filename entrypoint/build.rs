@@ -29,7 +29,7 @@ fn main() -> io::Result<()> {
     ShadowBuilder::builder()
         .build_pattern(BuildPattern::RealTime)
         .build()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .unwrap();
 
     Ok(())
 }
