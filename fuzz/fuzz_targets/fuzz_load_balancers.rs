@@ -25,6 +25,7 @@ use rustc_hash::FxBuildHasher;
 ///       [name_len: u8]
 ///       [name: name_len bytes (UTF-8)]
 ///   [extra: remaining bytes for target-specific input]
+#[allow(clippy::type_complexity)]
 fn parse_input(input: &[u8]) -> Option<(u8, Vec<Arc<UpstreamInner>>, &[u8])> {
     if input.len() < 2 {
         return None;

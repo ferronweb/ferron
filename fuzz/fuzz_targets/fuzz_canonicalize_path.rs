@@ -44,7 +44,7 @@ fn assert_forwarding_uppercase_hex(forwarding: &str) {
         {
             let h1 = bytes[i + 1];
             let h2 = bytes[i + 2];
-            if (h1 >= b'a' && h1 <= b'f') || (h2 >= b'a' && h2 <= b'f') {
+            if (b'a'..=b'f').contains(&h1) || (b'a'..=b'f').contains(&h2) {
                 panic!(
                     "forwarding must use uppercase hex digits: {} (found lowercase)",
                     &forwarding[i..i + 3]
@@ -109,14 +109,13 @@ fn assert_no_excessive_nested_encoding(forwarding: &str) {
     let bytes = forwarding.as_bytes();
     let mut i = 0;
     while i + 4 < bytes.len() {
-        if bytes[i] == b'%' && bytes[i + 1] == b'2' && bytes[i + 2] == b'5' {
-            if bytes[i + 3].is_ascii_hexdigit() && bytes[i + 4].is_ascii_hexdigit() {
+        if bytes[i] == b'%' && bytes[i + 1] == b'2' && bytes[i + 2] == b'5'
+            && bytes[i + 3].is_ascii_hexdigit() && bytes[i + 4].is_ascii_hexdigit() {
                 panic!(
                     "forwarding contains excessive nested encoding: {}..{} (should reject %25xx patterns)",
                     i, i + 4
                 );
             }
-        }
         i += 1;
     }
 }
