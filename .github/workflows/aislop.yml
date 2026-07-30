@@ -3,8 +3,29 @@ name: Scan for AI slop
 on:
   push:
     branches: ["develop-3.x"]
-  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - "utils/**"
+      - ".github/workflows/aislop.yml"
+  pull_request_target:
+    types: ["opened"]
     branches: ["develop-3.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - "utils/**"
+      - ".github/workflows/aislop.yml"
 
 jobs:
   quality-gate:
@@ -13,6 +34,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Scan for AI slop
         id: aislop
         uses: scanaislop/aislop@v1
@@ -20,7 +44,7 @@ jobs:
           version: latest
 
       - name: Deal with the AI slop PR
-        if: ${{ failure() && steps.aislop.outcome == 'failure' && github.event_name == 'pull_request' }}
+        if: ${{ failure() && steps.aislop.outcome == 'failure' && github.event_name == 'pull_request_target' }}
         uses: actions/github-script@v9
         with:
           script: |
