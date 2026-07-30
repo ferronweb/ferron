@@ -49,7 +49,7 @@ jobs:
           version: latest
 
       - name: Deal with the AI slop PR
-        if: ${{ failure() && steps.aislop.outcome == 'failure' && github.event_name == 'pull_request_target' }}
+        if: ${{ failure() && steps.aislop.outcome == 'failure' && github.event_name == 'pull_request' }}
         uses: actions/github-script@v9
         with:
           script: |
