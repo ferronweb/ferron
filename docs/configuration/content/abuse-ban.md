@@ -180,7 +180,7 @@ Events are stored in a sliding time window. When the number of events within the
 ### Ban mechanics
 
 - **Ban duration** — fixed duration (default 15 minutes); independent from the event counting window.
-- **TTL-based expiry** — bans automatically expire after the configured duration; no background eviction threads are needed.
+- **TTL-based expiry** — bans automatically expire after the configured duration. No background eviction threads are needed.
 - **Per-IP tracking** — each IP address is tracked independently. Different event types are tracked separately for the same IP.
 - **No persistence** — bans are stored in memory and are **not** preserved across server restarts.
 

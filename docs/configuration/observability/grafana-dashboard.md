@@ -54,7 +54,7 @@ Maps the token-bucket retry budget and rate limiting:
 - **Rate-limit rejected /s (by zone)** — `rate(ferron_ratelimit_rejected_total)`
 - **Rate-limit allowed vs throttled /s** — `rate(ferron_ratelimit_allowed_total)` / `rate(ferron_ratelimit_throttled_total)`
 
-An API gateway engineer keeps this row open to watch JWT-adjacent throttling and endpoint rejection spikes; a CDN operator can leave it collapsed.
+An API gateway engineer keeps this row open to watch JWT-adjacent throttling and endpoint rejection spikes. A CDN operator can leave it collapsed.
 
 ### Row 3 — Infrastructure saturation (USE, collapsible)
 
@@ -76,7 +76,7 @@ Connection-pool and host-pressure panels, crucial for multi-tenant edges and ser
 - **Egress bandwidth** — `rate(ferron_static_bytes_sent_sum)` (static-file and PHP-accelerator egress; see the gap below)
 - **DNS cache TTL remaining** — `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 
-A CDN or PHP-accelerator operator keeps this row pinned; an API gateway user can ignore it.
+A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can ignore it.
 
 ## Deploying the dashboard
 
@@ -119,7 +119,7 @@ Enable the features whose rows you care about:
 
 - **Per-route filtering** is unavailable without baggage promotion, as noted above.
 - **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today, so proxy-dominated CDN egress must be measured at the load balancer or added to Ferron later.
-- **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when HTTPS is configured; those panels render empty on HTTP-only instances.
+- **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when HTTPS is configured. Those panels render empty on HTTP-only instances.
 - Rows whose Ferron modules are disabled show empty panels by design. The dashboard degrades gracefully rather than erroring.
 
 ## See also

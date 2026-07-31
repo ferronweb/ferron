@@ -398,7 +398,7 @@ WantedBy=multi-user.target
 ### Limitations
 
 - AbuseIPDB API daily quotas apply — plan your thresholds accordingly.
-- The script is best-effort; it does not retry failed reports or maintain a queue.
+- The script is best-effort. It does not retry failed reports or maintain a queue.
 - There is no bidirectional sync — the sidecar cannot query or clear Ferron's internal ban state.
 - Bans are lost on Ferron restart, but the sidecar already reported them by that point.
 

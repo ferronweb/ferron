@@ -555,7 +555,7 @@ Active health checks are configured per-upstream inside an `active_check` block.
 | `interval` | `<duration: string>` | Interval between health check probes. | `10s` |
 | `timeout` | `<duration: string>` | Maximum wait time for a probe response. | `5s` |
 | `expect_status` | `<status: string>` | Expected HTTP status code(s) for a successful probe. Supports: `2xx`, `3xx`, `2xx,3xx`, specific codes (`200,204`), or ranges (`200-299`). | `2xx,3xx` |
-| `response_time_threshold` | `<duration: string>` | Optional response time threshold; if exceeded, the probe is marked unhealthy. | disabled |
+| `response_time_threshold` | `<duration: string>` | Optional response time threshold. If exceeded, the probe is marked unhealthy. | disabled |
 | `body_match` | `<substring: string>` | Optional substring to match in the response body (GET only). | disabled |
 | `consecutive_fails` | `<count: integer>` | Number of consecutive failures before marking an upstream as unhealthy. | 2 |
 | `consecutive_passes` | `<count: integer>` | Number of consecutive successes before marking an upstream as healthy when recovering. | 2 |

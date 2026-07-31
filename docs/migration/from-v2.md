@@ -271,7 +271,7 @@ Ferron 2 used `{placeholder}` syntax throughout. Ferron 3 uses `request.*` varia
 
 ### TLS / ACME
 
-The TLS configuration has been restructured. In Ferron 2, `auto_tls` and `auto_tls_contact` were separate directives. In Ferron 3, everything lives inside a `tls` block:
+The TLS configuration has been restructured. In Ferron 2, `auto_tls` and `auto_tls_contact` were separate directives. In Ferron 3, everything is configured inside a `tls` block:
 
 ```kdl
 // Ferron 2

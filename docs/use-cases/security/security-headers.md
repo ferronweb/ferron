@@ -24,7 +24,7 @@ example.com {
 > Keep `Strict-Transport-Security` only on HTTPS hosts you intend to keep on HTTPS permanently.
 
 > [!tip]
-> Treat `Content-Security-Policy` as application-specific; start simple, then tighten based on real asset/script needs.
+> Treat `Content-Security-Policy` as application-specific. Start simple, then tighten based on real asset/script needs.
 
 ## Remove or replace unwanted headers
 

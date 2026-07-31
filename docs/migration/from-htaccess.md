@@ -1,6 +1,6 @@
 ---
 title: "Migrating from Apache .htaccess to Ferron 3 (PHP hosting)"
-description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting (with .htaccess) to Ferron 3 + PHP-FPM, covering the front-controller pattern, www/HTTPS redirects, IP ACLs, error pages, directory listings, and more."
+description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting (with .htaccess) to Ferron 3 with PHP-FPM, covering the front-controller pattern, www/HTTPS redirects, IP ACLs, error pages, directory listings, and more."
 ---
 
 This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you already know to Ferron 3 directives, and highlights the differences in how the two servers think about configuration.
@@ -240,7 +240,7 @@ Apache (current `Require`):
 Require ip 203.0.113.0/24
 ```
 
-Ferron uses `allow` and `block`. When `allow` is present, **only** the listed networks are permitted; everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
+Ferron uses `allow` and `block`. When `allow` is present, **only** the listed networks are permitted. Everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
 
 ```ferron
 example.com {
@@ -408,7 +408,7 @@ example.com {
 }
 ```
 
-Brute-force protection is enabled by default; you can tune it:
+Brute-force protection is enabled by default. You can tune it:
 
 ```ferron
 example.com {
@@ -572,7 +572,7 @@ example.com {
 
 ## Migration checklist
 
-1. Install and start PHP-FPM; confirm the socket (or TCP port) is reachable by the Ferron user.
+1. Install and start PHP-FPM. Confirm the socket (or TCP port) is reachable by the Ferron user.
 2. Create `ferron.conf` with the `root`, `fcgi_php`, and TLS settings for your domain.
 3. Recreate each `.htaccess` rule using the mapping above — `rewrite` for routing, `allow`/`block` for ACLs, `error_page` for error documents, `header` for headers, `basic_auth` for password areas.
 4. Move the front-controller rewrite (and any `index`/`directory_listing` settings) to the host block.

@@ -16,7 +16,7 @@ ferron validate -c ferron.conf
 If the configuration is valid, the command exits with code 0. If there are errors, it exits with code 1.
 
 > [!note]
-> Validation is module-aware: a directive recognized by a loaded module is valid; an unrecognized one is flagged as unknown. Validation does not guarantee runtime correctness — some issues can only be detected at runtime.
+> Validation is module-aware: a directive recognized by a loaded module is valid. An unrecognized one is flagged as unknown. Validation does not guarantee runtime correctness — some issues can only be detected at runtime.
 
 ### Log output
 

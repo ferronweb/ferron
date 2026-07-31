@@ -13,7 +13,7 @@ This page documents directives that configure static file serving, directory lis
 ### Index and directory listings
 
 - `index <filename: string>...`
-  - This directive specifies one or more filenames to try when a request path resolves to a directory. Files are tried in order; the first existing file replaces the directory path in the file context. Only applies when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
+  - This directive specifies one or more filenames to try when a request path resolves to a directory. Files are tried in order. The first existing file replaces the directory path in the file context. Only applies when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
 - `directory_listing [bool: boolean]` (`http-static`)
   - This directive specifies whether auto-generated HTML directory listings are enabled when a request path resolves to a directory and no index file is found. Default: `directory_listing false`
 
@@ -79,7 +79,7 @@ example.com {
 ### Error pages
 
 - `error_page <status-code: integer>... <file-path: string>`
-  - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path; all preceding arguments are status codes. Default: built-in error pages
+  - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path. All preceding arguments are status codes. Default: built-in error pages
 - `error_page_placeholders [bool: boolean]`
   - When enabled, `{{trace.id}}` and `{{trace.spanid}}` in the error page file are replaced with the request's trace ID and span ID. Default: `false`
 
@@ -108,7 +108,7 @@ example.com {
   - This directive controls whether symbolic links are allowed during file path resolution. When a symlink is encountered while traversing the request path, the behavior depends on this setting:
     - `false` (default): Allow all symlinks without restriction.
     - `true`: Reject all symbolic links with a `403 Forbidden` response. Symlinks are detected during path traversal without following them, mitigating symlink-based escape attacks.
-    - `"if_not_owner"`: Allow symlinks only if owned by the same user as the target file (Unix only; treated as `true` on non-Unix systems).
+    - `"if_not_owner"`: Allow symlinks only if owned by the same user as the target file (Unix only, treated as `true` on non-Unix systems).
   - Default: `disable_symlinks false`
 
 > [!warning]

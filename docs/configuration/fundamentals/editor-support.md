@@ -3,7 +3,7 @@ title: "Editor support"
 description: "Syntax highlighting, language server, and editor extensions for Ferron configuration files."
 ---
 
-Ferron configuration files (`.conf` / `.ferron`) are supported by a range of editor integrations. These cover syntax highlighting, formatting, completions, and diagnostics; useful for GitOps operators and anyone editing Ferron configuration by hand.
+Ferron configuration files (`.conf` / `.ferron`) are supported by a range of editor integrations. These cover syntax highlighting, formatting, completions, and diagnostics, useful for GitOps operators and anyone editing Ferron configuration by hand.
 
 ## Feature overview
 

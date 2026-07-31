@@ -42,7 +42,7 @@ example.com {
 ```
 
 > [!note]
-> Disabled by default: Both `buffer_request` and `buffer_response` are disabled unless explicitly configured — this avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes; typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit; setting it too large increases memory consumption per request.
+> Disabled by default: Both `buffer_request` and `buffer_response` are disabled unless explicitly configured — this avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes. Typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit. Setting it too large increases memory consumption per request.
 
 ## Behavior
 

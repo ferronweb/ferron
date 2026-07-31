@@ -75,7 +75,7 @@ tls {
 }
 ```
 
-If both are omitted, the safe default range (TLS 1.2–1.3) is used. Setting only `min_version` restricts the lower bound; setting only `max_version` restricts the upper bound. An error is returned if `max_version` is older than `min_version`.
+If both are omitted, the safe default range (TLS 1.2–1.3) is used. Setting only `min_version` restricts the lower bound. Setting only `max_version` restricts the upper bound. An error is returned if `max_version` is older than `min_version`.
 
 ### Client certificate authentication (mTLS)
 

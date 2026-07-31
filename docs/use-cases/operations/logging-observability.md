@@ -254,7 +254,7 @@ api.example.com {
 }
 ```
 
-## Hybrid setup: local fallback + OTLP
+## Hybrid setup: local fallback and OTLP
 
 A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally:
 
@@ -278,7 +278,7 @@ example.com {
 }
 ```
 
-### Hybrid setup: Prometheus + OTLP
+### Hybrid setup: Prometheus and OTLP
 
 You can combine both Prometheus and OTLP for maximum flexibility:
 

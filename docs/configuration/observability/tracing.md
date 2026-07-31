@@ -258,7 +258,7 @@ example.com {
 ```
 
 > [!note]
-> The default trace sampling mode (`parentbased_always_on`) samples all traces; in production use `parentbased_traceidratio`.
+> The default trace sampling mode (`parentbased_always_on`) samples all traces. In production use `parentbased_traceidratio`.
 
 ### Ratio-based sampling
 

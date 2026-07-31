@@ -225,7 +225,7 @@ example.com {
 - **Use strong passwords.** The security of the hash depends on the entropy of the original password.
 - **Plaintext passwords are rejected.** This module does not support plaintext passwords at all.
 - **Brute-force protection is enabled by default.** This provides a reasonable baseline of protection without requiring additional configuration.
-- **Tune `basic_auth_concurrency` to your workload.** Setting it too low may cause authentication queuing under high load; setting it too high may allow a flood of expensive hash operations to exhaust resources.
+- **Tune `basic_auth_concurrency` to your workload.** Setting it too low may cause authentication queuing under high load. Setting it too high may allow a flood of expensive hash operations to exhaust resources.
 
 ## Best practices
 

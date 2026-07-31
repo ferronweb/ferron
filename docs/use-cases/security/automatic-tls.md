@@ -124,7 +124,7 @@ Below is an example configuration for DNS-01 with Cloudflare:
 ```
 
 > [!important]
-> Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
+> Ensure your public DNS records point to the Ferron server before requesting certificates. ACME challenges will fail if traffic goes elsewhere.
 
 > [!info]
 > For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).

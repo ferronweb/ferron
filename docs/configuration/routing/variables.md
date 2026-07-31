@@ -13,7 +13,7 @@ This page documents the `set_var` and `log_field` directives, which set interpol
   - Sets a variable when the source value matches the regular expression. By default, the variable is set to `"1"` on match. Default: none
 
 > [!note]
-> The `set_var` directive is similar to Apache's `SetEnvIf` — it evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable; they are evaluated in declaration order with last-match-wins semantics.
+> The `set_var` directive is similar to Apache's `SetEnvIf` — it evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable. They are evaluated in declaration order with last-match-wins semantics.
 
 #### Block sub-directives
 

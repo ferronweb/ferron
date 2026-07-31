@@ -111,7 +111,7 @@ eu-west.example.com  A  198.51.100.20  (Europe)
 ap-southeast.example.com  A  192.0.2.30  (Asia-Pacific)
 ```
 
-The same Ferron configuration and cache store can be deployed on every node. GeoDNS handles routing; Ferron handles TLS termination, caching, and origin proxying at each location.
+The same Ferron configuration and cache store can be deployed on every node. GeoDNS handles routing. Ferron handles TLS termination, caching, and origin proxying at each location.
 
 ## Full edge node configuration
 

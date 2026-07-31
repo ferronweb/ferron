@@ -6,7 +6,7 @@ description: "Protect routes in Ferron with IP-based access control, Basic Auth,
 Ferron supports several access control patterns, from simple IP-based `block`/`allow` rules to authenticated areas with HTTP Basic Authentication or an external authentication backend.
 
 > [!tip]
-> Test restrictive rules with a temporary endpoint first to avoid locking yourself out. Prefer `location` matches when possible; use conditional matchers only when you need pattern matching.
+> Test restrictive rules with a temporary endpoint first to avoid locking yourself out. Prefer `location` matches when possible. Use conditional matchers only when you need pattern matching.
 
 ## Restrict a path by client IP (block/allow)
 

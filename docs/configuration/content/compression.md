@@ -15,7 +15,7 @@ When a client sends an `Accept-Encoding` header, Ferron selects the best compres
 1. **Zstandard** — the preferred algorithm. Offers the best compression ratio for text content and fast decoding.
 2. **Brotli** — excellent compression ratio, widely supported.
 3. **gzip** — the most universally supported compression algorithm.
-4. **Deflate** — similar to gzip but without the CRC checksum overhead; less common in practice.
+4. **Deflate** — similar to gzip but without the CRC checksum overhead. Less common in practice.
 
 The server iterates through the client's `Accept-Encoding` header values and selects the **first** algorithm that matches the preference order. For example, if a client sends:
 

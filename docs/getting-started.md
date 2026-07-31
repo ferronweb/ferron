@@ -26,7 +26,7 @@ Choose **static file serving** if:
 
 - You have a static website, docs site, landing page, or built frontend assets.
 - You do not need app logic on every request.
-- Your content mostly lives in a directory on disk.
+- Your content is mostly stored in a directory on disk.
 
 Choose **reverse proxying** if:
 
