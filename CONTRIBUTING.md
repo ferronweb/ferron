@@ -82,7 +82,7 @@ cargo test
 If behavior, configuration, CLI output, installation steps, or defaults change, update documentation in the same pull request.
 
 - Main docs live in `docs/`.
-- If you add or rename doc pages, update `docs/docLinks.ts`.
+- If you add or rename doc pages, update `docs/links.json`.
 - Keep examples and command snippets aligned with the code and scripts in this repository.
 
 Optional local docs linting/formatting (same tool used in CI):
