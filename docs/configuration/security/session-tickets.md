@@ -22,7 +22,7 @@ tls {
 }
 ```
 
-This configuration validates the key file and enables session tickets. Keys are loaded once at startup.
+This configuration validates the key file and enables session tickets. Ferron loads the keys once at startup.
 
 ### Automatic key rotation (recommended for production)
 
@@ -44,9 +44,9 @@ tls {
 
 This configuration:
 
-- Generates initial keys if the file doesn't exist
+- Generates initial keys if the file does not exist
 - Automatically rotates keys every 12 hours
-- Keeps up to 3 keys for seamless decryption of old tickets
+- Keeps up to 3 keys for decryption of old tickets without interruption
 - Persists new keys to disk atomically on each rotation
 
 ### Configuration parameters
@@ -87,7 +87,7 @@ openssl rand 80 >> session_tickets.keys
 
 #### Rotating key files
 
-Manual ticket key rotation can be done like tihs:
+Rotate ticket keys manually like this:
 
 ```bash
 # Rotate keys, keeping some previous keys from the old file
@@ -113,12 +113,12 @@ chown ferron:ferron session_tickets.keys
 
 When `auto_rotate` is enabled:
 
-1. **Initial setup**: If the key file doesn't exist, Ferron generates `max_keys` random keys
-2. **Validation**: The existing file is validated (size must be multiple of 80 bytes)
-3. **Runtime**: Keys are loaded and a `TicketKeyRotator` is created
+1. **Initial setup**: If the key file does not exist, Ferron generates `max_keys` random keys
+2. **Validation**: Ferron validates the existing file (size must be a multiple of 80 bytes)
+3. **Runtime**: Ferron loads the keys and creates a `TicketKeyRotator`
 4. **Rotation trigger**: When `rotation_interval` elapses
-5. **Key generation**: A new cryptographically secure key is generated
-6. **File update**: New key is prepended, file is trimmed to `max_keys`, atomic write
+5. **Key generation**: Ferron generates a new cryptographically secure key
+6. **File update**: Ferron prepends the new key, trims the file to `max_keys`, and writes atomically
 7. **Memory update**: Current → previous, new key becomes current
 
 ### Example: 12-hour rotation
@@ -146,16 +146,16 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 ### Don'ts
 
 - **Never log key content** — Ferron never logs key bytes
-- **Don't use predictable values** — no hardcoded or weak keys
-- **Don't expose files** — avoid world-readable permissions
-- **Don't rotate all keys at once** — keep old keys for overlap during rotation
-- **Don't commit keys to version control** — add to `.gitignore`
+- **Do not use predictable values** — no hardcoded or weak keys
+- **Do not expose files** — avoid world-readable permissions
+- **Do not rotate all keys at once** — keep old keys for overlap during rotation
+- **Do not commit keys to version control** — add to `.gitignore`
 
 ## Troubleshooting
 
 ### "Ticket keys file not found"
 
-The key file doesn't exist and `auto_rotate` is disabled.
+The key file does not exist and `auto_rotate` is disabled.
 
 **Fix:** Either enable `auto_rotate` or create the file manually with `openssl rand 80 > session_tickets.keys`.
 
@@ -169,7 +169,7 @@ The key file exists but has zero bytes.
 
 The file size is incorrect.
 
-**Fix:** Ensure the file contains complete 80-byte records.
+**Fix:** Make sure the file contains complete 80-byte records.
 
 ### Debugging
 

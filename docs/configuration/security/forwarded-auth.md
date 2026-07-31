@@ -107,7 +107,7 @@ example.com {
 }
 ```
 
-Headers are copied by name — if the auth response contains the specified header, it is added to the original request. Multiple values are preserved.
+Headers are copied by name — if the auth response contains the specified header, Ferron adds it to the original request. Multiple values are preserved.
 
 ### Global connection limit
 
@@ -133,11 +133,11 @@ Default: `auth_to_concurrent_conns 16384`
 ## Authentication flow
 
 1. The stage receives the incoming request and parses the `auth_to` configuration.
-2. A new HTTP request is constructed using the original request's method, path, query string, and headers.
-3. Standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `Forwarded`) are added.
-4. The request is sent to the authentication backend via the connection pool.
-5. **On success (2xx)**: Configured headers are copied from the response to the original request. The pipeline continues.
-6. **On failure (4xx/5xx)**: The backend's response is returned directly to the client. The pipeline stops.
+2. The stage constructs a new HTTP request using the original request's method, path, query string, and headers.
+3. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `Forwarded`).
+4. The stage sends the request to the authentication backend via the connection pool.
+5. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
+6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client. The pipeline stops.
 
 ## Stage ordering
 
@@ -204,7 +204,7 @@ internal.example.com {
 ```
 
 > [!tip]
-> For authentication backends behind TLS, ensure the backend's certificate is valid or use `no_verification true` for development/testing.
+> For authentication backends behind TLS, make sure the backend's certificate is valid or use `no_verification true` for development/testing.
 
 ### Disabling the global connection limit
 
@@ -220,7 +220,7 @@ example.com {
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`auth_to_concurrent_conns false`** — Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
 - **`auth_to { no_verification }`** — Disabling TLS verification for the authentication backend should only be used in tightly controlled internal test environments.

@@ -3,7 +3,7 @@ title: "Configuration: FastCGI support"
 description: "Server-side FastCGI protocol support for backend application servers with connection pooling and keepalive."
 ---
 
-This page documents the `fcgi` directive for configuring Ferron's FastCGI support. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets, with support for connection pooling and keepalive for improved performance.
+This page documents the `fcgi` directive for configuring Ferron's FastCGI support. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets. It also supports connection pooling and keepalive for improved performance.
 
 ## `fcgi`
 
@@ -16,7 +16,7 @@ example.com {
 }
 ```
 
-The `fcgi` directive enables FastCGI protocol support. It can be written as a boolean flag to enable with defaults, with a backend URL to set the target, or as a block with nested directives to customize behavior.
+The `fcgi` directive enables FastCGI protocol support. You can write it as a boolean flag to enable with defaults, or with a backend URL to set the target. You can also write it as a block with nested directives to customize behavior.
 
 | Form | Description |
 | --- | --- |
@@ -55,16 +55,16 @@ example.com {
 
 > [!note]
 >
-> - TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:9000`).
+> - TCP URLs must include both host and port (for example, `tcp://127.0.0.1:9000`).
 > - Unix socket paths must be absolute paths.
 > - When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
-> - If a FastCGI server returns a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response — stderr output is logged as a warning (trimmed before logging).
+> - If a FastCGI server returns a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response. Ferron trims stderr output before logging it as a warning.
 
 ### `extension`
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `extension` | `<string>` | This directive registers a file extension that should be processed by the FastCGI backend. Files with these extensions are handled by the FastCGI backend when `pass` is `false`. This directive can be specified multiple times, and each invocation can accept multiple extensions. | — |
+| `extension` | `<string>` | This directive registers a file extension that the FastCGI backend should process. The FastCGI backend handles files with these extensions when `pass` is `false`. You can specify this directive multiple times. Each invocation can accept multiple extensions. | — |
 
 **Configuration example:**
 
@@ -88,7 +88,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets a FastCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. This directive can be specified multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets a FastCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -114,7 +114,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `pass` | `<boolean: optional>` | This directive controls whether all requests are passed to the FastCGI backend. When `true`, all requests are forwarded. When `false`, requests are passed to the file-processing pipeline, allowing the `extension` directive to match files. | `true` |
+| `pass` | `<boolean: optional>` | This directive controls whether Ferron passes all requests to the FastCGI backend. When `true`, Ferron forwards all requests. When `false`, Ferron passes requests to the file-processing pipeline. This allows the `extension` directive to match files. | `true` |
 
 **Configuration example:**
 
@@ -137,7 +137,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `keepalive` | `<boolean: optional>` | This directive enables connection keepalive to the FastCGI backend. When enabled, connections are reused across requests, reducing connection setup overhead. | `false` |
+| `keepalive` | `<boolean: optional>` | This directive enables connection keepalive to the FastCGI backend. When enabled, Ferron reuses connections across requests, reducing connection setup overhead. | `false` |
 
 **Configuration example:**
 
@@ -192,8 +192,8 @@ example.com {
 > [!note]
 >
 > - `fcgi_php` automatically registers `.php` as a file extension.
-> - `fcgi_php false` can be used to disable PHP FastCGI for a specific scope.
-> - For PHP-FPM over Unix sockets, ensure the socket is accessible by the Ferron process (check owner/group/mode in your PHP-FPM pool configuration).
+> - Use `fcgi_php false` to disable PHP FastCGI for a specific scope.
+> - For PHP-FPM over Unix sockets, make sure the socket is accessible by the Ferron process (check owner/group/mode in your PHP-FPM pool configuration).
 
 ## Connection pooling
 
@@ -266,7 +266,7 @@ Additional variables set by `environment` directives override any automatically 
 
 ## Authentication
 
-When used alongside an authentication module (e.g., `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the FastCGI request. The authentication type is extracted from the `Authorization` header (e.g., `Basic` or `Bearer`).
+When used alongside an authentication module (for example, `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the FastCGI request. Ferron extracts the authentication type from the `Authorization` header (for example, `Basic` or `Bearer`).
 
 ## Trace context injection
 
@@ -302,7 +302,7 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `ferron.fcgi.requests` | Counter | — | Number of FastCGI requests processed |
-| `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before a backend response was returned |
+| `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before the backend returned a response |
 | `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
 | `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |
 
@@ -324,7 +324,7 @@ The FastCGI stage sets the following attributes on its `ferron.stage.fcgi_pass` 
 | `http.response.status_code` | int | HTTP status code returned by the FastCGI backend. |
 | `ferron.fcgi.backend_url` | string | URL of the FastCGI backend. |
 | `ferron.fcgi.script_filename` | string | Absolute path to the script on the backend filesystem, when available. |
-| `error.type` | string | Error type on failure (e.g., `service_unavailable`), enabling trace UI highlighting. |
+| `error.type` | string | Error type on failure (for example, `service_unavailable`), enabling trace UI highlighting. |
 
 ## Examples
 

@@ -3,7 +3,7 @@ title: "Configuration: SCGI support"
 description: "Server-side CGI protocol support for backend application servers using the SCGI protocol."
 ---
 
-This page documents the `scgi` directive for configuring Ferron's SCGI (Simple Common Gateway Interface) support. SCGI is a protocol for interfacing external application servers with web servers, similar to CGI but with binary framing for better performance.
+This page documents the `scgi` directive for configuring Ferron's SCGI (Simple Common Gateway Interface) support. SCGI is a protocol for interfacing external application servers with web servers. It is similar to CGI but with binary framing for better performance.
 
 ## `scgi`
 
@@ -16,7 +16,7 @@ example.com {
 }
 ```
 
-The `scgi` directive enables SCGI protocol support. When specified, Ferron will forward requests to the configured SCGI backend using the SCGI protocol instead of spawning local processes.
+The `scgi` directive enables SCGI protocol support. When specified, Ferron forwards requests to the configured SCGI backend using the SCGI protocol instead of spawning local processes.
 
 | Form | Description |
 | --- | --- |
@@ -51,7 +51,7 @@ example.com {
 
 > [!note]
 >
-> - TCP URLs must include both host and port (e.g., `tcp://127.0.0.1:4000`).
+> - TCP URLs must include both host and port (for example, `tcp://127.0.0.1:4000`).
 > - Unix socket paths must be absolute paths.
 > - When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
 
@@ -59,7 +59,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. This directive can be specified multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -95,7 +95,7 @@ Ferron automatically sets the following SCGI environment variables:
 | `QUERY_STRING` | Query string (empty string if none). |
 | `PATH_INFO` | Path info extracted from the request. |
 | `SCRIPT_NAME` | The script path relative to the document root. |
-| `AUTH_TYPE` | Authentication type from the `Authorization` header (e.g., `Basic`, `Bearer`). |
+| `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
 | `HTTPS` | Set to `on` when the connection is encrypted. |
@@ -107,7 +107,7 @@ Additional variables set by `environment` directives override any automatically 
 
 ## Authentication
 
-When used alongside an authentication module (e.g., `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the SCGI request. The authentication type is extracted from the `Authorization` header (e.g., `Basic` or `Bearer`).
+When used alongside an authentication module (for example, `http-basicauth`), Ferron automatically populates the `AUTH_TYPE` and `REMOTE_USER` environment variables in the SCGI request. Ferron extracts the authentication type from the `Authorization` header (for example, `Basic` or `Bearer`).
 
 ## Trace context injection
 
@@ -141,7 +141,7 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `ferron.scgi.requests` | Counter | — | Number of SCGI requests processed |
-| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before a backend response was returned |
+| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before the backend returned a response |
 | `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |
 
 ### Access log fields

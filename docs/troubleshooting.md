@@ -93,7 +93,7 @@ For HTTPS upstreams with private or self-signed certs:
 
 ### Certificate does not match the hostname
 
-Ensure the requested hostname matches the certificate SAN or CN and the correct Ferron host block.
+Make sure the requested hostname matches the certificate SAN or CN and the correct Ferron host block.
 
 ### Missing DNS records
 
@@ -178,8 +178,8 @@ Start with a minimal known-good config, validate it with `ferron validate -c fer
 
 Ferron does not have a single global debug mode. For troubleshooting visibility:
 
-- Ensure `error_log` is enabled.
-- Ensure access logging is enabled via `log`.
+- Make sure `error_log` is enabled.
+- Make sure access logging is enabled via `log`.
 - Temporarily enable `rewrite_log` when debugging rewrites.
 - Use OTLP export if you already have centralized tracing or metrics.
 

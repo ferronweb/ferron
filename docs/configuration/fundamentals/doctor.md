@@ -7,13 +7,13 @@ This page documents the `ferron doctor` command, which extends configuration val
 
 ## The doctor command
 
-The `doctor` command runs the same structural validation as `ferron validate`, then additionally checks for configuration patterns that are technically valid but deviate from recommended practices.
+The `doctor` command runs the same structural validation as `ferron validate`. It also checks for configuration patterns that are technically valid but deviate from recommended practices.
 
 ```bash
 ferron doctor -c ferron.conf
 ```
 
-If the configuration is valid and contains no best-practice violations, the command exits with code 0. If violations are found, it still exits with code 0 (they are advisory, not errors). If structural errors are found, it exits with code 1.
+If the configuration is valid and contains no best-practice violations, the command exits with code 0. If it finds violations, it still exits with code 0 (they are advisory, not errors). If it finds structural errors, it exits with code 1.
 
 > [!note]
 >
@@ -21,7 +21,7 @@ If the configuration is valid and contains no best-practice violations, the comm
 > - The `ferron validate` command suppresses doctor diagnostics — use `ferron doctor` to see them.
 
 > [!tip]
-> Some checks are contextual and only fire when specific directive combinations are detected. Not all security-relevant patterns can be detected at configuration time — runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
+> Some checks are contextual and only fire when the doctor detects specific directive combinations. The doctor cannot detect all security-relevant patterns at configuration time — runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
 
 ### Log output
 

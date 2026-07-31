@@ -12,9 +12,9 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `proxy` (`http-proxy`)
   - This directive configures the reverse proxy with one or more upstream backends. Supports block form with nested directives or shorthand form with upstreams as arguments. Default: none
 - `upstream <url: string>` (`http-proxy`)
-  - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, `unix`, `logical_dns`, and `dns_servers` properties. When the URL contains a hostname, A/AAAA records are resolved via Hickory DNS by default (strict DNS), creating a separate backend per resolved IP. Default: none
+  - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, `unix`, `logical_dns`, and `dns_servers` properties. When the URL contains a hostname, Ferron resolves A/AAAA records via Hickory DNS by default (strict DNS), creating a separate backend per resolved IP. Default: none
 - `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
-  - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
+  - This directive specifies a dynamic upstream that Ferron resolves via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
 - `algorithm <algorithm: string>` (`http-proxy`)
   - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`. Default: `algorithm two_random`
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
@@ -22,9 +22,9 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `retry_connection [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
 - `retry_budget [bool: boolean]` (`http-proxy`)
-  - This directive enables a token-bucket retry budget that limits retries to a fraction of steady-state traffic. When enabled alongside `retry_connection true`, retries consume tokens from a shared pool. Successful requests replenish the pool. If the retry budget is exhausted, further retries are refused and the request immediately returns `503 Service Unavailable`, preventing cascading retry storms from overwhelming remaining healthy backends. Supports `max_retry_rate`, `max_tokens`, and `refill_rate` nested directives. Default: `retry_budget false`
+  - This directive enables a token-bucket retry budget that limits retries to a fraction of steady-state traffic. When enabled alongside `retry_connection true`, retries consume tokens from a shared pool. Successful requests replenish the pool. If the retry budget is exhausted, Ferron refuses further retries and the request immediately returns `503 Service Unavailable`. This prevents cascading retry storms from overwhelming remaining healthy backends. Supports `max_retry_rate`, `max_tokens`, and `refill_rate` nested directives. Default: `retry_budget false`
 - `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
-  - This directive controls whether the `ferron.proxy.backend_resolved_ip` and `ferron.proxy.dns_status` attributes are included in proxy metrics and access logs. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only, keeping metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value, and a `ferron.proxy.dns_status` attribute indicates the DNS resolution outcome (`resolved`, `nxdomain`, `dns_error`, `logical_dns`, `static`). Enable only when per-IP metric granularity is required and the IP set is stable. Default: `metrics_resolved_ip false`
+  - This directive controls whether Ferron includes the `ferron.proxy.backend_resolved_ip` and `ferron.proxy.dns_status` attributes in proxy metrics and access logs. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only, keeping metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value, and a `ferron.proxy.dns_status` attribute indicates the DNS resolution outcome (`resolved`, `nxdomain`, `dns_error`, `logical_dns`, `static`). Enable only when you need per-IP metric granularity and the IP set is stable. Default: `metrics_resolved_ip false`
 
 **Configuration example:**
 
@@ -73,16 +73,16 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | `open_duration` | `<duration: string>` | How long the circuit stays open before a half-open trial request is allowed. | `30s` |
 | `consecutive_passes` | `<count: integer>` | Number of successful half-open trial requests required to close the circuit again. | 1 |
 | `record_5xx` | `[bool: boolean]` | Whether upstream `5xx` responses count toward tripping the circuit. Transport failures always count. | `false` |
-| `latency_threshold` | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (e.g., `"0.1s"`, `"0.5s"`). | disabled |
-| `flapping_transitions` | `<count: integer>` | Number of circuit breaker state transitions within `flapping_window` required to mark an upstream as flapping. When flapping, individual transition logs are suppressed and a single warning is emitted. Set to `0` to disable flapping detection. | 3 |
+| `latency_threshold` | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (for example `"0.1s"`, `"0.5s"`). | disabled |
+| `flapping_transitions` | `<count: integer>` | Number of circuit breaker state transitions within `flapping_window` required to mark an upstream as flapping. When flapping, Ferron suppresses individual transition logs and emits a single warning. Set to `0` to disable flapping detection. | 3 |
 | `flapping_window` | `<duration: string>` | Time window for counting state transitions for flapping detection. | `10s` |
-| `slow_start` | `<duration: string>` | Duration of slow-start window after a backend's circuit breaker recovers (half-open → closed). During slow-start, the load balancer applies a decaying virtual connection penalty to prevent thundering herd — the recovered backend appears busier than it is until real traffic catches up. Set to `0` to disable. | `0` |
+| `slow_start` | `<duration: string>` | Duration of slow-start window after a backend's circuit breaker recovers (half-open → closed). During slow-start, the load balancer applies a decaying virtual connection penalty to prevent thundering herd. The recovered backend appears busier than it is until real traffic catches up. Set to `0` to disable. | `0` |
 
 #### Retry budget nested directives
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `max_retry_rate` | `<rate: float>` | Maximum retry rate as a fraction of total requests (0.0–1.0). When exceeded, further retries are refused with `503 Service Unavailable`. | `0.1` (10%) |
+| `max_retry_rate` | `<rate: float>` | Maximum retry rate as a fraction of total requests (0.0–1.0). When exceeded, Ferron refuses further retries with `503 Service Unavailable`. | `0.1` (10%) |
 | `max_tokens` | `<count: integer>` | Maximum number of tokens in the bucket (burst capacity). Controls how many retries can happen in a short burst before the rate limit applies. | `10` |
 | `refill_rate` | `<rate: float>` | Tokens added per second to the bucket. Higher values allow retries to recover faster after sustained traffic. | `2.0` |
 
@@ -107,7 +107,7 @@ example.com {
 
 #### SSRF risk with interpolated upstream URLs
 
-The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (e.g., `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs, as an attacker can craft requests to redirect the proxy to internal services.
+The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (for example `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs. An attacker can craft requests to redirect the proxy to internal services.
 
 **Unsafe — user-controlled header in upstream URL:**
 
@@ -154,7 +154,7 @@ example.com {
 - `http2_only [bool: boolean]` (`http-proxy`)
   - This directive specifies whether only HTTP/2 is used for upstream connections. Default: `http2_only false`
 - `intercept_errors [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether upstream error responses (4xx/5xx) are intercepted and replaced with built-in error pages. When `true`, Ferron replaces upstream error responses with its own error pages. When `false` (default), the full upstream response body and headers are passed through unchanged. Default: `intercept_errors false`
+  - This directive specifies whether Ferron intercepts upstream error responses (4xx/5xx) and replaces them with built-in error pages. When `true`, Ferron replaces upstream error responses with its own error pages. When `false` (default), Ferron passes the full upstream response body and headers through unchanged. Default: `intercept_errors false`
 
 ### TLS
 
@@ -179,7 +179,7 @@ example.com {
 }
 ```
 
-Both `cert` and `key` must be provided for mTLS to activate. The certificate chain and private key must be PEM-encoded. mTLS credentials are scoped per-upstream, so different backends can require different client certificates. Active health check probes also use the configured mTLS credentials. mTLS credentials are cached in memory until configuration reload or server shutdown.
+You must provide both `cert` and `key` for mTLS to activate. The certificate chain and private key must be PEM-encoded. mTLS credentials are scoped per-upstream, so different backends can require different client certificates. Active health check probes also use the configured mTLS credentials. Ferron caches mTLS credentials in memory until configuration reload or server shutdown.
 
 ### PROXY protocol
 
@@ -245,19 +245,19 @@ example.com {
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
-| `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
+| `idle_timeout` | `<duration>` | Keep-alive idle timeout. Ferron evicts connections idle longer than this from the pool. | `60s` |
 | `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to be established. Set to `false` to disable. | `5s` |
 | `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
 | `weight` | `<number>` | Weight for weighted load balancing. Higher values receive more requests. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1 |
-| `priority` | `<number>` | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier is exhausted, the next tier is tried. | 0 |
+| `priority` | `<number>` | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier is exhausted, Ferron tries the next tier. | 0 |
 | `cert` | `<path: string>` | Path to a PEM file containing the client certificate chain to present to the upstream server for mTLS. Must be used together with `key`. | disabled |
 | `key` | `<path: string>` | Path to a PEM file containing the client private key for mTLS. Must be used together with `cert`. | disabled |
-| `logical_dns` | `[bool: boolean]` | When `true`, disables strict A/AAAA DNS resolution and uses the system's logical DNS resolution instead. The upstream URL is passed through as-is without per-IP backend splitting. | `false` |
+| `logical_dns` | `[bool: boolean]` | When `true`, disables strict A/AAAA DNS resolution and uses the system's logical DNS resolution instead. Ferron passes the upstream URL through as-is without per-IP backend splitting. | `false` |
 | `dns_servers` | `<string>` | Comma-separated DNS server IPs used for strict A/AAAA resolution. Uses Hickory's default resolvers if empty. | system |
 
 ### `srv` (feature-gated)
 
-Defines a dynamic upstream resolved via DNS SRV records.
+Defines a dynamic upstream that Ferron resolves via DNS SRV records.
 
 ```ferron
 example.com {
@@ -292,13 +292,13 @@ example.com {
 
 ## Session affinity
 
-Session affinity (sticky sessions) ensures that requests from the same client are consistently routed to the same backend server. This is useful for stateful applications, WebSocket-heavy workloads, and improving cache locality.
+Session affinity (sticky sessions) makes sure the same client's requests always go to the same backend server. This is useful for stateful applications, WebSocket-heavy workloads, and improving cache locality.
 
 The `affinity` directive configures session affinity inside a `proxy` block. Four affinity types are supported:
 
 ### Cookie affinity
 
-Reads and sets a cookie to track which backend a client should be routed to. If no cookie is present, a backend is selected and a cookie is set on the response.
+Reads and sets a cookie to track which backend receives each client's requests. If no cookie is present, Ferron selects a backend and sets a cookie on the response.
 
 ```ferron
 example.com {
@@ -380,14 +380,14 @@ example.com {
 
 ### Affinity behavior
 
-- Affinity is respected only when the target backend is healthy. If the affinity target is unhealthy, the configured load balancing algorithm is used as a fallback.
+- Ferron respects affinity only when the target backend is healthy. If the affinity target is unhealthy, Ferron uses the configured load balancing algorithm as a fallback.
 - When `retry_connection` is enabled and the affinity-targeted backend fails, Ferron retries with another backend.
 - Cookie affinity automatically sets the cookie on the first request if no valid cookie is present.
-- The affinity key is used with a consistent hash ring for deterministic routing.
+- Ferron uses the affinity key with a consistent hash ring for deterministic routing.
 
 ## Priority-based failover
 
-Backends can be assigned numeric priority values to implement tiered failover. Lower values indicate higher priority. When all backends in the highest-priority tier are unavailable (unhealthy, circuit-open, or already-tried), the next tier is used as a fallback.
+You can assign numeric priority values to backends to implement tiered failover. Lower values indicate higher priority. When all backends in the highest-priority tier are unavailable (unhealthy, circuit-open, or already-tried), Ferron uses the next tier as a fallback.
 
 ```ferron
 example.com {
@@ -405,7 +405,7 @@ example.com {
 }
 ```
 
-Requests are routed to the primary tier (priority 0) first. If all primary backends are unavailable, the secondary tier (priority 1) is tried, and so on. Within each tier, the configured load balancing algorithm selects which backend handles the request. Priority and weight work together: priority determines which tier is tried, and weight determines how requests are distributed within a tier.
+Ferron routes requests to the primary tier (priority 0) first. If all primary backends are unavailable, Ferron tries the secondary tier (priority 1), and so on. Within each tier, the configured load balancing algorithm selects which backend handles the request. Priority and weight work together: priority determines which tier Ferron tries, and weight determines how Ferron distributes requests within a tier.
 
 For SRV upstreams, the `priority` subdirective is an additive offset applied to DNS SRV priorities. A backend's effective priority is `dns_priority + offset`. For example, if DNS returns priorities 10 and 20, setting `priority 5` on the SRV block shifts them to 15 and 25.
 
@@ -423,7 +423,7 @@ example.com {
 
 When an `upstream` URL contains a hostname (not an IP literal), Ferron resolves A and AAAA records using Hickory DNS by default. Each resolved IP address becomes a separate backend in the load balancer, enabling per-IP load balancing, circuit breaking, and health checking.
 
-For example, if `http://myapp.example.com:8080` resolves to three IPs (`10.0.0.1`, `10.0.0.2`, `10.0.0.3`), Ferron creates three distinct backends — one per IP. The original hostname is preserved for TLS SNI and the HTTP `Host` header.
+For example, if `http://myapp.example.com:8080` resolves to three IPs (`10.0.0.1`, `10.0.0.2`, `10.0.0.3`), Ferron creates three distinct backends — one per IP. Ferron preserves the original hostname for TLS SNI and the HTTP `Host` header.
 
 ```ferron
 example.com {
@@ -437,7 +437,7 @@ example.com {
 
 ### Opting out with `logical_dns`
 
-Set `logical_dns true` to disable strict A/AAAA resolution. The upstream URL is passed through as-is, and the system's DNS resolver handles address selection. This is useful when the upstream uses DNS for logical routing (e.g., geographic steering) and you want a single logical backend rather than per-IP backends.
+Set `logical_dns true` to disable strict A/AAAA resolution. Ferron passes the upstream URL through as-is, and the system's DNS resolver handles address selection. This is useful when the upstream uses DNS for logical routing (for example geographic steering). You then get a single logical backend rather than per-IP backends.
 
 ```ferron
 example.com {
@@ -450,7 +450,7 @@ example.com {
 ```
 
 > [!important]
-> When using Ferron with ephemeral network addresses (e.g., as a Kubernetes ingress controller), always define upstreams using DNS hostnames (such as Kubernetes service identifiers like `http://my-service.default.svc.cluster.local:8080`) rather than individual Pod IP addresses. DNS hostnames remain stable across pod restarts and scaling events, whereas Pod IPs change frequently. Using individual Pod IPs directly as upstream URLs or relying on per-IP metric dimensions (`metrics_resolved_ip true`) can cause cardinality explosion in time-series databases, degrading observability performance and increasing storage costs.
+> When using Ferron with ephemeral network addresses (for example as a Kubernetes ingress controller), always define upstreams using DNS hostnames. Use service identifiers such as `http://my-service.default.svc.cluster.local:8080` rather than individual Pod IP addresses. DNS hostnames remain stable across pod restarts and scaling events, whereas Pod IPs change frequently. Using individual Pod IPs directly as upstream URLs or relying on per-IP metric dimensions (`metrics_resolved_ip true`) can cause cardinality explosion in time-series databases. This degrades observability performance and increases storage costs.
 
 ## Forwarding headers
 
@@ -473,21 +473,21 @@ When a trace context exists for the request, the reverse proxy module automatica
 | `tracestate` | Injected only if the incoming request or Ferron's trace context carries a non-empty `tracestate` value. |
 | `baggage` | Injected only if the incoming request or Ferron's trace context carries non-empty `baggage` values. |
 
-Trace context injection happens after all `request_header` transformations are applied. This means:
+Trace context injection happens after Ferron applies all `request_header` transformations. This means:
 
 - You can override the injected headers using `request_header +traceparent "..."` to add a custom value.
 - You can remove injected headers using `request_header -traceparent` to suppress propagation.
-- The injected headers cannot be removed by `headers_to_remove` since injection occurs last.
+- `headers_to_remove` cannot remove the injected headers since injection occurs last.
 
 > [!info]
-> By default, incoming `traceparent` headers are discarded. Trace context is created when `http { trace { generate true } }` (the default) is active and trace sinks are configured. To trust incoming trace context, enable `trust_request true` inside the `trace` block. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
+> By default, Ferron discards incoming `traceparent` headers. Ferron creates trace context when `http { trace { generate true } }` (the default) is active and trace sinks are configured. To trust incoming trace context, enable `trust_request true` inside the `trace` block. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
 
 ## Connection pooling
 
 Ferron maintains a keep-alive connection pool for upstream backends. Key behaviors:
 
-- **Connection reuse** - pooled connections are automatically reused for subsequent requests to the same upstream.
-- **Idle eviction** - connections idle longer than `idle_timeout` are evicted from the pool.
+- **Connection reuse** - Ferron automatically reuses pooled connections for later requests to the same upstream.
+- **Idle eviction** - Ferron evicts connections idle longer than `idle_timeout` from the pool.
 - **HTTP/2 multiplexing** - HTTP/2 connections share a single TCP connection for multiple concurrent requests.
 
 > [!tip]
@@ -499,7 +499,7 @@ Ferron maintains a keep-alive connection pool for upstream backends. Key behavio
 
 Circuit breaking provides passive health checking — tracking request-time failures per backend without background probes. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses, then temporarily ejects unstable backends from the load balancer.
 
-1. Transport failures and (optionally) upstream `5xx` responses are counted per backend in a rolling window.
+1. Ferron counts transport failures and (optionally) upstream `5xx` responses per backend in a rolling window.
 2. When the backend reaches `max_fails` failures within `window`, Ferron opens the circuit and stops selecting that backend.
 3. After `open_duration`, Ferron allows a single half-open trial request to the backend.
 4. If the trial request succeeds, Ferron closes the circuit after `consecutive_passes` successful half-open requests.
@@ -544,7 +544,7 @@ example.com {
 
 Active health checks proactively probe backend health on a schedule, independent of incoming traffic. This allows quick detection of backend failures before they affect client requests.
 
-Active health checks are configured per-upstream inside an `active_check` block.
+You configure active health checks per-upstream inside an `active_check` block.
 
 #### `active_check` nested directives
 
@@ -555,7 +555,7 @@ Active health checks are configured per-upstream inside an `active_check` block.
 | `interval` | `<duration: string>` | Interval between health check probes. | `10s` |
 | `timeout` | `<duration: string>` | Maximum wait time for a probe response. | `5s` |
 | `expect_status` | `<status: string>` | Expected HTTP status code(s) for a successful probe. Supports: `2xx`, `3xx`, `2xx,3xx`, specific codes (`200,204`), or ranges (`200-299`). | `2xx,3xx` |
-| `response_time_threshold` | `<duration: string>` | Optional response time threshold. If exceeded, the probe is marked unhealthy. | disabled |
+| `response_time_threshold` | `<duration: string>` | Optional response time threshold. If exceeded, Ferron marks the probe unhealthy. | disabled |
 | `body_match` | `<substring: string>` | Optional substring to match in the response body (GET only). | disabled |
 | `consecutive_fails` | `<count: integer>` | Number of consecutive failures before marking an upstream as unhealthy. | 2 |
 | `consecutive_passes` | `<count: integer>` | Number of consecutive successes before marking an upstream as healthy when recovering. | 2 |
@@ -590,15 +590,15 @@ example.com {
 ```
 
 > [!tip]
-> For active health checks: ensure the probe endpoint is reachable on all backends, keep probes lightweight, and use HEAD requests when the response body is not needed. If upstreams are incorrectly marked unhealthy, check logs and verify `expect_status`.
+> For active health checks: make sure the probe endpoint is reachable on all backends, keep probes lightweight, and use HEAD requests when the response body is not needed. If Ferron marks upstreams unhealthy incorrectly, check logs and verify `expect_status`.
 
 ## DNS result caching
 
-When strict DNS or SRV resolution is enabled, Ferron caches resolved DNS results in memory with TTL-based expiry. The cache key includes the hostname (strict DNS) or SRV name, port, and DNS server list, ensuring that different resolver configurations are not served stale results.
+When strict DNS or SRV resolution is enabled, Ferron caches resolved DNS results in memory with TTL-based expiry. The cache key includes the hostname (strict DNS) or SRV name, port, and DNS server list. This makes sure different resolver configurations never get stale results.
 
-The cached TTL is derived from the minimum TTL across all DNS response records, with a 30-second fallback when no TTL is available. This prevents stale backends from remaining in the pool while avoiding unnecessary DNS resolution for high-traffic hostnames.
+Ferron derives the cached TTL from the minimum TTL across all DNS response records, with a 30-second fallback when no TTL is available. This prevents stale backends from remaining in the pool while avoiding unnecessary DNS resolution for high-traffic hostnames.
 
-Cache entries are evicted lazily — expired entries are treated as cache misses and re-resolved on demand. A periodic background task removes expired entries every 60 seconds to prevent unbounded memory growth for hostnames no longer queried.
+Ferron evicts cache entries lazily — it treats expired entries as cache misses and re-resolves them on demand. A periodic background task removes expired entries every 60 seconds to prevent unbounded memory growth for hostnames no longer queried.
 
 > [!info]
 > Cache metrics are available as `ferron.proxy.dns.cache_hit` and `ferron.proxy.dns.cache_miss` counters.
@@ -615,7 +615,7 @@ example.com {
 }
 ```
 
-In this example, the strict DNS resolution for `myapp.example.com` is cached. Subsequent requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
+In this example, Ferron caches the strict DNS resolution for `myapp.example.com`. Later requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
 
 ## Retry budgets
 
@@ -623,10 +623,10 @@ The retry budget uses a token-bucket algorithm shared across all requests for a 
 
 1. The bucket starts full with `max_tokens` tokens.
 2. Each successful request deposits one token (up to capacity), replenishing retry capacity proportional to steady-state traffic.
-3. Each retry consumes one token. If the bucket is empty, the retry is refused and the request returns `503 Service Unavailable` with a `Retry-After` header indicating when the client should retry.
-4. Tokens are lazily refilled based on elapsed time and `refill_rate`.
+3. Each retry consumes one token. If the bucket is empty, Ferron refuses the retry. The request then returns `503 Service Unavailable` with a `Retry-After` header indicating when the client should retry.
+4. Ferron lazily refills tokens based on elapsed time and `refill_rate`.
 
-This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries — the remaining healthy backend is not overwhelmed.
+This prevents retry storms: when multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries. The remaining healthy backend is not overwhelmed.
 
 > [!note]
 > The retry budget is scoped per proxy configuration block. Different hosts or locations can have independent budgets. The budget does not add delays between retries — it limits the *count* of retries, not their timing. For delay-based retry control, use circuit breakers with `open_duration`.
@@ -680,11 +680,11 @@ This prevents retry storms: when multiple backends fail simultaneously, the retr
 
 ### Logs
 
-- **`ERROR`**: logged when a proxy configuration error occurs during parsing. The message includes the error details.
-- **`ERROR`**: logged when a proxy execution error occurs (e.g., connection failure, transport error). The message includes the error type and details.
-- **`WARN`**: logged when an upstream is marked unhealthy by active health checks. The message includes the upstream address and failure reason.
-- **`INFO`**: logged when an upstream recovers after consecutive successful health check probes.
-- **`DEBUG`**: logged when a health check loop is initialized for a given upstream.
+- **`ERROR`**: Ferron logs this when a proxy configuration error occurs during parsing. The message includes the error details.
+- **`ERROR`**: Ferron logs this when a proxy execution error occurs (for example connection failure, transport error). The message includes the error type and details.
+- **`WARN`**: Ferron logs this when active health checks mark an upstream unhealthy. The message includes the upstream address and failure reason.
+- **`INFO`**: Ferron logs this when an upstream recovers after consecutive successful health check probes.
+- **`DEBUG`**: Ferron logs this when it initializes a health check loop for a given upstream.
 
 ### Structured logs
 
@@ -723,7 +723,7 @@ The reverse proxy stage sets the following attributes on its `ferron.stage.rever
 | Attribute | Type | Description |
 | --- | --- | --- |
 | `http.response.status_code` | int | HTTP status code returned by the upstream backend. |
-| `error.type` | string | Error type string on failure (e.g., `connection_refused`, `timeout`), enabling trace UI highlighting. |
+| `error.type` | string | Error type string on failure (for example `connection_refused`, `timeout`), enabling trace UI highlighting. |
 | `ferron.proxy.backend_url` | string | URL of the upstream backend selected for the request. |
 | `ferron.proxy.backend_unix_path` | string | Unix socket path of the backend, when using Unix sockets. |
 | `ferron.proxy.connection_reused` | bool | Whether the connection to the backend was reused from the pool. |
@@ -737,12 +737,12 @@ The reverse proxy stage sets the following attributes on its `ferron.stage.rever
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 ### TLS verification
 
-- **`proxy { no_verification }`** — Disabling TLS certificate verification for HTTPS upstreams should only be used for testing or tightly controlled internal networks.
-- **`active_check { no_verification }`** — Disabling TLS verification for health check probes should only be used for strictly internal endpoints.
+- **`proxy { no_verification }`** — Only disable TLS certificate verification for HTTPS upstreams in testing or tightly controlled internal networks.
+- **`active_check { no_verification }`** — Only disable TLS verification on health check probes for strictly internal endpoints.
 
 ### Upstream SSRF risk
 

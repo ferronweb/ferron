@@ -49,11 +49,11 @@ manual-tls.example.com {
 
 > [!important]
 >
-> - Make sure Ferron can read both the certificate and key files. Ensure the certificate file includes any required intermediate certificates when needed by your CA.
+> - Make sure Ferron can read both the certificate and key files. Make sure the certificate file includes any required intermediate certificates that your CA needs.
 > - The certificate and private key must match. If they do not match, TLS handshakes will fail.
 
 > [!note]
-> If you rotate certificates externally, reload or restart Ferron so updated files are used.
+> If you rotate certificates externally, reload or restart Ferron so it uses the updated files.
 
 ## Manual TLS with multiple hosts
 

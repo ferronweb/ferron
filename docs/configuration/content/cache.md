@@ -3,7 +3,7 @@ title: "Configuration: HTTP cache"
 description: "In-memory HTTP response caching with RFC 9111 behavior, an optional LSCache override mode, and cache observability."
 ---
 
-This page documents the `cache` directive for configuring Ferron's in-memory HTTP response cache. The cache stores complete `GET` response representations, serves `HEAD` from cached `GET` metadata, follows standard HTTP caching semantics by default, and understands a subset of LiteSpeed Cache response headers for LSCache-aware applications.
+This page documents the `cache` directive for configuring Ferron's in-memory HTTP response cache. The cache stores complete `GET` response representations and serves `HEAD` from cached `GET` metadata. It follows standard HTTP caching semantics by default. It also understands a subset of LiteSpeed Cache response headers for LSCache-aware applications.
 
 The cache applies to final HTTP responses produced by static file serving, reverse proxying, and other response stages.
 
@@ -36,7 +36,7 @@ example.com {
 }
 ```
 
-At HTTP host scope, `cache` can be written either as a block or as a boolean flag. Block form enables caching for that scope and configures nested directives. Boolean form is useful when you want to enable or disable inherited caching without changing any nested settings.
+At HTTP host scope, you can write `cache` either as a block or as a boolean flag. Block form enables caching for that scope and configures nested directives. Boolean form is useful when you want to enable or disable inherited caching without changing any nested settings.
 
 ### Global `cache` block
 
@@ -69,17 +69,17 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how responses
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `max_response_size` | `<int>` | The maximum response body size, in bytes, that can be buffered and stored in the cache. Responses larger than this limit are still served, but they are not stored. | `2097152` |
-| `litespeed_override_cache_control` | `[<bool>]` | Whether `X-LiteSpeed-Cache-Control` overrides standard response caching headers such as `Cache-Control` and `Expires` when Ferron decides whether to store a response and what TTL to use. This mode is intentionally non-standard and is intended only for applications that expect LiteSpeed-style cache semantics. | `false` |
-| `emit_litespeed_headers` | `[<bool>]` | Whether the `X-LiteSpeed-Cache-Control` response header should be emitted when serving a cached response. | `false` |
-| `purge_method` | `[<bool>]` | Whether the `PURGE` HTTP method is accepted for cache invalidation. When enabled, requests with method `PURGE` to a given URL will remove all cached entries matching that URL. This directive requires either HTTP basic authentication or the `purge_allowed_ips` directive. Unauthenticated requests from non-allowed IPs are rejected with a 403 Forbidden response. | `false` |
-| `purge_allowed_ips` | `<string> [<string> ...]` | One or more IP addresses or CIDR ranges that are allowed to send `PURGE` requests. When non-empty, only requests from these IPs are allowed (unless the request is already authenticated via HTTP basic authentication). This directive can be specified multiple times. | none |
-| `vary` | `<string> [<string> ...]` | Additional request headers that are added to the cache key, alongside any standard `Vary` response headers returned by the origin. This directive can be specified multiple times. | none |
-| `vary_cookies` | `<string> [<string> ...]` | Specific cookie names to include in the cache key. When set, only the listed cookies (along with any cookies added by LSCache's `X-LiteSpeed-Vary` header) are used for cache key differentiation, preventing high-entropy tracking or session cookies from fragmenting the cache. This directive can be specified multiple times. | none |
-| `ignore` | `<string> [<string> ...]` | Response headers that are removed from the stored cache representation while leaving the live response unchanged. This directive can be specified multiple times. | none |
-| `ignore_request_cache_control` | `[<bool>]` | When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy. | `false` |
-| `enable_stale_while_revalidate` | `[<bool>]` | When enabled, cached responses with a `stale-while-revalidate` directive are revalidated synchronously after their `max-age` expires instead of being returned immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
-| `enable_stale_if_error` | `[<bool>]` | When enabled, cached responses with a `stale-if-error` directive are served from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
+| `max_response_size` | `<int>` | The maximum response body size, in bytes, that Ferron can buffer and store in the cache. Responses larger than this limit are still served, but they are not stored. | `2097152` |
+| `litespeed_override_cache_control` | `[<bool>]` | Whether `X-LiteSpeed-Cache-Control` overrides standard response caching headers such as `Cache-Control` and `Expires`. This applies when Ferron decides whether to store a response and what TTL to use. This mode is intentionally non-standard. It is intended only for applications that expect LiteSpeed-style cache semantics. | `false` |
+| `emit_litespeed_headers` | `[<bool>]` | Whether Ferron emits the `X-LiteSpeed-Cache-Control` response header when serving a cached response. | `false` |
+| `purge_method` | `[<bool>]` | Whether Ferron accepts the `PURGE` HTTP method for cache invalidation. When enabled, requests with method `PURGE` to a given URL remove all cached entries matching that URL. This directive requires either HTTP basic authentication or the `purge_allowed_ips` directive. Ferron rejects unauthenticated requests from non-allowed IPs with a 403 Forbidden response. | `false` |
+| `purge_allowed_ips` | `<string> [<string> ...]` | One or more IP addresses or CIDR ranges that are allowed to send `PURGE` requests. When non-empty, only requests from these IPs are allowed (unless the request is already authenticated via HTTP basic authentication). You can specify this directive multiple times. | none |
+| `vary` | `<string> [<string> ...]` | Additional request headers that Ferron adds to the cache key, alongside any standard `Vary` response headers returned by the origin. You can specify this directive multiple times. | none |
+| `vary_cookies` | `<string> [<string> ...]` | Specific cookie names to include in the cache key. When set, only the listed cookies (along with any cookies added by LSCache's `X-LiteSpeed-Vary` header) are used for cache key differentiation. This prevents high-entropy tracking or session cookies from fragmenting the cache. You can specify this directive multiple times. | none |
+| `ignore` | `<string> [<string> ...]` | Response headers that Ferron removes from the stored cache representation while leaving the live response unchanged. You can specify this directive multiple times. | none |
+| `ignore_request_cache_control` | `[<bool>]` | When enabled, Ferron ignores request-based cache control (for example, `Cache-Control`) in favor of the configured cache policy. | `false` |
+| `enable_stale_while_revalidate` | `[<bool>]` | When enabled, Ferron revalidates cached responses with a `stale-while-revalidate` directive synchronously after their `max-age` expires, instead of returning them immediately as a cache hit. See [Stale-while-revalidate](#stale-while-revalidate) below. | `true` |
+| `enable_stale_if_error` | `[<bool>]` | When enabled, Ferron serves cached responses with a `stale-if-error` directive from cache when the upstream returns a 5xx error during revalidation. See [Stale-if-error](#stale-if-error) below. | `true` |
 | `purge_propagation` | block | Configures multi-instance cache purge propagation via an external control-plane service. See [Cache purge propagation](#cache-purge-propagation) below. | (disabled) |
 | `zone` | `<string>` | Assign this host to a named cache zone. Hosts sharing the same zone name share a single cache store. If omitted, the host uses an implicit per-host zone. See [Cache zones](#cache-zones) below. | (implicit per-host) |
 | `max_entries` | `<int>` | Maximum number of response entries for this host's cache. When specified without `zone`, this implicitly creates a per-host zone with the given capacity, even if a global zone exists. See [Cache zones](#cache-zones) below. | (global or `1024`) |
@@ -100,7 +100,7 @@ example.com {
 ```
 
 > [!important]
-> `litespeed_override_cache_control` makes Ferron treat `X-LiteSpeed-Cache-Control` as overriding standard HTTP caching rules. It is intentionally non-compliant with RFC 9111 — enable it only when the upstream is written for LiteSpeed-style cache semantics. Request-side directives such as `Cache-Control: no-cache` and `Pragma: no-cache` still affect cache lookup behavior normally (unless overridden by `ignore_request_cache_control`).
+> `litespeed_override_cache_control` makes Ferron treat `X-LiteSpeed-Cache-Control` as overriding standard HTTP caching rules. It is intentionally non-compliant with RFC 9111 — enable it only when the upstream is written for LiteSpeed-style cache semantics. Request-side directives such as `Cache-Control: no-cache` and `Pragma: no-cache` still affect cache lookup behavior normally (unless `ignore_request_cache_control` overrides them).
 
 ### Boolean `cache` form
 
@@ -112,7 +112,7 @@ example.com {
 
 ### `purge_propagation` block
 
-Use the `purge_propagation { ... }` block inside a host `cache { ... }` block to propagate cache purges to other instances via an external control-plane service. When enabled, Ferron sends a webhook POST to the control-plane whenever a local purge occurs (via `PURGE` method or `X-LiteSpeed-Purge` header). The control-plane then broadcasts `PURGE` requests to all other registered edge instances.
+Use the `purge_propagation { ... }` block inside a host `cache { ... }` block to propagate cache purges to other instances. Propagation uses an external control-plane service. When enabled, Ferron sends a webhook POST to the control-plane whenever a local purge occurs (via `PURGE` method or `X-LiteSpeed-Purge` header). The control-plane then broadcasts `PURGE` requests to all other registered edge instances.
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
@@ -235,18 +235,18 @@ Here `admin.example.com` gets its own 2048-entry cache, while `example.com` shar
 > Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries.
 
 > [!important]
-> When using named zones, the `max_entries` capacity is defined in the global `zone` block, not in the host-level `cache` block. Specifying `max_entries` in a host block that also uses `zone` will trigger a validation warning.
+> When using named zones, define the `max_entries` capacity in the global `zone` block, not in the host-level `cache` block. Specifying `max_entries` in a host block that also uses `zone` triggers a validation warning.
 
 Zone resolution follows this order:
 
-1. **Named zone** — if the host specifies `zone "name"`, the named zone's `CacheStore` is used. Capacity comes from the global `zone "name" { max_entries = N }` definition.
-2. **Host-level `max_entries`** — if the host specifies `max_entries` in its cache block (without `zone`), an implicit per-host zone is created with that capacity. This overrides the global zone.
-3. **Global zone** — if no `zone` or host-level `max_entries` is specified and a global `cache { max_entries = N }` block exists (without explicit `zone` blocks), the global `CacheStore` is used. All hosts without an explicit `zone` share this store.
-4. **Per-host zone** — if none of the above apply, the hostname is used as the zone ID. Capacity comes from the host-level or global `max_entries`.
+1. **Named zone** — if the host specifies `zone "name"`, it uses the named zone's `CacheStore`. Capacity comes from the global `zone "name" { max_entries = N }` definition.
+2. **Host-level `max_entries`** — if the host specifies `max_entries` in its cache block (without `zone`), Ferron creates an implicit per-host zone with that capacity. This overrides the global zone.
+3. **Global zone** — if the host specifies no `zone` or host-level `max_entries`, a global `cache { max_entries = N }` block must exist (without explicit `zone` blocks). The host then uses the global `CacheStore`. All hosts without an explicit `zone` share this store.
+4. **Per-host zone** — if none of the above apply, Ferron uses the hostname as the zone ID. Capacity comes from the host-level or global `max_entries`.
 
 ### PURGE method cache invalidation
 
-When the `purge_method` subdirective is enabled, Ferron accepts the `PURGE` HTTP method for cache invalidation. A `PURGE` request to a specific URL removes all cached entries (both public and private) matching that URL, causing subsequent requests to fetch fresh content.
+When the `purge_method` subdirective is enabled, Ferron accepts the `PURGE` HTTP method for cache invalidation. A `PURGE` request to a specific URL removes all cached entries (both public and private) matching that URL. This causes later requests to fetch fresh content.
 
 **Security:**
 
@@ -255,7 +255,7 @@ PURGE requests must be either:
 - Authenticated via HTTP basic authentication (the `basic_auth` directive), or
 - Originating from an IP address matching the `purge_allowed_ips` list.
 
-If neither condition is met, Ferron returns a **403 Forbidden** response. This ensures that cache purging is never accidentally left unsecured.
+If neither condition is met, Ferron returns a **403 Forbidden** response. This makes sure that cache purging is never accidentally left unsecured.
 
 **Example using trusted IP list:**
 
@@ -293,7 +293,7 @@ Host: example.com
 ### Public and private cache behavior
 
 - Public responses containing `Set-Cookie` are not stored.
-- Private responses are partitioned by client context. Ferron currently uses the client IP address, the authenticated username when available, and detected private cookies.
+- Ferron partitions private responses by client context. It currently uses the client IP address, the authenticated username when available, and detected private cookies.
 - If Ferron cannot determine a narrower private cookie set, it falls back to all request cookies for the private cache key.
 
 ### Stale-while-revalidate
@@ -301,9 +301,9 @@ Host: example.com
 When an upstream response includes the `stale-while-revalidate` directive in its `Cache-Control` header, Ferron extends the usable lifetime of the cached entry beyond its `max-age`. The behavior differs depending on concurrent request patterns:
 
 - **Leader request** — the first request to encounter the expired entry becomes the leader and revalidates synchronously with the upstream. It receives a fresh response that replaces the cache entry.
-- **Follower requests** — concurrent requests that arrive while the leader is revalidating are served the stale cached response immediately.
+- **Follower requests** — Ferron serves the stale cached response immediately to concurrent requests that arrive while the leader revalidates.
 
-This ensures that one request still contacts the upstream for fresh content — no background tasks are involved — while other concurrent requests avoid waiting for revalidation.
+This makes sure that one request still contacts the upstream for fresh content. No background tasks are involved. Other concurrent requests avoid waiting for revalidation.
 
 > [!note]
 > Ferron 3 does not have an internal route invocation mechanism, so background revalidation is not supported. `stale-while-revalidate` always involves a synchronous upstream request for the leader, and followers receive the stale response.
@@ -324,11 +324,11 @@ Cache-Status: FerronCache; hit; detail=stale-while-revalidate,public; age=120
 
 #### Interaction with `must-revalidate` and `proxy-revalidate`
 
-Per RFC 9111, responses with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) are never served stale, even within a `stale-while-revalidate` window. When either directive is present, Ferron treats the entry as strictly fresh-or-miss — it will either revalidate or return a miss rather than serving stale content.
+Per RFC 9111, responses with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) are never served stale. This applies even within a `stale-while-revalidate` window. When either directive is present, Ferron treats the entry as strictly fresh-or-miss. It either revalidates or returns a miss rather than serving stale content.
 
 ### Stale-if-error
 
-When an upstream response includes the `stale-if-error` directive in its `Cache-Control` header, Ferron can serve the stale cached response when revalidation fails with a 5xx server error:
+When an upstream response includes the `stale-if-error` directive in its `Cache-Control` header, Ferron can serve the stale cached response. It does this when revalidation fails with a 5xx server error:
 
 ```http
 Cache-Control: public, max-age=300, stale-if-error=3600
@@ -338,7 +338,7 @@ This caches the response for 300 seconds, then allows stale serving on upstream 
 
 How it works:
 
-1. A request triggers revalidation (e.g., the cached entry has expired, or the client sent `Cache-Control: max-age=0`).
+1. A request triggers revalidation (for example, the cached entry has expired, or the client sent `Cache-Control: max-age=0`).
 2. Ferron contacts the upstream, which returns a 5xx status code.
 3. If a valid stale entry with `stale-if-error` exists, Ferron serves the stale response with a `Cache-Status` header containing `detail=stale-while-revalidate`.
 4. If no stale entry exists or the `stale-if-error` window has elapsed, Ferron returns the 5xx error to the client.
@@ -353,7 +353,7 @@ When the cache module is enabled, Ferron understands the following response head
 | --- | --- | --- |
 | `X-LiteSpeed-Cache-Control` | Controls cache scope and TTL using LSCache-style directives such as `public`, `private`, `max-age`, `s-maxage`, `no-cache`, and `no-store`. | By default, standard HTTP caching rules still take precedence. Enable `litespeed_override_cache_control` to prefer this header instead. |
 | `X-LiteSpeed-Vary` | Adds LSCache-style vary dimensions. | `cookie=<name>` is supported. `value=<name>` is not supported yet and causes Ferron to skip cache storage for that response. |
-| `X-LiteSpeed-Tag` | Assigns tags to cached responses so they can be purged later. | On private responses, `public:` prefixes remain public tags. |
+| `X-LiteSpeed-Tag` | Assigns tags to cached responses so you can purge them later. | On private responses, `public:` prefixes remain public tags. |
 | `X-LiteSpeed-Purge` | Purges cached responses by tag, URL, or wildcard. | The `stale` marker currently falls back to an immediate hard purge. |
 | `LSC-Cookie` | Adds cache-safe cookie replay metadata. | Ferron converts this header to `Set-Cookie` before sending the response. |
 | `X-LiteSpeed-Cache` | Exposes cache hit, miss, or bypass status on outgoing responses. | Ferron sets this header itself (if enabled). Origin-provided values are ignored. |
@@ -397,7 +397,7 @@ X-Purge-Source: propagation
 Ferron uses two mechanisms to prevent infinite purge loops:
 
 - **`X-Purge-Source: propagation` header** — when an edge receives a `PURGE` request with this header, it executes the purge locally but does not forward it to the control-plane. This prevents re-propagation loops.
-- **Origin exclusion** — the control-plane removes the originating node (identified by the `origin` field in the webhook payload) from its broadcast list, preventing the origin from receiving its own purge back.
+- **Origin exclusion** — the control-plane removes the originating node (identified by the `origin` field in the webhook payload) from its broadcast list. This prevents the origin from receiving its own purge back.
 
 **Control-plane requirements:**
 
@@ -432,8 +432,8 @@ The `ferron.cache.zone` attribute identifies which cache zone the request belong
 
 - `DEBUG` — logged when Ferron skips cache storage because `X-LiteSpeed-Vary: value=...` is not supported yet.
 - `DEBUG` — logged when Ferron skips cache storage because the response body exceeds `cache.max_response_size`.
-- `DEBUG` — logged when Ferron performs a purge through `X-LiteSpeed-Purge`.
-- `DEBUG` — logged when Ferron performs a purge through `PURGE` HTTP method.
+- `DEBUG` — logged when Ferron purges through `X-LiteSpeed-Purge`.
+- `DEBUG` — logged when Ferron purges through `PURGE` HTTP method.
 - `DEBUG` — logged when Ferron receives an LSCache `stale` purge marker and falls back to a hard purge.
 - `WARN` — logged when outbound purge propagation to the control-plane fails.
 
@@ -479,7 +479,7 @@ The cache stage sets the following attributes on its `ferron.stage.cache` span:
 The following best-practice checks are reported by `ferron doctor` for directives on this page.
 
 - **`litespeed_override_cache_control`** — This makes LiteSpeed cache headers override standard HTTP cache policy. Enable only for applications that require LiteSpeed-compatible semantics.
-- **`ignore_request_cache_control`** — When enabled, request-based cache control (e.g., `Cache-Control`) is ignored in favor of the configured cache policy.
+- **`ignore_request_cache_control`** — When enabled, Ferron ignores request-based cache control (for example, `Cache-Control`) in favor of the configured cache policy.
 - **`purge_method` without access control** — Cache purging enabled without `purge_allowed_ips` or `basic_auth` in the same scope allows unauthenticated cache invalidation.
 - **`purge_allowed_ips` with wildcard** — Allowing every source address for cache purging should be restricted to trusted operators or internal networks.
 - **`control_plane_url` without `shared_secret`** — Purge propagation configured without a shared secret allows any source to trigger cache purges across all edge instances.

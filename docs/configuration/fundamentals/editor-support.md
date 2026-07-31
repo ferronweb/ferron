@@ -3,7 +3,7 @@ title: "Editor support"
 description: "Syntax highlighting, language server, and editor extensions for Ferron configuration files."
 ---
 
-Ferron configuration files (`.conf` / `.ferron`) are supported by a range of editor integrations. These cover syntax highlighting, formatting, completions, and diagnostics, useful for GitOps operators and anyone editing Ferron configuration by hand.
+A range of editor integrations support Ferron configuration files (`.conf` / `.ferron`). These cover syntax highlighting, formatting, completions, and diagnostics, useful for GitOps operators and anyone editing Ferron configuration by hand.
 
 ## Feature overview
 
@@ -17,7 +17,7 @@ Ferron configuration files (`.conf` / `.ferron`) are supported by a range of edi
 
 ## Syntax highlighting
 
-Syntax highlighting is provided by two independent grammars. Use the one compatible with your editor.
+Two independent grammars provide syntax highlighting. Use the one compatible with your editor.
 
 ### TextMate grammar
 
@@ -61,7 +61,7 @@ The language server is published as `ferron-language-server` on [npm](https://ww
 npm install -g ferron-language-server
 ```
 
-Prebuilt binaries are also available from [GitHub releases](https://github.com/ferronweb/ferron-language-server/releases) and can be downloaded from [dl.ferron.sh](https://dl.ferron.sh/ferron-language-server).
+Prebuilt binaries are also available from [GitHub releases](https://github.com/ferronweb/ferron-language-server/releases) and from [dl.ferron.sh](https://dl.ferron.sh/ferron-language-server).
 
 ### Configuration
 

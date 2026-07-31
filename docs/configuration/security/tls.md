@@ -112,7 +112,7 @@ api.example.com {
 >
 > - Client certificate verification uses the same trust model as server-side TLS: the client cert chain must validate against the configured CA roots.
 > - When `client_auth_ca` points to a file containing multiple CA certificates (a bundle), all of them are loaded into the trust store.
-> - The `system` trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
+> - The `system` trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
 > - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
 ## Observability
@@ -133,7 +133,7 @@ api.example.com {
 
 ### "Invalid minimum/maximum TLS version"
 
-The `min_version` or `max_version` value is not recognized. Ensure you use exactly `TLSv1.2` or `TLSv1.3`.
+The `min_version` or `max_version` value is not recognized. Make sure you use exactly `TLSv1.2` or `TLSv1.3`.
 
 ### "Maximum TLS version is older than minimum TLS version"
 
@@ -142,8 +142,8 @@ The `min_version` or `max_version` value is not recognized. Ensure you use exact
 ### Client certificate handshake failure
 
 - Verify the client certificate chain validates against the CA specified in `client_auth_ca`.
-- Check that the CA certificate file is a valid PEM and hasn't expired.
-- If using `client_auth_ca system`, ensure the issuing CA is trusted by the OS.
+- Check that the CA certificate file is a valid PEM and has not expired.
+- If using `client_auth_ca system`, make sure the issuing CA is trusted by the OS.
 
 ## See also
 
@@ -153,12 +153,12 @@ The `min_version` or `max_version` value is not recognized. Ensure you use exact
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`max_version TLSv1.2`** — Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
 - **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS.
 - **`ocsp` disabled** — OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
 - **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use only when all clients are expected to support them.
 - **`ticket_keys` without `auto_rotate`** — Session ticket keys should rotate automatically in production to limit the impact of key compromise.
-- **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for seamless rotation without excessive retention.
+- **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
 - **`ticket_keys.rotation_interval` > 24h** — Rotate session ticket keys every 12–24 hours in production.

@@ -3,13 +3,13 @@ title: Edge caching (CDN)
 description: "Deploy Ferron as a CDN edge node with HTTP caching, ACME TLS with fallback providers for resilience, global cache purging, and GeoDNS routing."
 ---
 
-Ferron can be deployed as an edge caching node in a content delivery network (CDN). Its HTTP cache, automatic TLS, and purge propagation features make it suitable for serving cached content close to end users with centralized cache management.
+You can deploy Ferron as an edge caching node in a content delivery network (CDN). Its HTTP cache, automatic TLS, and purge propagation features make it suitable for serving cached content close to end users with centralized cache management.
 
 ## Automatic TLS with ACME fallback
 
-When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail, leaving edge nodes without valid TLS certificates. Ferron supports **ACME fallback providers** to handle this — if the primary provider fails, the next configured fallback is tried automatically.
+When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail, leaving edge nodes without valid TLS certificates. Ferron supports **ACME fallback providers** to handle this — if the primary provider fails, Ferron tries the next configured fallback automatically.
 
-This is especially important for CDN deployments where a single edge node may terminate TLS for hundreds of domains and cannot afford downtime from CA outages.
+This is especially important for CDN deployments. A single edge node may terminate TLS for hundreds of domains and cannot afford downtime from CA outages.
 
 ```ferron
 *.customer.example.com {
@@ -40,7 +40,7 @@ This is especially important for CDN deployments where a single edge node may te
 }
 ```
 
-Providers are tried **sequentially**: the primary is attempted first, followed by each `fallback` block in order. A fallback is triggered when account creation with the previous provider fails. Once a provider succeeds, subsequent operations (order creation, challenge solving, certificate installation) use that same provider.
+Ferron tries providers **sequentially**: it attempts the primary first, then each `fallback` block in order. Ferron starts a fallback when account creation with the previous provider fails. Once a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
 
 ## On-demand TLS for wildcard domains
 
@@ -73,13 +73,13 @@ Wildcard certificates normally require the **DNS-01** challenge, which means con
 ```
 
 > [!warning]
-> Always configure `on_demand_ask` in production. Without an approval endpoint, Ferron will issue certificates for any hostname under the wildcard, which can be exploited for abuse.
+> Always configure `on_demand_ask` in production. Without an approval endpoint, Ferron issues certificates for any hostname under the wildcard. Attackers can exploit this for abuse.
 
 The approval endpoint receives `?domain=<sni>` as a query parameter and must return `200` to approve issuance. This gives you control over which subdomains receive certificates without needing DNS provider keys on the edge.
 
 ## Global cache purging
 
-A single edge node's cache can be purged locally with `PURGE` requests, but a CDN spans many nodes. Ferron supports multi-instance cache purge propagation via an external control-plane:
+You can purge a single edge node's cache locally with `PURGE` requests, but a CDN spans many nodes. Ferron supports multi-instance cache purge propagation via an external control-plane:
 
 ```ferron
 *.customer.example.com {
@@ -96,7 +96,7 @@ A single edge node's cache can be purged locally with `PURGE` requests, but a CD
 }
 ```
 
-When a purge is triggered (via `PURGE` request or `X-LiteSpeed-Purge` header), the edge node notifies the control-plane, which fans out the invalidation to every registered edge. This means a single origin webhook or admin request invalidates content across the entire CDN.
+When a client triggers a purge (via `PURGE` request or `X-LiteSpeed-Purge` header), the edge node notifies the control-plane. The control-plane fans out the invalidation to every registered edge. This means a single origin webhook or admin request invalidates content across the entire CDN.
 
 > [!info]
 > For a full explanation of the purge propagation protocol and control-plane implementation, see [HTTP caching — Multi-instance cache purge propagation](/docs/v3/use-cases/content/caching#multi-instance-cache-purge-propagation).
@@ -111,7 +111,7 @@ eu-west.example.com  A  198.51.100.20  (Europe)
 ap-southeast.example.com  A  192.0.2.30  (Asia-Pacific)
 ```
 
-The same Ferron configuration and cache store can be deployed on every node. GeoDNS handles routing. Ferron handles TLS termination, caching, and origin proxying at each location.
+You can deploy the same Ferron configuration and cache store on every node. GeoDNS handles routing. Ferron handles TLS termination, caching, and origin proxying at each location.
 
 ## Full edge node configuration
 

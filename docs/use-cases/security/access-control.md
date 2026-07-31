@@ -179,7 +179,7 @@ example.com {
 }
 ```
 
-When the backend returns a success status (2xx), the request continues. On failure (4xx/5xx), the backend's response is returned to the client. Headers from the auth response can be copied to the original request for downstream use:
+When the backend returns a success status (2xx), the request continues. On failure (4xx/5xx), Ferron returns the backend's response to the client. You can copy headers from the auth response to the original request for downstream use:
 
 ```ferron
 api.example.com {

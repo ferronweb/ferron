@@ -52,14 +52,14 @@ example.com {
 
 > [!note]
 >
-> - When compression is used, a suffix is appended to the ETag (e.g. `W/"abc123-br"` for Brotli).
+> - When compression is used, a suffix is appended to the ETag (for example, `W/"abc123-br"` for Brotli).
 > - `If-None-Match` requests that match the current ETag return `304 Not Modified`.
 > - Pre-compressed sidecar files receive their own ETag based on the sidecar file's own metadata.
 
 ### MIME types
 
 - `mime_type <extension: string> <mime-type: string>` (`http-static`)
-  - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. Multiple `mime_type` directives can be used to map different extensions. Default: built-in MIME database
+  - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. You can use multiple `mime_type` directives to map different extensions. Default: built-in MIME database
 
 **Configuration example:**
 
@@ -81,7 +81,7 @@ example.com {
 - `error_page <status-code: integer>... <file-path: string>`
   - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path. All preceding arguments are status codes. Default: built-in error pages
 - `error_page_placeholders [bool: boolean]`
-  - When enabled, `{{trace.id}}` and `{{trace.spanid}}` in the error page file are replaced with the request's trace ID and span ID. Default: `false`
+  - When enabled, Ferron replaces `{{trace.id}}` and `{{trace.spanid}}` in the error page file with the request's trace ID and span ID. Default: `false`
 
 **Configuration example:**
 
@@ -96,18 +96,18 @@ example.com {
 
 > [!note]
 >
-> - Only applies when an error response is being generated and no custom response has already been set.
+> - Only applies when an error response is generated and no custom response has already been set.
 > - The file path is absolute or relative to the current working directory.
 > - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
-> - Multiple status codes can be mapped to the same error page in a single directive.
+> - You can map multiple status codes to the same error page in a single directive.
 > - Placeholder substitution reads the file into memory and replaces `{{trace.id}}` and `{{trace.spanid}}` with the current request's trace context before serving. The zerocopy/sendfile optimization is bypassed when substitution is active.
 
 ### Symlink handling
 
 - `disable_symlinks [bool: boolean | string: "if_not_owner"]`
-  - This directive controls whether symbolic links are allowed during file path resolution. When a symlink is encountered while traversing the request path, the behavior depends on this setting:
+  - This directive controls whether symbolic links are allowed during file path resolution. When the resolver encounters a symlink while traversing the request path, the behavior depends on this setting:
     - `false` (default): Allow all symlinks without restriction.
-    - `true`: Reject all symbolic links with a `403 Forbidden` response. Symlinks are detected during path traversal without following them, mitigating symlink-based escape attacks.
+    - `true`: Reject all symbolic links with a `403 Forbidden` response. The resolver detects symlinks during path traversal without following them, mitigating symlink-based escape attacks.
     - `"if_not_owner"`: Allow symlinks only if owned by the same user as the target file (Unix only, treated as `true` on non-Unix systems).
   - Default: `disable_symlinks false`
 
@@ -117,7 +117,7 @@ example.com {
 > [!note]
 >
 > - Symlink detection uses `symlink_metadata()`, which does not follow the symlink, so no file I/O is performed on the symlink target.
-> - When enabled, symlinks are detected at each path component level during traversal, not just at the final target.
+> - When enabled, the resolver detects symlinks at each path component level during traversal, not just at the final target.
 > - `if_not_owner` mode is Unix-specific and requires the symlink and target to have the same owner UID.
 
 **Configuration example:**
@@ -143,7 +143,7 @@ legacy.example.com {
 
 ## File handle reuse
 
-Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead for at most 200 milliseconds after the first request. This is done by caching file metadata and the open file handle in memory. The cache is keyed by the file path and is invalidated when the file is modified, deleted, or replaced.
+Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead. The reuse lasts at most 200 milliseconds after the first request. Ferron does this by caching file metadata and the open file handle in memory. The cache is keyed by the file path. Ferron invalidates it when the file is modified, deleted, or replaced.
 
 ## Observability
 

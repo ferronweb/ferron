@@ -3,7 +3,7 @@ title: "Configuration: control plane"
 description: "Embed contextual metadata and span links from the control plane into all observability signals."
 ---
 
-This page documents the `control_plane` directive, which embeds contextual metadata and static OpenTelemetry span links from the server configuration into all observability signals (traces, logs, metrics, access logs). This bridges the gap between a control plane (e.g. a Kubernetes ingress controller) that writes the configuration and the data plane that serves requests.
+This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into all observability signals (traces, logs, metrics, access logs). This bridges the gap between a control plane (for example, a Kubernetes ingress controller) that writes the configuration and the data plane that serves requests.
 
 > [!info]
 >
@@ -46,7 +46,7 @@ Each `span_links` block defines one link with:
 The `control_plane` directive can appear at three levels. When present at multiple levels, the most specific one wins:
 
 1. **Location** (most specific) — inside a `location` block within a host
-2. **Host** — inside a host block (e.g. `example.com { ... }`)
+2. **Host** — inside a host block (for example, `example.com { ... }`)
 3. **Global** (least specific) — at the top level of the configuration
 
 Metadata and span links from more specific levels **fully replace** those from less specific levels — they are not merged.

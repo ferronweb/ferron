@@ -3,14 +3,14 @@ title: "Configuration: routing and URL processing"
 description: "Request matching, conditional configuration, error handling, web root, and URL sanitation."
 ---
 
-This page documents directives that affect HTTP request matching and configuration layering inside host blocks. These directives are processed by the `http-server` module's radix tree resolver.
+This page documents directives that affect HTTP request matching and configuration layering inside host blocks. The `http-server` module's radix tree resolver processes these directives.
 
 ## Directives
 
 ### Path matching
 
 - `location <path: string>`
-  - This directive specifies a path prefix for request matching. `/api` matches `/api` and `/api/...`. Longer matches are more specific. If this block matches, the URL is automatically rewritten to remove the base URL. Default: not configured
+  - This directive specifies a path prefix for request matching. `/api` matches `/api` and `/api/...`. Longer matches are more specific. If this block matches, Ferron automatically rewrites the URL to remove the base URL. Default: not configured
 
 **Configuration example:**
 
@@ -25,14 +25,14 @@ example.com {
 > [!note]
 >
 > - Matching is prefix-based — `/api` matches `/api` and `/api/users`. More specific locations win over less specific ones.
-> - If this block matches, the URL is automatically rewritten to remove the base URL.
+> - If this block matches, Ferron automatically rewrites the URL to remove the base URL.
 
 ### Conditional matching
 
 - `if <matcher-name: string>`
-  - This directive specifies a named matcher to evaluate. When the named matcher evaluates to true, the nested block's directives are applied. Default: not configured
+  - This directive specifies a named matcher to evaluate. When the named matcher evaluates to true, Ferron applies the nested block's directives. Default: not configured
 - `if_not <matcher-name: string>`
-  - This directive specifies a named matcher to evaluate. When the named matcher evaluates to false, the nested block's directives are applied. Default: not configured
+  - This directive specifies a named matcher to evaluate. When the named matcher evaluates to false, Ferron applies the nested block's directives. Default: not configured
 
 **Configuration example:**
 
@@ -54,7 +54,7 @@ example.com {
 ### Error handling
 
 - `handle_error [status: integer]`
-  - This directive associates a nested block with a specific error code, or with a default error case when no code is given. Default: not configured
+  - This directive associates a nested block with a specific error code, or with a default error case when you give no code. Default: not configured
 
 **Configuration example:**
 
@@ -69,7 +69,7 @@ example.com {
 ### Web root
 
 - `root <path: string>`
-  - This directive specifies the webroot used by the HTTP file-handler pipeline after regular HTTP stages leave the request without a response. The resolved path is canonicalized before file stages run. Requests that try to escape the webroot are rejected. Default: not configured
+  - This directive specifies the webroot that the HTTP file-handler pipeline uses after regular HTTP stages leave the request without a response. Ferron canonicalizes the resolved path before file stages run. Ferron rejects requests that try to escape the webroot. Default: not configured
 
 **Configuration example:**
 
@@ -81,8 +81,8 @@ example.com {
 
 > [!note]
 >
-> - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
-> - Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/configuration/content/static-files).
+> - If a request continues below a matched file path, Ferron carries the unmatched suffix into the file-stage context as `path_info`.
+> - Separate directives control additional static file behavior (index resolution, compression, ETags, directory listings, MIME types). See [Static file serving](/docs/v3/configuration/content/static-files).
 
 ### URL redirects
 
@@ -102,5 +102,5 @@ example.com {
 > Notes for `trailing_slash_redirect`:
 >
 > - Only applies when the resolved request path maps to a directory on the filesystem.
-> - Query strings are preserved in the redirect (e.g. `/blog?foo=bar` → `/blog/?foo=bar`).
-> - This is useful for SEO consistency and ensuring relative links within directory-served pages resolve correctly.
+> - Ferron preserves query strings in the redirect (for example `/blog?foo=bar` → `/blog/?foo=bar`).
+> - This is useful for SEO consistency and for making sure relative links within directory-served pages resolve correctly.

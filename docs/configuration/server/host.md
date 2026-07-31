@@ -19,18 +19,18 @@ http example.com:8080 {
 > - The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1, HTTP/2, and experimental HTTP/3 protocol support.
 
 > [!info]
-> For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme); for crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
+> For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme). For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
 
 ## Directives
 
 ### Automatic TLS
 
-When a hostname is specified (e.g. `example.com`) and no explicit port is given, Ferron starts **two listeners**:
+When a hostname is specified (for example, `example.com`) and no explicit port is given, Ferron starts **two listeners**:
 
 - One on `default_http_port` (default: 80) — serves plain HTTP with no TLS
 - One on `default_https_port` (default: 443) — serves HTTPS with automatic ACME TLS
 
-On the HTTPS listener, if no explicit `tls` directive is present, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). Certificates are obtained and renewed automatically at startup.
+On the HTTPS listener, if no explicit `tls` directive is present, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). The ACME provider gets and renews certificates automatically at startup.
 
 Hostnames that have **special automatic TLS behavior**:
 
@@ -67,7 +67,7 @@ example.com {
 }
 ```
 
-When an **explicit port** is specified (e.g. `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
+When an **explicit port** is specified (for example, `example.com:8080`), only a single listener is started on that port. No automatic ACME TLS is applied — you must configure TLS explicitly.
 
 > [!info]
 > See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
@@ -88,7 +88,7 @@ example.com {
 > [!note]
 >
 > - `localhost` hostnames never get redirected — there is no HTTPS listener for them.
-> - When an explicit port is specified (e.g. `example.com:8080`), no redirect is performed since no separate HTTPS listener exists.
+> - When an explicit port is specified (for example, `example.com:8080`), no redirect happens since no separate HTTPS listener exists.
 > - The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
 
 ### Client IP from forwarded headers
@@ -134,7 +134,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 - `options_allowed_methods <methods: string>`
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 - `timeout <duration>`
-  - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
+  - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
 - `h1_enable_early_hints <bool>`
   - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
 - `h2_initial_window_size <size: integer>`
@@ -168,9 +168,9 @@ example.com {
 > [!note]
 >
 > - `protocols` must leave at least one supported protocol enabled.
-> - HTTP/3 (`h3`) is currently **experimental**. When enabled, Ferron will start an additional QUIC listener on the same port for HTTP/3 traffic.
-> - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE` to reduce the attack surface reported by security scanners. You can customize this list based on your server's requirements.
-> - When HTTP/3 is enabled, the server will automatically add an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
+> - HTTP/3 (`h3`) is currently **experimental**. When enabled, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
+> - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE`. This reduces the attack surface reported by security scanners. You can customize this list based on your server's requirements.
+> - When HTTP/3 is enabled, the server automatically adds an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
 
 > [!note] Notes for "url_sanitize"
 >
@@ -180,7 +180,7 @@ example.com {
 > - Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
 
 > [!warning]
-> When `url_sanitize` is disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
+> When `url_sanitize` is disabled, Ferron does not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
 
 > [!note] Notes for "url_reject_backslash"
 >
@@ -189,7 +189,7 @@ example.com {
 > - Both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`) are rejected.
 
 > [!warning]
-> Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs, but this can expose backends to path interpretation vulnerabilities.
+> Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs. However, this can expose backends to path interpretation vulnerabilities.
 
 ### TLS
 
@@ -247,7 +247,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### TLS deployment
 
-- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder that TLS termination should be performed by an upstream proxy or load balancer. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
+- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder. The reminder states that an upstream proxy or load balancer should perform TLS termination. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
 
 ## Observability
 

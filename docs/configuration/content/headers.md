@@ -79,12 +79,12 @@ example.com {
 
 1. **Preflight handling**: When an `OPTIONS` request includes `Origin` and `Access-Control-Request-Method` headers, the module returns `204 No Content` with the appropriate CORS response headers.
 
-2. **Response headers**: For all responses (including error responses), CORS headers are added when enabled, including `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
+2. **Response headers**: When enabled, the module adds CORS headers to all responses (including error responses): `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
 
 #### Origin matching
 
 - If `origins` contains `"*"`, any origin is allowed and `Access-Control-Allow-Origin` is set to `*`.
-- Otherwise, the incoming `Origin` header is compared against the list. If it matches, the header is echoed back. If it doesn't match, no CORS headers are added.
+- Otherwise, the module compares the incoming `Origin` header against the list. If it matches, the module echoes the header back. If it does not match, the module adds no CORS headers.
 
 **Configuration example — allow all origins:**
 
@@ -116,7 +116,7 @@ api.example.com {
 ```
 
 > [!note]
-> If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
+> If CORS headers do not appear in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
 
 ## Best practices
 

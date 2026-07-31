@@ -177,7 +177,7 @@ Validation runs against two levels:
 - **Global configuration** — directives inside the top-level `{ ... }` block
 - **Per-protocol blocks** — host blocks such as `example.com`, `*:443`, `http *:8080`
 
-Each protocol registers its own validators via the module system. If a module is not loaded (e.g., a custom build with a reduced feature set), its directives will not be recognized and will show as unknown.
+Each protocol registers its own validators via the module system. If a module is not loaded (for example, a custom build with a reduced feature set), its directives appear as unknown.
 
 ## Configuration adapters and validation
 
@@ -225,10 +225,10 @@ ferron adapt -c ferron.conf
 
 ### ferron run
 
-The `run` command performs the same validation during startup. If validation fails, the server exits with an error.
+The `run` command runs the same validation during startup. If validation fails, the server exits with an error.
 
 > [!note]
-> Unknown directives produce warnings, not errors — the server can start, but the directive is silently ignored. Invalid configurations produce errors — the server will not start.
+> Unknown directives produce warnings, not errors — the server can start, but the directive is silently ignored. Invalid configurations produce errors — the server does not start.
 
 ## See also
 

@@ -3,7 +3,7 @@ title: "Configuration directives"
 description: "Listing available directives with the ferron directives command."
 ---
 
-The `ferron directives` command prints every configuration directive registered by the loaded modules as a JSON document. It does not validate a configuration file — it only reflects the directive schema known to the running binary.
+The `ferron directives` command prints every configuration directive that the loaded modules register as a JSON document. It does not validate a configuration file — it only reflects the directive schema known to the running binary.
 
 ```bash
 ferron directives

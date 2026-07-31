@@ -46,7 +46,7 @@ admin.example.com:443 {
 ```
 
 > [!warning]
-> When `client_auth_ca system` is used, the OS trust store includes all OS-trusted root CAs — use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
+> When you use `client_auth_ca system`, the OS trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
 
 > [!important]
 > For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path. Keep private internal CA material protected and rotate client certificates regularly.
@@ -119,7 +119,7 @@ example.com {
 }
 ```
 
-Both `cert` and `key` must be provided for mTLS to activate. The certificate chain and private key must be PEM-encoded.
+You must provide both `cert` and `key` for mTLS to activate. The certificate chain and private key must be PEM-encoded.
 
 ### Per-upstream credentials
 

@@ -17,10 +17,10 @@ Before installing Ferron, make sure you have:
 
 Visit the [Ferron downloads page](/download) and choose the archive that matches your operating system and architecture:
 
-- **Windows**: `.zip` archive (e.g., `ferron-3.0.0-x86_64-pc-windows-msvc.zip`)
-- **macOS**: `.tar.gz` archive (e.g., `ferron-3.0.0-aarch64-apple-darwin.tar.gz`)
-- **Linux**: `.tar.gz` archive (e.g., `ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz`)
-- **FreeBSD**: `.tar.gz` archive (e.g., `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`)
+- **Windows**: `.zip` archive (for example, `ferron-3.0.0-x86_64-pc-windows-msvc.zip`)
+- **macOS**: `.tar.gz` archive (for example, `ferron-3.0.0-aarch64-apple-darwin.tar.gz`)
+- **Linux**: `.tar.gz` archive (for example, `ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz`)
+- **FreeBSD**: `.tar.gz` archive (for example, `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`)
 
 ## Installation steps
 
@@ -116,7 +116,7 @@ By default, Ferron serves content from the `wwwroot` directory. Open a web brows
 If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
 
 > [!tip]
-> If you cannot access the server from another machine, ensure your firewall allows incoming connections on the configured port (default: 80). If port 80 is already in use, you can change the listen port in `ferron.conf` and update your firewall rules accordingly.
+> If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is already in use, you can change the listen port in `ferron.conf` and update your firewall rules accordingly.
 
 ## Reloading the configuration (Unix)
 

@@ -3,7 +3,7 @@ title: "Configuration: OTLP observability"
 description: "OpenTelemetry Protocol (OTLP) export configuration for logs, metrics, and traces."
 ---
 
-This page documents the OTLP (OpenTelemetry Protocol) observability configuration for Ferron. The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors, allowing integration with modern observability platforms such as Jaeger, Loki, Prometheus, and commercial APM solutions.
+This page documents the OTLP (OpenTelemetry Protocol) observability configuration for Ferron. The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors. This allows integration with modern observability platforms such as Jaeger, Loki, Prometheus, and commercial APM solutions.
 
 ## Directives
 
@@ -53,10 +53,10 @@ Each signal sub-block supports these nested directives:
 | `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
 | `no_verification` | `[bool]` | Disable TLS certificate verification. Use with caution. | `false` |
 | `log_style` | `<string>` | Log style for log records. `legacy` preserves the existing human-readable `message` body. `modern` (default) publishes a short `summary` plus typed per-event attributes and remaps access-log fields to OTEL semantic conventions. | `"modern"` |
-| `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one isn't configured. | none |
+| `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one is not configured. | none |
 
 > [!tip]
-> The OTLP resource automatically includes `process.pid` and `process.start_time` attributes, which allow observability backends to distinguish between concurrent processes (same PID range after restart) and sequential process lifetimes (different start times). This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
+> The OTLP resource automatically includes `process.pid` and `process.start_time` attributes. These allow observability backends to distinguish between concurrent processes (same PID range after restart) and sequential process lifetimes (different start times). This prevents cumulative counters from adjacent process lifetimes from being visually interleaved in dashboards.
 
 ### Baggage promotion
 
@@ -100,7 +100,7 @@ Each `key` entry configures one baggage key to promote:
 The `log_style` directive selects how log records are emitted over OTLP:
 
 - `legacy` - each log record's body is the human-readable `message` text. The `format` directive (when set) continues to apply to log records. This is the existing behavior.
-- `modern` (default) - each log record's body is a short OTEL-friendly `summary` (e.g. `"Upstream circuit opened"`) and per-event attributes are published as typed OpenTelemetry attributes (string, boolean, integer, float). The `format` directive is ignored for log records in this mode. Access logs in modern mode use a body of `"Access log (<protocol>)"`, set the record timestamp from the access event, and remap access-log fields onto OTEL semantic-convention attribute names.
+- `modern` (default) - each log record's body is a short OTEL-friendly `summary` (for example, `"Upstream circuit opened"`). Per-event attributes are published as typed OpenTelemetry attributes (string, boolean, integer, float). The `format` directive is ignored for log records in this mode. Access logs in modern mode use a body of `"Access log (<protocol>)"`. They set the record timestamp from the access event and remap access-log fields onto OTEL semantic-convention attribute names.
 
 The most common access-log field remappings in modern mode are:
 
@@ -305,7 +305,7 @@ Ferron supports three OTLP protocols for exporting signals:
 
 ## Signal correlation
 
-Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. Baggage from the incoming `baggage` header is attached to the span context, making it available for correlated queries like "show me all logs for trace `abc123`" or "filter by baggage key `userId`" in your observability backend.
+Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context when Ferron has a request trace. Baggage from the incoming `baggage` header is attached to the span context. This makes it available for correlated queries in your observability backend. For example, "show me all logs for trace `abc123`" or "filter by baggage key `userId`".
 
 > [!note]
 > All signals from the same request share the same trace context.
@@ -328,9 +328,9 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 ### Logs
 
-- `WARN` — logged when an error occurred with logs provider.
-- `WARN` — logged when an error occurred with metrics provider.
-- `WARN` — logged when an error occurred with traces provider.
+- `WARN` — logged when an error occurs with the logs provider.
+- `WARN` — logged when an error occurs with the metrics provider.
+- `WARN` — logged when an error occurs with the traces provider.
 
 ### Structured logs
 
@@ -344,10 +344,10 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 The following best-practice checks are reported by `ferron doctor` for directives on this page.
 
-- **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
-- **Service name not explicitly set** - when no explicit `service_name` is configured, the default value `"ferron"` will be used, which might cause data to be attributed incorrectly.
+- **`max_distinct false` inside Baggage configuration** - do not set high-cardinality attributes in baggage. They can lead to excessive memory usage and performance issues.
+- **Service name not explicitly set** - when no explicit `service_name` is configured, Ferron uses the default value `"ferron"`. This might attribute data incorrectly.
 - **"Legacy" log style** - when using `log_style legacy`, OpenTelemetry log reports may be harder to filter or aggregate.
-- **`no_verification` enabled** — Disabling TLS verification for OTLP endpoints should only be used for testing.
+- **`no_verification` enabled** — Only disable TLS verification for OTLP endpoints when testing.
 
 ## See also
 

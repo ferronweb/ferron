@@ -88,7 +88,7 @@ sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 
 ### Rolling back to Ferron 2
 
-If you need to roll back, stop Ferron 3, restore the Ferron 2 config backup, and reinstall Ferron 2 using the original install method before starting the old service again.
+If you need to roll back, stop Ferron 3 and restore the Ferron 2 config backup. Reinstall Ferron 2 using the original install method before starting the old service again.
 
 - **Docker**: switch the image tag back from `:3` to `:2`.
 - **Windows installer**: uninstall Ferron 3, reinstall Ferron 2, then restore `ferron.kdl`.
@@ -132,7 +132,7 @@ The migration tool provides a **starting point**, not a perfect conversion. Keep
 
 1. **`location` with `remove_base=#false`** - the tool generates `match` + `if` blocks that may need manual adjustment.
 2. **Match names** - generated `match` block names may be verbose. You should rename them for clarity.
-3. **Complex `log_format`** - custom log format strings may need manual review to ensure placeholder names are correct.
+3. **Complex `log_format`** - custom log format strings may need manual review to make sure placeholder names are correct.
 4. **`fcgi_php`** - the `fcgi_php` directive is preserved but may need adjustment depending on your FastCGI setup.
 5. **Rego subconditions** - Rego-based conditions are not migrated. You need to rewrite them using standard match expressions.
 
@@ -245,7 +245,7 @@ example.com {
 Key differences:
 
 - `condition` is replaced by `match`
-- Subconditions become expressions (e.g., `request.uri.path ~ "/api"`)
+- Subconditions become expressions (for example, `request.uri.path ~ "/api"`)
 - Placeholders like `{path}` are replaced by variables like `request.uri.path`
 - `is_language` is replaced by `in` operator on `request.header.accept_language`
 - `is_equal` / `is_not_equal` / `is_regex` / `is_not_regex` become `==`, `!=`, `~`, `!~`
@@ -493,7 +493,7 @@ The most common pitfall is mixing the old `condition`/`if`/`if_not` syntax with 
 
 In Ferron 2, `condition` blocks used subconditions like `is_equal`, `is_not_equal`, `is_regex`, `is_not_regex`, `is_remote_ip`, `is_forwarded_for`, and `is_language`. In Ferron 3, these are replaced by `match` blocks with expression operators (`==`, `!=`, `~`, `!~`, `in`).
 
-If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, if you use a Ferron 2 `if`/`if_not` referencing an old `condition` name while also defining a `match` block with a similar name, the two systems will not connect — the `if`/`if_not` will reference the old condition name, not the new `match` block.
+If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, when a Ferron 2 `if`/`if_not` references an old `condition` name and a `match` block has a similar name, the two systems will not connect. The `if`/`if_not` will reference the old condition name, not the new `match` block.
 
 **Example of the pitfall** — this will **not** work:
 

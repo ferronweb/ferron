@@ -3,17 +3,17 @@ title: "Configuration: URL rewriting"
 description: "The `rewrite` directive for transforming request URLs using regular expression patterns."
 ---
 
-This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early fin the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
+This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Ferron applies rewrites early in the request pipeline, before proxying or static file serving, so routing uses the rewritten URL.
 
 > [!info]
-> For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects); for static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).
+> For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects). For static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).
 
 ## Directives
 
 ### `rewrite`
 
 - `rewrite <regex: string> <replacement: string>`
-  - This directive specifies a regular expression pattern and replacement string for URL rewriting. Capture groups in the regex can be referenced in the replacement string (`$1`, `$2`, etc.). Default: none
+  - This directive specifies a regular expression pattern and replacement string for URL rewriting. You can reference regex capture groups in the replacement string (`$1`, `$2`, etc.). Default: none
 
 #### Block options
 
@@ -40,10 +40,10 @@ example.com {
 }
 ```
 
-All requests to `/old-path/anything` are internally rewritten to `/new-path/anything`. The client sees no redirect — the rewrite is transparent.
+Ferron internally rewrites all `/old-path/anything` requests to `/new-path/anything`. The client sees no redirect — the rewrite is transparent.
 
 > [!tip]
-> If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect — rules with `last` stop further processing.
+> If you get unexpected routing behavior, verify that Ferron applies rewrite rules in the order you expect — rules with `last` stop further processing.
 
 #### Stop processing with `last`
 
@@ -56,7 +56,7 @@ example.com {
 }
 ```
 
-Requests to `/api/v1/users` are rewritten to `/api/v2/users` and then stop — the second rule never sees the `/api/v2/` prefix.
+Ferron rewrites `/api/v1/users` requests to `/api/v2/users` and then stops. The second rule never sees the `/api/v2/` prefix.
 
 #### Chained rules without `last`
 
@@ -67,7 +67,7 @@ example.com {
 }
 ```
 
-A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second rule rewrites it to `/current/foo`.
+Ferron first rewrites a `/legacy/foo` request to `/modern/foo`. Then the second rule rewrites it to `/current/foo`.
 
 #### File/directory-specific rules
 
@@ -85,7 +85,7 @@ example.com {
 ### `rewrite_log`
 
 - `rewrite_log <bool>`
-  - This directive specifies whether each URL rewrite operation is logged to the error log. Default: `rewrite_log false`
+  - This directive specifies whether Ferron logs each URL rewrite operation to the error log. Default: `rewrite_log false`
 
 **Configuration example:**
 
@@ -107,11 +107,11 @@ The regular expression engine used is [`fancy-regex`](https://crates.io/crates/f
 
 ## URL sanitation interaction
 
-When URL sanitization is enabled (the default), dangerous path sequences like `/../` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./url-processing.md)).
+When URL sanitization is enabled (the default), Ferron normalizes dangerous path sequences like `/../` before applying rewrite rules. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./url-processing.md)).
 
 ## Pipeline position
 
-Rewrite rules are applied after client IP resolution and before reverse proxying, static file serving, and response generation. This means rewritten URLs are used for all subsequent routing decisions.
+Ferron applies rewrite rules after client IP resolution and before reverse proxying, static file serving, and response generation. This means all later routing decisions use rewritten URLs.
 
 ## Observability
 
@@ -124,7 +124,7 @@ Rewrite rules are applied after client IP resolution and before reverse proxying
 
 ### Logs
 
-When `rewrite_log` is enabled, each rewrite operation is logged to the error log at `INFO` level.
+When `rewrite_log` is enabled, Ferron logs each rewrite operation to the error log at `INFO` level.
 
 ### Structured logs
 

@@ -3,9 +3,9 @@ title: "Configuration: abuse protection"
 description: "Lightweight Fail2ban-like IP banning with temporary lockouts for abusive behavior."
 ---
 
-This page documents `abuse_protection` and `abuse_event` directives for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (e.g., rate limit breaches, brute-force failures), Ferron temporarily bans the IP address.
+This page documents `abuse_protection` and `abuse_event` directives for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (for example, rate limit breaches or brute-force failures), Ferron temporarily bans the IP address.
 
-The abuse protection module works by tracking abuse events emitted by other HTTP modules (such as rate limiting and basic authentication) and temporarily banning IPs that exceed configured thresholds within time windows. Bans are stored in memory and automatically expire after the configured duration.
+The abuse protection module works by tracking abuse events emitted by other HTTP modules (such as rate limiting and basic authentication). It temporarily bans IPs that exceed configured thresholds within time windows. Bans are stored in memory and automatically expire after the configured duration.
 
 ## `abuse_protection`
 
@@ -27,7 +27,7 @@ example.com {
 }
 ```
 
-The `abuse_protection` block can be placed inside an HTTP host block.
+You can place the `abuse_protection` block inside an HTTP host block.
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
@@ -35,8 +35,8 @@ The `abuse_protection` block can be placed inside an HTTP host block.
 | `rate_limit_threshold` | block | Ban after N rate limit events in window. | 5 in 300s |
 | `brute_force_threshold` | block | Ban after N brute force failures in window. | 3 in 120s |
 | `custom_threshold` | block | Ban after N custom events in window. | none |
-| `error_rate_threshold` | block | Ban after N error responses (e.g., 404, 403) in window. | none |
-| `allowlist` | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. This directive can be specified multiple times. | none |
+| `error_rate_threshold` | block | Ban after N error responses (for example, 404, 403) in window. | none |
+| `allowlist` | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times. | none |
 
 ### Threshold blocks
 
@@ -55,7 +55,7 @@ The `error_rate_threshold` block configures when error response patterns trigger
 | --- | --- | --- | --- |
 | `events` | `<int>` | Number of error responses required to trigger a ban. | 50 |
 | `window` | `<duration>` | Time window for counting error responses. | `"60s"` |
-| `status_codes` | `<string> [<string> ...]` | HTTP status codes that count as errors (e.g., `"404"`, `"403"`). | `"404"` |
+| `status_codes` | `<string> [<string> ...]` | HTTP status codes that count as errors (for example, `"404"`, `"403"`). | `"404"` |
 
 **Configuration example — stricter thresholds:**
 
@@ -117,7 +117,7 @@ example.com {
 }
 ```
 
-IPs added to the `allowlist` are never banned, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
+Ferron never bans IPs in the `allowlist`, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
 
 **Configuration example — error rate threshold:**
 
@@ -160,9 +160,9 @@ example.com {
 }
 ```
 
-The `abuse_event` block can be placed inside an HTTP host block.
+You can place the `abuse_event` block inside an HTTP host block.
 
-This directive can be used to define custom abuse protection rules (for example, to protect your website from automated vulnerability scanners). This could be also useful when configuring a honeypot within Ferron.
+You can use this directive to define custom abuse protection rules (for example, to protect your website from automated vulnerability scanners). It is also useful when configuring a honeypot within Ferron.
 
 ## Behavior
 
@@ -170,22 +170,22 @@ This directive can be used to define custom abuse protection rules (for example,
 
 The module tracks events per IP address and event type:
 
-- **Rate limit events** — emitted by the rate limiting module when a client exceeds their rate limit.
-- **Brute force events** — emitted by the basic authentication module when a client has repeated failed authentication attempts.
+- **Rate limit events** — the rate limiting module emits them when a client exceeds its rate limit.
+- **Brute force events** — the basic authentication module emits them when a client has repeated failed authentication attempts.
 - **Custom events** — available for other modules (and `abuse_event` directive) to emit custom abuse events.
-- **Error rate events** — emitted by the abuse protection module itself when a response status code matches configured error codes (e.g., 404, 403). Uses `run_inverse` to observe responses after the pipeline completes.
+- **Error rate events** — the abuse protection module emits them when a response status code matches configured error codes (for example, 404 and 403). It uses `run_inverse` to observe responses after the pipeline completes.
 
 Events are stored in a sliding time window. When the number of events within the window reaches the configured threshold, the IP is immediately banned.
 
 ### Ban mechanics
 
-- **Ban duration** — fixed duration (default 15 minutes); independent from the event counting window.
+- **Ban duration** — fixed duration (default 15 minutes). It is independent from the event counting window.
 - **TTL-based expiry** — bans automatically expire after the configured duration. No background eviction threads are needed.
-- **Per-IP tracking** — each IP address is tracked independently. Different event types are tracked separately for the same IP.
+- **Per-IP tracking** — the module tracks each IP address independently. It tracks different event types separately for the same IP.
 - **No persistence** — bans are stored in memory and are **not** preserved across server restarts.
 
 > [!tip]
-> If your IP is banned immediately, check configured thresholds — you may have `events 1` or `events 2`, or very short `window` values (e.g., 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
+> If your IP is banned immediately, check configured thresholds. You may have `events 1` or `events 2`, or very short `window` values (for example, 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
 
 > [!warning]
 > For manual unbanning, you must wait for the ban to expire naturally.
@@ -199,11 +199,11 @@ Events are stored in a sliding time window. When the number of events within the
 5. If not banned: request continues through the pipeline normally.
 6. When other modules detect abuse (rate limit breach, brute force attempt), they emit events to the abuse registry.
 7. If an event causes a threshold to be exceeded, the IP is immediately banned.
-8. After the pipeline completes, the abuse protection stage's `run_inverse` observes the response status code. If it matches a configured `error_rate_threshold` status code, an error rate event is recorded.
+8. After the pipeline completes, the abuse protection stage's `run_inverse` observes the response status code. If it matches a configured `error_rate_threshold` status code, the stage records an error rate event.
 
 ### Allowlist behavior
 
-Any IP that matches an entry in the `allowlist` is skipped before ban checks are performed. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
+The stage skips any IP that matches an entry in the `allowlist` before it performs ban checks. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
 
 ## Examples
 
@@ -241,8 +241,8 @@ The abuse protection module emits the following metrics:
 
 ### Logs
 
-- **`DEBUG`**: logged when a ban rejection occurs, including the banned IP address and reason.
-- **`WARN`**: logged when an IP is triggered for banning.
+- **`DEBUG`**: logged when a ban rejection occurs. The message includes the banned IP address and reason.
+- **`WARN`**: logged when the module triggers a ban for an IP.
 
 ### Structured logs
 

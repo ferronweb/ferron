@@ -3,7 +3,7 @@ title: Abuse protection
 description: "Protect Ferron from brute-force attacks, rate limit abuse, and other malicious behavior with temporary IP banning."
 ---
 
-Ferron's `abuse_protection` directive provides lightweight, Fail2ban-style IP banning. When a client exceeds configured thresholds (e.g., repeated rate limit breaches or failed login attempts), Ferron temporarily bans their IP address. Bans are stored in memory and automatically expire after the configured duration.
+Ferron's `abuse_protection` directive provides lightweight, Fail2ban-style IP banning. When a client exceeds configured thresholds (for example, repeated rate limit breaches or failed login attempts), Ferron temporarily bans their IP address. Bans are stored in memory and automatically expire after the configured duration.
 
 This page covers common deployment patterns. For full configuration details, see [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban).
 
@@ -145,8 +145,8 @@ example.com {
 The flow works as follows:
 
 1. The rate limiter throttles individual clients that exceed their token bucket.
-2. Each rate limit breach is recorded as an abuse event.
-3. If the client accumulates enough breaches within the window, their IP is banned.
+2. Ferron records each rate limit breach as an abuse event.
+3. If the client accumulates enough breaches within the window, Ferron bans the client's IP.
 4. While banned, the client receives a **403 Forbidden** response with a `Retry-After` header.
 
 ## Detecting automated scans by URL pattern
@@ -178,7 +178,7 @@ example.com {
 }
 ```
 
-Requests matching this pattern trigger a custom abuse event. After 5 such events within 300 seconds, the client's IP is banned. The ban duration follows the default or configured `ban_duration`.
+Requests matching this pattern trigger a custom abuse event. Ferron bans the client's IP after 5 such events within 300 seconds. The ban duration follows the default or configured `ban_duration`.
 
 ## Detecting hostile scanning by error rate
 
@@ -200,7 +200,7 @@ example.com {
 }
 ```
 
-This bans an IP for **15 minutes** if they trigger 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together — for example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
+This bans an IP for **15 minutes** if they trigger 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together. For example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
 
 **Stricter threshold for vulnerability scanners:**
 
@@ -238,7 +238,7 @@ example.com {
 
 Ferron's native abuse protection bans IPs for a limited duration in memory. For persistent threat intelligence sharing, you can run a lightweight sidecar that tails Ferron's WARN-level logs and reports banned IPs to [AbuseIPDB](https://www.abuseipdb.com/).
 
-The sidecar watches for `Ban triggered` log lines, extracts the IP address and reason, maps the reason to an [AbuseIPDB category](https://www.abuseipdb.com/categories), and posts a report to the AbuseIPDB API.
+The sidecar watches for `Ban triggered` log lines and extracts the IP address and reason. It maps the reason to an [AbuseIPDB category](https://www.abuseipdb.com/categories) and posts a report to the AbuseIPDB API.
 
 ### Log format
 

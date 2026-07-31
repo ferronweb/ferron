@@ -30,7 +30,7 @@ cargo build -r --workspace
 This compiles all crates in the workspace, including the `ferron` binary and all module crates.
 
 > [!note]
-> The first build will take longer as Cargo downloads and compiles all dependencies. Subsequent builds are faster.
+> The first build will take longer as Cargo downloads and compiles all dependencies. Later builds are faster.
 
 ## Running the server
 

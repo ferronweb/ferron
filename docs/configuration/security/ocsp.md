@@ -3,7 +3,7 @@ title: "Configuration: OCSP stapling"
 description: "OCSP stapling for TLS — attaching signed OCSP responses during the TLS handshake."
 ---
 
-This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake, eliminating the need for clients to contact the CA's OCSP responder directly. This improves:
+This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake. This eliminates the need for clients to contact the CA's OCSP responder directly. This improves:
 
 - **Privacy** — clients no longer reveal their browsing habits to the CA
 - **Performance** — eliminates the extra round-trip to the OCSP responder
@@ -86,11 +86,11 @@ example.com {
 ### Startup sequence
 
 1. The OCSP module initializes a background service on the secondary tokio runtime
-2. The TLS provider loads or obtains certificates
-3. The certificate is **preloaded** into the OCSP service immediately
+2. The TLS provider loads or gets certificates
+3. The OCSP module **preloads** the certificate into the service immediately
 4. The background task fetches an OCSP response from the CA's responder
-5. The response is verified to ensure it is valid and matches the certificate
-6. The response is cached and attached to subsequent TLS handshakes
+5. The OCSP module verifies the response to make sure it is valid and matches the certificate
+6. The OCSP module caches the response and attaches it to later TLS handshakes
 
 ### Refresh cycle
 
@@ -103,11 +103,11 @@ The background task maintains fresh OCSP responses:
 
 ### OCSP Must-Staple
 
-Certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633) are automatically detected. Must-Staple certificates **require** a stapled OCSP response — clients that enforce Must-Staple will reject connections without one. Preloading ensures the response is fetched immediately on startup.
+The module automatically detects certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates **require** a stapled OCSP response — clients that enforce Must-Staple will reject connections without one. Preloading makes sure the response is fetched immediately on startup.
 
 ## Response verification
 
-When an OCSP response is fetched, the OCSP stapler performs several verification checks before caching and stapling it:
+When an OCSP response is fetched, the OCSP stapler runs several checks before caching and stapling it:
 
 ### Signature verification
 
@@ -151,13 +151,13 @@ If no OCSP URL is found in the certificate, OCSP stapling is silently skipped fo
 
 ## Security considerations
 
-- If the OCSP responder is unreachable, the last cached response is kept and used until a new one is fetched. However, the service does not serve responses past their `nextUpdate` time — it will keep retrying until a fresh response is obtained.
+- If the OCSP responder is unreachable, the last cached response is kept and used until a new one is fetched. However, the service does not serve responses past their `nextUpdate` time — it will keep retrying until it gets a fresh response.
 
 ## Troubleshooting
 
 ### "OCSP fetch failed: ..."
 
-The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the certificate's subject common name (or a SPKI hash prefix if the CN is unavailable) to help identify which certificate is affected. Common causes:
+The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the certificate's subject common name (or a SPKI hash prefix if the CN is unavailable). This helps identify which certificate is affected. Common causes:
 
 - Network issues
 - CA's OCSP responder is down

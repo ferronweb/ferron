@@ -3,7 +3,7 @@ title: Installation via Linux installer
 description: "Install Ferron 3 on Linux using the installer script: run the command, choose your install method, and manage the service."
 ---
 
-Ferron can be installed on Linux systems using an interactive installer script. The installer detects your distribution, architecture, and C library, then offers you a choice between installing via a package manager (if packages are available) or as a standalone archive.
+Ferron can be installed on Linux systems using an interactive installer script. The installer detects your distribution, architecture, and C library. Then it offers you a choice between installing via a package manager (if packages are available) or as a standalone archive.
 
 ## Installation steps
 
@@ -15,7 +15,7 @@ To install Ferron, run the following command:
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-You will be prompted to choose the installation type. If packages are available for your distribution, the installer will offer to install Ferron via your package manager. Otherwise, it installs the archive version directly.
+The installer prompts you to choose the installation type. If packages are available for your distribution, the installer offers to install Ferron via your package manager. Otherwise, it installs the archive version directly.
 
 > [!note]
 > On RHEL/Fedora systems, the installer automatically configures SELinux contexts and booleans for Ferron. If you encounter permission issues, verify that SELinux is properly configured.
@@ -27,7 +27,7 @@ By default, Ferron serves content from the `/var/www/ferron` directory. Open a w
 If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
 > [!tip]
-> If you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
+> If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 

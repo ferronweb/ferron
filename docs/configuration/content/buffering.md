@@ -3,7 +3,7 @@ title: "Configuration: HTTP buffering"
 description: "Request and response body buffering to protect backends and control memory usage."
 ---
 
-This page documents the `buffer_request` and `buffer_response` directives for configuring HTTP body buffering in Ferron. Buffering collects incoming request bodies and outgoing response bodies up to a configured size limit, which can serve as an additional protection layer against Slowloris-style attacks and help control memory consumption for large payloads.
+This page documents the `buffer_request` and `buffer_response` directives for configuring HTTP body buffering in Ferron. Buffering collects incoming request bodies and outgoing response bodies up to a configured size limit. It can serve as an additional protection layer against Slowloris-style attacks. It also helps control memory consumption for large payloads.
 
 ## Request and response buffering
 
@@ -19,14 +19,14 @@ example.com {
 }
 ```
 
-Both directives accept an integer value (buffer size in bytes) and can be configured at global or HTTP host scope. When set, the server buffers up to the specified number of bytes before passing the body downstream. Bodies larger than the buffer limit are still served, but the initial portion is collected first.
+Both directives accept an integer value (buffer size in bytes). You can configure them at global or HTTP host scope. When set, the server buffers up to the specified number of bytes before passing the body downstream. The server still serves bodies larger than the buffer limit, but it collects the initial portion first.
 
 ### Global buffering directives
 
 | Directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `buffer_request` | `<int>` | This directive specifies the buffer size in bytes for incoming HTTP request bodies. Buffering request bodies can protect backend servers from Slowloris-style attacks by collecting the body before processing. | disabled |
-| `buffer_response` | `<int>` | This directive specifies the buffer size in bytes for outgoing HTTP response bodies. Buffering responses can help control memory usage and ensure consistent delivery to clients. | disabled |
+| `buffer_response` | `<int>` | This directive specifies the buffer size in bytes for outgoing HTTP response bodies. Buffering responses can help control memory usage and make sure delivery to clients is consistent. | disabled |
 
 **Configuration example:**
 
@@ -42,23 +42,23 @@ example.com {
 ```
 
 > [!note]
-> Disabled by default: Both `buffer_request` and `buffer_response` are disabled unless explicitly configured — this avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes. Typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit. Setting it too large increases memory consumption per request.
+> Disabled by default: both `buffer_request` and `buffer_response` are disabled unless you configure them explicitly. This avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes. Typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit. Setting it too large increases memory consumption per request.
 
 ## Behavior
 
 > [!tip]
 >
 > - Each active connection uses memory proportional to the buffer size when buffering is enabled. Under high concurrency, large buffer sizes can increase memory pressure — monitor memory usage and adjust accordingly.
-> - To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes) or remove the directive entirely if no parent scope configures it.
+> - To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes). Remove the directive entirely if no parent scope configures it.
 
 ### Request buffering
 
 When `buffer_request` is configured:
 
 - The server collects incoming request body frames up to the configured byte limit.
-- If the request body is smaller than the buffer limit, the entire body is collected before downstream stages (like reverse proxy or authentication) process it.
-- If the request body exceeds the buffer limit, the buffered portion is collected and the remaining body stream is preserved. Downstream stages receive a chained stream consisting of the buffered frames followed by the remaining body.
-- Non-data frames (such as trailing headers) are preserved and stop further collection.
+- If the request body is smaller than the buffer limit, the server collects the entire body. It does this before downstream stages (like reverse proxy or authentication) process it.
+- If the request body exceeds the buffer limit, the server collects the buffered portion and preserves the remaining body stream. Downstream stages receive a chained stream consisting of the buffered frames followed by the remaining body.
+- The server preserves non-data frames (such as trailing headers) and stops further collection.
 
 > [!important]
 > Slowloris protection: Request buffering is one layer of defense against Slowloris attacks. You should also configure the `timeout` directive to enforce connection timeouts. See [Core directives](../server/core-directives.md) for the `timeout` directive.
@@ -68,13 +68,13 @@ When `buffer_request` is configured:
 When `buffer_response` is configured:
 
 - The server collects outgoing response body frames up to the configured byte limit.
-- Similar to request buffering, the response body is split into buffered frames (up to the limit) and a remaining stream (if the body exceeds the limit).
+- Similar to request buffering, the server splits the response body into buffered frames (up to the limit) and a remaining stream. The remaining stream exists only if the body exceeds the limit.
 - The buffered response is reassembled and sent to the client as a chained stream.
 - Response buffering only applies to custom responses generated by the pipeline. Built-in error responses are not buffered.
 
 ### Buffering and pipeline stages
 
-The buffer stage runs early in the HTTP pipeline, after URL rewriting but before rate limiting, authentication, caching, reverse proxy, and static file stages. This ordering ensures that request bodies are buffered before they reach backend handlers.
+The buffer stage runs early in the HTTP pipeline. It runs after URL rewriting but before rate limiting, authentication, caching, reverse proxy, and static file stages. This ordering makes sure that request bodies are buffered before they reach backend handlers.
 
 ## Observability
 

@@ -3,7 +3,7 @@ title: "Building Ferron 3 from source (custom modules)"
 description: "How to build a custom Ferron 3 binary with external or community-developed modules."
 ---
 
-While the default `ferron` binary includes a broad set of modules, you can build your own custom version of Ferron to include external modules, community-developed extensions, or to exclude default features for a smaller binary footprint.
+The default `ferron` binary includes a broad set of modules. You can build your own custom version of Ferron to include external modules or community-developed extensions. You can also exclude default features for a smaller binary footprint.
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ ferron-http-custom = { git = "https://git.example.com/ferron-http-custom.git" }
 
 ### 3. Implement `main.rs`
 
-Your `main` function should initialize the entrypoint, obtain a profile (a list of module loaders), add your custom module loader to it, and then start the server.
+Your `main` function should initialize the entrypoint and get a profile (a list of module loaders). Add your custom module loader to the profile, then start the server.
 
 ```rust
 fn main() {
@@ -64,7 +64,7 @@ fn main() {
 > If you want a minimal binary, disable `profile-default` for `ferron-entrypoint` and add only the specific modules you need to your `Cargo.toml`.
 
 > [!note]
-> Ensure your custom modules are compatible with the version of `ferron-core` and `ferron-entrypoint` you are using. Ferron modules are statically linked — any change to your module list requires a recompilation of the binary.
+> Make sure your custom modules are compatible with the version of `ferron-core` and `ferron-entrypoint` you are using. Ferron modules are statically linked — any change to your module list requires a recompilation of the binary.
 
 ## Building and running
 
@@ -82,7 +82,7 @@ Run your custom server with a configuration file:
 
 ## How it works
 
-Ferron uses a **module profile** system. The `ferron-entrypoint` crate provides the CLI logic and runtime management, but it doesn't know about specific modules until they are registered in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
+Ferron uses a **module profile** system. The `ferron-entrypoint` crate provides the CLI logic and runtime management. It does not know about specific modules until they are registered in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
 
 - `ferron_entrypoint::init()`: Sets up `malloc-best-effort` and crash reporting.
 - `ferron_entrypoint::default_profile()`: Returns a list of all loaders for modules bundled with Ferron.

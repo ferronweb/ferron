@@ -97,7 +97,7 @@ example.com {
 
 ## Trace ID logging for debugging
 
-Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a variation of Combined Log Format with additional hostname and trace ID fields (Enhanced Combined Log Format) by default, so you don't need to configure it manually in most cases.
+Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a variation of Combined Log Format with additional hostname and trace ID fields (Enhanced Combined Log Format) by default. You do not need to configure it manually in most cases.
 
 Example log output:
 
@@ -161,7 +161,7 @@ example.com {
 
 ### Structured (OTEL-style) logs over OTLP
 
-If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record's body is a short summary (e.g. `"Upstream circuit opened"`) and per-event attributes are published as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"` and are remapped to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks are unaffected.
+If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record's body is a short summary (for example, `"Upstream circuit opened"`). Ferron publishes per-event attributes as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"`. Ferron remaps them to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks are unaffected.
 
 ```ferron
 example.com {
@@ -181,7 +181,7 @@ example.com {
 
 ### "Traditional" logs over OTLP
 
-If you want to send traditional, human-readable log records via OTLP (e.g., for compatibility with existing logging systems), set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
+If you want to send traditional, human-readable log records via OTLP (for example, for compatibility with existing logging systems), set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
 
 ```ferron
 example.com {

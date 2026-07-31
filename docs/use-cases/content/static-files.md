@@ -38,7 +38,7 @@ example.com {
 
 ## Single-page applications
 
-Single-page applications (SPAs) are also supported by Ferron by adding a URL rewrite rule in addition to the static file serving configuration. You can use this configuration:
+Ferron also supports single-page applications (SPAs) by adding a URL rewrite rule in addition to the static file serving configuration. You can use this configuration:
 
 ```ferron
 example.com {
@@ -80,7 +80,7 @@ example.com {
 }
 ```
 
-In this configuration, Ferron will serve precompressed versions of static files if they exist. The precompressed static files would additionally have `.gz` extension for gzip, `.br` for Brotli, `.deflate` for Deflate, or `.zst` for Zstandard.
+In this configuration, Ferron serves precompressed versions of static files if they exist. The precompressed files use the `.gz` extension for gzip, `.br` for Brotli, `.deflate` for Deflate, and `.zst` for Zstandard.
 
 > [!tip]
 > If precompressed assets are not served, check that matching files exist (for example `app.js.br` or `app.js.gz`) and regenerate them after changing source assets.

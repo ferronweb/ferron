@@ -3,7 +3,7 @@ title: "Configuration: HTTP map"
 description: "The `map` directive for creating variables whose values depend on values of other variables."
 ---
 
-This page documents the `map` directive, which creates variables whose values are determined by matching a source variable against a set of patterns. Mapped variables are available via `{{variable}}` interpolation in other directives.
+This page documents the `map` directive, which creates variables whose values come from matching a source variable against a set of patterns. Mapped variables are available via `{{variable}}` interpolation in other directives.
 
 ## Directives
 
@@ -13,7 +13,7 @@ This page documents the `map` directive, which creates variables whose values ar
   - This directive specifies a source variable to match and a destination variable name to create. The nested block defines the mapping rules. Default: none
 
 > [!note]
-> The destination variable name can be any identifier — it is stored in the request's variable map and accessed via `{{name}}` interpolation.
+> The destination variable name can be any identifier — Ferron stores it in the request's variable map and you access it via `{{name}}` interpolation.
 
 #### Block sub-directives
 
@@ -24,7 +24,7 @@ This page documents the `map` directive, which creates variables whose values ar
 | `regex` | `<pattern: string> <result: string>` | Regular expression match. Capture groups can be referenced in the result as `$1`, `$2`, etc. | None |
 
 > [!note]
-> If the source variable cannot be resolved, the source value is treated as an empty string and the `default` value is used. Regex patterns are compiled at parse time — invalid patterns are rejected during validation. Wildcard patterns (`*`) are converted to regex internally.
+> If Ferron cannot resolve the source variable, it treats the source value as an empty string and uses the `default` value. Ferron compiles regex patterns at parse time — it rejects invalid patterns during validation. Ferron converts wildcard patterns (`*`) to regex internally.
 
 #### Block options (inside `regex { ... }`)
 
@@ -74,7 +74,7 @@ example.com {
 }
 ```
 
-Requests to `/api/users` set `category` to `api`, requests to `/blog/post` set it to `blog`, and `/docs` sets it to `docs`. Everything else falls back to `uncategorized`. The mapped variable is then passed as a header to the backend.
+Requests to `/api/users` set `category` to `api`, requests to `/blog/post` set it to `blog`, and `/docs` sets it to `docs`. Everything else falls back to `uncategorized`. Ferron then passes the mapped variable to the backend as a header.
 
 ### Regex with capture groups
 
@@ -87,7 +87,7 @@ http * {
 }
 ```
 
-A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex are available as `$1`, `$2`, etc. in the result string. If the pattern has no capture groups or the group doesn't exist, the reference is kept literally (e.g. `$1`).
+A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex are available as `$1`, `$2`, etc. in the result string. If the pattern has no capture groups or the group does not exist, Ferron keeps the reference literally (for example `$1`).
 
 ### Case-insensitive matching
 
@@ -109,7 +109,7 @@ The `case_insensitive` option applies to individual `regex` entries. Alternative
 
 ### Map at host and location level
 
-`map` blocks can be defined inside host blocks and `location` blocks. They inherit from parent scopes using standard Ferron inheritance:
+You can define `map` blocks inside host blocks and `location` blocks. They inherit from parent scopes using standard Ferron inheritance:
 
 ```ferron
 http * {
@@ -135,7 +135,7 @@ example.com {
 }
 ```
 
-When a `map` with the same destination variable is defined at multiple levels, the innermost scope takes precedence. Maps with different destination variables are all evaluated.
+When you define a `map` with the same destination variable at multiple levels, the innermost scope takes precedence. Ferron evaluates all maps with different destination variables.
 
 ## Pipeline position
 

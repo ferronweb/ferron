@@ -28,7 +28,7 @@ example.com {
 }
 ```
 
-Multiple `rate_limit` blocks can be defined to apply different rules simultaneously (e.g. one per IP and one per API key).
+You can define multiple `rate_limit` blocks to apply different rules simultaneously (for example, one per IP and one per API key).
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
@@ -49,12 +49,12 @@ The `key` directive determines what each bucket is keyed on:
 | --- | --- |
 | `remote_address` | Client IP address (default). |
 | `uri` | Request URI path. |
-| `request.header.<name>` | Value of the specified request header (e.g. `request.header.X-Api-Key`). |
+| `request.header.<name>` | Value of the specified request header (for example, `request.header.X-Api-Key`). |
 
 ## Behavior
 
 > [!important]
-> Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (e.g. Redis) — this is not supported by the rate limiting module.
+> Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (for example, Redis). The rate limiting module does not support this.
 
 ### Token bucket algorithm
 
@@ -64,15 +64,15 @@ Each key gets its own token bucket:
 - **Refill rate** = `rate` tokens per second (refilled lazily on each request)
 - **Consumption** = 1 token per request
 
-When the bucket is empty, the request is rejected with the configured `deny_status` and a `Retry-After` header indicating how many seconds to wait.
+When the bucket is empty, the server rejects the request with the configured `deny_status` and a `Retry-After` header indicating how many seconds to wait.
 
 ### Bucket eviction
 
-To prevent unbounded memory growth from one-shot clients, buckets are evicted after `bucket_ttl` seconds of inactivity. The `max_buckets` setting provides a hard upper limit — when reached, new requests are rejected until stale buckets are evicted.
+To prevent unbounded memory growth from one-shot clients, the module evicts buckets after `bucket_ttl` seconds of inactivity. The `max_buckets` setting provides a hard upper limit. When reached, the module rejects new requests until it evicts stale buckets.
 
 ### Per-location limits
 
-`rate_limit` blocks inside `location` blocks apply only to requests matching that path. Both host-level and location-level rules are evaluated — a request must pass all rules to be served.
+`rate_limit` blocks inside `location` blocks apply only to requests matching that path. Ferron evaluates both host-level and location-level rules. A request must pass all rules before it is served.
 
 ### Rate limit zones
 
@@ -205,7 +205,7 @@ api.example.com {
 Each unique API key gets 150 requests burst, then 50/second.
 
 > [!note]
-> Requests where the key cannot be extracted (e.g. missing header) skip that rule.
+> Requests where the key cannot be extracted (for example, a missing header) skip that rule.
 
 ### Strict endpoint with custom status
 
@@ -240,7 +240,7 @@ The `ferron.ratelimit.zone` attribute identifies which rate limit zone the reque
 ### Logs
 
 - **`DEBUG`**: logged when a rate limit bucket is exhausted for a key.
-- **`WARN`**: logged when the registry reaches `max_buckets` capacity and backpressure is applied.
+- **`WARN`**: logged when the registry reaches `max_buckets` capacity and applies backpressure.
 
 ### Structured logs
 

@@ -7,7 +7,7 @@ This page covers the Ferron configuration file format, how blocks and directives
 
 ## Ferron configuration files
 
-Ferron uses `.conf` (or `.ferron`) files parsed by the `config-ferronconf` adapter. A configuration file is made of top-level statements that define global blocks, host blocks, matchers, and snippets.
+Ferron uses `.conf` (or `.ferron`) files. The `config-ferronconf` adapter parses them. A configuration file consists of top-level statements that define global blocks, host blocks, matchers, and snippets.
 
 ```ferron
 # Uncomment to include additional configuration files
@@ -78,7 +78,7 @@ directory_listing
 directory_listing false
 ```
 
-This shorthand can useful for simple on/off toggles where the intent is clear.
+This shorthand can be useful for simple on/off toggles where the intent is clear.
 
 ### Duration strings
 
@@ -113,7 +113,7 @@ match api_request {
 ```
 
 > [!warning]
-> Invalid escape sequences in quoted strings (e.g., `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regex patterns.
+> Invalid escape sequences in quoted strings (for example, `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regex patterns.
 
 > [!note]
 > Raw strings do not support interpolation (`{{...}}`). Use regular strings if variable substitution is needed.
@@ -161,7 +161,7 @@ Current defaults:
 - If the protocol is omitted, it defaults to `http`.
 - For HTTP host blocks, if the port is omitted, Ferron treats it as port `80`.
 
-When a hostname is specified (e.g. `example.com`) and no explicit port is given, Ferron starts **two listeners** — one on the default HTTP port (80) and one on the default HTTPS port (443) with automatic ACME TLS. See [ACME automatic TLS](/docs/v3/configuration/security/acme) for details.
+When a hostname is specified (for example, `example.com`) and no explicit port is given, Ferron starts **two listeners**. One runs on the default HTTP port (80) and one on the default HTTPS port (443) with automatic ACME TLS. See [ACME automatic TLS](/docs/v3/configuration/security/acme) for details.
 
 ## Includes and snippets
 
@@ -219,7 +219,7 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 
 When hot-reload is disabled (the default), Ferron can still detect when configuration source files have changed on disk but have not been reloaded. This is called **configuration drift** — a signal that the running configuration may not match the file on disk.
 
-Drift is detected via lightweight periodic mtime comparison (no re-parsing). When drift is detected, a warn-level log is emitted and the `ferron.admin.config_drift` gauge metric is set to `1`. When the configuration is reloaded and drift is resolved, an info-level log is emitted and the metric resets to `0`.
+Drift is detected via lightweight periodic mtime comparison (no re-parsing). When Ferron detects drift, it emits a warn-level log and sets the `ferron.admin.config_drift` gauge metric to `1`. When the configuration reloads and drift resolves, Ferron emits an info-level log and the metric resets to `0`.
 
 Drift hints are **enabled by default**. To disable them:
 

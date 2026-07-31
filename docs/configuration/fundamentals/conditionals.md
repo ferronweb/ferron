@@ -53,7 +53,7 @@ The following operators are available inside `match` blocks:
 > [!note]
 >
 > - `in` splits the right-hand string on commas and trims each item.
-> - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` performs language matching with support for base language codes (e.g. `en` matches `en-US`).
+> - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` matches languages with support for base language codes. For example, `en` matches `en-US`.
 > - All expressions inside a single `match` block must pass (AND semantics).
 
 > [!note]
@@ -83,7 +83,7 @@ The HTTP resolver exposes these variables for use in `match` blocks and interpol
 | `trace.spanid` | Span ID, if available |
 | `mtls.cn` | Client certificate common name, if available |
 
-Header names are normalized by lowercasing them and converting `_` to `-`. For example, `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
+Ferron normalizes header names by lowercasing them and converting `_` to `-`. For example, `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
 
 ### IP canonicalization
 

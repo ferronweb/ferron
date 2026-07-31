@@ -9,7 +9,7 @@ Ferron supports automatic TLS via ACME-compatible Certificate Authorities such a
 - **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake
 - **DNS-01** — creates a TXT record at `_acme-challenge.<domain>` (required for wildcard domains)
 
-Certificates are cached and automatically renewed before expiration.
+Ferron caches certificates and renews them automatically before expiration.
 
 Below is the example Ferron configuration that configures automatic TLS with the production Let's Encrypt directory:
 
@@ -36,7 +36,7 @@ example.com {
 ```
 
 > [!important]
-> Keep `cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
+> Keep `cache` on persistent storage and make sure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
 
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
@@ -58,7 +58,7 @@ example.com {
 
 ## Using Ferron as an ACME client for other servers
 
-If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron as an ACME client to obtain TLS certificates for those servers:
+If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron as an ACME client. It can get TLS certificates for those servers:
 
 ```ferron
 example.com {
@@ -77,13 +77,13 @@ example.com {
 }
 ```
 
-If only one path is given for `save`, the key path defaults to the certificate path with a `.key` extension. After a certificate is obtained, the private key is written with `0600` permissions on Unix.
+If you give only one path for `save`, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
 
 ## Automatic TLS on demand
 
-Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
+Ferron can also get certificates on demand when a hostname is accessed for the first time (`on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
 
-When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
+When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron calls the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
 ```ferron
 *.example.com {
@@ -102,7 +102,7 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
 
 ## DNS providers (DNS-01 challenge)
 
-Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for wildcard certificates. The DNS-01 challenge requires a DNS provider to be configured inside the `tls` block.
+Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for wildcard certificates. The DNS-01 challenge requires a DNS provider inside the `tls` block.
 
 Below is an example configuration for DNS-01 with Cloudflare:
 
@@ -124,14 +124,14 @@ Below is an example configuration for DNS-01 with Cloudflare:
 ```
 
 > [!important]
-> Ensure your public DNS records point to the Ferron server before requesting certificates. ACME challenges will fail if traffic goes elsewhere.
+> Make sure your public DNS records point to the Ferron server before requesting certificates. ACME challenges fail if traffic goes elsewhere.
 
 > [!info]
 > For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).
 
 ## Certificate caching
 
-Certificates are cached both in-memory and on disk (when a `cache` path is configured). This ensures certificates survive restarts and are automatically renewed.
+Ferron caches certificates both in-memory and on disk (when a `cache` path is configured). This makes sure certificates survive restarts and are automatically renewed.
 
 ```ferron
 example.com {

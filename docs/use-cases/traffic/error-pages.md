@@ -16,11 +16,11 @@ example.com {
 }
 ```
 
-Multiple status codes can be mapped to the same error page in a single directive.
+You can map multiple status codes to the same error page in a single directive.
 
 ### Including trace information
 
-Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, the placeholders are replaced with the request's trace context before the page is served.
+Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, Ferron replaces the placeholders with the request's trace context before serving the page.
 
 ```ferron
 example.com {
@@ -64,7 +64,7 @@ app.example.com {
 ```
 
 > [!note]
-> The file path is absolute or relative to the current working directory. If the specified error page file does not exist, the directive is skipped and the built-in error page is used instead.
+> The file path is absolute or relative to the current working directory. If the specified error page file does not exist, Ferron skips the directive and uses the built-in error page instead.
 
 ## JSON error responses
 

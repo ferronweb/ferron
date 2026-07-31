@@ -10,14 +10,14 @@ This page documents the `json_errors` directive for generating structured JSON e
 ### JSON errors
 
 - `json_errors <enabled: bool>` (`http-jsonerror`)
-  - When `true`, HTTP error responses (4xx, 5xx) are returned with a JSON body instead of an HTML error page. Default: `false`
+  - When `true`, Ferron returns HTTP error responses (4xx, 5xx) with a JSON body instead of an HTML error page. Default: `false`
 
 #### Block options
 
 | Option | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `format` | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`); `"simple"` uses plain JSON (`application/json`). | `"problem"` |
-| `type_uri` | `<string>` | URI for the `type` field in RFC 9457 format. The `{status}` placeholder is replaced with the HTTP status code. | `"about:blank"` |
+| `format` | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`). `"simple"` uses plain JSON (`application/json`). | `"problem"` |
+| `type_uri` | `<string>` | URI for the `type` field in RFC 9457 format. Ferron replaces the `{status}` placeholder with the HTTP status code. | `"about:blank"` |
 | `trace_id` | `<bool>` | Include the request's trace ID in the response when available. | `true` |
 
 **Configuration example:**
@@ -93,7 +93,7 @@ example.com {
 
 ## Scoping
 
-The `json_errors` directive can be placed at different configuration levels:
+You can place the `json_errors` directive at different configuration levels:
 
 - **Host level** — applies to all requests for that host
 - **`location` block** — applies only to requests matching that path prefix

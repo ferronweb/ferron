@@ -55,7 +55,7 @@ When `endpoint_native_histograms` is set and `endpoint_format` is `"protobuf"`, 
 Text format always exposes classic bucket histograms regardless of this setting, since the OpenMetrics text format does not support native histograms.
 
 > [!note]
-> Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions will silently ignore the native histogram data and use the classic buckets.
+> Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions silently ignore the native histogram data and use the classic buckets.
 
 ### Metric exemplars
 
@@ -69,7 +69,7 @@ Each exemplar contains:
 Exemplars are enabled by default for all counter metrics. For histograms, exemplars are active when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive in Ferron's Prometheus module.
 
 > [!note]
-> Exemplars are displayed in the OpenMetrics text format as comments appended at the end of the metric line and are natively supported in the Prometheus protobuf format. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
+> Exemplars are displayed in the OpenMetrics text format as comments appended at the end of the metric line. The Prometheus protobuf format supports them natively. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
 
 ### Baggage promotion
 
@@ -135,7 +135,7 @@ http_server_request_duration_seconds_count{http_request_method="GET"} 195
 > [!tip]
 >
 > - If the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.
-> - Ensure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
+> - Make sure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
 
 ### Metric naming
 
@@ -261,7 +261,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### `max_distinct` high cardinality prevention
 
-- **`max_distinct false` inside Baggage configuration** - high-cardinality attributes should not be set in baggage, as they can lead to excessive memory usage and performance issues.
+- **`max_distinct false` inside Baggage configuration** - do not set high-cardinality attributes in baggage. They can lead to excessive memory usage and performance issues.
 
 ## See also
 

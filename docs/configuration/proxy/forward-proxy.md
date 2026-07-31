@@ -25,12 +25,12 @@ proxy.example.com {
 | `allow_domains` | `<string>...` | Allowed destination domains. Supports `*` wildcards. If empty, all domains are denied (deny-by-default). | none (deny all) |
 | `allow_ports` | `<int>...` | Allowed destination ports. | `80`, `443` |
 | `deny_ips` | `<CIDR>...` | Denied destination IP ranges, applied after DNS resolution. | Loopback, RFC 1918, link-local, cloud metadata (see below) |
-| `connect_method` | `<bool>` or bare | Enable HTTP CONNECT tunneling. When disabled, CONNECT requests are rejected with 403. | `true` |
+| `connect_method` | `<bool>` or bare | Enable HTTP CONNECT tunneling. When disabled, Ferron rejects CONNECT requests with 403. | `true` |
 | `http_version` | `1.0` or `1.1` | HTTP version used for upstream connections. | `1.1` |
 
 ### Default denied IP ranges
 
-When no `deny_ips` is specified, the following ranges are denied by default:
+When you specify no `deny_ips`, the following ranges are denied by default:
 
 | Range | Description |
 | --- | --- |
@@ -49,12 +49,12 @@ When no `deny_ips` is specified, the following ranges are denied by default:
 
 The forward proxy uses a **deny-by-default** model:
 
-1. **Domain control**: If `allow_domains` is not set, all destination domains are denied.
+1. **Domain control**: If you do not set `allow_domains`, all destination domains are denied.
 2. **Port control**: Only explicitly allowed ports are permitted (defaults to 80 and 443).
-3. **IP blocking**: After DNS resolution, the final IP is checked against the deny list.
+3. **IP blocking**: After DNS resolution, Ferron checks the final IP against the deny list.
 
 > [!note]
-> DNS resolution happens at connect time — the resolved IP is validated against the deny list to prevent DNS rebinding attacks.
+> DNS resolution happens at connect time — Ferron validates the resolved IP against the deny list to prevent DNS rebinding attacks.
 
 ## Request handling
 
@@ -77,7 +77,7 @@ When a client sends an HTTP request with an absolute URI, Ferron:
 4. Forwards the request via HTTP/1.1
 5. Returns the upstream response to the client
 
-Only `http` scheme is supported. Requests with `https` scheme are rejected with 400.
+Only `http` scheme is supported. Ferron rejects `https` requests with 400.
 
 ## Examples
 
@@ -129,9 +129,9 @@ proxy.example.com {
 
 ### Logs
 
-- **`ERROR`**: logged when a CONNECT upgrade fails, no upgrade future is produced, the backend TCP connection fails, the HTTP/1 handshake fails, or the request to the backend fails. The message includes the target address and error details.
-- **`WARN`**: logged when a CONNECT or HTTP request is denied by ACL (port or domain), when CONNECT method is disabled, when the request is malformed, when an unsupported scheme is used, when TCP_NODELAY cannot be set, when DNS resolution fails, or when a CONNECT tunnel encounters an error.
-- **`INFO`**: logged when a CONNECT tunnel closes normally. The message includes byte counts for each direction.
+- **`ERROR`**: Ferron logs this when a CONNECT upgrade fails, no upgrade future is produced, the backend TCP connection fails, or the HTTP/1 handshake fails. It also logs when the request to the backend fails. The message includes the target address and error details.
+- **`WARN`**: Ferron logs this when a CONNECT or HTTP request is denied by ACL (port or domain). It also logs when CONNECT method is disabled, the request is malformed, or the client uses an unsupported scheme. It also logs when TCP_NODELAY cannot be set, DNS resolution fails, or a CONNECT tunnel encounters an error.
+- **`INFO`**: Ferron logs this when a CONNECT tunnel closes normally. The message includes byte counts for each direction.
 
 ### Structured logs
 
@@ -174,7 +174,7 @@ The forward proxy stage sets the following attributes on its `ferron.stage.forwa
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`allow_domains "*"`** — Allowing proxying to any public domain defeats the purpose of a forward proxy. Restrict to destinations your clients actually need.
 - **Custom `deny_ips` without loopback and metadata ranges** — Overriding the default deny list without including `127.0.0.0/8`, `::1`, and `169.254.169.254/32` can expose internal services through the proxy.

@@ -23,7 +23,7 @@ The server iterates through the client's `Accept-Encoding` header values and sel
 Accept-Encoding: gzip, br, zstd
 ```
 
-The server will select **Zstandard** because it appears first in the preference order, even though the client listed gzip first.
+The server selects **Zstandard** because it appears first in the preference order, even though the client listed gzip first.
 
 If the client does not send an `Accept-Encoding` header, or none of the supported algorithms are listed, the response is served without compression (`identity`).
 
@@ -32,14 +32,14 @@ If the client does not send an `Accept-Encoding` header, or none of the supporte
 ### On-the-fly compression
 
 - `compressed [bool: boolean]` (`http-static`)
-  - Enables on-the-fly compression for static file responses. Files larger than 256 bytes with compressible extensions are compressed dynamically. Default: `compressed true`
+  - Enables on-the-fly compression for static file responses. The server dynamically compresses files larger than 256 bytes with compressible extensions. Default: `compressed true`
 - `dynamic_compressed [bool: boolean]` (`http-compression`)
-  - Enables on-the-fly compression for dynamic response bodies (e.g., responses from reverse proxies or application handlers). Default: `dynamic_compressed false`
+  - Enables on-the-fly compression for dynamic response bodies (for example, responses from reverse proxies or application handlers). Default: `dynamic_compressed false`
 
 ### Pre-compressed sidecar files
 
 - `precompressed [bool: boolean]` (`http-static`)
-  - Enables serving pre-compressed sidecar files (e.g. `style.css.zst`, `app.js.br`) instead of compressing on the fly. The server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference. Default: `precompressed false`
+  - Enables serving pre-compressed sidecar files (for example, `style.css.zst`, `app.js.br`) instead of compressing on the fly. The server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference. Default: `precompressed false`
 
 **Configuration example:**
 
@@ -73,14 +73,14 @@ Ferron detects and handles browsers with known compression bugs:
 
 When compression is applied, the ETag is modified to distinguish compressed variants:
 
-- **Static files**: a suffix is appended to the ETag (e.g. `W/"abc123-zstd"` for zstd-compressed files). Pre-compressed sidecar files receive their own ETag based on the sidecar file's metadata.
-- **Dynamic responses**: a `-dynamic-` prefixed suffix is appended (e.g. `W/"abc123-dynamic-zstd"`).
+- **Static files**: a suffix is appended to the ETag (for example, `W/"abc123-zstd"` for zstd-compressed files). Pre-compressed sidecar files receive their own ETag based on the sidecar file's metadata.
+- **Dynamic responses**: a `-dynamic-` prefixed suffix is appended (for example, `W/"abc123-dynamic-zstd"`).
 
 When the `If-None-Match` header is present, the server checks both the base ETag and the compressed variant to determine whether to return `304 Not Modified`.
 
 ## Vary header
 
-When compression is possible (based on file size and extension), the server adds `Accept-Encoding` to the `Vary` header to ensure caches serve the correct compressed variant to each client.
+When compression is possible (based on file size and extension), the server adds `Accept-Encoding` to the `Vary` header. This makes sure caches serve the correct compressed variant to each client.
 
 ## Observability
 

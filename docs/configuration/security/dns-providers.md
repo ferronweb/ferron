@@ -3,7 +3,7 @@ title: "Configuration: DNS providers"
 description: "Reference for all built-in DNS providers used with the ACME DNS-01 challenge."
 ---
 
-DNS providers are used by the `tls-acme` module to solve the **DNS-01 ACME challenge** — the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block, selecting it by name with the `provider` directive.
+The `tls-acme` module uses DNS providers to solve the **DNS-01 ACME challenge** — the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block, selecting it by name with the `provider` directive.
 
 ```ferron
 *.example.com {
@@ -301,7 +301,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `base_url` | `<string>` | cPanel host URL (e.g. `https://example.com:2083`). | — (required) |
+| `base_url` | `<string>` | cPanel host URL (for example `https://example.com:2083`). | — (required) |
 | `username` | `<string>` | cPanel account username. | — (required) |
 | `token` | `<string>` | cPanel API token. | — (required) |
 
@@ -961,7 +961,7 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `credentials` | `<string>` | Comma-separated key=value pairs (e.g. `domain1=ip1,domain2=ip2`). | — (required) |
+| `credentials` | `<string>` | Comma-separated key=value pairs (for example `domain1=ip1,domain2=ip2`). | — (required) |
 
 **Configuration example:**
 
@@ -1628,7 +1628,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
-| `server` | `<uri>` | DNS server address as a URI with scheme `tcp` or `udp` (e.g. `udp://ns1.example.com:53`). | — (required) |
+| `server` | `<uri>` | DNS server address as a URI with scheme `tcp` or `udp` (for example `udp://ns1.example.com:53`). | — (required) |
 | `key_name` | `<string>` | TSIG key name. | — (required) |
 | `key_secret` | `<string>` | TSIG key secret, Base64-encoded. | — (required) |
 | `key_algorithm` | `HMAC-MD5`, `GSS`, `HMAC-SHA1`, `HMAC-SHA224`, `HMAC-SHA256`, `HMAC-SHA256-128`, `HMAC-SHA384`, `HMAC-SHA384-192`, `HMAC-SHA512`, `HMAC-SHA512-256` | TSIG algorithm. | — (required) |
@@ -1662,7 +1662,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 |-----------|-----------|-------------|---------|
 | `access_key_id` | `<string>` | AWS access key ID. | — (required) |
 | `secret_access_key` | `<string>` | AWS secret access key. | — (required) |
-| `region` | `<string>` | AWS region (e.g. `us-east-1`). | — (optional) |
+| `region` | `<string>` | AWS region (for example `us-east-1`). | — (optional) |
 | `session_token` | `<string>` | AWS session token for temporary credentials. | — (optional) |
 | `hosted_zone_id` | `<string>` | Route 53 hosted zone ID. Ferron resolves the zone automatically if omitted. | — (optional) |
 | `private_zone_only` | `<bool>` | Set to `true` to target a private hosted zone only. | `false` |
@@ -2070,6 +2070,6 @@ Choose the `endpoint` that matches where your domain is registered:
 
 ## Best practices
 
-The following best-practice check is reported by `ferron doctor` for DNS provider directives.
+`ferron doctor` reports the following best-practice check for DNS provider directives.
 
-- **Secrets in plain configuration** — DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings to avoid leaking secrets in version control or logs.
+- **Secrets in plain configuration** — DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings. This avoids leaking secrets in version control or logs.

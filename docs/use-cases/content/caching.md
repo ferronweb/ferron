@@ -24,11 +24,11 @@ This configuration caches responses up to 1MB in size. The default `max_response
 > - Only `GET` and `HEAD` requests are cached. `HEAD` requests reuse cached `GET` representations.
 > - Responses with `Vary: *` are never stored.
 > - Public responses containing `Set-Cookie` are not stored.
-> - The cache is in-memory and will be cleared on server restart — for persistent caching, consider using an external cache like Redis.
+> - The cache is in-memory and clears on server restart — for persistent caching, consider using an external cache like Redis.
 
 ## Caching with Vary headers
 
-The `vary` directive ensures responses are cached separately based on request headers. This is crucial for content that varies by `Accept-Encoding`, `Accept-Language`, or other headers:
+The `vary` directive makes sure Ferron caches responses separately based on request headers. This is crucial for content that varies by `Accept-Encoding`, `Accept-Language`, or other headers:
 
 ```ferron
 example.com {
@@ -38,7 +38,7 @@ example.com {
 }
 ```
 
-Without `vary`, responses with different headers would be incorrectly cached together, potentially serving the wrong content to clients.
+Without `vary`, Ferron could cache responses with different headers together and serve the wrong content to clients.
 
 > [!tip]
 > If you see unexpected cache misses, check that `vary` headers are configured correctly for your use case. If cache size is growing unbounded, check for frequently accessed large responses and consider reducing `max_response_size`.
@@ -97,7 +97,7 @@ This tells Ferron to prioritize `X-LiteSpeed-Cache-Control` headers over standar
 
 ## Caching with authentication
 
-Private responses are partitioned by client context using the client IP, authenticated username, and detected private cookies. This means authenticated users get personalized cached responses:
+Ferron partitions private responses by client context using the client IP, authenticated username, and detected private cookies. This means authenticated users get personalized cached responses:
 
 ```ferron
 example.com {
@@ -114,7 +114,7 @@ example.com {
 }
 ```
 
-Each authenticated user will have their own cached dashboard pages based on their credentials.
+Each authenticated user has their own cached dashboard pages based on their credentials.
 
 ## Caching with reverse proxying
 
@@ -136,7 +136,7 @@ This caches API responses from the backend, reducing load during traffic spikes.
 
 ## Stale-while-revalidate
 
-Stale-while-revalidate allows a cached response to be served after its `max-age` has expired, as long as it falls within the `stale-while-revalidate` window set by the origin. This avoids latency spikes when the cache entry expires and concurrent requests arrive:
+Stale-while-revalidate allows Ferron to serve a cached response after its `max-age` has expired. This works as long as the response falls within the `stale-while-revalidate` window set by the origin. This avoids latency spikes when the cache entry expires and concurrent requests arrive:
 
 ```ferron
 example.com {

@@ -18,11 +18,11 @@ This page documents the `ferron-fmt` tool, a formatter for Ferron configuration 
 - **Trailing newline** — optional trailing newline
 - **Directive sorting** — optional alphabetical sorting of directives within blocks
 - **Comment preservation** — inline and trailing comments are preserved
-- **Quoting normalization** — bare strings when possible, double-quoted when necessary (e.g., for values that would be ambiguous)
+- **Quoting normalization** — bare strings when possible, double-quoted when necessary (for example, values that would be ambiguous)
 - **Raw string preservation** — `r"..."` syntax is preserved for strings that were originally raw
 - **Line continuation preservation** — `\` at end of line is preserved at the same position
 
-This tool can be used to ensure consistent formatting across multiple Ferron configuration files.
+Use this tool to make sure formatting is consistent across multiple Ferron configuration files.
 
 > [!tip]
 > The formatter is idempotent — running it multiple times on the same file produces identical output.
@@ -78,7 +78,7 @@ ferron-fmt --check ferron.conf && echo "Formatted" || echo "Needs formatting"
 | `--quote-style <style>` | `auto` | Quote style: `auto`, `always-double`, or `always-bare` |
 | `--no-normalize-quotes` | — | Preserve original quoting style instead of normalizing |
 | `--max-blank-lines <n>` | `2` | Maximum number of consecutive blank lines to preserve |
-| `--no-trailing-newline` | — | Don't add a trailing newline at the end of the file |
+| `--no-trailing-newline` | — | Do not add a trailing newline at the end of the file |
 | `--sort-directives` | — | Sort directives alphabetically within blocks |
 | `--check` | — | Check if input is already formatted (exit 1 if not) |
 | `-i, --in-place` | — | Edit file in place |
@@ -188,7 +188,7 @@ example.com {
 ```
 
 > [!note]
-> `always-bare` will produce a parse error if any value cannot be represented as a bare string (e.g., values containing spaces or special characters).
+> `always-bare` produces a parse error if any value cannot be represented as a bare string (for example, values containing spaces or special characters).
 
 ## Preserving original quoting
 
@@ -198,7 +198,7 @@ By default, `ferron-fmt` normalizes quoting according to the configured quote st
 ferron-fmt --no-normalize-quotes ferron.conf
 ```
 
-This is useful when you want consistent indentation but don't want to change the quoting style.
+This is useful when you want consistent indentation but do not want to change the quoting style.
 
 ## Trailing newline
 
@@ -254,7 +254,7 @@ match api_request {
 Running the formatter on this input keeps the `r"..."` syntax intact. Regular quoted strings (`"..."`) are not converted to raw strings.
 
 > [!note]
-> Raw strings do not support interpolation. The formatter will not convert interpolated strings to raw strings.
+> Raw strings do not support interpolation. The formatter does not convert interpolated strings to raw strings.
 
 ## Line continuations
 

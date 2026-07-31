@@ -52,12 +52,12 @@ example.com {
 }
 ```
 
-Multiple `status` directives can be defined. They are evaluated in order — the first matching rule wins.
+You can define multiple `status` directives. Ferron evaluates them in order — the first matching rule wins.
 
 ### Connection abort
 
 - `abort [bool: boolean]` (`http-response`)
-  - This directive specifies whether the connection is immediately closed without sending any response. When `true` or when omitted, the connection is terminated immediately. Default: `abort false`
+  - This directive specifies whether Ferron closes the connection immediately without sending any response. When `true` or when omitted, Ferron terminates the connection immediately. Default: `abort false`
 
 **Configuration example:**
 
@@ -67,7 +67,7 @@ example.com {
 }
 ```
 
-When `abort` is set, the connection is terminated immediately with no HTTP response sent. This is useful for silently dropping requests from unwanted clients or for denial-of-service mitigation.
+When `abort` is set, Ferron terminates the connection immediately with no HTTP response sent. This is useful for silently dropping requests from unwanted clients or for denial-of-service mitigation.
 
 ### IP access control
 
@@ -108,7 +108,7 @@ In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.
 ### 103 Early Hints
 
 - `early_hints` (`http-response`)
-  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that allow the browser to begin preloading resources (stylesheets, scripts, fonts, etc.) while the server is still preparing the final response. Default: none
+  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that allow the browser to begin preloading resources (stylesheets, scripts, fonts, etc.). This happens while the server is still preparing the final response. Default: none
 
 #### Subdirectives
 
@@ -128,7 +128,7 @@ example.com {
 }
 ```
 
-Multiple `link` entries can be defined within a single `early_hints` block. Multiple `early_hints` blocks can also be defined at different scoping levels (host, `location`, `if` / `if_not`).
+You can define multiple `link` entries within a single `early_hints` block. You can also define multiple `early_hints` blocks at different scoping levels (host, `location`, `if` / `if_not`).
 
 #### HTTP/1.1 support
 
@@ -142,14 +142,14 @@ By default, 103 Early Hints is supported natively on HTTP/2 and HTTP/3 connectio
 }
 ```
 
-Without this option, 103 Early Hints is silently skipped on HTTP/1.1 connections (a warning is logged).
+Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connections and logs a warning.
 
 > [!note]
-> 103 Early Hints is only effective on HTTP/2+ connections by default. For HTTP/1.1, enable `h1_enable_early_hints true` in your `http` block. If `send_early_hints` fails, a warning is logged and the request continues normally.
+> 103 Early Hints is only effective on HTTP/2+ connections by default. For HTTP/1.1, enable `h1_enable_early_hints true` in your `http` block. If `send_early_hints` fails, Ferron logs a warning and the request continues normally.
 
 #### Scoping
 
-The `early_hints` directive can be placed at different configuration levels:
+You can place the `early_hints` directive at different configuration levels:
 
 - **Host level** — applies to all requests for that host
 - **`location` block** — applies only to requests matching that path prefix
@@ -157,7 +157,7 @@ The `early_hints` directive can be placed at different configuration levels:
 
 ## Scoping
 
-All directives (`status`, `abort`, `block`, `allow`, `early_hints`) can be placed at different configuration levels:
+You can place all directives (`status`, `abort`, `block`, `allow`, `early_hints`) at different configuration levels:
 
 - **Host level** — applies to all requests for that host
 - **`location` block** — applies only to requests matching that path prefix

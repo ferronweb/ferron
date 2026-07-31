@@ -8,9 +8,9 @@ This page documents the `http` TLS provider (`tls-http` module), which fetches T
 - **Polling mode** (default): Polls a single endpoint at a configurable interval, suitable for known domains.
 - **On-demand mode** (`on_demand true`): Fetches certificates lazily on first TLS handshake for each SNI hostname, with optional approval endpoint, suitable for wildcard domains.
 
-Unlike the ACME provider, this module does not perform certificate issuance or challenge validation — it simply fetches a certificate chain and private key in JSON format from a configured endpoint.
+Unlike the ACME provider, this module does not issue certificates or validate challenges. It simply fetches a certificate chain and private key in JSON format from a configured endpoint.
 
-This is useful when you have an **external certificate management service** (e.g., HashiCorp Vault, a custom PKI, or a cloud certificate manager) that exposes certificates via a REST API.
+This is useful when you have an **external certificate management service** that exposes certificates via a REST API. For example, HashiCorp Vault, a custom PKI, or a cloud certificate manager.
 
 ```ferron
 example.com {
@@ -75,8 +75,8 @@ When a TLS handshake arrives for a hostname without a cached certificate:
 1. The module sends an on-demand request to the background listener.
 2. If `on_demand_ask` is configured, the module calls the approval endpoint with `?domain=<encoded>` as a query parameter. A `200` response authorizes the fetch.
 3. The module fetches the certificate from `url` with `?domain=<encoded>` appended to the URL.
-4. The certificate is cached per SNI hostname in memory.
-5. A per-SNI refresh task is spawned to re-fetch the certificate at the configured `refresh_interval`.
+4. The module caches the certificate per SNI hostname in memory.
+5. The module spawns a per-SNI refresh task to re-fetch the certificate at the configured `refresh_interval`.
 
 ### On-demand approval endpoint
 
@@ -265,31 +265,31 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 | `ferron.tls_http.next_refresh_seconds` | Gauge | — | Seconds until next certificate refresh |
 
-The certificate expiration gauge is shared across all TLS providers (manual, ACME, HTTP, local) and is emitted every time a certificate is mounted into the in-memory context.
+The certificate expiration gauge is shared across all TLS providers (manual, ACME, HTTP, local). It is emitted every time a certificate is mounted into the in-memory context.
 
 ## Security considerations
 
 - **Private keys are never logged** or exposed in error messages.
-- The certificate endpoint URL should be protected with authentication (e.g., API keys, mTLS) in production.
+- The certificate endpoint URL should be protected with authentication (for example, API keys, mTLS) in production.
 - Use `no_verification` only for internal endpoints with self-signed certificates — never for public endpoints.
 - The private key is loaded into memory and used only for TLS — it is never written to disk by this module.
-- If the certificate endpoint returns a valid but untrusted certificate chain, Ferron will still use it. Ensure your endpoint only returns certificates from trusted CAs.
+- If the certificate endpoint returns a valid but untrusted certificate chain, Ferron will still use it. Make sure your endpoint only returns certificates from trusted CAs.
 - When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate fetching for arbitrary hostnames.
-- The `url` endpoint receives the domain in the `?domain=` query parameter — ensure it validates and authenticates requests.
+- The `url` endpoint receives the domain in the `?domain=` query parameter — make sure it validates and authenticates requests.
 
 ## Troubleshooting
 
 ### "Failed to parse the HTTP response from TLS certificate endpoint: ..."
 
-The endpoint returned a response that couldn't be parsed as JSON. Check that:
+The endpoint returned a response that could not be parsed as JSON. Check that:
 
 - The endpoint returns valid JSON with `private_key` and `certificate` fields
 - The response content type is `application/json`
-- There are no encoding issues (e.g., BOM characters)
+- There are no encoding issues (for example, BOM characters)
 
 ### "Failed to parse the TLS certificate chain from TLS endpoint response: ..."
 
-The `certificate` field couldn't be parsed as PEM. Check that:
+The `certificate` field could not be parsed as PEM. Check that:
 
 - The certificate is in PEM format (starts with `-----BEGIN CERTIFICATE-----`)
 - The chain includes the leaf certificate first, followed by intermediates
@@ -297,7 +297,7 @@ The `certificate` field couldn't be parsed as PEM. Check that:
 
 ### "Failed to parse the TLS private key from TLS endpoint response: ..."
 
-The `private_key` field couldn't be parsed as PEM. Check that:
+The `private_key` field could not be parsed as PEM. Check that:
 
 - The key is in PEM format (starts with `-----BEGIN PRIVATE KEY-----` or similar)
 - The key format is supported (RSA, EC, Ed25519)
@@ -305,25 +305,25 @@ The `private_key` field couldn't be parsed as PEM. Check that:
 
 ### Certificate not updating
 
-If the certificate isn't updating despite changes on the server side:
+If the certificate is not updating despite changes on the server side:
 
 1. Check the logs for `TLS certificate refreshed successfully` — if missing, the fetch may be failing
 2. Verify the endpoint URL is correct and reachable
 3. Check `ferron.tls.certificate_not_after` (with `ferron.tls.provider="http"`) to see when the loaded certificate actually expires
-4. Ensure the `refresh_interval` isn't too long for your use case
+4. Make sure the `refresh_interval` is not too long for your use case
 
 ### On-demand certificates not being fetched
 
-If on-demand certificates aren't being fetched for new hostnames:
+If on-demand certificates are not being fetched for new hostnames:
 
 1. Verify `on_demand true` is set in the TLS block
 2. Check the logs for `On-demand certificate requested` — if missing, the resolver may not be receiving handshakes
 3. If `on_demand_ask` is configured, verify the endpoint returns `200` for the requested hostname
-4. Check that the host block uses a wildcard pattern (e.g., `*:443`)
+4. Check that the host block uses a wildcard pattern (for example, `*:443`)
 
 ### Observability data missing
 
-If metrics or logs aren't appearing:
+If metrics or logs are not appearing:
 
 1. Verify that an observability backend (Prometheus, OTLP, etc.) is configured
 2. Check that the `observability` block is present in the global configuration
@@ -339,7 +339,7 @@ If metrics or logs aren't appearing:
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`url` with plain HTTP** — Certificate endpoints returning private keys should use HTTPS with authentication.
 - **`no_verification` for certificate endpoint** — Disabling TLS verification for the certificate endpoint should only be used for strictly internal and otherwise authenticated endpoints.

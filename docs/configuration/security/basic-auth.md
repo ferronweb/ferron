@@ -106,7 +106,7 @@ users {
 
 > [!note]
 >
-> - It's recommended to use `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
+> - It is recommended to use the `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
 > - The `realm` value is shown in the browser's authentication dialog.
 > - Configuration validation fails if any password value is not a recognized hash format.
 
@@ -126,32 +126,32 @@ Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Plain numbers withou
 ### Authentication flow
 
 1. The stage extracts the `Authorization: Basic <credentials>` header from the request.
-2. If the header is missing or malformed, a 401 response is returned with a `WWW-Authenticate` challenge.
-3. The credentials are decoded from base64 (`username:password`).
-4. Brute-force lockout is checked — if the IP is locked, the request is rejected immediately with a 429 response.
-5. The username is looked up in the configured `users` block.
-6. If the user exists, the password is verified against the stored hash.
-7. On success, `ctx.auth_user` is set to the authenticated username.
-8. On failure, the attempt is recorded and a 401 response is returned.
+2. If the header is missing or malformed, the stage returns a 401 response with a `WWW-Authenticate` challenge.
+3. The stage decodes the credentials from base64 (`username:password`).
+4. The stage checks brute-force lockout — if the IP is locked, it rejects the request immediately with a 429 response.
+5. The stage looks up the username in the configured `users` block.
+6. If the user exists, the stage verifies the password against the stored hash.
+7. On success, the stage sets `ctx.auth_user` to the authenticated username.
+8. On failure, the stage records the attempt and returns a 401 response.
 
 ### Forward proxy (CONNECT) support
 
-When a CONNECT request is received and authentication fails, a **407 Proxy Authentication Required** response is returned instead of 401.
+When a CONNECT request is received and authentication fails, the stage returns a **407 Proxy Authentication Required** response instead of 401.
 
 ### Brute-force protection behavior
 
 When brute-force protection is enabled:
 
-- Each failed authentication attempt is recorded per-IP with a timestamp.
+- The stage records each failed authentication attempt per-IP with a timestamp.
 - If `max_attempts` failures occur within the `window` duration, the IP is locked.
-- During lockout, **all** authentication attempts for that IP are rejected immediately.
-- After `lockout_duration`, the lockout expires and the attempt history is reset.
+- During lockout, the stage rejects **all** authentication attempts for that IP immediately.
+- After `lockout_duration`, the lockout expires and the stage resets the attempt history.
 
 ### Stage ordering
 
 The `basic_auth` stage runs early in the pipeline:
 
-- **After** `client_ip_from_header` (ensures accurate remote address)
+- **After** `client_ip_from_header` (makes sure the remote address is accurate)
 - **Before** `forward_proxy` (auth before forwarding)
 - **Before** `reverse_proxy` (auth before proxying)
 - **Before** `static_file` (auth before serving files)
@@ -229,7 +229,7 @@ example.com {
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`basic_auth_concurrency false`** — Disabling the global password-verification concurrency limit removes backpressure on expensive hash checks. Keep a bounded limit.
 - **Non-Argon2id password hashes** — Prefer Argon2id for new Basic Auth credentials. Other hash algorithms are weaker against offline attacks.

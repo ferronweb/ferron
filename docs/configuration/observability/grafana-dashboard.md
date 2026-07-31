@@ -3,7 +3,7 @@ title: "Grafana reference dashboard"
 description: "A dynamic, modular Grafana dashboard for Ferron 3 covering the RED and USE methods across edge cache, retry budgets, and connection pools."
 ---
 
-Ferron ships a reference Grafana dashboard ([`dashboards/ferron-3-reference.json` in the repository](https://github.com/ferronweb/ferron/blob/3.x/dashboards/ferron-3-reference.json)) that adapts to different operational roles from a single layout. Instead of maintaining separate dashboards for a CDN edge, an API gateway, and a shared-hosting box, the reference template uses template variables and collapsible rows so one structure serves all three.
+Ferron ships a reference Grafana dashboard ([`dashboards/ferron-3-reference.json` in the repository](https://github.com/ferronweb/ferron/blob/3.x/dashboards/ferron-3-reference.json)) that adapts to different operational roles from a single layout. Instead of maintaining separate dashboards for a CDN edge, an API gateway, and a shared-hosting box, the reference template uses template variables and collapsible rows. One structure serves all three.
 
 > [!note]
 > The dashboard targets a Prometheus-compatible datasource (such as [Prometheus metrics](/docs/v3/configuration/observability/prometheus) exported by Ferron or scraped through Mimir/Cortex). It expects Ferron's OpenTelemetry-style metric names after conversion to Prometheus snake_case (counters gain a `_total` suffix).
@@ -31,7 +31,7 @@ Top-level variables let a single dashboard adapt to any deployment without editi
 | `Rate-limit zone` | Named rate-limit zone | `ferron.ratelimit.zone` |
 
 > [!warning]
-> Ferron does **not** expose a per-route (request-path) metric label. The sketch variable `$route` from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/v3/configuration/observability/prometheus#baggage-promotion) and add it as a variable — but cap `max_distinct` to avoid label explosion.
+> Ferron does **not** expose a per-route (request-path) metric label. The sketch variable `$route` from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/v3/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
 
 ## Rows
 
@@ -73,7 +73,7 @@ Connection-pool and host-pressure panels, crucial for multi-tenant edges and ser
 - **Cache hit ratio** — `rate(ferron_cache_requests_total{...,result="hit"})` / total
 - **Cache entries** — `ferron_cache_entries` by zone
 - **Cache evictions /s (by reason)** — `rate(ferron_cache_evictions_total)` split by `ferron.cache.reason`
-- **Egress bandwidth** — `rate(ferron_static_bytes_sent_sum)` (static-file and PHP-accelerator egress; see the gap below)
+- **Egress bandwidth** — `rate(ferron_static_bytes_sent_sum)` (static-file and PHP-accelerator egress. See the gap below)
 - **DNS cache TTL remaining** — `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 
 A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can ignore it.
@@ -118,7 +118,7 @@ Enable the features whose rows you care about:
 ## Known gaps
 
 - **Per-route filtering** is unavailable without baggage promotion, as noted above.
-- **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today, so proxy-dominated CDN egress must be measured at the load balancer or added to Ferron later.
+- **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today, so you must measure proxy-dominated CDN egress at the load balancer or add it to Ferron later.
 - **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when HTTPS is configured. Those panels render empty on HTTP-only instances.
 - Rows whose Ferron modules are disabled show empty panels by design. The dashboard degrades gracefully rather than erroring.
 

@@ -34,15 +34,15 @@ Ferron uses OpenTelemetry metric types. Understanding the type helps you write c
 
 When using the OTLP observability backend, all histogram metrics use **Base2 Exponential Histograms** instead of fixed linear buckets. This provides several advantages for latency-sensitive workloads:
 
-- **Automatic bucket allocation** — bucket boundaries are computed automatically using a base-2 exponential formula, eliminating the need to manually tune bucket boundaries.
-- **High resolution across orders of magnitude** — the default configuration uses 160 buckets covering the range from sub-millisecond to 100 seconds with less than 5% relative error, preserving tail-latency outliers (p99, p99.9) that would be masked by coarse fixed buckets.
-- **No configuration required** — the exponential histogram aggregation is applied automatically at the SDK layer via an OTel View. No configuration changes are needed.
+- **Automatic bucket allocation** — the SDK computes bucket boundaries automatically using a base-2 exponential formula. You do not need to tune bucket boundaries manually.
+- **High resolution across orders of magnitude** — the default configuration uses 160 buckets from sub-millisecond to 100 seconds with less than 5% relative error. This preserves tail-latency outliers (p99, p99.9) that coarse fixed buckets would mask.
+- **No configuration required** — the SDK applies the exponential histogram aggregation automatically at the SDK layer via an OTel View. No configuration changes are needed.
 
 The Prometheus observability backend also supports native exponential histograms when `endpoint_native_histograms` is configured and the output format is set to `"protobuf"`. In text format, it uses explicit bucket histograms with predefined boundaries.
 
 ## Metric exemplars
 
-Ferron supports **metric exemplars** in the Prometheus observability backend. When a request carries an active trace context (W3C trace ID and span ID), the Prometheus module attaches an exemplar to the observation, linking it to the specific trace that triggered it.
+Ferron supports **metric exemplars** in the Prometheus observability backend. When a request carries an active trace context (W3C trace ID and span ID), the Prometheus module attaches an exemplar to the observation. This links the observation to the specific trace that triggered it.
 
 Each exemplar contains:
 
@@ -58,7 +58,7 @@ The OTLP observability backend does not currently support metric exemplars due t
 
 ## Process metrics
 
-The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`; on Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
+The `metrics-process` module collects process-level metrics automatically when an observability backend is configured. On Linux it reads `/proc/self/stat`. On Windows it uses the `GetProcessTimes` and `GetProcessMemoryInfo` APIs. On both platforms the collection interval is 1 second.
 
 **Platform support:** Linux and Windows. On other platforms, the module is a no-op.
 
@@ -127,7 +127,7 @@ Ferron also emits common request-path metrics:
 
 ## Prometheus scrape metrics
 
-The Prometheus endpoint emits self-referential metrics about its own scrape performance. These are registered in the same registry that serves `/metrics`, so they appear in every scrape response.
+The Prometheus endpoint emits self-referential metrics about its own scrape performance. Ferron registers them in the same registry that serves `/metrics`. They appear in every scrape response.
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|

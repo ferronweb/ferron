@@ -3,7 +3,7 @@ title: Fail2ban integration
 description: "Block abusive IPs at the firewall level by combining Ferron's access logs with Fail2ban filters and actions."
 ---
 
-Ferron's access logs use an extended variant of Combined Log Format (which in turn is used by NGINX and Apache) by default, making them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules) to ban offending IPs at the firewall level.
+Ferron's access logs use an extended variant of Combined Log Format by default (the same format NGINX and Apache use). This makes them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules) to ban offending IPs at the firewall level.
 
 Unlike Ferron's built-in [abuse protection](/docs/v3/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban provides persistent bans managed by the OS firewall. This is useful when you want bans to survive Ferron restarts or when you need to block IPs across multiple services.
 
@@ -24,7 +24,7 @@ sudo apt install fail2ban
 sudo dnf install fail2ban
 ```
 
-Ensure Ferron writes access logs to a file. The default text format works out of the box:
+Make sure Ferron writes access logs to a file. The default text format works out of the box:
 
 ```ferron
 example.com {
@@ -120,7 +120,7 @@ This bans IPs for **30 minutes** after 10 rate limit rejections within 10 minute
 
 ## Ban clients generating server errors
 
-Detect clients that cause an unusual number of `5xx` responses (e.g., by sending malformed requests that crash backend applications).
+Detect clients that cause an unusual number of `5xx` responses (for example, by sending malformed requests that crash backend applications).
 
 Create `/etc/fail2ban/filter.d/ferron-5xx.conf`:
 
@@ -146,7 +146,7 @@ action   = iptables-multiport[name=ferron-5xx, port="http,https"]
 
 ## Ban scanners targeting specific paths
 
-Detect automated scanners probing for common vulnerable paths (e.g., WordPress admin panels, phpMyAdmin, `.env` files).
+Detect automated scanners probing for common vulnerable paths (for example, WordPress admin panels, phpMyAdmin, `.env` files).
 
 Create `/etc/fail2ban/filter.d/ferron-scanner.conf`:
 
@@ -249,14 +249,14 @@ The flow works as follows:
 
 1. Ferron's `abuse_protection` provides fast, in-process banning for repeat offenders (bans expire after 15 minutes).
 2. Fail2ban monitors the same access log and applies firewall-level bans for persistent abusers (bans can last hours or days).
-3. An IP that triggers both systems gets banned twice — once by Ferron (HTTP 403 responses) and once by Fail2ban (dropped at the firewall).
+3. Both systems ban an IP that triggers them — Ferron returns HTTP 403 responses, and Fail2ban drops traffic at the firewall.
 
 > [!tip]
 > Keep `abuse_protection` thresholds tighter (lower `events`, shorter `window`) and Fail2ban thresholds looser (higher `maxretry`, longer `bantime`). This way, Ferron handles quick reactions while Fail2ban handles sustained abuse.
 
 ## Custom access log format for better parsing
 
-If you prefer a simpler log format that is easier for Fail2ban to parse, use the `access_pattern` directive to output standard Combined Log Format (without the extra Host and trace ID fields):
+If you prefer a simpler log format that Fail2ban can parse easily, use the `access_pattern` directive. It outputs standard Combined Log Format (without the extra Host and trace ID fields):
 
 ```ferron
 example.com {

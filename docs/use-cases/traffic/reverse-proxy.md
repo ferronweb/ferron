@@ -11,7 +11,7 @@ example.com {
 }
 ```
 
-The WebSocket protocol is supported out of the box in this configuration — no additional configuration is required.
+This configuration supports the WebSocket protocol out of the box — no additional configuration is required.
 
 > [!tip]
 > If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `circuit_breaker` and `connection_timeout` upstream settings.
@@ -116,7 +116,7 @@ In this example, approximately 90% of requests go to the legacy backend and 10% 
 
 ### Sticky session A/B testing
 
-For A/B tests where you want each visitor to consistently see the same variant, use cookie affinity. This ensures users always reach the same backend throughout their session.
+For A/B tests where you want each visitor to consistently see the same variant, use cookie affinity. This makes sure users always reach the same backend throughout their session.
 
 ```ferron
 example.com {
@@ -136,7 +136,7 @@ example.com {
 }
 ```
 
-With cookie affinity, the first request assigns a backend and sets a `ab_test_variant` cookie. Subsequent requests from the same browser are routed to the same backend for the duration of the cookie TTL.
+With cookie affinity, the first request assigns a backend and sets a `ab_test_variant` cookie. Ferron routes later requests from the same browser to the same backend for the duration of the cookie TTL.
 
 ### Header-based variant selection
 
@@ -158,7 +158,7 @@ example.com {
 }
 ```
 
-With this configuration, requests containing `X-AB-Variant: b` are routed to the second backend. All other requests fall back to the configured `round_robin` algorithm.
+With this configuration, Ferron routes requests containing `X-AB-Variant: b` to the second backend. All other requests fall back to the configured `round_robin` algorithm.
 
 ### Migrating tech stacks at the proxy layer
 
@@ -197,7 +197,7 @@ example.com {
 }
 ```
 
-This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity ensures each visitor stays on the same backend during the migration window. Circuit breakers are enabled by default, so passive health checking is active without any configuration — the `circuit_breaker` block above only customizes the thresholds.
+This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity makes sure each visitor stays on the same backend during the migration window. Circuit breakers are enabled by default, so passive health checking is active without any configuration — the `circuit_breaker` block above only customizes the thresholds.
 
 ### Observing A/B test results
 
@@ -207,7 +207,7 @@ Ferron's proxy metrics make it easy to compare backend performance in Prometheus
 - `ferron.proxy.backends.unhealthy` — monitor when backends are marked unhealthy by health checks.
 - `ferron.proxy.requests` — compare request counts, status codes, and latency across backends.
 
-You can create Grafana panels to visualize the ratio of requests between backends, compare p99 latency per backend, and alert on increased error rates in the new backend.
+You can create Grafana panels to visualize the ratio of requests between backends. You can also compare p99 latency per backend and alert on increased error rates in the new backend.
 
 ## Passive health checking
 
@@ -372,7 +372,7 @@ example.com {
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.
 
-Below are assumptions made for this example:
+Below are the assumptions for this example:
 
 - `https://example.com` is "main site", while `https://example.com/agenda` is hosting a calendar service.
 - `https://foo.example.com` is passed to `https://saas.foo.net`
@@ -406,11 +406,11 @@ bar.example.com {
 }
 ```
 
-For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip `agenda/` or configure URL rewriting in Ferron.
+For `http://calender.example.net:5000/agenda/example`, you probably need to configure the calendar service to strip `agenda/` or configure URL rewriting in Ferron.
 
 ## Trace context propagation
 
-The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests when a trace context exists. This enables end-to-end distributed tracing — your backend services can read these headers to create child spans that connect to the trace initiated by Ferron.
+The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests when a trace context exists. This enables end-to-end distributed tracing — your backend services can read these headers to create child spans that connect to the trace started by Ferron.
 
 > [!info]
 > For details on trace context configuration, sampling, and header behavior, see [Tracing configuration](/docs/v3/configuration/observability/tracing) and [Reverse proxy configuration](/docs/v3/configuration/proxy/reverse-proxy#trace-context-injection).
@@ -419,7 +419,7 @@ The reverse proxy automatically injects W3C Trace Context headers (`traceparent`
 
 ### SSRF risk with interpolated upstream URLs
 
-The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (e.g., `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs, as an attacker can craft requests to redirect the proxy to internal services.
+The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (for example `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs. An attacker can craft requests to redirect the proxy to internal services.
 
 **Unsafe — user-controlled header in upstream URL:**
 

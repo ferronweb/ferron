@@ -10,18 +10,18 @@ This page documents the `set_var` and `log_field` directives, which set interpol
 ### `set_var`
 
 - `set_var <source: string> <regex: string> <variable: string>` (`http-variables`)
-  - Sets a variable when the source value matches the regular expression. By default, the variable is set to `"1"` on match. Default: none
+  - Sets a variable when the source value matches the regular expression. By default, Ferron sets the variable to `"1"` on match. Default: none
 
 > [!note]
-> The `set_var` directive is similar to Apache's `SetEnvIf` — it evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable. They are evaluated in declaration order with last-match-wins semantics.
+> The `set_var` directive is similar to Apache's `SetEnvIf` — it evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable. Ferron evaluates them in declaration order with last-match-wins semantics.
 
 #### Block sub-directives
 
 | Sub-directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `value` | `<string>` | The value to assign when the pattern matches. | `"1"` |
-| `case_insensitive` | `<bool>` | When `true`, the regex match is performed case-insensitively. | `false` |
-| `negate` | `<bool>` | When `true`, the variable is set when the pattern does **not** match. | `false` |
+| `case_insensitive` | `<bool>` | When `true`, Ferron performs the regex match case-insensitively. | `false` |
+| `negate` | `<bool>` | When `true`, Ferron sets the variable when the pattern does **not** match. | `false` |
 
 **Configuration example:**
 
@@ -37,10 +37,10 @@ example.com {
 ### `log_field`
 
 - `log_field <field: string> <source: string>` (`http-variables`)
-  - Maps a variable or interpolated value to a custom access log field. The field is evaluated after the response is generated, so response-time variables are available. Default: none
+  - Maps a variable or interpolated value to a custom access log field. Ferron evaluates the field after it generates the response, so response-time variables are available. Default: none
 
 > [!note]
-> The source can be a plain variable name (e.g., `network_type`) or an interpolated string (e.g., `"{{request.header.x_custom_header}}"`). Plain variable names are resolved via the `Variables` trait at runtime.
+> The source can be a plain variable name (for example `network_type`) or an interpolated string (for example `"{{request.header.x_custom_header}}"`). Ferron resolves plain variable names via the `Variables` trait at runtime.
 
 **Configuration example:**
 
@@ -89,7 +89,7 @@ http * {
 }
 ```
 
-This matches user agents containing "mobile" regardless of capitalization (e.g., "Mobile", "MOBILE", "MoBiLe").
+This matches user agents containing "mobile" regardless of capitalization (for example "Mobile", "MOBILE", "MoBiLe").
 
 **Negated matching:**
 
@@ -101,7 +101,7 @@ http * {
 }
 ```
 
-The variable `has_xff` is set to `"1"` when the `X-Forwarded-For` header is **not** present or is empty. This is useful for identifying direct connections versus proxied requests.
+Ferron sets the variable `has_xff` to `"1"` when the `X-Forwarded-For` header is **not** present or is empty. This is useful for identifying direct connections versus proxied requests.
 
 ### Custom access log fields with `log_field`
 
@@ -119,7 +119,7 @@ http * {
 }
 ```
 
-After the response is generated, the access log will include `file_type` and `network` fields with the values resolved from the variables set earlier.
+After Ferron generates the response, the access log includes `file_type` and `network` fields with the values resolved from the variables set earlier.
 
 **Interpolated values:**
 
@@ -130,11 +130,11 @@ http * {
 }
 ```
 
-The interpolated string is resolved at log time using the full variable resolution system, including request headers, URI components, and custom variables.
+Ferron resolves the interpolated string at log time using the full variable resolution system, including request headers, URI components, and custom variables.
 
 ### Using `set_var` with other directives
 
-Variables set by `set_var` can be used in any directive that supports interpolation:
+You can use variables set by `set_var` in any directive that supports interpolation:
 
 ```ferron
 http * {

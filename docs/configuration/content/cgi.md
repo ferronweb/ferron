@@ -17,7 +17,7 @@ example.com {
 }
 ```
 
-The `cgi` block can be written as a boolean flag to enable CGI with all defaults, or as a block with nested directives to customize behavior.
+You can write the `cgi` block as a boolean flag to enable CGI with all defaults. You can also write it as a block with nested directives to customize behavior.
 
 | Form | Description |
 | --- | --- |
@@ -30,7 +30,7 @@ The `cgi` block can be written as a boolean flag to enable CGI with all defaults
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `extension` | `<string>` | This directive registers an additional file extension that should be treated as a CGI script. Unlike `cgi-bin` directory matching, the file does not need to be executable. This directive can be specified multiple times. | — |
+| `extension` | `<string>` | This directive registers an additional file extension that Ferron treats as a CGI script. Unlike `cgi-bin` directory matching, the file does not need to be executable. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -53,7 +53,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `interpreter` | `<extension: string> <arg: string>...` | This directive maps a file extension to a custom interpreter command. The first argument is the extension (with a leading dot, e.g. `.php`). Subsequent arguments form the interpreter command line. Pass `false` as the second argument to disable the interpreter for that extension. This directive can be specified multiple times. | built-in defaults |
+| `interpreter` | `<extension: string> <arg: string>...` | This directive maps a file extension to a custom interpreter command. The first argument is the extension (with a leading dot, for example `.php`). Later arguments form the interpreter command line. Pass `false` as the second argument to disable the interpreter for that extension. You can specify this directive multiple times. | built-in defaults |
 
 **Configuration example:**
 
@@ -71,16 +71,16 @@ example.com {
 > [!note]
 >
 > - The file path is automatically appended as the final argument.
-> - When `false` is used as the second argument, the interpreter list is cleared, meaning the file must be directly executable (e.g., via a shebang line or native executable).
+> - When `false` is used as the second argument, the interpreter list is cleared. The file must then be directly executable (for example, via a shebang line or native executable).
 > - For Unix systems, files without a matching interpreter must have the executable permission bit set.
-> - On Unix systems, scripts with a shebang line (e.g., `#!/usr/bin/env python3`) are parsed and the interpreter is derived from the shebang.
-> - On Windows, `.exe` files are executed directly, `.bat`/`.cmd` files use `cmd /c`, and scripts with shebangs are parsed similarly to Unix.
+> - On Unix systems, Ferron parses scripts with a shebang line (for example, `#!/usr/bin/env python3`) and derives the interpreter from the shebang.
+> - On Windows, Ferron executes `.exe` files directly. `.bat`/`.cmd` files use `cmd /c`, and scripts with shebangs are parsed similarly to Unix.
 
 ### `environment`
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Values are resolved with the same interpolation syntax as other directives. This directive can be specified multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -97,13 +97,13 @@ example.com {
 > [!note]
 >
 > - Environment variables take precedence over any existing variables with the same name.
-> - The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - Ferron automatically removes the `Proxy` header from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
 > - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
 
 > [!note]
 >
-> - The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response — stderr output is logged as a warning (trimmed before logging).
+> - Ferron always removes the `Proxy` header to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response. It trims stderr output and logs it as a warning.
 > - The working directory is set to the directory containing the script file.
 
 ## Default interpreters
@@ -125,7 +125,7 @@ The following built-in interpreters are available when no custom `interpreter` d
 
 ## Default index files
 
-When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, the following files are checked in order: `index.html`, `index.htm`, `index.xhtml`.
+When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, Ferron checks the following files in order: `index.html`, `index.htm`, `index.xhtml`.
 
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
@@ -136,7 +136,7 @@ If you register additional extensions via the `extension` directive, Ferron also
 
 For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
-This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron will use that instead.
+This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron uses that instead.
 
 > [!important]
 > CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive. On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, shebang lines are supported for `.bat`, `.cmd`, and other script files — native `.exe` files are executed directly.
@@ -152,8 +152,8 @@ When a matching file is found, Ferron checks for an interpreter using the follow
 
 1. Custom `interpreter` directive matching the file extension.
 2. Built-in default interpreter for the extension.
-3. If the file is directly executable (has the executable bit on Unix, or is a native `.exe` on Windows), it is run directly.
-4. If the file has a shebang line, the interpreter is parsed from the shebang.
+3. If the file is directly executable (executable bit on Unix, or native `.exe` on Windows), Ferron runs it directly.
+4. If the file has a shebang line, Ferron parses the interpreter from the shebang.
 
 > [!tip]
 > CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
@@ -173,7 +173,7 @@ Ferron automatically sets the following CGI environment variables:
 | `QUERY_STRING` | Query string (empty string if none). |
 | `PATH_INFO` | Path info extracted from the request. |
 | `SCRIPT_NAME` | The script path relative to the document root. |
-| `AUTH_TYPE` | Authentication type from the `Authorization` header (e.g., `Basic`, `Bearer`). |
+| `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
 | `HTTPS` | Set to `on` when the connection is encrypted. |
@@ -276,7 +276,7 @@ example.com {
 }
 ```
 
-This allows PHP files to be handled via shebang lines or direct execution instead.
+This allows Ferron to handle PHP files via shebang lines or direct execution instead.
 
 ### Using `cgi-bin` with additional extensions
 

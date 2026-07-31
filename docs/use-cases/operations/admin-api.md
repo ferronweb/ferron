@@ -3,7 +3,7 @@ title: Admin API
 description: "Securely configure, access, and harden the Ferron admin API for server management."
 ---
 
-The admin API is a built-in control plane that provides health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server and should be treated with the same security as a root shell on your server.
+The admin API is a built-in control plane that provides health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server. Treat it with the same security as a root shell on your server.
 
 > [!warning]
 > The admin API is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. All other security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
@@ -31,7 +31,7 @@ This configuration is safe for most deployments because `127.0.0.1` is only reac
 
 ## Health checks in containers and orchestration
 
-If your server runs inside a container or is managed by an orchestrator (Docker, Kubernetes, systemd, etc.), you may need the `health` endpoint for liveness or readiness probes. The health endpoint returns `200 OK` while the server is running and `503 Service Unavailable` during shutdown.
+If your server runs inside a container or an orchestrator manages it (Docker, Kubernetes, systemd, etc.), you may need the `health` endpoint. Use it for liveness or readiness probes. The health endpoint returns `200 OK` while the server is running and `503 Service Unavailable` during shutdown.
 
 ```ferron
 {
@@ -62,7 +62,7 @@ SSH tunneling is the simplest and most secure way to access the admin API remote
 ssh -L 8081:127.0.0.1:8081 admin@your-server
 ```
 
-After the tunnel is established, open `http://127.0.0.1:8081` in your browser or use `curl`:
+After you establish the tunnel, open `http://127.0.0.1:8081` in your browser or use `curl`:
 
 ```bash
 curl http://127.0.0.1:8081/health
@@ -203,7 +203,7 @@ Sensitive values (TLS keys, passwords, tokens, bearer credentials, and htpasswd 
 
 ### Admin API stops responding after a configuration change
 
-The admin listener is gracefully shut down and restarted during every configuration reload. If the new configuration is valid, a fresh listener starts immediately. If the admin block is removed from the new configuration, the listener is permanently stopped.
+Ferron shuts down and restarts the admin listener during every configuration reload. If the new configuration is valid, a fresh listener starts immediately. If you remove the admin block from the new configuration, the listener stops permanently.
 
 ### Accidentally bound to `0.0.0.0`
 

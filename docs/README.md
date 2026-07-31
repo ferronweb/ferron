@@ -36,8 +36,8 @@ docs/
 
 Two tiers of documentation:
 
-- **Use-case guides** (`use-cases/`) — task-oriented walkthroughs that show how to accomplish a goal (e.g., "set up automatic TLS").
-- **Configuration reference** (`configuration/`) — exhaustive directive-level pages organized by functional area. Expects the reader to already know what they're looking for.
+- **Use-case guides** (`use-cases/`) — task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
+- **Configuration reference** (`configuration/`) — exhaustive directive-level pages organized by functional area. Expects the reader to already know what they are looking for.
 
 The `getting-started.md` and `index.md` pages bridge the two tiers with recommended reading paths.
 
@@ -102,7 +102,7 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 - **Consistency over novelty** — if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
 - **Inline callouts** — no separate notes section at the end of a page.
 - **No emojis** unless the content explicitly calls for them.
-- **Linters are guidance** — don't let woke or other terminology linters override clarity or consistency.
+- **Linters are guidance** — do not let woke or other terminology linters override clarity or consistency.
 
 ## Sidebar
 
@@ -112,7 +112,7 @@ The sidebar navigation is defined in `links.json`. Add new pages there to make t
 
 | Name | Description |
 |------|-------------|
-| `href` | The URL path of the page (e.g., `/docs/v3/installation/linux/rhel-fedora`) |
+| `href` | The URL path of the page (for example, `/docs/v3/installation/linux/rhel-fedora`) |
 | `target` | The target window or tab (`"_self"` for current, `"_blank"` for new) |
 | `label` | The display text in the sidebar |
 | `sub` | Whether this is a sub-item (indented under another category) |

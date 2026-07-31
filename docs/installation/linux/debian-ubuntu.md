@@ -9,7 +9,7 @@ Ferron 3 has official packages available for Debian, Ubuntu, and derivatives. Be
 
 ### 1. Add Ferron's repository
 
-To add Ferron's repository, run the following commands (applicable for Debian and Ubuntu, if you're using a derivative, replace `$(lsb_release -cs)` with the closest matching Debian or Ubuntu version codename):
+To add Ferron's repository, run the following commands (applicable for Debian and Ubuntu). If you are using a derivative, replace `$(lsb_release -cs)` with the closest matching Debian or Ubuntu version codename:
 
 ```bash
 # Install packages required for adding a new repository
@@ -43,7 +43,7 @@ By default, Ferron serves content from the `/var/www/ferron` directory. Open a w
 If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
 > [!tip]
-> If you cannot access the server from another machine, ensure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
+> If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 

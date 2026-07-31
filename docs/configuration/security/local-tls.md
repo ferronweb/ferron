@@ -3,7 +3,7 @@ title: "Configuration: local TLS provider"
 description: "Locally-trusted certificates for development and testing environments using loopback addresses."
 ---
 
-This page documents the `local` TLS provider, which generates and manages locally-trusted certificates for development and testing environments. It's automatically selected for loopback addresses (`localhost`, `127.0.0.1`, `::1`) when no explicit TLS configuration is provided.
+This page documents the `local` TLS provider, which generates and manages locally-trusted certificates for development and testing environments. It is automatically selected for loopback addresses (`localhost`, `127.0.0.1`, `::1`) when no explicit TLS configuration is provided.
 
 ## Directives
 
@@ -60,11 +60,11 @@ localhost:443 {
 
 ### Certificate Authority
 
-A local root CA is generated on first use. The CA certificate is cached in the data directory and is valid for 10 years. **Manual trust is required** — you must import the CA into your OS or browser trust store.
+Ferron generates a local root CA on first use. The CA certificate is cached in the data directory and is valid for 10 years. **Manual trust is required** — you must import the CA into your OS or browser trust store.
 
 ### Leaf certificates
 
-Leaf certificates are generated for each unique set of Subject Alternative Names (SANs). They are valid for 1 year and automatically regenerated when expired or when SANs change. When any loopback address is detected, all loopback addresses (`localhost`, `127.0.0.1`, `::1`) are automatically included in the certificate.
+Ferron generates leaf certificates for each unique set of Subject Alternative Names (SANs). They are valid for 1 year. Ferron regenerates them automatically when they expire or when SANs change. When any loopback address is detected, Ferron automatically includes all loopback addresses (`localhost`, `127.0.0.1`, `::1`) in the certificate.
 
 ### Cache location
 
@@ -73,7 +73,7 @@ By default, certificates are stored in:
 - **Linux/macOS**: `~/.local/share/ferron-local-tls/`
 - **Windows**: `%LOCALAPPDATA%\ferron-local-tls\`
 
-If the cache directory couldn't be used, a temporary fallback location is used instead.
+If the cache directory could not be used, a temporary fallback location is used instead.
 
 You can customize the cache location with the `cache` directive:
 
@@ -173,7 +173,7 @@ The CA certificate is regenerated only if the cached files are missing or corrup
 
 If you see security warnings in your browser:
 
-1. **Check the certificate details** — ensure it's issued by "Ferron Local Root CA"
+1. **Check the certificate details** — make sure it is issued by "Ferron Local Root CA"
 2. **Import the CA certificate** — add the CA to your OS or browser trust store
 3. **Clear browser cache** — some browsers cache certificate trust decisions
 4. **Restart your browser** — changes to certificate trust may require a restart
@@ -190,6 +190,6 @@ When any loopback address is detected, the local provider automatically includes
 
 ## Best practices
 
-The following best-practice check is reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice check for directives on this page.
 
 - **`provider local` on non-loopback hosts** — The local TLS provider issues self-signed certificates. Use ACME or manual certificates for production hostnames.

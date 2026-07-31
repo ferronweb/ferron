@@ -3,13 +3,13 @@ title: "Configuration: ACME automatic TLS"
 description: "Automatic TLS certificate issuance via ACME, including HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
 ---
 
-This page documents the ACME TLS provider (`tls-acme` module), which automatically obtains TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. It supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance, with three challenge types:
+This page documents the ACME TLS provider (`tls-acme` module), which automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. It supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance, with three challenge types:
 
 - **HTTP-01** — serves a token at `/.well-known/acme-challenge/` (default)
 - **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake
 - **DNS-01** — creates a TXT record at `_acme-challenge.<domain>`
 
-Certificates are **cached** (both in-memory and file-based) and **automatically renewed** before expiration.
+Ferron **caches** certificates (both in-memory and file-based) and **renews** them automatically before expiration.
 
 Automatic TLS via ACME is enabled by default in Ferron for public hosts:
 
@@ -120,7 +120,7 @@ example.com {
 
 ## Eager mode (recommended for known domains)
 
-Eager mode obtains certificates at **server startup**, before any client traffic is received. This is ideal for static configurations where all domain names are known in advance.
+Eager mode gets certificates at **server startup**, before any client traffic is received. This is ideal for static configurations where all domain names are known in advance.
 
 ## On-demand mode
 
@@ -157,7 +157,7 @@ To prevent abuse, you can configure an approval endpoint. Before issuing a certi
 
 ### In-memory cache (default)
 
-When no `cache` path is specified, certificates and account data are stored in memory.
+When no `cache` path is specified, Ferron stores certificates and account data in memory.
 
 ### File-based cache
 
@@ -189,7 +189,7 @@ The cache directory structure:
 
 ## Certificate renewal
 
-Certificates are automatically renewed before expiration. The renewal check runs every **10 seconds** in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available, falling back to a heuristic of 50% of certificate lifetime (capped at 24 hours before expiry).
+Ferron automatically renews certificates before expiration. The renewal check runs every **10 seconds** in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
 
 ## External Account Binding (EAB)
 
@@ -209,7 +209,7 @@ The HMAC secret must be base64url-encoded (without padding).
 
 ## Fallback providers
 
-When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (e.g., the CA is down or unreachable), Ferron automatically tries the next configured fallback provider.
+When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron automatically tries the next configured fallback provider.
 
 ```ferron
 example.com {
@@ -237,9 +237,9 @@ Each `fallback` block accepts the same provider-level directives as the primary 
 
 ### How fallback works
 
-- Providers are tried **sequentially**: the primary is attempted first, followed by each `fallback` block in order.
-- A fallback is triggered when account creation with the previous provider fails.
-- Once a provider succeeds, subsequent operations (order creation, challenge solving, certificate installation) use that same provider.
+- Ferron tries providers **sequentially**: the primary first, then each `fallback` block in order.
+- Ferron triggers a fallback when account creation with the previous provider fails.
+- Once a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
 - Account cache keys are scoped per-provider, so each provider maintains its own cached credentials.
 
 ### Example: primary with staging fallback
@@ -264,7 +264,7 @@ example.com {
 
 ## Saving certificates to disk
 
-To persist obtained certificates for use by other tools or backup:
+To persist certificates you get for use by other tools or backup:
 
 ```ferron
 tls {
@@ -275,7 +275,7 @@ tls {
 }
 ```
 
-If only one path is given, the key path defaults to the certificate path with a `.key` extension. After a certificate is obtained, the private key is written with `0600` permissions on Unix.
+If only one path is given, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
 
 ## Security considerations
 
@@ -287,11 +287,11 @@ If only one path is given, the key path defaults to the certificate path with a 
 
 ### "ACME certificate provisioning error: ..."
 
-Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, etc.). At debug log level (`--verbose`), you'll also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
+Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, etc.). At debug log level (`--verbose`), you will also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
 
 ### DNS-01 issues
 
-- Ensure the DNS provider is configured correctly with valid credentials.
+- Make sure the DNS provider is configured correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
 - DNS propagation may take longer than 60 seconds for some providers — the ACME CA will retry validation.
 
@@ -310,7 +310,7 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 The ACME background task emits log events and metrics through the configured observability pipeline:
 
 > [!note]
-> The ACME log events are global-only, that means they won't be emitted via per-host observability sinks.
+> The ACME log events are global-only. This means they will not be emitted via per-host observability sinks.
 
 ### Logs
 
@@ -401,7 +401,7 @@ The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.st
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`no_verification` for ACME directory** — Disabling TLS verification for the ACME directory should only be used for testing.
 - **`on_demand` without `on_demand_ask`** — On-demand certificate issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.

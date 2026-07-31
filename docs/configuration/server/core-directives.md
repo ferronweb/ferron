@@ -14,7 +14,7 @@ This page documents directives that belong in top-level global blocks:
 > [!note]
 >
 > - These directives affect startup and listener construction, not per-request routing.
-> - Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or `config-json` module (for `.json` files).
+> - The `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files) handles configuration file parsing.
 
 > [!info]
 > For observability-specific configuration, see [Observability and logging](/docs/v3/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/server/host). For admin API security hardening, see [Security considerations](#security-considerations).
@@ -43,7 +43,7 @@ This page documents directives that belong in top-level global blocks:
 > - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
 > - Setting `default_http_port false` disables the automatic HTTP listener for hosts without explicit ports.
 > - Setting `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects for hosts without explicit ports.
-> - If **both** directives are set to `false`, host blocks without explicit ports will not create any listeners and a warning is logged.
+> - If **both** directives are set to `false`, host blocks without explicit ports do not create any listeners, and Ferron logs a warning.
 
 **Disable default HTTP listener (HTTPS only):**
 
@@ -88,7 +88,7 @@ This page documents directives that belong in top-level global blocks:
 - `backlog <size: integer>`
   - This directive specifies the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
 - `multipath <bool>`
-  - This directive specifies whether Multipath TCP (MPTCP) is enabled for the listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel does not support MPTCP or it is disabled, a warning is logged and the listener falls back to standard TCP. Default: disabled
+  - This directive specifies whether Multipath TCP (MPTCP) is enabled for the listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel does not support MPTCP or it is disabled, Ferron logs a warning and the listener falls back to standard TCP. Default: disabled
 
 **Configuration example:**
 
@@ -219,10 +219,10 @@ example.com {
 
 > [!note]
 >
-> - Log files are created if they don't exist and opened in append mode.
+> - Log files are created if they do not exist and opened in append mode.
 > - Writes are buffered and flushed periodically (every 1 second) and on shutdown.
 > - If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
-> - When rotation is enabled, the current log file is renamed to `<filename>.1`, existing rotated files are shifted up, and a new empty log file is created.
+> - When rotation is enabled, the current log file is renamed to `<filename>.1`. Existing rotated files are shifted up, and a new empty log file is created.
 > - If `access_log_rotate_keep` (or `error_log_rotate_keep`) is set to `0`, the log file is deleted on rotation instead of being renamed.
 
 ## Observability aliases
@@ -349,7 +349,7 @@ The admin API is a **privileged control plane** that provides full server config
 
 #### Risks of binding to `0.0.0.0`
 
-Setting `listen "0.0.0.0:<port>"` (or omitting the bind address to default to all interfaces) makes the admin API **completely open to any client that can reach the host**. This can happen accidentally in containerized environments (e.g., Docker with bridge networking) or misconfigured networks.
+Setting `listen "0.0.0.0:<port>"` makes the admin API **completely open to any client that can reach the host**. Omitting the bind address defaults to all interfaces and has the same effect. This can happen accidentally in containerized environments (for example, Docker with bridge networking) or misconfigured networks.
 
 Consequences of an open admin API:
 
@@ -393,7 +393,7 @@ Consequences of an open admin API:
    Remote user → reverse proxy (auth required) → 127.0.0.1:8081 (admin API)
    ```
 
-4. **Restrict network access at the infrastructure level**. Use firewall rules, security groups, or VPC networking to ensure only trusted hosts can reach the admin port.
+4. **Restrict network access at the infrastructure level**. Use firewall rules, security groups, or VPC networking to make sure only trusted hosts can reach the admin port.
 
 5. **Monitor admin API access**. Use your observability sinks to track requests to admin endpoints for anomaly detection.
 
@@ -410,7 +410,7 @@ The admin API provides a RESTful interface for server configuration and control.
 
 #### `GET /health`
 
-Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been initiated. Suitable for load balancer and orchestration health checks.
+Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been started. Suitable for load balancer and orchestration health checks.
 
 #### `GET /status`
 
@@ -505,7 +505,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### Default ports
 
-- **Both default ports disabled** — Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Ensure all host blocks specify explicit ports, or keep at least one default listener enabled.
+- **Both default ports disabled** — Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Make sure all host blocks specify explicit ports, or keep at least one default listener enabled.
 
 ### PROXY protocol
 
@@ -518,4 +518,4 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### Location blocks
 
-- **No duplicate `location` block pathnames** — Duplicate pathnames in location blocks will cause the server to return an ambiguous response, so they should be avoided.
+- **No duplicate `location` block pathnames** — Duplicate pathnames in location blocks cause the server to return an ambiguous response, so avoid them.

@@ -3,7 +3,7 @@ title: "JSON configuration and adapt command"
 description: "Using ferron adapt to output configuration as JSON, and working with JSON-formatted configurations."
 ---
 
-This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files).
+This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. The `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files) handles configuration file parsing.
 
 > [!info]
 > For configuration format details, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax), [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals), and [Core directives](/docs/v3/configuration/server/core-directives).
@@ -170,7 +170,7 @@ Blocks appear at multiple levels:
 
 - **Global configuration** — server-wide settings
 - **Port/host configuration** — protocol and host-specific settings
-- **Nested directives** — child blocks within directive entries (e.g., `runtime { io_uring }`)
+- **Nested directives** — child blocks within directive entries (for example, `runtime { io_uring }`)
 
 ### Directive entries
 
@@ -251,7 +251,7 @@ Each entry in the `ports` map represents a protocol:
 | `ip` | `IpAddr \| null` | IP address to match (for multi-homed servers) |
 | `host` | `String \| null` | Host/domain name to match (for SNI) |
 
-When both are `null`, the configuration applies to all hosts on that port (e.g., `*:8080`).
+When both are `null`, the configuration applies to all hosts on that port (for example, `*:8080`).
 
 ### Match expressions
 

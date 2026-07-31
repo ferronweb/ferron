@@ -16,9 +16,9 @@ Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) and W3C Bag
 
 ### Incoming trace context
 
-By default, Ferron discards any incoming `traceparent`, `tracestate`, and `baggage` headers and generates a new trace ID for each request. This ensures that each request within Ferron's boundary starts with a fresh, server-generated trace identity.
+By default, Ferron discards any incoming `traceparent`, `tracestate`, and `baggage` headers and generates a new trace ID for each request. This makes sure that each request within Ferron's boundary starts with a fresh, server-generated trace identity.
 
-When the `trust_request` directive is enabled in the `trace` block, incoming `traceparent` and `tracestate` headers are parsed and used as the parent for Ferron's internal `ferron.request` span. In this mode, Ferron creates a local request span with the same trace ID and a new span ID, then reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can still generate a new one when `generate` is enabled.
+When the `trust_request` directive is enabled in the `trace` block, Ferron parses the incoming `traceparent` and `tracestate` headers. It uses them as the parent for its internal `ferron.request` span. In this mode, Ferron creates a local request span with the same trace ID and a new span ID. It reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can still generate a new one when `generate` is enabled.
 
 When `trust_request` is enabled, the incoming `baggage` header is also parsed and attached to the local request span context. Baggage is then propagated to upstream services and included in OTLP span exports, allowing application-defined key-value pairs to flow through the entire request path.
 
@@ -34,13 +34,13 @@ These directives are configured within the `http` block.
 
 ### W3C Baggage
 
-Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (e.g. tenant ID, user segment, request flags) across service boundaries without requiring explicit configuration.
+Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (for example, tenant ID, user segment, request flags) across service boundaries without requiring explicit configuration.
 
 #### How baggage propagation works
 
 1. By default, incoming `baggage` headers are discarded (unless `trust_request` is enabled). When `trust_request` is enabled, Ferron reads the incoming `baggage` header from the request.
 2. The baggage string (when available) is stored in the request's trace context.
-3. When forwarding the request to an upstream service, the `baggage` header is included alongside `traceparent` and `tracestate` only if the trace context carries non-empty baggage values.
+3. When forwarding the request to an upstream service, Ferron includes the `baggage` header alongside `traceparent` and `tracestate`. It does this only if the trace context carries non-empty baggage values.
 4. When exporting via OTLP, baggage is parsed and attached to the OpenTelemetry span context as OpenTelemetry baggage.
 
 #### Baggage header format
@@ -106,22 +106,22 @@ http {
 }
 ```
 
-When `trust_request` is enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers, stores the baggage in the request trace context, and propagates them to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
+When `trust_request` is enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers. It stores the baggage in the request trace context and propagates the headers to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
 
 > [!note]
 >
-> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing requests to backend services when a trace context exists. No per-module configuration is needed — trace context injection is controlled globally via the `trace` block (directives `generate` and `trust_request`) and whether a trace sink is configured.
-> - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`), making them accessible to application code without any special header parsing.
+> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers into outgoing requests to backend services when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`. No per-module configuration is needed. The `trace` block (directives `generate` and `trust_request`) controls trace context injection globally. Whether a trace sink is configured also matters.
+> - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This makes them accessible to application code without any special header parsing.
 
 > [!note]
 >
-> - Generating and propagating trace headers carries unique identifiers — ensure this complies with your privacy requirements.
+> - Generating and propagating trace headers carries unique identifiers — make sure this complies with your privacy requirements.
 > - By default, incoming baggage values are discarded. When `trust_request` is enabled, baggage values are propagated as-is and Ferron does not validate or modify them.
 > - Baggage items are attached to OpenTelemetry spans when using the OTLP provider — high-cardinality baggage keys may increase span storage costs.
 
 ### Trace ID response header
 
-Ferron can inject the current request's trace ID into HTTP response headers, making it easy for clients to correlate their requests with server-side traces and logs.
+Ferron can inject the current request's trace ID into HTTP response headers. This makes it easy for clients to correlate their requests with server-side traces and logs.
 
 #### `trace_id_header`
 
@@ -187,7 +187,7 @@ Explicitly disables trace ID injection.
 #### Behavior
 
 - The trace ID is taken from the current request's trace context (W3C `traceparent` if present, or the generated trace ID).
-- The header is injected into both custom responses (e.g., from reverse proxy, static file serving) and built-in error responses (e.g., 404, 500).
+- The header is injected into both custom responses (for example, from reverse proxy, static file serving) and built-in error responses (for example, 404, 500).
 - When `reflect_request` is enabled, the trace ID is only injected if the request carries the `X-Ferron-Trace-Reflect: 1` header.
 
 > [!note]
@@ -201,7 +201,7 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 
 - **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
   - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
-  - For HTTPS connections: `tls.protocol.version` (e.g. `"TLSv1.3"`), `tls.cipher_suite` (e.g. `"TLS_AES_256_GCM_SHA384"`)
+  - For HTTPS connections: `tls.protocol.version` (for example, `"TLSv1.3"`), `tls.cipher_suite` (for example, `"TLS_AES_256_GCM_SHA384"`)
 - **`EndSpan("ferron.request", error)`** — emitted when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 
@@ -225,7 +225,7 @@ Each pipeline and file-serving stage generates its own forward (`ferron.stage.<s
 - **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
   - Attributes: `http.response.status_code`
 
-Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
+Trace events are consumed by observability backends that support tracing (for example, OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
 
 ## Trace sampling
 
@@ -274,7 +274,7 @@ example.com {
 }
 ```
 
-Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to ensure consistent sampling decisions across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
+Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to make sure sampling decisions are consistent across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
 
 ### Attribute-based sampling
 
@@ -318,7 +318,7 @@ A span is sampled if **any** rule matches. When no rules match, the `default_act
 | `sample` | Spans not matching any rule are still sampled. |
 
 > [!warning]
-> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes will also drop health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
+> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes also drops health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
 
 > [!note]
 > In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions for attribute-based sampling.

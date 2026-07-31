@@ -35,7 +35,7 @@ This command does the following:
 - `--name myferron` - assigns a name (`myferron`) to the running container.
 - `-d` - runs the container in detached mode (as a background process).
 - `-p 80:80` - maps port 80 of the container to port 80 on the host machine.
-- `--restart=always` - ensures the container automatically restarts if it stops or if the system reboots.
+- `--restart=always` - makes sure the container automatically restarts if it stops or if the system reboots.
 
 ## Verifying the installation
 
@@ -109,7 +109,7 @@ docker logs myferron
 
 ## Using Ferron with Docker Compose
 
-If you're using Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
+If you are using Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
 
 ```yaml
 services:

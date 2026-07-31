@@ -19,13 +19,13 @@ Ferron emits two log signals: **access logs** and **application logs**.
 | Access logs | Per-request HTTP request/response data (method, path, status, duration, etc.) |
 | Application logs | Server-level messages (startup, config reloads, errors, debug output) |
 
-Access logs are configured per-host via the `log` directive. Application logs are configured via the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal — the `error_log` directive is simply the file sink for the application log signal.
+Configure access logs per-host via the `log` directive. Configure application logs via the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal — the `error_log` directive is simply the file sink for the application log signal.
 
 ## Directives
 
 ### Access logging
 
-Access logs are configured via `log` blocks inside host or global scopes:
+Configure access logs with `log` blocks inside host or global scopes:
 
 ```ferron
 example.com {
@@ -68,7 +68,7 @@ Each access log entry contains the following fields:
 | `trace_id` | Optional trace ID for the request (if W3C trace context is available) |
 
 > [!important]
-> Access logs don't contain sensitive fields (such as `header_cookie`, `header_authorization`). This is to ensure sensitive data is not exposed in log output.
+> Access logs do not contain sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.
 
 > [!info]
 > Pipeline modules can contribute additional access log fields when active. These fields are only present when the corresponding module handles the request. For the list of module-contributed access log fields, see the respective module's documentation.
@@ -99,7 +99,7 @@ Use the `fields` directive to limit which fields appear in the JSON output. If `
 
 The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `logformat-text` module.
 
-By default, it uses the **Enhanced Combined Log Format** (ECLF; Ferron's extended version of CLF), which extends Combined Log Format with `Host` header and trace ID fields.
+By default, it uses the **Enhanced Combined Log Format** (ECLF). This is Ferron's extended version of CLF. It extends Combined Log Format with `Host` header and trace ID fields.
 
 **Configuration example:**
 
@@ -217,7 +217,7 @@ example.com {
 
 ### Console vs file vs OTLP
 
-The `format` directive (json/text) applies to **file and console** sinks. OTLP also a different mechanism:
+The `format` directive (json/text) applies to **file and console** sinks. OTLP also uses a different mechanism:
 
 | Sink | Formatting directive | Configuration |
 |------|---------------------|---------------|
@@ -248,7 +248,7 @@ The `metrics-reload` module emits application log events during configuration re
 
 | Level | Message | Trigger |
 |-------|---------|---------|
-| `INFO` | `Reloading configuration...` | A reload is initiated |
+| `INFO` | `Reloading configuration...` | A reload is started |
 | `WARN` | `Can't reload the server, continuing to run with the previous configuration: {error}` | The reload attempt failed |
 
 These events carry the `ferron-metrics-reload` target and are emitted through the observability event system.
@@ -279,7 +279,7 @@ The `client.address` and `server.address` attributes are included in:
 - **Request validation error logs** — emitted for invalid Host headers, malformed URLs, CONNECT path errors, and URL sanitization failures.
 
 > [!note]
-> Connection-level errors that occur before the socket address is resolved (e.g. accept failures, PROXY protocol errors) do not include IP attributes.
+> Connection-level errors that occur before the socket address is resolved (for example, accept failures, PROXY protocol errors) do not include IP attributes.
 
 ## Trace ID in console and file logs
 

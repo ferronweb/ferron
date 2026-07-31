@@ -9,7 +9,7 @@ The examples assume a single WordPress-style site served through PHP-FPM over a 
 
 ## Before you start: how Ferron differs from `.htaccess`
 
-Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) that is loaded and **validated at startup** — there is no per-directory `.htaccess` file, and changes require a server reload.
+Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) that is loaded and **validated at startup**. There is no per-directory `.htaccess` file, and changes require a server reload.
 
 | Concept | Apache `.htaccess` | Ferron 3 |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Then reference it from Ferron with `fcgi_php "unix:///run/php/php8.4-fpm.sock"`.
 
 ## A complete WordPress example
 
-Here is a full Ferron 3 configuration that reproduces what a typical `WordPress` `.htaccess` + Apache vhost provides: PHP-FPM execution, the front-controller rewrite, HTTPS enforcement, a www→non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
+Here is a full Ferron 3 configuration that reproduces what a typical `WordPress` `.htaccess` + Apache vhost provides. It covers PHP-FPM execution, the front-controller rewrite, HTTPS enforcement, a www→non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
 
 ```ferron
 example.com {
@@ -209,7 +209,7 @@ RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 ```
 
-In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (e.g. `example.com`) with no explicit port, Ferron starts both an HTTP (`:80`) and HTTPS (`:443`) listener and issues a **308 Permanent Redirect** from HTTP to HTTPS by default. There is nothing to configure unless you want to disable it:
+In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (for example, `example.com`) with no explicit port, Ferron starts both an HTTP (`:80`) and HTTPS (`:443`) listener. It issues a **308 Permanent Redirect** from HTTP to HTTPS by default. There is nothing to configure unless you want to disable it:
 
 ```ferron
 example.com {
@@ -222,7 +222,7 @@ example.com {
 Set `https_redirect false` only if you intentionally serve plain HTTP (for example, behind a TLS-terminating load balancer that already redirects).
 
 > [!note]
-> The 308 status preserves the request method and body, so `POST` form submissions redirect correctly — unlike Apache's common `R=301` which can change `POST` to `GET`.
+> The 308 status preserves the request method and body, so `POST` form submissions redirect correctly. This differs from Apache's common `R=301`, which can change `POST` to `GET`.
 
 ## IP-based access control (ACLs)
 
@@ -256,7 +256,7 @@ example.com {
 Place these inside a `location` or `if` block to protect a single path (such as `/wp-admin` or `/administrator`).
 
 > [!important]
-> If Ferron sits behind a reverse proxy or load balancer, configure `client_ip_from_header` with a `trusted_proxy` list so the IP rules evaluate the real client IP rather than the proxy's address.
+> If Ferron sits behind a reverse proxy or load balancer, configure `client_ip_from_header` with a `trusted_proxy` list. The IP rules then evaluate the real client IP rather than the proxy's address.
 
 ### Deny access to sensitive files
 
@@ -324,7 +324,7 @@ example.com {
 ```
 
 > [!note]
-> Missing error page files are skipped silently and Ferron's built-in page is used instead, so always verify the paths exist.
+> Ferron skips missing error page files silently and uses its built-in page instead, so always verify the paths exist.
 
 ## Directory listings
 
@@ -336,7 +336,7 @@ Options +Indexes
 Options -Indexes
 ```
 
-Ferron's `directory_listing` is disabled by default. Enable it to mirror `+Indexes`; leave it off (the default) to mirror `-Indexes`:
+Ferron's `directory_listing` is disabled by default. Enable it to mirror `+Indexes`. Leave it off (the default) to mirror `-Indexes`:
 
 ```ferron
 example.com {
@@ -348,7 +348,7 @@ example.com {
 }
 ```
 
-`index` controls the files tried when a directory is requested (Ferron defaults to `index.html index.htm index.xhtml`; `index.php` is included as well for PHP entry points when using PHP-FPM).
+`index` controls the files tried when a directory is requested. Ferron defaults to `index.html index.htm index.xhtml`, and `index.php` is included as well for PHP entry points when using PHP-FPM.
 
 ## Security and other response headers
 
@@ -574,13 +574,13 @@ example.com {
 
 1. Install and start PHP-FPM. Confirm the socket (or TCP port) is reachable by the Ferron user.
 2. Create `ferron.conf` with the `root`, `fcgi_php`, and TLS settings for your domain.
-3. Recreate each `.htaccess` rule using the mapping above — `rewrite` for routing, `allow`/`block` for ACLs, `error_page` for error documents, `header` for headers, `basic_auth` for password areas.
+3. Recreate each `.htaccess` rule using the mapping above. Use `rewrite` for routing, `allow`/`block` for ACLs, `error_page` for error documents, `header` for headers, and `basic_auth` for password areas.
 4. Move the front-controller rewrite (and any `index`/`directory_listing` settings) to the host block.
 5. Validate the configuration: `ferron validate -c ferron.conf`.
 6. Run `ferron doctor -c ferron.conf` to catch TLS, redirect, and timeout best-practice issues.
 7. Start Ferron and confirm:
    - `https://example.com/` loads the home page (PHP executed).
-   - A clean URL (e.g. `/sample-post`) renders via `index.php`.
+   - A clean URL (for example, `/sample-post`) renders via `index.php`.
    - `http://` redirects to `https://` (308).
    - `www.` redirects to the canonical host (301) if configured.
    - Custom 404/50x pages appear for missing routes and backend errors.
