@@ -9,6 +9,7 @@ SUPPORTED_TARGETS=(
 	"aarch64-unknown-linux-gnu"
 	"armv7-unknown-linux-gnueabihf"
 	"riscv64gc-unknown-linux-gnu"
+	"loongarch64-unknown-linux-gnu"
 	"s390x-unknown-linux-gnu"
 	"powerpc64le-unknown-linux-gnu"
 	"x86_64-unknown-linux-musl"
@@ -16,6 +17,7 @@ SUPPORTED_TARGETS=(
 	"aarch64-unknown-linux-musl"
 	"armv7-unknown-linux-musleabihf"
 	"riscv64gc-unknown-linux-musl"
+	"loongarch64-unknown-linux-musl"
 )
 
 usage() {
@@ -81,6 +83,7 @@ target_to_qemu_binary() {
 		aarch64-unknown-linux-gnu | aarch64-unknown-linux-musl) echo "qemu-aarch64-static" ;;
 		armv7-unknown-linux-gnueabihf | armv7-unknown-linux-musleabihf) echo "qemu-arm-static" ;;
 		riscv64gc-unknown-linux-gnu | riscv64gc-unknown-linux-musl) echo "qemu-riscv64-static" ;;
+		loongarch64-unknown-linux-gnu | loongarch64-unknown-linux-musl) echo "qemu-loongarch64-static" ;;
 		s390x-unknown-linux-gnu) echo "qemu-s390x-static" ;;
 		powerpc64le-unknown-linux-gnu) echo "qemu-ppc64le-static" ;;
 		*) echo "" ;;
@@ -93,6 +96,7 @@ host_arch() {
 		aarch64) echo "aarch64" ;;
 		armv7*) echo "armv7" ;;
 		riscv64) echo "riscv64" ;;
+		loongarch64) echo "loongarch64" ;;
 		s390x) echo "s390x" ;;
 		ppc64le) echo "ppc64le" ;;
 		i?86) echo "i686" ;;

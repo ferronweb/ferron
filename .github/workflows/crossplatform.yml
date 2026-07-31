@@ -72,6 +72,12 @@ jobs:
           - target: riscv64gc-unknown-linux-musl
             runner: ubuntu-latest
             cross-build: true
+          - target: loongarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross-build: true
+          - target: loongarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross-build: true
           - target: s390x-unknown-linux-gnu
             runner: ubuntu-latest
             cross-build: true

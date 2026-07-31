@@ -14,6 +14,7 @@ SUPPORTED_TARGETS=(
 	"aarch64-unknown-linux-musl"
 	"armv7-unknown-linux-musleabihf"
 	"riscv64gc-unknown-linux-musl"
+	"loongarch64-unknown-linux-musl"
 )
 
 usage() {
@@ -53,6 +54,7 @@ target_to_alpine_arch() {
 		aarch64-unknown-linux-musl) echo "aarch64" ;;
 		armv7-unknown-linux-musleabihf) echo "armv7" ;;
 		riscv64gc-unknown-linux-musl) echo "riscv64" ;;
+		loongarch64-unknown-linux-musl) echo "loongarch64" ;;
 		*) log_error "Unknown musl target: $target"; return 1 ;;
 	esac
 }
@@ -63,6 +65,7 @@ host_arch() {
 		aarch64) echo "aarch64" ;;
 		armv7*) echo "armv7" ;;
 		riscv64) echo "riscv64" ;;
+		loongarch64) echo "loongarch64" ;;
 		*) echo "$(uname -m)" ;;
 	esac
 }
@@ -75,6 +78,7 @@ host_arch_to_alpine() {
 		aarch64) echo "aarch64" ;;
 		armv7) echo "armv7" ;;
 		riscv64) echo "riscv64" ;;
+		loongarch64) echo "loongarch64" ;;
 		*) echo "$arch" ;;
 	esac
 }

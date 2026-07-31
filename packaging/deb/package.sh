@@ -36,6 +36,7 @@ case "$TARGET_TRIPLE" in
     "i686-unknown-linux-gnu") DEB_ARCHITECTURE="i386" ;;
     "powerpc64le-unknown-linux-gnu") DEB_ARCHITECTURE="ppc64el" ;;
     "riscv64gc-unknown-linux-gnu") DEB_ARCHITECTURE="riscv64" ;;
+    "loongarch64-unknown-linux-gnu") DEB_ARCHITECTURE="loong64" ;;
     "s390x-unknown-linux-gnu") DEB_ARCHITECTURE="s390x" ;;
     *)
         echo "Unsupported target triple: $TARGET_TRIPLE" >&2

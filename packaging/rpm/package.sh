@@ -36,6 +36,7 @@ case "$TARGET_TRIPLE" in
     "i686-unknown-linux-gnu") RPM_ARCHITECTURE="i686" ;;
     "powerpc64le-unknown-linux-gnu") RPM_ARCHITECTURE="ppc64le" ;;
     "riscv64gc-unknown-linux-gnu") RPM_ARCHITECTURE="riscv64" ;;
+    "loongarch64-unknown-linux-gnu") RPM_ARCHITECTURE="loongarch64" ;;
     "s390x-unknown-linux-gnu") RPM_ARCHITECTURE="s390x" ;;
     "")
         echo "No architecture specified." >&2

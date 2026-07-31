@@ -12,6 +12,7 @@ SUPPORTED_TARGETS=(
 	"riscv64gc-unknown-linux-gnu"
 	"s390x-unknown-linux-gnu"
 	"powerpc64le-unknown-linux-gnu"
+	"loongarch64-unknown-linux-gnu"
 )
 
 DEBIAN_MIRROR="https://deb.debian.org/debian"
@@ -55,6 +56,7 @@ target_to_deb_arch() {
 		aarch64-unknown-linux-gnu) echo "arm64" ;;
 		armv7-unknown-linux-gnueabihf) echo "armhf" ;;
 		riscv64gc-unknown-linux-gnu) echo "riscv64" ;;
+		loongarch64-unknown-linux-gnu) echo "loong64" ;;
 		s390x-unknown-linux-gnu) echo "s390x" ;;
 		powerpc64le-unknown-linux-gnu) echo "ppc64el" ;;
 		*) log_error "Unknown target: $target"; return 1 ;;
@@ -71,6 +73,7 @@ target_to_deb_suite() {
 		riscv64gc-unknown-linux-gnu) echo "trixie" ;; # riscv64
 		s390x-unknown-linux-gnu) echo "bookworm" ;; # s390x
 		powerpc64le-unknown-linux-gnu) echo "bookworm" ;; # ppc64el
+		loongarch64-unknown-linux-gnu) echo "forky" ;; # loong64
 		*) log_error "Unknown target: $target"; return 1 ;;
 	esac
 }
@@ -85,6 +88,7 @@ target_to_fallback_gcc() {
 		riscv64gc-unknown-linux-gnu) echo "12" ;; # trixie
 		s390x-unknown-linux-gnu) echo "11" ;; # bookworm
 		powerpc64le-unknown-linux-gnu) echo "11" ;; # bookworm
+		loongarch64-unknown-linux-gnu) echo "14" ;; # forky
 		*) log_error "Unknown target: $target"; return 1 ;;
 	esac
 }
@@ -101,6 +105,7 @@ target_to_gnu_arch() {
 		riscv64gc-unknown-linux-gnu) echo "riscv64-linux-gnu" ;;
 		s390x-unknown-linux-gnu) echo "s390x-linux-gnu" ;;
 		powerpc64le-unknown-linux-gnu) echo "powerpc64le-linux-gnu" ;;
+		loongarch64-unknown-linux-gnu) echo "loongarch64-linux-gnu" ;;
 		*) log_error "Unknown target: $target"; return 1 ;;
 	esac
 }
@@ -113,6 +118,7 @@ target_to_gnu_prefix() {
 		aarch64-unknown-linux-gnu) echo "aarch64-linux-gnu-" ;;
 		armv7-unknown-linux-gnueabihf) echo "arm-linux-gnueabihf-" ;;
 		riscv64gc-unknown-linux-gnu) echo "riscv64-linux-gnu-" ;;
+		loongarch64-unknown-linux-gnu) echo "loongarch64-linux-gnu-" ;;
 		s390x-unknown-linux-gnu) echo "s390x-linux-gnu-" ;;
 		powerpc64le-unknown-linux-gnu) echo "powerpc64le-linux-gnu-" ;;
 		*) echo "" ;;
@@ -127,6 +133,7 @@ target_to_qemu_arch() {
 		aarch64-unknown-linux-gnu) echo "aarch64" ;;
 		armv7-unknown-linux-gnueabihf) echo "arm" ;;
 		riscv64gc-unknown-linux-gnu) echo "riscv64" ;;
+		loongarch64-unknown-linux-gnu) echo "loongarch64" ;;
 		s390x-unknown-linux-gnu) echo "s390x" ;;
 		powerpc64le-unknown-linux-gnu) echo "ppc64" ;;
 		*) echo "" ;;
@@ -354,24 +361,6 @@ prepare_sysroot() {
 		done
 	fi
 
-	# Fix libc.so linker scripts to use correct dynamic linker path
-	log_info "Fixing linker scripts..."
-	local libc_linker_script
-	libc_linker_script=$(find "${sysroot_dir}" -name "libc.so" -type f 2>/dev/null | head -1)
-	if [[ -n "${libc_linker_script}" ]]; then
-		log_info "  Found libc.so linker script: ${libc_linker_script}"
-		local fixed_script
-		fixed_script=$(mktemp)
-		local arch_dir
-		arch_dir=$(echo "${target}" | cut -d'-' -f1)
-		local gnu_arch="${arch_dir}-linux-gnu"
-		sed "s|/lib/ld-linux-${arch_dir}\.so|/lib/${gnu_arch}/ld-linux-${arch_dir}.so|g" \
-			"${libc_linker_script}" > "${fixed_script}"
-		cat "${fixed_script}" > "${libc_linker_script}"
-		rm -f "${fixed_script}"
-		log_info "  Fixed: $(cat "${libc_linker_script}")"
-	fi
-
 	# Fix broken symlinks: .so files in usr/lib/<arch>/ that point to absolute /lib/
 	# paths (or to a wrong-depth relative path). These break under --sysroot.
 	# Point each linker-name .so at the ACTUAL shared object (.so.N) wherever the
@@ -411,7 +400,7 @@ prepare_sysroot() {
 			if grep -qE 'GROUP|OUTPUT_FORMAT' "${script_file}" 2>/dev/null; then
 				# Collect absolute paths referenced in the script
 				local abs_paths
-				abs_paths=$(grep -oE '/(lib|usr/lib)/[^ )]+' "${script_file}" 2>/dev/null | sort -u)
+				abs_paths=$(grep -oE '/(lib|usr/lib|lib64)/[^ )]+' "${script_file}" 2>/dev/null | sort -u)
 				local abs_path
 				for abs_path in ${abs_paths}; do
 					local base_name
