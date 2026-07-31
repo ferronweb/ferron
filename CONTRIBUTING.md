@@ -21,7 +21,7 @@ Contributions are welcome across:
 ## Development setup
 
 1. Fork the repository and clone your fork.
-2. Create a branch from `develop-3.x` (this is the default development branch for Ferron 2 work).
+2. Create a branch from `develop-3.x` (this is the default development branch for Ferron 3 work).
 3. Make your changes in focused commits.
 
 ## Build and check locally
