@@ -10,7 +10,7 @@ quality:
   maxFunctionLoc: 120
   maxFileLoc: 1000
   maxNesting: 5
-  maxParams: 6
+  maxParams: 7 # Same as clippy
 lint:
   typecheck: false
   expoDoctor: false
