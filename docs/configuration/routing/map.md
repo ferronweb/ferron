@@ -17,20 +17,23 @@ This page documents the `map` directive, which creates variables whose values co
 
 #### Block sub-directives
 
-| Sub-directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `default` | `<value: string>` | The fallback value when no entry matches the source. | Empty string |
-| `exact` | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`. | None |
-| `regex` | `<pattern: string> <result: string>` | Regular expression match. Capture groups can be referenced in the result as `$1`, `$2`, etc. | None |
+| Sub-directive | Arguments                            | Description                                                                                  | Default      |
+| ------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- | ------------ |
+| `default`     | `<value: string>`                    | The fallback value when no entry matches the source.                                         | Empty string |
+| `exact`       | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`.                           | None         |
+| `regex`       | `<pattern: string> <result: string>` | Regular expression match. Capture groups can be referenced in the result as `$1`, `$2`, etc. | None         |
 
 > [!note]
 > If Ferron cannot resolve the source variable, it treats the source value as an empty string and uses the `default` value. Ferron compiles regex patterns at parse time — it rejects invalid patterns during validation. Ferron converts wildcard patterns (`*`) to regex internally.
 
+> [!tip]
+> Values can also contain variable interpolations (`{{name}}`) that are resolved at runtime.
+
 #### Block options (inside `regex { ... }`)
 
-| Option | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `case_insensitive` | `<bool>` | When `true`, the regular expression pattern is matched case-insensitively. | `false` |
+| Option             | Arguments | Description                                                                | Default |
+| ------------------ | --------- | -------------------------------------------------------------------------- | ------- |
+| `case_insensitive` | `<bool>`  | When `true`, the regular expression pattern is matched case-insensitively. | `false` |
 
 **Configuration example:**
 
@@ -150,7 +153,7 @@ Map evaluation runs after client IP resolution and before URL rewriting. This me
 
 The map stage sets the following attributes on its `ferron.stage.map` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.map.variable` | string | The variable name being mapped. |
-| `ferron.map.edited` | bool | Whether the variable value was changed by the mapping. |
+| Attribute             | Type   | Description                                            |
+| --------------------- | ------ | ------------------------------------------------------ |
+| `ferron.map.variable` | string | The variable name being mapped.                        |
+| `ferron.map.edited`   | bool   | Whether the variable value was changed by the mapping. |

@@ -40,7 +40,7 @@ pub fn evaluate_map_directives(
     config: &LayeredConfiguration,
     variables: &impl Variables,
 ) -> Vec<(String, String)> {
-    let rules = parse_map_config(config);
+    let rules = parse_map_config(config, variables);
     if rules.is_empty() {
         return Vec::new();
     }
@@ -148,12 +148,12 @@ fn resolve_captures(value: &str, captures: &fancy_regex::Captures<'_, str>) -> S
 }
 
 /// Parse all `map` directives from the layered configuration.
-fn parse_map_config(config: &LayeredConfiguration) -> Vec<MapRule> {
+fn parse_map_config(config: &LayeredConfiguration, ctx: &impl Variables) -> Vec<MapRule> {
     let mut rules = Vec::new();
     let entries = config.get_entries("map", true);
 
     for entry in entries {
-        if let Some(rule) = parse_map_entry(entry) {
+        if let Some(rule) = parse_map_entry(entry, ctx) {
             rules.push(rule);
         }
     }
@@ -162,7 +162,10 @@ fn parse_map_config(config: &LayeredConfiguration) -> Vec<MapRule> {
 }
 
 /// Parse a single `map` directive entry into a `MapRule`.
-fn parse_map_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<MapRule> {
+fn parse_map_entry(
+    entry: &ServerConfigurationDirectiveEntry,
+    ctx: &impl Variables,
+) -> Option<MapRule> {
     if entry.args.len() != 2 {
         return None;
     }
@@ -171,7 +174,7 @@ fn parse_map_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<MapRule>
     let destination = entry.args[1].as_str()?.to_string();
 
     let block = entry.children.as_ref()?;
-    let (entries, default) = parse_map_block(block);
+    let (entries, default) = parse_map_block(block, ctx);
 
     Some(MapRule {
         source,
@@ -182,14 +185,21 @@ fn parse_map_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<MapRule>
 }
 
 /// Parse the contents of a `map { ... }` block.
-fn parse_map_block(block: &ServerConfigurationBlock) -> (Vec<MapEntry>, Option<String>) {
+fn parse_map_block(
+    block: &ServerConfigurationBlock,
+    ctx: &impl Variables,
+) -> (Vec<MapEntry>, Option<String>) {
     let mut entries = Vec::new();
     let mut default = None;
 
     if let Some(default_entries) = block.directives.get("default") {
         if let Some(entry) = default_entries.first() {
-            if let Some(value) = entry.args.first().and_then(|v| v.as_str()) {
-                default = Some(value.to_string());
+            if let Some(value) = entry
+                .args
+                .first()
+                .and_then(|v| v.as_string_with_interpolations(ctx))
+            {
+                default = Some(value);
             }
         }
     }
