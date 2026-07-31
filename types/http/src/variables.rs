@@ -13,6 +13,7 @@ pub mod var {
     pub const REQUEST_SCHEME: &str = "request.scheme";
     pub const REQUEST_PATH_INFO: &str = "request.path_info";
     pub const REQUEST_HEADER_PREFIX: &str = "request.header.";
+    pub const REQUEST_URI_QUERY_PREFIX: &str = "request.uri.query.";
     pub const SERVER_IP: &str = "server.ip";
     pub const SERVER_PORT: &str = "server.port";
     pub const REMOTE_IP: &str = "remote.ip";
@@ -116,6 +117,40 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                     .map(|s| s.to_string())
             });
             Some(mtls_cn.unwrap_or_default())
+        }
+        n if n.starts_with(var::REQUEST_URI_QUERY_PREFIX) => {
+            let query_param = n
+                .trim_start_matches(var::REQUEST_URI_QUERY_PREFIX)
+                .to_string();
+            let query_string = ctx
+                .original_uri
+                .as_ref()
+                .map(|u| u.query().unwrap_or("").to_string())
+                .or_else(|| {
+                    ctx.req
+                        .as_ref()
+                        .map(|r| r.uri().query().unwrap_or("").to_string())
+                });
+            if let Some(query_string) = query_string {
+                query_string
+                    .split('&')
+                    // Use last value, not first (this is standard when
+                    // multiple values are present, but only one is supported)
+                    .rev()
+                    .find_map(|p| {
+                        // p == query_param, because W3 URI spec and RFC 3986 state that
+                        // query parameter names are case-sensitive.
+                        let Some((oquery_param, oquery_value)) = p.split_once("=") else {
+                            return (p == query_param).then_some(None).flatten();
+                        };
+                        (oquery_param == query_param)
+                            .then_some(Some(oquery_value))
+                            .flatten()
+                    })
+                    .map(ToString::to_string)
+            } else {
+                None
+            }
         }
         n if n.starts_with(var::REQUEST_HEADER_PREFIX) => {
             let header_name = n

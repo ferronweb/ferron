@@ -17,6 +17,7 @@
 #### HTTP server core
 
 - **Variable interpolation in map results** — variable interpolations (`{{name}}`) in map result values are now resolved at runtime.
+- **`request.uri.query.<param>` variables** — the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
 
 ### Changed
 
