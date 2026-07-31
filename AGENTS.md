@@ -96,7 +96,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 ## Conventions
 
 - **Branch**: all work targets `develop-3.x` (CI workflows filter on it; the 3.x docs site syncs from it).
-- **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes).
+- **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes). Commit messages should have `Assisted-by: AgentName:ModelVersion` in the footer (for example if you're Claude Opus 4.8 on Claude Code, use `Assisted-by: Claude:Opus-4.8`).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (see `CHANGELOG.md`). Use bold inline headers for each bullet.
 - **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links.
 - **Stub implementation/known issue comments**: When leaving stubs in the codebase and comments explaining the stubs, include `TODO` markers. For known-issue comments, leave `FIXME` markers.
