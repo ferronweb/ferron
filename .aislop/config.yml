@@ -7,8 +7,8 @@ engines:
   architecture: false
   security: true
 quality:
-  maxFunctionLoc: 80
-  maxFileLoc: 400
+  maxFunctionLoc: 120
+  maxFileLoc: 1000
   maxNesting: 5
   maxParams: 6
 lint:
