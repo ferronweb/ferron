@@ -16,6 +16,7 @@ pub mod var {
     pub const REQUEST_PATH_INFO: &str = "request.path_info";
     pub const REQUEST_HEADER_PREFIX: &str = "request.header.";
     pub const REQUEST_URI_QUERY_PREFIX: &str = "request.uri.query.";
+    pub const REQUEST_COOKIE_PREFIX: &str = "request.cookie.";
     pub const SERVER_IP: &str = "server.ip";
     pub const SERVER_PORT: &str = "server.port";
     pub const REMOTE_IP: &str = "remote.ip";
@@ -140,15 +141,58 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                     // multiple values are present, but only one is supported)
                     .rev()
                     .find_map(|p| {
-                        // p == query_param, because W3 URI spec and RFC 3986 state that
-                        // query parameter names are case-sensitive.
+                        // W3 URI spec and RFC 3986 state that query parameter names are
+                        // case-sensitive.
+                        //
+                        // BUT, query parameter names can be URL-encoded, so handle that too.
                         let Some((oquery_param, oquery_value)) = p.split_once("=") else {
-                            return (p == query_param).then_some(None).flatten();
+                            return (urlencoding::decode(p).ok()
+                                == Some(Cow::Borrowed(&query_param)))
+                            .then_some(None)
+                            .flatten();
                         };
-                        (oquery_param == query_param)
-                            .then_some(Some(oquery_value))
-                            .flatten()
+                        (urlencoding::decode(oquery_param).ok()
+                            == Some(Cow::Borrowed(&query_param)))
+                        .then_some(Some(oquery_value))
+                        .flatten()
                     })
+                    .map(urlencoding::decode)
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .map(Cow::into_owned)
+            } else {
+                None
+            }
+        }
+        n if n.starts_with(var::REQUEST_COOKIE_PREFIX) => {
+            let cookie_name = n.trim_start_matches(var::REQUEST_COOKIE_PREFIX).to_string();
+            let cookie_header = ctx
+                .req
+                .as_ref()
+                .and_then(|r| r.headers().get(http::header::COOKIE))
+                .and_then(|v| v.to_str().ok());
+            if let Some(cookie_header) = cookie_header {
+                cookie_header
+                    .split(';')
+                    // Use last value, not first (this is RFC 6265-standard when
+                    // multiple values are present, but only one is supported)
+                    .rev()
+                    .map(|p| p.trim())
+                    .find_map(|p| {
+                        let Some((ocookie_name, ocookie_value)) = p.split_once("=") else {
+                            return (urlencoding::decode(p).ok()
+                                == Some(Cow::Borrowed(&cookie_name)))
+                            .then_some(None)
+                            .flatten();
+                        };
+                        (urlencoding::decode(ocookie_name).ok()
+                            == Some(Cow::Borrowed(&cookie_name)))
+                        .then_some(Some(ocookie_value))
+                        .flatten()
+                    })
+                    // Server-side frameworks typically decode URL-encoded cookie values,
+                    // so do the same here.
                     .map(urlencoding::decode)
                     .transpose()
                     .ok()

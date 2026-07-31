@@ -72,6 +72,7 @@ The HTTP resolver exposes these variables for use in `match` blocks and interpol
 | `request.uri`               | Full request URI                                                                   |
 | `request.version`           | HTTP version string (e.g. `HTTP/1.1`)                                              |
 | `request.header.<name>`     | Request header value                                                               |
+| `request.cookie.<name>`     | URL-decoded HTTP cookie value, if present                                          |
 | `request.host`              | Resolved request hostname                                                          |
 | `request.scheme`            | `http` or `https`                                                                  |
 | `request.path_info`         | Extra path info after a script match (e.g. `/test` in `/index.php/test`), or empty |
