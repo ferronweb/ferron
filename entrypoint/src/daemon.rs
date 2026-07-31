@@ -30,6 +30,7 @@ pub fn daemonize() -> Result<bool> {
     use nix::unistd;
 
     // First fork
+    // SAFETY: `fork` is performed before multi-threading is used.
     match unsafe { unistd::fork()? } {
         unistd::ForkResult::Parent { child } => {
             // Parent process: wait for child and exit
@@ -49,6 +50,7 @@ pub fn daemonize() -> Result<bool> {
     log_debug!("Created new session, SID: {}", unistd::getsid(None)?);
 
     // Second fork to ensure we can never acquire a controlling terminal
+    // SAFETY: see the first `fork` safety note
     match unsafe { unistd::fork()? } {
         unistd::ForkResult::Parent { child } => {
             // First child exits
@@ -88,6 +90,8 @@ fn close_standard_fds() -> Result<()> {
         open("/dev/null", OFlag::O_RDWR, Mode::empty()).context("Failed to open /dev/null")?;
 
     // Redirect stdin, stdout, stderr to /dev/null
+    // SAFETY: these FDs are guaranteed to be valid before this point (they're stdio)
+    // By the way: std::os::fd::{STDIN, STDOUT, STDERR} are experimental...
     dup2(&devnull, &mut (unsafe { OwnedFd::from_raw_fd(0) }))
         .context("Failed to redirect stdin")?;
     dup2(&devnull, &mut (unsafe { OwnedFd::from_raw_fd(1) }))
