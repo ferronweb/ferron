@@ -38,6 +38,7 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 ### Install by distro
 
 **Arch Linux:**
+
 ```bash
 sudo pacman -S lld clang openssl python llvm qemu-user-static qemu-user-static-binfmt curl
 # h2load and wrk are in AUR if not found:
@@ -45,31 +46,33 @@ yay -S nghttp2 wrk
 ```
 
 **Debian/Ubuntu:**
+
 ```bash
 sudo apt install lld clang libclang-dev wrk nghttp2-client openssl python3 llvm curl qemu-user-static
 ```
 
 **Fedora:**
+
 ```bash
 sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm curl qemu-user-static
 ```
 
 ## Target Matrix
 
-| Rust Target | Libc | Status |
-|---|---|---|
-| `x86_64-unknown-linux-gnu` | glibc | Supported |
-| `i686-unknown-linux-gnu` | glibc | Supported |
-| `aarch64-unknown-linux-gnu` | glibc | Supported |
-| `armv7-unknown-linux-gnueabihf` | glibc | Supported |
-| `riscv64gc-unknown-linux-gnu` | glibc | Supported |
-| `s390x-unknown-linux-gnu` | glibc | Supported |
-| `powerpc64le-unknown-linux-gnu` | glibc | Supported |
-| `x86_64-unknown-linux-musl` | musl | Supported |
-| `i686-unknown-linux-musl` | musl | Supported |
-| `aarch64-unknown-linux-musl` | musl | Supported |
-| `armv7-unknown-linux-musleabihf` | musl | Supported |
-| `riscv64gc-unknown-linux-musl` | musl | Supported |
+| Rust Target                      | Libc  | Status    |
+| -------------------------------- | ----- | --------- |
+| `x86_64-unknown-linux-gnu`       | glibc | Supported |
+| `i686-unknown-linux-gnu`         | glibc | Supported |
+| `aarch64-unknown-linux-gnu`      | glibc | Supported |
+| `armv7-unknown-linux-gnueabihf`  | glibc | Supported |
+| `riscv64gc-unknown-linux-gnu`    | glibc | Supported |
+| `s390x-unknown-linux-gnu`        | glibc | Supported |
+| `powerpc64le-unknown-linux-gnu`  | glibc | Supported |
+| `x86_64-unknown-linux-musl`      | musl  | Supported |
+| `i686-unknown-linux-musl`        | musl  | Supported |
+| `aarch64-unknown-linux-musl`     | musl  | Supported |
+| `armv7-unknown-linux-musleabihf` | musl  | Supported |
+| `riscv64gc-unknown-linux-musl`   | musl  | Supported |
 
 ## Directory Structure
 
@@ -106,6 +109,7 @@ Uses `debootstrap` to create a Debian buster sysroot with glibc and libstdc++:
 ```
 
 The sysroot is created at `cross-build/sysroots/gnu-<arch>/` and contains:
+
 - GNU libc headers and libraries
 - libstdc++ headers and libraries
 
@@ -128,6 +132,7 @@ architecture), so **no host GCC is required**.
 ```
 
 The sysroot is created at `cross-build/sysroots/musl-<arch>/` and contains:
+
 - musl headers
 - libc++ static libraries
 - libc++ headers
@@ -187,26 +192,32 @@ This runs a 4-phase process:
 ### PGO workflow details
 
 #### Phase 1: Instrumented build
+
 ```bash
 RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build -r --target <target>
 ```
 
 #### Phase 2: Training benchmarks
+
 The benchmark script (`benchmarks/run.sh`) runs 4 scenarios:
 
-| Scenario | Tool | Protocol | Purpose |
-|---|---|---|---|
-| Small static files | wrk | HTTP/1.1 | Tests small response handling |
-| Large static files | wrk | HTTP/1.1 | Tests large response streaming |
-| Reverse proxy | wrk | HTTP/1.1 | Tests proxy request forwarding |
-| Reverse proxy | h2load | HTTP/2 + TLS | Tests multiplexed connections |
+| Scenario           | Tool   | Protocol     | Purpose                        |
+| ------------------ | ------ | ------------ | ------------------------------ |
+| Small static files | wrk    | HTTP/1.1     | Tests small response handling  |
+| Large static files | wrk    | HTTP/1.1     | Tests large response streaming |
+| Reverse proxy      | wrk    | HTTP/1.1     | Tests proxy request forwarding |
+| Reverse proxy      | h2load | HTTP/2 + TLS | Tests multiplexed connections  |
+
+For cross-compiled targets, the benchmark script uses `curl` instead of `wrk` and `h2load`.
 
 #### Phase 3: Profile merge
+
 ```bash
 llvm-profdata merge -output=merged.profdata /tmp/pgo-data/*.profraw
 ```
 
 #### Phase 4: Optimized build
+
 ```bash
 RUSTFLAGS="-Cprofile-use=merged.profdata" cargo build -r --target <target>
 ```
@@ -221,55 +232,12 @@ For cross-compiled targets, the benchmark script uses `qemu-user-static` to run 
 ./cross-build/build.sh <target> --pgo --bench-duration 60
 ```
 
-## CI/CD Integration
-
-### GitHub Actions cache
-
-Cache the sysroots across CI runs:
-
-```yaml
-- name: Cache sysroots
-  uses: actions/cache@v4
-  with:
-    path: cross-build/sysroots
-    key: sysroots-${{ hashFiles('cross-build/sysroots/prepare-*.sh') }}
-
-- name: Prepare sysroots (if cache miss)
-  if: steps.cache-sysroots.outputs.cache-hit != 'true'
-  run: |
-    ./cross-build/sysroots/prepare-gnu.sh --all
-    ./cross-build/sysroots/prepare-musl.sh --all
-
-- name: Build
-  run: ./cross-build/build.sh ${{ matrix.target }}
-```
-
-### Build matrix
-
-```yaml
-strategy:
-  matrix:
-    target:
-      - x86_64-unknown-linux-gnu
-      - aarch64-unknown-linux-gnu
-      - armv7-unknown-linux-gnueabihf
-      - x86_64-unknown-linux-musl
-      - aarch64-unknown-linux-musl
-```
-
-## Environment Variables
-
-| Variable | Description |
-|---|---|
-| `RUSTFLAGS` | Extra Rust compiler flags (extended by build.sh) |
-| `SYSROOT_DIR` | Override sysroot directory |
-| `FERRON_KEEP_PGO_DATA` | Set to `1` to keep PGO data after build |
-
 ## Troubleshooting
 
 ### "Sysroot not found"
 
 Prepare the sysroot first:
+
 ```bash
 ./cross-build/sysroots/prepare-gnu.sh <target>
 # or
@@ -279,6 +247,7 @@ Prepare the sysroot first:
 ### "qemu-user-static not found"
 
 Install it:
+
 ```bash
 # Arch
 sudo pacman -S qemu-user-static qemu-user-static-binfmt
@@ -286,7 +255,7 @@ sudo pacman -S qemu-user-static qemu-user-static-binfmt
 sudo apt install qemu-user-static
 ```
 
-### "clang not found" (musl targets)
+### "clang not found"
 
 ```bash
 # Arch
@@ -297,15 +266,9 @@ sudo apt install clang
 
 ### Build fails with linker errors
 
-Ensure the sysroot contains the required libraries:
+Make sure the sysroot contains the required libraries:
+
 ```bash
 ls -la cross-build/sysroots/gnu-<arch>/lib/
 ls -la cross-build/sysroots/musl-<arch>/lib/
-```
-
-### PGO benchmarks produce no .profraw files
-
-Ensure `LLVM_PROFILE_FILE` is set and the binary has write access to the output directory:
-```bash
-export LLVM_PROFILE_FILE=/tmp/pgo-data/ferron-%p-%m.profraw
 ```
