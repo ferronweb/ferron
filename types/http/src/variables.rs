@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use x509_parser::nom::AsBytes;
 
 use crate::HttpContext;
@@ -147,7 +149,11 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                             .then_some(Some(oquery_value))
                             .flatten()
                     })
-                    .map(ToString::to_string)
+                    .map(urlencoding::decode)
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .map(Cow::into_owned)
             } else {
                 None
             }

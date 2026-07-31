@@ -1305,6 +1305,7 @@ dependencies = [
  "rustc-hash",
  "rustls-pki-types",
  "typemap_rev",
+ "urlencoding",
  "vibeio",
  "x509-parser",
 ]
