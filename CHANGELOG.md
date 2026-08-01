@@ -20,7 +20,6 @@
 - **`request.uri.query.<param>` variables** — the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
 - **`request.cookie.<name>` variables** — the `request.cookie.<name>` variables are now available for string interpolations, so to not manually extract cookie values from the request.
 - **CORS origin interpolations** — CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
-- **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
 
 ### Changed
 
@@ -42,6 +41,8 @@
 - **HTTP/2 host header handling correctness** — previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
 - **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
 - **Symlink ownership check** — previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
+- **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
+- **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 
 #### Configuration validation
 

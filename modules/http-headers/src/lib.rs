@@ -17,7 +17,8 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
-    Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+    Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue, TraceAttributeValue,
 };
 use http_body_util::BodyExt;
 
@@ -62,7 +63,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             Ok(Some(cfg)) => cfg,
             Ok(None) => return Ok(true),
             Err(e) => {
-                ferron_core::log_error!("Failed to parse headers config: {e}");
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Error,
+                    message: format!("Failed to apply response headers: {e}"),
+                    summary: "Failed to apply response headers".into(),
+                    target: "ferron-http-headers".into(),
+                    attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    control_plane_metadata: None,
+                }));
                 return Ok(true);
             }
         };
@@ -109,22 +118,43 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             }
         }
 
+        let headers_ctx = HeadersContext {
+            config,
+            origin: ctx
+                .req
+                .as_ref()
+                .and_then(|r| r.headers().get("origin").and_then(|v| v.to_str().ok()))
+                .unwrap_or("")
+                .to_string(),
+            method: ctx
+                .req
+                .as_ref()
+                .map(|r| r.method().as_str().to_string())
+                .unwrap_or_default(),
+            headers: ctx
+                .req
+                .as_ref()
+                .and_then(|r| {
+                    r.headers()
+                        .get("access-control-request-headers")
+                        .and_then(|v| v.to_str().ok())
+                })
+                .map(String::from),
+        };
+        ctx.extensions.insert::<HeadersContext>(headers_ctx);
+
         Ok(true)
     }
 
     #[inline]
     async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
-        let config = match config::parse_headers_config(ctx) {
-            Ok(Some(cfg)) => cfg,
-            Ok(None) => return Ok(()),
-            Err(e) => {
-                ferron_core::log_error!("Failed to apply response headers: {e}");
-                return Ok(());
-            }
+        let Some(header_ctx) = ctx.extensions.get::<HeadersContext>() else {
+            return Ok(());
         };
 
         // Pre-resolve all header values before borrowing ctx.res mutably
-        let resolved_headers: Vec<(usize, String)> = config
+        let resolved_headers: Vec<(usize, String)> = header_ctx
+            .config
             .header_actions
             .iter()
             .enumerate()
@@ -139,28 +169,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             })
             .collect();
 
-        // Collect CORS context
-        let origin = ctx
-            .req
-            .as_ref()
-            .and_then(|r| r.headers().get("origin").and_then(|v| v.to_str().ok()))
-            .unwrap_or("")
-            .to_string();
-        let request_method = ctx
-            .req
-            .as_ref()
-            .map(|r| r.method().as_str().to_string())
-            .unwrap_or_default();
-        let request_headers = ctx
-            .req
-            .as_ref()
-            .and_then(|r| {
-                r.headers()
-                    .get("access-control-request-headers")
-                    .and_then(|v| v.to_str().ok())
-            })
-            .map(String::from);
-
         // Set fallback response (404 Not Found default error page)
         if ctx.res.is_none() {
             ctx.res = Some(HttpResponse::BuiltinError(404, None))
@@ -172,7 +180,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
 
             // Apply custom header actions using pre-resolved values
             let mut resolved_iter = resolved_headers.iter().peekable();
-            for (i, action) in config.header_actions.iter().enumerate() {
+            for (i, action) in header_ctx.config.header_actions.iter().enumerate() {
                 match action {
                     config::HeaderAction::Remove(name) => {
                         headers.remove(name);
@@ -194,20 +202,20 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                 }
             }
 
-            if let Some(cors) = config.cors.as_ref() {
+            if let Some(cors) = header_ctx.config.cors.as_ref() {
                 cors::apply_cors_headers(
                     headers,
                     cors,
-                    &origin,
-                    &request_method,
-                    request_headers.as_deref(),
+                    &header_ctx.origin,
+                    &header_ctx.method,
+                    header_ctx.headers.as_deref(),
                 );
             }
         } else if let Some(HttpResponse::BuiltinError(_, ref mut maybe_headers)) = ctx.res {
             let headers = maybe_headers.get_or_insert_with(http::HeaderMap::new);
 
             let mut resolved_iter = resolved_headers.iter().peekable();
-            for (i, action) in config.header_actions.iter().enumerate() {
+            for (i, action) in header_ctx.config.header_actions.iter().enumerate() {
                 match action {
                     config::HeaderAction::Remove(name) => {
                         headers.remove(name);
@@ -229,12 +237,19 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                 }
             }
 
-            if let Some(cors) = config.cors.as_ref() {
-                cors::apply_cors_headers(headers, cors, &origin, &request_method, None);
+            if let Some(cors) = header_ctx.config.cors.as_ref() {
+                cors::apply_cors_headers(
+                    headers,
+                    cors,
+                    &header_ctx.origin,
+                    &header_ctx.method,
+                    None,
+                );
             }
         }
 
-        let set_count = config
+        let set_count = header_ctx
+            .config
             .header_actions
             .iter()
             .filter(|a| {
@@ -244,7 +259,8 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                 )
             })
             .count();
-        let unset_count = config
+        let unset_count = header_ctx
+            .config
             .header_actions
             .iter()
             .filter(|a| matches!(a, config::HeaderAction::Remove(_)))
@@ -390,4 +406,15 @@ impl ModuleLoader for HttpHeadersModuleLoader {
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry.with_stage::<HttpContext, _>(|| Arc::new(HeadersStage::new()))
     }
+}
+
+struct HeadersContext {
+    pub config: crate::config::HeadersConfig,
+    pub origin: String,
+    pub method: String,
+    pub headers: Option<String>, // access-control-request-headers
+}
+
+impl typemap_rev::TypeMapKey for HeadersContext {
+    type Value = HeadersContext;
 }
