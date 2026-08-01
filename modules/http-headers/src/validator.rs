@@ -76,7 +76,7 @@ fn validate_cors_block(
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
     let mut sub = std::collections::HashSet::new();
-    ferron_core::validate_nested!(block, used(sub), origins, args(*) => [ServerConfigurationValue::String(_, _)]);
+    ferron_core::validate_nested!(block, used(sub), origins, args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
     ferron_core::validate_nested!(block, used(sub), methods, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, used(sub), headers, args(*) => [ServerConfigurationValue::String(_, _)]);
     ferron_core::validate_nested!(block, used(sub), credentials, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);

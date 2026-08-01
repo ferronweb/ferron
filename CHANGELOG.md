@@ -19,6 +19,7 @@
 - **Variable interpolation in map results** — variable interpolations (`{{name}}`) in map result values are now resolved at runtime.
 - **`request.uri.query.<param>` variables** — the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
 - **`request.cookie.<name>` variables** — the `request.cookie.<name>` variables are now available for string interpolations, so to not manually extract cookie values from the request.
+- **CORS origin interpolations** — CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
 
 ### Changed
 
