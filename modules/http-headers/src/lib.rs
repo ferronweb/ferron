@@ -67,7 +67,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                     level: LogLevel::Error,
                     message: format!("Failed to apply response headers: {e}"),
                     summary: "Failed to apply response headers".into(),
-                    target: "ferron-http-headers".into(),
+                    target: "ferron-http-headers",
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 }));
