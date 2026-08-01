@@ -58,6 +58,7 @@ pub struct P2cEwmaParams {
 }
 
 impl Default for P2cEwmaParams {
+    #[inline]
     fn default() -> Self {
         Self {
             alpha: 0.3,
@@ -77,6 +78,7 @@ impl Default for P2cEwmaParams {
 ///
 /// Non-finite latency values (NaN, Inf) are silently ignored to prevent
 /// EWMA corruption and biased P2C selection.
+#[inline]
 pub fn update_ewma(
     state_map: &EwmaStateMap,
     upstream: &Arc<UpstreamInner>,
@@ -111,6 +113,7 @@ pub fn update_ewma(
 /// Returns `params.default_ewma` when no data exists for the backend.
 /// Applies time-based exponential decay so that stale high-latency data
 /// fades naturally.
+#[inline]
 pub fn get_decayed_ewma(
     state_map: &EwmaStateMap,
     upstream: &UpstreamInner,
@@ -125,6 +128,7 @@ pub fn get_decayed_ewma(
 /// Compute the combined P2C score from EWMA latency and active connections.
 ///
 /// Lower score = more preferred.
+#[inline]
 pub fn compute_score(ewma: f64, active_connections: usize, params: &P2cEwmaParams) -> f64 {
     let score = ewma + (active_connections as f64) * params.connection_penalty;
 
@@ -137,6 +141,7 @@ pub fn compute_score(ewma: f64, active_connections: usize, params: &P2cEwmaParam
 }
 
 /// Returns `true` while the backend is still in the linear warm-up phase.
+#[inline]
 pub fn is_warming_up(state_map: &EwmaStateMap, upstream: &Arc<UpstreamInner>) -> bool {
     state_map
         .get(upstream)

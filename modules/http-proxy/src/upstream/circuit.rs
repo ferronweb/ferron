@@ -83,7 +83,7 @@ pub fn record_backend_response(
     trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
 ) {
-    let is_5xx_failure = circuit_breaker.record_5xx && is_circuit_breaker_failure_status(status);
+    let is_5xx_failure = circuit_breaker.record_5xx && (500..600).contains(&status);
     let is_latency_failure = circuit_breaker.latency_threshold.is_some_and(|threshold| {
         upstream_time_secs.is_some_and(|t| std::time::Duration::from_secs_f64(t) > threshold)
     });
@@ -560,10 +560,6 @@ fn record_circuit_breaker_success(
             metrics_resolved_ip,
         );
     }
-}
-
-fn is_circuit_breaker_failure_status(status: u16) -> bool {
-    (500..600).contains(&status)
 }
 
 #[cfg(test)]

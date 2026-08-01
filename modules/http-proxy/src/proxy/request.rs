@@ -16,13 +16,6 @@ use crate::types::error::ProxyError;
 /// Covers IPv6 addresses with brackets, forwarded header elements, etc.
 const HEADER_BUF_CAP: usize = 256;
 
-/// Check whether `client_ip_from_header` is configured.
-#[inline]
-fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
-    ClientIpFromHeaderConfig::resolve_from_context(ctx)
-        .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()))
-}
-
 /// Construct proxy request with header transformations.
 #[inline]
 pub(super) fn construct_proxy_request(
@@ -128,7 +121,9 @@ pub(super) fn construct_proxy_request(
     let mut local_ip_buf = ArrayString::<45>::new();
     let _ = write!(local_ip_buf, "{}", local_ip);
 
-    if client_ip_from_header_enabled(ctx) {
+    let client_ip_from_header_enabled = ClientIpFromHeaderConfig::resolve_from_context(ctx)
+        .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()));
+    if client_ip_from_header_enabled {
         append_x_forwarded_for(&mut parts.headers, &client_ip_buf);
         append_forwarded(&mut parts.headers, &client_ip_buf, proto, &local_ip_buf);
     } else {
