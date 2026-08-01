@@ -79,10 +79,9 @@ struct RequestState {
 
 enum LookupResult {
     Hit,
-    #[expect(dead_code)]
     StaleWhileRevalidate {
         entry: Box<LookupEntry>,
-        cache_key: String,
+        // There used to be a `cache_key` field, but it was removed as it was dead code.
         stats: StoreStats,
         /// Key for inflight coalescing on expired-entry misses.
         inflight_key: Option<String>,
@@ -447,7 +446,6 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                         LookupResult::StaleWhileRevalidate {
                             entry: Box::new(entry),
-                            cache_key,
                             stats,
                             inflight_key: is_leader.then_some(base_key.clone()),
                             scope: Some(scope),
