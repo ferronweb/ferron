@@ -38,6 +38,7 @@ pub(crate) fn entry_matches_purge(
     })
 }
 
+#[inline]
 pub fn strip_store_headers(headers: &mut HeaderMap) {
     headers.remove(header::AGE);
 }

@@ -206,6 +206,7 @@ pub fn parse_litespeed_purge(headers: &HeaderMap) -> Vec<PurgeOperation> {
     operations
 }
 
+#[inline]
 pub fn collect_lsc_cookies(headers: &HeaderMap) -> Vec<HeaderValue> {
     headers.get_all(&LS_COOKIE).iter().cloned().collect()
 }

@@ -133,6 +133,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     }
 }
 
+#[inline]
 pub fn parse_max_entries(configuration: &LayeredConfiguration) -> usize {
     get_nested_non_negative_usize(configuration, "max_entries", DEFAULT_MAX_CACHE_ENTRIES)
 }
@@ -142,6 +143,7 @@ pub fn parse_max_entries(configuration: &LayeredConfiguration) -> usize {
 /// This is distinct from `parse_max_entries()` which reads from any layer
 /// (including inherited global values). This function only checks the highest-
 /// priority (host-level) cache block, using `inherit = false`.
+#[inline]
 pub fn has_host_max_entries(configuration: &LayeredConfiguration) -> bool {
     for entry in configuration.get_entries("cache", false) {
         if let Some(children) = &entry.children {
