@@ -102,7 +102,14 @@ impl RateLimitEngine {
 
             let Some(bucket) = registry.get_or_create(&key) else {
                 // Registry at capacity — apply backpressure
-                ferron_core::log_warn!("Rate limit registry at capacity — applying backpressure");
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    target: "ferron-http-ratelimit",
+                    message: "Rate limit registry at capacity — applying backpressure".into(),
+                    summary: "Rate limit registry at capacity".into(),
+                    attributes: vec![],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",
                     attributes: vec![
@@ -161,11 +168,6 @@ impl RateLimitEngine {
             };
             if !allowed {
                 let retry_after = bucket.time_until_available(1).await;
-                ferron_core::log_debug!(
-                    "Rate limit bucket exhausted for key \"{}\" (type: {})",
-                    key,
-                    key_type_label(&config.key)
-                );
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Debug,
                     message: format!(

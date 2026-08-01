@@ -340,6 +340,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                             .map(|pq| pq.as_str().to_string())
                             .unwrap_or_else(|| request.uri().path().to_string());
                         if let Some(handle) = SECONDARY_RUNTIME.get() {
+                            let events = ctx.events.clone();
+                            let trace_context =
+                                ferron_http::trace_context::current_event_trace_context(ctx);
                             handle.spawn(async move {
                                 if let Err(e) = propagate_purge_webhook(
                                     &url,
@@ -349,10 +352,20 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 )
                                 .await
                                 {
-                                    ferron_core::log_warn!(
-                                        "Purge propagation to control-plane failed: {}",
-                                        e
-                                    );
+                                    events.emit(Event::Log(LogEvent {
+                                        level: LogLevel::Warn,
+                                        target: LOG_TARGET,
+                                        message: format!(
+                                            "Purge propagation to control-plane failed: {}",
+                                            e
+                                        ),
+                                        summary: "Purge propagation failed".into(),
+                                        attributes: vec![(
+                                            "error.message",
+                                            LogAttributeValue::String(e.to_string()),
+                                        )],
+                                        trace_context,
+                                    }));
                                 }
                             });
                         } else {
@@ -1037,6 +1050,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                     let secret = state.config.purge_propagation.shared_secret.clone();
                     let node_id = state.config.purge_propagation.node_id.clone();
                     if let Some(handle) = SECONDARY_RUNTIME.get() {
+                        let events = ctx.events.clone();
+                        let trace_context =
+                            ferron_http::trace_context::current_event_trace_context(ctx);
                         handle.spawn(async move {
                             for path in &paths {
                                 if let Err(e) = propagate_purge_webhook(
@@ -1047,10 +1063,20 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 )
                                 .await
                                 {
-                                    ferron_core::log_warn!(
-                                        "Purge propagation to control-plane failed: {}",
-                                        e
-                                    );
+                                    events.emit(Event::Log(LogEvent {
+                                        level: LogLevel::Warn,
+                                        target: LOG_TARGET,
+                                        message: format!(
+                                            "Purge propagation to control-plane failed: {}",
+                                            e
+                                        ),
+                                        summary: "Purge propagation failed".into(),
+                                        attributes: vec![(
+                                            "error.message",
+                                            LogAttributeValue::String(e.to_string()),
+                                        )],
+                                        trace_context: trace_context.clone(),
+                                    }));
                                 }
                             }
                         });
