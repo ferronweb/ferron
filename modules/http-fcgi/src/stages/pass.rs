@@ -178,7 +178,6 @@ impl Stage<HttpContext> for FcgiPassStage {
                         LogAttributeValue::String(scgi_to_fixed.to_string()),
                     )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    
                 }));
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.failures",
@@ -251,7 +250,6 @@ impl Stage<HttpContext> for FcgiPassStage {
                         LogAttributeValue::String(stderr_string_trimmed.to_string()),
                     )],
                     trace_context: None,
-                    
                 }));
                 events.emit(Event::Metric(MetricEvent {
                     name: "ferron.fcgi.stderr_errors",
@@ -263,7 +261,6 @@ impl Stage<HttpContext> for FcgiPassStage {
                         "Number of FastCGI requests that produced non-empty stderr output.",
                     ),
                     trace_context: None,
-                    
                 }));
             }
         });
@@ -294,7 +291,6 @@ impl Stage<HttpContext> for FcgiPassStage {
             unit: Some("s"),
             description: Some("Duration of FastCGI upstream request processing."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.fcgi.requests",
@@ -304,7 +300,6 @@ impl Stage<HttpContext> for FcgiPassStage {
             unit: Some("{request}"),
             description: Some("Number of FastCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
 
         ctx.get_span_attributes().insert(

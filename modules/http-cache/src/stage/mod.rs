@@ -322,7 +322,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                     summary: "Cache purged via PURGE method".into(),
                     attributes: vec![("cache.purged.count", LogAttributeValue::I64(purged as i64))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    
                 }));
 
                 let is_propagated = request_headers
@@ -365,7 +364,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 attributes: Vec::new(),
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
-                                
                             }));
                         }
                     }
@@ -995,7 +993,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                 summary: "LSCache stale purge marker ignored".into(),
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                
             }));
         }
         if !purge_ops.is_empty() {
@@ -1018,7 +1015,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                         LogAttributeValue::I64(stats.purged as i64),
                     )],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    
                 }));
 
                 if let Some(url) = &state.config.purge_propagation.control_plane_url {
@@ -1068,7 +1064,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 ctx,
                             ),
-                            
                         }));
                     }
                 }
@@ -1093,7 +1088,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                     .into(),
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                
             }));
         }
         let has_set_cookie = response.headers().contains_key(header::SET_COOKIE);

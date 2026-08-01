@@ -29,7 +29,6 @@ pub async fn collect_reload_metrics(
             target: "ferron-metrics-reload",
             attributes: vec![],
             trace_context: None,
-            
         }));
 
         reload_state = RELOAD_STATE.load_full();
@@ -64,7 +63,6 @@ pub async fn collect_reload_metrics(
             unit: Some("{reload}"),
             description: Some("Number of configuration reloads performed."),
             trace_context: None,
-            
         }));
     }
 }

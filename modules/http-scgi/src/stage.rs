@@ -160,7 +160,6 @@ impl Stage<HttpContext> for ScgiStage {
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
-                                
                             }));
                             ctx.events.emit(Event::Metric(MetricEvent {
                                 name: "ferron.scgi.failures",
@@ -223,7 +222,6 @@ impl Stage<HttpContext> for ScgiStage {
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
-                                
                             }));
                             ctx.events.emit(Event::Metric(MetricEvent {
                                 name: "ferron.scgi.failures",
@@ -302,7 +300,6 @@ impl Stage<HttpContext> for ScgiStage {
             unit: Some("s"),
             description: Some("Duration of SCGI upstream request processing."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.scgi.requests",
@@ -312,7 +309,6 @@ impl Stage<HttpContext> for ScgiStage {
             unit: Some("{request}"),
             description: Some("Number of SCGI requests processed."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
 
         ctx.get_span_attributes().insert(

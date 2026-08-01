@@ -316,7 +316,6 @@ pub fn emit_error(
         target: LOG_TARGET,
         attributes,
         trace_context: None,
-        
     }));
 }
 

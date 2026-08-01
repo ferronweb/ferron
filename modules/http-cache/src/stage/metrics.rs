@@ -41,7 +41,6 @@ pub(super) fn emit_request_metric(
         unit: Some("{request}"),
         description: Some("Number of cache lookups handled by the HTTP cache."),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
     ctx.events.emit(Event::Metric(MetricEvent {
         name: "ferron.cache.entries",
@@ -54,7 +53,6 @@ pub(super) fn emit_request_metric(
         unit: Some("{entry}"),
         description: Some("Number of entries currently stored in the HTTP cache."),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
 }
 
@@ -86,7 +84,6 @@ pub(super) fn emit_store_metric(
         unit: Some("{response}"),
         description: Some("Number of responses stored in the HTTP cache."),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
 }
 
@@ -102,7 +99,6 @@ pub(super) fn emit_singleflight_metrics(ctx: &HttpContext, store: &CacheStore) {
             "Number of requests intercepted by the singleflight deduplication layer.",
         ),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
     ctx.events.emit(Event::Metric(MetricEvent {
         name: "ferron.cache.singleflight_active_locks",
@@ -114,7 +110,6 @@ pub(super) fn emit_singleflight_metrics(ctx: &HttpContext, store: &CacheStore) {
             "Number of active in-flight upstream fetches coordinated by singleflight.",
         ),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
 }
 
@@ -138,7 +133,6 @@ pub(super) fn emit_eviction_metrics(ctx: &HttpContext, zone_id: &CacheZoneId, st
             unit: Some("{entry}"),
             description: Some("Number of cache entries evicted from the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Debug,
@@ -164,7 +158,6 @@ pub(super) fn emit_eviction_metrics(ctx: &HttpContext, zone_id: &CacheZoneId, st
                 ),
             ],
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
     }
     if stats.size_evictions > 0 {
@@ -185,7 +178,6 @@ pub(super) fn emit_eviction_metrics(ctx: &HttpContext, zone_id: &CacheZoneId, st
             unit: Some("{entry}"),
             description: Some("Number of cache entries evicted from the HTTP cache."),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Debug,
@@ -211,7 +203,6 @@ pub(super) fn emit_eviction_metrics(ctx: &HttpContext, zone_id: &CacheZoneId, st
                 ),
             ],
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            
         }));
     }
 }
@@ -244,7 +235,6 @@ pub(super) fn emit_purge_metric(
         unit: Some("{entry}"),
         description: Some("Number of cache entries purged via LSCache-compatible controls."),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
     ctx.events.emit(Event::Metric(MetricEvent {
         name: "ferron.cache.entries",
@@ -257,6 +247,5 @@ pub(super) fn emit_purge_metric(
         unit: Some("{entry}"),
         description: Some("Number of entries currently stored in the HTTP cache."),
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        
     }));
 }
