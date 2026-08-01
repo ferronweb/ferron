@@ -5,7 +5,6 @@ use std::ops::Deref;
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use ferron_core::config::ServerConfigurationValue;
@@ -88,21 +87,16 @@ impl FdPool {
 
     /// Evict expired handles from the pool.
     #[inline]
-    fn evict_if_full(&mut self) -> u64 {
+    fn evict_if_full(&mut self) {
         let total = self.total_handles();
         if total < FD_CACHE_MAX_ENTRIES_PREEMPTIVE {
-            return 0;
+            return;
         }
-
-        let mut evicted = 0u64;
 
         let mut expired_paths: Vec<PathBuf> = Vec::new();
         for (path, item) in &mut self.entries {
-            let before = item.handles.len();
             item.handles
                 .retain(|h| h.pooled_at.elapsed() < FD_CACHE_TTL);
-            let removed = (before - item.handles.len()) as u64;
-            evicted += removed;
             if item.handles.is_empty() {
                 expired_paths.push(path.clone());
             }
@@ -110,12 +104,6 @@ impl FdPool {
         for path in expired_paths {
             self.entries.remove(&path);
         }
-
-        if self.total_handles() < FD_CACHE_MAX_ENTRIES_PREEMPTIVE {
-            return evicted;
-        }
-
-        evicted
     }
 }
 
@@ -126,42 +114,8 @@ impl Default for FdPool {
     }
 }
 
-/// Pool-level statistics for observability.
-#[derive(Debug, Default)]
-pub struct PoolStats {
-    pub hits: AtomicU64,
-    pub misses: AtomicU64,
-    pub evictions: AtomicU64,
-    pub expirations: AtomicU64,
-    pub preemptive_evictions: AtomicU64,
-}
-
-impl PoolStats {
-    #[inline]
-    pub fn hits(&self) -> u64 {
-        self.hits.load(Ordering::Relaxed)
-    }
-    #[inline]
-    pub fn misses(&self) -> u64 {
-        self.misses.load(Ordering::Relaxed)
-    }
-    #[inline]
-    pub fn evictions(&self) -> u64 {
-        self.evictions.load(Ordering::Relaxed)
-    }
-    #[inline]
-    pub fn expirations(&self) -> u64 {
-        self.expirations.load(Ordering::Relaxed)
-    }
-    #[inline]
-    pub fn preemptive_evictions(&self) -> u64 {
-        self.preemptive_evictions.load(Ordering::Relaxed)
-    }
-}
-
 thread_local! {
     static FD_REUSE_CACHE: RefCell<FdPool> = RefCell::new(FdPool::new());
-    static FD_POOL_STATS: PoolStats = PoolStats::default();
 }
 
 /// A file handle that is reused from a per-thread pool.
@@ -215,9 +169,6 @@ impl ReusedFile {
                 {
                     result = tr;
                     break;
-                } else {
-                    // Expired handle — drop it and continue
-                    FD_POOL_STATS.with(|s| s.expirations.fetch_add(1, Ordering::Relaxed));
                 }
             }
             if let Some(item) = cache.entries.get(&path_key) {
@@ -229,7 +180,6 @@ impl ReusedFile {
         });
 
         if let Some(pooled) = pooled {
-            FD_POOL_STATS.with(|s| s.hits.fetch_add(1, Ordering::Relaxed));
             let file = pooled.file;
             let metadata = file.metadata().await;
             return Ok(Self {
@@ -240,7 +190,6 @@ impl ReusedFile {
         }
 
         // Pool miss — open fresh
-        FD_POOL_STATS.with(|s| s.misses.fetch_add(1, Ordering::Relaxed));
         let file = match vibeio::fs::File::open(path.as_ref()).await {
             Ok(file) => file,
             Err(e) => {
@@ -272,12 +221,7 @@ impl ReusedFile {
     fn return_handle_to_pool(inner: vibeio::fs::File, path_buf: PathBuf) {
         FD_REUSE_CACHE.with(move |c| {
             let mut cache = c.borrow_mut();
-            let evicted = cache.evict_if_full();
-            if evicted > 0 {
-                FD_POOL_STATS.with(|s| {
-                    s.preemptive_evictions.fetch_add(evicted, Ordering::Relaxed);
-                });
-            }
+            cache.evict_if_full();
             cache
                 .entries
                 .entry(path_buf)
@@ -380,44 +324,6 @@ impl Drop for ReusedFile {
     }
 }
 
-/// Clear the per-thread FD reuse pool.
-#[inline]
-pub fn clear_pool() {
-    let _ = FD_REUSE_CACHE.try_with(|cache| {
-        cache.borrow_mut().entries.clear();
-    });
-}
-
-/// Get the total number of pooled handles across all paths (for testing/observability).
-#[inline]
-pub fn pool_size() -> usize {
-    FD_REUSE_CACHE
-        .try_with(|cache| cache.borrow().total_handles())
-        .unwrap_or(0)
-}
-
-/// Get pool statistics snapshot (for observability).
-#[inline]
-pub fn pool_stats() -> PoolStatsSnapshot {
-    FD_POOL_STATS.with(|s| PoolStatsSnapshot {
-        hits: s.hits(),
-        misses: s.misses(),
-        evictions: s.evictions(),
-        expirations: s.expirations(),
-        preemptive_evictions: s.preemptive_evictions(),
-    })
-}
-
-/// Snapshot of pool statistics.
-#[derive(Debug, Default, Clone)]
-pub struct PoolStatsSnapshot {
-    pub hits: u64,
-    pub misses: u64,
-    pub evictions: u64,
-    pub expirations: u64,
-    pub preemptive_evictions: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -462,8 +368,8 @@ mod tests {
             });
 
         // Pool is now over capacity — eviction should remove the expired handle
-        let evicted = pool.evict_if_full();
-        assert!(evicted >= 1);
+        pool.evict_if_full();
+        assert!(pool.total_handles() <= FD_CACHE_MAX_ENTRIES_PREEMPTIVE);
 
         // The expired handle should be removed
         assert!(
