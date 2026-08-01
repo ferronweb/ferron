@@ -401,28 +401,16 @@ fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigu
         .or_else(|| entry.args.first().and_then(value_span))
 }
 
-fn first_directive_value<'a>(
+fn directive_value<'a>(
     config: &'a ServerConfigurationBlock,
     name: &str,
 ) -> Option<(
     &'a ServerConfigurationValue,
     Option<ServerConfigurationSpan>,
 )> {
-    let entry = config.directives.get(name)?.first()?;
-    let value = entry.args.first()?;
+    let entry = config.directives.get(name)?.last()?;
+    let value = entry.get_value()?;
     Some((value, entry_span(entry)))
-}
-
-fn first_directive_bool(config: &ServerConfigurationBlock, name: &str) -> Option<bool> {
-    first_directive_value(config, name).and_then(|(value, _)| match value {
-        ServerConfigurationValue::Boolean(value, _) => Some(*value),
-        ServerConfigurationValue::String(value, _) => value.parse().ok(),
-        _ => None,
-    })
-}
-
-fn is_interpolated(value: &ServerConfigurationValue) -> bool {
-    matches!(value, ServerConfigurationValue::InterpolatedString(_, _))
 }
 
 fn ocsp_disabled(config: &ServerConfigurationBlock) -> Option<Option<ServerConfigurationSpan>> {
@@ -467,7 +455,7 @@ pub fn add_tls_common_best_practice_diagnostics(
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
 ) {
     if let Some((ServerConfigurationValue::String(version, _), span)) =
-        first_directive_value(config, "max_version")
+        directive_value(config, "max_version")
     {
         if version == "TLSv1.2" {
             validator_ctx.add_best_practice_violation(
@@ -477,8 +465,8 @@ pub fn add_tls_common_best_practice_diagnostics(
         }
     }
 
-    if first_directive_bool(config, "client_auth") == Some(true) {
-        match first_directive_value(config, "client_auth_ca") {
+    if config.get_flag("client_auth") {
+        match directive_value(config, "client_auth_ca") {
             Some((ServerConfigurationValue::String(source, _), span))
                 if source == "system" || source == "webpki" =>
             {
@@ -487,7 +475,7 @@ pub fn add_tls_common_best_practice_diagnostics(
                     span,
                 );
             }
-            Some((value, _)) if is_interpolated(value) => {}
+            Some((ServerConfigurationValue::InterpolatedString(_, _), _)) => {}
             None => {
                 validator_ctx.add_best_practice_violation(
                     "`client_auth true` without `client_auth_ca` uses the default public webpki roots; prefer a private CA bundle file for mTLS",
@@ -537,7 +525,7 @@ pub fn add_tls_common_best_practice_diagnostics(
             }
 
             if let Some((ServerConfigurationValue::Number(max_keys, _), span)) =
-                first_directive_value(block, "max_keys")
+                directive_value(block, "max_keys")
             {
                 if *max_keys < 2 || *max_keys > 5 {
                     validator_ctx.add_best_practice_violation(
@@ -548,7 +536,7 @@ pub fn add_tls_common_best_practice_diagnostics(
             }
 
             if ticket_keys_auto_rotate(block) {
-                if let Some((value, span)) = first_directive_value(block, "rotation_interval") {
+                if let Some((value, span)) = directive_value(block, "rotation_interval") {
                     if value.as_duration().is_some_and(|duration| {
                         duration > std::time::Duration::from_secs(24 * 60 * 60)
                     }) {
