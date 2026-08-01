@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+#[cfg(test)]
 use std::str::FromStr;
 
 use ferronconf::{
@@ -26,8 +27,8 @@ pub fn format_config_with_analysis(
     output
 }
 
-/// Formats a `Config` AST into a formatted string (backward-compatible).
-#[allow(dead_code)]
+/// Formats a `Config` AST into a formatted string (used in tests).
+#[cfg(test)]
 pub fn format_config(config: &Config, config_fmt: &FormatConfig) -> String {
     format_config_with_analysis(config, config_fmt, None, None)
 }
@@ -586,7 +587,7 @@ impl<'a> Formatter<'a> {
 }
 
 /// Checks if two configs produce the same formatted output (idempotency test helper).
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn format_is_idempotent(input: &str, config_fmt: &FormatConfig) -> bool {
     let analysis = crate::source_analysis::analyze_input(input);
     let config1 = match Config::from_str(input) {

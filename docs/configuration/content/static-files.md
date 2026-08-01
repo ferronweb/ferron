@@ -134,7 +134,7 @@ uploads.example.com {
     disable_symlinks if_not_owner
 }
 
-# Allow symlinks (default, backward compatible)
+# Allow symlinks (default)
 legacy.example.com {
     root /srv/www/legacy
     disable_symlinks false
@@ -151,53 +151,53 @@ Ferron reuses file handles (and I/O errors) for static file responses to reduce 
 
 #### Static file serving
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.static.files_served` | Counter | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Number of static files served |
-| `ferron.static.bytes_sent` | Histogram | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB |
-| `ferron.static.responses` | Counter | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome) | Static-file responses across normal, conditional, range, and error paths |
+| Metric                       | Type      | Attributes                                                                                                               | Description                                                                       |
+| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `ferron.static.files_served` | Counter   | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Number of static files served                                                     |
+| `ferron.static.bytes_sent`   | Histogram | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB |
+| `ferron.static.responses`    | Counter   | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome)           | Static-file responses across normal, conditional, range, and error paths          |
 
 ### Access log fields
 
 The static file serving module and the file resolution stage contribute the following fields to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `ferron.static.file_path` | string | Absolute file path served. |
-| `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable). |
-| `ferron.static.dir_path` | string | Directory path when a listing is served. |
-| `ferron.file_resolve.request_path` | string | Decoded request path being resolved (error paths only). |
-| `ferron.file_resolve.root_path` | string | Configured document root (error paths only). |
-| `ferron.file_resolve.outcome` | string | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only). |
-| `ferron.file_resolve.last_candidate_path` | string | Last filesystem path attempted before failure (error paths only). |
+| Field                                     | Type   | Description                                                                    |
+| ----------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| `ferron.static.file_path`                 | string | Absolute file path served.                                                     |
+| `ferron.static.file_path_precompressed`   | string | The precompressed file path (if applicable).                                   |
+| `ferron.static.dir_path`                  | string | Directory path when a listing is served.                                       |
+| `ferron.file_resolve.request_path`        | string | Decoded request path being resolved (error paths only).                        |
+| `ferron.file_resolve.root_path`           | string | Configured document root (error paths only).                                   |
+| `ferron.file_resolve.outcome`             | string | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only). |
+| `ferron.file_resolve.last_candidate_path` | string | Last filesystem path attempted before failure (error paths only).              |
 
 ### Trace spans
 
 The file resolution span (`ferron.pipeline.file_resolve`) captures the resolution process before any file-serving stage runs:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.file_resolve.request_path` | string | The decoded request URI path. |
-| `ferron.file_resolve.root_path` | string | The configured document root. |
-| `ferron.file_resolve.outcome` | string | `resolved`, `not_found`, `forbidden`, `bad_request`, or `error`. |
-| `ferron.file_resolve.resolved_path` | string | The resolved filesystem path (success only). |
-| `ferron.file_resolve.last_candidate_path` | string | The last path attempted before failure (error only). |
+| Attribute                                 | Type   | Description                                                      |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------- |
+| `ferron.file_resolve.request_path`        | string | The decoded request URI path.                                    |
+| `ferron.file_resolve.root_path`           | string | The configured document root.                                    |
+| `ferron.file_resolve.outcome`             | string | `resolved`, `not_found`, `forbidden`, `bad_request`, or `error`. |
+| `ferron.file_resolve.resolved_path`       | string | The resolved filesystem path (success only).                     |
+| `ferron.file_resolve.last_candidate_path` | string | The last path attempted before failure (error only).             |
 
 The static file stage sets the following attributes on its `ferron.stage.static_file` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `http.response.status_code` | int | HTTP status code of the file response. |
-| `ferron.static.file_path` | string | The file path relative to the document root. |
-| `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable). |
-| `ferron.static.precompressed` | bool | Whether a precompressed variant of the file was served. |
+| Attribute                               | Type   | Description                                             |
+| --------------------------------------- | ------ | ------------------------------------------------------- |
+| `http.response.status_code`             | int    | HTTP status code of the file response.                  |
+| `ferron.static.file_path`               | string | The file path relative to the document root.            |
+| `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable).            |
+| `ferron.static.precompressed`           | bool   | Whether a precompressed variant of the file was served. |
 
 The directory listing stage sets the following attributes on its `ferron.stage.directory_listing` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `http.response.status_code` | int | HTTP status code of the response. |
-| `ferron.static.dir_path` | string | The directory path being listed. |
+| Attribute                   | Type   | Description                       |
+| --------------------------- | ------ | --------------------------------- |
+| `http.response.status_code` | int    | HTTP status code of the response. |
+| `ferron.static.dir_path`    | string | The directory path being listed.  |
 
 ## Best practices
 

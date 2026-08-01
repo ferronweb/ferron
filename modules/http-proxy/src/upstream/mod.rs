@@ -1,7 +1,7 @@
 //! Upstream resolution and load balancing logic.
 //!
-//! This module re-exports types from `crate::types` for backward compatibility,
-//! and provides upstream-specific functions (affinity, circuit breaker, resolution).
+//! This module re-exports types from `crate::types` and provides upstream-specific
+//! functions (affinity, circuit breaker, resolution).
 
 pub mod affinity;
 pub mod circuit;

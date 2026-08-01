@@ -8,7 +8,7 @@ pub trait EventSink: Send + Sync {
 
     /// Emit an event shared via `Arc`. Override this to avoid cloning the full
     /// `Event` when your sink can work with a shared reference. The default
-    /// implementation clones the event for backward compatibility.
+    /// implementation clones the event.
     #[inline]
     fn emit_arc(&self, event: Arc<Event>) {
         let event = Arc::unwrap_or_clone(event);

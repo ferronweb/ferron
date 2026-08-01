@@ -91,7 +91,7 @@ impl RetryBudgetState {
     /// Get the current retry rate (retries / total requests).
     ///
     /// Returns `0.0` when no requests have been observed.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn current_retry_rate(&self) -> f64 {
         let requests = self.total_requests.load(Ordering::Relaxed);
         let retries = self.total_retries.load(Ordering::Relaxed);
