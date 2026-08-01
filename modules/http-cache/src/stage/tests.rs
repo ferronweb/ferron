@@ -41,7 +41,6 @@ fn test_context(path: &str) -> HttpContext {
 }
 
 #[test]
-#[inline]
 fn parses_private_key_from_cookies() {
     let mut cookies = ahash::AHashMap::default();
     cookies.insert("PHPSESSID".to_string(), "1234567890abcdef".to_string());
@@ -51,7 +50,6 @@ fn parses_private_key_from_cookies() {
 }
 
 #[tokio::test]
-#[inline]
 async fn hit_response_uses_empty_body_for_head() {
     let entry = LookupEntry {
         scope: CacheScope::Public,
@@ -73,7 +71,6 @@ async fn hit_response_uses_empty_body_for_head() {
 }
 
 #[test]
-#[inline]
 fn base_key_uses_scheme_host_and_path() {
     let ctx = test_context("/test?q=1");
     let request = ctx.req.as_ref().unwrap();
@@ -82,7 +79,6 @@ fn base_key_uses_scheme_host_and_path() {
 }
 
 #[test]
-#[inline]
 fn base_key_prefers_original_uri() {
     let mut ctx = test_context("/rewritten/path");
     ctx.original_uri = Some("/canonical/path".parse().unwrap());

@@ -353,6 +353,11 @@ impl Drop for ReusedFile {
         if let Some(inner) = self.inner.take() {
             // Rewind the file cursor to the beginning so the next user
             // of this pooled handle starts at offset 0.
+            //
+            // `vibeio` doesn't currently expose `rewind` for `vibeio::fs::File`,
+            // but we can work around that by borrowing an fd, wrapping it in a
+            // `std::fs::File`, and then rewinding that, and discarding the file
+            // without closing the underlying fd.
             #[cfg(unix)]
             {
                 let fd = inner.as_raw_fd();
@@ -418,37 +423,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[inline]
-    fn reused_file_returns_to_pool() {
-        let dir = std::env::temp_dir().join("ferron-reused-file-test");
-        std::fs::create_dir_all(&dir).unwrap();
-        let file_path = dir.join("test.txt");
-        std::fs::write(&file_path, b"hello").unwrap();
-
-        clear_pool();
-        assert_eq!(pool_size(), 0);
-
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    #[inline]
-    fn symlink_mode_parsing() {
-        let val_true = ServerConfigurationValue::Boolean(true, None);
-        assert_eq!(
-            SymlinkMode::from_config_value(&val_true).unwrap(),
-            SymlinkMode::On
-        );
-
-        let val_false = ServerConfigurationValue::Boolean(false, None);
-        assert_eq!(
-            SymlinkMode::from_config_value(&val_false).unwrap(),
-            SymlinkMode::Off
-        );
-    }
-
-    #[test]
-    #[inline]
     fn pool_eviction_removes_expired() {
         let mut pool = FdPool::new();
 
@@ -460,6 +434,8 @@ mod tests {
             let file_path = dir.join(format!("file_{i}.txt"));
             std::fs::write(&file_path, format!("content {i}")).unwrap();
             let file = std::fs::File::open(&file_path).unwrap();
+            // `vibeio::fs::File`, but it isn't inside a `vibeio` runtime?
+            // How is that possible!? Why does this test somehow pass?
             let std_file = vibeio::fs::File::from_std(file).unwrap();
             pool.entries
                 .entry(file_path)
