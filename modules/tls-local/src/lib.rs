@@ -2,10 +2,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
+use ferron_core::config_validator_scoped_key;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::RegistryBuilder;
-use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
@@ -152,25 +152,6 @@ impl ModuleLoader for LocalTlsModuleLoader {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         set_event_sink(event_sink);
-        Ok(())
-    }
-}
-
-pub struct LocalTlsModule;
-
-impl Module for LocalTlsModule {
-    fn name(&self) -> &str {
-        "tls-local"
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn start(
-        &self,
-        _runtime: &mut ferron_core::runtime::Runtime,
-    ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }
