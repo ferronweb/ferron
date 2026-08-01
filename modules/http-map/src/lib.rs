@@ -82,6 +82,7 @@ impl Stage<HttpContext> for MapStage {
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![
             StageConstraint::After("client_ip_from_header".to_string()),
+            StageConstraint::Before("headers".to_string()),
             StageConstraint::Before("rewrite".to_string()),
         ]
     }
