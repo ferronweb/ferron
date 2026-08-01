@@ -46,19 +46,6 @@ pub fn apply_cors_headers(
     _request_method: &str,
     _request_headers: Option<&str>,
 ) {
-    // Access-Control-Allow-Origin
-    let allow_origin = if cors.origins.contains(&"*".to_string()) {
-        "*"
-    } else if cors.origins.iter().any(|o| o == origin) {
-        origin
-    } else {
-        return; // Origin not allowed, don't add CORS headers
-    };
-
-    if let Ok(val) = HeaderValue::from_str(allow_origin) {
-        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, val);
-    }
-
     // Vary: Origin
     if !cors.origins.is_empty() && !cors.origins.iter().any(|o| o == "*") {
         // Append "origin" to "Vary" header list, instead of replacing
@@ -84,6 +71,19 @@ pub fn apply_cors_headers(
                 }
             }
         };
+    }
+
+    // Access-Control-Allow-Origin
+    let allow_origin = if cors.origins.contains(&"*".to_string()) {
+        "*"
+    } else if cors.origins.iter().any(|o| o == origin) {
+        origin
+    } else {
+        return; // Origin not allowed, don't add CORS headers
+    };
+
+    if let Ok(val) = HeaderValue::from_str(allow_origin) {
+        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, val);
     }
 
     // Access-Control-Allow-Credentials
