@@ -44,6 +44,10 @@
 - **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
 - **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 
+#### Observability
+
+- **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
+
 #### Configuration validation
 
 - **JSON configuration parse error reporting** — previously, configuration parse errors were reported using human-readable error messages (even if the `--json` flag was used). This has been fixed to report parse errors in JSON when configured to do so.

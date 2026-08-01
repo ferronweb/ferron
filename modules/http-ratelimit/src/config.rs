@@ -148,27 +148,6 @@ pub fn parse_zone_name(block: &ServerConfigurationBlock) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Check if a global `rate_limit` block defines named zones (has `zone` directives).
-///
-/// Returns `true` if any global `rate_limit` block contains a `zone` directive.
-#[allow(dead_code)]
-pub fn has_global_zone_definitions(
-    configuration: &ferron_core::config::layer::LayeredConfiguration,
-) -> bool {
-    if let Some(global_layer) = configuration.layers.first() {
-        if let Some(entries) = global_layer.directives.get("rate_limit") {
-            for entry in entries {
-                if let Some(children) = &entry.children {
-                    if children.directives.contains_key("zone") {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
 /// Check if a global `rate_limit` block exists without zone definitions.
 ///
 /// Returns `true` if the global (first) layer has a `rate_limit` block

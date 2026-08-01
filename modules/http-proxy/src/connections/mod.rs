@@ -233,17 +233,6 @@ impl ConnectionManager {
             .store(per_thread, Ordering::Relaxed);
     }
 
-    /// Updates the local limit for a specific upstream.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn update_local_limit_for_upstream(&self, upstream: Arc<UpstreamInner>, new_limit: usize) {
-        let mut limits = self
-            .local_limits
-            .write()
-            .expect("local_limits lock poisoned");
-        limits.insert(upstream.clone(), new_limit);
-    }
-
     /// Pulls a connection from the pool, waiting if necessary for one to become available.
     #[inline]
     pub async fn pull(

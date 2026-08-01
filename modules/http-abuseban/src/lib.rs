@@ -33,11 +33,10 @@
 //! }
 //! ```
 
-pub mod config;
-pub mod loader;
-pub mod registry;
-pub mod stage;
-pub mod validator;
+mod config;
+mod loader;
+mod registry;
+mod stage;
+mod validator;
 
 pub use loader::HttpAbuseProtectionModuleLoader;
-pub use registry::AbuseRegistry;

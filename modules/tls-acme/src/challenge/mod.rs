@@ -2,7 +2,6 @@
 //!
 //! Defines the shared data locks used across challenge implementations.
 
-pub mod dns01;
 pub mod http01;
 pub mod tlsalpn01;
 

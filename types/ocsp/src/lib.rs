@@ -66,7 +66,7 @@ struct GlobalState {
     cache: OcspCache,
     host_map: OcspHostMap,
     cancel_token: CancellationToken,
-    event_sink: parking_lot::Mutex<Option<Arc<CompositeEventSink>>>,
+    event_sink: parking_lot::RwLock<Option<Arc<CompositeEventSink>>>,
 }
 
 static GLOBAL_STATE: std::sync::OnceLock<GlobalState> = std::sync::OnceLock::new();
@@ -80,7 +80,7 @@ fn get_or_init_global() -> &'static GlobalState {
             cache: Arc::new(RwLock::new(HashMap::new())),
             host_map: Arc::new(RwLock::new(HashMap::new())),
             cancel_token: CancellationToken::new(),
-            event_sink: parking_lot::Mutex::new(None),
+            event_sink: parking_lot::RwLock::new(None),
         }
     })
 }
@@ -91,7 +91,7 @@ fn get_or_init_global() -> &'static GlobalState {
 /// observability system instead of using `log_*` macros directly.
 pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
     let state = get_or_init_global();
-    *state.event_sink.lock() = Some(event_sink);
+    *state.event_sink.write() = Some(event_sink);
 }
 
 /// Take the startup pieces required to spawn the OCSP background task from
@@ -115,7 +115,7 @@ pub fn take_ocsp_startup_state() -> Result<
     let cache = state.cache.clone();
     let host_map = state.host_map.clone();
     let cancel_token = state.cancel_token.clone();
-    let event_sink = state.event_sink.lock().clone();
+    let event_sink = state.event_sink.read().clone();
     Ok((receiver, cache, host_map, cancel_token, event_sink))
 }
 
@@ -171,7 +171,6 @@ pub struct OcspStapler {
     cache: OcspCache,
     sender: mpsc::UnboundedSender<Vec<CertificateDer<'static>>>,
     host_map: OcspHostMap,
-    event_sink: Option<Arc<CompositeEventSink>>,
 }
 
 impl std::fmt::Debug for OcspStapler {
@@ -190,14 +189,7 @@ impl OcspStapler {
             cache: handle.cache.clone(),
             sender: handle.sender.clone(),
             host_map: handle.host_map.clone(),
-            event_sink: None,
         }
-    }
-
-    /// Set the event sink for per-host metrics emission.
-    pub fn with_event_sink(mut self, event_sink: Arc<CompositeEventSink>) -> Self {
-        self.event_sink = Some(event_sink);
-        self
     }
 }
 
@@ -222,7 +214,7 @@ impl ResolvesServerCert for OcspStapler {
                         original_key = Arc::new(original_key_mut);
                     }
 
-                    if let Some(ref event_sink) = self.event_sink {
+                    if let Some(event_sink) = get_or_init_global().event_sink.read().as_ref() {
                         let host = self
                             .host_map
                             .read()

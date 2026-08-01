@@ -397,13 +397,8 @@ impl AbuseRegistry {
         overall_result
     }
 
-    /// Get the current number of active bans.
-    pub fn active_ban_count(&self) -> usize {
-        self.bans.retain(|_, entry| entry.is_active());
-        self.bans.len()
-    }
-
     /// Get the total number of bans triggered since startup.
+    #[cfg(test)]
     pub fn total_bans_triggered(&self) -> u64 {
         self.bans_triggered.load(Ordering::Relaxed)
     }
@@ -414,6 +409,7 @@ impl AbuseRegistry {
     /// `max_window`. Should be called periodically (e.g., every minute) or
     /// lazily. Without an upper bound on the eviction window, default
     /// thresholds (up to 5 minutes) are used as a safe fallback.
+    #[cfg(test)]
     pub fn evict_stale_trackers(&self) {
         self.evict_stale_trackers_with_window(Duration::from_secs(3600));
     }
