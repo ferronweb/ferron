@@ -109,7 +109,6 @@ pub async fn bad_request_handler(
                 LogAttributeValue::String(local_address.ip().to_string()),
             ),
         ],
-        control_plane_metadata.clone(),
     );
     events.emit(Event::Metric(MetricEvent {
         name: "ferron.http.server.pre_handler_request_count",
@@ -134,7 +133,6 @@ pub async fn bad_request_handler(
             "Number of malformed or timed-out HTTP requests rejected before request handling.",
         ),
         trace_context: None,
-        control_plane_metadata: None,
     }));
     let mut response = if let Some(response) = execute_error_pipeline(
         error_pipeline.as_ref(),
@@ -363,7 +361,6 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            control_plane_metadata: host_control_plane_metadata.clone(),
         }));
     }
 
@@ -473,7 +470,6 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of active HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         events.emit(Event::Metric(MetricEvent {
@@ -484,7 +480,6 @@ pub async fn request_handler(
             unit: Some("s"),
             description: Some("Duration of HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         events.emit(Event::Metric(MetricEvent {
@@ -495,7 +490,6 @@ pub async fn request_handler(
             unit: Some("{request}"),
             description: Some("Number of HTTP server requests."),
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-            control_plane_metadata: resolved_control_plane_metadata.clone(),
         }));
 
         events.emit(Event::Access(Arc::new(HttpAccessLog {
@@ -622,7 +616,6 @@ async fn request_handler_inner(
                     LogAttributeValue::String(local_address.ip().to_string()),
                 ),
             ],
-            host_control_plane_metadata.clone(),
         );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
@@ -681,7 +674,6 @@ async fn request_handler_inner(
                     LogAttributeValue::String(local_address.ip().to_string()),
                 ),
             ],
-            host_control_plane_metadata.clone(),
         );
         return (
             Ok(builtin_error_response(
@@ -737,7 +729,6 @@ async fn request_handler_inner(
                         LogAttributeValue::String(local_address.ip().to_string()),
                     ),
                 ],
-                host_control_plane_metadata.clone(),
             );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -798,7 +789,6 @@ async fn request_handler_inner(
                                     LogAttributeValue::String(local_address.ip().to_string()),
                                 ),
                             ],
-                            host_control_plane_metadata.clone(),
                         );
                         if let Some(response) = execute_error_pipeline(
                             error_pipeline.as_ref(),
@@ -858,7 +848,6 @@ async fn request_handler_inner(
                             LogAttributeValue::String(local_address.ip().to_string()),
                         ),
                     ],
-                    host_control_plane_metadata.clone(),
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),

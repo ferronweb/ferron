@@ -371,7 +371,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{connection}"),
                         description: Some("Current number of idle connections in the pool."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                     pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.pool.outstanding",
@@ -383,7 +382,6 @@ impl Module for ReverseProxyModule {
                             "Current number of outstanding (in-use) connections in the pool.",
                         ),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                 }
 
@@ -413,7 +411,6 @@ impl Module for ReverseProxyModule {
                             "Current per-upstream local connection limit for this worker.",
                         ),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                 }
 
@@ -428,7 +425,6 @@ impl Module for ReverseProxyModule {
                     unit: Some("{connection}"),
                     description: Some("Current global connection limit for reverse proxy."),
                     trace_context: None,
-                    control_plane_metadata: None,
                 }));
 
                 let hits = crate::types::dns_cache::DNS_CACHE_HITS
@@ -444,7 +440,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{request}"),
                         description: Some("DNS result cache hits."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                 }
                 if misses > 0 {
@@ -456,7 +451,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{request}"),
                         description: Some("DNS result cache misses."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                 }
 
@@ -472,7 +466,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{second}"),
                         description: Some("Minimum remaining TTL across all DNS cache entries."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                     pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
@@ -485,7 +478,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{second}"),
                         description: Some("Maximum remaining TTL across all DNS cache entries."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                     pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
@@ -498,7 +490,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{second}"),
                         description: Some("Average remaining TTL across all DNS cache entries."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                     pool_sink.emit(Event::Metric(MetricEvent {
                         name: "ferron.proxy.dns.cache_entries",
@@ -508,7 +499,6 @@ impl Module for ReverseProxyModule {
                         unit: Some("{entry}"),
                         description: Some("Number of active entries in the DNS cache."),
                         trace_context: None,
-                        control_plane_metadata: None,
                     }));
                 }
             }
@@ -531,7 +521,6 @@ impl Module for ReverseProxyModule {
                 target: LOG_TARGET,
                 attributes: Vec::new(),
                 trace_context: None,
-                control_plane_metadata: None,
             },
         ));
         Ok(())

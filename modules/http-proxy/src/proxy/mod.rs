@@ -122,7 +122,7 @@ pub async fn execute_proxy(
             target: LOG_TARGET,
             attributes: Vec::new(),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            control_plane_metadata: None,
+            
         }));
         // Collect active health check unhealthy metrics
         if let Some(counter) = active_unhealthy_counter {
@@ -162,7 +162,7 @@ pub async fn execute_proxy(
                 target: LOG_TARGET,
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
+                
             }));
             // Collect active health check unhealthy metrics
             if let Some(counter) = active_unhealthy_counter {
@@ -289,7 +289,7 @@ pub async fn execute_proxy(
                                     LogAttributeValue::String(e.to_string()),
                                 )],
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                                control_plane_metadata: None,
+                                
                             }));
                             // Collect active health check unhealthy metrics
                             if let Some(counter) = active_unhealthy_counter {
@@ -342,7 +342,7 @@ pub async fn execute_proxy(
                                 LogAttributeValue::String(e.to_string())
                             )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                            control_plane_metadata: None,
+                            
                         }));
                         continue; // Loop back to select next backend
                     }
@@ -383,7 +383,7 @@ pub async fn execute_proxy(
                     target: LOG_TARGET,
                     attributes: attrs,
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
+                    
                 }));
                 // Collect active health check unhealthy metrics
                 if let Some(counter) = active_unhealthy_counter {

@@ -73,7 +73,6 @@ fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome:
         unit: Some("{response}"),
         description: Some("Number of static file responses by outcome."),
         trace_context: current_event_trace_context(&ctx.http),
-        control_plane_metadata: None,
     }));
 }
 
@@ -950,7 +949,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             unit: Some("{file}"),
             description: Some("Number of static files served."),
             trace_context: current_event_trace_context(&ctx.http),
-            control_plane_metadata: None,
         }));
 
         ctx.http.events.emit(Event::Metric(MetricEvent {
@@ -967,7 +965,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             unit: Some("By"),
             description: Some("Bytes sent for static file responses."),
             trace_context: current_event_trace_context(&ctx.http),
-            control_plane_metadata: None,
         }));
 
         Ok(false)

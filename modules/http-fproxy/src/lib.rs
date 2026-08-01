@@ -225,7 +225,6 @@ impl Stage<HttpContext> for ForwardProxyStage {
                     target: LOG_TARGET,
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 return Ok(true);
             }
@@ -267,7 +266,6 @@ impl Stage<HttpContext> for ForwardProxyStage {
                         ("error.message", LogAttributeValue::String(e.to_string())),
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.get_span_attributes().insert(
                     "error.type",

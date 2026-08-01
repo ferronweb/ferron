@@ -49,7 +49,6 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
-                    control_plane_metadata: None,
                 }));
             }
             result.ok()
@@ -72,7 +71,6 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
-                    control_plane_metadata: None,
                 }));
             }
             result.ok()
@@ -95,7 +93,6 @@ impl OtlpProviderCache {
                     target: "ferron-observability-otlp",
                     attributes: vec![("error.message", LogAttributeValue::String(err.to_string()))],
                     trace_context: None,
-                    control_plane_metadata: None,
                 }));
             }
             result.ok()

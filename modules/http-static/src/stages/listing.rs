@@ -194,7 +194,6 @@ fn emit_listing_response_metric(ctx: &HttpFileContext, status_code: u16, outcome
         unit: Some("{response}"),
         description: Some("Number of static file responses by outcome."),
         trace_context: current_event_trace_context(&ctx.http),
-        control_plane_metadata: None,
     }));
 }
 

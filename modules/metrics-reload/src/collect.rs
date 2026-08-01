@@ -29,7 +29,7 @@ pub async fn collect_reload_metrics(
             target: "ferron-metrics-reload",
             attributes: vec![],
             trace_context: None,
-            control_plane_metadata: None,
+            
         }));
 
         reload_state = RELOAD_STATE.load_full();
@@ -45,7 +45,7 @@ pub async fn collect_reload_metrics(
                     ("error.message", LogAttributeValue::String(error.to_string()))
                 ],
                 trace_context: None,
-                control_plane_metadata: None,
+                
             }));
         }
 
@@ -64,7 +64,7 @@ pub async fn collect_reload_metrics(
             unit: Some("{reload}"),
             description: Some("Number of configuration reloads performed."),
             trace_context: None,
-            control_plane_metadata: None,
+            
         }));
     }
 }

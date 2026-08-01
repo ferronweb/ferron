@@ -310,14 +310,8 @@ impl Module for LogFileObservabilityModule {
                                             .as_string_with_interpolations(&HashMap::new()));
 
                                     if let Some(log_path) = log_path {
-                                        if let Some(message) =
+                                        if let Some(mut message) =
                                           format_log_event(le, &msg.log_config, &registry) {
-                                        // Prefer event-level metadata over provider-level metadata
-                                        let effective_metadata = le.control_plane_metadata.as_ref()
-                                            .or(msg.control_plane_metadata.as_ref());
-                                        let cp_prefix =
-                                            format_metadata_prefix(effective_metadata);
-                                        let mut message = format!("{}{}", cp_prefix, message);
                                         message = message.to_string().replace("\n", "\n  ");
                                         message.push('\n');
 

@@ -245,7 +245,6 @@ impl Stage<HttpContext> for RewriteStage {
                         "Rewrite rules that produced an invalid path (400 response).",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.get_span_attributes()
                     .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
@@ -301,7 +300,6 @@ impl Stage<HttpContext> for RewriteStage {
                         ("ferron.rewrite.to", LogAttributeValue::String(rewritten)),
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 },
             ));
         }
@@ -314,7 +312,6 @@ impl Stage<HttpContext> for RewriteStage {
             unit: Some("{request}"),
             description: Some("URLs successfully rewritten."),
             trace_context: current_event_trace_context(ctx),
-            control_plane_metadata: None,
         }));
 
         ctx.get_span_attributes()

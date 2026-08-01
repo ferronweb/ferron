@@ -175,7 +175,6 @@ impl Module for OtlpObservabilityModule {
                                 log_event,
                                 &entry.baggage_promotions,
                                 config.log_style,
-                                &entry.control_plane_metadata,
                             );
                         }
                     }
@@ -187,7 +186,6 @@ impl Module for OtlpObservabilityModule {
                                 &mut entry.metrics_instruments,
                                 &entry.baggage_promotions,
                                 &mut entry.baggage_tracker,
-                                &entry.control_plane_metadata,
                             );
                         }
                     }

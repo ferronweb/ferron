@@ -1,9 +1,9 @@
 ---
 title: "Configuration: control plane"
-description: "Embed contextual metadata and span links from the control plane into all observability signals."
+description: "Embed contextual metadata and span links from the control plane into access logs and traces."
 ---
 
-This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into all observability signals (traces, logs, metrics, access logs). This bridges the gap between a control plane (for example, a Kubernetes ingress controller) that writes the configuration and the data plane that serves requests.
+This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into access logs and traces. This bridges the gap between a control plane (for example, a Kubernetes ingress controller) that writes the configuration and the data plane that serves requests.
 
 > [!info]
 >
@@ -14,10 +14,10 @@ This page documents the `control_plane` directive. It embeds contextual metadata
 
 The `control_plane` block accepts two sub-blocks:
 
-| Sub-block | Arguments | Description |
-| --- | --- | --- |
-| `metadata` | `<key> <value>` | Arbitrary key-value pairs injected as `ferron.control_plane.*` attributes on all observability signals. |
-| `span_links` | — | Static OpenTelemetry span links attached to every `ferron.request` span, creating causal connections to control plane traces. |
+| Sub-block    | Arguments       | Description                                                                                                                   |
+| ------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `metadata`   | `<key> <value>` | Arbitrary key-value pairs injected as `ferron.control_plane.*` attributes on all observability signals.                       |
+| `span_links` | —               | Static OpenTelemetry span links attached to every `ferron.request` span, creating causal connections to control plane traces. |
 
 ### Metadata injection
 
@@ -34,12 +34,12 @@ Metadata values are automatically included as:
 
 Each `span_links` block defines one link with:
 
-| Directive | Type | Required | Description |
-| --- | --- | --- | --- |
-| `trace_id` | string | yes | 32 hex characters (the trace ID of the linked span) |
-| `span_id` | string | yes | 16 hex characters (the span ID of the linked span) |
-| `sampled` | boolean | no | Whether the linked span was sampled (default: `false`) |
-| `attributes` | block | no | Key-value pairs describing the relationship (e.g. `relationship triggers`) |
+| Directive    | Type    | Required | Description                                                                |
+| ------------ | ------- | -------- | -------------------------------------------------------------------------- |
+| `trace_id`   | string  | yes      | 32 hex characters (the trace ID of the linked span)                        |
+| `span_id`    | string  | yes      | 16 hex characters (the span ID of the linked span)                         |
+| `sampled`    | boolean | no       | Whether the linked span was sampled (default: `false`)                     |
+| `attributes` | block   | no       | Key-value pairs describing the relationship (e.g. `relationship triggers`) |
 
 ## Precedence
 
@@ -161,11 +161,11 @@ This enables operators to:
 
 When metadata `{ org_id acme team platform }` is configured:
 
-| Signal | Appearance |
-|--------|------------|
-| OTLP trace attribute | `ferron.control_plane.org_id: "acme"` |
-| Console log | `[org_id=acme] [team=platform] request ...` |
-| Prometheus metric label | `ferron_control_plane_org_id{...}` |
+| Signal                  | Appearance                                  |
+| ----------------------- | ------------------------------------------- |
+| OTLP trace attribute    | `ferron.control_plane.org_id: "acme"`       |
+| Console log             | `[org_id=acme] [team=platform] request ...` |
+| Prometheus metric label | `ferron_control_plane_org_id{...}`          |
 
 ## See also
 

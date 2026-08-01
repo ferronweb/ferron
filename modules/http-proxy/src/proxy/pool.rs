@@ -344,7 +344,7 @@ pub async fn establish_and_send(
                                 ],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
-                                control_plane_metadata: None,
+
                             },
                         ));
                             return Err(ProxyError::TlsHandshakeFailed(format!(
@@ -403,7 +403,6 @@ pub async fn establish_and_send(
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 ctx,
                             ),
-                            control_plane_metadata: None,
                         },
                     ));
                     e
@@ -485,7 +484,6 @@ pub async fn establish_and_send(
                                 )],
                                 trace_context:
                                     ferron_http::trace_context::current_event_trace_context(ctx),
-                                control_plane_metadata: None,
                             },
                         ));
                         return Err(ProxyError::TlsHandshakeFailed(format!(
@@ -714,7 +712,6 @@ pub async fn handle_upgrade(
                                         target: "ferron-http-proxy",
                                         attributes: upstream_attrs,
                                         trace_context,
-                                        control_plane_metadata: None,
                                     },
                                 ));
                             }
@@ -731,7 +728,6 @@ pub async fn handle_upgrade(
                                     target: "ferron-http-proxy",
                                     attributes: upstream_attrs,
                                     trace_context,
-                                    control_plane_metadata: None,
                                 },
                             ));
                         }
@@ -752,7 +748,6 @@ pub async fn handle_upgrade(
                         target: "ferron-http-proxy",
                         attributes: upstream_attrs,
                         trace_context,
-                        control_plane_metadata: None,
                     },
                 ));
             }

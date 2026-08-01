@@ -222,7 +222,6 @@ pub fn try_acquire_circuit_breaker_slot(
                         ),
                     ],
                     trace_context: event_trace_context.clone(),
-                    control_plane_metadata: None,
                 },
             ));
             emit_circuit_metric(
@@ -292,7 +291,6 @@ fn emit_circuit_metric(
         unit: Some("{circuit}"),
         description: Some("Circuit breaker state and transitions for upstream backends."),
         trace_context,
-        control_plane_metadata: None,
     }));
 }
 
@@ -375,7 +373,6 @@ fn record_circuit_breaker_failure(
                         ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
                     )],
                     trace_context: event_trace_context.clone(),
-                    control_plane_metadata: None,
                 },
             ));
             emit_circuit_metric(
@@ -439,7 +436,6 @@ fn record_circuit_breaker_failure(
                         ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
                     )],
                     trace_context: event_trace_context.clone(),
-                    control_plane_metadata: None,
                 },
             ));
             emit_circuit_metric(
@@ -543,7 +539,6 @@ fn record_circuit_breaker_success(
                     ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
                 )],
                 trace_context: event_trace_context.clone(),
-                control_plane_metadata: None,
             },
         ));
         emit_circuit_metric(

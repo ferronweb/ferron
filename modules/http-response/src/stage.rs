@@ -69,7 +69,6 @@ impl HttpResponseStage {
                 unit: Some("{request}"),
                 description: Some("Connections aborted via the abort directive."),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
             ctx.get_span_attributes().insert(
                 "ferron.response.action",
@@ -98,7 +97,6 @@ impl HttpResponseStage {
                     "Connections blocked via block/allow directives (raw IPs not included).",
                 ),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
             ctx.get_span_attributes().insert(
                 "ferron.response.action",
@@ -156,7 +154,6 @@ impl HttpResponseStage {
                 unit: Some("{request}"),
                 description: Some("Custom status codes returned via status directives."),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
 
             ctx.get_span_attributes().insert(
@@ -402,7 +399,6 @@ impl Stage<HttpContext> for EarlyHintsStage {
                     summary: "Failed to send 103 Early Hints".into(),
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
             }
         }

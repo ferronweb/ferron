@@ -70,7 +70,6 @@ pub(crate) async fn admin_metrics_middleware(
             unit: Some("s"),
             description: Some("Duration of admin API requests"),
             trace_context: None,
-            control_plane_metadata: None,
         }));
 
         state.events.emit(Event::Metric(MetricEvent {
@@ -81,7 +80,6 @@ pub(crate) async fn admin_metrics_middleware(
             unit: None,
             description: Some("Total number of admin API requests"),
             trace_context: None,
-            control_plane_metadata: None,
         }));
     }
 
@@ -111,7 +109,6 @@ fn emit_log(events: &CompositeEventSink, level: LogLevel, message: String, summa
         target: "ferron-admin-api",
         attributes: vec![],
         trace_context: None,
-        control_plane_metadata: None,
     }));
 }
 
@@ -184,7 +181,6 @@ pub async fn reload_handler(
             unit: None,
             description: Some("Total admin config reload attempts"),
             trace_context: None,
-            control_plane_metadata: None,
         }));
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -205,7 +201,6 @@ pub async fn reload_handler(
             unit: None,
             description: Some("Total admin config reload attempts"),
             trace_context: None,
-            control_plane_metadata: None,
         }));
         (
             StatusCode::OK,

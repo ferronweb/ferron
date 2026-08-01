@@ -111,7 +111,6 @@ pub(crate) fn emit_proxy_failure_metric(
             "Number of reverse proxy requests that failed before a backend response was returned.",
         ),
         trace_context,
-        control_plane_metadata: None,
     }));
 }
 
@@ -246,6 +245,5 @@ pub(crate) fn emit_backend_excluded(
             "Backend excluded from selection due to health, circuit breaker, or retry state.",
         ),
         trace_context,
-        control_plane_metadata: None,
     }));
 }

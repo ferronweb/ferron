@@ -237,7 +237,6 @@ impl ResolvesServerCert for OcspStapler {
                             unit: Some("{hit}"),
                             description: Some("OCSP responses served to clients"),
                             trace_context: None,
-                            control_plane_metadata: None,
                         }));
                     }
                 }

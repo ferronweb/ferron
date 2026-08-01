@@ -685,7 +685,6 @@ fn emit_error_log(ctx: &HttpContext, err: &ForwardProxyError) {
         target: LOG_TARGET,
         attributes,
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        control_plane_metadata: None,
     }));
 }
 
@@ -739,7 +738,6 @@ fn emit_error_log_to_events(
         target: LOG_TARGET,
         attributes,
         trace_context,
-        control_plane_metadata: None,
     }));
 }
 
@@ -758,7 +756,6 @@ fn emit_log_with_attrs(
         target: LOG_TARGET,
         attributes,
         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        control_plane_metadata: None,
     }));
 }
 
@@ -778,7 +775,6 @@ fn emit_log_to_events(
         target: LOG_TARGET,
         attributes,
         trace_context,
-        control_plane_metadata: None,
     }));
 }
 
@@ -833,6 +829,5 @@ fn emit_forward_proxy_metric_to_events(
         unit: Some("{request}"),
         description: Some("Number of forward proxy requests by mode and outcome."),
         trace_context,
-        control_plane_metadata: None,
     }));
 }

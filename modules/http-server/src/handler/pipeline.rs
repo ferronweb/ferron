@@ -114,7 +114,6 @@ pub async fn execute_pipeline_stages(
                         LogAttributeValue::String(error.to_string()),
                     ),
                 ],
-                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
@@ -128,7 +127,6 @@ pub async fn execute_pipeline_stages(
                     "error.type",
                     LogAttributeValue::String("pipeline_timeout".into()),
                 )],
-                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(408, None));
             None
@@ -171,7 +169,6 @@ pub async fn execute_pipeline_stages(
                                 LogAttributeValue::String(error.to_string()),
                             ),
                         ],
-                        control_plane_metadata.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -190,7 +187,6 @@ pub async fn execute_pipeline_stages(
                                 LogAttributeValue::String(error.to_string()),
                             ),
                         ],
-                        control_plane_metadata.clone(),
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
@@ -209,7 +205,6 @@ pub async fn execute_pipeline_stages(
                     "error.type",
                     LogAttributeValue::String("pipeline_inverse_error".into()),
                 )],
-                control_plane_metadata.clone(),
             );
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }

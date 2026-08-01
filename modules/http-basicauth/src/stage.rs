@@ -218,7 +218,6 @@ impl Stage<HttpContext> for BasicAuthStage {
                 target: "ferron-http-basicauth",
                 attributes: vec![("client.address", LogAttributeValue::String(ip.to_string()))],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
             ctx.res = Some(Self::make_lockout_response(ctx, &engine));
             ctx.get_span_attributes().insert(
@@ -262,7 +261,6 @@ impl Stage<HttpContext> for BasicAuthStage {
                     target: "ferron-http-basicauth",
                     attributes: vec![("user.name", LogAttributeValue::String(username.clone()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
                 ctx.get_span_attributes().insert(
@@ -288,7 +286,6 @@ impl Stage<HttpContext> for BasicAuthStage {
                 target: "ferron-http-basicauth",
                 attributes: vec![("user.name", LogAttributeValue::String(username.clone()))],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
             ctx.auth_user = Some(username.clone());
             ctx.get_span_attributes().insert(
@@ -333,7 +330,6 @@ impl Stage<HttpContext> for BasicAuthStage {
                     ("ferron.basicauth.locked", LogAttributeValue::Bool(locked)),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
             ctx.res = Some(Self::make_auth_challenge_response(ctx, &config.realm));
             ctx.get_span_attributes().insert(

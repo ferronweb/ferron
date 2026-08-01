@@ -199,9 +199,8 @@ pub(super) fn emit_error(
     events: &CompositeEventSink,
     message: impl Into<String>,
     attributes: Vec<(&'static str, LogAttributeValue)>,
-    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
-    emit_error_with_trace(events, message, None, attributes, control_plane_metadata);
+    emit_error_with_trace(events, message, None, attributes);
 }
 
 #[inline]
@@ -210,7 +209,6 @@ pub(super) fn emit_error_with_trace(
     message: impl Into<String>,
     trace_context: Option<EventTraceContext>,
     attributes: Vec<(&'static str, LogAttributeValue)>,
-    control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
@@ -219,7 +217,6 @@ pub(super) fn emit_error_with_trace(
         target: LOG_TARGET,
         attributes,
         trace_context,
-        control_plane_metadata,
     }));
 }
 
@@ -274,7 +271,6 @@ pub(super) async fn execute_error_pipeline(
                 "error.type",
                 LogAttributeValue::String("error_pipeline_error".into()),
             )],
-            control_plane_metadata.clone(),
         );
     }
 

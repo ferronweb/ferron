@@ -72,7 +72,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             ferron_observability::LogAttributeValue::String(e.to_string()),
                         )],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                        control_plane_metadata: None,
                     },
                 ));
                 return Ok(true);
@@ -198,7 +197,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             ),
                         ],
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                        control_plane_metadata: None,
                     },
                 ));
                 let status_code = e.http_status_hint().map_or(502, |sh| sh.as_u16());
@@ -309,7 +307,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{backend}"),
                     description: Some("Number of times a backend server was selected."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -342,7 +339,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{backend}"),
                     description: Some("Number of health check failures for a backend server."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -366,7 +362,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{backend}"),
                     description: Some("Number of health check failures for a backend server."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -401,7 +396,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         unit: Some("{circuit}"),
                         description: Some("Current circuit breaker state per backend (0=closed, 1=open, 2=half_open)."),
                         trace_context: current_event_trace_context(ctx),
-                        control_plane_metadata: None,
+
                     }));
             }
             if let Some(flapping) = self.state.flapping_state.get(&backend.proxy_to) {
@@ -417,7 +412,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             "Whether an upstream backend is flapping (1 = flapping, 0 = stable).",
                         ),
                         trace_context: current_event_trace_context(ctx),
-                        control_plane_metadata: None,
                     }));
             }
         }
@@ -444,7 +438,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 unit: Some("{request}"),
                 description: Some("Number of reverse proxy requests."),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
 
         let selected_backends_len = metrics.selected_backends.len();
@@ -460,7 +453,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "Number of backends selected for a request (including retries).",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -474,7 +466,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{handshake}"),
                     description: Some("TLS handshake failures with upstream backends."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -490,7 +481,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "Times the connection pool was exhausted and a request had to wait.",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -506,7 +496,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("s"),
                     description: Some("Duration spent waiting for a pooled connection."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -522,7 +511,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("s"),
                     description: Some("Duration of upstream request-response."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -538,7 +526,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("s"),
                     description: Some("TLS handshake duration for upstream connection."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -592,7 +579,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     value: MetricValue::U64(metrics.retry_count),
                     unit: Some("{attempt}"),
                     description: Some("Number of retry attempts during backend selection."),
-                    control_plane_metadata: None,
+
                     trace_context: current_event_trace_context(ctx),
                 }));
             retry_attrs.push(("ferron.proxy.retry.final", MetricAttributeValue::Bool(true)));
@@ -607,7 +594,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     "Indicates the request succeeded after a retry (1) or required no retries (0).",
                 ),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
         }
 
@@ -623,7 +609,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     "Number of requests where retry was refused due to retry budget exhaustion.",
                 ),
                 trace_context: current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
         }
         if let Some(tokens) = metrics.retry_budget_tokens {
@@ -636,7 +621,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{token}"),
                     description: Some("Current available retry budget tokens."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -650,7 +634,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{request}"),
                     description: Some("A pooled connection was available immediately."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
         if metrics.pool_miss {
@@ -665,7 +648,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "No pooled connection was available; a new connection was established.",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -681,7 +663,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "Upstream responses that ended before the declared Content-Length.",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -699,7 +680,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "Duration of TCP/TLS connection establishment to the upstream.",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
         if metrics.ttfb_secs > 0.0 {
@@ -716,7 +696,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         "Time from request send to first byte of response headers received.",
                     ),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
         }
 
@@ -736,7 +715,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{connection}"),
                     description: Some("Active tracked connections for the selected backend."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
 
             // Emit P2C+EWMA adaptive load balancing diagnostics for the selected backend
@@ -757,7 +735,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             "Current EWMA response latency for the selected backend.",
                         ),
                         trace_context: current_event_trace_context(ctx),
-                        control_plane_metadata: None,
                     }));
 
                 // Backend warm-up state gauge
@@ -771,7 +748,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     unit: Some("{state}"),
                     description: Some("Whether the selected backend is still in EWMA warm-up phase (1 = warming up, 0 = settled)."),
                     trace_context: current_event_trace_context(ctx),
-                    control_plane_metadata: None,
+
                 }));
 
                 if ewma_latency > 0.0 {
@@ -790,7 +767,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             value: MetricValue::U64(1),
                             unit: Some("{selection}"),
                             description: Some("P2C+EWMA backend selection with combined score."),
-                            control_plane_metadata: None,
+
                             trace_context: current_event_trace_context(ctx),
                         }));
                 }
@@ -808,7 +785,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                             "Combined load-balancer selection score for the selected backend. Lower is more preferred.",
                         ),
                         trace_context: current_event_trace_context(ctx),
-                        control_plane_metadata: None,
+
                     }));
             }
         }

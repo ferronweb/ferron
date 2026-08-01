@@ -155,12 +155,6 @@ impl Module for ConsoleObservabilityModule {
                                 }
                             }
                             ferron_observability::Event::Log(le) => {
-                                // Prefer event-level metadata over provider-level metadata
-                                let effective_metadata = le
-                                    .control_plane_metadata
-                                    .as_ref()
-                                    .or(msg.control_plane_metadata.as_ref());
-                                let cp_prefix = format_metadata_prefix(effective_metadata);
                                 let trace_id_part = le
                                     .trace_context
                                     .as_ref()
@@ -169,16 +163,16 @@ impl Module for ConsoleObservabilityModule {
                                     .unwrap_or_default();
                                 match le.level {
                                     ferron_observability::LogLevel::Error => {
-                                        log_error!("{}{}{}", cp_prefix, trace_id_part, le.message)
+                                        log_error!("{}{}", trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Warn => {
-                                        log_warn!("{}{}{}", cp_prefix, trace_id_part, le.message)
+                                        log_warn!("{}{}", trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Info => {
-                                        log_info!("{}{}{}", cp_prefix, trace_id_part, le.message)
+                                        log_info!("{}{}", trace_id_part, le.message)
                                     }
                                     ferron_observability::LogLevel::Debug => {
-                                        log_debug!("{}{}{}", cp_prefix, trace_id_part, le.message)
+                                        log_debug!("{}{}", trace_id_part, le.message)
                                     }
                                 }
                             }

@@ -77,7 +77,6 @@ impl AbuseProtectionStage {
                         ),
                     ],
                     trace_context: ferron_http::trace_context::current_event_trace_context(context),
-                    control_plane_metadata: None,
                 },
             ));
 
@@ -93,7 +92,6 @@ impl AbuseProtectionStage {
                     unit: Some("{request}"),
                     description: Some("Requests rejected due to IP ban."),
                     trace_context: ferron_http::trace_context::current_event_trace_context(context),
-                    control_plane_metadata: None,
                 },
             ));
 

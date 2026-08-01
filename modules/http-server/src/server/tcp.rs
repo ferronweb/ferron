@@ -55,7 +55,6 @@ fn emit_connection_error_metric(
         unit: Some("{error}"),
         description: Some("Number of connection lifecycle errors by transport and stage."),
         trace_context: None,
-        control_plane_metadata: None,
     }));
 }
 

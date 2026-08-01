@@ -35,8 +35,6 @@ pub struct LogEvent {
     /// attributes in OTLP `log_style modern`. Ignored by other sinks.
     pub attributes: Vec<(&'static str, LogAttributeValue)>,
     pub trace_context: Option<EventTraceContext>,
-    /// Control plane metadata to include as `ferron.control_plane.*` attributes.
-    pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// Represents an attribute value for a log record.
@@ -84,8 +82,6 @@ pub struct MetricEvent {
     pub description: Option<&'static str>,
     /// Optional trace context for the metric, useful for correlating with trace events.
     pub trace_context: Option<EventTraceContext>,
-    /// Control plane metadata to include as `ferron.control_plane.*` attributes.
-    pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
 /// Represents a type of metric.
@@ -259,7 +255,6 @@ mod tests {
                 LogAttributeValue::String("127.0.0.1".to_string()),
             )],
             trace_context: None,
-            control_plane_metadata: None,
         };
         assert_eq!(event.message, "full text message");
         assert_eq!(event.summary, "short");

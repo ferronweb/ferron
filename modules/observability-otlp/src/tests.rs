@@ -232,7 +232,6 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             unit: None,
             description: None,
             trace_context: None,
-            control_plane_metadata: None,
         };
         emit_metric(
             &provider,
@@ -240,7 +239,6 @@ async fn emit_metric_with_high_cardinality_label_is_sanitized() {
             &mut instruments,
             &[],
             &mut DistinctValueTracker::new(),
-            &None,
         );
 
         // Verify the sanitized value is bounded
@@ -271,7 +269,6 @@ async fn emit_metric_with_long_label_value_is_hashed() {
         unit: None,
         description: None,
         trace_context: None,
-        control_plane_metadata: None,
     };
 
     // Should not panic or OOM
@@ -281,7 +278,6 @@ async fn emit_metric_with_long_label_value_is_hashed() {
         &mut instruments,
         &[],
         &mut DistinctValueTracker::new(),
-        &None,
     );
 
     // The internal sanitization should have hashed the value
@@ -384,7 +380,6 @@ fn emit_log_promotes_baggage_to_log_attributes() {
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
         }),
-        control_plane_metadata: None,
     };
 
     // Should not panic
@@ -393,7 +388,6 @@ fn emit_log_promotes_baggage_to_log_attributes() {
         &event,
         &promotions,
         crate::config::LogStyle::Legacy,
-        &None,
     );
 }
 
@@ -425,7 +419,6 @@ async fn emit_metric_promotes_baggage_to_metric_attributes() {
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
         }),
-        control_plane_metadata: None,
     };
 
     // Should not panic and should include baggage attribute
@@ -435,7 +428,6 @@ async fn emit_metric_promotes_baggage_to_metric_attributes() {
         &mut instruments,
         &promotions,
         &mut tracker,
-        &None,
     );
 }
 
@@ -469,7 +461,6 @@ async fn emit_metric_baggage_cardinality_cap() {
                 baggage: Some(format!("user.id=value{i}")),
                 sampled: Some(true),
             }),
-            control_plane_metadata: None,
         };
         emit_metric(
             &provider,
@@ -477,7 +468,6 @@ async fn emit_metric_baggage_cardinality_cap() {
             &mut instruments,
             &promotions,
             &mut tracker,
-            &None,
         );
     }
 
@@ -495,7 +485,6 @@ async fn emit_metric_baggage_cardinality_cap() {
             baggage: Some("user.id=value2".to_string()),
             sampled: Some(true),
         }),
-        control_plane_metadata: None,
     };
     emit_metric(
         &provider,
@@ -503,7 +492,6 @@ async fn emit_metric_baggage_cardinality_cap() {
         &mut instruments,
         &promotions,
         &mut tracker,
-        &None,
     );
 }
 
@@ -526,11 +514,10 @@ fn emit_log_modern_uses_summary_as_body() {
             ("http.response.status_code", LogAttributeValue::I64(502)),
         ],
         trace_context: None,
-        control_plane_metadata: None,
     };
 
     // Should not panic.
-    emit_log(&provider, &event, &[], LogStyle::Modern, &None);
+    emit_log(&provider, &event, &[], LogStyle::Modern);
 }
 
 #[test]
@@ -555,11 +542,10 @@ fn emit_log_modern_preserves_attribute_types() {
             ("attr.f64", LogAttributeValue::F64(1.5)),
         ],
         trace_context: None,
-        control_plane_metadata: None,
     };
 
     // Smoke test: must not panic and must accept all attribute variants.
-    emit_log(&provider, &event, &[], LogStyle::Modern, &None);
+    emit_log(&provider, &event, &[], LogStyle::Modern);
 }
 
 #[test]
@@ -693,7 +679,6 @@ async fn emit_metric_histogram_uses_exponential_aggregation_with_view() {
         unit: Some("s"),
         description: Some("Test exponential histogram."),
         trace_context: None,
-        control_plane_metadata: None,
     };
 
     emit_metric(
@@ -702,7 +687,6 @@ async fn emit_metric_histogram_uses_exponential_aggregation_with_view() {
         &mut instruments,
         &[],
         &mut DistinctValueTracker::new(),
-        &None,
     );
 
     // Verify the instrument was created as a Histogram type

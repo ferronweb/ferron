@@ -41,7 +41,6 @@ pub fn emit_log(
         target,
         attributes,
         trace_context: None,
-        control_plane_metadata: None,
     }));
     *error_message.write() = Some(message.to_string());
 }
@@ -62,7 +61,6 @@ fn emit_log_simple(
         target,
         attributes,
         trace_context: None,
-        control_plane_metadata: None,
     }));
 }
 
@@ -85,7 +83,6 @@ fn emit_metric(
         unit,
         description,
         trace_context: None,
-        control_plane_metadata: None,
     }));
 }
 

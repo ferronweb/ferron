@@ -191,7 +191,6 @@ impl ForwardedAuthenticationStage {
                     target: "ferron-http-fauth",
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);
@@ -223,7 +222,6 @@ impl ForwardedAuthenticationStage {
                     target: "ferron-http-fauth",
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);
@@ -248,7 +246,6 @@ impl ForwardedAuthenticationStage {
                     target: "ferron-http-fauth",
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 self.client.return_connection(pool_key, conn_item);
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
@@ -287,7 +284,6 @@ impl ForwardedAuthenticationStage {
                 target: "ferron-http-fauth",
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
 
             ctx.get_span_attributes().insert(
@@ -330,7 +326,6 @@ impl ForwardedAuthenticationStage {
                     LogAttributeValue::I64(auth_status.as_u16() as i64),
                 )],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                control_plane_metadata: None,
             }));
 
             ctx.get_span_attributes().insert(
@@ -387,7 +382,6 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
                     target: "ferron-http-fauth",
                     attributes: vec![("error.message", LogAttributeValue::String(e.to_string()))],
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    control_plane_metadata: None,
                 }));
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
                 return Ok(false);

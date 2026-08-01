@@ -244,7 +244,6 @@ pub(super) async fn execute_http_file_pipeline(
                             trace_context: ferron_http::trace_context::current_event_trace_context(
                                 ctx,
                             ),
-                            control_plane_metadata: None,
                         }));
                         return Ok(());
                     }
