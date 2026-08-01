@@ -3,10 +3,6 @@ use std::time::Duration;
 use http::header::HeaderName;
 
 pub(super) const PURGE_SOURCE_HEADER: HeaderName = HeaderName::from_static("x-purge-source");
-/// Header sent in outbound purge webhooks to identify the originating edge node.
-/// The external control-plane uses this to avoid broadcasting back to the origin.
-#[allow(dead_code)]
-pub(super) const PURGE_ORIGIN_HEADER: HeaderName = HeaderName::from_static("x-purge-origin");
 pub(super) const PURGE_SECRET_HEADER: HeaderName = HeaderName::from_static("x-purge-secret");
 
 /// Build an HTTPS client for outbound purge propagation webhooks.

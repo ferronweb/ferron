@@ -42,8 +42,9 @@ pub struct PurgePropagationConfig {
     /// Shared secret included as `X-Purge-Secret` header when pushing purge
     /// events to the control-plane.
     pub shared_secret: Option<String>,
-    /// Identifier for this edge instance, sent as `X-Purge-Origin` in outbound
-    /// webhook requests. Defaults to the machine hostname if not set.
+    /// Identifier for this edge instance, sent as `origin` JSON field
+    /// in outbound webhook requests. Defaults to the machine hostname
+    /// if not set.
     pub node_id: Option<String>,
 }
 
