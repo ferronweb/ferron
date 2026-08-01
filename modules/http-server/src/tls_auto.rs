@@ -31,11 +31,8 @@ pub fn select_auto_tls_provider(
         .get_provider_registry::<TcpTlsContext>()
         .is_some_and(|r| r.get("acme").is_some());
 
-    let is_localhost = match (host, ip) {
-        (Some(h), _) if is_loopback_host(h) => true,
-        (_, Some(i)) if is_loopback_ip(i) => true,
-        _ => false,
-    };
+    let is_localhost = host.is_some_and(|h| h == "localhost")
+        || ip.is_some_and(|i| i == "127.0.0.1" || i == "::1");
 
     if is_localhost {
         if local_available {
@@ -48,16 +45,6 @@ pub fn select_auto_tls_provider(
     } else {
         TlsAutoSelection::None
     }
-}
-
-/// Returns true if the hostname is a loopback / development name.
-pub fn is_loopback_host(hostname: &str) -> bool {
-    matches!(hostname, "localhost")
-}
-
-/// Returns true if the IP is a loopback address.
-pub fn is_loopback_ip(ip: &str) -> bool {
-    matches!(ip, "127.0.0.1" | "::1")
 }
 
 /// Create a synthetic `tls` directive entry for a specific provider.
@@ -195,19 +182,5 @@ mod tests {
         } else {
             panic!("Expected string provider name");
         }
-    }
-
-    #[test]
-    fn test_loopback_detection() {
-        // Test hostname detection
-        assert!(is_loopback_host("localhost"));
-        assert!(!is_loopback_host("example.com"));
-        assert!(!is_loopback_host("localhost.example.com"));
-
-        // Test IP detection
-        assert!(is_loopback_ip("127.0.0.1"));
-        assert!(is_loopback_ip("::1"));
-        assert!(!is_loopback_ip("192.168.1.1"));
-        assert!(!is_loopback_ip("::ffff:192.168.1.1"));
     }
 }
