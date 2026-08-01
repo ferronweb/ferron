@@ -177,10 +177,11 @@ impl Stage<HttpContext> for ScgiStage {
                                 value: MetricValue::U64(1),
                                 unit: Some("{request}"),
                                 description: Some(
-                                    "Number of SCGI requests that failed before a backend response was returned.",
+                                    "Number of SCGI requests that failed before a backend \
+                                    response was returned.",
                                 ),
-                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                                
+                                trace_context:
+                                    ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             ctx.get_span_attributes().insert(
@@ -239,10 +240,11 @@ impl Stage<HttpContext> for ScgiStage {
                                 value: MetricValue::U64(1),
                                 unit: Some("{request}"),
                                 description: Some(
-                                    "Number of SCGI requests that failed before a backend response was returned.",
+                                    "Number of SCGI requests that failed before a backend \
+                                    response was returned.",
                                 ),
-                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                                
+                                trace_context:
+                                    ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
                             ctx.get_span_attributes().insert(

@@ -44,7 +44,6 @@ pub async fn collect_reload_metrics(
                     ("error.message", LogAttributeValue::String(error.to_string()))
                 ],
                 trace_context: None,
-                
             }));
         }
 

@@ -1274,7 +1274,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                         summary: "Skipping cache store because response body exceeded maximum size".into(),
                         attributes: Vec::new(),
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                        
                     }));
                     let mut response = response_from_streaming_parts(parts, prefix, remainder)?;
                     annotate_response_headers(

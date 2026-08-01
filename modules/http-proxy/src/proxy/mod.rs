@@ -287,7 +287,7 @@ pub async fn execute_proxy(
                                     LogAttributeValue::String(e.to_string()),
                                 )],
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                                
+
                             }));
                             // Collect active health check unhealthy metrics
                             if let Some(counter) = active_unhealthy_counter {
@@ -340,7 +340,6 @@ pub async fn execute_proxy(
                                 LogAttributeValue::String(e.to_string())
                             )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                            
                         }));
                         continue; // Loop back to select next backend
                     }

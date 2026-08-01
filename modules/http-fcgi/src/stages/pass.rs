@@ -198,7 +198,6 @@ impl Stage<HttpContext> for FcgiPassStage {
                         "Number of FastCGI requests that failed before a backend response was returned.",
                     ),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                    
                 }));
                 ctx.res = Some(HttpResponse::BuiltinError(503, None));
                 ctx.get_span_attributes().insert(
