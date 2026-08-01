@@ -11,11 +11,11 @@ This page documents the `header` and `cors` directives for configuring response 
 
 The `header` directive manipulates response headers before sending to the client. Three forms are supported:
 
-| Syntax | Effect |
-| --- | --- |
-| `header +Name "value"` | **Add** header (appends, allows duplicates) |
-| `header -Name` | **Remove** all instances of the header |
-| `header Name "value"` | **Replace** header (removes existing, sets new value) |
+| Syntax                 | Effect                                                |
+| ---------------------- | ----------------------------------------------------- |
+| `header +Name "value"` | **Add** header (appends, allows duplicates)           |
+| `header -Name`         | **Remove** all instances of the header                |
+| `header Name "value"`  | **Replace** header (removes existing, sets new value) |
 
 Header values support interpolation with `{{...}}` syntax.
 
@@ -31,15 +31,15 @@ example.com {
 
 #### Interpolation variables
 
-| Variable | Description |
-| --- | --- |
-| `{{remote.ip}}` | The client's IP address |
-| `{{remote.port}}` | The client's port |
-| `{{server.ip}}` | The server's listening IP address |
-| `{{server.port}}` | The server's listening port |
-| `{{request.host}}` | The matched hostname |
-| `{{request.scheme}}` | `http` or `https` |
-| `{{env.NAME}}` | Environment variable `NAME` |
+| Variable             | Description                       |
+| -------------------- | --------------------------------- |
+| `{{remote.ip}}`      | The client's IP address           |
+| `{{remote.port}}`    | The client's port                 |
+| `{{server.ip}}`      | The server's listening IP address |
+| `{{server.port}}`    | The server's listening port       |
+| `{{request.host}}`   | The matched hostname              |
+| `{{request.scheme}}` | `http` or `https`                 |
+| `{{env.NAME}}`       | Environment variable `NAME`       |
 
 > [!note]
 > For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/v3/configuration/server/host) for details.
@@ -66,14 +66,14 @@ example.com {
 }
 ```
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `origins` | `<string>...` | Allowed origins. Use `"*"` to allow all. | none (CORS disabled) |
-| `methods` | `<string>...` | Allowed HTTP methods for preflight. | none |
-| `headers` | `<string>...` | Allowed request headers for preflight. | none |
-| `credentials` | `<bool>` | Allow credentials (cookies, auth headers). | `false` |
-| `max_age` | `<number>` | Preflight cache duration in seconds. | none |
-| `expose_headers` | `<string>...` | Headers exposed to the browser in responses. | none |
+| Nested directive | Arguments     | Description                                                                                                                                        | Default              |
+| ---------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `origins`        | `<string>...` | Allowed origins. Use `"*"` to allow all. Accepts variable interpolations (for example `{{request.header.origin}}` for `Origin` header reflection). | none (CORS disabled) |
+| `methods`        | `<string>...` | Allowed HTTP methods for preflight.                                                                                                                | none                 |
+| `headers`        | `<string>...` | Allowed request headers for preflight.                                                                                                             | none                 |
+| `credentials`    | `<bool>`      | Allow credentials (cookies, auth headers).                                                                                                         | `false`              |
+| `max_age`        | `<number>`    | Preflight cache duration in seconds.                                                                                                               | none                 |
+| `expose_headers` | `<string>...` | Headers exposed to the browser in responses.                                                                                                       | none                 |
 
 #### Behavior
 
@@ -130,7 +130,7 @@ The following best-practice check is reported by `ferron doctor` for directives 
 
 The headers stage sets the following attributes on its `ferron.stage.headers` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.headers.set` | int | Number of response headers set. |
-| `ferron.headers.unset` | int | Number of response headers removed. |
+| Attribute              | Type | Description                         |
+| ---------------------- | ---- | ----------------------------------- |
+| `ferron.headers.set`   | int  | Number of response headers set.     |
+| `ferron.headers.unset` | int  | Number of response headers removed. |
