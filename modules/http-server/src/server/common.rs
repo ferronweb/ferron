@@ -151,24 +151,6 @@ fn initialize_sinks_from_providers(
     sinks
 }
 
-/// Extract host-level control plane metadata from provider entries (first entry = most specific).
-fn extract_host_control_plane_metadata(
-    entries: &[ObservabilityProviderEntry],
-) -> Option<Arc<std::collections::BTreeMap<String, String>>> {
-    entries
-        .first()
-        .and_then(|(_, _, metadata, _)| metadata.clone())
-}
-
-/// Extract host-level control plane span links from provider entries (first entry = most specific).
-fn extract_host_control_plane_span_links(
-    entries: &[ObservabilityProviderEntry],
-) -> Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>> {
-    entries
-        .first()
-        .and_then(|(_, _, _, span_links)| span_links.clone())
-}
-
 /// Helper to resolve root-level observability sinks (for pre-connection errors).
 #[inline]
 pub fn resolve_root_observability_sink(
@@ -192,7 +174,10 @@ pub fn resolve_host_control_plane_metadata(
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
     let entries = observability_resolver
         .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
-    extract_host_control_plane_metadata(&entries)
+    // first entry = most specific
+    entries
+        .first()
+        .and_then(|(_, _, metadata, _)| metadata.clone())
 }
 
 /// Resolve host-level control plane span links from the observability resolver.
@@ -205,7 +190,10 @@ pub fn resolve_host_control_plane_span_links(
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
     let entries = observability_resolver
         .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
-    extract_host_control_plane_span_links(&entries)
+    // first entry = most specific
+    entries
+        .first()
+        .and_then(|(_, _, _, span_links)| span_links.clone())
 }
 
 #[inline]

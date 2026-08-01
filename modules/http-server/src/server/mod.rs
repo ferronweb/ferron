@@ -159,28 +159,6 @@ fn resolve_tcp_buffer_size(
     })?))
 }
 
-fn resolve_tcp_backlog(
-    tcp_config: Option<&ServerConfigurationBlock>,
-) -> anyhow::Result<Option<i32>> {
-    let Some(value) = tcp_config.and_then(|config| config.get_value("backlog")) else {
-        return Ok(None);
-    };
-
-    let Some(size) = value.as_number() else {
-        anyhow::bail!("tcp.backlog must be a number");
-    };
-
-    Ok(Some(i32::try_from(size).map_err(|_| {
-        anyhow::anyhow!("tcp.backlog must be a non-negative integer")
-    })?))
-}
-
-fn resolve_tcp_multipath(tcp_config: Option<&ServerConfigurationBlock>) -> bool {
-    tcp_config
-        .map(|config| config.get_flag("multipath"))
-        .unwrap_or(false)
-}
-
 fn resolve_tcp_listener_options(
     global_config: &ServerConfigurationBlock,
     port: u16,
@@ -213,12 +191,30 @@ fn resolve_tcp_listener_options(
         None => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port),
     };
 
+    let multipath = tcp_config
+        .map(|config| config.get_flag("multipath"))
+        .unwrap_or(false);
+
+    let backlog = match tcp_config.and_then(|config| config.get_value("backlog")) {
+        Some(value) => {
+            let Some(size) = value.as_number() else {
+                anyhow::bail!("tcp.backlog must be a number");
+            };
+
+            Some(
+                i32::try_from(size)
+                    .map_err(|_| anyhow::anyhow!("tcp.backlog must be a non-negative integer"))?,
+            )
+        }
+        None => None,
+    };
+
     Ok(tcp::TcpListenerOptions {
         address,
         send_buffer_size: resolve_tcp_buffer_size(tcp_config, "send_buf")?,
         recv_buffer_size: resolve_tcp_buffer_size(tcp_config, "recv_buf")?,
-        backlog: resolve_tcp_backlog(tcp_config)?,
-        multipath: resolve_tcp_multipath(tcp_config),
+        backlog,
+        multipath,
     })
 }
 

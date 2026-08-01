@@ -79,17 +79,14 @@ fn is_unreserved(b: u8) -> bool {
 }
 
 #[inline]
-fn is_hex_digit(b: u8) -> bool {
-    b.is_ascii_hexdigit()
-}
-
-#[inline]
 fn hex_value(b: u8) -> u8 {
+    // It's possible to use char::to_digit(self, 16),
+    // but it would be generally slower than this custom implementation...
     match b {
         b'0'..=b'9' => b - b'0',
         b'a'..=b'f' => b - b'a' + 10,
         b'A'..=b'F' => b - b'A' + 10,
-        _ => unreachable!(),
+        _ => unreachable!("the byte {b} is not a valid hex digit at this point"),
     }
 }
 
@@ -107,7 +104,7 @@ fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError>
             }
             let h1 = bytes[i + 1];
             let h2 = bytes[i + 2];
-            if !is_hex_digit(h1) || !is_hex_digit(h2) {
+            if !h1.is_ascii_hexdigit() || !h2.is_ascii_hexdigit() {
                 return Err(CanonicalizationError::MalformedPercent);
             }
             // Check for excessive encoding: %25 followed by two hex digits
@@ -115,7 +112,7 @@ fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError>
             if h1 == b'2' && h2 == b'5' && i + 4 < bytes.len() {
                 let h3 = bytes[i + 3];
                 let h4 = bytes[i + 4];
-                if is_hex_digit(h3) && is_hex_digit(h4) {
+                if h3.is_ascii_hexdigit() && h4.is_ascii_hexdigit() {
                     return Err(CanonicalizationError::ExcessiveEncoding);
                 }
             }

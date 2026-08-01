@@ -31,21 +31,6 @@ fn create_block_with_directives(
     }
 }
 
-fn create_string_value(s: &str) -> ServerConfigurationValue {
-    ServerConfigurationValue::String(s.to_string(), None)
-}
-
-fn create_number_value(n: i64) -> ServerConfigurationValue {
-    ServerConfigurationValue::Number(n, None)
-}
-
-fn create_matcher(
-    _name: &str,
-    exprs: Vec<ServerConfigurationMatcherExpr>,
-) -> ServerConfigurationMatcher {
-    ServerConfigurationMatcher { exprs, span: None }
-}
-
 fn create_eq_expr(identifier: &str, value: &str) -> ServerConfigurationMatcherExpr {
     ServerConfigurationMatcherExpr {
         left: ServerConfigurationMatcherOperand::Identifier(identifier.to_string()),
@@ -74,12 +59,12 @@ fn test_block_with_simple_directives() {
     let block = create_block_with_directives(vec![
         (
             "root".to_string(),
-            vec![create_string_value("/var/www")],
+            vec![ServerConfigurationValue::String("/var/www".into(), None)],
             None,
         ),
         (
             "index".to_string(),
-            vec![create_string_value("index.html")],
+            vec![ServerConfigurationValue::String("index.html".into(), None)],
             None,
         ),
     ]);
@@ -96,25 +81,31 @@ fn test_block_with_simple_directives() {
 fn test_location_directive_multiple() {
     let location1_block = create_block_with_directives(vec![(
         "proxy_pass".to_string(),
-        vec![create_string_value("http://localhost:8080")],
+        vec![ServerConfigurationValue::String(
+            "http://localhost:8080".into(),
+            None,
+        )],
         None,
     )]);
 
     let location2_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/var/www/static")],
+        vec![ServerConfigurationValue::String(
+            "/var/www/static".into(),
+            None,
+        )],
         None,
     )]);
 
     let block = create_block_with_directives(vec![
         (
             "location".to_string(),
-            vec![create_string_value("/api")],
+            vec![ServerConfigurationValue::String("/api".into(), None)],
             Some(location1_block),
         ),
         (
             "location".to_string(),
-            vec![create_string_value("/static")],
+            vec![ServerConfigurationValue::String("/static".into(), None)],
             Some(location2_block),
         ),
     ]);
@@ -140,25 +131,31 @@ fn test_location_directive_multiple() {
 fn test_location_directive_duplicate_merged() {
     let location1_block = create_block_with_directives(vec![(
         "proxy_pass".to_string(),
-        vec![create_string_value("http://localhost:8080")],
+        vec![ServerConfigurationValue::String(
+            "http://localhost:8080".into(),
+            None,
+        )],
         None,
     )]);
 
     let location2_block = create_block_with_directives(vec![(
         "proxy_set_header".to_string(),
-        vec![create_string_value("Host localhost")],
+        vec![ServerConfigurationValue::String(
+            "Host localhost".into(),
+            None,
+        )],
         None,
     )]);
 
     let block = create_block_with_directives(vec![
         (
             "location".to_string(),
-            vec![create_string_value("/api")],
+            vec![ServerConfigurationValue::String("/api".into(), None)],
             Some(location1_block),
         ),
         (
             "location".to_string(),
-            vec![create_string_value("/api")],
+            vec![ServerConfigurationValue::String("/api".into(), None)],
             Some(location2_block),
         ),
     ]);
@@ -179,19 +176,22 @@ fn test_location_directive_duplicate_merged() {
 fn test_location_directive_nested_locations() {
     let inner_location_block = create_block_with_directives(vec![(
         "proxy_pass".to_string(),
-        vec![create_string_value("http://localhost:8080")],
+        vec![ServerConfigurationValue::String(
+            "http://localhost:8080".into(),
+            None,
+        )],
         None,
     )]);
 
     let outer_location_block = create_block_with_directives(vec![(
         "location".to_string(),
-        vec![create_string_value("/v1")],
+        vec![ServerConfigurationValue::String("/v1".into(), None)],
         Some(inner_location_block),
     )]);
 
     let block = create_block_with_directives(vec![(
         "location".to_string(),
-        vec![create_string_value("/api")],
+        vec![ServerConfigurationValue::String("/api".into(), None)],
         Some(outer_location_block),
     )]);
 
@@ -223,12 +223,15 @@ fn test_if_directive_single() {
     let mut matchers = HashMap::new();
     matchers.insert(
         "is_mobile".to_string(),
-        create_matcher("is_mobile", vec![create_eq_expr("user_agent", "Mobile")]),
+        ServerConfigurationMatcher {
+            exprs: vec![create_eq_expr("user_agent", "Mobile")],
+            span: None,
+        },
     );
 
     let if_block = create_block_with_directives(vec![(
         "rewrite".to_string(),
-        vec![create_string_value("/mobile")],
+        vec![ServerConfigurationValue::String("/mobile".into(), None)],
         None,
     )]);
 
@@ -236,7 +239,7 @@ fn test_if_directive_single() {
     directives_map.insert(
         "if".to_string(),
         vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("is_mobile")],
+            args: vec![ServerConfigurationValue::String("is_mobile".into(), None)],
             children: Some(if_block),
             span: None,
         }],
@@ -264,7 +267,10 @@ fn test_if_directive_single() {
 fn test_if_directive_undefined_matcher_error() {
     let block = create_block_with_directives(vec![(
         "if".to_string(),
-        vec![create_string_value("undefined_matcher")],
+        vec![ServerConfigurationValue::String(
+            "undefined_matcher".into(),
+            None,
+        )],
         Some(create_block_with_directives(vec![])),
     )]);
 
@@ -282,12 +288,15 @@ fn test_if_not_directive_single() {
     let mut matchers = HashMap::new();
     matchers.insert(
         "is_bot".to_string(),
-        create_matcher("is_bot", vec![create_eq_expr("user_agent", "bot")]),
+        ServerConfigurationMatcher {
+            exprs: vec![create_eq_expr("user_agent", "bot")],
+            span: None,
+        },
     );
 
     let if_not_block = create_block_with_directives(vec![(
         "allow".to_string(),
-        vec![create_string_value("all")],
+        vec![ServerConfigurationValue::String("all".into(), None)],
         None,
     )]);
 
@@ -295,7 +304,7 @@ fn test_if_not_directive_single() {
     directives_map.insert(
         "if_not".to_string(),
         vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("is_bot")],
+            args: vec![ServerConfigurationValue::String("is_bot".into(), None)],
             children: Some(if_not_block),
             span: None,
         }],
@@ -323,18 +332,24 @@ fn test_mixed_location_and_conditional_matches() {
     let mut matchers = HashMap::new();
     matchers.insert(
         "is_secure".to_string(),
-        create_matcher("is_secure", vec![create_eq_expr("scheme", "https")]),
+        ServerConfigurationMatcher {
+            exprs: vec![create_eq_expr("scheme", "https")],
+            span: None,
+        },
     );
 
     let location_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/var/www")],
+        vec![ServerConfigurationValue::String("/var/www".into(), None)],
         None,
     )]);
 
     let if_block = create_block_with_directives(vec![(
         "add_header".to_string(),
-        vec![create_string_value("Strict-Transport-Security")],
+        vec![ServerConfigurationValue::String(
+            "Strict-Transport-Security".into(),
+            None,
+        )],
         None,
     )]);
 
@@ -342,7 +357,7 @@ fn test_mixed_location_and_conditional_matches() {
     directives_map.insert(
         "location".to_string(),
         vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("/")],
+            args: vec![ServerConfigurationValue::String("/".into(), None)],
             children: Some(location_block),
             span: None,
         }],
@@ -350,7 +365,7 @@ fn test_mixed_location_and_conditional_matches() {
     directives_map.insert(
         "if".to_string(),
         vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("is_secure")],
+            args: vec![ServerConfigurationValue::String("is_secure".into(), None)],
             children: Some(if_block),
             span: None,
         }],
@@ -383,7 +398,7 @@ fn test_mixed_location_and_conditional_matches() {
 fn test_handle_error_without_code() {
     let error_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/errors")],
+        vec![ServerConfigurationValue::String("/errors".into(), None)],
         None,
     )]);
 
@@ -403,25 +418,28 @@ fn test_handle_error_without_code() {
 fn test_handle_error_duplicate_merged() {
     let error1_block = create_block_with_directives(vec![(
         "return".to_string(),
-        vec![create_string_value("500")],
+        vec![ServerConfigurationValue::String("500".into(), None)],
         None,
     )]);
 
     let error2_block = create_block_with_directives(vec![(
         "add_header".to_string(),
-        vec![create_string_value("Content-Type text/html")],
+        vec![ServerConfigurationValue::String(
+            "Content-Type text/html".into(),
+            None,
+        )],
         None,
     )]);
 
     let block = create_block_with_directives(vec![
         (
             "handle_error".to_string(),
-            vec![create_number_value(500)],
+            vec![ServerConfigurationValue::Number(500, None)],
             Some(error1_block),
         ),
         (
             "handle_error".to_string(),
-            vec![create_number_value(500)],
+            vec![ServerConfigurationValue::Number(500, None)],
             Some(error2_block),
         ),
     ]);
@@ -443,25 +461,25 @@ fn test_handle_error_duplicate_merged() {
 fn test_handle_error_multiple_codes() {
     let error404_block = create_block_with_directives(vec![(
         "return".to_string(),
-        vec![create_string_value("404")],
+        vec![ServerConfigurationValue::String("404".into(), None)],
         None,
     )]);
 
     let error500_block = create_block_with_directives(vec![(
         "return".to_string(),
-        vec![create_string_value("500")],
+        vec![ServerConfigurationValue::String("500".into(), None)],
         None,
     )]);
 
     let block = create_block_with_directives(vec![
         (
             "handle_error".to_string(),
-            vec![create_number_value(404)],
+            vec![ServerConfigurationValue::Number(404, None)],
             Some(error404_block),
         ),
         (
             "handle_error".to_string(),
-            vec![create_number_value(500)],
+            vec![ServerConfigurationValue::Number(500, None)],
             Some(error500_block),
         ),
     ]);
@@ -479,7 +497,7 @@ fn test_handle_error_multiple_codes() {
 fn test_handle_error_missing_block_error() {
     let block = create_block_with_directives(vec![(
         "handle_error".to_string(),
-        vec![create_number_value(404)],
+        vec![ServerConfigurationValue::Number(404, None)],
         None,
     )]);
 
@@ -507,13 +525,19 @@ fn test_prepare_host_config_empty() {
 fn test_prepare_host_config_multiple_hosts() {
     let host1_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/var/www/site1")],
+        vec![ServerConfigurationValue::String(
+            "/var/www/site1".into(),
+            None,
+        )],
         None,
     )]);
 
     let host2_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/var/www/site2")],
+        vec![ServerConfigurationValue::String(
+            "/var/www/site2".into(),
+            None,
+        )],
         None,
     )]);
 
@@ -550,7 +574,7 @@ fn test_prepare_host_config_with_ip() {
 
     let host_block = create_block_with_directives(vec![(
         "root".to_string(),
-        vec![create_string_value("/var/www")],
+        vec![ServerConfigurationValue::String("/var/www".into(), None)],
         None,
     )]);
 
@@ -582,13 +606,16 @@ fn test_prepare_host_config_complex() {
 
     let location_block = create_block_with_directives(vec![(
         "proxy_pass".to_string(),
-        vec![create_string_value("http://localhost:8080")],
+        vec![ServerConfigurationValue::String(
+            "http://localhost:8080".into(),
+            None,
+        )],
         None,
     )]);
 
     let host_block = create_block_with_directives(vec![(
         "location".to_string(),
-        vec![create_string_value("/api")],
+        vec![ServerConfigurationValue::String("/api".into(), None)],
         Some(location_block),
     )]);
 
@@ -633,7 +660,7 @@ fn test_prepare_host_config_complex() {
 fn test_location_missing_children_error() {
     let block = create_block_with_directives(vec![(
         "location".to_string(),
-        vec![create_string_value("/test")],
+        vec![ServerConfigurationValue::String("/test".into(), None)],
         None,
     )]);
 
@@ -651,14 +678,17 @@ fn test_if_not_missing_children_error() {
     let mut matchers = HashMap::new();
     matchers.insert(
         "test".to_string(),
-        create_matcher("test", vec![create_eq_expr("foo", "bar")]),
+        ServerConfigurationMatcher {
+            exprs: vec![create_eq_expr("foo", "bar")],
+            span: None,
+        },
     );
 
     let mut directives_map = HashMap::new();
     directives_map.insert(
         "if_not".to_string(),
         vec![ServerConfigurationDirectiveEntry {
-            args: vec![create_string_value("test")],
+            args: vec![ServerConfigurationValue::String("test".into(), None)],
             children: None,
             span: None,
         }],
