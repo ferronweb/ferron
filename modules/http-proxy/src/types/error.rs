@@ -152,15 +152,71 @@ impl ProxyError {
     }
 
     /// Optional HTTP status hint for mapping errors to builtin responses.
+    ///
+    /// This is the single mapping from proxy errors to HTTP statuses; the
+    /// io-kind classification previously split across helpers lives here.
     #[inline]
     pub fn http_status_hint(&self) -> Option<StatusCode> {
         match self {
             ProxyError::ConnectFailedUnavailable(_) => Some(StatusCode::SERVICE_UNAVAILABLE),
             ProxyError::Timeout(_) => Some(StatusCode::GATEWAY_TIMEOUT),
-            // For Io errors, prefer the existing io_error_status() helper in proxy::tls
-            ProxyError::Io(_) | ProxyError::Other(_) => None,
+            ProxyError::Io(io_err) => Some(match io_err.kind() {
+                std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::HostUnreachable => StatusCode::SERVICE_UNAVAILABLE,
+                std::io::ErrorKind::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+                _ => StatusCode::BAD_GATEWAY,
+            }),
+            ProxyError::Other(_) => None,
             // 502 Bad Gateway by default
             _ => Some(StatusCode::BAD_GATEWAY),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use http::StatusCode;
+
+    use super::ProxyError;
+
+    #[test]
+    fn io_error_status_hint_classifies_io_kinds() {
+        let cases = [
+            (
+                io::ErrorKind::ConnectionRefused,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (io::ErrorKind::NotFound, StatusCode::SERVICE_UNAVAILABLE),
+            (
+                io::ErrorKind::HostUnreachable,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (io::ErrorKind::TimedOut, StatusCode::GATEWAY_TIMEOUT),
+            (io::ErrorKind::ConnectionReset, StatusCode::BAD_GATEWAY),
+        ];
+        for (kind, expected) in cases {
+            let err = ProxyError::Io(io::Error::new(kind, "test"));
+            assert_eq!(err.http_status_hint(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn typed_error_status_hints() {
+        assert_eq!(
+            ProxyError::ConnectFailedUnavailable("x".into()).http_status_hint(),
+            Some(StatusCode::SERVICE_UNAVAILABLE)
+        );
+        assert_eq!(
+            ProxyError::Timeout("x".into()).http_status_hint(),
+            Some(StatusCode::GATEWAY_TIMEOUT)
+        );
+        assert_eq!(
+            ProxyError::InvalidUpstreamUrl("x".into()).http_status_hint(),
+            Some(StatusCode::BAD_GATEWAY)
+        );
+        assert_eq!(ProxyError::Other("x".into()).http_status_hint(), None);
     }
 }

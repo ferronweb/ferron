@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-use http::StatusCode;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
@@ -127,17 +126,5 @@ impl ServerCertVerifier for NoServerVerifier {
         rustls::crypto::aws_lc_rs::default_provider()
             .signature_verification_algorithms
             .supported_schemes()
-    }
-}
-
-pub(super) fn io_error_status(err: &std::io::Error) -> (StatusCode, &'static str) {
-    match err.kind() {
-        std::io::ErrorKind::ConnectionRefused
-        | std::io::ErrorKind::NotFound
-        | std::io::ErrorKind::HostUnreachable => {
-            (StatusCode::SERVICE_UNAVAILABLE, "Service unavailable")
-        }
-        std::io::ErrorKind::TimedOut => (StatusCode::GATEWAY_TIMEOUT, "Gateway timeout"),
-        _ => (StatusCode::BAD_GATEWAY, "Bad gateway"),
     }
 }

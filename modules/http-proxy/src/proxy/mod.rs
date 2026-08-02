@@ -35,7 +35,7 @@ use crate::ProxyMetrics;
 
 use self::affinity::maybe_set_affinity_cookie;
 use self::backend::count_available_backends;
-use self::tls::{cached_tls_config, io_error_status};
+use self::tls::cached_tls_config;
 
 const LOG_TARGET: &str = "ferron-http-proxy";
 
@@ -345,13 +345,11 @@ pub async fn execute_proxy(
                 }
 
                 // No retry or no more backends — return error
-                let (status, reason) = if let ProxyError::Io(io_err) = &e {
-                    io_error_status(io_err)
-                } else {
-                    (
-                        e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY),
-                        "Bad gateway",
-                    )
+                let status = e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY);
+                let reason = match status {
+                    StatusCode::SERVICE_UNAVAILABLE => "Service unavailable",
+                    StatusCode::GATEWAY_TIMEOUT => "Gateway timeout",
+                    _ => "Bad gateway",
                 };
                 let attrs = vec![
                     (
