@@ -10,6 +10,7 @@ mod connections;
 pub(crate) mod directives;
 mod health_check;
 pub(crate) mod metrics;
+mod per_config;
 mod proxy;
 pub(crate) mod runtime_handle;
 mod send_net_io;
@@ -36,6 +37,7 @@ use parking_lot::RwLock;
 use rustc_hash::FxBuildHasher;
 use types::retry_budget::SharedRetryBudget;
 
+use crate::per_config::{PerConfigCache, TaskRegistry};
 use crate::stage::ReverseProxyStage;
 #[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
@@ -99,20 +101,19 @@ struct ProxyState {
     /// Flapping detection state per upstream.
     flapping_state: types::flapping::FlappingStateMap,
     /// Background health check task handles, keyed by configuration pointer.
-    /// Used to clean up tasks on reload.
-    health_check_tasks: DashMap<Vec<usize>, tokio::task::JoinHandle<()>, FxBuildHasher>,
+    /// Tasks are aborted on reload via `on_reload`.
+    health_check_tasks: TaskRegistry,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
-    active_unhealthy_counters: DashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>, FxBuildHasher>,
+    active_unhealthy_counters: PerConfigCache<Arc<ActiveUnhealthyCounters>>,
     /// Whether to include resolved IP addresses in proxy metrics attributes.
     /// Updated from config on each request.
     metrics_resolved_ip: std::sync::atomic::AtomicBool,
     /// Cache of resolved upstreams keyed by config pointer identity.
     /// Avoids re-resolving static upstreams on every request.
     /// Automatically invalidated on config reload (new Arc pointers).
-    resolved_upstreams_cache:
-        DashMap<Vec<usize>, Arc<Vec<Arc<types::upstream::UpstreamInner>>>, FxBuildHasher>,
+    resolved_upstreams_cache: PerConfigCache<Arc<Vec<Arc<types::upstream::UpstreamInner>>>>,
     /// Retry budget state, keyed by config pointer identity.
-    retry_budget_states: DashMap<Vec<usize>, SharedRetryBudget, FxBuildHasher>,
+    retry_budget_states: PerConfigCache<SharedRetryBudget>,
 }
 
 impl ProxyState {
@@ -125,12 +126,28 @@ impl ProxyState {
             algorithms: ArcSwap::from_pointee(DashMap::with_hasher(FxBuildHasher)),
             active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             flapping_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
-            health_check_tasks: DashMap::with_hasher(FxBuildHasher),
-            active_unhealthy_counters: DashMap::with_hasher(FxBuildHasher),
+            health_check_tasks: TaskRegistry::new(),
+            active_unhealthy_counters: PerConfigCache::new(),
             metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
-            resolved_upstreams_cache: DashMap::with_hasher(FxBuildHasher),
-            retry_budget_states: DashMap::with_hasher(FxBuildHasher),
+            resolved_upstreams_cache: PerConfigCache::new(),
+            retry_budget_states: PerConfigCache::new(),
         }
+    }
+
+    /// Invalidate all per-config state on config reload.
+    ///
+    /// A reloaded config arrives under fresh layer Arc pointer keys, so the
+    /// previous generation must be discarded here: health check probe loops
+    /// are aborted first (no task keeps probing after its config is gone),
+    /// then the caches are cleared, then the load-balancer algorithms are
+    /// swapped for the new generation.
+    #[inline]
+    fn on_reload(&self) {
+        self.health_check_tasks.abort_all();
+        self.resolved_upstreams_cache.clear();
+        self.retry_budget_states.clear();
+        self.active_unhealthy_counters.clear();
+        self.algorithms.swap(Default::default());
     }
 
     /// Get or create the connection manager using the globally configured limit.
@@ -189,16 +206,12 @@ impl ProxyState {
         };
 
         // Spawn the health check task with a callback to update the shared counter
-        if let dashmap::Entry::Vacant(e) = self.health_check_tasks.entry(config_keys.to_vec()) {
-            let counter: Arc<ActiveUnhealthyCounters> =
-                match self.active_unhealthy_counters.entry(config_keys.to_vec()) {
-                    dashmap::Entry::Occupied(e) => e.get().clone(),
-                    dashmap::Entry::Vacant(e) => {
-                        let counter = Arc::new(ActiveUnhealthyCounters::new(HashMap::new()));
-                        e.insert(counter.clone());
-                        counter
-                    }
-                };
+        self.health_check_tasks.ensure(config_keys, || {
+            let counter = self
+                .active_unhealthy_counters
+                .get_or_insert_with(config_keys, || {
+                    Arc::new(ActiveUnhealthyCounters::new(HashMap::new()))
+                });
             let counter_clone = Arc::clone(&counter);
             let task = health_check::spawn_health_check_task(
                 upstreams.to_vec(),
@@ -211,8 +224,8 @@ impl ProxyState {
                 event_sink,
             );
 
-            e.insert(task);
-        }
+            task.abort_handle()
+        });
     }
 }
 
@@ -301,11 +314,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         // Clear mTLS cache
         self::config::MTLS_FILE_CACHE.clear();
 
-        // Prevent load balancing state memory leaks
+        // Prevent load balancing state memory leaks on config reload
         if let Some(ref state) = self.state {
-            state.algorithms.swap(Default::default());
-            // Clear resolved upstreams cache on config reload
-            state.resolved_upstreams_cache.clear();
+            state.on_reload();
         }
 
         modules.push(Arc::new(ReverseProxyModule {

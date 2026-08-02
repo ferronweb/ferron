@@ -15,7 +15,6 @@ use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::StatusCode;
 use parking_lot::RwLock;
-use rustc_hash::FxBuildHasher;
 
 use crate::config::ProxyConfig;
 use crate::connections::ConnectionManager;
@@ -93,7 +92,7 @@ pub async fn execute_proxy(
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
     resolved_upstreams_cache: Option<
-        &dashmap::DashMap<Vec<usize>, Arc<Vec<Arc<UpstreamInner>>>, FxBuildHasher>,
+        &crate::per_config::PerConfigCache<Arc<Vec<Arc<UpstreamInner>>>>,
     >,
     config_key: &[usize],
     retry_budget: Option<&SharedRetryBudget>,
@@ -103,11 +102,11 @@ pub async fn execute_proxy(
     // Resolve upstreams, using cache for static upstreams when available
     let upstreams = if let Some(cache) = resolved_upstreams_cache {
         if let Some(cached) = cache.get(config_key) {
-            Arc::clone(&cached)
+            cached
         } else {
-            let resolved = resolve_upstreams(&config.upstreams, health_check_state.cloned()).await;
-            let resolved = Arc::new(resolved);
-            cache.insert(config_key.to_vec(), Arc::clone(&resolved));
+            let resolved =
+                Arc::new(resolve_upstreams(&config.upstreams, health_check_state.cloned()).await);
+            cache.insert(config_key, Arc::clone(&resolved));
             resolved
         }
     } else {

@@ -122,13 +122,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .clone()
         };
 
-        let active_unhealthy_counter = {
-            self.state
-                .active_unhealthy_counters
-                .get(&config_key)
-                .as_deref()
-                .cloned()
-        };
+        let active_unhealthy_counter = self.state.active_unhealthy_counters.get(&config_key);
 
         // Capture HTTP method before execute_proxy() consumes ctx.req
         let captured_method = ctx
@@ -141,20 +135,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .map(|r| crate::proxy::is_method_idempotent(r.method()));
 
         let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
-            if let Some(e) = self.state.retry_budget_states.get(&config_key) {
-                return e.clone();
-            }
             self.state
                 .retry_budget_states
-                .entry(config_key.clone())
-                .or_insert_with(|| {
+                .get_or_insert_with(&config_key, || {
                     SharedRetryBudget::new(
                         budget_config.max_tokens,
                         budget_config.refill_rate,
                         budget_config.max_retry_rate,
                     )
                 })
-                .clone()
         });
 
         let result = crate::proxy::execute_proxy(

@@ -52,6 +52,10 @@
 
 - **JSON configuration parse error reporting** — previously, configuration parse errors were reported using human-readable error messages (even if the `--json` flag was used). This has been fixed to report parse errors in JSON when configured to do so.
 
+#### Reverse proxy
+
+- **Config reload cleanup** — on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
+
 ## Ferron 3.0.0-beta.8
 
 **Released in July 15, 2026**
