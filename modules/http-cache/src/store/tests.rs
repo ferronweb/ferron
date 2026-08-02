@@ -97,7 +97,12 @@ fn lookup_returns_matching_public_entry() {
     assert_eq!(stats.size_evictions, 0);
     assert_eq!(len, 1);
 
-    let (lookup, stats, len, had_expired) = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome {
+        entry: lookup,
+        stats,
+        items: len,
+        had_expired,
+    } = store.lookup(base_key, &headers, &cookies, None);
     let (lookup, _key, _hit) = lookup.expect("expected cache hit");
     assert_eq!(stats.expired_evictions, 0);
     assert_eq!(len, 1);
@@ -126,12 +131,13 @@ fn lookup_prefers_private_entry_for_matching_private_key() {
     );
     store.insert_with_request(private, Some("user=1"), &headers, &cookies);
 
-    let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, Some("user=1"));
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup(base_key, &headers, &cookies, Some("user=1"));
     let (lookup, _, _) = lookup.expect("expected private cache hit");
     assert_eq!(lookup.scope, CacheScope::Private);
     assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
-    let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } = store.lookup(base_key, &headers, &cookies, None);
     let (lookup, _, _) = lookup.expect("expected public cache hit");
     assert_eq!(lookup.scope, CacheScope::Public);
     assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
@@ -166,7 +172,8 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
         &cookies,
     );
 
-    let (lookup, _, _, _) = store.lookup("https://example.com/a", &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup("https://example.com/a", &headers, &cookies, None);
     assert!(lookup.is_some(), "expected a to become most recently used");
 
     let (stats, len) = store.insert_with_request(
@@ -185,15 +192,15 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
 
     assert!(store
         .lookup("https://example.com/b", &headers, &cookies, None)
-        .0
+        .entry
         .is_none());
     assert!(store
         .lookup("https://example.com/a", &headers, &cookies, None)
-        .0
+        .entry
         .is_some());
     assert!(store
         .lookup("https://example.com/c", &headers, &cookies, None)
-        .0
+        .entry
         .is_some());
 }
 
@@ -243,15 +250,15 @@ fn set_max_entries_trims_entries_to_capacity() {
     let survivors = [
         store
             .lookup("https://example.com/a", &headers, &cookies, None)
-            .0
+            .entry
             .is_some(),
         store
             .lookup("https://example.com/b", &headers, &cookies, None)
-            .0
+            .entry
             .is_some(),
         store
             .lookup("https://example.com/c", &headers, &cookies, None)
-            .0
+            .entry
             .is_some(),
     ];
     assert_eq!(
@@ -306,15 +313,19 @@ fn lookup_cleans_up_expired_entries() {
             .is_ok());
     }
 
-    let (lookup, stats, len, had_expired) =
-        store.lookup("https://example.com/fresh", &headers, &cookies, None);
+    let LookupOutcome {
+        entry: lookup,
+        stats,
+        items: len,
+        had_expired,
+    } = store.lookup("https://example.com/fresh", &headers, &cookies, None);
     assert!(lookup.is_some());
     assert_eq!(stats.expired_evictions, 1);
     assert_eq!(len, 1);
     assert!(!had_expired);
     assert!(store
         .lookup("https://example.com/expired", &headers, &cookies, None)
-        .0
+        .entry
         .is_none());
 }
 
@@ -381,7 +392,7 @@ fn purge_respects_scope_selectors_and_private_key() {
     assert_eq!(len, 1);
     assert!(store
         .lookup("https://example.com/listing", &headers, &cookies, None)
-        .0
+        .entry
         .is_none());
     assert!(store
         .lookup(
@@ -390,7 +401,7 @@ fn purge_respects_scope_selectors_and_private_key() {
             &cookies,
             Some("user=1")
         )
-        .0
+        .entry
         .is_none());
     let remaining = store
         .lookup(
@@ -399,7 +410,7 @@ fn purge_respects_scope_selectors_and_private_key() {
             &cookies,
             Some("user=2"),
         )
-        .0
+        .entry
         .expect("expected unmatched private entry to remain");
     assert_eq!(remaining.0.body, Some(Bytes::from_static(b"user-2")));
 }
@@ -474,7 +485,7 @@ fn had_expired_is_true_when_entry_expired() {
             .is_ok());
     }
 
-    let (_, _, _, had_expired) =
+    let LookupOutcome { had_expired, .. } =
         store.lookup("https://example.com/expired", &headers, &cookies, None);
     assert!(had_expired);
 }
@@ -557,7 +568,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     }
 
     // Verify lookup returns had_expired
-    let (_, _, _, had_expired) = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome { had_expired, .. } = store.lookup(base_key, &headers, &cookies, None);
     assert!(had_expired);
 
     let fetch_count = Arc::new(AtomicUsize::new(0));
@@ -578,7 +589,8 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
                 // Follower: wait for leader to complete
                 notify.notified().await;
                 // Re-check cache
-                let (lookup, _, _, _) = store.lookup(&base_key, &headers, &cookies, None);
+                let LookupOutcome { entry: lookup, .. } =
+                    store.lookup(&base_key, &headers, &cookies, None);
                 if lookup.is_some() {
                     return;
                 }
@@ -616,7 +628,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     );
 
     // Cache should now have the entry
-    let (lookup, _, _, _) = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } = store.lookup(base_key, &headers, &cookies, None);
     assert!(
         lookup.is_some(),
         "cache should be populated after coalesced fetch"
@@ -664,7 +676,7 @@ async fn follower_gets_cached_response_after_leader_stores() {
         // Follower waits
         notify.notified().await;
         // After notification, re-check cache
-        let (lookup, _, _, _) =
+        let LookupOutcome { entry: lookup, .. } =
             store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
         lookup.and_then(|(entry, _, _)| entry.body)
     });
@@ -729,7 +741,7 @@ async fn leader_non_cacheable_wakes_followers_without_cached_entry() {
     let cookies_clone = cookies.clone();
     let follower_handle = tokio::spawn(async move {
         notify.notified().await;
-        let (lookup, _, _, _) =
+        let LookupOutcome { entry: lookup, .. } =
             store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
         lookup.is_none() // Should be None since leader didn't store
     });
@@ -764,7 +776,8 @@ fn stored_entry_preserves_etag_and_last_modified() {
 
     store.insert_with_request(entry, None, &headers, &cookies);
 
-    let (lookup, _, _, _) = store.lookup("https://example.com/page", &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup("https://example.com/page", &headers, &cookies, None);
     let (lookup, _, _) = lookup.expect("expected cache hit");
     assert_eq!(lookup.etag, Some(HeaderValue::from_static("\"abc123\"")));
     assert_eq!(
@@ -820,7 +833,8 @@ fn lookup_returns_cache_key_for_revalidation() {
     );
     store.insert_with_request(entry, None, &headers, &cookies);
 
-    let (lookup, _, _, _) = store.lookup("https://example.com/page", &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup("https://example.com/page", &headers, &cookies, None);
     let (_, cache_key, _) = lookup.expect("expected cache hit");
     assert!(cache_key.contains("scope=public"));
 }
@@ -851,7 +865,8 @@ fn update_entry_headers_recalculates_ttl_from_304() {
         false,
     );
 
-    let (lookup, _, _, _) = store.lookup("https://example.com/page", &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup("https://example.com/page", &headers, &cookies, None);
     let (lookup, _, _) = lookup.expect("expected cache hit");
     assert_eq!(lookup.ttl, Duration::from_secs(120));
 }
@@ -882,9 +897,14 @@ fn update_entry_headers_recalculates_swr_and_must_revalidate() {
         false,
     );
 
-    let (lookup, _, _, _) = store.lookup("https://example.com/page", &headers, &cookies, None);
-    let (lookup, _, _) = lookup.expect("expected cache hit");
-    assert_eq!(lookup.stale_while_revalidate, Some(Duration::from_secs(30)));
+    let LookupOutcome {
+        entry: Some((lookup, _, hit)),
+        ..
+    } = store.lookup("https://example.com/page", &headers, &cookies, None)
+    else {
+        panic!("expected cache hit");
+    };
+    assert!(matches!(hit, LookupHit::Fresh));
     assert!(lookup.must_revalidate);
 }
 
@@ -984,10 +1004,10 @@ fn variants_by_base_preserved_after_lru_eviction() {
     // (only cleaned up by purge, not by LRU eviction)
     assert!(!store
         .lookup("https://example.com/a", &headers, &cookies, None)
-        .0
+        .entry
         .is_some());
     assert!(store
         .lookup("https://example.com/b", &headers, &cookies, None)
-        .0
+        .entry
         .is_some());
 }

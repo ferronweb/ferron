@@ -58,8 +58,6 @@ pub struct LookupEntry {
     pub age: Duration,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,
-    #[allow(dead_code)]
-    pub stale_while_revalidate: Option<Duration>,
     pub stale_if_error: Option<Duration>,
     pub must_revalidate: bool,
     pub ttl: Duration,
@@ -70,4 +68,14 @@ pub struct StoreStats {
     pub size_evictions: usize,
     pub expired_evictions: usize,
     pub purged: usize,
+}
+
+/// Result of a store lookup: the matched entry, stats, current store size,
+/// and whether variants exist for the base key without anything servable.
+#[derive(Clone)]
+pub struct LookupOutcome {
+    pub entry: Option<(LookupEntry, String, LookupHit)>,
+    pub stats: StoreStats,
+    pub items: usize,
+    pub had_expired: bool,
 }

@@ -33,7 +33,7 @@ use crate::lscache::{
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
 };
-use crate::store::{CacheStore, LookupEntry, StoreStats, StoredEntry};
+use crate::store::{CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry};
 use crate::SECONDARY_RUNTIME;
 
 use self::key::{
@@ -423,7 +423,12 @@ impl Stage<HttpContext> for HttpCacheStage {
             && request_policy.allow_lookup;
 
         let lookup_result = if request_is_lookup_eligible {
-            let (lookup, stats, items, had_expired) = store.lookup(
+            let LookupOutcome {
+                entry: lookup,
+                stats,
+                items,
+                had_expired,
+            } = store.lookup(
                 &base_key,
                 &request_headers,
                 &request_cookies,
@@ -513,7 +518,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                         let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
                         emit_singleflight_metrics(ctx, &store);
 
-                        let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
+                        let LookupOutcome {
+                            entry: retry_lookup,
+                            stats: retry_stats,
+                            items: retry_items,
+                            ..
+                        } = store.lookup(
                             &base_key,
                             &request_headers,
                             &request_cookies,
@@ -890,14 +900,15 @@ impl Stage<HttpContext> for HttpCacheStage {
         }
 
         if response.status().is_server_error() && state.config.enable_stale_if_error {
-            if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
-                state.store.lookup(
-                    &state.base_key,
-                    &state.request_headers,
-                    &state.request_cookies,
-                    state.private_key.as_deref(),
-                )
-            {
+            if let LookupOutcome {
+                entry: Some((stale_entry, _, _)),
+                ..
+            } = state.store.lookup(
+                &state.base_key,
+                &state.request_headers,
+                &state.request_cookies,
+                state.private_key.as_deref(),
+            ) {
                 if let Some(sie_duration) = stale_entry.stale_if_error {
                     if !stale_entry.must_revalidate
                         && stale_entry.age <= stale_entry.ttl + sie_duration

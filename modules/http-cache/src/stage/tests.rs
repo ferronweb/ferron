@@ -60,7 +60,6 @@ async fn hit_response_uses_empty_body_for_head() {
         age: std::time::Duration::from_secs(5),
         etag: None,
         last_modified: None,
-        stale_while_revalidate: None,
         stale_if_error: None,
         must_revalidate: false,
         ttl: std::time::Duration::from_secs(60),

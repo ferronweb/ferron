@@ -32,6 +32,10 @@
 
 - **Diagnostic span location improvements** — diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
 
+#### HTTP caching
+
+- **Cache store lookup outcome struct** — the store's `lookup` interface now returns a named `LookupOutcome` struct instead of a positional tuple, and the servable entry view no longer carries an unused `stale_while_revalidate` field.
+
 ### Fixed
 
 #### HTTP server core
