@@ -205,6 +205,22 @@ async fn wait_for_any_ready(
     }
 }
 
+/// Classify a connect failure into a proxy error. `scheme` is used only in
+/// the error message prefix.
+fn classify_connect_error(kind: std::io::ErrorKind, scheme: &str, error: &str) -> ProxyError {
+    match kind {
+        std::io::ErrorKind::TimedOut => {
+            ProxyError::Timeout(format!("{scheme} connect failed: {error}"))
+        }
+        std::io::ErrorKind::ConnectionAborted
+        | std::io::ErrorKind::NotFound
+        | std::io::ErrorKind::HostUnreachable => {
+            ProxyError::ConnectFailedUnavailable(format!("{scheme} connect failed: {error}"))
+        }
+        _ => ProxyError::ConnectFailed(format!("{scheme} connect failed: {error}")),
+    }
+}
+
 /// TCP connect adapter: establish a TCP stream to the upstream address and
 /// classify the failure.
 async fn connect_tcp(
@@ -230,26 +246,7 @@ async fn connect_tcp(
             e
         }) {
         Ok(s) => s,
-        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-            return Err(ProxyError::Timeout(format!("TCP connect failed: {e}")));
-        }
-        Err(e)
-            if matches!(
-                e.kind(),
-                std::io::ErrorKind::ConnectionAborted
-                    | std::io::ErrorKind::NotFound
-                    | std::io::ErrorKind::HostUnreachable
-            ) =>
-        {
-            return Err(ProxyError::ConnectFailedUnavailable(format!(
-                "TCP connect failed: {e}"
-            )));
-        }
-        Err(e) => {
-            return Err(ProxyError::ConnectFailed(format!(
-                "TCP connect failed: {e}"
-            )));
-        }
+        Err(e) => return Err(classify_connect_error(e.kind(), "TCP", &e.to_string())),
     };
     Ok(tcp)
 }
@@ -257,27 +254,9 @@ async fn connect_tcp(
 /// Unix connect adapter: establish a Unix stream and classify the failure.
 #[cfg(unix)]
 async fn connect_unix(path: &str) -> Result<vibeio::net::PollUnixStream, ProxyError> {
-    match vibeio::net::PollUnixStream::connect(path).await {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-            Err(ProxyError::Timeout(format!("Unix connect failed: {e}")))
-        }
-        Err(e)
-            if matches!(
-                e.kind(),
-                std::io::ErrorKind::ConnectionAborted
-                    | std::io::ErrorKind::NotFound
-                    | std::io::ErrorKind::HostUnreachable
-            ) =>
-        {
-            Err(ProxyError::ConnectFailedUnavailable(format!(
-                "Unix connect failed: {e}"
-            )))
-        }
-        Err(e) => Err(ProxyError::ConnectFailed(format!(
-            "Unix connect failed: {e}"
-        ))),
-    }
+    vibeio::net::PollUnixStream::connect(path)
+        .await
+        .map_err(|e| classify_connect_error(e.kind(), "Unix", &e.to_string()))
 }
 
 /// Shared PROXY-header / TLS / HTTP dispatch sequence for both TCP and Unix

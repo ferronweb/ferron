@@ -349,6 +349,65 @@ fn test_backend_set_reports_overloaded_exclusions() {
 }
 
 #[test]
+fn test_backend_set_reoffers_circuit_refused_backend_on_next_round() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let circuit_breaker_state: crate::types::circuit::CircuitBreakerStateMap =
+        Arc::new(DashMap::with_hasher(FxBuildHasher));
+    let in_flight = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    circuit_breaker_state.insert(
+        upstreams[0].clone(),
+        crate::types::circuit::CircuitBreakerState {
+            status: Arc::new(std::sync::atomic::AtomicU8::new(
+                crate::types::circuit::CIRCUIT_BREAKER_STATUS_HALFOPEN,
+            )),
+            half_open_in_flight: Arc::clone(&in_flight),
+            ..Default::default()
+        },
+    );
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        ..Default::default()
+    };
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = crate::upstream::circuit::CircuitBreaker::new(
+        Some(&circuit_breaker_state),
+        None,
+        &circuit_breaker,
+        &sink,
+        None,
+        false,
+    );
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
+    let mut backend_set = BackendSet::new(
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+    );
+
+    // Round 1: backend1 is half-open with a busy probe slot, so backend2 wins.
+    let first = backend_set.next_backend().unwrap();
+    assert_eq!(first.upstream.proxy_to, "http://backend2");
+    assert_eq!(first.exclusions.overloaded.len(), 1);
+    assert_eq!(first.exclusions.overloaded[0].proxy_to, "http://backend1");
+
+    // The probe slot frees up before the next round.
+    in_flight.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    // Round 2: backend1 must be re-offered instead of being permanently
+    // excluded as "already tried" by the failed acquisition.
+    let second = backend_set.next_backend().unwrap();
+    assert_eq!(second.upstream.proxy_to, "http://backend1");
+    assert_eq!(second.exclusions.already_tried.len(), 1);
+    assert_eq!(
+        second.exclusions.already_tried[0].proxy_to,
+        "http://backend2"
+    );
+    assert!(second.exclusions.overloaded.is_empty());
+}
+
+#[test]
 fn test_select_backend_index_weighted_round_robin_unequal_weights() {
     let backends = vec![
         (0, make_upstream_with_weight("http://backend1", 5)),

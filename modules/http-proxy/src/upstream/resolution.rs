@@ -275,7 +275,6 @@ impl<'a> BackendSet<'a> {
             let upstream_idx = group.swap_remove(index);
             unhealthy.insert(upstream_idx);
             let upstream = Arc::clone(&self.upstreams[upstream_idx]);
-            self.tried.insert(Arc::clone(&upstream));
             if start_pos == Some(index) {
                 *affinity_index = None;
             }
@@ -288,6 +287,11 @@ impl<'a> BackendSet<'a> {
                 }
                 continue;
             }
+
+            // Only successfully acquired backends count as tried; backends
+            // refused by the circuit breaker may recover (cooldown expiry,
+            // half-open slot freed) and are re-offered on later retry rounds.
+            self.tried.insert(Arc::clone(&upstream));
 
             // Get the tracker (already initialized by select_backend_index)
             super::lb::selector::initialize_tracker(self.conn_state, &upstream);
