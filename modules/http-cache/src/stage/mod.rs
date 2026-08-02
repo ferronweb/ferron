@@ -121,6 +121,10 @@ pub struct HttpCacheStage {
     zones: Arc<DashMap<CacheZoneId, Arc<CacheStore>>>,
     /// Config generation at which each zone's `max_entries` was last applied.
     zone_generations: Arc<DashMap<CacheZoneId, ZoneGeneration>>,
+    /// Parsed cache configs keyed by hostname, cleared on config reload.
+    configs: Arc<DashMap<String, CacheConfig>>,
+    /// Config generation at which `configs` was last filled.
+    config_generation: Arc<AtomicU64>,
 }
 
 impl HttpCacheStage {
@@ -129,7 +133,30 @@ impl HttpCacheStage {
         Self {
             zones: Arc::new(DashMap::new()),
             zone_generations: Arc::new(DashMap::new()),
+            configs: Arc::new(DashMap::new()),
+            config_generation: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    /// Get the cache config for the request's hostname, parsing it once per
+    /// hostname per configuration generation. The configuration can differ
+    /// per host within a generation, so the cache is keyed by hostname
+    /// rather than by generation alone.
+    #[inline]
+    fn get_config(&self, ctx: &HttpContext) -> CacheConfig {
+        let current_gen = active_config_generation();
+        if self.config_generation.load(Ordering::Relaxed) != current_gen {
+            self.configs.clear();
+            self.config_generation.store(current_gen, Ordering::Relaxed);
+        }
+        let hostname = ctx
+            .hostname
+            .clone()
+            .unwrap_or_else(|| "_default".to_string());
+        self.configs
+            .entry(hostname)
+            .or_insert_with(|| parse_cache_config(&ctx.configuration))
+            .clone()
     }
 
     /// Get or create a `CacheStore` for the given zone, updating `max_entries`
@@ -146,10 +173,7 @@ impl HttpCacheStage {
             .value()
             .clone();
 
-        let current_gen = ferron_core::admin::ADMIN_METRICS
-            .reload_metrics
-            .read()
-            .active_generation;
+        let current_gen = active_config_generation();
 
         let should_update = match self.zone_generations.get(zone_id) {
             Some(entry) => entry.generation.load(Ordering::Relaxed) != current_gen,
@@ -218,7 +242,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = parse_cache_config(&ctx.configuration);
+        let config = self.get_config(ctx);
 
         if !config.enabled {
             return Ok(true);
@@ -1137,6 +1161,15 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         Ok(())
     }
+}
+
+/// Current configuration generation, bumped on every config reload.
+#[inline]
+fn active_config_generation() -> u64 {
+    ferron_core::admin::ADMIN_METRICS
+        .reload_metrics
+        .read()
+        .active_generation
 }
 
 /// Resolve the cache zone ID for a request.

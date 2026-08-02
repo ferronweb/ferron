@@ -160,3 +160,61 @@ fn purge_reports_purged_and_remaining_entry_counts() {
     assert_eq!(stats.purged, 1);
     assert_eq!(store.len(), 1);
 }
+
+#[test]
+fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_core::config::ServerConfigurationBlockBuilder;
+
+    fn layered_config(max_response_size: u64) -> LayeredConfiguration {
+        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+        let entry = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValue::Number(
+                max_response_size as i64,
+                None,
+            )],
+            children: None,
+            span: None,
+        };
+        let block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block(
+                "cache",
+                Vec::<String>::new(),
+                ServerConfigurationBlockBuilder::new()
+                    .directive("max_response_size", entry)
+                    .build(),
+            )
+            .build();
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(block));
+        layered
+    }
+
+    let stage = HttpCacheStage::new();
+    let mut ctx_a = test_context("/a");
+    ctx_a.hostname = Some("a.example.com".to_string());
+    ctx_a.configuration = layered_config(1024);
+    let mut ctx_b = test_context("/b");
+    ctx_b.hostname = Some("b.example.com".to_string());
+    ctx_b.configuration = layered_config(2048);
+
+    let config_a = stage.get_config(&ctx_a);
+    assert_eq!(config_a.max_response_size, 1024);
+    assert!(config_a.enabled);
+    assert_eq!(stage.configs.len(), 1);
+
+    let config_b = stage.get_config(&ctx_b);
+    assert_eq!(config_b.max_response_size, 2048);
+    assert_eq!(stage.configs.len(), 2);
+
+    assert_eq!(stage.get_config(&ctx_a).max_response_size, 1024);
+    assert_eq!(stage.configs.len(), 2);
+
+    ferron_core::admin::ADMIN_METRICS
+        .reload_metrics
+        .write()
+        .active_generation += 1;
+
+    assert_eq!(stage.get_config(&ctx_b).max_response_size, 2048);
+    assert_eq!(stage.configs.len(), 1);
+}
