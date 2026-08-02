@@ -1,5 +1,5 @@
 mod key;
-mod metrics;
+mod outcome;
 mod purge_propagation;
 mod response_helpers;
 mod served;
@@ -15,10 +15,8 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
-use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
-use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
+use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
@@ -37,12 +35,10 @@ use crate::policy::{
 use crate::store::{CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry};
 use crate::SECONDARY_RUNTIME;
 
-use self::key::{
-    build_base_key, build_private_cache_key, build_vary_rule, cache_key_fingerprint, parse_cookies,
-};
-use self::metrics::{
+use self::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
+use self::outcome::{
     emit_eviction_metrics, emit_purge_metric, emit_request_metric, emit_singleflight_metrics,
-    emit_store_metric,
+    emit_store_metric, report, CacheOutcome,
 };
 use self::purge_propagation::{propagate_purge_webhook, PURGE_SOURCE_HEADER};
 use self::response_helpers::{
@@ -285,18 +281,25 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 if !purge_allowed {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
-                    ctx.get_span_attributes().insert(
-                        "ferron.cache.result",
-                        TraceAttributeValue::String("purge_rejected".to_string()),
-                    );
-                    let log_fields = custom_access_log_fields(ctx);
-                    log_fields.insert(
-                        "ferron.cache.result".into(),
-                        CustomAccessLogField::String("purge_rejected".into()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.key_fingerprint".into(),
-                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "purge_rejected",
+                            zone_id: &zone_id,
+                            key: &purge_url,
+                            scope: None,
+                            items: None,
+                            stored: None,
+                            evictions: None,
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
                     );
                     return Ok(false);
                 }
@@ -392,29 +395,26 @@ impl Stage<HttpContext> for HttpCacheStage {
                     )
                     .map_err(|e| PipelineError::custom(e.to_string()))?;
                 ctx.res = Some(HttpResponse::Custom(response));
-                ctx.get_span_attributes().insert(
-                    "ferron.cache.result",
-                    TraceAttributeValue::String("purge".to_string()),
+                report(
+                    ctx,
+                    CacheOutcome {
+                        result: "purge",
+                        zone_id: &zone_id,
+                        key: &purge_url,
+                        scope: None,
+                        items: None,
+                        stored: None,
+                        evictions: None,
+                        detail: None,
+                        key_uri: None,
+                        key_method: None,
+                        bypass_reason: None,
+                        evaluated_cookies: None,
+                        coalesced_wait_ms: None,
+                        mark_uncoalesced: false,
+                        metric_result: None,
+                    },
                 );
-                ctx.get_span_attributes().insert(
-                    "ferron.cache.zone",
-                    TraceAttributeValue::String(zone_id.label().to_string()),
-                );
-                {
-                    let log_fields = custom_access_log_fields(ctx);
-                    log_fields.insert(
-                        "ferron.cache.result".into(),
-                        CustomAccessLogField::String("purge".into()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.zone".into(),
-                        CustomAccessLogField::String(zone_id.label().to_string()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.key_fingerprint".into(),
-                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
-                    );
-                }
                 return Ok(false);
             }
         }
@@ -466,36 +466,26 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     }
                 } else {
-                    emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
-                    emit_eviction_metrics(ctx, &zone_id, stats);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("hit".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(scope.as_str().to_string()),
-                        );
-                        let log_fields = custom_access_log_fields(ctx);
-                        log_fields.insert(
-                            "ferron.cache.result".into(),
-                            CustomAccessLogField::String("hit".into()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.zone".into(),
-                            CustomAccessLogField::String(zone_id.label().to_string()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.key_fingerprint".into(),
-                            CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-                        );
-                    }
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "hit",
+                            zone_id: &zone_id,
+                            key: &base_key,
+                            scope: Some(scope),
+                            items: Some(items),
+                            stored: None,
+                            evictions: Some(stats),
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
@@ -534,44 +524,26 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                         if let Some((entry, _, _)) = retry_lookup {
                             let scope = entry.scope;
-                            emit_eviction_metrics(ctx, &zone_id, retry_stats);
-                            emit_request_metric(ctx, &zone_id, "hit", Some(scope), retry_items);
-                            {
-                                let sa = ctx.get_span_attributes();
-                                sa.insert(
-                                    "ferron.cache.result",
-                                    TraceAttributeValue::String("hit".to_string()),
-                                );
-                                sa.insert(
-                                    "ferron.cache.zone",
-                                    TraceAttributeValue::String(zone_id.label().to_string()),
-                                );
-                                sa.insert(
-                                    "ferron.cache.scope",
-                                    TraceAttributeValue::String(scope.as_str().to_string()),
-                                );
-                                let log_fields = custom_access_log_fields(ctx);
-                                log_fields.insert(
-                                    "ferron.cache.result".into(),
-                                    CustomAccessLogField::String("hit".into()),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.zone".into(),
-                                    CustomAccessLogField::String(zone_id.label().to_string()),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.key_fingerprint".into(),
-                                    CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.coalesced".into(),
-                                    CustomAccessLogField::Bool(true),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.coalesce_wait_duration_ms".into(),
-                                    CustomAccessLogField::F64(wait_ms),
-                                );
-                            }
+                            report(
+                                ctx,
+                                CacheOutcome {
+                                    result: "hit",
+                                    zone_id: &zone_id,
+                                    key: &base_key,
+                                    scope: Some(scope),
+                                    items: Some(retry_items),
+                                    stored: None,
+                                    evictions: Some(retry_stats),
+                                    detail: None,
+                                    key_uri: None,
+                                    key_method: None,
+                                    bypass_reason: None,
+                                    evaluated_cookies: None,
+                                    coalesced_wait_ms: Some(wait_ms),
+                                    mark_uncoalesced: false,
+                                    metric_result: None,
+                                },
+                            );
                             ctx.res = Some(if entry.body.is_none() {
                                 HttpResponse::BuiltinError(
                                     entry.status.as_u16(),
@@ -657,50 +629,29 @@ impl Stage<HttpContext> for HttpCacheStage {
             };
             let req_method = ctx.req.as_ref().map(|r| r.method().as_str().to_string());
             let req_uri = ctx.req.as_ref().map(|r| r.uri().to_string());
-            let sa = ctx.get_span_attributes();
-            sa.insert(
-                "ferron.cache.result",
-                TraceAttributeValue::String(result_label.to_string()),
-            );
-            sa.insert(
-                "ferron.cache.zone",
-                TraceAttributeValue::String(zone_id.label().to_string()),
-            );
-            if let Some(uri) = req_uri {
-                sa.insert("ferron.cache.key.uri", TraceAttributeValue::String(uri));
-            }
-            if let Some(method) = req_method {
-                sa.insert(
-                    "ferron.cache.key.method",
-                    TraceAttributeValue::String(method),
-                );
-            }
-            if let LookupResult::Bypass = &lookup_result {
-                sa.insert(
-                    "ferron.cache.bypass_reason",
-                    TraceAttributeValue::String(request_policy.reason.to_string()),
-                );
-            }
-            let log_fields = custom_access_log_fields(ctx);
-            log_fields.insert(
-                "ferron.cache.result".into(),
-                CustomAccessLogField::String(result_label.to_string()),
-            );
-            log_fields.insert(
-                "ferron.cache.zone".into(),
-                CustomAccessLogField::String(zone_id.label().to_string()),
-            );
-            log_fields.insert(
-                "ferron.cache.key_fingerprint".into(),
-                CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-            );
-            log_fields.insert(
-                "ferron.cache.coalesced".into(),
-                CustomAccessLogField::Bool(false),
-            );
-            log_fields.insert(
-                "ferron.cache.coalesce_wait_duration_ms".into(),
-                CustomAccessLogField::F64(0.0),
+            let bypass_reason = match lookup_result {
+                LookupResult::Bypass => Some(request_policy.reason),
+                _ => None,
+            };
+            report(
+                ctx,
+                CacheOutcome {
+                    result: result_label,
+                    zone_id: &zone_id,
+                    key: &base_key,
+                    scope: None,
+                    items: None,
+                    stored: None,
+                    evictions: None,
+                    detail: None,
+                    key_uri: req_uri.as_deref(),
+                    key_method: req_method.as_deref(),
+                    bypass_reason,
+                    evaluated_cookies: None,
+                    coalesced_wait_ms: None,
+                    mark_uncoalesced: true,
+                    metric_result: None,
+                },
             );
         }
 
@@ -759,35 +710,26 @@ impl Stage<HttpContext> for HttpCacheStage {
                         )?)
                     });
 
-                    emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("stale".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(entry.scope.as_str().to_string()),
-                        );
-                        let log_fields = custom_access_log_fields(ctx);
-                        log_fields.insert(
-                            "ferron.cache.result".into(),
-                            CustomAccessLogField::String("stale".into()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.zone".into(),
-                            CustomAccessLogField::String(state.zone_id.label().to_string()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.key_fingerprint".into(),
-                            CustomAccessLogField::String(cache_key_fingerprint(&state.base_key)),
-                        );
-                    }
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "stale",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: *scope,
+                            items: Some(*items),
+                            stored: None,
+                            evictions: None,
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: Some("hit"),
+                        },
+                    );
                     return Ok(());
                 }
             }
@@ -922,45 +864,28 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 .map_err(|e| PipelineError::custom(e.to_string()))?
                         };
 
-                        emit_request_metric(
+                        report(
                             ctx,
-                            &state.zone_id,
-                            "hit",
-                            Some(stale_entry.scope),
-                            state.store.len(),
+                            CacheOutcome {
+                                result: "stale",
+                                zone_id: &state.zone_id,
+                                key: &state.base_key,
+                                scope: Some(stale_entry.scope),
+                                items: Some(state.store.len()),
+                                stored: None,
+                                evictions: None,
+                                detail: None,
+                                key_uri: None,
+                                key_method: None,
+                                bypass_reason: None,
+                                evaluated_cookies: None,
+                                coalesced_wait_ms: None,
+                                mark_uncoalesced: false,
+                                metric_result: Some("hit"),
+                            },
                         );
 
                         ctx.res = Some(HttpResponse::Custom(stale_response));
-                        {
-                            let sa = ctx.get_span_attributes();
-                            sa.insert(
-                                "ferron.cache.result",
-                                TraceAttributeValue::String("stale".to_string()),
-                            );
-                            sa.insert(
-                                "ferron.cache.zone",
-                                TraceAttributeValue::String(state.zone_id.label().to_string()),
-                            );
-                            sa.insert(
-                                "ferron.cache.scope",
-                                TraceAttributeValue::String(stale_entry.scope.as_str().to_string()),
-                            );
-                            let log_fields = custom_access_log_fields(ctx);
-                            log_fields.insert(
-                                "ferron.cache.result".into(),
-                                CustomAccessLogField::String("stale".into()),
-                            );
-                            log_fields.insert(
-                                "ferron.cache.zone".into(),
-                                CustomAccessLogField::String(state.zone_id.label().to_string()),
-                            );
-                            log_fields.insert(
-                                "ferron.cache.key_fingerprint".into(),
-                                CustomAccessLogField::String(cache_key_fingerprint(
-                                    &state.base_key,
-                                )),
-                            );
-                        }
                         return Ok(());
                     }
                 }
@@ -1189,13 +1114,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &state.request_headers,
                         &state.request_cookies,
                     );
-                    emit_eviction_metrics(ctx, &state.zone_id, stats);
-                    emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
 
                     if let LookupResult::StaleWhileRevalidate {
                         entry,
-                        scope,
-                        items,
+                        scope: stale_scope,
+                        items: stale_items,
                         ..
                     } = &state.lookup_result
                     {
@@ -1213,7 +1136,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                             )?)
                         });
 
-                        emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
+                        emit_eviction_metrics(ctx, &state.zone_id, stats);
+                        emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
+                        emit_request_metric(ctx, &state.zone_id, "hit", *stale_scope, *stale_items);
                         return Ok(());
                     }
 
@@ -1229,31 +1154,29 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "miss",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: Some(scope),
+                            items: Some(items),
+                            stored: Some((scope, status.as_u16())),
+                            evictions: Some(stats),
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: vary_rule.as_ref().and_then(|vr| {
+                                (!vr.cookie_names.is_empty()).then_some(vr.cookie_names.as_slice())
+                            }),
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(outgoing_response);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("miss".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(scope.as_str().to_string()),
-                        );
-                        if let Some(ref vr) = vary_rule {
-                            if !vr.cookie_names.is_empty() {
-                                sa.insert(
-                                    "ferron.cache.key.evaluated_cookies",
-                                    TraceAttributeValue::String(vr.cookie_names.join(";")),
-                                );
-                            }
-                        }
-                    }
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {
                     ctx.events.emit(Event::Log(LogEvent {
@@ -1273,23 +1196,27 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "miss",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: None,
+                            items: Some(state.store.len()),
+                            stored: None,
+                            evictions: None,
+                            detail: Some("response-too-large"),
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(HttpResponse::Custom(response));
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("miss".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.detail",
-                            TraceAttributeValue::String("response-too-large".to_string()),
-                        );
-                    }
                 }
             }
         } else {
@@ -1314,36 +1241,26 @@ impl Stage<HttpContext> for HttpCacheStage {
             } else {
                 "miss"
             };
-            emit_request_metric(
+            report(
                 ctx,
-                &state.zone_id,
-                result,
-                purge_scope.or(decision.scope),
-                state.store.len(),
+                CacheOutcome {
+                    result,
+                    zone_id: &state.zone_id,
+                    key: &state.base_key,
+                    scope: purge_scope.or(decision.scope),
+                    items: Some(state.store.len()),
+                    stored: None,
+                    evictions: None,
+                    detail: (result == "bypass").then_some(decision.reason),
+                    key_uri: None,
+                    key_method: None,
+                    bypass_reason: None,
+                    evaluated_cookies: None,
+                    coalesced_wait_ms: None,
+                    mark_uncoalesced: false,
+                    metric_result: None,
+                },
             );
-            {
-                let sa = ctx.get_span_attributes();
-                sa.insert(
-                    "ferron.cache.result",
-                    TraceAttributeValue::String(result.to_string()),
-                );
-                sa.insert(
-                    "ferron.cache.zone",
-                    TraceAttributeValue::String(state.zone_id.label().to_string()),
-                );
-                if let Some(scope) = purge_scope.or(decision.scope) {
-                    sa.insert(
-                        "ferron.cache.scope",
-                        TraceAttributeValue::String(scope.as_str().to_string()),
-                    );
-                }
-                if result == "bypass" {
-                    sa.insert(
-                        "ferron.cache.detail",
-                        TraceAttributeValue::String(decision.reason.to_string()),
-                    );
-                }
-            }
             let (parts, body) = response.into_parts();
             ctx.res = Some(if let Some(body) = body {
                 HttpResponse::Custom(Response::from_parts(parts, body))
