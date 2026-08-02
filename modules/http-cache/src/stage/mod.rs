@@ -2,6 +2,7 @@ mod key;
 mod metrics;
 mod purge_propagation;
 mod response_helpers;
+mod served;
 #[cfg(test)]
 mod tests;
 
@@ -18,7 +19,7 @@ use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
-use http::header::{self, HeaderValue};
+use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 use typemap_rev::TypeMapKey;
@@ -45,10 +46,11 @@ use self::metrics::{
 };
 use self::purge_propagation::{propagate_purge_webhook, PURGE_SOURCE_HEADER};
 use self::response_helpers::{
-    annotate_response_headers, append_lsc_cookies_as_set_cookie, build_cached_response,
-    collect_body_with_limit, response_from_parts, response_from_streaming_parts,
-    strip_internal_headers, CacheHeaderState, CollectBodyOutcome,
+    annotate_response_headers, append_lsc_cookies_as_set_cookie, collect_body_with_limit,
+    response_from_parts, response_from_streaming_parts, strip_internal_headers, CacheHeaderState,
+    CollectBodyOutcome,
 };
+use self::served::{serve, ServedState};
 
 const LOG_TARGET: &str = "ferron-http-cache";
 const CACHE_STATUS_HEADER: http::header::HeaderName =
@@ -500,8 +502,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                             Some(entry.headers.clone()),
                         )
                     } else {
-                        HttpResponse::Custom(build_cached_response(
+                        HttpResponse::Custom(serve(
                             entry,
+                            ServedState::Hit,
                             head_only,
                             config.emit_litespeed_headers,
                         )?)
@@ -575,8 +578,9 @@ impl Stage<HttpContext> for HttpCacheStage {
                                     Some(entry.headers.clone()),
                                 )
                             } else {
-                                HttpResponse::Custom(build_cached_response(
+                                HttpResponse::Custom(serve(
                                     entry,
+                                    ServedState::Hit,
                                     head_only,
                                     config.emit_litespeed_headers,
                                 )?)
@@ -747,23 +751,13 @@ impl Stage<HttpContext> for HttpCacheStage {
                             Some(entry.headers.clone()),
                         )
                     } else {
-                        HttpResponse::Custom(build_cached_response(
+                        HttpResponse::Custom(serve(
                             (**entry).clone(),
+                            ServedState::StaleWhileRevalidate,
                             state.head_only,
                             state.config.emit_litespeed_headers,
                         )?)
                     });
-
-                    if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
-                        annotate_response_headers(
-                            resp.headers_mut(),
-                            CacheHeaderState::StaleWhileRevalidate {
-                                scope: entry.scope,
-                                age: entry.age,
-                            },
-                            state.config.emit_litespeed_headers,
-                        );
-                    }
 
                     emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                     {
@@ -848,43 +842,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                     fresh_headers = new_fresh_headers;
                 }
 
-                let mut builder = Response::builder().status(cached_entry.status);
-                for (name, value) in &fresh_headers {
-                    builder = builder.header(name, value);
-                }
-
-                let head_only = state.head_only;
-                let body = if head_only {
-                    Empty::<Bytes>::new()
-                        .map_err(|error| match error {})
-                        .boxed_unsync()
-                } else if let Some(body) = &cached_entry.body {
-                    Full::new(body.clone())
-                        .map_err(|error: std::convert::Infallible| match error {})
-                        .boxed_unsync()
-                } else {
-                    Empty::<Bytes>::new()
-                        .map_err(|error| match error {})
-                        .boxed_unsync()
-                };
-
-                if head_only && !fresh_headers.contains_key(header::CONTENT_LENGTH) {
-                    if let Some(body_bytes) = &cached_entry.body {
-                        if let Ok(value) = HeaderValue::from_str(&body_bytes.len().to_string()) {
-                            builder = builder.header(header::CONTENT_LENGTH, value);
-                        }
-                    }
-                }
-
-                let mut response_200 = builder
-                    .body(body)
-                    .map_err(|e| PipelineError::custom(e.to_string()))?;
-
-                annotate_response_headers(
-                    response_200.headers_mut(),
-                    CacheHeaderState::Revalidated,
+                let mut entry = (**cached_entry).clone();
+                entry.headers = fresh_headers;
+                let response_200 = serve(
+                    entry,
+                    ServedState::Revalidated,
+                    state.head_only,
                     state.config.emit_litespeed_headers,
-                );
+                )?;
 
                 emit_request_metric(
                     ctx,
@@ -1240,23 +1205,13 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 Some(entry.headers.clone()),
                             )
                         } else {
-                            HttpResponse::Custom(build_cached_response(
+                            HttpResponse::Custom(serve(
                                 (**entry).clone(),
+                                ServedState::StaleIfError,
                                 state.head_only,
                                 state.config.emit_litespeed_headers,
                             )?)
                         });
-
-                        if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
-                            annotate_response_headers(
-                                resp.headers_mut(),
-                                CacheHeaderState::StaleWhileRevalidate {
-                                    scope: entry.scope,
-                                    age: entry.age,
-                                },
-                                state.config.emit_litespeed_headers,
-                            );
-                        }
 
                         emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
                         return Ok(());

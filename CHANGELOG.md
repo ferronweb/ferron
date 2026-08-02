@@ -35,6 +35,7 @@
 #### HTTP caching
 
 - **Cache store lookup outcome struct** — the store's `lookup` interface now returns a named `LookupOutcome` struct instead of a positional tuple, and the servable entry view no longer carries an unused `stale_while_revalidate` field.
+- **Served response module** — all served cache responses (fresh hits, singleflight-coalesced hits, stale-while-revalidate serves, stale-if-error serves, and 304 revalidation rebuilds) now flow through a single `serve` entry point that owns header hygiene, LSCookie rehydration, HEAD content-length fixup, and cache-status / X-LiteSpeed-Cache annotation. The duplicated per-site response builders were removed.
 
 ### Fixed
 

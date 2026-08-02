@@ -13,9 +13,8 @@ use http_body_util::{BodyExt, BodyStream, Empty, Full, StreamBody};
 
 use crate::lscache::{LS_CACHE, LS_CACHE_CONTROL, LS_COOKIE, LS_PURGE, LS_TAG, LS_VARY};
 use crate::policy::CacheScope;
-use crate::store::LookupEntry;
 
-const CACHE_STATUS_HEADER: HeaderName = HeaderName::from_static("cache-status");
+pub(super) const CACHE_STATUS_HEADER: HeaderName = HeaderName::from_static("cache-status");
 
 pub(super) enum CacheHeaderState<'a> {
     Hit { scope: CacheScope, age: Duration },
@@ -31,52 +30,6 @@ pub(super) enum CollectBodyOutcome {
         prefix: Bytes,
         remainder: UnsyncBoxBody<Bytes, io::Error>,
     },
-}
-
-pub(super) fn build_cached_response(
-    entry: LookupEntry,
-    head_only: bool,
-    emit_ls_cache: bool,
-) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
-    let body_len = entry.body.as_ref().map(|body| body.len());
-    let mut response = Response::new(if head_only {
-        Empty::<Bytes>::new()
-            .map_err(|error| match error {})
-            .boxed_unsync()
-    } else if let Some(body) = entry.body {
-        Full::new(body)
-            .map_err(|error: std::convert::Infallible| match error {})
-            .boxed_unsync()
-    } else {
-        Empty::<Bytes>::new()
-            .map_err(|error| match error {})
-            .boxed_unsync()
-    });
-    *response.status_mut() = entry.status;
-    let mut headers = entry.headers.clone();
-    headers.remove(&LS_CACHE);
-    headers.remove(header::AGE);
-    headers.remove(CACHE_STATUS_HEADER);
-    append_lsc_cookies_as_set_cookie(&mut headers, &entry.lsc_cookies);
-    annotate_response_headers(
-        &mut headers,
-        CacheHeaderState::Hit {
-            scope: entry.scope,
-            age: entry.age,
-        },
-        emit_ls_cache,
-    );
-
-    if head_only && !headers.contains_key(header::CONTENT_LENGTH) {
-        if let Some(body_len) = body_len {
-            let value = HeaderValue::from_str(&body_len.to_string())
-                .map_err(|error| PipelineError::custom(error.to_string()))?;
-            headers.insert(header::CONTENT_LENGTH, value);
-        }
-    }
-
-    *response.headers_mut() = headers;
-    Ok(response)
 }
 
 pub(super) fn annotate_response_headers(

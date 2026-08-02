@@ -5,9 +5,6 @@ use http::Request;
 use std::net::SocketAddr;
 
 use super::key::{build_base_key, build_private_cache_key};
-use super::response_helpers::build_cached_response;
-use crate::policy::CacheScope;
-use crate::store::LookupEntry;
 
 #[inline]
 fn test_context(path: &str) -> HttpContext {
@@ -47,26 +44,6 @@ fn parses_private_key_from_cookies() {
     let key = build_private_cache_key(&cookies, "127.0.0.1".parse().unwrap(), Some("user"));
     assert!(key.contains("auth=user"));
     assert!(key.contains("cookie:PHPSESSID=1234567890abcdef"));
-}
-
-#[tokio::test]
-async fn hit_response_uses_empty_body_for_head() {
-    let entry = LookupEntry {
-        scope: CacheScope::Public,
-        status: http::StatusCode::OK,
-        headers: http::HeaderMap::new(),
-        body: Some(bytes::Bytes::from_static(b"hello")),
-        lsc_cookies: Vec::new(),
-        age: std::time::Duration::from_secs(5),
-        etag: None,
-        last_modified: None,
-        stale_if_error: None,
-        must_revalidate: false,
-        ttl: std::time::Duration::from_secs(60),
-    };
-    let response = build_cached_response(entry, true, false).unwrap();
-    let collected = response.into_body().collect().await.unwrap().to_bytes();
-    assert!(collected.is_empty());
 }
 
 #[test]
