@@ -1,7 +1,6 @@
 //! Core proxy logic: request transformation, TLS, connection establishment, and forwarding.
 
 mod affinity;
-mod backend;
 mod connect;
 mod pool;
 mod request;
@@ -26,15 +25,12 @@ use crate::types::health::HealthCheckStateMap;
 use crate::types::retry_budget::SharedRetryBudget;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
+use crate::upstream::circuit::CircuitBreaker;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
-use crate::upstream::{
-    determine_proxy_to, record_backend_response, record_backend_transport_failure,
-    resolve_upstreams,
-};
+use crate::upstream::{record_backend_response, record_backend_transport_failure, BackendSet};
 use crate::ProxyMetrics;
 
 use self::affinity::maybe_set_affinity_cookie;
-use self::backend::count_available_backends;
 use self::tls::cached_tls_config;
 
 const LOG_TARGET: &str = "ferron-http-proxy";
@@ -91,27 +87,10 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
-    resolved_upstreams_cache: Option<
-        &crate::per_config::PerConfigCache<Arc<Vec<Arc<UpstreamInner>>>>,
-    >,
-    config_key: &[usize],
+    upstreams: Arc<Vec<Arc<UpstreamInner>>>,
     retry_budget: Option<&SharedRetryBudget>,
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();
-
-    // Resolve upstreams, using cache for static upstreams when available
-    let upstreams = if let Some(cache) = resolved_upstreams_cache {
-        if let Some(cached) = cache.get(config_key) {
-            cached
-        } else {
-            let resolved =
-                Arc::new(resolve_upstreams(&config.upstreams, health_check_state.cloned()).await);
-            cache.insert(config_key, Arc::clone(&resolved));
-            resolved
-        }
-    } else {
-        Arc::new(resolve_upstreams(&config.upstreams, health_check_state.cloned()).await)
-    };
 
     if upstreams.is_empty() {
         ctx.events.emit(Event::Log(LogEvent {
@@ -133,26 +112,30 @@ pub async fn execute_proxy(
 
     let affinity_key = extract_affinity_key(&config.affinity, ctx);
 
+    let event_sink = ctx.events.clone();
+    let mut backend_set = BackendSet::new(
+        &upstreams,
+        algorithm,
+        conn_state,
+        ewma_state,
+        health_check_state,
+        CircuitBreaker::new(
+            Some(&circuit_breaker_state),
+            Some(&flapping_state),
+            &config.circuit_breaker,
+            &event_sink,
+            ferron_http::trace_context::current_event_trace_context(ctx),
+            config.metrics_resolved_ip,
+        ),
+        config.affinity.as_ref().map(|t| &t.affinity_type),
+        affinity_key.as_deref(),
+        ring,
+    );
+
     // Backend selection loop — retries on connection failure when retry_connection is enabled
     loop {
         // Select upstream via load balancing (tracker already initialized inside)
-        let Some(selected) = determine_proxy_to(
-            &upstreams,
-            algorithm,
-            conn_state,
-            ewma_state,
-            health_check_state,
-            &config.circuit_breaker,
-            Some(&circuit_breaker_state),
-            Some(&flapping_state),
-            config.affinity.as_ref().map(|t| &t.affinity_type),
-            affinity_key.as_deref(),
-            ring,
-            &ctx.events,
-            &mut metrics,
-            ferron_http::trace_context::current_event_trace_context(ctx),
-            config.metrics_resolved_ip,
-        ) else {
+        let Some(selected) = backend_set.next_backend() else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
                 message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
@@ -167,12 +150,30 @@ pub async fn execute_proxy(
                 metrics.active_unhealthy_backends =
                     guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
             }
+            // Report why the final selection round failed
+            let exclusions = backend_set.take_exclusions();
+            metrics
+                .excluded_already_tried
+                .extend(exclusions.already_tried);
+            metrics
+                .excluded_circuit_open
+                .extend(exclusions.circuit_open);
+            metrics.excluded_overloaded.extend(exclusions.overloaded);
             return Ok((HttpResponse::BuiltinError(503, None), metrics));
         };
 
         metrics.selected_backends.insert(selected.upstream.clone());
         metrics.final_selected_backend = Some(selected.upstream.clone());
         metrics.candidate_scores = selected.candidate_scores;
+        metrics
+            .excluded_already_tried
+            .extend(selected.exclusions.already_tried);
+        metrics
+            .excluded_circuit_open
+            .extend(selected.exclusions.circuit_open);
+        metrics
+            .excluded_overloaded
+            .extend(selected.exclusions.overloaded);
 
         let proxy_request_url: http::Uri = selected
             .upstream
@@ -309,13 +310,7 @@ pub async fn execute_proxy(
                         budget.record_retry();
                     }
                     // Count how many healthy backends remain
-                    let healthy_count = count_available_backends(
-                        &upstreams,
-                        health_check_state,
-                        Some(&circuit_breaker_state),
-                        &config.circuit_breaker,
-                        &metrics.selected_backends,
-                    );
+                    let healthy_count = backend_set.available_count();
 
                     if healthy_count > 0
                         && metrics.selected_backends.len() < upstreams.len()

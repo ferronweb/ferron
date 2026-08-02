@@ -150,6 +150,29 @@ impl ProxyState {
         self.algorithms.swap(Default::default());
     }
 
+    /// Resolve the upstreams for a config, caching static resolution per config.
+    ///
+    /// The cache is keyed by config pointer identity and is invalidated on
+    /// config reload (fresh Arc pointers), so a reloaded config always
+    /// resolves against the new health-check state.
+    #[inline]
+    pub async fn resolve_upstreams_cached(
+        &self,
+        config: &crate::config::ProxyConfig,
+        health_check_state: Option<types::health::HealthCheckStateMap>,
+        config_key: &[usize],
+    ) -> Arc<Vec<Arc<types::upstream::UpstreamInner>>> {
+        if let Some(cached) = self.resolved_upstreams_cache.get(config_key) {
+            return cached;
+        }
+        let resolved = Arc::new(
+            crate::upstream::resolve_upstreams(&config.upstreams, health_check_state).await,
+        );
+        self.resolved_upstreams_cache
+            .insert(config_key, Arc::clone(&resolved));
+        resolved
+    }
+
     /// Get or create the connection manager using the globally configured limit.
     #[inline]
     fn get_conn_manager(&self) -> Arc<crate::connections::ConnectionManager> {

@@ -1,7 +1,7 @@
 //! Load balancer runtime state.
 //!
-//! The configuration types (`LoadBalancerAlgorithm`, `SelectedBackend`)
-//! are defined in `crate::types` to avoid circular dependencies.
+//! The configuration type (`LoadBalancerAlgorithm`) is defined in
+//! `crate::types` to avoid circular dependencies.
 
 pub mod hash_ring;
 pub mod p2c_ewma;

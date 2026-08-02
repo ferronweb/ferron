@@ -43,6 +43,13 @@ fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
     })
 }
 
+fn cb_view<'a>(
+    config: &'a crate::config::CircuitBreakerConfig,
+    sink: &'a ferron_observability::CompositeEventSink,
+) -> crate::upstream::circuit::CircuitBreaker<'a> {
+    crate::upstream::circuit::CircuitBreaker::new(None, None, config, sink, None, false)
+}
+
 /// Compatibility wrapper: accepts the old `&[(usize, Arc<UpstreamInner>)]`
 /// format and converts to the new indices + upstreams signature.
 fn old_select_backend_index(
@@ -156,59 +163,44 @@ fn test_select_backend_single_backend() {
 }
 
 #[test]
-fn test_determine_proxy_to_no_upstreams() {
+fn test_backend_set_no_upstreams() {
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
-    let result = determine_proxy_to(
-        &[],
-        &algorithm,
-        None,
-        None,
-        None,
-        &crate::config::CircuitBreakerConfig::default(),
-        None,
-        None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        None,
-        false,
-    );
-    assert!(result.is_none());
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let config = crate::config::CircuitBreakerConfig::default();
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = cb_view(&config, &sink);
+    let mut backend_set = BackendSet::new(&[], &algorithm, None, None, None, cb, None, None, &ring);
+    assert!(backend_set.next_backend().is_none());
 }
 
 #[test]
-fn test_determine_proxy_to_single_backend() {
+fn test_backend_set_single_backend() {
     let upstreams = vec![make_upstream("http://backend1")];
     let algorithm = LoadBalancerAlgorithmInner::Random;
     let conn_state: ConnectionsTrackState = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
-    let result = determine_proxy_to(
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let config = crate::config::CircuitBreakerConfig::default();
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = cb_view(&config, &sink);
+    let mut backend_set = BackendSet::new(
         &upstreams,
         &algorithm,
         Some(&conn_state),
         None,
         None,
-        &crate::config::CircuitBreakerConfig::default(),
+        cb,
         None,
         None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        None,
-        false,
+        &ring,
     );
-    assert!(result.is_some());
-    let selected = result.unwrap();
+    let selected = backend_set.next_backend().unwrap();
     assert_eq!(selected.upstream.proxy_to, "http://backend1");
 }
 
 #[test]
-fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
+fn test_backend_set_filters_unhealthy() {
     let upstreams = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
@@ -225,29 +217,27 @@ fn test_determine_proxy_to_active_health_check_filters_unhealthy() {
 
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
-    let result = determine_proxy_to(
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let config = crate::config::CircuitBreakerConfig::default();
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = cb_view(&config, &sink);
+    let mut backend_set = BackendSet::new(
         &upstreams,
         &algorithm,
         None,
         None,
         Some(&health_check_state),
-        &crate::config::CircuitBreakerConfig::default(),
+        cb,
         None,
         None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        None,
-        false,
+        &ring,
     );
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
+    let selected = backend_set.next_backend().unwrap();
+    assert_eq!(selected.upstream.proxy_to, "http://backend2");
 }
 
 #[test]
-fn test_determine_proxy_to_active_health_check_all_healthy() {
+fn test_backend_set_all_healthy() {
     let upstreams = vec![
         make_upstream("http://backend1"),
         make_upstream("http://backend2"),
@@ -256,29 +246,106 @@ fn test_determine_proxy_to_active_health_check_all_healthy() {
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     let algorithm = LoadBalancerAlgorithmInner::Random;
 
-    let result = determine_proxy_to(
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let config = crate::config::CircuitBreakerConfig::default();
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = cb_view(&config, &sink);
+    let mut backend_set = BackendSet::new(
         &upstreams,
         &algorithm,
         None,
         None,
         Some(&health_check_state),
-        &crate::config::CircuitBreakerConfig::default(),
+        cb,
         None,
         None,
-        None,
-        None,
-        &RwLock::new(ConsistentHashRing::new(&[])),
-        &ferron_observability::CompositeEventSink::new(vec![]),
-        &mut crate::ProxyMetrics::new(),
-        None,
-        false,
+        &ring,
     );
-    assert!(result.is_some());
-    let selected = result.unwrap();
+    let selected = backend_set.next_backend().unwrap();
     assert!(
         selected.upstream.proxy_to == "http://backend1"
             || selected.upstream.proxy_to == "http://backend2"
     );
+}
+
+#[test]
+fn test_backend_set_tracks_tried_backends_and_reports_exclusions() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let config = crate::config::CircuitBreakerConfig::default();
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = cb_view(&config, &sink);
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
+    let mut backend_set = BackendSet::new(
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+    );
+
+    assert_eq!(backend_set.available_count(), 2);
+    let first = backend_set.next_backend().unwrap();
+    assert_eq!(first.upstream.proxy_to, "http://backend1");
+    assert!(first.exclusions.already_tried.is_empty());
+    assert_eq!(backend_set.available_count(), 1);
+
+    let second = backend_set.next_backend().unwrap();
+    assert_eq!(second.upstream.proxy_to, "http://backend2");
+    assert_eq!(second.exclusions.already_tried.len(), 1);
+    assert_eq!(
+        second.exclusions.already_tried[0].proxy_to,
+        "http://backend1"
+    );
+
+    assert_eq!(backend_set.available_count(), 0);
+    assert!(backend_set.next_backend().is_none());
+}
+
+#[test]
+fn test_backend_set_reports_overloaded_exclusions() {
+    let upstreams = vec![
+        make_upstream("http://backend1"),
+        make_upstream("http://backend2"),
+    ];
+    let circuit_breaker_state: crate::types::circuit::CircuitBreakerStateMap =
+        Arc::new(DashMap::with_hasher(FxBuildHasher));
+    circuit_breaker_state.insert(
+        upstreams[0].clone(),
+        crate::types::circuit::CircuitBreakerState {
+            status: Arc::new(std::sync::atomic::AtomicU8::new(
+                crate::types::circuit::CIRCUIT_BREAKER_STATUS_HALFOPEN,
+            )),
+            half_open_in_flight: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            ..Default::default()
+        },
+    );
+    let circuit_breaker = crate::config::CircuitBreakerConfig {
+        enabled: true,
+        ..Default::default()
+    };
+    let sink = ferron_observability::CompositeEventSink::new(vec![]);
+    let cb = crate::upstream::circuit::CircuitBreaker::new(
+        Some(&circuit_breaker_state),
+        None,
+        &circuit_breaker,
+        &sink,
+        None,
+        false,
+    );
+    let ring = RwLock::new(ConsistentHashRing::new(&[]));
+    let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
+    let mut backend_set = BackendSet::new(
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+    );
+
+    let selected = backend_set.next_backend().unwrap();
+    assert_eq!(selected.upstream.proxy_to, "http://backend2");
+    assert_eq!(selected.exclusions.overloaded.len(), 1);
+    assert_eq!(
+        selected.exclusions.overloaded[0].proxy_to,
+        "http://backend1"
+    );
+    assert!(selected.exclusions.circuit_open.is_empty());
 }
 
 #[test]
