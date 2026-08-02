@@ -32,14 +32,6 @@
 
 - **Diagnostic span location improvements** — diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
 
-#### HTTP caching
-
-- **Cache store lookup outcome struct** — the store's `lookup` interface now returns a named `LookupOutcome` struct instead of a positional tuple, and the servable entry view no longer carries an unused `stale_while_revalidate` field.
-- **Served response module** — all served cache responses (fresh hits, singleflight-coalesced hits, stale-while-revalidate serves, stale-if-error serves, and 304 revalidation rebuilds) now flow through a single `serve` entry point that owns header hygiene, LSCookie rehydration, HEAD content-length fixup, and cache-status / X-LiteSpeed-Cache annotation. The duplicated per-site response builders were removed.
-- **Cache outcome reporting** — every cache lookup now reports through a single `CacheOutcome` / `report` seam that owns the request/store/eviction metrics, span attributes, and access-log fields. The inline telemetry blocks in the stage were replaced by one call per site, and the metrics helpers moved out of the dissolved `metrics` module.
-- **Purge orchestration module** — all purges (the PURGE method and LSCache purge controls) now flow through a single `purge` entry point that owns the store purge, per-scope purge metrics, the purge debug log, and control-plane webhook fan-out. The outbound webhook HTTPS client is built once per process instead of per event, and the propagation paths are derived from the purge selectors and deduplicated. Purge metrics are now reported per scope with that scope's actual count.
-- **Per-hostname config parse cache** — the cache stage now parses its configuration once per hostname per configuration generation instead of once per request. The parse cache is keyed by hostname (falling back to `_default` when absent) and is cleared whenever the configuration reloads, so per-host configuration differences are still honored.
-
 ### Fixed
 
 #### HTTP server core
