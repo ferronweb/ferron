@@ -136,6 +136,12 @@
     "sub": true
   },
   {
+    "href": "/docs/v3/use-cases/traffic/status-redirects",
+    "target": "_self",
+    "label": "Status codes & redirects",
+    "sub": true
+  },
+  {
     "href": "/docs/v3/use-cases/traffic/url-rewriting",
     "target": "_self",
     "label": "URL rewriting",
