@@ -81,7 +81,6 @@ enum LookupResult {
     Hit,
     StaleWhileRevalidate {
         entry: Box<LookupEntry>,
-        // There used to be a `cache_key` field, but it was removed as it was dead code.
         stats: StoreStats,
         /// Key for inflight coalescing on expired-entry misses.
         inflight_key: Option<String>,
