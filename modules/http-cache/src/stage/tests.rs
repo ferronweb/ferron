@@ -67,3 +67,96 @@ fn base_key_prefers_original_uri() {
     );
     assert_eq!(key, "https://example.com/canonical/path");
 }
+
+#[test]
+fn propagation_paths_map_selectors_and_deduplicate() {
+    use crate::lscache::{PurgeOperation, PurgeSelector};
+    use crate::policy::CacheScope;
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![
+            PurgeSelector::All,
+            PurgeSelector::UrlPath("/a".to_string()),
+            PurgeSelector::Tag("v1".to_string()),
+            PurgeSelector::Url("/b?x=1".to_string()),
+            PurgeSelector::UrlPath("/a".to_string()),
+        ],
+        stale: false,
+    }];
+    assert_eq!(
+        super::purge::collect_propagation_paths(&operations),
+        vec!["*", "/a", "tag=v1", "/b?x=1"]
+    );
+}
+
+#[test]
+fn purge_reports_purged_and_remaining_entry_counts() {
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use http::StatusCode;
+
+    use crate::lscache::{PurgeOperation, PurgeSelector};
+    use crate::policy::CacheScope;
+    use crate::store::{CacheStore, StoredEntry};
+
+    let mut ctx = test_context("/purge/me");
+    let store = CacheStore::new(100);
+
+    let entry = StoredEntry {
+        scope: CacheScope::Public,
+        base_key: "https://example.com/keep".to_string(),
+        vary: crate::store::VaryRule {
+            header_names: Vec::new(),
+            cookie_names: Vec::new(),
+            value: None,
+        },
+        status: StatusCode::OK,
+        headers: http::HeaderMap::new(),
+        body: Some(Bytes::from_static(b"hello")),
+        lsc_cookies: Vec::new(),
+        created_at: std::time::Instant::now(),
+        ttl: Duration::from_secs(60),
+        access_at: 0,
+        private_key: None,
+        tags: Vec::new(),
+        purge_url: "/keep".to_string(),
+        etag: None,
+        last_modified: None,
+        stale_while_revalidate: Some(Duration::from_secs(10)),
+        stale_if_error: None,
+        must_revalidate: false,
+    };
+    store.insert_with_request(
+        entry.clone(),
+        None,
+        &http::HeaderMap::new(),
+        &Default::default(),
+    );
+
+    let second = StoredEntry {
+        base_key: "https://example.com/purge/me".to_string(),
+        purge_url: "/purge/me".to_string(),
+        ..entry
+    };
+    store.insert_with_request(second, None, &http::HeaderMap::new(), &Default::default());
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![PurgeSelector::UrlPath("/purge/me".to_string())],
+        stale: false,
+    }];
+    let stats = super::purge::purge(
+        &mut ctx,
+        &CacheZoneId::Host("example.com".to_string()),
+        &store,
+        &operations,
+        None,
+        false,
+        &crate::config::PurgePropagationConfig::default(),
+    );
+
+    assert_eq!(stats.purged, 1);
+    assert_eq!(store.len(), 1);
+}

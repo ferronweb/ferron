@@ -1,6 +1,6 @@
 mod key;
 mod outcome;
-mod purge_propagation;
+mod purge;
 mod response_helpers;
 mod served;
 #[cfg(test)]
@@ -16,7 +16,7 @@ use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
+use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
@@ -33,14 +33,13 @@ use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
 };
 use crate::store::{CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry};
-use crate::SECONDARY_RUNTIME;
 
 use self::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
 use self::outcome::{
-    emit_eviction_metrics, emit_purge_metric, emit_request_metric, emit_singleflight_metrics,
-    emit_store_metric, report, CacheOutcome,
+    emit_eviction_metrics, emit_request_metric, emit_singleflight_metrics, emit_store_metric,
+    report, CacheOutcome,
 };
-use self::purge_propagation::{propagate_purge_webhook, PURGE_SOURCE_HEADER};
+use self::purge::{purge, PURGE_SOURCE_HEADER};
 use self::response_helpers::{
     annotate_response_headers, append_lsc_cookies_as_set_cookie, collect_body_with_limit,
     response_from_parts, response_from_streaming_parts, strip_internal_headers, CacheHeaderState,
@@ -304,86 +303,27 @@ impl Stage<HttpContext> for HttpCacheStage {
                     return Ok(false);
                 }
 
-                let mut purged = 0;
-                for scope in [CacheScope::Public, CacheScope::Private] {
-                    let purge_ops = vec![PurgeOperation {
-                        scope,
+                let purge_ops: Vec<PurgeOperation> = [CacheScope::Public, CacheScope::Private]
+                    .iter()
+                    .map(|scope| PurgeOperation {
+                        scope: *scope,
                         selectors: vec![PurgeSelector::UrlPath(request.uri().path().to_string())],
                         stale: false,
-                    }];
-                    let (stats, items) = store.purge(&purge_ops, None);
-                    if stats.purged > 0 {
-                        emit_purge_metric(ctx, &zone_id, scope, stats.purged, items);
-                    }
-                    purged += stats.purged;
-                }
-
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Debug,
-                    target: LOG_TARGET,
-                    message: format!("Purged {} cache entries via PURGE method", purged),
-                    summary: "Cache purged via PURGE method".into(),
-                    attributes: vec![("cache.purged.count", LogAttributeValue::I64(purged as i64))],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-
+                    })
+                    .collect();
                 let is_propagated = request_headers
                     .get(&PURGE_SOURCE_HEADER)
                     .and_then(|v| v.to_str().ok())
                     .is_some_and(|v| v.eq_ignore_ascii_case("propagation"));
-
-                if !is_propagated {
-                    if let Some(url) = &config.purge_propagation.control_plane_url {
-                        let url = url.clone();
-                        let secret = config.purge_propagation.shared_secret.clone();
-                        let node_id = config.purge_propagation.node_id.clone();
-                        let path = request
-                            .uri()
-                            .path_and_query()
-                            .map(|pq| pq.as_str().to_string())
-                            .unwrap_or_else(|| request.uri().path().to_string());
-                        if let Some(handle) = SECONDARY_RUNTIME.get() {
-                            let events = ctx.events.clone();
-                            let trace_context =
-                                ferron_http::trace_context::current_event_trace_context(ctx);
-                            handle.spawn(async move {
-                                if let Err(e) = propagate_purge_webhook(
-                                    &url,
-                                    secret.as_deref(),
-                                    node_id.as_deref(),
-                                    &path,
-                                )
-                                .await
-                                {
-                                    events.emit(Event::Log(LogEvent {
-                                        level: LogLevel::Warn,
-                                        target: LOG_TARGET,
-                                        message: format!(
-                                            "Purge propagation to control-plane failed: {}",
-                                            e
-                                        ),
-                                        summary: "Purge propagation failed".into(),
-                                        attributes: vec![(
-                                            "error.message",
-                                            LogAttributeValue::String(e.to_string()),
-                                        )],
-                                        trace_context,
-                                    }));
-                                }
-                            });
-                        } else {
-                            ctx.events.emit(Event::Log(LogEvent {
-                                level: LogLevel::Warn,
-                                target: LOG_TARGET,
-                                message: "Distributed cache purge not yet available".to_string(),
-                                summary: "Distributed cache purge not yet available".into(),
-                                attributes: Vec::new(),
-                                trace_context:
-                                    ferron_http::trace_context::current_event_trace_context(ctx),
-                            }));
-                        }
-                    }
-                }
+                purge(
+                    ctx,
+                    &zone_id,
+                    &store,
+                    &purge_ops,
+                    None,
+                    !is_propagated,
+                    &config.purge_propagation,
+                );
 
                 let response = Response::builder()
                     .status(StatusCode::OK)
@@ -892,7 +832,6 @@ impl Stage<HttpContext> for HttpCacheStage {
             }
         }
 
-        let mut purge_scope = None;
         let purge_ops = parse_litespeed_purge(response.headers());
         if purge_ops.iter().any(|operation| operation.stale) {
             ctx.events.emit(Event::Log(LogEvent {
@@ -906,93 +845,20 @@ impl Stage<HttpContext> for HttpCacheStage {
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
-        if !purge_ops.is_empty() {
-            let (stats, items) = state.store.purge(&purge_ops, state.private_key.as_deref());
-            for operation in &purge_ops {
-                purge_scope = Some(operation.scope);
-                emit_purge_metric(ctx, &state.zone_id, operation.scope, stats.purged, items);
-            }
-            if stats.purged > 0 {
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Debug,
-                    target: LOG_TARGET,
-                    message: format!(
-                        "Purged {} cache entrie(s) via LSCache controls",
-                        stats.purged
-                    ),
-                    summary: "Cache purged via LSCache controls".into(),
-                    attributes: vec![(
-                        "cache.purged.count",
-                        LogAttributeValue::I64(stats.purged as i64),
-                    )],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-
-                if let Some(url) = &state.config.purge_propagation.control_plane_url {
-                    let mut paths: Vec<String> = Vec::new();
-                    for op in &purge_ops {
-                        for sel in &op.selectors {
-                            let path = match sel {
-                                PurgeSelector::All => "*".to_string(),
-                                PurgeSelector::Url(url) => url.clone(),
-                                PurgeSelector::UrlPath(path) => path.clone(),
-                                PurgeSelector::Tag(tag) => format!("tag={tag}"),
-                            };
-                            if !paths.contains(&path) {
-                                paths.push(path);
-                            }
-                        }
-                    }
-
-                    let url = url.clone();
-                    let secret = state.config.purge_propagation.shared_secret.clone();
-                    let node_id = state.config.purge_propagation.node_id.clone();
-                    if let Some(handle) = SECONDARY_RUNTIME.get() {
-                        let events = ctx.events.clone();
-                        let trace_context =
-                            ferron_http::trace_context::current_event_trace_context(ctx);
-                        handle.spawn(async move {
-                            for path in &paths {
-                                if let Err(e) = propagate_purge_webhook(
-                                    &url,
-                                    secret.as_deref(),
-                                    node_id.as_deref(),
-                                    path,
-                                )
-                                .await
-                                {
-                                    events.emit(Event::Log(LogEvent {
-                                        level: LogLevel::Warn,
-                                        target: LOG_TARGET,
-                                        message: format!(
-                                            "Purge propagation to control-plane failed: {}",
-                                            e
-                                        ),
-                                        summary: "Purge propagation failed".into(),
-                                        attributes: vec![(
-                                            "error.message",
-                                            LogAttributeValue::String(e.to_string()),
-                                        )],
-                                        trace_context: trace_context.clone(),
-                                    }));
-                                }
-                            }
-                        });
-                    } else {
-                        ctx.events.emit(Event::Log(LogEvent {
-                            level: LogLevel::Warn,
-                            target: LOG_TARGET,
-                            message: "Distributed cache purge not yet available".to_string(),
-                            summary: "Distributed cache purge not yet available".into(),
-                            attributes: Vec::new(),
-                            trace_context: ferron_http::trace_context::current_event_trace_context(
-                                ctx,
-                            ),
-                        }));
-                    }
-                }
-            }
-        }
+        let purge_scope = if purge_ops.is_empty() {
+            None
+        } else {
+            purge(
+                ctx,
+                &state.zone_id,
+                &state.store,
+                &purge_ops,
+                state.private_key.as_deref(),
+                true,
+                &state.config.purge_propagation,
+            );
+            purge_ops.last().map(|operation| operation.scope)
+        };
 
         let ls_control = parse_litespeed_cache_control(response.headers());
         let ls_vary = if ls_control.as_ref().is_some_and(|control| control.no_vary) {
