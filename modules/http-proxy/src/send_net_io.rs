@@ -24,9 +24,6 @@ pub type SendTcpStreamPollDropGuard = SendStreamPollDropGuard<PollTcpStream>;
 /// A wrapper around a `PollUnixStream` that supports cross-thread safety.
 #[cfg(unix)]
 pub type SendUnixStreamPoll = SendStreamPoll<PollUnixStream>;
-/// A guard that ensures the inner stream is properly marked as dropped when dropped.
-#[cfg(unix)]
-pub type SendUnixStreamPollDropGuard = SendStreamPollDropGuard<PollUnixStream>;
 
 /// A trait that allows a stream to be wrapped in a `SendStreamPoll`.
 #[cfg(unix)]

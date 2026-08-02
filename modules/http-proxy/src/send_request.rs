@@ -145,31 +145,13 @@ impl SendRequestWrapper {
 }
 
 /// HTTP/1.x handshake using vibeio executor.
-pub async fn http1_handshake<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
+///
+/// `drop_guard` keeps the underlying poll stream alive until the connection
+/// teardown; it is generic so both TCP and Unix streams share this path.
+pub async fn http1_handshake<I, G>(io: I, drop_guard: G) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    let io = VibeioIo::new(io);
-    let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
-    let conn_with_upgrades = conn.with_upgrades();
-    vibeio::spawn(async move {
-        let _ = conn_with_upgrades.await;
-        drop(drop_guard);
-    });
-    Ok(SendRequestWrapper::http1(sender))
-}
-
-/// HTTP/1.x handshake for Unix sockets.
-#[cfg(unix)]
-pub async fn http1_handshake_unix<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
-where
-    I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    G: 'static,
 {
     let io = VibeioIo::new(io);
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
@@ -182,31 +164,13 @@ where
 }
 
 /// HTTP/2 handshake using vibeio executor.
-pub async fn http2_handshake<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
+///
+/// `drop_guard` keeps the underlying poll stream alive until the connection
+/// teardown; it is generic so both TCP and Unix streams share this path.
+pub async fn http2_handshake<I, G>(io: I, drop_guard: G) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    let io = VibeioIo::new(io);
-    let executor = vibeio_hyper::VibeioExecutor;
-    let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn(async move {
-        let _ = conn.await;
-        drop(drop_guard);
-    });
-    Ok(SendRequestWrapper::http2(sender))
-}
-
-/// HTTP/2 handshake for Unix sockets.
-#[cfg(unix)]
-pub async fn http2_handshake_unix<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
-where
-    I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    G: 'static,
 {
     let io = VibeioIo::new(io);
     let executor = vibeio_hyper::VibeioExecutor;
