@@ -26,6 +26,7 @@ impl<T> Default for PerConfigCache<T> {
 
 impl<T> PerConfigCache<T> {
     /// Create an empty cache.
+    #[inline]
     pub fn new() -> Self {
         Self {
             inner: DashMap::with_hasher(FxBuildHasher),
@@ -36,6 +37,7 @@ impl<T> PerConfigCache<T> {
     ///
     /// `init` runs at most once per key; concurrent callers receive the
     /// same value.
+    #[inline]
     pub fn get_or_insert_with(&self, key: &[usize], init: impl FnOnce() -> T) -> T
     where
         T: Clone,
@@ -44,6 +46,7 @@ impl<T> PerConfigCache<T> {
     }
 
     /// Get a clone of the entry for `key`, if present.
+    #[inline]
     pub fn get(&self, key: &[usize]) -> Option<T>
     where
         T: Clone,
@@ -52,17 +55,21 @@ impl<T> PerConfigCache<T> {
     }
 
     /// Insert `value` for `key`.
+    #[allow(dead_code)]
+    #[inline]
     pub fn insert(&self, key: &[usize], value: T) {
         self.inner.insert(key.to_vec(), value);
     }
 
     /// Remove all entries.
+    #[inline]
     pub fn clear(&self) {
         self.inner.clear();
     }
 
     /// Number of entries.
     #[cfg(test)]
+    #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -78,6 +85,7 @@ pub struct TaskRegistry {
 }
 
 impl Default for TaskRegistry {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -85,6 +93,7 @@ impl Default for TaskRegistry {
 
 impl TaskRegistry {
     /// Create an empty registry.
+    #[inline]
     pub fn new() -> Self {
         Self {
             inner: DashMap::with_hasher(FxBuildHasher),
@@ -96,6 +105,7 @@ impl TaskRegistry {
     /// `spawn` runs only when `key` is unregistered, so the operation is
     /// idempotent per configuration generation. Returns `true` when a new
     /// task was spawned.
+    #[inline]
     pub fn ensure(&self, key: &[usize], spawn: impl FnOnce() -> tokio::task::AbortHandle) -> bool {
         match self.inner.entry(key.to_vec()) {
             dashmap::Entry::Occupied(_) => false,
@@ -107,6 +117,7 @@ impl TaskRegistry {
     }
 
     /// Whether `key` has a registered task.
+    #[inline]
     pub fn contains_key(&self, key: &[usize]) -> bool {
         self.inner.contains_key(key)
     }
@@ -115,6 +126,7 @@ impl TaskRegistry {
     ///
     /// Handles are collected before aborting so no shard lock is held
     /// while a task is cancelled.
+    #[inline]
     pub fn abort_all(&self) {
         let handles: Vec<_> = self
             .inner
@@ -129,6 +141,7 @@ impl TaskRegistry {
 
     /// Number of registered tasks.
     #[cfg(test)]
+    #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
