@@ -140,6 +140,9 @@ impl ProxyState {
     fn on_reload(&self) {
         self.health_check_tasks.abort_all();
         self.retry_budget_states.clear();
+        // Since active health check state is set on first (immediately),
+        // and later (after delays) health checks, let's just clear it all.
+        self.active_health_check_state.clear();
         self.active_unhealthy_counters.clear();
         self.algorithms.swap(Default::default());
     }
