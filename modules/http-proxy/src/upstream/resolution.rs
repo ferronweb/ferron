@@ -17,14 +17,11 @@ use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorith
 /// For SRV upstreams, this performs DNS resolution. For static upstreams,
 /// it returns them as-is.
 #[inline]
-pub async fn resolve_upstreams(
-    upstreams: &[Upstream],
-    active_health_check_state: Option<HealthCheckStateMap>,
-) -> Vec<Arc<UpstreamInner>> {
+pub async fn resolve_upstreams(upstreams: &[Upstream]) -> Vec<Arc<UpstreamInner>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
     for upstream in upstreams {
-        resolved.extend(upstream.resolve(active_health_check_state.clone()).await);
+        resolved.extend(upstream.resolve().await);
     }
     resolved
 }

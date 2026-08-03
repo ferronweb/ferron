@@ -2,8 +2,6 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::types::health::HealthCheckStateMap;
-
 /// DNS resolution status for an upstream backend.
 ///
 /// Tracks whether DNS resolution was applicable and its outcome,
@@ -71,6 +69,8 @@ pub struct UpstreamInner {
     pub idle_timeout: std::time::Duration,
     /// DNS resolution status, used for metric labeling.
     pub dns_status: DnsResolutionStatus,
+    /// Per-upstream connection limit.
+    pub limit: Option<usize>,
 }
 
 impl std::hash::Hash for UpstreamInner {
@@ -173,10 +173,7 @@ impl Upstream {
     /// (strict DNS mode), or pass through as-is for IP literals, Unix sockets,
     /// and logical DNS mode. SRV upstreams perform an SRV DNS lookup.
     #[inline]
-    pub async fn resolve(
-        &self,
-        active_health_check_state: Option<HealthCheckStateMap>,
-    ) -> Vec<Arc<UpstreamInner>> {
+    pub async fn resolve(&self) -> Vec<Arc<UpstreamInner>> {
         match self {
             Upstream::Static(cfg) => {
                 let needs_dns =
@@ -185,7 +182,7 @@ impl Upstream {
                 if needs_dns {
                     #[cfg(feature = "srv-lookup")]
                     {
-                        super::strict_dns::resolve_strict_dns(cfg, active_health_check_state).await
+                        super::strict_dns::resolve_strict_dns(cfg).await
                     }
                     #[cfg(not(feature = "srv-lookup"))]
                     {
@@ -217,14 +214,13 @@ impl Upstream {
                         priority: cfg.priority,
                         connection_timeout: cfg.connection_timeout,
                         idle_timeout: cfg.idle_timeout,
+                        limit: cfg.limit,
                         dns_status,
                     })]
                 }
             }
             #[cfg(feature = "srv-lookup")]
-            Upstream::Srv(srv_data) => {
-                super::srv::resolve_srv(srv_data, active_health_check_state).await
-            }
+            Upstream::Srv(srv_data) => super::srv::resolve_srv(srv_data).await,
         }
     }
 }

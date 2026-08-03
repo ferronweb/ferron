@@ -10,8 +10,6 @@ use parking_lot::RwLock;
 
 use crate::types::circuit::circuit_breaker_state_label;
 use crate::types::retry_budget::SharedRetryBudget;
-#[cfg(feature = "srv-lookup")]
-use crate::types::upstream::Upstream;
 use crate::upstream::lb::p2c_ewma::{self, P2cEwmaParams};
 use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::ProxyState;
@@ -90,24 +88,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // Set or update per-upstream local limits.
-        let conn_manager = self.state.get_conn_manager();
-        for uc in &config.upstreams {
-            let limit = match uc {
-                Upstream::Static(s) => s.limit,
-                #[cfg(feature = "srv-lookup")]
-                Upstream::Srv(s) => s.limit,
-            };
-            if let Some(limit) = limit {
-                let resolved = uc
-                    .resolve(Some(Arc::clone(&self.state.active_health_check_state)))
-                    .await;
-                for resolved_upstream in resolved {
-                    conn_manager.set_local_limit(resolved_upstream, limit);
-                }
-            }
-        }
-
         let (algorithm, ring) = if let Some(algo) = self.state.algorithms.load().get(&config_key) {
             algo.clone()
         } else {
@@ -149,11 +129,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 })
         });
 
-        let upstreams = crate::upstream::resolve_upstreams(
-            &config.upstreams,
-            Some(Arc::clone(&self.state.active_health_check_state)),
-        )
-        .await;
+        let upstreams = crate::upstream::resolve_upstreams(&config.upstreams).await;
+
+        // Set or update per-upstream local limits.
+        let conn_manager = self.state.get_conn_manager();
+        for upstream in &upstreams {
+            if let Some(limit) = upstream.limit {
+                conn_manager.set_local_limit(upstream.clone(), limit);
+            }
+        }
 
         let result = crate::proxy::execute_proxy(
             ctx,

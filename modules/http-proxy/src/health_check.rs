@@ -670,7 +670,7 @@ pub fn spawn_health_check_task(
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
-                            crate::types::strict_dns::resolve_strict_dns_inner(&temp_cfg),
+                            crate::types::strict_dns::resolve_strict_dns(&temp_cfg),
                         )
                         .await;
                         if timeout_result.is_err() {
