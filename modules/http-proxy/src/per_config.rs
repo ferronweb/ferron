@@ -145,12 +145,6 @@ impl TaskRegistry {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
-
-    /// Returns `true` if there are no registered tasks.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
 }
 
 #[cfg(test)]
