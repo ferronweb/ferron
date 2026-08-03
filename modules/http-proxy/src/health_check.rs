@@ -598,7 +598,6 @@ pub fn spawn_health_check_task(
         }
 
         let mut last_probe_times: HashMap<String, tokio::time::Instant> = HashMap::new();
-        let mut probe_configs = probe_configs;
         loop {
             let now = tokio::time::Instant::now();
             let mut next_wake = now + Duration::from_secs(60);
