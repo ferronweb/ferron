@@ -1,11 +1,8 @@
-use std::borrow::Cow;
-use std::fmt::Write;
-
-use arrayvec::ArrayString;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::HttpContext;
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Uri};
+use std::borrow::Cow;
 
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
@@ -111,11 +108,8 @@ pub(super) fn construct_proxy_request(
     let local_ip = ctx.local_address.ip();
     let proto = if ctx.encrypted { "https" } else { "http" };
 
-    // Format IP addresses into stack-allocated buffers to avoid heap allocation
-    let mut client_ip_buf = ArrayString::<45>::new();
-    let _ = client_ip_buf.write_str(&client_ip.to_string());
-    let mut local_ip_buf = ArrayString::<45>::new();
-    let _ = local_ip_buf.write_str(&local_ip.to_string());
+    let client_ip_buf = client_ip.to_string();
+    let local_ip_buf = local_ip.to_string();
 
     let client_ip_from_header_enabled = ClientIpFromHeaderConfig::resolve_from_context(ctx)
         .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()));
