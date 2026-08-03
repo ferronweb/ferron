@@ -146,14 +146,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 })
         });
 
-        let upstreams = self
-            .state
-            .resolve_upstreams_cached(
-                &config,
-                Some(Arc::clone(&self.state.active_health_check_state)),
-                &config_key,
-            )
-            .await;
+        let upstreams = crate::upstream::resolve_upstreams(
+            &config.upstreams,
+            Some(Arc::clone(&self.state.active_health_check_state)),
+        )
+        .await;
 
         let result = crate::proxy::execute_proxy(
             ctx,

@@ -108,10 +108,6 @@ struct ProxyState {
     /// Whether to include resolved IP addresses in proxy metrics attributes.
     /// Updated from config on each request.
     metrics_resolved_ip: std::sync::atomic::AtomicBool,
-    /// Cache of resolved upstreams keyed by config pointer identity.
-    /// Avoids re-resolving static upstreams on every request.
-    /// Automatically invalidated on config reload (new Arc pointers).
-    resolved_upstreams_cache: PerConfigCache<Arc<Vec<Arc<types::upstream::UpstreamInner>>>>,
     /// Retry budget state, keyed by config pointer identity.
     retry_budget_states: PerConfigCache<SharedRetryBudget>,
 }
@@ -129,7 +125,6 @@ impl ProxyState {
             health_check_tasks: TaskRegistry::new(),
             active_unhealthy_counters: PerConfigCache::new(),
             metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
-            resolved_upstreams_cache: PerConfigCache::new(),
             retry_budget_states: PerConfigCache::new(),
         }
     }
@@ -144,33 +139,9 @@ impl ProxyState {
     #[inline]
     fn on_reload(&self) {
         self.health_check_tasks.abort_all();
-        self.resolved_upstreams_cache.clear();
         self.retry_budget_states.clear();
         self.active_unhealthy_counters.clear();
         self.algorithms.swap(Default::default());
-    }
-
-    /// Resolve the upstreams for a config, caching static resolution per config.
-    ///
-    /// The cache is keyed by config pointer identity and is invalidated on
-    /// config reload (fresh Arc pointers), so a reloaded config always
-    /// resolves against the new health-check state.
-    #[inline]
-    pub async fn resolve_upstreams_cached(
-        &self,
-        config: &crate::config::ProxyConfig,
-        health_check_state: Option<types::health::HealthCheckStateMap>,
-        config_key: &[usize],
-    ) -> Arc<Vec<Arc<types::upstream::UpstreamInner>>> {
-        if let Some(cached) = self.resolved_upstreams_cache.get(config_key) {
-            return cached;
-        }
-        let resolved = Arc::new(
-            crate::upstream::resolve_upstreams(&config.upstreams, health_check_state).await,
-        );
-        self.resolved_upstreams_cache
-            .insert(config_key, Arc::clone(&resolved));
-        resolved
     }
 
     /// Get or create the connection manager using the globally configured limit.
