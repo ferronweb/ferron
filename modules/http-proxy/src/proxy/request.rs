@@ -113,9 +113,9 @@ pub(super) fn construct_proxy_request(
 
     // Format IP addresses into stack-allocated buffers to avoid heap allocation
     let mut client_ip_buf = ArrayString::<45>::new();
-    let _ = client_ip_buf.write_str(&client_ip.to_string());
+    let _ = write!(client_ip_buf, "{}", client_ip);
     let mut local_ip_buf = ArrayString::<45>::new();
-    let _ = local_ip_buf.write_str(&local_ip.to_string());
+    let _ = write!(local_ip_buf, "{}", local_ip);
 
     let client_ip_from_header_enabled = ClientIpFromHeaderConfig::resolve_from_context(ctx)
         .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()));
