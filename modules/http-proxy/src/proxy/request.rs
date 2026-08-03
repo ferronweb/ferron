@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::fmt::Write;
-use std::str::FromStr;
 
 use arrayvec::ArrayString;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
@@ -11,10 +10,6 @@ use http::{Request, Uri};
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::send_request::ProxyBody;
 use crate::types::error::ProxyError;
-
-/// Max capacity for stack-allocated header value buffers.
-/// Covers IPv6 addresses with brackets, forwarded header elements, etc.
-const HEADER_BUF_CAP: usize = 256;
 
 /// Construct proxy request with header transformations.
 #[inline]
@@ -78,7 +73,8 @@ pub(super) fn construct_proxy_request(
     ))?;
     let (mut parts, body) = req.into_parts();
 
-    parts.uri = Uri::from_str(&final_uri)?;
+    let final_uri_buf = bytes::Bytes::from_owner(final_uri.into_owned());
+    parts.uri = Uri::from_maybe_shared(final_uri_buf)?;
 
     for name in &config.headers_to_remove {
         parts.headers.remove(name);
@@ -160,9 +156,14 @@ pub(super) fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: 
 pub(super) fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
     if let Some(existing) = headers.get("x-forwarded-for") {
         if let Ok(existing_str) = existing.to_str() {
-            let mut buf = ArrayString::<HEADER_BUF_CAP>::new();
-            let _ = write!(buf, "{}, {}", existing_str, client_ip_str);
-            if let Ok(hv) = HeaderValue::from_str(&buf) {
+            let mut buf = String::with_capacity(existing_str.len() + client_ip_str.len() + 2);
+            buf.push_str(existing_str);
+            buf.push(',');
+            buf.push(' ');
+            buf.push_str(client_ip_str);
+            // Convert to Bytes to avoid additional heap allocations in HeaderValue::from_str
+            let buf = bytes::Bytes::from_owner(buf);
+            if let Ok(hv) = HeaderValue::from_maybe_shared(buf) {
                 headers.insert("x-forwarded-for", hv);
                 return;
             }
@@ -180,9 +181,10 @@ pub(super) fn set_forwarded(
     proto: &'static str,
     local_ip_str: &str,
 ) {
-    let mut buf = ArrayString::<HEADER_BUF_CAP>::new();
-    build_forwarded_element_into(client_ip_str, proto, local_ip_str, &mut buf);
-    if let Ok(hv) = HeaderValue::from_str(&buf) {
+    let buf = build_forwarded_element(client_ip_str, proto, local_ip_str);
+    // Convert to Bytes to avoid additional heap allocations in HeaderValue::from_str
+    let buf = bytes::Bytes::from_owner(buf);
+    if let Ok(hv) = HeaderValue::from_maybe_shared(buf) {
         headers.insert("forwarded", hv);
     }
 }
@@ -194,41 +196,59 @@ pub(super) fn append_forwarded(
     proto: &'static str,
     local_ip_str: &str,
 ) {
-    let mut element_buf = ArrayString::<HEADER_BUF_CAP>::new();
-    build_forwarded_element_into(client_ip_str, proto, local_ip_str, &mut element_buf);
+    let element_buf = build_forwarded_element(client_ip_str, proto, local_ip_str);
     if let Some(existing) = headers.get("forwarded") {
         if let Ok(existing_str) = existing.to_str() {
-            let mut buf = ArrayString::<HEADER_BUF_CAP>::new();
-            let _ = write!(buf, "{}, {}", existing_str, element_buf);
-            if let Ok(hv) = HeaderValue::from_str(&buf) {
+            let mut buf = String::with_capacity(existing_str.len() + element_buf.len() + 2);
+            buf.push_str(existing_str);
+            buf.push(',');
+            buf.push(' ');
+            buf.push_str(&element_buf);
+            // Convert to Bytes to avoid additional heap allocations in HeaderValue::from_str
+            let buf = bytes::Bytes::from_owner(buf);
+            if let Ok(hv) = HeaderValue::from_maybe_shared(buf) {
                 headers.insert("forwarded", hv);
                 return;
             }
         }
     }
-    if let Ok(hv) = HeaderValue::from_str(&element_buf) {
+    // Convert to Bytes to avoid additional heap allocations in HeaderValue::from_str
+    let buf = bytes::Bytes::from_owner(element_buf);
+    if let Ok(hv) = HeaderValue::from_maybe_shared(buf) {
         headers.insert("forwarded", hv);
     }
 }
 
-/// Build a Forwarded header element into a stack-allocated buffer.
+/// Build a Forwarded header element into a `String`.
 #[inline]
-pub(super) fn build_forwarded_element_into(
-    client_ip_str: &str,
-    proto: &str,
-    local_ip_str: &str,
-    buf: &mut ArrayString<HEADER_BUF_CAP>,
-) {
-    let _ = write!(buf, "for=");
+fn build_forwarded_element(client_ip_str: &str, proto: &str, local_ip_str: &str) -> String {
+    // for="[<client_ip_str>];proto=<proto>;by="[<local_ip_str>]"
+    // 012345               67890123       456789              01
+    //
+    // 21 additional characters in the worst case, so reserve 21 for safety
+    let mut buf =
+        String::with_capacity(client_ip_str.len() + proto.len() + local_ip_str.len() + 21);
+    buf.push_str("for=");
     if client_ip_str.contains(':') {
-        let _ = write!(buf, "\"[{}]\"", client_ip_str);
+        buf.push('\"');
+        buf.push('[');
+        buf.push_str(client_ip_str);
+        buf.push(']');
+        buf.push('\"');
     } else {
-        let _ = write!(buf, "{}", client_ip_str);
+        buf.push_str(client_ip_str);
     }
-    let _ = write!(buf, ";proto={};by=", proto);
+    buf.push_str(";proto=");
+    buf.push_str(proto);
+    buf.push_str(";by=");
     if local_ip_str.contains(':') {
-        let _ = write!(buf, "\"[{}]\"", local_ip_str);
+        buf.push('\"');
+        buf.push('[');
+        buf.push_str(local_ip_str);
+        buf.push(']');
+        buf.push('\"');
     } else {
-        let _ = write!(buf, "{}", local_ip_str);
+        buf.push_str(local_ip_str);
     }
+    buf
 }
