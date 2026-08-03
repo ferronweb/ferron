@@ -103,6 +103,8 @@ struct ProxyState {
     /// Background health check task handles, keyed by configuration pointer.
     /// Tasks are aborted on reload via `on_reload`.
     health_check_tasks: TaskRegistry,
+    /// Whether health checks have been started for this proxy instance.
+    health_check_started: std::sync::atomic::AtomicBool,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
     active_unhealthy_counters: PerConfigCache<Arc<ActiveUnhealthyCounters>>,
     /// Whether to include resolved IP addresses in proxy metrics attributes.
@@ -123,6 +125,7 @@ impl ProxyState {
             active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             flapping_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             health_check_tasks: TaskRegistry::new(),
+            health_check_started: std::sync::atomic::AtomicBool::new(false),
             active_unhealthy_counters: PerConfigCache::new(),
             metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
             retry_budget_states: PerConfigCache::new(),
@@ -183,8 +186,12 @@ impl ProxyState {
             Upstream::Srv(cfg) => cfg.health_check_config.enabled,
         });
 
-        if !has_health_checks && self.health_check_tasks.is_empty() {
-            // No health checks enabled and no tasks running — nothing to do
+        if !has_health_checks
+            && !self
+                .health_check_started
+                .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            // No health checks enabled and no tasks running at any time — nothing to do
             return;
         }
 
@@ -199,6 +206,10 @@ impl ProxyState {
                 return;
             }
         };
+
+        // Mark health checks as started, so future calls can clear the active health check state
+        self.health_check_started
+            .store(true, std::sync::atomic::Ordering::Relaxed);
 
         // Spawn the health check task with a callback to update the shared counter
         self.health_check_tasks.ensure(config_keys, || {

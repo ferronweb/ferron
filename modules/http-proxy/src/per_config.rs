@@ -147,6 +147,7 @@ impl TaskRegistry {
     }
 
     /// Returns `true` if there are no registered tasks.
+    #[allow(dead_code)]
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
