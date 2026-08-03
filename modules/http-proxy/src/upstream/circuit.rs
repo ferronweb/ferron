@@ -26,6 +26,7 @@ pub struct CircuitBreaker<'a> {
 }
 
 impl<'a> CircuitBreaker<'a> {
+    #[inline]
     pub fn new(
         state: Option<&'a CircuitBreakerStateMap>,
         flapping_state: Option<&'a FlappingStateMap>,
@@ -57,6 +58,7 @@ impl<'a> CircuitBreaker<'a> {
     }
 
     /// Whether a backend is currently available for new circuit-breaker traffic.
+    #[inline]
     pub fn is_available(&self, upstream: &Arc<UpstreamInner>) -> bool {
         if !self.config.enabled {
             return true;
@@ -78,6 +80,7 @@ impl<'a> CircuitBreaker<'a> {
     }
 
     /// Whether a backend's circuit breaker is currently in the open state.
+    #[inline]
     pub fn is_open(&self, upstream: &Arc<UpstreamInner>) -> bool {
         self.config
             .enabled
@@ -93,6 +96,7 @@ impl<'a> CircuitBreaker<'a> {
     /// are unavailable (closed-circuit cooldown, half-open slot busy) are
     /// rejected without any state transitions. Otherwise the state machine
     /// advances (open → half-open) and the acquisition is emitted.
+    #[inline]
     pub fn try_acquire(&self, upstream: &Arc<UpstreamInner>) -> bool {
         if !self.is_available(upstream) {
             return false;
@@ -300,6 +304,7 @@ pub fn record_backend_response(
     }
 }
 
+#[inline]
 fn emit_circuit_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream: &Arc<UpstreamInner>,
@@ -345,6 +350,7 @@ fn emit_circuit_metric(
     }));
 }
 
+#[inline]
 fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
@@ -513,6 +519,7 @@ fn record_circuit_breaker_failure(
     }
 }
 
+#[inline]
 fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
@@ -632,6 +639,7 @@ mod tests {
 
     use super::*;
 
+    #[inline]
     fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
@@ -646,6 +654,7 @@ mod tests {
         })
     }
 
+    #[inline]
     fn cb_view<'a>(
         state: &'a CircuitBreakerStateMap,
         config: &'a crate::config::CircuitBreakerConfig,

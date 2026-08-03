@@ -83,6 +83,7 @@ pub struct BackendSet<'a> {
 impl<'a> BackendSet<'a> {
     /// Create a backend set over the given selection state.
     #[allow(clippy::too_many_arguments)]
+    #[inline]
     pub fn new(
         upstreams: &'a [Arc<UpstreamInner>],
         algorithm: &'a LoadBalancerAlgorithmInner,
@@ -133,6 +134,7 @@ impl<'a> BackendSet<'a> {
     /// exclusions. When no backend remains, `None` is returned and any
     /// exclusions recorded by the final round stay pending for
     /// [`Self::take_exclusions`].
+    #[inline]
     pub fn next_backend(&mut self) -> Option<SelectionOutcome> {
         if self.upstreams.is_empty() {
             return None;
@@ -211,10 +213,12 @@ impl<'a> BackendSet<'a> {
     ///
     /// After `next_backend` returns `None`, this exposes why the last round
     /// failed so the caller can still report the excluded backends.
+    #[inline]
     pub fn take_exclusions(&mut self) -> SelectionExclusions {
         std::mem::take(&mut self.exclusions)
     }
 
+    #[inline]
     fn resolve_affinity(&self, unhealthy: &FxHashSet<usize>) -> Option<usize> {
         if let (Some(affinity_type), Some(key)) = (self.affinity_type, self.affinity_key) {
             return super::affinity::resolve_affinity_index(
@@ -233,6 +237,7 @@ impl<'a> BackendSet<'a> {
     /// Returns `Some(SelectionOutcome)` if a backend was selected, or `None`
     /// if the group is exhausted (all circuit-open or overloaded). On each
     /// call, the group shrinks as backends are tried.
+    #[inline]
     fn try_select_from_group(
         &mut self,
         group: &mut Vec<usize>,

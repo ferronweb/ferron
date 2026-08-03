@@ -19,6 +19,7 @@ pub struct PerConfigCache<T> {
 }
 
 impl<T> Default for PerConfigCache<T> {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }

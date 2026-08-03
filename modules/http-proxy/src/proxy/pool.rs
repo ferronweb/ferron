@@ -36,6 +36,7 @@ use ferron_http::HttpContext;
 /// and raced against establishing a brand-new connection, avoiding the
 /// cost of unnecessary duplicate connection establishments.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -173,6 +174,7 @@ pub async fn try_send_with_pool(
 /// Wait for any pending connection to become ready.
 ///
 /// Returns the item if one becomes ready, or `None` if all fail.
+#[inline]
 async fn wait_for_any_ready(
     pending_items: &mut Vec<PooledConnection>,
     idle_timeout: Duration,
@@ -207,6 +209,7 @@ async fn wait_for_any_ready(
 
 /// Classify a connect failure into a proxy error. `scheme` is used only in
 /// the error message prefix.
+#[inline]
 fn classify_connect_error(kind: std::io::ErrorKind, scheme: &str, error: &str) -> ProxyError {
     match kind {
         std::io::ErrorKind::TimedOut => {
@@ -223,6 +226,7 @@ fn classify_connect_error(kind: std::io::ErrorKind, scheme: &str, error: &str) -
 
 /// TCP connect adapter: establish a TCP stream to the upstream address and
 /// classify the failure.
+#[inline]
 async fn connect_tcp(
     addr: &str,
     ctx: &mut HttpContext,
@@ -253,6 +257,7 @@ async fn connect_tcp(
 
 /// Unix connect adapter: establish a Unix stream and classify the failure.
 #[cfg(unix)]
+#[inline]
 async fn connect_unix(path: &str) -> Result<vibeio::net::PollUnixStream, ProxyError> {
     vibeio::net::PollUnixStream::connect(path)
         .await
@@ -263,6 +268,7 @@ async fn connect_unix(path: &str) -> Result<vibeio::net::PollUnixStream, ProxyEr
 /// upstream connections. The stream and drop-guard types are erased into the
 /// generic parameters `S` and `G`.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn dispatch_handshake<S, G>(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -360,6 +366,7 @@ where
 /// If `existing_item` is provided, it is reused instead of pulling a new one
 /// from the pool, avoiding a double semaphore acquisition.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -472,6 +479,7 @@ pub async fn establish_and_send(
 
 /// Send request via a SendRequestWrapper and handle the response.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -580,6 +588,7 @@ pub async fn send_via_wrapper(
 }
 
 /// Handle HTTP 101 Switching Protocols (WebSocket upgrades).
+#[inline]
 pub async fn handle_upgrade(
     resp_for_upgrade: http::Response<()>,
     req_extensions: http::Extensions,

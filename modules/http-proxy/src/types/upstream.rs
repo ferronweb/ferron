@@ -25,6 +25,7 @@ pub enum DnsResolutionStatus {
 
 impl DnsResolutionStatus {
     /// Returns the metric label value for this status.
+    #[inline]
     pub fn as_label(&self) -> &'static str {
         match self {
             Self::NotApplicable => "static",

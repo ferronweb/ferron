@@ -361,6 +361,7 @@ pub fn initialize_tracker(
 }
 
 /// Clone an existing connection tracker for an upstream.
+#[inline]
 pub fn get_tracker(
     conn_state: Option<&ConnectionsTrackState>,
     upstream: &Arc<UpstreamInner>,

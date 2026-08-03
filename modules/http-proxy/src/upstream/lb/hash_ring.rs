@@ -39,6 +39,7 @@ impl ConsistentHashRing {
         (weight.min(Self::MAX_EFFECTIVE_WEIGHT) as usize).saturating_mul(Self::VNODES_PER_BACKEND)
     }
 
+    #[inline]
     fn build_nodes(backends: &[Arc<UpstreamInner>]) -> (Vec<(u64, usize)>, u64) {
         let total_vnodes: usize = backends
             .iter()
@@ -126,6 +127,7 @@ mod tests {
 
     use super::*;
 
+    #[inline]
     fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
@@ -140,6 +142,7 @@ mod tests {
         })
     }
 
+    #[inline]
     fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),

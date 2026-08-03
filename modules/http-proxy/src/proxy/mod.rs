@@ -39,6 +39,7 @@ const LOG_TARGET: &str = "ferron-http-proxy";
 ///
 /// Standard methods are kept as-is; unknown methods are collapsed into `_other`
 /// to prevent high-cardinality label explosion from custom/fuzzed HTTP methods.
+#[inline]
 pub(crate) fn categorize_http_method(method: &http::Method) -> &'static str {
     match *method {
         http::Method::GET => "GET",
@@ -58,6 +59,7 @@ pub(crate) fn categorize_http_method(method: &http::Method) -> &'static str {
 ///
 /// GET, HEAD, PUT, DELETE, OPTIONS, and TRACE are idempotent.
 /// POST, PATCH, CONNECT, and custom methods are not.
+#[inline]
 pub(crate) fn is_method_idempotent(method: &http::Method) -> bool {
     matches!(
         *method,
@@ -75,6 +77,7 @@ pub(crate) fn is_method_idempotent(method: &http::Method) -> bool {
 /// Returns the HTTP response and collected metrics for post-request emission.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
+#[inline]
 pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,

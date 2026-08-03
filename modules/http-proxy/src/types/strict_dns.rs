@@ -210,6 +210,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 /// Extract hostname and port from a URL string.
 ///
 /// Returns `(hostname, port)` or `None` if parsing fails.
+#[inline]
 pub fn parse_host_port(url: &str) -> Option<(String, u16)> {
     let rest = url
         .strip_prefix("http://")

@@ -12,6 +12,7 @@ pub const CIRCUIT_BREAKER_STATUS_OPEN: u8 = 1;
 pub const CIRCUIT_BREAKER_STATUS_HALFOPEN: u8 = 2;
 
 /// Returns a human-readable label for the circuit breaker status value.
+#[inline]
 pub fn circuit_breaker_state_label(status: u8) -> &'static str {
     match status {
         CIRCUIT_BREAKER_STATUS_CLOSED => "closed",
@@ -47,6 +48,7 @@ pub struct CircuitBreakerState {
 }
 
 impl Default for CircuitBreakerState {
+    #[inline]
     fn default() -> Self {
         Self {
             recent_failures: None,

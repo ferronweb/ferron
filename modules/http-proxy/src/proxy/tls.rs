@@ -12,6 +12,7 @@ static TLS_CLIENT_CONFIG_CACHE: LazyLock<
     parking_lot::RwLock<HashMap<(bool, bool, bool, Option<usize>), Arc<ClientConfig>>>,
 > = LazyLock::new(|| parking_lot::RwLock::new(HashMap::new()));
 
+#[inline]
 fn build_tls_config(
     http2: bool,
     http2_only: bool,
@@ -60,6 +61,7 @@ fn build_tls_config(
     tls_client_config
 }
 
+#[inline]
 pub(super) fn cached_tls_config(
     http2: bool,
     http2_only: bool,
@@ -93,6 +95,7 @@ pub(super) fn cached_tls_config(
 struct NoServerVerifier;
 
 impl ServerCertVerifier for NoServerVerifier {
+    #[inline]
     fn verify_server_cert(
         &self,
         _end_entity: &CertificateDer<'_>,
@@ -104,6 +107,7 @@ impl ServerCertVerifier for NoServerVerifier {
         Ok(ServerCertVerified::assertion())
     }
 
+    #[inline]
     fn verify_tls12_signature(
         &self,
         _message: &[u8],
@@ -113,6 +117,7 @@ impl ServerCertVerifier for NoServerVerifier {
         Ok(HandshakeSignatureValid::assertion())
     }
 
+    #[inline]
     fn verify_tls13_signature(
         &self,
         _message: &[u8],
@@ -122,6 +127,7 @@ impl ServerCertVerifier for NoServerVerifier {
         Ok(HandshakeSignatureValid::assertion())
     }
 
+    #[inline]
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         rustls::crypto::aws_lc_rs::default_provider()
             .signature_verification_algorithms

@@ -6,6 +6,7 @@ use http::header::HeaderName;
 
 use super::types::{HeaderAction, ProxyConfig};
 
+#[inline]
 pub(super) fn parse_request_header_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
@@ -54,6 +55,7 @@ pub(super) fn parse_request_header_entry(
     Ok(())
 }
 
+#[inline]
 pub(super) fn parse_affinity_entry(
     type_val: &str,
     entry: &ServerConfigurationDirectiveEntry,

@@ -113,6 +113,7 @@ struct ProxyState {
 }
 
 impl ProxyState {
+    #[inline]
     fn new() -> Self {
         Self {
             conn_manager: RwLock::new(None),
@@ -234,6 +235,7 @@ pub struct ReverseProxyModuleLoader {
 }
 
 impl ModuleLoader for ReverseProxyModuleLoader {
+    #[inline]
     fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
         directives::register_core_proxy_directives(registry);
         directives::register_health_check_directives(registry);
@@ -244,6 +246,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         directives::register_affinity_directives(registry);
     }
 
+    #[inline]
     fn register_global_configuration_validators(
         &mut self,
         registry: &mut Vec<Box<dyn ConfigurationValidator>>,
@@ -251,6 +254,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         registry.push(Box::new(ProxyConfigurationValidator));
     }
 
+    #[inline]
     fn register_per_protocol_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<
@@ -264,6 +268,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             .push(Box::new(ProxyConfigurationValidator));
     }
 
+    #[inline]
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let state = Arc::new(ProxyState::new());
         self.state = Some(Arc::clone(&state));
@@ -274,6 +279,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         })
     }
 
+    #[inline]
     fn register_modules(
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
@@ -332,14 +338,17 @@ struct ReverseProxyModule {
 }
 
 impl Module for ReverseProxyModule {
+    #[inline]
     fn name(&self) -> &str {
         "http-proxy"
     }
 
+    #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
+    #[inline]
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         // Capture the secondary Tokio runtime handle for SRV lookups and pool gauge emission
         let (secondary_handle, pool_sink) =

@@ -31,6 +31,7 @@ pub enum LoadBalancerAlgorithmInner {
 }
 
 impl From<LoadBalancerAlgorithm> for LoadBalancerAlgorithmInner {
+    #[inline]
     fn from(alg: LoadBalancerAlgorithm) -> Self {
         match alg {
             LoadBalancerAlgorithm::Random => LoadBalancerAlgorithmInner::Random,

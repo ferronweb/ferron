@@ -31,6 +31,7 @@ pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
     LazyLock::new(DashMap::new);
 
 /// Parse proxy configuration from a server configuration block.
+#[inline]
 pub fn parse_proxy_config(
     ctx: &ferron_http::HttpContext,
 ) -> Result<Option<ProxyConfig>, Box<dyn Error + Send + Sync>> {
@@ -88,6 +89,7 @@ pub fn parse_proxy_config(
     Ok(Some(cfg))
 }
 
+#[inline]
 fn parse_proxy_block(
     block: &ServerConfigurationBlock,
     cfg: &mut ProxyConfig,

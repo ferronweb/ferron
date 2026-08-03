@@ -22,10 +22,12 @@ pub struct ReverseProxyStage {
 
 #[async_trait::async_trait(?Send)]
 impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
+    #[inline]
     fn name(&self) -> &str {
         "reverse_proxy"
     }
 
+    #[inline]
     fn is_applicable(
         &self,
         config: Option<&ferron_core::config::ServerConfigurationBlock>,
@@ -33,6 +35,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         config.is_some_and(|c| c.has_directive("proxy"))
     }
 
+    #[inline]
     async fn run(
         &self,
         ctx: &mut HttpContext,
@@ -834,6 +837,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         Ok(false)
     }
 
+    #[inline]
     async fn run_inverse(
         &self,
         _ctx: &mut HttpContext,
