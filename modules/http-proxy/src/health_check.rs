@@ -465,7 +465,19 @@ pub fn is_upstream_healthy(state_map: &HealthCheckStateMap, upstream_url: &str) 
         .map(|state| state.is_healthy)
         .unwrap_or(true)
 }
-///
+
+/// Configuration for a probe to be performed on an upstream.
+struct ProbeConfig {
+    /// The type of health check to perform (static, SRV, or strict DNS).
+    health_check_type: UpstreamHealthCheckType,
+    /// The configuration for the health check.
+    health_check_config: UpstreamHealthCheckConfig,
+    /// The mTLS credentials to use for the health check.
+    mtls_credentials: Option<Arc<MtlsCredentials>>,
+    /// Whether health checks are enabled for this upstream.
+    health_check_enabled: bool,
+}
+
 /// This task will periodically probe all upstreams with health checks enabled
 /// and update the health state map accordingly.
 ///
@@ -479,60 +491,55 @@ pub fn spawn_health_check_task(
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
-        let mut probe_configs: Vec<(
-            UpstreamHealthCheckType,
-            UpstreamHealthCheckConfig,
-            Option<Arc<MtlsCredentials>>,
-        )> = Vec::new();
+        let mut probe_configs: Vec<ProbeConfig> = Vec::new();
 
         for upstream in &upstreams {
             match upstream {
                 Upstream::Static(cfg) => {
-                    if cfg.health_check_config.enabled {
-                        if let Some((host, port)) =
-                            crate::types::strict_dns::parse_host_port(&cfg.url)
-                        {
-                            let is_ip = host.parse::<std::net::IpAddr>().is_ok();
-                            let is_logical = cfg.logical_dns;
-                            if !is_ip && !is_logical && !cfg.url.starts_with("unix:") {
-                                probe_configs.push((
-                                    UpstreamHealthCheckType::StrictDns((
-                                        host,
-                                        port,
-                                        cfg.dns_servers.clone(),
-                                    )),
-                                    cfg.health_check_config.clone(),
-                                    cfg.mtls.clone(),
-                                ));
-                            } else {
-                                probe_configs.push((
-                                    UpstreamHealthCheckType::Static(cfg.url.clone()),
-                                    cfg.health_check_config.clone(),
-                                    cfg.mtls.clone(),
-                                ));
-                            }
+                    if let Some((host, port)) = crate::types::strict_dns::parse_host_port(&cfg.url)
+                    {
+                        let is_ip = host.parse::<std::net::IpAddr>().is_ok();
+                        let is_logical = cfg.logical_dns;
+                        if !is_ip && !is_logical && !cfg.url.starts_with("unix:") {
+                            probe_configs.push(ProbeConfig {
+                                health_check_type: UpstreamHealthCheckType::StrictDns((
+                                    host,
+                                    port,
+                                    cfg.dns_servers.clone(),
+                                )),
+                                health_check_config: cfg.health_check_config.clone(),
+                                mtls_credentials: cfg.mtls.clone(),
+                                health_check_enabled: cfg.health_check_config.enabled,
+                            });
                         } else {
-                            probe_configs.push((
-                                UpstreamHealthCheckType::Static(cfg.url.clone()),
-                                cfg.health_check_config.clone(),
-                                cfg.mtls.clone(),
-                            ));
+                            probe_configs.push(ProbeConfig {
+                                health_check_type: UpstreamHealthCheckType::Static(cfg.url.clone()),
+                                health_check_config: cfg.health_check_config.clone(),
+                                mtls_credentials: cfg.mtls.clone(),
+                                health_check_enabled: cfg.health_check_config.enabled,
+                            });
                         }
+                    } else {
+                        probe_configs.push(ProbeConfig {
+                            health_check_type: UpstreamHealthCheckType::Static(cfg.url.clone()),
+                            health_check_config: cfg.health_check_config.clone(),
+                            mtls_credentials: cfg.mtls.clone(),
+                            health_check_enabled: cfg.health_check_config.enabled,
+                        });
                     }
                 }
                 #[cfg(feature = "srv-lookup")]
                 Upstream::Srv(cfg) => {
-                    if cfg.health_check_config.enabled {
-                        probe_configs.push((
-                            UpstreamHealthCheckType::Srv((
-                                cfg.srv_name.clone(),
-                                cfg.dns_servers.clone(),
-                                cfg.weight,
-                            )),
-                            cfg.health_check_config.clone(),
-                            cfg.mtls.clone(),
-                        ));
-                    }
+                    probe_configs.push(ProbeConfig {
+                        health_check_type: UpstreamHealthCheckType::Srv((
+                            cfg.srv_name.clone(),
+                            cfg.dns_servers.clone(),
+                            cfg.weight,
+                        )),
+                        health_check_config: cfg.health_check_config.clone(),
+                        mtls_credentials: cfg.mtls.clone(),
+                        health_check_enabled: cfg.health_check_config.enabled,
+                    });
                 }
             }
         }
@@ -543,8 +550,7 @@ pub fn spawn_health_check_task(
         }
 
         for probe_config in &probe_configs {
-            let (upstream_type, config, _) = probe_config;
-            let upstream_desc = match upstream_type {
+            let upstream_desc = match &probe_config.health_check_type {
                 UpstreamHealthCheckType::Static(url) => format!("Static({})", url),
                 #[cfg(feature = "srv-lookup")]
                 UpstreamHealthCheckType::Srv((srv_name, _, _)) => format!("SRV({})", srv_name),
@@ -553,14 +559,18 @@ pub fn spawn_health_check_task(
                     format!("StrictDns({}:{})", host, port)
                 }
             };
+            if !probe_config.health_check_enabled {
+                // Don't emit health check logs for disabled probes, it's just noise.
+                continue;
+            }
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Debug,
                     message: format!(
                         "Initializing health check for upstream {}: {} {}",
                         upstream_desc,
-                        config.method.as_str(),
-                        config.uri
+                        probe_config.health_check_config.method.as_str(),
+                        probe_config.health_check_config.uri
                     ),
                     summary: "Initializing health check".into(),
                     target: super::LOG_TARGET,
@@ -572,12 +582,14 @@ pub fn spawn_health_check_task(
                         (
                             "ferron.proxy.health.method",
                             ferron_observability::LogAttributeValue::String(
-                                config.method.as_str().to_string(),
+                                probe_config.health_check_config.method.as_str().to_string(),
                             ),
                         ),
                         (
                             "ferron.proxy.health.uri",
-                            ferron_observability::LogAttributeValue::String(config.uri.clone()),
+                            ferron_observability::LogAttributeValue::String(
+                                probe_config.health_check_config.uri.clone(),
+                            ),
                         ),
                     ],
                     trace_context: None,
@@ -586,16 +598,18 @@ pub fn spawn_health_check_task(
         }
 
         let mut last_probe_times: HashMap<String, tokio::time::Instant> = HashMap::new();
-
+        let mut probe_configs = probe_configs;
         loop {
             let now = tokio::time::Instant::now();
             let mut next_wake = now + Duration::from_secs(60);
 
             let mut probes_due = Vec::new();
 
-            for (upstream_url, config, mtls) in &probe_configs {
-                let upstreams = match upstream_url {
-                    UpstreamHealthCheckType::Static(url) => vec![url.clone()],
+            for probe_config in probe_configs.split_off(0) {
+                let upstreams = match &probe_config.health_check_type {
+                    UpstreamHealthCheckType::Static(url) => {
+                        vec![url.clone()]
+                    }
                     #[cfg(feature = "srv-lookup")]
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
                         let timeout_result = tokio::time::timeout(
@@ -691,18 +705,34 @@ pub fn spawn_health_check_task(
                 };
 
                 for upstream_url in upstreams {
+                    if !probe_config.health_check_enabled {
+                        // Cleanup any state for this upstream, and don't bother with probes
+                        state_map.remove(&upstream_url);
+                        continue;
+                    }
+
                     let last_probe = last_probe_times.get(&upstream_url);
                     let elapsed = last_probe.map_or(Duration::MAX, |t| t.elapsed());
 
-                    if elapsed >= config.interval {
-                        probes_due.push((upstream_url.clone(), config.clone(), mtls.clone()));
+                    if elapsed >= probe_config.health_check_config.interval {
+                        probes_due.push((
+                            upstream_url.clone(),
+                            probe_config.health_check_config.clone(),
+                            probe_config.mtls_credentials.clone(),
+                        ));
                         next_wake = now;
                     } else {
-                        let time_until_due = config.interval - elapsed;
+                        let time_until_due = probe_config.health_check_config.interval - elapsed;
                         if time_until_due < next_wake - now {
                             next_wake = now + time_until_due;
                         }
                     }
+                }
+
+                if probe_config.health_check_enabled {
+                    // Don't push probe config if health checks are disabled for this upstream,
+                    // as it will never be used for probing.
+                    probe_configs.push(probe_config);
                 }
             }
 

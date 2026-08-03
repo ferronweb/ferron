@@ -183,7 +183,8 @@ impl ProxyState {
             Upstream::Srv(cfg) => cfg.health_check_config.enabled,
         });
 
-        if !has_health_checks {
+        if !has_health_checks && self.health_check_tasks.is_empty() {
+            // No health checks enabled and no tasks running — nothing to do
             return;
         }
 
