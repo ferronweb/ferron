@@ -17,21 +17,13 @@ use crate::types::upstream::{DnsResolutionStatus, UpstreamConfig, UpstreamInner}
 /// Results are cached based on the minimum TTL from the DNS response.
 #[inline]
 pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
-    let url = cfg.url.clone();
-    let weight = cfg.weight;
-    let mtls = cfg.mtls.clone();
-    let priority = cfg.priority;
-    let dns_servers = cfg.dns_servers.clone();
-    let connection_timeout = cfg.connection_timeout;
-    let idle_timeout = cfg.idle_timeout;
-    let limit = cfg.limit;
-
-    let (hostname, port) = match parse_host_port(&url) {
+    let (hostname, port) = match parse_host_port(&cfg.url) {
         Some(v) => v,
         None => return Vec::new(),
     };
 
-    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers).await {
+    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &cfg.dns_servers).await
+    {
         if cached.is_empty() {
             if let Some((_, event_sink)) = crate::runtime_handle::try_get_secondary_runtime_handle()
             {
@@ -65,6 +57,15 @@ pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>>
             return Vec::new();
         }
     };
+
+    let url = cfg.url.clone();
+    let weight = cfg.weight;
+    let mtls = cfg.mtls.clone();
+    let priority = cfg.priority;
+    let dns_servers = cfg.dns_servers.clone();
+    let connection_timeout = cfg.connection_timeout;
+    let idle_timeout = cfg.idle_timeout;
+    let limit = cfg.limit;
 
     let result = handle
         .spawn(async move {

@@ -48,15 +48,8 @@ pub async fn resolve_srv(
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,
 ) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {
-    let srv_name = srv_data.srv_name.clone();
-    let dns_servers = srv_data.dns_servers.clone();
-    let weight = srv_data.weight;
-    let mtls = srv_data.mtls.clone();
-    let connection_timeout = srv_data.connection_timeout;
-    let idle_timeout = srv_data.idle_timeout;
-    let limit = srv_data.limit;
-
-    if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers).await {
+    if let Some(cached) = super::dns_cache::get_srv(&srv_data.srv_name, &srv_data.dns_servers).await
+    {
         return cached;
     }
 
@@ -68,6 +61,14 @@ pub async fn resolve_srv_inner(
             return Vec::new();
         }
     };
+
+    let srv_name = srv_data.srv_name.clone();
+    let dns_servers = srv_data.dns_servers.clone();
+    let weight = srv_data.weight;
+    let mtls = srv_data.mtls.clone();
+    let connection_timeout = srv_data.connection_timeout;
+    let idle_timeout = srv_data.idle_timeout;
+    let limit = srv_data.limit;
 
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
