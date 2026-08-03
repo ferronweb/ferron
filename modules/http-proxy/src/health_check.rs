@@ -545,7 +545,7 @@ pub fn spawn_health_check_task(
         }
 
         if probe_configs.is_empty() {
-            sleep(Duration::from_secs(u64::MAX)).await;
+            std::future::pending::<()>().await;
             return;
         }
 
