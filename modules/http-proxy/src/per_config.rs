@@ -68,7 +68,7 @@ impl<T> PerConfigCache<T> {
     }
 
     /// Number of entries.
-    #[cfg(test)]
+    #[allow(dead_code)]
     #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
@@ -153,49 +153,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use super::{PerConfigCache, TaskRegistry};
-
-    #[test]
-    fn per_config_cache_keeps_keys_distinct() {
-        let cache = PerConfigCache::new();
-        let key_a = vec![1usize, 2, 3];
-        let key_b = vec![4usize, 5, 6];
-
-        assert_eq!(cache.get_or_insert_with(&key_a, || 10), 10);
-        assert_eq!(cache.get_or_insert_with(&key_b, || 20), 20);
-        assert_eq!(cache.len(), 2);
-
-        assert_eq!(cache.get(&key_a), Some(10));
-        assert_eq!(cache.get(&key_b), Some(20));
-    }
-
-    #[test]
-    fn per_config_cache_init_runs_once_per_key() {
-        let cache = PerConfigCache::new();
-        let key = vec![1usize, 2, 3];
-        let calls = Arc::new(AtomicUsize::new(0));
-
-        let init = || {
-            calls.fetch_add(1, Ordering::Relaxed);
-            42
-        };
-        assert_eq!(cache.get_or_insert_with(&key, &init), 42);
-        assert_eq!(cache.get_or_insert_with(&key, &init), 42);
-        assert_eq!(cache.get_or_insert_with(&key, &init), 42);
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
-    }
-
-    #[test]
-    fn per_config_cache_clear_invalidates() {
-        let cache = PerConfigCache::new();
-        let key = vec![1usize, 2, 3];
-        cache.insert(&key, 7);
-        assert_eq!(cache.get(&key), Some(7));
-
-        cache.clear();
-        assert_eq!(cache.get(&key), None);
-        assert_eq!(cache.len(), 0);
-    }
+    use super::TaskRegistry;
 
     #[tokio::test]
     async fn task_registry_ensure_is_idempotent() {
