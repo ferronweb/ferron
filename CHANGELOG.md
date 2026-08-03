@@ -56,7 +56,7 @@
 
 - **Config reload cleanup** — on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
 - **Upstream resolution cache fix** - in earlier versions of Ferron 3 beta, stale upstream resolution cache (with infinite TTL) could have caused upstream connection errors, due to drift between cached state and actual DNS state. This has been fixed by removing the infinite-TTL internal upstream resolution cache.
-- **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 characters maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
+- **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
 
 ## Ferron 3.0.0-beta.8
 
