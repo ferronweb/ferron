@@ -312,7 +312,7 @@ echo "Hello after sleep";
 
     // Give the request a short moment to start, then stop the backend to simulate a mid-request reset
     tokio::time::sleep(Duration::from_millis(200)).await;
-    php_fpm.stop().await.unwrap();
+    php_fpm.stop_with_timeout(Some(5)).await.unwrap();
 
     // Wait for the request to complete or fail
     match tokio::time::timeout(Duration::from_secs(10), req_future).await {
