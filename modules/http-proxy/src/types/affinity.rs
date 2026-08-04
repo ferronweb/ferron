@@ -14,6 +14,7 @@ pub enum SameSiteMode {
 
 impl SameSiteMode {
     /// Return the string representation for Set-Cookie header.
+    #[inline]
     pub fn as_str(&self) -> &'static str {
         match self {
             SameSiteMode::Strict => "Strict",
@@ -43,6 +44,7 @@ pub struct CookieAffinityConfig {
 }
 
 impl Default for CookieAffinityConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             name: "ferron_sticky".to_string(),

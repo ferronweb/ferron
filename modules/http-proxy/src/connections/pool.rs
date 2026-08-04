@@ -421,6 +421,7 @@ impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> SingleThreadPool<K, L, I> {
 }
 
 impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> Drop for PoolItem<K, L, I> {
+    #[inline]
     fn drop(&mut self) {
         if let Some(key) = self.key.take() {
             let pool = &*self.pool;

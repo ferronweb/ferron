@@ -15,10 +15,8 @@ pub mod tests;
 use std::hash::BuildHasher;
 
 // Re-export upstream-specific functions
-pub use circuit::{
-    is_circuit_breaker_available, record_backend_response, record_backend_transport_failure,
-};
-pub use resolution::{determine_proxy_to, resolve_upstreams};
+pub use circuit::{record_backend_response, record_backend_transport_failure};
+pub use resolution::{resolve_upstreams, BackendSet};
 
 /// Returns an [`ahash::AHasher`] with a consistent seed.
 ///

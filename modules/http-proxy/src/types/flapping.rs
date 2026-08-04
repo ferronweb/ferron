@@ -19,6 +19,7 @@ pub struct FlappingState {
 }
 
 impl Default for FlappingState {
+    #[inline]
     fn default() -> Self {
         Self {
             transitions: Some(Arc::new(ArrayQueue::new(15))), // 16 - 1 = 15

@@ -14,6 +14,7 @@ use crate::types::health::UpstreamHealthCheckConfig;
 use crate::types::upstream::SrvUpstreamData;
 use crate::types::upstream::{MtlsCredentials, Upstream, UpstreamConfig};
 
+#[inline]
 pub(super) fn parse_upstream_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
@@ -214,6 +215,7 @@ pub(super) fn parse_upstream_entry(
 }
 
 #[cfg(feature = "srv-lookup")]
+#[inline]
 pub(super) fn parse_srv_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut ProxyConfig,
@@ -395,6 +397,7 @@ pub(super) fn parse_srv_entry(
     Ok(())
 }
 
+#[inline]
 pub(super) fn read_mtls_data(path: &str) -> Result<std::sync::Arc<Vec<u8>>, std::io::Error> {
     if let Some(cached) = MTLS_FILE_CACHE.get(path) {
         return Ok(cached.clone());

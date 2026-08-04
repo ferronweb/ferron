@@ -8,6 +8,7 @@ use ferron_http::trace_context::current_event_trace_context;
 use futures_util::future::select_ok;
 use http_body_util::BodyExt;
 use rustls::pki_types::ServerName;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
@@ -22,8 +23,6 @@ use crate::send_request::{
     http1_handshake, http2_handshake, BodyTrackingState, ContentLengthTrackingBody,
     SendRequestWrapper, TrackedBody, TruncatedTracker,
 };
-#[cfg(unix)]
-use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::types::error::ProxyError;
 use crate::types::upstream::UpstreamInner;
 use crate::types::ConnectionsTrackState;
@@ -37,6 +36,7 @@ use ferron_http::HttpContext;
 /// and raced against establishing a brand-new connection, avoiding the
 /// cost of unnecessary duplicate connection establishments.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -174,6 +174,7 @@ pub async fn try_send_with_pool(
 /// Wait for any pending connection to become ready.
 ///
 /// Returns the item if one becomes ready, or `None` if all fail.
+#[inline]
 async fn wait_for_any_ready(
     pending_items: &mut Vec<PooledConnection>,
     idle_timeout: Duration,
@@ -206,11 +207,166 @@ async fn wait_for_any_ready(
     }
 }
 
+/// Classify a connect failure into a proxy error. `scheme` is used only in
+/// the error message prefix.
+#[inline]
+fn classify_connect_error(kind: std::io::ErrorKind, scheme: &str, error: &str) -> ProxyError {
+    match kind {
+        std::io::ErrorKind::TimedOut => {
+            ProxyError::Timeout(format!("{scheme} connect failed: {error}"))
+        }
+        std::io::ErrorKind::ConnectionAborted
+        | std::io::ErrorKind::NotFound
+        | std::io::ErrorKind::HostUnreachable => {
+            ProxyError::ConnectFailedUnavailable(format!("{scheme} connect failed: {error}"))
+        }
+        _ => ProxyError::ConnectFailed(format!("{scheme} connect failed: {error}")),
+    }
+}
+
+/// TCP connect adapter: establish a TCP stream to the upstream address and
+/// classify the failure.
+#[inline]
+async fn connect_tcp(
+    addr: &str,
+    ctx: &mut HttpContext,
+) -> Result<vibeio::net::PollTcpStream, ProxyError> {
+    let tcp = match vibeio::net::PollTcpStream::connect(addr)
+        .await
+        .map_err(|e| {
+            ctx.events.emit(ferron_observability::Event::Log(
+                ferron_observability::LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
+                    summary: "Reverse proxy: TCP connect to backend failed".into(),
+                    target: "ferron-http-proxy",
+                    attributes: vec![(
+                        "upstream.address",
+                        ferron_observability::LogAttributeValue::String(addr.to_string()),
+                    )],
+                    trace_context: current_event_trace_context(ctx),
+                },
+            ));
+            e
+        }) {
+        Ok(s) => s,
+        Err(e) => return Err(classify_connect_error(e.kind(), "TCP", &e.to_string())),
+    };
+    Ok(tcp)
+}
+
+/// Unix connect adapter: establish a Unix stream and classify the failure.
+#[cfg(unix)]
+#[inline]
+async fn connect_unix(path: &str) -> Result<vibeio::net::PollUnixStream, ProxyError> {
+    vibeio::net::PollUnixStream::connect(path)
+        .await
+        .map_err(|e| classify_connect_error(e.kind(), "Unix", &e.to_string()))
+}
+
+/// Shared PROXY-header / TLS / HTTP dispatch sequence for both TCP and Unix
+/// upstream connections. The stream and drop-guard types are erased into the
+/// generic parameters `S` and `G`.
+#[allow(clippy::too_many_arguments)]
+#[inline]
+async fn dispatch_handshake<S, G>(
+    ctx: &mut HttpContext,
+    config: &ProxyConfig,
+    upstream: &Arc<UpstreamInner>,
+    proxy_url: &http::Uri,
+    is_https: bool,
+    client_ip: Option<IpAddr>,
+    label: &str,
+    metrics: &mut ProxyMetrics,
+    mut stream: S,
+    drop_guard: G,
+) -> Result<SendRequestWrapper, ProxyError>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    G: 'static,
+{
+    // Write PROXY protocol header if configured (before HTTP handshake)
+    if let Some(proxy_header_version) = config.proxy_header {
+        if let Some(cip) = client_ip {
+            let local_addr = ctx.local_address;
+            let header_bytes = build_proxy_protocol_header(
+                proxy_header_version,
+                cip,
+                local_addr.ip(),
+                ctx.remote_address.port(),
+                local_addr.port(),
+            )?;
+            stream.write_all(&header_bytes).await.map_err(|e| {
+                ProxyError::ProxyProtocolWriteFailed(format!("PROXY header write failed: {e}"))
+            })?;
+        }
+    }
+
+    if is_https {
+        let connector = TlsConnector::from(cached_tls_config(
+            config.http2,
+            config.http2_only,
+            config.no_verification,
+            upstream.mtls.clone(),
+        ));
+        // Always use the original hostname for TLS SNI, not a pre-resolved IP.
+        let host = proxy_url.host().ok_or("upstream URL has no host")?;
+        let domain = ServerName::try_from(host.to_string())
+            .map_err(|e| format!("Invalid server name: {e}"))?;
+        let tls_start = std::time::Instant::now();
+        let tls_stream = match connector.connect(domain, stream).await {
+            Ok(s) => {
+                metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
+                s
+            }
+            Err(e) => {
+                metrics.tls_handshake_failures += 1;
+                ctx.events.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Warn,
+                        message: format!("Reverse proxy: TLS handshake with {label} failed: {e}"),
+                        summary: "Reverse proxy: TLS handshake with backend failed".into(),
+                        target: "ferron-http-proxy",
+                        attributes: vec![
+                            (
+                                "upstream.address",
+                                ferron_observability::LogAttributeValue::String(label.to_string()),
+                            ),
+                            (
+                                "error.message",
+                                ferron_observability::LogAttributeValue::String(e.to_string()),
+                            ),
+                        ],
+                        trace_context: current_event_trace_context(ctx),
+                    },
+                ));
+                return Err(ProxyError::TlsHandshakeFailed(format!(
+                    "TLS handshake failed: {e}"
+                )));
+            }
+        };
+
+        let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
+        let use_http2 = (config.http2 && negotiated_h2) || config.http2_only;
+
+        if use_http2 {
+            http2_handshake(tls_stream, drop_guard).await
+        } else {
+            http1_handshake(tls_stream, drop_guard).await
+        }
+    } else if config.http2_only || config.http2 {
+        http2_handshake(stream, drop_guard).await
+    } else {
+        http1_handshake(stream, drop_guard).await
+    }
+}
+
 /// Establish a new connection and send the request.
 ///
 /// If `existing_item` is provided, it is reused instead of pulling a new one
 /// from the pool, avoiding a double semaphore acquisition.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -246,6 +402,8 @@ pub async fn establish_and_send(
     let is_unix = false;
 
     let wrapper_fut = async {
+        // Two small connect adapters — TCP and Unix — then one shared
+        // PROXY-header / TLS / HTTP dispatch sequence.
         if is_unix {
             #[cfg(unix)]
             {
@@ -253,122 +411,17 @@ pub async fn establish_and_send(
                     .proxy_unix
                     .as_ref()
                     .ok_or("Unix socket path not set")?;
-                let unix = match vibeio::net::PollUnixStream::connect(unix_path).await {
-                    Ok(s) => s,
-                    Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                        return Err(ProxyError::Timeout(format!("Unix connect failed: {e}")));
-                    }
-
-                    Err(e)
-                        if matches!(
-                            e.kind(),
-                            std::io::ErrorKind::ConnectionAborted
-                                | std::io::ErrorKind::NotFound
-                                | std::io::ErrorKind::HostUnreachable
-                        ) =>
-                    {
-                        return Err(ProxyError::ConnectFailedUnavailable(format!(
-                            "Unix connect failed: {e}"
-                        )));
-                    }
-                    Err(e) => {
-                        return Err(ProxyError::ConnectFailed(format!(
-                            "Unix connect failed: {e}"
-                        )));
-                    }
-                };
+                let unix = connect_unix(unix_path).await?;
                 let mut stream = SendUnixStreamPoll::new(unix);
-
                 let drop_guard = unsafe { stream.get_drop_guard() };
-
-                // Write PROXY protocol header if configured (before HTTP handshake)
-                if let Some(proxy_header_version) = config.proxy_header {
-                    if let Some(cip) = client_ip {
-                        let local_addr = ctx.local_address;
-                        let header_bytes = build_proxy_protocol_header(
-                            proxy_header_version,
-                            cip,
-                            local_addr.ip(),
-                            ctx.remote_address.port(),
-                            local_addr.port(),
-                        )?;
-                        use tokio::io::AsyncWriteExt;
-                        stream.write_all(&header_bytes).await.map_err(|e| {
-                            ProxyError::ProxyProtocolWriteFailed(format!(
-                                "PROXY header write failed: {e}"
-                            ))
-                        })?;
-                    }
-                }
-
-                if is_https {
-                    let connector = TlsConnector::from(cached_tls_config(
-                        config.http2,
-                        config.http2_only,
-                        config.no_verification,
-                        upstream.mtls.clone(),
-                    ));
-                    let host = proxy_url.host().ok_or("upstream URL has no host")?;
-                    let domain = ServerName::try_from(host.to_string())
-                        .map_err(|e| format!("Invalid server name: {e}"))?;
-                    let tls_start = std::time::Instant::now();
-                    let tls_stream = match connector.connect(domain, stream).await {
-                        Ok(s) => {
-                            metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
-                            s
-                        }
-                        Err(e) => {
-                            metrics.tls_handshake_failures += 1;
-                            ctx.events.emit(ferron_observability::Event::Log(
-                            ferron_observability::LogEvent {
-                                level: ferron_observability::LogLevel::Warn,
-                                message: format!(
-                                    "Reverse proxy: TLS handshake with {unix_path} failed: {e}"
-                                ),
-                                summary: "Reverse proxy: TLS handshake with Unix socket failed"
-                                    .into(),
-                                target: "ferron-http-proxy",
-                                attributes: vec![
-                                    (
-                                        "upstream.address",
-                                        ferron_observability::LogAttributeValue::String(
-                                            unix_path.to_string(),
-                                        ),
-                                    ),
-                                    (
-                                        "error.message",
-                                        ferron_observability::LogAttributeValue::String(
-                                            e.to_string(),
-                                        ),
-                                    ),
-                                ],
-                                trace_context:
-                                    ferron_http::trace_context::current_event_trace_context(ctx),
-
-                            },
-                        ));
-                            return Err(ProxyError::TlsHandshakeFailed(format!(
-                                "TLS handshake failed: {e}"
-                            )));
-                        }
-                    };
-
-                    let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
-                    let use_http2 = (config.http2 && negotiated_h2) || config.http2_only;
-
-                    if use_http2 {
-                        http2_handshake_unix(tls_stream, drop_guard).await
-                    } else {
-                        http1_handshake_unix(tls_stream, drop_guard).await
-                    }
-                } else if config.http2_only || config.http2 {
-                    http2_handshake_unix(stream, drop_guard).await
-                } else {
-                    http1_handshake_unix(stream, drop_guard).await
-                }
+                dispatch_handshake(
+                    ctx, config, &upstream, proxy_url, is_https, client_ip, unix_path, metrics,
+                    stream, drop_guard,
+                )
+                .await
             }
             #[cfg(not(unix))]
-            unreachable!();
+            unreachable!()
         } else {
             // Use pre-resolved IP from connect_to if available, otherwise parse from proxy_url
             let addr = if let Some(ct) = &upstream.connect_to {
@@ -381,130 +434,14 @@ pub async fn establish_and_send(
                 format!("{host}:{port}")
             };
 
-            // Extract hostname for TLS SNI (always use original hostname, not resolved IP)
-            let sni_host = proxy_url
-                .host()
-                .ok_or("upstream URL has no host")?
-                .to_string();
-
-            let tcp = match vibeio::net::PollTcpStream::connect(&addr)
-                .await
-                .map_err(|e| {
-                    ctx.events.emit(ferron_observability::Event::Log(
-                        ferron_observability::LogEvent {
-                            level: ferron_observability::LogLevel::Warn,
-                            message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
-                            summary: "Reverse proxy: TCP connect to backend failed".into(),
-                            target: "ferron-http-proxy",
-                            attributes: vec![(
-                                "upstream.address",
-                                ferron_observability::LogAttributeValue::String(addr.clone()),
-                            )],
-                            trace_context: ferron_http::trace_context::current_event_trace_context(
-                                ctx,
-                            ),
-                        },
-                    ));
-                    e
-                }) {
-                Ok(s) => s,
-                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    return Err(ProxyError::Timeout(format!("TCP connect failed: {e}")));
-                }
-                Err(e)
-                    if matches!(
-                        e.kind(),
-                        std::io::ErrorKind::ConnectionAborted
-                            | std::io::ErrorKind::NotFound
-                            | std::io::ErrorKind::HostUnreachable
-                    ) =>
-                {
-                    return Err(ProxyError::ConnectFailedUnavailable(format!(
-                        "TCP connect failed: {e}"
-                    )));
-                }
-                Err(e) => {
-                    return Err(ProxyError::ConnectFailed(format!(
-                        "TCP connect failed: {e}"
-                    )));
-                }
-            };
+            let tcp = connect_tcp(&addr, ctx).await?;
             let mut stream = SendTcpStreamPoll::new(tcp);
-
             let drop_guard = unsafe { stream.get_drop_guard() };
-
-            // Write PROXY protocol header if configured
-            if let Some(proxy_header_version) = config.proxy_header {
-                if let Some(cip) = client_ip {
-                    let local_addr = ctx.local_address;
-                    let header_bytes = build_proxy_protocol_header(
-                        proxy_header_version,
-                        cip,
-                        local_addr.ip(),
-                        ctx.remote_address.port(),
-                        local_addr.port(),
-                    )?;
-                    use tokio::io::AsyncWriteExt;
-                    stream.write_all(&header_bytes).await.map_err(|e| {
-                        ProxyError::ProxyProtocolWriteFailed(format!(
-                            "PROXY header write failed: {e}"
-                        ))
-                    })?;
-                }
-            }
-
-            if is_https {
-                let connector = TlsConnector::from(cached_tls_config(
-                    config.http2,
-                    config.http2_only,
-                    config.no_verification,
-                    upstream.mtls.clone(),
-                ));
-                let domain = ServerName::try_from(sni_host)
-                    .map_err(|e| format!("Invalid server name: {e}"))?;
-                let tls_start = std::time::Instant::now();
-                let tls_stream = match connector.connect(domain, stream).await {
-                    Ok(s) => {
-                        metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
-                        s
-                    }
-                    Err(e) => {
-                        metrics.tls_handshake_failures += 1;
-                        ctx.events.emit(ferron_observability::Event::Log(
-                            ferron_observability::LogEvent {
-                                level: ferron_observability::LogLevel::Warn,
-                                message: format!(
-                                    "Reverse proxy: TLS handshake with {addr} failed: {e}"
-                                ),
-                                summary: "Reverse proxy: TLS handshake with backend failed".into(),
-                                target: "ferron-http-proxy",
-                                attributes: vec![(
-                                    "upstream.address",
-                                    ferron_observability::LogAttributeValue::String(addr.clone()),
-                                )],
-                                trace_context:
-                                    ferron_http::trace_context::current_event_trace_context(ctx),
-                            },
-                        ));
-                        return Err(ProxyError::TlsHandshakeFailed(format!(
-                            "TLS handshake failed: {e}"
-                        )));
-                    }
-                };
-
-                let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
-                let use_http2 = (config.http2 && negotiated_h2) || config.http2_only;
-
-                if use_http2 {
-                    http2_handshake(tls_stream, drop_guard).await
-                } else {
-                    http1_handshake(tls_stream, drop_guard).await
-                }
-            } else if config.http2_only || config.http2 {
-                http2_handshake(stream, drop_guard).await
-            } else {
-                http1_handshake(stream, drop_guard).await
-            }
+            dispatch_handshake(
+                ctx, config, &upstream, proxy_url, is_https, client_ip, &addr, metrics, stream,
+                drop_guard,
+            )
+            .await
         }
     };
     let wrapper_result = if let Some(t) = upstream.connection_timeout {
@@ -542,6 +479,7 @@ pub async fn establish_and_send(
 
 /// Send request via a SendRequestWrapper and handle the response.
 #[allow(clippy::too_many_arguments)]
+#[inline]
 pub async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -650,6 +588,7 @@ pub async fn send_via_wrapper(
 }
 
 /// Handle HTTP 101 Switching Protocols (WebSocket upgrades).
+#[inline]
 pub async fn handle_upgrade(
     resp_for_upgrade: http::Response<()>,
     req_extensions: http::Extensions,

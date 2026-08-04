@@ -19,6 +19,7 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 type HttpsConnector =
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
 
+#[inline]
 fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
@@ -74,10 +75,12 @@ fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsCon
         .build()
 }
 
+#[inline]
 fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
     #[derive(Debug)]
     struct NoServerVerifier;
     impl ServerCertVerifier for NoServerVerifier {
+        #[inline]
         fn verify_server_cert(
             &self,
             _end_entity: &CertificateDer<'_>,
@@ -88,6 +91,7 @@ fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsC
         ) -> Result<ServerCertVerified, rustls::Error> {
             Ok(ServerCertVerified::assertion())
         }
+        #[inline]
         fn verify_tls12_signature(
             &self,
             _message: &[u8],
@@ -96,6 +100,7 @@ fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsC
         ) -> Result<HandshakeSignatureValid, rustls::Error> {
             Ok(HandshakeSignatureValid::assertion())
         }
+        #[inline]
         fn verify_tls13_signature(
             &self,
             _message: &[u8],
@@ -104,6 +109,7 @@ fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsC
         ) -> Result<HandshakeSignatureValid, rustls::Error> {
             Ok(HandshakeSignatureValid::assertion())
         }
+        #[inline]
         fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
             use rustls::SignatureScheme::*;
             vec![
@@ -167,6 +173,7 @@ struct ProbeResult {
 ///
 /// Returns a `ProbeResult` containing the HTTP status, response time, optional body,
 /// and any error that occurred.
+#[inline]
 async fn probe_upstream(
     upstream_url: &str,
     config: &UpstreamHealthCheckConfig,
@@ -214,6 +221,7 @@ async fn probe_upstream(
 ///
 /// Supports both HTTP and HTTPS with native certificate store and webpki-roots fallback.
 /// When `no_verification` is true, TLS certificate verification is disabled.
+#[inline]
 async fn execute_probe_request(
     url: &str,
     method: &str,
@@ -282,6 +290,7 @@ async fn execute_probe_request(
     Ok((status_code, body))
 }
 
+#[inline]
 fn health_check_client(
     no_verification: bool,
     mtls: Option<Arc<MtlsCredentials>>,
@@ -298,6 +307,7 @@ fn health_check_client(
 
 /// Process a probe result and update health check state.
 #[allow(clippy::type_complexity)]
+#[inline]
 fn process_probe_result(
     upstream_url: &str,
     config: &UpstreamHealthCheckConfig,
@@ -459,6 +469,7 @@ fn process_probe_result(
 ///
 /// Returns true if health checks are disabled for this upstream or if it's currently healthy.
 /// Returns false if health checks are enabled and the upstream is marked unhealthy.
+#[inline]
 pub fn is_upstream_healthy(state_map: &HealthCheckStateMap, upstream_url: &str) -> bool {
     state_map
         .get(upstream_url)
@@ -471,6 +482,7 @@ pub fn is_upstream_healthy(state_map: &HealthCheckStateMap, upstream_url: &str) 
 ///
 /// The task is spawned on the provided runtime handle (typically the secondary runtime)
 /// to avoid requiring a Tokio context in the pipeline stage.
+#[inline]
 pub fn spawn_health_check_task(
     upstreams: Vec<Upstream>,
     state_map: HealthCheckStateMap,
@@ -538,7 +550,7 @@ pub fn spawn_health_check_task(
         }
 
         if probe_configs.is_empty() {
-            sleep(Duration::from_secs(u64::MAX)).await;
+            std::future::pending::<()>().await;
             return;
         }
 
@@ -586,7 +598,6 @@ pub fn spawn_health_check_task(
         }
 
         let mut last_probe_times: HashMap<String, tokio::time::Instant> = HashMap::new();
-
         loop {
             let now = tokio::time::Instant::now();
             let mut next_wake = now + Duration::from_secs(60);
@@ -659,7 +670,7 @@ pub fn spawn_health_check_task(
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
-                            crate::types::strict_dns::resolve_strict_dns_inner(&temp_cfg),
+                            crate::types::strict_dns::resolve_strict_dns(&temp_cfg),
                         )
                         .await;
                         if timeout_result.is_err() {

@@ -7,58 +7,23 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::types::health::HealthCheckStateMap;
 use crate::types::upstream::{DnsResolutionStatus, UpstreamConfig, UpstreamInner};
 
 /// Resolve A/AAAA records for the hostname in `UpstreamConfig`.
-///
-/// Each resolved IP becomes a separate `UpstreamInner` with `connect_to`
-/// set to the IP address, while `proxy_to` retains the original hostname
-/// for TLS SNI and HTTP request construction.
-#[inline]
-pub async fn resolve_strict_dns(
-    cfg: &UpstreamConfig,
-    active_health_check_state: Option<HealthCheckStateMap>,
-) -> Vec<Arc<UpstreamInner>> {
-    let candidates = resolve_strict_dns_inner(cfg).await;
-
-    if candidates.is_empty() {
-        return Vec::new();
-    }
-
-    candidates
-        .into_iter()
-        .filter(move |upstream| {
-            active_health_check_state.as_ref().is_none_or(|s| {
-                s.get(upstream.proxy_to.as_str())
-                    .is_none_or(|s| s.is_healthy)
-            })
-        })
-        .collect()
-}
-
-/// Low-level A/AAAA resolution.
 ///
 /// Returns one `UpstreamInner` per resolved IP address. The hostname and
 /// port are extracted from `cfg.url`.
 ///
 /// Results are cached based on the minimum TTL from the DNS response.
 #[inline]
-pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
-    let url = cfg.url.clone();
-    let weight = cfg.weight;
-    let mtls = cfg.mtls.clone();
-    let priority = cfg.priority;
-    let dns_servers = cfg.dns_servers.clone();
-    let connection_timeout = cfg.connection_timeout;
-    let idle_timeout = cfg.idle_timeout;
-
-    let (hostname, port) = match parse_host_port(&url) {
+pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
+    let (hostname, port) = match parse_host_port(&cfg.url) {
         Some(v) => v,
         None => return Vec::new(),
     };
 
-    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &dns_servers).await {
+    if let Some(cached) = super::dns_cache::get_strict_dns(&hostname, port, &cfg.dns_servers).await
+    {
         if cached.is_empty() {
             if let Some((_, event_sink)) = crate::runtime_handle::try_get_secondary_runtime_handle()
             {
@@ -92,6 +57,15 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
             return Vec::new();
         }
     };
+
+    let url = cfg.url.clone();
+    let weight = cfg.weight;
+    let mtls = cfg.mtls.clone();
+    let priority = cfg.priority;
+    let dns_servers = cfg.dns_servers.clone();
+    let connection_timeout = cfg.connection_timeout;
+    let idle_timeout = cfg.idle_timeout;
+    let limit = cfg.limit;
 
     let result = handle
         .spawn(async move {
@@ -136,6 +110,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
                             priority,
                             connection_timeout,
                             idle_timeout,
+                            limit,
                             dns_status: DnsResolutionStatus::Resolved,
                         }));
                     }
@@ -210,6 +185,7 @@ pub async fn resolve_strict_dns_inner(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamI
 /// Extract hostname and port from a URL string.
 ///
 /// Returns `(hostname, port)` or `None` if parsing fails.
+#[inline]
 pub fn parse_host_port(url: &str) -> Option<(String, u16)> {
     let rest = url
         .strip_prefix("http://")

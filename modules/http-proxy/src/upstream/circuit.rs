@@ -9,34 +9,220 @@ use crate::types::circuit::{
     CircuitBreakerStateMap, CIRCUIT_BREAKER_STATUS_CLOSED, CIRCUIT_BREAKER_STATUS_HALFOPEN,
     CIRCUIT_BREAKER_STATUS_OPEN,
 };
+use crate::types::flapping::FlappingStateMap;
 use crate::types::upstream::UpstreamInner;
 
-/// Returns whether a backend is currently available for new circuit-breaker traffic.
-pub fn is_circuit_breaker_available(
-    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
-) -> bool {
-    if !circuit_breaker.enabled {
-        return true;
+/// A view over the circuit-breaker state and configuration for one request.
+///
+/// Pure reads (`is_available`, `is_open`, `state`) never mutate state;
+/// `try_acquire` performs the state transitions and emits events.
+pub struct CircuitBreaker<'a> {
+    state: Option<&'a CircuitBreakerStateMap>,
+    flapping_state: Option<&'a FlappingStateMap>,
+    config: &'a CircuitBreakerConfig,
+    event_sink: &'a ferron_observability::CompositeEventSink,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
+}
+
+impl<'a> CircuitBreaker<'a> {
+    #[inline]
+    pub fn new(
+        state: Option<&'a CircuitBreakerStateMap>,
+        flapping_state: Option<&'a FlappingStateMap>,
+        config: &'a CircuitBreakerConfig,
+        event_sink: &'a ferron_observability::CompositeEventSink,
+        event_trace_context: Option<ferron_observability::EventTraceContext>,
+        metrics_resolved_ip: bool,
+    ) -> Self {
+        Self {
+            state,
+            flapping_state,
+            config,
+            event_sink,
+            event_trace_context,
+            metrics_resolved_ip,
+        }
     }
 
-    let Some(circuit_breaker_state) = circuit_breaker_state else {
-        return true;
-    };
+    /// The underlying state map, used by the load-balancer selectors.
+    #[inline]
+    pub fn state(&self) -> Option<&'a CircuitBreakerStateMap> {
+        self.state
+    }
 
-    let Some(state) = circuit_breaker_state.get(upstream) else {
-        return true;
-    };
+    /// The slow-start duration from the circuit-breaker configuration.
+    #[inline]
+    pub fn slow_start_duration(&self) -> Duration {
+        self.config.slow_start_duration
+    }
 
-    match state.status.load(Ordering::Relaxed) {
-        CIRCUIT_BREAKER_STATUS_CLOSED => true,
-        CIRCUIT_BREAKER_STATUS_OPEN => state
-            .opened_at
-            .read()
-            .is_some_and(|opened_at| opened_at.elapsed() >= circuit_breaker.open_duration),
-        CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.load(Ordering::Relaxed),
-        _ => false,
+    /// Whether a backend is currently available for new circuit-breaker traffic.
+    #[inline]
+    pub fn is_available(&self, upstream: &Arc<UpstreamInner>) -> bool {
+        if !self.config.enabled {
+            return true;
+        }
+
+        let Some(state) = self.state.and_then(|s| s.get(upstream)) else {
+            return true;
+        };
+
+        match state.status.load(Ordering::Relaxed) {
+            CIRCUIT_BREAKER_STATUS_CLOSED => true,
+            CIRCUIT_BREAKER_STATUS_OPEN => state
+                .opened_at
+                .read()
+                .is_some_and(|opened_at| opened_at.elapsed() >= self.config.open_duration),
+            CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.load(Ordering::Relaxed),
+            _ => false,
+        }
+    }
+
+    /// Whether a backend's circuit breaker is currently in the open state.
+    #[inline]
+    pub fn is_open(&self, upstream: &Arc<UpstreamInner>) -> bool {
+        self.config
+            .enabled
+            .then_some(self.state)
+            .flatten()
+            .and_then(|s| s.get(upstream))
+            .is_some_and(|s| s.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_OPEN)
+    }
+
+    /// Record a circuit breaker slot acquisition attempt.
+    ///
+    /// The decision is delegated to [`Self::is_available`]: backends that
+    /// are unavailable (closed-circuit cooldown, half-open slot busy) are
+    /// rejected without any state transitions. Otherwise the state machine
+    /// advances (open → half-open) and the acquisition is emitted.
+    #[inline]
+    pub fn try_acquire(&self, upstream: &Arc<UpstreamInner>) -> bool {
+        if !self.is_available(upstream) {
+            return false;
+        }
+
+        if !self.config.enabled {
+            return true;
+        }
+
+        let Some(circuit_breaker_state) = self.state else {
+            return true;
+        };
+
+        // Get a reference instead of a mutable reference for fast paths.
+        let state = if let Some(state) = circuit_breaker_state.get(upstream) {
+            state
+        } else {
+            let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+            state.recent_failures = (self.config.max_fails > 1).then(|| {
+                Arc::new(crossbeam_queue::ArrayQueue::new(
+                    (self.config.max_fails as usize).saturating_sub(1),
+                ))
+            });
+            state.downgrade()
+        };
+
+        match state.status.load(Ordering::Relaxed) {
+            CIRCUIT_BREAKER_STATUS_CLOSED => true,
+            CIRCUIT_BREAKER_STATUS_OPEN => {
+                let opened_at = {
+                    let mut opened_at_ref = state.opened_at.upgradable_read();
+                    let opened_at = if let Some(opened_at) = &*opened_at_ref {
+                        opened_at
+                    } else {
+                        // This might be a rare edge case, reset the opened_at counter...
+                        opened_at_ref.with_upgraded(|r| {
+                            if r.is_some() {
+                                // Double check, to not overwrite the instant
+                                return;
+                            }
+                            *r = Some(std::time::Instant::now());
+                        });
+                        let Some(opened_at) = &*opened_at_ref else {
+                            // At this point, something else has overwriten the value, so return `false`
+                            return false;
+                        };
+                        opened_at
+                    };
+
+                    if opened_at.elapsed() < self.config.open_duration {
+                        return false;
+                    }
+
+                    *opened_at
+                };
+
+                state
+                    .status
+                    .store(CIRCUIT_BREAKER_STATUS_HALFOPEN, Ordering::Relaxed);
+                *state.opened_at.write() = None;
+                state.half_open_in_flight.store(true, Ordering::Relaxed);
+                state.half_open_pass_count.store(0, Ordering::Relaxed);
+                // Clear slow-start recovery timestamp — the circuit is re-entering
+                // half-open, so the slow-start penalty should not apply.
+                if let Some(ref recovery_at) = state.slow_start_recovery_at {
+                    *recovery_at.write() = None;
+                }
+                crate::upstream::flapping::record_circuit_transition(
+                    self.flapping_state,
+                    self.config,
+                    &upstream.proxy_to,
+                    self.event_sink,
+                    self.event_trace_context.clone(),
+                );
+                self.event_sink.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Info,
+                        message: format!(
+                            "Upstream {} circuit transitioned to half-open after {:?}",
+                            upstream.proxy_to,
+                            opened_at.elapsed()
+                        ),
+                        summary: "Upstream circuit transitioned to half-open".into(),
+                        target: crate::LOG_TARGET,
+                        attributes: vec![
+                            (
+                                "upstream.address",
+                                ferron_observability::LogAttributeValue::String(
+                                    upstream.proxy_to.clone(),
+                                ),
+                            ),
+                            (
+                                "ferron.proxy.circuit.open_duration_ms",
+                                ferron_observability::LogAttributeValue::I64(
+                                    opened_at.elapsed().as_millis() as i64,
+                                ),
+                            ),
+                        ],
+                        trace_context: self.event_trace_context.clone(),
+                    },
+                ));
+                emit_circuit_metric(
+                    self.event_sink,
+                    upstream,
+                    "ferron.proxy.circuit.state",
+                    ferron_observability::MetricType::Gauge,
+                    ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_HALFOPEN as u64),
+                    self.event_trace_context.clone(),
+                    self.metrics_resolved_ip,
+                );
+                emit_circuit_metric(
+                    self.event_sink,
+                    upstream,
+                    "ferron.proxy.circuit.open_total",
+                    ferron_observability::MetricType::Counter,
+                    ferron_observability::MetricValue::I64(-1),
+                    self.event_trace_context.clone(),
+                    self.metrics_resolved_ip,
+                );
+                true
+            }
+            CIRCUIT_BREAKER_STATUS_HALFOPEN => {
+                !state.half_open_in_flight.swap(true, Ordering::Relaxed)
+            }
+            _ => false, // Possibly corrupted state
+        }
     }
 }
 
@@ -118,137 +304,7 @@ pub fn record_backend_response(
     }
 }
 
-/// Record a circuit breaker slot acquisition attempt.
-pub fn try_acquire_circuit_breaker_slot(
-    circuit_breaker_state: Option<&CircuitBreakerStateMap>,
-    flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
-    circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
-    event_sink: &ferron_observability::CompositeEventSink,
-    event_trace_context: Option<ferron_observability::EventTraceContext>,
-    metrics_resolved_ip: bool,
-) -> bool {
-    if !circuit_breaker.enabled {
-        return true;
-    }
-
-    let Some(circuit_breaker_state) = circuit_breaker_state else {
-        return true;
-    };
-
-    // Get a reference instead of a mutable reference for fast paths.
-    let state = if let Some(state) = circuit_breaker_state.get(upstream) {
-        state
-    } else {
-        let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
-        state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
-            Arc::new(crossbeam_queue::ArrayQueue::new(
-                (circuit_breaker.max_fails as usize).saturating_sub(1),
-            ))
-        });
-        state.downgrade()
-    };
-
-    match state.status.load(Ordering::Relaxed) {
-        CIRCUIT_BREAKER_STATUS_CLOSED => true,
-        CIRCUIT_BREAKER_STATUS_OPEN => {
-            let opened_at = {
-                let mut opened_at_ref = state.opened_at.upgradable_read();
-                let opened_at = if let Some(opened_at) = &*opened_at_ref {
-                    opened_at
-                } else {
-                    // This might be a rare edge case, reset the opened_at counter...
-                    opened_at_ref.with_upgraded(|r| {
-                        if r.is_some() {
-                            // Double check, to not overwrite the instant
-                            return;
-                        }
-                        *r = Some(std::time::Instant::now());
-                    });
-                    let Some(opened_at) = &*opened_at_ref else {
-                        // At this point, something else has overwriten the value, so return `false`
-                        return false;
-                    };
-                    opened_at
-                };
-
-                if opened_at.elapsed() < circuit_breaker.open_duration {
-                    return false;
-                }
-
-                *opened_at
-            };
-
-            state
-                .status
-                .store(CIRCUIT_BREAKER_STATUS_HALFOPEN, Ordering::Relaxed);
-            *state.opened_at.write() = None;
-            state.half_open_in_flight.store(true, Ordering::Relaxed);
-            state.half_open_pass_count.store(0, Ordering::Relaxed);
-            // Clear slow-start recovery timestamp — the circuit is re-entering
-            // half-open, so the slow-start penalty should not apply.
-            if let Some(ref recovery_at) = state.slow_start_recovery_at {
-                *recovery_at.write() = None;
-            }
-            crate::upstream::flapping::record_circuit_transition(
-                flapping_state,
-                circuit_breaker,
-                &upstream.proxy_to,
-                event_sink,
-                event_trace_context.clone(),
-            );
-            event_sink.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Info,
-                    message: format!(
-                        "Upstream {} circuit transitioned to half-open after {:?}",
-                        upstream.proxy_to,
-                        opened_at.elapsed()
-                    ),
-                    summary: "Upstream circuit transitioned to half-open".into(),
-                    target: crate::LOG_TARGET,
-                    attributes: vec![
-                        (
-                            "upstream.address",
-                            ferron_observability::LogAttributeValue::String(
-                                upstream.proxy_to.clone(),
-                            ),
-                        ),
-                        (
-                            "ferron.proxy.circuit.open_duration_ms",
-                            ferron_observability::LogAttributeValue::I64(
-                                opened_at.elapsed().as_millis() as i64,
-                            ),
-                        ),
-                    ],
-                    trace_context: event_trace_context.clone(),
-                },
-            ));
-            emit_circuit_metric(
-                event_sink,
-                upstream,
-                "ferron.proxy.circuit.state",
-                ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_HALFOPEN as u64),
-                event_trace_context.clone(),
-                metrics_resolved_ip,
-            );
-            emit_circuit_metric(
-                event_sink,
-                upstream,
-                "ferron.proxy.circuit.open_total",
-                ferron_observability::MetricType::Counter,
-                ferron_observability::MetricValue::I64(-1),
-                event_trace_context,
-                metrics_resolved_ip,
-            );
-            true
-        }
-        CIRCUIT_BREAKER_STATUS_HALFOPEN => !state.half_open_in_flight.swap(true, Ordering::Relaxed),
-        _ => false, // Possibly corrupted state
-    }
-}
-
+#[inline]
 fn emit_circuit_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream: &Arc<UpstreamInner>,
@@ -294,6 +350,7 @@ fn emit_circuit_metric(
     }));
 }
 
+#[inline]
 fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
@@ -462,6 +519,7 @@ fn record_circuit_breaker_failure(
     }
 }
 
+#[inline]
 fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
@@ -574,13 +632,14 @@ mod tests {
 
     use crate::types::circuit::CircuitBreakerState;
     use crate::types::upstream::UpstreamInner;
-    use crate::upstream::determine_proxy_to;
     use crate::upstream::lb::{
         ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
     };
+    use crate::upstream::BackendSet;
 
     use super::*;
 
+    #[inline]
     fn make_upstream(url: &str) -> Arc<UpstreamInner> {
         Arc::new(UpstreamInner {
             proxy_to: url.to_string(),
@@ -591,8 +650,18 @@ mod tests {
             priority: 0,
             connection_timeout: None,
             idle_timeout: std::time::Duration::from_secs(60),
+            limit: None,
             dns_status: Default::default(),
         })
+    }
+
+    #[inline]
+    fn cb_view<'a>(
+        state: &'a CircuitBreakerStateMap,
+        config: &'a crate::config::CircuitBreakerConfig,
+        sink: &'a ferron_observability::CompositeEventSink,
+    ) -> CircuitBreaker<'a> {
+        CircuitBreaker::new(Some(state), None, config, sink, None, false)
     }
 
     #[test]
@@ -624,11 +693,9 @@ mod tests {
             None,
             false,
         );
-        assert!(is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.is_available(&upstream));
 
         record_backend_transport_failure(
             Some(&circuit_breaker_state),
@@ -641,16 +708,14 @@ mod tests {
             false,
         );
 
-        assert!(!is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(!cb.is_available(&upstream));
         assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
     }
 
     #[test]
-    fn test_determine_proxy_to_skips_open_circuit_breaker_backend() {
+    fn test_backend_set_skips_open_circuit_breaker_backend() {
         let upstreams = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
@@ -679,26 +744,83 @@ mod tests {
             },
         );
 
-        let result = determine_proxy_to(
-            &upstreams,
-            &LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new()),
-            None,
-            None,
-            None,
-            &circuit_breaker,
-            Some(&circuit_breaker_state),
-            None,
-            None,
-            None,
-            &RwLock::new(ConsistentHashRing::new(&[])),
-            &ferron_observability::CompositeEventSink::new(vec![]),
-            &mut crate::ProxyMetrics::new(),
-            None,
-            false,
-        )
-        .unwrap();
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        let ring = RwLock::new(ConsistentHashRing::new(&[]));
+        let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
+        let mut backend_set = BackendSet::new(
+            &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+        );
+        let result = backend_set.next_backend().unwrap();
 
         assert_eq!(result.upstream.proxy_to, "http://backend2");
+    }
+
+    #[test]
+    fn test_try_acquire_delegates_decision_to_is_available() {
+        let circuit_breaker_state: CircuitBreakerStateMap =
+            Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let upstream = make_upstream("http://backend1");
+        let circuit_breaker = crate::config::CircuitBreakerConfig {
+            enabled: true,
+            max_fails: 1,
+            window: Duration::from_secs(30),
+            open_duration: Duration::from_secs(1),
+            consecutive_passes: 1,
+            record_5xx: false,
+            latency_threshold: None,
+            flapping_transitions: 3,
+            flapping_window: Duration::from_secs(10),
+            slow_start_duration: Duration::ZERO,
+        };
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+
+        // Half-open with the probe slot busy: unavailable and rejected without transition.
+        circuit_breaker_state.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_HALFOPEN)),
+                half_open_in_flight: Arc::new(AtomicBool::new(true)),
+                ..Default::default()
+            },
+        );
+        assert!(!cb.is_available(&upstream));
+        assert!(!cb.try_acquire(&upstream));
+        let state = circuit_breaker_state.get(&upstream).unwrap();
+        assert_eq!(
+            state.status.load(Ordering::Relaxed),
+            CIRCUIT_BREAKER_STATUS_HALFOPEN
+        );
+        drop(state);
+
+        // Open within the cooldown window: unavailable and rejected without transition.
+        circuit_breaker_state.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_OPEN)),
+                opened_at: Arc::new(RwLock::new(Some(Instant::now()))),
+                ..Default::default()
+            },
+        );
+        assert!(!cb.is_available(&upstream));
+        assert!(!cb.try_acquire(&upstream));
+        circuit_breaker_state.insert(
+            upstream.clone(),
+            CircuitBreakerState {
+                status: Arc::new(AtomicU8::new(CIRCUIT_BREAKER_STATUS_OPEN)),
+                opened_at: Arc::new(RwLock::new(Some(Instant::now() - Duration::from_secs(2)))),
+                ..Default::default()
+            },
+        );
+        assert!(cb.is_available(&upstream));
+        assert!(cb.try_acquire(&upstream));
+        let state = circuit_breaker_state.get(&upstream).unwrap();
+        assert_eq!(
+            state.status.load(Ordering::Relaxed),
+            CIRCUIT_BREAKER_STATUS_HALFOPEN
+        );
+        assert!(state.half_open_in_flight.load(Ordering::Relaxed));
     }
 
     #[test]
@@ -728,20 +850,12 @@ mod tests {
             },
         );
 
-        assert!(try_acquire_circuit_breaker_slot(
-            Some(&circuit_breaker_state),
-            None,
-            &circuit_breaker,
-            &upstream,
-            &ferron_observability::CompositeEventSink::new(vec![]),
-            None,
-            false,
-        ));
-        assert!(!is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.try_acquire(&upstream));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(!cb.is_available(&upstream));
 
         record_backend_response(
             Some(&circuit_breaker_state),
@@ -756,11 +870,9 @@ mod tests {
             false,
         );
 
-        assert!(is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.is_available(&upstream));
     }
 
     #[test]
@@ -802,11 +914,9 @@ mod tests {
             false,
         );
 
-        assert!(!is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(!cb.is_available(&upstream));
         assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
     }
 
@@ -842,11 +952,9 @@ mod tests {
             false,
         );
 
-        assert!(is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.is_available(&upstream));
     }
 
     #[test]
@@ -882,11 +990,9 @@ mod tests {
             false,
         );
 
-        assert!(!is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(!cb.is_available(&upstream));
         assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
     }
 
@@ -923,11 +1029,9 @@ mod tests {
             false,
         );
 
-        assert!(!is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(!cb.is_available(&upstream));
         assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
     }
 
@@ -963,11 +1067,9 @@ mod tests {
             false,
         );
 
-        assert!(is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.is_available(&upstream));
     }
 
     #[test]
@@ -1002,10 +1104,8 @@ mod tests {
             false,
         );
 
-        assert!(is_circuit_breaker_available(
-            Some(&circuit_breaker_state),
-            &circuit_breaker,
-            &upstream,
-        ));
+        let sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
+        assert!(cb.is_available(&upstream));
     }
 }

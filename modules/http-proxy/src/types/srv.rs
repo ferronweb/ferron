@@ -10,7 +10,6 @@
 #[inline]
 pub async fn resolve_srv(
     srv_data: &super::upstream::SrvUpstreamData,
-    active_health_check_state: Option<super::health::HealthCheckStateMap>,
 ) -> Vec<std::sync::Arc<super::upstream::UpstreamInner>> {
     let candidates = resolve_srv_inner(srv_data).await;
 
@@ -20,17 +19,11 @@ pub async fn resolve_srv(
 
     let priority_offset = srv_data.priority.unwrap_or(0);
 
-    // Return all healthy backends with their final priority.
+    // Return all backends with their final priority.
     // Each backend's priority = DNS SRV priority + config priority offset.
     // The top-level load balancer handles tiered failover across priorities.
     candidates
         .into_iter()
-        .filter(move |(upstream, _, _)| {
-            active_health_check_state.as_ref().is_none_or(|s| {
-                s.get(upstream.proxy_to.as_str())
-                    .is_none_or(|s| s.is_healthy)
-            })
-        })
         .map(|(upstream, dns_priority, dns_weight)| {
             let priority = dns_priority.saturating_add(priority_offset);
             let weight = (dns_weight as u32).saturating_mul(upstream.weight);
@@ -43,6 +36,7 @@ pub async fn resolve_srv(
                 priority,
                 connection_timeout: upstream.connection_timeout,
                 idle_timeout: upstream.idle_timeout,
+                limit: upstream.limit,
                 dns_status: super::upstream::DnsResolutionStatus::Resolved,
             })
         })
@@ -54,14 +48,8 @@ pub async fn resolve_srv(
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,
 ) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {
-    let srv_name = srv_data.srv_name.clone();
-    let dns_servers = srv_data.dns_servers.clone();
-    let weight = srv_data.weight;
-    let mtls = srv_data.mtls.clone();
-    let connection_timeout = srv_data.connection_timeout;
-    let idle_timeout = srv_data.idle_timeout;
-
-    if let Some(cached) = super::dns_cache::get_srv(&srv_name, &dns_servers).await {
+    if let Some(cached) = super::dns_cache::get_srv(&srv_data.srv_name, &srv_data.dns_servers).await
+    {
         return cached;
     }
 
@@ -73,6 +61,14 @@ pub async fn resolve_srv_inner(
             return Vec::new();
         }
     };
+
+    let srv_name = srv_data.srv_name.clone();
+    let dns_servers = srv_data.dns_servers.clone();
+    let weight = srv_data.weight;
+    let mtls = srv_data.mtls.clone();
+    let connection_timeout = srv_data.connection_timeout;
+    let idle_timeout = srv_data.idle_timeout;
+    let limit = srv_data.limit;
 
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
@@ -151,6 +147,7 @@ pub async fn resolve_srv_inner(
                             priority: 0,
                             connection_timeout,
                             idle_timeout,
+                            limit,
                             dns_status: super::upstream::DnsResolutionStatus::Resolved,
                         });
                         let priority = srv.priority;

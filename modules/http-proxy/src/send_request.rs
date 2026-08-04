@@ -145,31 +145,14 @@ impl SendRequestWrapper {
 }
 
 /// HTTP/1.x handshake using vibeio executor.
-pub async fn http1_handshake<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
+///
+/// `drop_guard` keeps the underlying poll stream alive until the connection
+/// teardown; it is generic so both TCP and Unix streams share this path.
+#[inline]
+pub async fn http1_handshake<I, G>(io: I, drop_guard: G) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    let io = VibeioIo::new(io);
-    let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
-    let conn_with_upgrades = conn.with_upgrades();
-    vibeio::spawn(async move {
-        let _ = conn_with_upgrades.await;
-        drop(drop_guard);
-    });
-    Ok(SendRequestWrapper::http1(sender))
-}
-
-/// HTTP/1.x handshake for Unix sockets.
-#[cfg(unix)]
-pub async fn http1_handshake_unix<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
-where
-    I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    G: 'static,
 {
     let io = VibeioIo::new(io);
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
@@ -182,31 +165,14 @@ where
 }
 
 /// HTTP/2 handshake using vibeio executor.
-pub async fn http2_handshake<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendTcpStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
+///
+/// `drop_guard` keeps the underlying poll stream alive until the connection
+/// teardown; it is generic so both TCP and Unix streams share this path.
+#[inline]
+pub async fn http2_handshake<I, G>(io: I, drop_guard: G) -> Result<SendRequestWrapper, ProxyError>
 where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    let io = VibeioIo::new(io);
-    let executor = vibeio_hyper::VibeioExecutor;
-    let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn(async move {
-        let _ = conn.await;
-        drop(drop_guard);
-    });
-    Ok(SendRequestWrapper::http2(sender))
-}
-
-/// HTTP/2 handshake for Unix sockets.
-#[cfg(unix)]
-pub async fn http2_handshake_unix<I>(
-    io: I,
-    drop_guard: crate::send_net_io::SendUnixStreamPollDropGuard,
-) -> Result<SendRequestWrapper, ProxyError>
-where
-    I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    G: 'static,
 {
     let io = VibeioIo::new(io);
     let executor = vibeio_hyper::VibeioExecutor;
@@ -235,6 +201,7 @@ impl PoolReturnInfo {
     ///
     /// This consumes the item without running its Drop impl (via `ManuallyDrop`),
     /// allowing the wrapper to be stored separately and returned later.
+    #[inline]
     pub fn from_item(item: PooledConnection, wrapper: SendRequestWrapper, is_unix: bool) -> Self {
         // Prevent item's Drop from running (we'll handle return manually)
         let item = std::mem::ManuallyDrop::new(item);
@@ -249,6 +216,7 @@ impl PoolReturnInfo {
 }
 
 impl Drop for PoolReturnInfo {
+    #[inline]
     fn drop(&mut self) {
         if let Some(wrapper) = self.wrapper.take() {
             if let Some(ref key) = self.key {
@@ -275,6 +243,7 @@ pub struct TrackedBody<B> {
 }
 
 impl<B> TrackedBody<B> {
+    #[inline]
     pub fn new(
         inner: B,
         tracker: Option<Arc<()>>,
@@ -295,6 +264,7 @@ where
     type Data = B::Data;
     type Error = B::Error;
 
+    #[inline]
     fn poll_frame(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -302,10 +272,12 @@ where
         std::pin::Pin::new(&mut self.inner).poll_frame(cx)
     }
 
+    #[inline]
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
     }
 
+    #[inline]
     fn size_hint(&self) -> hyper::body::SizeHint {
         self.inner.size_hint()
     }
@@ -326,6 +298,7 @@ pub struct BodyTrackingState {
 }
 
 impl BodyTrackingState {
+    #[inline]
     pub fn new(expected_length: Option<u64>) -> Arc<Self> {
         Arc::new(Self {
             truncated: std::sync::atomic::AtomicBool::new(false),
@@ -346,6 +319,7 @@ pub struct ContentLengthTrackingBody<B> {
 }
 
 impl<B> ContentLengthTrackingBody<B> {
+    #[inline]
     pub fn new(inner: B, state: Arc<BodyTrackingState>) -> Self {
         Self { inner, state }
     }
@@ -358,6 +332,7 @@ where
     type Data = Bytes;
     type Error = B::Error;
 
+    #[inline]
     fn poll_frame(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -393,10 +368,12 @@ where
         result
     }
 
+    #[inline]
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
     }
 
+    #[inline]
     fn size_hint(&self) -> hyper::body::SizeHint {
         self.inner.size_hint()
     }
@@ -415,6 +392,7 @@ pub struct TruncatedTracker {
 }
 
 impl TruncatedTracker {
+    #[inline]
     pub fn new(
         state: Arc<BodyTrackingState>,
         backend_url: String,
@@ -431,6 +409,7 @@ impl TruncatedTracker {
 }
 
 impl Drop for TruncatedTracker {
+    #[inline]
     fn drop(&mut self) {
         if !self
             .state
@@ -503,6 +482,7 @@ mod tests {
     }
 
     impl TestBody {
+        #[inline]
         fn new(frames: Vec<Bytes>) -> Self {
             Self { frames, index: 0 }
         }
@@ -512,6 +492,7 @@ mod tests {
         type Data = Bytes;
         type Error = std::io::Error;
 
+        #[inline]
         fn poll_frame(
             mut self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
@@ -525,16 +506,19 @@ mod tests {
             }
         }
 
+        #[inline]
         fn is_end_stream(&self) -> bool {
             self.index >= self.frames.len()
         }
 
+        #[inline]
         fn size_hint(&self) -> hyper::body::SizeHint {
             hyper::body::SizeHint::new()
         }
     }
 
     /// Helper: drive a body to completion using poll_frame.
+    #[inline]
     fn drive_to_completion<B: hyper::body::Body + Unpin>(body: &mut B) {
         let waker = std::task::Waker::noop();
         let mut cx = std::task::Context::from_waker(waker);

@@ -152,13 +152,22 @@ impl ProxyError {
     }
 
     /// Optional HTTP status hint for mapping errors to builtin responses.
+    ///
+    /// This is the single mapping from proxy errors to HTTP statuses; the
+    /// io-kind classification previously split across helpers lives here.
     #[inline]
     pub fn http_status_hint(&self) -> Option<StatusCode> {
         match self {
             ProxyError::ConnectFailedUnavailable(_) => Some(StatusCode::SERVICE_UNAVAILABLE),
             ProxyError::Timeout(_) => Some(StatusCode::GATEWAY_TIMEOUT),
-            // For Io errors, prefer the existing io_error_status() helper in proxy::tls
-            ProxyError::Io(_) | ProxyError::Other(_) => None,
+            ProxyError::Io(io_err) => Some(match io_err.kind() {
+                std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::HostUnreachable => StatusCode::SERVICE_UNAVAILABLE,
+                std::io::ErrorKind::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+                _ => StatusCode::BAD_GATEWAY,
+            }),
+            ProxyError::Other(_) => None,
             // 502 Bad Gateway by default
             _ => Some(StatusCode::BAD_GATEWAY),
         }

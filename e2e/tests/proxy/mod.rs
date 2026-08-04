@@ -2,6 +2,7 @@
 mod common;
 
 mod affinity;
+mod dns_resolution;
 mod grpc;
 mod lb;
 mod priority;

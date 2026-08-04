@@ -10,8 +10,6 @@ use parking_lot::RwLock;
 
 use crate::types::circuit::circuit_breaker_state_label;
 use crate::types::retry_budget::SharedRetryBudget;
-#[cfg(feature = "srv-lookup")]
-use crate::types::upstream::Upstream;
 use crate::upstream::lb::p2c_ewma::{self, P2cEwmaParams};
 use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::ProxyState;
@@ -22,10 +20,12 @@ pub struct ReverseProxyStage {
 
 #[async_trait::async_trait(?Send)]
 impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
+    #[inline]
     fn name(&self) -> &str {
         "reverse_proxy"
     }
 
+    #[inline]
     fn is_applicable(
         &self,
         config: Option<&ferron_core::config::ServerConfigurationBlock>,
@@ -33,6 +33,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         config.is_some_and(|c| c.has_directive("proxy"))
     }
 
+    #[inline]
     async fn run(
         &self,
         ctx: &mut HttpContext,
@@ -87,24 +88,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // Set or update per-upstream local limits.
-        let conn_manager = self.state.get_conn_manager();
-        for uc in &config.upstreams {
-            let limit = match uc {
-                Upstream::Static(s) => s.limit,
-                #[cfg(feature = "srv-lookup")]
-                Upstream::Srv(s) => s.limit,
-            };
-            if let Some(limit) = limit {
-                let resolved = uc
-                    .resolve(Some(Arc::clone(&self.state.active_health_check_state)))
-                    .await;
-                for resolved_upstream in resolved {
-                    conn_manager.set_local_limit(resolved_upstream, limit);
-                }
-            }
-        }
-
         let (algorithm, ring) = if let Some(algo) = self.state.algorithms.load().get(&config_key) {
             algo.clone()
         } else {
@@ -122,13 +105,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .clone()
         };
 
-        let active_unhealthy_counter = {
-            self.state
-                .active_unhealthy_counters
-                .get(&config_key)
-                .as_deref()
-                .cloned()
-        };
+        let active_unhealthy_counter = self.state.active_unhealthy_counters.get(&config_key);
 
         // Capture HTTP method before execute_proxy() consumes ctx.req
         let captured_method = ctx
@@ -141,21 +118,26 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .map(|r| crate::proxy::is_method_idempotent(r.method()));
 
         let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
-            if let Some(e) = self.state.retry_budget_states.get(&config_key) {
-                return e.clone();
-            }
             self.state
                 .retry_budget_states
-                .entry(config_key.clone())
-                .or_insert_with(|| {
+                .get_or_insert_with(&config_key, || {
                     SharedRetryBudget::new(
                         budget_config.max_tokens,
                         budget_config.refill_rate,
                         budget_config.max_retry_rate,
                     )
                 })
-                .clone()
         });
+
+        let upstreams = crate::upstream::resolve_upstreams(&config.upstreams).await;
+
+        // Set or update per-upstream local limits.
+        let conn_manager = self.state.get_conn_manager();
+        for upstream in &upstreams {
+            if let Some(limit) = upstream.limit {
+                conn_manager.set_local_limit(upstream.clone(), limit);
+            }
+        }
 
         let result = crate::proxy::execute_proxy(
             ctx,
@@ -169,8 +151,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),
-            Some(&self.state.resolved_upstreams_cache),
-            &config_key,
+            upstreams,
             retry_budget.as_ref(),
         )
         .await;
@@ -840,6 +821,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         Ok(false)
     }
 
+    #[inline]
     async fn run_inverse(
         &self,
         _ctx: &mut HttpContext,

@@ -52,6 +52,12 @@
 
 - **JSON configuration parse error reporting** — previously, configuration parse errors were reported using human-readable error messages (even if the `--json` flag was used). This has been fixed to report parse errors in JSON when configured to do so.
 
+#### Reverse proxy
+
+- **Config reload cleanup** — on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
+- **Upstream resolution cache fix** - in earlier versions of Ferron 3 beta, stale upstream resolution cache (with infinite TTL) could have caused upstream connection errors, due to drift between cached state and actual DNS state. This has been fixed by removing the infinite-TTL internal upstream resolution cache.
+- **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
+
 ## Ferron 3.0.0-beta.8
 
 **Released in July 15, 2026**
@@ -67,7 +73,7 @@
 #### Configuration format
 
 - **Raw string literals** — new `r"..."` syntax for strings with no escape processing. Raw strings are ideal for regex patterns where backslashes should be treated literally (e.g., `r"^/api/v1(?:/|$)"` instead of `"^/api/v1(?:/|$)"`). Raw strings do not support interpolation.
-- **Line continuation** — a backslash (`\`) at the end of a line joins it with the next line, allowing long directives to be split across multiple lines (e.g., `proxy http://localhost:3000 \` followed by `    http://localhost:3001`).
+- **Line continuation** — a backslash (`\`) at the end of a line joins it with the next line, allowing long directives to be split across multiple lines (e.g., `proxy http://localhost:3000 \` followed by `http://localhost:3001`).
 - **Semicolons as optional delimiters** — semicolons (`;`) can now appear between statements and between host patterns as optional delimiters, providing compatibility with tools that generate semicolon-terminated output.
 
 ### Changed
@@ -79,7 +85,7 @@
 
 #### Default pages
 
-- **Redesigned default error and directory listing pages** — the built-in error pages and static directory listings have been redesigned to match new Ferron 3 branding (see https://ferron.sh/blog/ferron-new-look). The installation landing page (`wwwroot`) has also been refreshed to match.
+- **Redesigned default error and directory listing pages** — the built-in error pages and static directory listings have been redesigned to match new Ferron 3 branding (see <https://ferron.sh/blog/ferron-new-look>). The installation landing page (`wwwroot`) has also been refreshed to match.
 
 ### Fixed
 
@@ -297,7 +303,7 @@
 
 - **HTTP range requests fix** — HTTP range requests now correctly handle out-of-bounds ranges, returning `206 Partial Content` with the available range instead of `416 Range Not Satisfiable` (per RFC 7233 §2.1).
 - **On-the-fly compression allowed while using precompressed files** — When serving precompressed files, the content is now compressed on-the-fly if precompressed files are not available, improving performance and reducing disk usage.
-- **Multipart byterange fix** — Multipart range responses now include the required `bytes ` prefix in `Content-Range` part headers (per RFC 7233 §4.1) and correctly serve one additional byte per range to match inclusive-to-exclusive bounds (`is_end_stream` no longer signals end-of-stream while the last range's data is still being streamed).
+- **Multipart byterange fix** — Multipart range responses now include the required `bytes` prefix in `Content-Range` part headers (per RFC 7233 §4.1) and correctly serve one additional byte per range to match inclusive-to-exclusive bounds (`is_end_stream` no longer signals end-of-stream while the last range's data is still being streamed).
 - **`If-None-Match` POST fix** — POST requests with a matching `If-None-Match` header now correctly return `412 Precondition Failed` instead of `200 OK` (per RFC 7232 §4.2).
 - **`If-Match: *` with non-GET/HEAD fix** — `If-Match: *` now correctly passes for POST and other non-GET/HEAD requests when a representation exists, per RFC 7232 §3.1.
 - **Invalid Range header handling** — Syntactically invalid `Range` headers are now treated as absent (returning `200 OK`) instead of `416 Range Not Satisfiable`, per RFC 7233 §3.1.

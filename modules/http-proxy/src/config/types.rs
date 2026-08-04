@@ -22,6 +22,7 @@ pub struct RetryBudgetConfig {
 }
 
 impl Default for RetryBudgetConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             max_retry_rate: 0.1,
@@ -47,6 +48,7 @@ pub struct CircuitBreakerConfig {
 }
 
 impl Default for CircuitBreakerConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             enabled: true,
@@ -86,6 +88,7 @@ pub struct ProxyConfig {
 }
 
 impl Default for ProxyConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             upstreams: Vec::new(),

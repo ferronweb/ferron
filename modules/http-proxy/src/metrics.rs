@@ -190,6 +190,7 @@ pub(crate) fn inject_upstream_state_span_attributes(
 }
 
 /// Build resolved IP and DNS status attributes for proxy metrics.
+#[inline]
 pub(crate) fn resolved_ip_attrs(
     metrics_resolved_ip: bool,
     backend: &Arc<types::upstream::UpstreamInner>,
@@ -211,6 +212,7 @@ pub(crate) fn resolved_ip_attrs(
     attrs
 }
 
+#[inline]
 pub(crate) fn emit_backend_excluded(
     events: &ferron_observability::CompositeEventSink,
     backend: &Arc<types::upstream::UpstreamInner>,
