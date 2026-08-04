@@ -58,7 +58,7 @@ impl TypeMapKey for RequestStateKey {
 }
 
 struct RequestState {
-    config: CacheConfig,
+    config: Arc<CacheConfig>,
     zone_id: CacheZoneId,
     base_key: String,
     request_headers: HeaderMap,
@@ -122,7 +122,7 @@ pub struct HttpCacheStage {
     /// Config generation at which each zone's `max_entries` was last applied.
     zone_generations: Arc<DashMap<CacheZoneId, ZoneGeneration>>,
     /// Parsed cache configs keyed by hostname, cleared on config reload.
-    configs: Arc<DashMap<String, CacheConfig>>,
+    configs: Arc<DashMap<String, Arc<CacheConfig>>>,
     /// Config generation at which `configs` was last filled.
     config_generation: Arc<AtomicU64>,
 }
@@ -143,7 +143,7 @@ impl HttpCacheStage {
     /// per host within a generation, so the cache is keyed by hostname
     /// rather than by generation alone.
     #[inline]
-    fn get_config(&self, ctx: &HttpContext) -> CacheConfig {
+    fn get_config(&self, ctx: &HttpContext) -> Arc<CacheConfig> {
         let current_gen = active_config_generation();
         if self.config_generation.load(Ordering::Relaxed) != current_gen {
             self.configs.clear();
@@ -153,9 +153,13 @@ impl HttpCacheStage {
             .hostname
             .clone()
             .unwrap_or_else(|| "_default".to_string());
+        if let Some(config) = self.configs.get(&hostname) {
+            // Fast path (read lock instead of write lock)
+            return config.clone();
+        }
         self.configs
             .entry(hostname)
-            .or_insert_with(|| parse_cache_config(&ctx.configuration))
+            .or_insert_with(|| Arc::new(parse_cache_config(&ctx.configuration)))
             .clone()
     }
 
