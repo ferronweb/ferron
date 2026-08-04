@@ -469,6 +469,7 @@ async fn apply_resolved_file_to_context(
     }
 }
 
+#[inline]
 fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExecutionError> {
     let root_entries = ctx.configuration.get_entries("root", true);
     let Some(root_entry) = root_entries.first() else {
@@ -487,6 +488,7 @@ fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExe
     Ok(Some(PathBuf::from(root_path)))
 }
 
+#[inline]
 fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
     let entries = ctx.configuration.get_entries("index", true);
     if entries.is_empty() {
@@ -508,6 +510,7 @@ fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
     }
 }
 
+#[inline]
 fn resolve_disable_symlinks(ctx: &HttpContext) -> Result<SymlinkMode, FilePipelineExecutionError> {
     let value = ctx.configuration.get_entry("disable_symlinks", true);
 
@@ -540,15 +543,11 @@ async fn resolve_http_file_target(
     let req_str = request_path.to_string();
 
     loop {
-        let candidate_path = build_candidate_path(root_path, &request_segments[..candidate_depth]);
-
-        // Check if path is still within root (simple check: no .. in normalized form)
-        if !is_path_within_root(root_path, &candidate_path) {
-            return Err(FilePipelineExecutionError::Forbidden {
+        let candidate_path = build_candidate_path(root_path, &request_segments[..candidate_depth])
+            .ok_or_else(|| FilePipelineExecutionError::Forbidden {
                 request_path: req_str.clone(),
-                last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
-            });
-        }
+                last_candidate_path: None,
+            })?;
 
         // Check for symlinks if enabled
         if disable_symlinks != SymlinkMode::Off {
@@ -656,14 +655,6 @@ async fn resolve_http_file_target(
     }
 }
 
-/// Check if a path is within root by comparing normalized components.
-/// This uses simple path component logic without canonicalization.
-fn is_path_within_root(root: &Path, candidate: &Path) -> bool {
-    // Both paths should be absolute (start with /)
-    // Check if candidate starts with root as a path prefix
-    candidate.strip_prefix(root).is_ok()
-}
-
 /// Check for symlinks in the path traversal chain (if enabled).
 /// Returns an error if a forbidden symlink is found.
 async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> io::Result<()> {
@@ -727,10 +718,6 @@ async fn try_resolve_index_files(
 ) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
     for index in index_files {
         let index_path = directory.join(index);
-
-        if !is_path_within_root(root, &index_path) {
-            continue;
-        }
 
         // Check for symlinks if enabled
         if disable_symlinks != SymlinkMode::Off
@@ -815,14 +802,21 @@ fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipeline
     Ok(segments)
 }
 
-fn build_candidate_path(root_path: &Path, request_segments: &[String]) -> PathBuf {
+#[inline]
+fn build_candidate_path(root_path: &Path, request_segments: &[String]) -> Option<PathBuf> {
     let mut candidate_path = root_path.to_path_buf();
     for segment in request_segments {
-        candidate_path.push(segment);
+        let segment_path: &Path = segment.as_ref();
+        if segment_path.is_absolute() {
+            // Prevent absolute path component path traversal, just in case
+            return None;
+        }
+        candidate_path.push(segment_path);
     }
-    candidate_path
+    Some(candidate_path)
 }
 
+#[inline]
 fn build_path_info(request_segments: &[String], trailing_slash: bool) -> Option<String> {
     if request_segments.is_empty() {
         return None;
@@ -876,6 +870,7 @@ pub(super) fn strip_matched_path_prefix(
     stripped_path_and_query.try_into().ok()
 }
 
+#[inline]
 fn is_not_directory_like(error: &io::Error) -> bool {
     #[cfg(unix)]
     if error.raw_os_error() == Some(20) {
