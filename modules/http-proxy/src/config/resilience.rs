@@ -5,6 +5,7 @@ use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 use super::types::{CircuitBreakerConfig, RetryBudgetConfig};
 use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, UpstreamHealthCheckConfig};
 
+#[inline]
 pub(super) fn parse_expected_status(
     s: &str,
 ) -> Result<ExpectedStatusCodes, Box<dyn Error + Send + Sync>> {
@@ -43,6 +44,7 @@ pub(super) fn parse_expected_status(
     Ok(ExpectedStatusCodes::Specific(code))
 }
 
+#[inline]
 pub(super) fn parse_active_health_check(
     entries: &ServerConfigurationBlock,
     health_check_config: &mut UpstreamHealthCheckConfig,
@@ -155,6 +157,7 @@ pub(super) fn parse_active_health_check(
     Ok(())
 }
 
+#[inline]
 pub(super) fn parse_retry_budget(
     entries: &ServerConfigurationBlock,
     retry_budget_config: &mut RetryBudgetConfig,
@@ -214,6 +217,7 @@ pub(super) fn parse_retry_budget(
     Ok(())
 }
 
+#[inline]
 pub(super) fn parse_circuit_breaker(
     entries: &ServerConfigurationBlock,
     circuit_breaker_config: &mut CircuitBreakerConfig,

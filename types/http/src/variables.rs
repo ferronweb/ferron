@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+#[cfg(feature = "mtls")]
 use x509_parser::nom::AsBytes;
 
 use crate::HttpContext;

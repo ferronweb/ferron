@@ -47,6 +47,7 @@ impl WeightedRoundRobinState {
     /// is resized automatically if the backend count changes.
     ///
     /// Returns the index of the selected backend.
+    #[inline]
     pub fn next(&self, weights: &[u32]) -> usize {
         let n = weights.len();
         if n == 0 {

@@ -28,6 +28,7 @@ pub(crate) static RESOLVER_CACHE: OnceLock<
 /// Returns the secondary runtime handle if it has been captured.
 ///
 /// Returns `None` if `Module::start()` has not been called yet.
+#[inline]
 pub fn try_get_secondary_runtime_handle() -> Option<(
     tokio::runtime::Handle,
     Arc<ferron_observability::CompositeEventSink>,
@@ -41,6 +42,7 @@ pub fn try_get_secondary_runtime_handle() -> Option<(
 ///
 /// The handle is captured during `Module::start()` by spawning a task
 /// on the secondary runtime that calls `tokio::runtime::Handle::current()`.
+#[inline]
 pub fn get_secondary_runtime_handle(
     runtime: &Runtime,
     sink: Arc<ferron_observability::CompositeEventSink>,
@@ -70,6 +72,7 @@ pub fn get_secondary_runtime_handle(
 /// Returns `None` if the secondary runtime handle hasn't been captured yet
 /// (i.e., `Module::start()` hasn't been called).
 #[cfg(feature = "srv-lookup")]
+#[inline]
 pub(crate) fn get_or_create_resolver(
     dns_servers: &[std::net::IpAddr],
 ) -> Option<Arc<hickory_resolver::TokioResolver>> {

@@ -36,6 +36,7 @@ impl RetryBudgetState {
     /// Create a new retry budget state.
     ///
     /// The bucket starts full (`tokens == capacity`).
+    #[inline]
     pub fn new(capacity: u64, refill_rate: f64) -> Self {
         Self {
             tokens: Mutex::new(capacity as f64),
@@ -51,6 +52,7 @@ impl RetryBudgetState {
     ///
     /// Returns `true` if a token was consumed (retry is allowed), `false` if
     /// the bucket is empty (retry should be refused).
+    #[inline]
     pub fn try_consume_retry_token(&self) -> bool {
         let mut tokens = self.tokens.lock();
         self.refill(&mut tokens);
@@ -68,6 +70,7 @@ impl RetryBudgetState {
     /// Called after each request completes successfully (regardless of whether
     /// it was a retry). Deposits a token into the bucket to replenish retry
     /// capacity proportional to steady-state traffic.
+    #[inline]
     pub fn record_request(&self) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
 
@@ -77,11 +80,13 @@ impl RetryBudgetState {
     }
 
     /// Record that a retry was attempted.
+    #[inline]
     pub fn record_retry(&self) {
         self.total_retries.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Get the current number of available tokens (after refill).
+    #[inline]
     pub fn available_tokens(&self) -> f64 {
         let mut tokens = self.tokens.lock();
         self.refill(&mut tokens);
@@ -92,6 +97,7 @@ impl RetryBudgetState {
     ///
     /// Returns `0.0` when no requests have been observed.
     #[cfg(test)]
+    #[inline]
     pub fn current_retry_rate(&self) -> f64 {
         let requests = self.total_requests.load(Ordering::Relaxed);
         let retries = self.total_retries.load(Ordering::Relaxed);
@@ -107,6 +113,7 @@ impl RetryBudgetState {
     /// Returns `0.0` if tokens are already available. When the refill rate is
     /// zero (tokens only arrive via `record_request`), returns a conservative
     /// fallback of `5.0` seconds since the arrival rate is unpredictable.
+    #[inline]
     pub fn time_until_available(&self, n: u64) -> f64 {
         let current = self.available_tokens();
         let needed = (n as f64) - current;
@@ -120,6 +127,7 @@ impl RetryBudgetState {
     }
 
     /// Refill tokens based on elapsed time since last refill.
+    #[inline]
     fn refill(&self, tokens: &mut f64) {
         let mut last_refill = self.last_refill.lock();
         let now = Instant::now();
@@ -140,6 +148,7 @@ pub struct SharedRetryBudget {
 
 impl SharedRetryBudget {
     /// Create a new shared retry budget from configuration parameters.
+    #[inline]
     pub fn new(capacity: u64, refill_rate: f64, _max_retry_rate: f64) -> Self {
         Self {
             inner: Arc::new(RetryBudgetState::new(capacity, refill_rate)),

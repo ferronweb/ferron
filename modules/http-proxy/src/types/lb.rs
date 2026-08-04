@@ -2,8 +2,6 @@
 //!
 //! These are the configuration-time algorithm choices and related types.
 
-use std::sync::Arc;
-
 /// Load balancing algorithm configuration.
 ///
 /// This enum represents the algorithm choice made at configuration time.
@@ -23,24 +21,4 @@ pub enum LoadBalancerAlgorithm {
     /// Picks two random backends and selects the one with the lower combined
     /// score of EWMA response latency + active connection penalty.
     P2cEwma,
-}
-
-/// Result of backend selection: the upstream and its connection tracker.
-///
-/// The `tracker` field is used by load balancing algorithms that need to
-/// track active connections per backend (e.g., LeastConnections, TwoRandomChoices).
-/// For algorithms like Random and RoundRobin, this is `None`.
-pub struct SelectedBackend {
-    /// The selected upstream.
-    pub upstream: Arc<super::upstream::UpstreamInner>,
-    /// Connection tracker for LeastConnections/TwoRandomChoices.
-    /// `None` for Random/RoundRobin algorithms.
-    pub tracker: Option<Arc<()>>,
-    /// Candidate scores from the load-balancer selection algorithm.
-    ///
-    /// For P2C-based algorithms (`TwoRandomChoices`, `P2cEwma`), contains
-    /// the two candidate scores that were compared. The first element is
-    /// the winner's score and the second is the loser's score. For other
-    /// algorithms, this is empty.
-    pub candidate_scores: Vec<f64>,
 }

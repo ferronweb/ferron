@@ -53,6 +53,7 @@ pub fn extract_affinity_key(
 }
 
 /// Parse a specific cookie value from a Cookie header string.
+#[inline]
 fn parse_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
     for pair in cookie_header.split(';') {
         let pair = pair.trim();
@@ -68,6 +69,7 @@ fn parse_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
 
 /// Set the affinity cookie on the response if using cookie affinity
 /// and no valid cookie was present in the request.
+#[inline]
 pub fn maybe_set_affinity_cookie(
     resp: ferron_http::HttpResponse,
     affinity: &Option<crate::config::AffinityConfig>,

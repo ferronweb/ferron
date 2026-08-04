@@ -16,6 +16,7 @@ use crate::types::flapping::{FlappingState, FlappingStateMap};
 ///
 /// Returns `true` if the upstream is now considered flapping (callers
 /// should suppress individual transition logs when this returns `true`).
+#[inline]
 pub fn record_circuit_transition(
     flapping_state_map: Option<&FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
@@ -103,6 +104,7 @@ pub fn record_circuit_transition(
     is_flapping
 }
 
+#[inline]
 fn emit_flapping_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream_url: &str,

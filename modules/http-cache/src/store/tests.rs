@@ -982,10 +982,10 @@ fn variants_by_base_preserved_after_lru_eviction() {
 
     // After inserting b, a should be evicted but variants_by_base for a should be preserved
     // (only cleaned up by purge, not by LRU eviction)
-    assert!(!store
+    assert!(store
         .lookup("https://example.com/a", &headers, &cookies, None)
         .0
-        .is_some());
+        .is_none());
     assert!(store
         .lookup("https://example.com/b", &headers, &cookies, None)
         .0

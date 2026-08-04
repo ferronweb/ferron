@@ -20,6 +20,7 @@ pub(crate) fn register_core_proxy_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_health_check_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -96,6 +97,7 @@ pub(crate) fn register_health_check_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_upstream_connection_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -164,6 +166,7 @@ pub(crate) fn register_upstream_connection_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_circuit_breaker_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -226,6 +229,7 @@ pub(crate) fn register_circuit_breaker_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_retry_budget_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -260,6 +264,7 @@ pub(crate) fn register_retry_budget_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_connection_feature_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -314,6 +319,7 @@ pub(crate) fn register_connection_feature_directives(
     );
 }
 
+#[inline]
 pub(crate) fn register_affinity_directives(
     registry: &mut ferron_core::directives::DirectiveRegistry,
 ) {
@@ -377,6 +383,7 @@ pub(crate) fn register_affinity_directives(
     );
 }
 
+#[inline]
 fn register_directive(
     registry: &mut ferron_core::directives::DirectiveRegistry,
     name: &'static str,
@@ -398,6 +405,7 @@ fn register_directive(
     );
 }
 
+#[inline]
 fn register_directive_with_link(
     registry: &mut ferron_core::directives::DirectiveRegistry,
     name: &'static str,
@@ -420,6 +428,7 @@ fn register_directive_with_link(
     );
 }
 
+#[inline]
 fn subblock(name: &'static str) -> ferron_core::directives::DirectiveSubblock {
     ferron_core::directives::DirectiveSubblock::custom(name)
 }
