@@ -5,9 +5,6 @@ use http::Request;
 use std::net::SocketAddr;
 
 use super::key::{build_base_key, build_private_cache_key};
-use super::response_helpers::build_cached_response;
-use crate::policy::CacheScope;
-use crate::store::LookupEntry;
 
 #[inline]
 fn test_context(path: &str) -> HttpContext {
@@ -49,27 +46,6 @@ fn parses_private_key_from_cookies() {
     assert!(key.contains("cookie:PHPSESSID=1234567890abcdef"));
 }
 
-#[tokio::test]
-async fn hit_response_uses_empty_body_for_head() {
-    let entry = LookupEntry {
-        scope: CacheScope::Public,
-        status: http::StatusCode::OK,
-        headers: http::HeaderMap::new(),
-        body: Some(bytes::Bytes::from_static(b"hello")),
-        lsc_cookies: Vec::new(),
-        age: std::time::Duration::from_secs(5),
-        etag: None,
-        last_modified: None,
-        stale_while_revalidate: None,
-        stale_if_error: None,
-        must_revalidate: false,
-        ttl: std::time::Duration::from_secs(60),
-    };
-    let response = build_cached_response(entry, true, false).unwrap();
-    let collected = response.into_body().collect().await.unwrap().to_bytes();
-    assert!(collected.is_empty());
-}
-
 #[test]
 fn base_key_uses_scheme_host_and_path() {
     let ctx = test_context("/test?q=1");
@@ -90,4 +66,155 @@ fn base_key_prefers_original_uri() {
         request.uri(),
     );
     assert_eq!(key, "https://example.com/canonical/path");
+}
+
+#[test]
+fn propagation_paths_map_selectors_and_deduplicate() {
+    use crate::lscache::{PurgeOperation, PurgeSelector};
+    use crate::policy::CacheScope;
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![
+            PurgeSelector::All,
+            PurgeSelector::UrlPath("/a".to_string()),
+            PurgeSelector::Tag("v1".to_string()),
+            PurgeSelector::Url("/b?x=1".to_string()),
+            PurgeSelector::UrlPath("/a".to_string()),
+        ],
+        stale: false,
+    }];
+    assert_eq!(
+        super::purge::collect_propagation_paths(&operations),
+        vec!["*", "/a", "tag=v1", "/b?x=1"]
+    );
+}
+
+#[test]
+fn purge_reports_purged_and_remaining_entry_counts() {
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use http::StatusCode;
+
+    use crate::lscache::{PurgeOperation, PurgeSelector};
+    use crate::policy::CacheScope;
+    use crate::store::{CacheStore, StoredEntry};
+
+    let mut ctx = test_context("/purge/me");
+    let store = CacheStore::new(100);
+
+    let entry = StoredEntry {
+        scope: CacheScope::Public,
+        base_key: "https://example.com/keep".to_string(),
+        vary: crate::store::VaryRule {
+            header_names: Vec::new(),
+            cookie_names: Vec::new(),
+            value: None,
+        },
+        status: StatusCode::OK,
+        headers: http::HeaderMap::new(),
+        body: Some(Bytes::from_static(b"hello")),
+        lsc_cookies: Vec::new(),
+        created_at: std::time::Instant::now(),
+        ttl: Duration::from_secs(60),
+        access_at: 0,
+        private_key: None,
+        tags: Vec::new(),
+        purge_url: "/keep".to_string(),
+        etag: None,
+        last_modified: None,
+        stale_while_revalidate: Some(Duration::from_secs(10)),
+        stale_if_error: None,
+        must_revalidate: false,
+    };
+    store.insert_with_request(
+        entry.clone(),
+        None,
+        &http::HeaderMap::new(),
+        &Default::default(),
+    );
+
+    let second = StoredEntry {
+        base_key: "https://example.com/purge/me".to_string(),
+        purge_url: "/purge/me".to_string(),
+        ..entry
+    };
+    store.insert_with_request(second, None, &http::HeaderMap::new(), &Default::default());
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![PurgeSelector::UrlPath("/purge/me".to_string())],
+        stale: false,
+    }];
+    let stats = super::purge::purge(
+        &mut ctx,
+        &CacheZoneId::Host("example.com".to_string()),
+        &store,
+        &operations,
+        None,
+        false,
+        &crate::config::PurgePropagationConfig::default(),
+    );
+
+    assert_eq!(stats.purged, 1);
+    assert_eq!(store.len(), 1);
+}
+
+#[test]
+fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_core::config::ServerConfigurationBlockBuilder;
+
+    fn layered_config(max_response_size: u64) -> LayeredConfiguration {
+        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+        let entry = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValue::Number(
+                max_response_size as i64,
+                None,
+            )],
+            children: None,
+            span: None,
+        };
+        let block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block(
+                "cache",
+                Vec::<String>::new(),
+                ServerConfigurationBlockBuilder::new()
+                    .directive("max_response_size", entry)
+                    .build(),
+            )
+            .build();
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(block));
+        layered
+    }
+
+    let stage = HttpCacheStage::new();
+    let mut ctx_a = test_context("/a");
+    ctx_a.hostname = Some("a.example.com".to_string());
+    ctx_a.configuration = layered_config(1024);
+    let mut ctx_b = test_context("/b");
+    ctx_b.hostname = Some("b.example.com".to_string());
+    ctx_b.configuration = layered_config(2048);
+
+    let config_a = stage.get_config(&ctx_a);
+    assert_eq!(config_a.max_response_size, 1024);
+    assert!(config_a.enabled);
+    assert_eq!(stage.configs.len(), 1);
+
+    let config_b = stage.get_config(&ctx_b);
+    assert_eq!(config_b.max_response_size, 2048);
+    assert_eq!(stage.configs.len(), 2);
+
+    assert_eq!(stage.get_config(&ctx_a).max_response_size, 1024);
+    assert_eq!(stage.configs.len(), 2);
+
+    ferron_core::admin::ADMIN_METRICS
+        .reload_metrics
+        .write()
+        .active_generation += 1;
+
+    assert_eq!(stage.get_config(&ctx_b).max_response_size, 2048);
+    assert_eq!(stage.configs.len(), 1);
 }

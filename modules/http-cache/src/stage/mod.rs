@@ -1,7 +1,8 @@
 mod key;
-mod metrics;
-mod purge_propagation;
+mod outcome;
+mod purge;
 mod response_helpers;
+mod served;
 #[cfg(test)]
 mod tests;
 
@@ -14,11 +15,9 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
-use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
-use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
-use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel, TraceAttributeValue};
-use http::header::{self, HeaderValue};
+use ferron_observability::{Event, LogEvent, LogLevel};
+use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 use typemap_rev::TypeMapKey;
@@ -33,22 +32,20 @@ use crate::lscache::{
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
 };
-use crate::store::{CacheStore, LookupEntry, StoreStats, StoredEntry};
-use crate::SECONDARY_RUNTIME;
+use crate::store::{CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry};
 
-use self::key::{
-    build_base_key, build_private_cache_key, build_vary_rule, cache_key_fingerprint, parse_cookies,
+use self::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
+use self::outcome::{
+    emit_eviction_metrics, emit_request_metric, emit_singleflight_metrics, emit_store_metric,
+    report, CacheOutcome,
 };
-use self::metrics::{
-    emit_eviction_metrics, emit_purge_metric, emit_request_metric, emit_singleflight_metrics,
-    emit_store_metric,
-};
-use self::purge_propagation::{propagate_purge_webhook, PURGE_SOURCE_HEADER};
+use self::purge::{purge, PURGE_SOURCE_HEADER};
 use self::response_helpers::{
-    annotate_response_headers, append_lsc_cookies_as_set_cookie, build_cached_response,
-    collect_body_with_limit, response_from_parts, response_from_streaming_parts,
-    strip_internal_headers, CacheHeaderState, CollectBodyOutcome,
+    annotate_response_headers, append_lsc_cookies_as_set_cookie, collect_body_with_limit,
+    response_from_parts, response_from_streaming_parts, strip_internal_headers, CacheHeaderState,
+    CollectBodyOutcome,
 };
+use self::served::{serve, ServedState};
 
 const LOG_TARGET: &str = "ferron-http-cache";
 const CACHE_STATUS_HEADER: http::header::HeaderName =
@@ -61,7 +58,7 @@ impl TypeMapKey for RequestStateKey {
 }
 
 struct RequestState {
-    config: CacheConfig,
+    config: Arc<CacheConfig>,
     zone_id: CacheZoneId,
     base_key: String,
     request_headers: HeaderMap,
@@ -124,6 +121,10 @@ pub struct HttpCacheStage {
     zones: Arc<DashMap<CacheZoneId, Arc<CacheStore>>>,
     /// Config generation at which each zone's `max_entries` was last applied.
     zone_generations: Arc<DashMap<CacheZoneId, ZoneGeneration>>,
+    /// Parsed cache configs keyed by hostname, cleared on config reload.
+    configs: Arc<DashMap<String, Arc<CacheConfig>>>,
+    /// Config generation at which `configs` was last filled.
+    config_generation: Arc<AtomicU64>,
 }
 
 impl HttpCacheStage {
@@ -132,7 +133,34 @@ impl HttpCacheStage {
         Self {
             zones: Arc::new(DashMap::new()),
             zone_generations: Arc::new(DashMap::new()),
+            configs: Arc::new(DashMap::new()),
+            config_generation: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    /// Get the cache config for the request's hostname, parsing it once per
+    /// hostname per configuration generation. The configuration can differ
+    /// per host within a generation, so the cache is keyed by hostname
+    /// rather than by generation alone.
+    #[inline]
+    fn get_config(&self, ctx: &HttpContext) -> Arc<CacheConfig> {
+        let current_gen = active_config_generation();
+        if self.config_generation.load(Ordering::Relaxed) != current_gen {
+            self.configs.clear();
+            self.config_generation.store(current_gen, Ordering::Relaxed);
+        }
+        let hostname = ctx
+            .hostname
+            .clone()
+            .unwrap_or_else(|| "_default".to_string());
+        if let Some(config) = self.configs.get(&hostname) {
+            // Fast path (read lock instead of write lock)
+            return config.clone();
+        }
+        self.configs
+            .entry(hostname)
+            .or_insert_with(|| Arc::new(parse_cache_config(&ctx.configuration)))
+            .clone()
     }
 
     /// Get or create a `CacheStore` for the given zone, updating `max_entries`
@@ -149,10 +177,7 @@ impl HttpCacheStage {
             .value()
             .clone();
 
-        let current_gen = ferron_core::admin::ADMIN_METRICS
-            .reload_metrics
-            .read()
-            .active_generation;
+        let current_gen = active_config_generation();
 
         let should_update = match self.zone_generations.get(zone_id) {
             Some(entry) => entry.generation.load(Ordering::Relaxed) != current_gen,
@@ -221,7 +246,7 @@ impl Stage<HttpContext> for HttpCacheStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = parse_cache_config(&ctx.configuration);
+        let config = self.get_config(ctx);
 
         if !config.enabled {
             return Ok(true);
@@ -283,102 +308,50 @@ impl Stage<HttpContext> for HttpCacheStage {
 
                 if !purge_allowed {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
-                    ctx.get_span_attributes().insert(
-                        "ferron.cache.result",
-                        TraceAttributeValue::String("purge_rejected".to_string()),
-                    );
-                    let log_fields = custom_access_log_fields(ctx);
-                    log_fields.insert(
-                        "ferron.cache.result".into(),
-                        CustomAccessLogField::String("purge_rejected".into()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.key_fingerprint".into(),
-                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "purge_rejected",
+                            zone_id: &zone_id,
+                            key: &purge_url,
+                            scope: None,
+                            items: None,
+                            stored: None,
+                            evictions: None,
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
                     );
                     return Ok(false);
                 }
 
-                let mut purged = 0;
-                for scope in [CacheScope::Public, CacheScope::Private] {
-                    let purge_ops = vec![PurgeOperation {
-                        scope,
+                let purge_ops: Vec<PurgeOperation> = [CacheScope::Public, CacheScope::Private]
+                    .iter()
+                    .map(|scope| PurgeOperation {
+                        scope: *scope,
                         selectors: vec![PurgeSelector::UrlPath(request.uri().path().to_string())],
                         stale: false,
-                    }];
-                    let (stats, items) = store.purge(&purge_ops, None);
-                    if stats.purged > 0 {
-                        emit_purge_metric(ctx, &zone_id, scope, stats.purged, items);
-                    }
-                    purged += stats.purged;
-                }
-
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Debug,
-                    target: LOG_TARGET,
-                    message: format!("Purged {} cache entries via PURGE method", purged),
-                    summary: "Cache purged via PURGE method".into(),
-                    attributes: vec![("cache.purged.count", LogAttributeValue::I64(purged as i64))],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-
+                    })
+                    .collect();
                 let is_propagated = request_headers
                     .get(&PURGE_SOURCE_HEADER)
                     .and_then(|v| v.to_str().ok())
                     .is_some_and(|v| v.eq_ignore_ascii_case("propagation"));
-
-                if !is_propagated {
-                    if let Some(url) = &config.purge_propagation.control_plane_url {
-                        let url = url.clone();
-                        let secret = config.purge_propagation.shared_secret.clone();
-                        let node_id = config.purge_propagation.node_id.clone();
-                        let path = request
-                            .uri()
-                            .path_and_query()
-                            .map(|pq| pq.as_str().to_string())
-                            .unwrap_or_else(|| request.uri().path().to_string());
-                        if let Some(handle) = SECONDARY_RUNTIME.get() {
-                            let events = ctx.events.clone();
-                            let trace_context =
-                                ferron_http::trace_context::current_event_trace_context(ctx);
-                            handle.spawn(async move {
-                                if let Err(e) = propagate_purge_webhook(
-                                    &url,
-                                    secret.as_deref(),
-                                    node_id.as_deref(),
-                                    &path,
-                                )
-                                .await
-                                {
-                                    events.emit(Event::Log(LogEvent {
-                                        level: LogLevel::Warn,
-                                        target: LOG_TARGET,
-                                        message: format!(
-                                            "Purge propagation to control-plane failed: {}",
-                                            e
-                                        ),
-                                        summary: "Purge propagation failed".into(),
-                                        attributes: vec![(
-                                            "error.message",
-                                            LogAttributeValue::String(e.to_string()),
-                                        )],
-                                        trace_context,
-                                    }));
-                                }
-                            });
-                        } else {
-                            ctx.events.emit(Event::Log(LogEvent {
-                                level: LogLevel::Warn,
-                                target: LOG_TARGET,
-                                message: "Distributed cache purge not yet available".to_string(),
-                                summary: "Distributed cache purge not yet available".into(),
-                                attributes: Vec::new(),
-                                trace_context:
-                                    ferron_http::trace_context::current_event_trace_context(ctx),
-                            }));
-                        }
-                    }
-                }
+                purge(
+                    ctx,
+                    &zone_id,
+                    &store,
+                    &purge_ops,
+                    None,
+                    !is_propagated,
+                    &config.purge_propagation,
+                );
 
                 let response = Response::builder()
                     .status(StatusCode::OK)
@@ -390,29 +363,26 @@ impl Stage<HttpContext> for HttpCacheStage {
                     )
                     .map_err(|e| PipelineError::custom(e.to_string()))?;
                 ctx.res = Some(HttpResponse::Custom(response));
-                ctx.get_span_attributes().insert(
-                    "ferron.cache.result",
-                    TraceAttributeValue::String("purge".to_string()),
+                report(
+                    ctx,
+                    CacheOutcome {
+                        result: "purge",
+                        zone_id: &zone_id,
+                        key: &purge_url,
+                        scope: None,
+                        items: None,
+                        stored: None,
+                        evictions: None,
+                        detail: None,
+                        key_uri: None,
+                        key_method: None,
+                        bypass_reason: None,
+                        evaluated_cookies: None,
+                        coalesced_wait_ms: None,
+                        mark_uncoalesced: false,
+                        metric_result: None,
+                    },
                 );
-                ctx.get_span_attributes().insert(
-                    "ferron.cache.zone",
-                    TraceAttributeValue::String(zone_id.label().to_string()),
-                );
-                {
-                    let log_fields = custom_access_log_fields(ctx);
-                    log_fields.insert(
-                        "ferron.cache.result".into(),
-                        CustomAccessLogField::String("purge".into()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.zone".into(),
-                        CustomAccessLogField::String(zone_id.label().to_string()),
-                    );
-                    log_fields.insert(
-                        "ferron.cache.key_fingerprint".into(),
-                        CustomAccessLogField::String(cache_key_fingerprint(&purge_url)),
-                    );
-                }
                 return Ok(false);
             }
         }
@@ -423,7 +393,12 @@ impl Stage<HttpContext> for HttpCacheStage {
             && request_policy.allow_lookup;
 
         let lookup_result = if request_is_lookup_eligible {
-            let (lookup, stats, items, had_expired) = store.lookup(
+            let LookupOutcome {
+                entry: lookup,
+                stats,
+                items,
+                had_expired,
+            } = store.lookup(
                 &base_key,
                 &request_headers,
                 &request_cookies,
@@ -459,44 +434,35 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     }
                 } else {
-                    emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
-                    emit_eviction_metrics(ctx, &zone_id, stats);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("hit".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(scope.as_str().to_string()),
-                        );
-                        let log_fields = custom_access_log_fields(ctx);
-                        log_fields.insert(
-                            "ferron.cache.result".into(),
-                            CustomAccessLogField::String("hit".into()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.zone".into(),
-                            CustomAccessLogField::String(zone_id.label().to_string()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.key_fingerprint".into(),
-                            CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-                        );
-                    }
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "hit",
+                            zone_id: &zone_id,
+                            key: &base_key,
+                            scope: Some(scope),
+                            items: Some(items),
+                            stored: None,
+                            evictions: Some(stats),
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
                             Some(entry.headers.clone()),
                         )
                     } else {
-                        HttpResponse::Custom(build_cached_response(
+                        HttpResponse::Custom(serve(
                             entry,
+                            ServedState::Hit,
                             head_only,
                             config.emit_litespeed_headers,
                         )?)
@@ -513,7 +479,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                         let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
                         emit_singleflight_metrics(ctx, &store);
 
-                        let (retry_lookup, retry_stats, retry_items, _) = store.lookup(
+                        let LookupOutcome {
+                            entry: retry_lookup,
+                            stats: retry_stats,
+                            items: retry_items,
+                            ..
+                        } = store.lookup(
                             &base_key,
                             &request_headers,
                             &request_cookies,
@@ -521,52 +492,35 @@ impl Stage<HttpContext> for HttpCacheStage {
                         );
                         if let Some((entry, _, _)) = retry_lookup {
                             let scope = entry.scope;
-                            emit_eviction_metrics(ctx, &zone_id, retry_stats);
-                            emit_request_metric(ctx, &zone_id, "hit", Some(scope), retry_items);
-                            {
-                                let sa = ctx.get_span_attributes();
-                                sa.insert(
-                                    "ferron.cache.result",
-                                    TraceAttributeValue::String("hit".to_string()),
-                                );
-                                sa.insert(
-                                    "ferron.cache.zone",
-                                    TraceAttributeValue::String(zone_id.label().to_string()),
-                                );
-                                sa.insert(
-                                    "ferron.cache.scope",
-                                    TraceAttributeValue::String(scope.as_str().to_string()),
-                                );
-                                let log_fields = custom_access_log_fields(ctx);
-                                log_fields.insert(
-                                    "ferron.cache.result".into(),
-                                    CustomAccessLogField::String("hit".into()),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.zone".into(),
-                                    CustomAccessLogField::String(zone_id.label().to_string()),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.key_fingerprint".into(),
-                                    CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.coalesced".into(),
-                                    CustomAccessLogField::Bool(true),
-                                );
-                                log_fields.insert(
-                                    "ferron.cache.coalesce_wait_duration_ms".into(),
-                                    CustomAccessLogField::F64(wait_ms),
-                                );
-                            }
+                            report(
+                                ctx,
+                                CacheOutcome {
+                                    result: "hit",
+                                    zone_id: &zone_id,
+                                    key: &base_key,
+                                    scope: Some(scope),
+                                    items: Some(retry_items),
+                                    stored: None,
+                                    evictions: Some(retry_stats),
+                                    detail: None,
+                                    key_uri: None,
+                                    key_method: None,
+                                    bypass_reason: None,
+                                    evaluated_cookies: None,
+                                    coalesced_wait_ms: Some(wait_ms),
+                                    mark_uncoalesced: false,
+                                    metric_result: None,
+                                },
+                            );
                             ctx.res = Some(if entry.body.is_none() {
                                 HttpResponse::BuiltinError(
                                     entry.status.as_u16(),
                                     Some(entry.headers.clone()),
                                 )
                             } else {
-                                HttpResponse::Custom(build_cached_response(
+                                HttpResponse::Custom(serve(
                                     entry,
+                                    ServedState::Hit,
                                     head_only,
                                     config.emit_litespeed_headers,
                                 )?)
@@ -643,50 +597,29 @@ impl Stage<HttpContext> for HttpCacheStage {
             };
             let req_method = ctx.req.as_ref().map(|r| r.method().as_str().to_string());
             let req_uri = ctx.req.as_ref().map(|r| r.uri().to_string());
-            let sa = ctx.get_span_attributes();
-            sa.insert(
-                "ferron.cache.result",
-                TraceAttributeValue::String(result_label.to_string()),
-            );
-            sa.insert(
-                "ferron.cache.zone",
-                TraceAttributeValue::String(zone_id.label().to_string()),
-            );
-            if let Some(uri) = req_uri {
-                sa.insert("ferron.cache.key.uri", TraceAttributeValue::String(uri));
-            }
-            if let Some(method) = req_method {
-                sa.insert(
-                    "ferron.cache.key.method",
-                    TraceAttributeValue::String(method),
-                );
-            }
-            if let LookupResult::Bypass = &lookup_result {
-                sa.insert(
-                    "ferron.cache.bypass_reason",
-                    TraceAttributeValue::String(request_policy.reason.to_string()),
-                );
-            }
-            let log_fields = custom_access_log_fields(ctx);
-            log_fields.insert(
-                "ferron.cache.result".into(),
-                CustomAccessLogField::String(result_label.to_string()),
-            );
-            log_fields.insert(
-                "ferron.cache.zone".into(),
-                CustomAccessLogField::String(zone_id.label().to_string()),
-            );
-            log_fields.insert(
-                "ferron.cache.key_fingerprint".into(),
-                CustomAccessLogField::String(cache_key_fingerprint(&base_key)),
-            );
-            log_fields.insert(
-                "ferron.cache.coalesced".into(),
-                CustomAccessLogField::Bool(false),
-            );
-            log_fields.insert(
-                "ferron.cache.coalesce_wait_duration_ms".into(),
-                CustomAccessLogField::F64(0.0),
+            let bypass_reason = match lookup_result {
+                LookupResult::Bypass => Some(request_policy.reason),
+                _ => None,
+            };
+            report(
+                ctx,
+                CacheOutcome {
+                    result: result_label,
+                    zone_id: &zone_id,
+                    key: &base_key,
+                    scope: None,
+                    items: None,
+                    stored: None,
+                    evictions: None,
+                    detail: None,
+                    key_uri: req_uri.as_deref(),
+                    key_method: req_method.as_deref(),
+                    bypass_reason,
+                    evaluated_cookies: None,
+                    coalesced_wait_ms: None,
+                    mark_uncoalesced: true,
+                    metric_result: None,
+                },
             );
         }
 
@@ -737,53 +670,34 @@ impl Stage<HttpContext> for HttpCacheStage {
                             Some(entry.headers.clone()),
                         )
                     } else {
-                        HttpResponse::Custom(build_cached_response(
+                        HttpResponse::Custom(serve(
                             (**entry).clone(),
+                            ServedState::StaleWhileRevalidate,
                             state.head_only,
                             state.config.emit_litespeed_headers,
                         )?)
                     });
 
-                    if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
-                        annotate_response_headers(
-                            resp.headers_mut(),
-                            CacheHeaderState::StaleWhileRevalidate {
-                                scope: entry.scope,
-                                age: entry.age,
-                            },
-                            state.config.emit_litespeed_headers,
-                        );
-                    }
-
-                    emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("stale".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(entry.scope.as_str().to_string()),
-                        );
-                        let log_fields = custom_access_log_fields(ctx);
-                        log_fields.insert(
-                            "ferron.cache.result".into(),
-                            CustomAccessLogField::String("stale".into()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.zone".into(),
-                            CustomAccessLogField::String(state.zone_id.label().to_string()),
-                        );
-                        log_fields.insert(
-                            "ferron.cache.key_fingerprint".into(),
-                            CustomAccessLogField::String(cache_key_fingerprint(&state.base_key)),
-                        );
-                    }
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "stale",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: *scope,
+                            items: Some(*items),
+                            stored: None,
+                            evictions: None,
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: Some("hit"),
+                        },
+                    );
                     return Ok(());
                 }
             }
@@ -838,43 +752,14 @@ impl Stage<HttpContext> for HttpCacheStage {
                     fresh_headers = new_fresh_headers;
                 }
 
-                let mut builder = Response::builder().status(cached_entry.status);
-                for (name, value) in &fresh_headers {
-                    builder = builder.header(name, value);
-                }
-
-                let head_only = state.head_only;
-                let body = if head_only {
-                    Empty::<Bytes>::new()
-                        .map_err(|error| match error {})
-                        .boxed_unsync()
-                } else if let Some(body) = &cached_entry.body {
-                    Full::new(body.clone())
-                        .map_err(|error: std::convert::Infallible| match error {})
-                        .boxed_unsync()
-                } else {
-                    Empty::<Bytes>::new()
-                        .map_err(|error| match error {})
-                        .boxed_unsync()
-                };
-
-                if head_only && !fresh_headers.contains_key(header::CONTENT_LENGTH) {
-                    if let Some(body_bytes) = &cached_entry.body {
-                        if let Ok(value) = HeaderValue::from_str(&body_bytes.len().to_string()) {
-                            builder = builder.header(header::CONTENT_LENGTH, value);
-                        }
-                    }
-                }
-
-                let mut response_200 = builder
-                    .body(body)
-                    .map_err(|e| PipelineError::custom(e.to_string()))?;
-
-                annotate_response_headers(
-                    response_200.headers_mut(),
-                    CacheHeaderState::Revalidated,
+                let mut entry = (**cached_entry).clone();
+                entry.headers = fresh_headers;
+                let response_200 = serve(
+                    entry,
+                    ServedState::Revalidated,
+                    state.head_only,
                     state.config.emit_litespeed_headers,
-                );
+                )?;
 
                 emit_request_metric(
                     ctx,
@@ -890,14 +775,15 @@ impl Stage<HttpContext> for HttpCacheStage {
         }
 
         if response.status().is_server_error() && state.config.enable_stale_if_error {
-            if let (Some((stale_entry, _stale_key, _)), _stats, _len, _had_expired) =
-                state.store.lookup(
-                    &state.base_key,
-                    &state.request_headers,
-                    &state.request_cookies,
-                    state.private_key.as_deref(),
-                )
-            {
+            if let LookupOutcome {
+                entry: Some((stale_entry, _, _)),
+                ..
+            } = state.store.lookup(
+                &state.base_key,
+                &state.request_headers,
+                &state.request_cookies,
+                state.private_key.as_deref(),
+            ) {
                 if let Some(sie_duration) = stale_entry.stale_if_error {
                     if !stale_entry.must_revalidate
                         && stale_entry.age <= stale_entry.ttl + sie_duration
@@ -946,52 +832,34 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 .map_err(|e| PipelineError::custom(e.to_string()))?
                         };
 
-                        emit_request_metric(
+                        report(
                             ctx,
-                            &state.zone_id,
-                            "hit",
-                            Some(stale_entry.scope),
-                            state.store.len(),
+                            CacheOutcome {
+                                result: "stale",
+                                zone_id: &state.zone_id,
+                                key: &state.base_key,
+                                scope: Some(stale_entry.scope),
+                                items: Some(state.store.len()),
+                                stored: None,
+                                evictions: None,
+                                detail: None,
+                                key_uri: None,
+                                key_method: None,
+                                bypass_reason: None,
+                                evaluated_cookies: None,
+                                coalesced_wait_ms: None,
+                                mark_uncoalesced: false,
+                                metric_result: Some("hit"),
+                            },
                         );
 
                         ctx.res = Some(HttpResponse::Custom(stale_response));
-                        {
-                            let sa = ctx.get_span_attributes();
-                            sa.insert(
-                                "ferron.cache.result",
-                                TraceAttributeValue::String("stale".to_string()),
-                            );
-                            sa.insert(
-                                "ferron.cache.zone",
-                                TraceAttributeValue::String(state.zone_id.label().to_string()),
-                            );
-                            sa.insert(
-                                "ferron.cache.scope",
-                                TraceAttributeValue::String(stale_entry.scope.as_str().to_string()),
-                            );
-                            let log_fields = custom_access_log_fields(ctx);
-                            log_fields.insert(
-                                "ferron.cache.result".into(),
-                                CustomAccessLogField::String("stale".into()),
-                            );
-                            log_fields.insert(
-                                "ferron.cache.zone".into(),
-                                CustomAccessLogField::String(state.zone_id.label().to_string()),
-                            );
-                            log_fields.insert(
-                                "ferron.cache.key_fingerprint".into(),
-                                CustomAccessLogField::String(cache_key_fingerprint(
-                                    &state.base_key,
-                                )),
-                            );
-                        }
                         return Ok(());
                     }
                 }
             }
         }
 
-        let mut purge_scope = None;
         let purge_ops = parse_litespeed_purge(response.headers());
         if purge_ops.iter().any(|operation| operation.stale) {
             ctx.events.emit(Event::Log(LogEvent {
@@ -1005,93 +873,20 @@ impl Stage<HttpContext> for HttpCacheStage {
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
         }
-        if !purge_ops.is_empty() {
-            let (stats, items) = state.store.purge(&purge_ops, state.private_key.as_deref());
-            for operation in &purge_ops {
-                purge_scope = Some(operation.scope);
-                emit_purge_metric(ctx, &state.zone_id, operation.scope, stats.purged, items);
-            }
-            if stats.purged > 0 {
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Debug,
-                    target: LOG_TARGET,
-                    message: format!(
-                        "Purged {} cache entrie(s) via LSCache controls",
-                        stats.purged
-                    ),
-                    summary: "Cache purged via LSCache controls".into(),
-                    attributes: vec![(
-                        "cache.purged.count",
-                        LogAttributeValue::I64(stats.purged as i64),
-                    )],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-
-                if let Some(url) = &state.config.purge_propagation.control_plane_url {
-                    let mut paths: Vec<String> = Vec::new();
-                    for op in &purge_ops {
-                        for sel in &op.selectors {
-                            let path = match sel {
-                                PurgeSelector::All => "*".to_string(),
-                                PurgeSelector::Url(url) => url.clone(),
-                                PurgeSelector::UrlPath(path) => path.clone(),
-                                PurgeSelector::Tag(tag) => format!("tag={tag}"),
-                            };
-                            if !paths.contains(&path) {
-                                paths.push(path);
-                            }
-                        }
-                    }
-
-                    let url = url.clone();
-                    let secret = state.config.purge_propagation.shared_secret.clone();
-                    let node_id = state.config.purge_propagation.node_id.clone();
-                    if let Some(handle) = SECONDARY_RUNTIME.get() {
-                        let events = ctx.events.clone();
-                        let trace_context =
-                            ferron_http::trace_context::current_event_trace_context(ctx);
-                        handle.spawn(async move {
-                            for path in &paths {
-                                if let Err(e) = propagate_purge_webhook(
-                                    &url,
-                                    secret.as_deref(),
-                                    node_id.as_deref(),
-                                    path,
-                                )
-                                .await
-                                {
-                                    events.emit(Event::Log(LogEvent {
-                                        level: LogLevel::Warn,
-                                        target: LOG_TARGET,
-                                        message: format!(
-                                            "Purge propagation to control-plane failed: {}",
-                                            e
-                                        ),
-                                        summary: "Purge propagation failed".into(),
-                                        attributes: vec![(
-                                            "error.message",
-                                            LogAttributeValue::String(e.to_string()),
-                                        )],
-                                        trace_context: trace_context.clone(),
-                                    }));
-                                }
-                            }
-                        });
-                    } else {
-                        ctx.events.emit(Event::Log(LogEvent {
-                            level: LogLevel::Warn,
-                            target: LOG_TARGET,
-                            message: "Distributed cache purge not yet available".to_string(),
-                            summary: "Distributed cache purge not yet available".into(),
-                            attributes: Vec::new(),
-                            trace_context: ferron_http::trace_context::current_event_trace_context(
-                                ctx,
-                            ),
-                        }));
-                    }
-                }
-            }
-        }
+        let purge_scope = if purge_ops.is_empty() {
+            None
+        } else {
+            purge(
+                ctx,
+                &state.zone_id,
+                &state.store,
+                &purge_ops,
+                state.private_key.as_deref(),
+                true,
+                &state.config.purge_propagation,
+            );
+            purge_ops.last().map(|operation| operation.scope)
+        };
 
         let ls_control = parse_litespeed_cache_control(response.headers());
         let ls_vary = if ls_control.as_ref().is_some_and(|control| control.no_vary) {
@@ -1213,13 +1008,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &state.request_headers,
                         &state.request_cookies,
                     );
-                    emit_eviction_metrics(ctx, &state.zone_id, stats);
-                    emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
 
                     if let LookupResult::StaleWhileRevalidate {
                         entry,
-                        scope,
-                        items,
+                        scope: stale_scope,
+                        items: stale_items,
                         ..
                     } = &state.lookup_result
                     {
@@ -1229,25 +1022,17 @@ impl Stage<HttpContext> for HttpCacheStage {
                                 Some(entry.headers.clone()),
                             )
                         } else {
-                            HttpResponse::Custom(build_cached_response(
+                            HttpResponse::Custom(serve(
                                 (**entry).clone(),
+                                ServedState::StaleIfError,
                                 state.head_only,
                                 state.config.emit_litespeed_headers,
                             )?)
                         });
 
-                        if let Some(HttpResponse::Custom(ref mut resp)) = ctx.res {
-                            annotate_response_headers(
-                                resp.headers_mut(),
-                                CacheHeaderState::StaleWhileRevalidate {
-                                    scope: entry.scope,
-                                    age: entry.age,
-                                },
-                                state.config.emit_litespeed_headers,
-                            );
-                        }
-
-                        emit_request_metric(ctx, &state.zone_id, "hit", *scope, *items);
+                        emit_eviction_metrics(ctx, &state.zone_id, stats);
+                        emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
+                        emit_request_metric(ctx, &state.zone_id, "hit", *stale_scope, *stale_items);
                         return Ok(());
                     }
 
@@ -1263,31 +1048,29 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", Some(scope), items);
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "miss",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: Some(scope),
+                            items: Some(items),
+                            stored: Some((scope, status.as_u16())),
+                            evictions: Some(stats),
+                            detail: None,
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: vary_rule.as_ref().and_then(|vr| {
+                                (!vr.cookie_names.is_empty()).then_some(vr.cookie_names.as_slice())
+                            }),
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(outgoing_response);
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("miss".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.scope",
-                            TraceAttributeValue::String(scope.as_str().to_string()),
-                        );
-                        if let Some(ref vr) = vary_rule {
-                            if !vr.cookie_names.is_empty() {
-                                sa.insert(
-                                    "ferron.cache.key.evaluated_cookies",
-                                    TraceAttributeValue::String(vr.cookie_names.join(";")),
-                                );
-                            }
-                        }
-                    }
                 }
                 CollectBodyOutcome::Overflow { prefix, remainder } => {
                     ctx.events.emit(Event::Log(LogEvent {
@@ -1307,23 +1090,27 @@ impl Stage<HttpContext> for HttpCacheStage {
                         },
                         state.config.emit_litespeed_headers,
                     );
-                    emit_request_metric(ctx, &state.zone_id, "miss", None, state.store.len());
+                    report(
+                        ctx,
+                        CacheOutcome {
+                            result: "miss",
+                            zone_id: &state.zone_id,
+                            key: &state.base_key,
+                            scope: None,
+                            items: Some(state.store.len()),
+                            stored: None,
+                            evictions: None,
+                            detail: Some("response-too-large"),
+                            key_uri: None,
+                            key_method: None,
+                            bypass_reason: None,
+                            evaluated_cookies: None,
+                            coalesced_wait_ms: None,
+                            mark_uncoalesced: false,
+                            metric_result: None,
+                        },
+                    );
                     ctx.res = Some(HttpResponse::Custom(response));
-                    {
-                        let sa = ctx.get_span_attributes();
-                        sa.insert(
-                            "ferron.cache.result",
-                            TraceAttributeValue::String("miss".to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.zone",
-                            TraceAttributeValue::String(state.zone_id.label().to_string()),
-                        );
-                        sa.insert(
-                            "ferron.cache.detail",
-                            TraceAttributeValue::String("response-too-large".to_string()),
-                        );
-                    }
                 }
             }
         } else {
@@ -1348,36 +1135,26 @@ impl Stage<HttpContext> for HttpCacheStage {
             } else {
                 "miss"
             };
-            emit_request_metric(
+            report(
                 ctx,
-                &state.zone_id,
-                result,
-                purge_scope.or(decision.scope),
-                state.store.len(),
+                CacheOutcome {
+                    result,
+                    zone_id: &state.zone_id,
+                    key: &state.base_key,
+                    scope: purge_scope.or(decision.scope),
+                    items: Some(state.store.len()),
+                    stored: None,
+                    evictions: None,
+                    detail: (result == "bypass").then_some(decision.reason),
+                    key_uri: None,
+                    key_method: None,
+                    bypass_reason: None,
+                    evaluated_cookies: None,
+                    coalesced_wait_ms: None,
+                    mark_uncoalesced: false,
+                    metric_result: None,
+                },
             );
-            {
-                let sa = ctx.get_span_attributes();
-                sa.insert(
-                    "ferron.cache.result",
-                    TraceAttributeValue::String(result.to_string()),
-                );
-                sa.insert(
-                    "ferron.cache.zone",
-                    TraceAttributeValue::String(state.zone_id.label().to_string()),
-                );
-                if let Some(scope) = purge_scope.or(decision.scope) {
-                    sa.insert(
-                        "ferron.cache.scope",
-                        TraceAttributeValue::String(scope.as_str().to_string()),
-                    );
-                }
-                if result == "bypass" {
-                    sa.insert(
-                        "ferron.cache.detail",
-                        TraceAttributeValue::String(decision.reason.to_string()),
-                    );
-                }
-            }
             let (parts, body) = response.into_parts();
             ctx.res = Some(if let Some(body) = body {
                 HttpResponse::Custom(Response::from_parts(parts, body))
@@ -1388,6 +1165,15 @@ impl Stage<HttpContext> for HttpCacheStage {
 
         Ok(())
     }
+}
+
+/// Current configuration generation, bumped on every config reload.
+#[inline]
+fn active_config_generation() -> u64 {
+    ferron_core::admin::ADMIN_METRICS
+        .reload_metrics
+        .read()
+        .active_generation
 }
 
 /// Resolve the cache zone ID for a request.

@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 
+use crate::HttpContext;
 #[cfg(feature = "mtls")]
 use x509_parser::nom::AsBytes;
-
-use crate::HttpContext;
 
 /// Variable name constants to avoid magic strings throughout the codebase.
 pub mod var {

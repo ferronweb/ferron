@@ -19,7 +19,9 @@ use crate::policy::{recalculate_freshness, CacheScope};
 
 pub use self::key::build_entry_key;
 pub use self::purge::strip_store_headers;
-pub use self::types::{LookupEntry, LookupHit, StoreStats, StoredEntry, StoredVariant, VaryRule};
+pub use self::types::{
+    LookupEntry, LookupHit, LookupOutcome, StoreStats, StoredEntry, StoredVariant, VaryRule,
+};
 
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
@@ -123,19 +125,19 @@ impl CacheStore {
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
-    ) -> (
-        Option<(LookupEntry, String, LookupHit)>,
-        StoreStats,
-        usize,
-        bool,
-    ) {
+    ) -> LookupOutcome {
         let stats = StoreStats {
             expired_evictions: self.cleanup_expired(),
             ..Default::default()
         };
 
         let Some(variants) = self.variants_by_base.get(base_key) else {
-            return (None, stats, self.entries.len(), false);
+            return LookupOutcome {
+                entry: None,
+                stats,
+                items: self.entries.len(),
+                had_expired: false,
+            };
         };
         let variants = variants.value().clone();
         let has_variants = true;
@@ -175,8 +177,8 @@ impl CacheStore {
             if let Some(entry) = self.entries.get(key) {
                 let age = entry.created_at.elapsed();
                 if age <= entry.ttl {
-                    return (
-                        Some((
+                    return LookupOutcome {
+                        entry: Some((
                             LookupEntry {
                                 scope: entry.scope,
                                 status: entry.status,
@@ -186,7 +188,6 @@ impl CacheStore {
                                 age,
                                 etag: entry.etag.clone(),
                                 last_modified: entry.last_modified.clone(),
-                                stale_while_revalidate: entry.stale_while_revalidate,
                                 stale_if_error: entry.stale_if_error,
                                 must_revalidate: entry.must_revalidate,
                                 ttl: entry.ttl,
@@ -195,9 +196,9 @@ impl CacheStore {
                             LookupHit::Fresh,
                         )),
                         stats,
-                        self.entries.len(),
-                        false,
-                    );
+                        items: self.entries.len(),
+                        had_expired: false,
+                    };
                 }
             }
         }
@@ -208,8 +209,8 @@ impl CacheStore {
                 let age = entry.created_at.elapsed();
                 let swr_window = entry.stale_while_revalidate.unwrap_or_default();
                 if age <= entry.ttl + swr_window && !entry.must_revalidate {
-                    return (
-                        Some((
+                    return LookupOutcome {
+                        entry: Some((
                             LookupEntry {
                                 scope: entry.scope,
                                 status: entry.status,
@@ -219,7 +220,6 @@ impl CacheStore {
                                 age,
                                 etag: entry.etag.clone(),
                                 last_modified: entry.last_modified.clone(),
-                                stale_while_revalidate: entry.stale_while_revalidate,
                                 stale_if_error: entry.stale_if_error,
                                 must_revalidate: entry.must_revalidate,
                                 ttl: entry.ttl,
@@ -228,14 +228,19 @@ impl CacheStore {
                             LookupHit::StaleWhileRevalidate,
                         )),
                         stats,
-                        self.entries.len(),
-                        false,
-                    );
+                        items: self.entries.len(),
+                        had_expired: false,
+                    };
                 }
             }
         }
 
-        (None, stats, self.entries.len(), has_variants)
+        LookupOutcome {
+            entry: None,
+            stats,
+            items: self.entries.len(),
+            had_expired: has_variants,
+        }
     }
 
     #[inline]
