@@ -17,7 +17,7 @@ async fn create_ferron_container(
         .with_exposed_port(ContainerPort::Tcp(8081))
         .with_wait_for(WaitFor::Http(Box::new(
             HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
+                .with_port(ContainerPort::Tcp(8081))
                 .with_response_matcher(|_| true),
         )))
         .with_network("bridge")
