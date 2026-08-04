@@ -7,8 +7,8 @@ engines:
   architecture: false
   security: true
 quality:
-  maxFunctionLoc: 120
-  maxFileLoc: 1000
+  maxFunctionLoc: 80
+  maxFileLoc: 400
   maxNesting: 5
   maxParams: 7 # Same as clippy
 lint:
