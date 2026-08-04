@@ -1004,7 +1004,7 @@ fn variants_by_base_preserved_after_lru_eviction() {
     // (only cleaned up by purge, not by LRU eviction)
     assert!(store
         .lookup("https://example.com/a", &headers, &cookies, None)
-        .0
+        .entry
         .is_none());
     assert!(store
         .lookup("https://example.com/b", &headers, &cookies, None)
