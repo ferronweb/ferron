@@ -78,13 +78,13 @@ example.com {
 
 ### Load balancing algorithms
 
-| Algorithm | Description |
-| --- | --- |
-| `random` | Selects a backend randomly for each request. |
+| Algorithm     | Description                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `random`      | Selects a backend randomly for each request.                                              |
 | `round_robin` | Distributes requests proportionally to backend weights using smooth weighted round-robin. |
-| `least_conn` | Selects the backend with the fewest active tracked connections multiplied by its weight. |
-| `two_random` | Picks two random backends and selects the less loaded one. |
-| `p2c_ewma` | Selects the backend based on a P2C+EWMA adaptive load balancing algorithm. |
+| `least_conn`  | Selects the backend with the fewest active tracked connections multiplied by its weight.  |
+| `two_random`  | Picks two random backends and selects the less loaded one.                                |
+| `p2c_ewma`    | Selects the backend based on a P2C+EWMA adaptive load balancing algorithm.                |
 
 ## A/B testing with backends
 
@@ -97,12 +97,12 @@ You can split traffic between backends using the `weight` directive with the `ro
 ```ferron
 example.com {
     proxy {
-        # Legacy backend — receives 90% of traffic
+        # Legacy backend - receives 90% of traffic
         upstream http://legacy.example.com:3000 {
             weight 90
         }
 
-        # New tech stack — receives 10% of traffic
+        # New tech stack - receives 10% of traffic
         upstream http://nextjs.example.com:3001 {
             weight 10
         }

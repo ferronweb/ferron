@@ -1,7 +1,6 @@
 ---
 title: "Migrating from Ferron 2 to Ferron 3"
 description: "Step-by-step guide for migrating a Ferron 2 KDL config to Ferron 3, including the migration tool, rollback, and verification checklist."
-
 ---
 
 This guide shows how to migrate your Ferron 2 configuration (`.kdl`) to Ferron 3 (`.conf`).
@@ -190,7 +189,7 @@ example.com {
 ```
 
 ```ferron
-# Ferron 3 — `remove_base` is no longer needed
+# Ferron 3 - `remove_base` is no longer needed
 example.com {
     location /api {
         proxy http://localhost:3000
@@ -226,7 +225,7 @@ example.com {
 ```
 
 ```ferron
-# Ferron 3 — use `match` with expression syntax
+# Ferron 3 - use `match` with expression syntax
 match api_request {
     request.uri.path ~ "/api"
 }
@@ -324,7 +323,7 @@ example.com {
 
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
-        format json 
+        format json
         fields "timestamp" "status"
     }
 }
@@ -500,7 +499,7 @@ If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration
 ```ferron
 # INVALID: mixing condition (Ferron 2) with if (Ferron 3)
 condition "IS_API" {
-    is_regex "{path}" "^/api(/|$)"   # Ferron 2 syntax — ignored
+    is_regex "{path}" "^/api(/|$)"   # Ferron 2 syntax - ignored
 }
 
 example.com {
@@ -534,7 +533,7 @@ Even if you migrate `condition` → `match`, you must also migrate the placehold
 ```ferron
 # INVALID: match block using Ferron 2 placeholders
 match api_request {
-    request.uri.path ~ "{path}"   # "{path}" is a Ferron 2 placeholder — ignored
+    request.uri.path ~ "{path}"   # "{path}" is a Ferron 2 placeholder - ignored
 }
 ```
 

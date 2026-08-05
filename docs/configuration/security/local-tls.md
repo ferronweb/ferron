@@ -9,7 +9,7 @@ This page documents the `local` TLS provider, which generates and manages locall
 
 | Directive  | Type       | Default           | Description                  |
 | ---------- | ---------- | ----------------- | ---------------------------- |
-| `provider` | `local`    | —                 | Set to `"local"`           |
+| `provider` | `local`    | —                 | Set to `"local"`             |
 | `cache`    | `<string>` | platform data dir | Path for certificate caching |
 
 **Configuration example:**
@@ -138,7 +138,7 @@ localhost:443 {
 
 # After: automatic local provider
 localhost {
-    # No explicit tls needed — automatically uses local provider
+    # No explicit tls needed - automatically uses local provider
 }
 ```
 

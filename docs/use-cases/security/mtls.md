@@ -78,7 +78,7 @@ internal-api.example.com:443 {
 `client_auth` lives inside a `tls` block, which scopes to a specific host. You can enable mTLS for some hosts while keeping others public. A separate Ferron instance is unnecessary.
 
 ```ferron
-# Public website — no client auth
+# Public website - no client auth
 example.com:443 {
     tls {
         provider acme
@@ -89,7 +89,7 @@ example.com:443 {
     root /var/www/html
 }
 
-# Internal admin — requires client certificate
+# Internal admin - requires client certificate
 admin.example.com:443 {
     tls {
         provider manual
