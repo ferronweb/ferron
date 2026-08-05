@@ -36,6 +36,10 @@
 
 - **"Slim" Debian-based Docker images** — `ferronserver/ferron:3-debian` (and other Debian-base image tags) now are based on a "slim" variant of Debian instead of the full Debian image, making the image smaller and removing unnecessary packages. The slim variant is still compatible with the full Debian image, so it should not break existing deployments.
 
+#### Access control
+
+- **Interpolated strings as passwords (HTTP basic auth)** — interpolated strings can now be used as passwords for HTTP basic authentication (for example when moving from a static password to an environment variable).
+
 ### Fixed
 
 #### HTTP server core
