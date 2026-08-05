@@ -321,14 +321,6 @@ If on-demand certificates are not fetched for new hostnames:
 3. If you configure `on_demand_ask`, verify that the endpoint returns `200` for the requested hostname
 4. Check that the host block uses a wildcard pattern (for example, `*:443`)
 
-### Observability data missing
-
-If metrics or logs are not appearing:
-
-1. Verify that you have configured an observability backend (Prometheus, OTLP, etc.)
-2. Check that the `observability` block is present in the global configuration
-3. Verify that you have loaded the `metrics-prometheus` or `observability-otlp` module
-
 ## See also
 
 - [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS

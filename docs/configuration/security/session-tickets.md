@@ -151,27 +151,7 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 - **Do not rotate all keys at once** — keep old keys for overlap during rotation
 - **Do not commit keys to version control** — add to `.gitignore`
 
-## Troubleshooting
-
-### "Ticket keys file not found"
-
-The key file does not exist and you have disabled `auto_rotate`.
-
-**Fix:** Either enable `auto_rotate` or create the file manually with `openssl rand 80 > session_tickets.keys`.
-
-### "TLS ticket key file is empty"
-
-The key file exists but has zero bytes.
-
-**Fix:** Generate at least one 80-byte key.
-
-### "TLS ticket key file size (X) is not a multiple of 80 bytes"
-
-The file size is incorrect.
-
-**Fix:** Make sure the file contains complete 80-byte records.
-
-### Debugging
+## Debugging
 
 Enable debug logging to see ticket key events:
 

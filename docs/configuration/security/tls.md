@@ -26,17 +26,17 @@ tls {
 
 #### Supported cipher suites
 
-| Suite | Protocol | Key exchange | Notes |
-|-------|----------|-------------|-------|
-| `TLS_AES_128_GCM_SHA256` | TLS 1.3 | Any | Default in most deployments |
-| `TLS_AES_256_GCM_SHA384` | TLS 1.3 | Any | Stronger encryption |
-| `TLS_CHACHA20_POLY1305_SHA256` | TLS 1.3 | Any | Software-optimized, good for mobile |
-| `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` | TLS 1.2 | ECDHE + ECDSA | ECDSA certificate required |
-| `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` | TLS 1.2 | ECDHE + ECDSA | ECDSA certificate required |
-| `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` | TLS 1.2 | ECDHE + ECDSA | ECDSA certificate required |
-| `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` | TLS 1.2 | ECDHE + RSA | RSA certificate |
-| `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` | TLS 1.2 | ECDHE + RSA | RSA certificate |
-| `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` | TLS 1.2 | ECDHE + RSA | RSA certificate |
+| Suite                                           | Protocol | Key exchange  | Notes                               |
+| ----------------------------------------------- | -------- | ------------- | ----------------------------------- |
+| `TLS_AES_128_GCM_SHA256`                        | TLS 1.3  | Any           | Default in most deployments         |
+| `TLS_AES_256_GCM_SHA384`                        | TLS 1.3  | Any           | Stronger encryption                 |
+| `TLS_CHACHA20_POLY1305_SHA256`                  | TLS 1.3  | Any           | Software-optimized, good for mobile |
+| `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`       | TLS 1.2  | ECDHE + ECDSA | ECDSA certificate required          |
+| `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`       | TLS 1.2  | ECDHE + ECDSA | ECDSA certificate required          |
+| `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` | TLS 1.2  | ECDHE + ECDSA | ECDSA certificate required          |
+| `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`         | TLS 1.2  | ECDHE + RSA   | RSA certificate                     |
+| `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`         | TLS 1.2  | ECDHE + RSA   | RSA certificate                     |
+| `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256`   | TLS 1.2  | ECDHE + RSA   | RSA certificate                     |
 
 > [!note]
 > TLS 1.2 cipher suites are only effective when `min_version` allows TLS 1.2.
@@ -48,13 +48,13 @@ tls {
 
 #### Supported curves
 
-| Curve | Type | Notes |
-|-------|------|-------|
-| `x25519` | ECDH | Fast, widely supported, recommended default |
-| `secp256r1` | ECDH | NIST P-256, required for some compliance standards |
-| `secp384r1` | ECDH | NIST P-384, higher security level |
-| `x25519mlkem768` | Hybrid (ECDH + ML-KEM) | Post-quantum hybrid, experimental |
-| `mlkem768` | ML-KEM | Pure post-quantum KEM, experimental |
+| Curve            | Type                   | Notes                                              |
+| ---------------- | ---------------------- | -------------------------------------------------- |
+| `x25519`         | ECDH                   | Fast, widely supported, recommended default        |
+| `secp256r1`      | ECDH                   | NIST P-256, required for some compliance standards |
+| `secp384r1`      | ECDH                   | NIST P-384, higher security level                  |
+| `x25519mlkem768` | Hybrid (ECDH + ML-KEM) | Post-quantum hybrid, experimental                  |
+| `mlkem768`       | ML-KEM                 | Pure post-quantum KEM, experimental                |
 
 ### TLS protocol version
 
@@ -119,8 +119,8 @@ api.example.com {
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|--------|-------------|
+| Metric                             | Type  | Attributes                                                                        | Description                                  |
+| ---------------------------------- | ----- | --------------------------------------------------------------------------------- | -------------------------------------------- |
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ## Security considerations
@@ -130,14 +130,6 @@ api.example.com {
 - Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only in testing environments.
 
 ## Troubleshooting
-
-### "Invalid minimum/maximum TLS version"
-
-The `min_version` or `max_version` value is not recognized. Make sure you use exactly `TLSv1.2` or `TLSv1.3`.
-
-### "Maximum TLS version is older than minimum TLS version"
-
-`max_version` must be equal to or newer than `min_version`.
 
 ### Client certificate handshake failure
 
