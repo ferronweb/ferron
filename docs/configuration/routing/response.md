@@ -67,14 +67,14 @@ example.com {
 }
 ```
 
-When `abort` is set, Ferron terminates the connection immediately with no HTTP response sent. This is useful for silently dropping requests from unwanted clients or for denial-of-service mitigation.
+With `abort` set, Ferron terminates the connection immediately and sends no HTTP response. This is useful for silently dropping requests from unwanted clients or for denial-of-service mitigation.
 
 ### IP access control
 
 - `block <ip-or-cidr: string>...` (`http-response`)
   - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a **403 Forbidden** response. Default: none
 - `allow <ip-or-cidr: string>...` (`http-response`)
-  - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, **only** the listed IPs/CIDRs are permitted. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
+  - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, Ferron permits **only** the listed IPs/CIDRs. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
 
 **Configuration example:**
 
@@ -89,12 +89,12 @@ example.com {
 
 #### Combined block and allow
 
-When both `block` and `allow` are configured:
+When you set both `block` and `allow`:
 
 1. If the IP matches an `allow` entry **and** a `block` entry → **blocked** (block takes precedence)
 2. If the IP matches only an `allow` entry → **allowed**
 3. If the IP matches only a `block` entry → **blocked**
-4. If the IP matches neither → **allowed** (unless the allow list is non-empty, in which case non-listed IPs are denied)
+4. If the IP matches neither → **allowed** (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
 
 ```ferron
 example.com {
@@ -108,7 +108,7 @@ In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.
 ### 103 Early Hints
 
 - `early_hints` (`http-response`)
-  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that allow the browser to begin preloading resources (stylesheets, scripts, fonts, etc.). This happens while the server is still preparing the final response. Default: none
+  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that let the browser preload resources (stylesheets, scripts, fonts, etc.). This happens while the server is still preparing the final response. Default: none
 
 #### Subdirectives
 
@@ -132,7 +132,7 @@ You can define multiple `link` entries within a single `early_hints` block. You 
 
 #### HTTP/1.1 support
 
-By default, 103 Early Hints is supported natively on HTTP/2 and HTTP/3 connections. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/v3/configuration/server/host) directive in your `http` block:
+By default, HTTP/2 and HTTP/3 connections support 103 Early Hints natively. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/v3/configuration/server/host) directive in your `http` block:
 
 ```ferron
 {

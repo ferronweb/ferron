@@ -3,11 +3,11 @@ title: "Configuration: Prometheus metrics"
 description: "Prometheus metrics export configuration for monitoring Ferron server performance and health."
 ---
 
-This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports Ferron's internal metrics in Prometheus format, enabling integration with Prometheus servers, Grafana dashboards, and other monitoring systems that support OpenMetrics format.
+This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports the internal metrics of Ferron in Prometheus format. This lets you integrate with Prometheus servers, Grafana dashboards, and other monitoring systems that support the OpenMetrics format.
 
 ## Directives
 
-Prometheus metrics are configured via `observability` blocks with `provider prometheus`:
+You configure Prometheus metrics in `observability` blocks with `provider prometheus`:
 
 ```ferron
 observability {
@@ -45,31 +45,31 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 
 ### Format options
 
-- **`"text"`** — standard Prometheus text exposition format (default)
-- **`"protobuf"`** — Prometheus protobuf format for more efficient scraping
+- **`"text"`**: standard Prometheus text exposition format (default)
+- **`"protobuf"`**: Prometheus protobuf format for more efficient scraping
 
 ### Native histograms
 
-When `endpoint_native_histograms` is set and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms provide high-resolution percentile data across deep orders of magnitude (1ms to 100s) without requiring manual bucket allocation.
+When you set `endpoint_native_histograms` and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms give high-resolution percentile data across deep orders of magnitude (1ms to 100s) without manual bucket allocation.
 
-Text format always exposes classic bucket histograms regardless of this setting, since the OpenMetrics text format does not support native histograms.
+Text format always exposes classic bucket histograms regardless of this setting. The OpenMetrics text format does not support native histograms.
 
 > [!note]
 > Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions silently ignore the native histogram data and use the classic buckets.
 
 ### Metric exemplars
 
-When a request has an active trace context (trace ID and span ID), the Prometheus module automatically attaches **exemplars** to counter and histogram observations. Exemplars link a specific metric observation to a trace, enabling drill-down from a metric spike to the specific request that caused it.
+When a request has an active trace context (trace ID and span ID), the Prometheus module attaches **exemplars** to observations. It applies to both counter and histogram observations. Exemplars link a specific metric observation to a trace. They let you drill down from a metric spike to the specific request that caused it.
 
 Each exemplar contains:
 
-- `trace_id` — the W3C trace ID of the request
-- `span_id` — the W3C span ID of the request
+- `trace_id`: the W3C trace ID of the request
+- `span_id`: the W3C span ID of the request
 
-Exemplars are enabled by default for all counter metrics. For histograms, exemplars are active when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive in Ferron's Prometheus module.
+Ferron enables exemplars by default for all counter metrics. For histograms, exemplars are active when `endpoint_native_histograms` is `false` (the default). Native histograms and exemplars are mutually exclusive in the Ferron Prometheus module.
 
 > [!note]
-> Exemplars are displayed in the OpenMetrics text format as comments appended at the end of the metric line. The Prometheus protobuf format supports them natively. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
+> Exemplars appear in the OpenMetrics text format as comments at the end of the metric line. The Prometheus protobuf format supports them natively. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
 
 ### Baggage promotion
 
@@ -139,9 +139,9 @@ http_server_request_duration_seconds_count{http_request_method="GET"} 195
 
 ### Metric naming
 
-Ferron metrics follow OpenTelemetry semantic conventions and are automatically converted to Prometheus format:
+Ferron metrics follow OpenTelemetry semantic conventions and use automatic conversion to Prometheus format:
 
-- OpenTelemetry metric names are converted to snake_case
+- Ferron converts OpenTelemetry metric names to snake_case
 - Attributes become Prometheus labels
 - Counter metrics become Prometheus counters
 - Gauge metrics become Prometheus gauges
@@ -253,11 +253,11 @@ scrape_configs:
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 ### Endpoint authentication
 
-- **`endpoint_listen` on non-loopback address without `endpoint_auth_token`** — The metrics endpoint is unauthenticated and exposed to all network interfaces. Bind to a loopback address, use `endpoint_auth_token` to require a bearer token, or restrict access via network controls.
+- **`endpoint_listen` on non-loopback address without `endpoint_auth_token`**: The metrics endpoint allows unauthenticated access from all network interfaces. Bind to a loopback address, use `endpoint_auth_token` to require a bearer token, or restrict access via network controls.
 
 ### `max_distinct` high cardinality prevention
 

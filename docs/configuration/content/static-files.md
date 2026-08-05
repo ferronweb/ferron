@@ -3,19 +3,22 @@ title: "Configuration: static file serving"
 description: "Static file serving, directory listings, compression, caching headers, MIME types, and error pages."
 ---
 
-This page documents directives that configure static file serving, directory listings, compression, caching behavior, and custom error pages for requests resolved to the filesystem (via `root`).
+This page documents directives that configure static file serving, directory listings, compression, caching behavior, and custom error pages. These directives apply to requests that resolve to the filesystem (via `root`).
 
 > [!info]
-> Static file serving is handled by the `http-static` module. For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing), [HTTP cache](/docs/v3/configuration/content/cache), [HTTP response control](/docs/v3/configuration/routing/response), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP compression](/docs/v3/configuration/content/compression).
+> The `http-static` module handles static file serving.
+> For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing),
+> [HTTP cache](/docs/v3/configuration/content/cache), [HTTP response control](/docs/v3/configuration/routing/response),
+> [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP compression](/docs/v3/configuration/content/compression).
 
 ## Directives
 
 ### Index and directory listings
 
 - `index <filename: string>...`
-  - This directive specifies one or more filenames to try when a request path resolves to a directory. Files are tried in order. The first existing file replaces the directory path in the file context. Only applies when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
+  - This directive specifies one or more filenames to try when a request path resolves to a directory. Ferron tries them in order. The first existing file replaces the directory path in the file context. This applies only when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
 - `directory_listing [bool: boolean]` (`http-static`)
-  - This directive specifies whether auto-generated HTML directory listings are enabled when a request path resolves to a directory and no index file is found. Default: `directory_listing false`
+  - This directive controls whether Ferron auto-generates an HTML listing when a request path resolves to a directory. Ferron generates a listing only when no index file exists. Default: `directory_listing false`
 
 **Configuration example:**
 
@@ -29,16 +32,16 @@ example.com {
 
 > [!note]
 >
-> - Only generates a listing if no `index` file was found for the directory.
-> - Dotfiles (names starting with `.`) are excluded from the listing, except `.maindesc` which is read as a description.
-> - A `.maindesc` file in the directory, if present, is displayed as a `<pre>` block below the file table.
+> - Ferron generates a listing only if it finds no `index` file in the directory.
+> - The listing excludes dotfiles (names that start with `.`). Ferron reads `.maindesc` as a description.
+> - If a `.maindesc` file exists in the directory, Ferron shows it as a `<pre>` block below the file table.
 
 ### Caching headers
 
 - `etag [bool: boolean]` (`http-static`)
-  - This directive specifies whether ETag generation for static file responses is enabled. ETags are weak ETags (`W/"..."`) generated from an xxHash3 hash of the file path, size, and modification time. Default: `etag true`
+  - This directive controls whether Ferron generates ETags for static file responses. Ferron uses weak ETags (`W/"..."`) and derives them from an xxHash3 hash of the file path, size, and modification time. Default: `etag true`
 - `file_cache_control <value: string>` (`http-static`)
-  - This directive specifies the `Cache-Control` response header for all static file responses. The value is passed through as-is. Default: not set
+  - This directive specifies the `Cache-Control` response header for all static file responses. Ferron passes the value through as-is. Default: not set
 
 **Configuration example:**
 
@@ -52,9 +55,9 @@ example.com {
 
 > [!note]
 >
-> - When compression is used, a suffix is appended to the ETag (for example, `W/"abc123-br"` for Brotli).
+> - When compression is active, Ferron appends a suffix to the ETag (for example, `W/"abc123-br"` for Brotli).
 > - `If-None-Match` requests that match the current ETag return `304 Not Modified`.
-> - Pre-compressed sidecar files receive their own ETag based on the sidecar file's own metadata.
+> - Pre-compressed sidecar files receive their own ETag based on their own metadata.
 
 ### MIME types
 
@@ -73,15 +76,15 @@ example.com {
 
 > [!note]
 >
-> - If the extension is not found in custom mappings, the built-in database is used as a fallback.
-> - If neither custom nor built-in mappings match, the response is sent with no `Content-Type` header.
+> - If custom mappings do not contain the extension, Ferron uses the built-in database as a fallback.
+> - If neither mapping matches, Ferron sends the response with no `Content-Type` header.
 
 ### Error pages
 
 - `error_page <status-code: integer>... <file-path: string>`
-  - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path. All preceding arguments are status codes. Default: built-in error pages
+  - This directive maps one or more HTTP status codes to a file path. Ferron serves that file as the error response body. The last argument is always the file path. All preceding arguments are status codes. Default: built-in error pages
 - `error_page_placeholders [bool: boolean]`
-  - When enabled, Ferron replaces `{{trace.id}}` and `{{trace.spanid}}` in the error page file with the request's trace ID and span ID. Default: `false`
+  - When enabled, Ferron replaces `{{trace.id}}` and `{{trace.spanid}}` in the error page file. It uses the trace ID and span ID of the request. Default: `false`
 
 **Configuration example:**
 
@@ -96,27 +99,28 @@ example.com {
 
 > [!note]
 >
-> - Only applies when an error response is generated and no custom response has already been set.
+> - Ferron applies this only when it generates an error response and no custom response exists.
 > - The file path is absolute or relative to the current working directory.
-> - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
+> - If the specified error page file does not exist, Ferron skips the directive and uses the built-in error page.
 > - You can map multiple status codes to the same error page in a single directive.
-> - Placeholder substitution reads the file into memory and replaces `{{trace.id}}` and `{{trace.spanid}}` with the current request's trace context before serving. The zerocopy/sendfile optimization is bypassed when substitution is active.
+> - Placeholder substitution reads the file into memory and replaces the placeholders with the trace context of the request.
+> - The zerocopy/sendfile optimization does not run while substitution is active.
 
 ### Symlink handling
 
 - `disable_symlinks [bool: boolean | string: "if_not_owner"]`
-  - This directive controls whether symbolic links are allowed during file path resolution. When the resolver encounters a symlink while traversing the request path, the behavior depends on this setting:
+  - This directive controls whether Ferron allows symbolic links during file path resolution. When the resolver encounters a symlink while traversing the request path, the behavior depends on this setting:
     - `false` (default): Allow all symlinks without restriction.
     - `true`: Reject all symbolic links with a `403 Forbidden` response. The resolver detects symlinks during path traversal without following them, mitigating symlink-based escape attacks.
-    - `"if_not_owner"`: Allow symlinks only if owned by the same user as the target file (Unix only, treated as `true` on non-Unix systems).
+    - `"if_not_owner"`: Allow symlinks when the same user owns the link and the target file. On non-Unix systems, Ferron treats this value as `true`.
   - Default: `disable_symlinks false`
 
 > [!warning]
-> Symlink-based attacks can bypass directory boundaries. If your `root` directory contains untrusted symlinks or is in a shared hosting environment, enable `disable_symlinks on` to protect against escape attacks.
+> Symlink-based attacks can bypass directory boundaries. If the `root` directory contains untrusted symlinks, enable `disable_symlinks true`. If you run a shared hosting environment, enable it there as well.
 
 > [!note]
 >
-> - Symlink detection uses `symlink_metadata()`, which does not follow the symlink, so no file I/O is performed on the symlink target.
+> - Symlink detection uses `symlink_metadata()`, which does not follow the symlink. It does no file I/O on the symlink target.
 > - When enabled, the resolver detects symlinks at each path component level during traversal, not just at the final target.
 > - `if_not_owner` mode is Unix-specific and requires the symlink and target to have the same owner UID.
 
@@ -143,7 +147,7 @@ legacy.example.com {
 
 ## File handle reuse
 
-Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead. The reuse lasts at most 200 milliseconds after the first request. Ferron does this by caching file metadata and the open file handle in memory. The cache is keyed by the file path. Ferron invalidates it when the file is modified, deleted, or replaced.
+Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead. The reuse lasts at most 200 milliseconds after the first request. Ferron caches the file metadata and the open file handle in memory. The cache key is the file path. Ferron invalidates the cache when the file changes.
 
 ## Observability
 
@@ -165,8 +169,8 @@ The static file serving module and the file resolution stage contribute the foll
 | ----------------------------------------- | ------ | ------------------------------------------------------------------------------ |
 | `ferron.static.file_path`                 | string | Absolute file path served.                                                     |
 | `ferron.static.file_path_precompressed`   | string | The precompressed file path (if applicable).                                   |
-| `ferron.static.dir_path`                  | string | Directory path when a listing is served.                                       |
-| `ferron.file_resolve.request_path`        | string | Decoded request path being resolved (error paths only).                        |
+| `ferron.static.dir_path`                  | string | Directory path when Ferron serves a listing.                                  |
+| `ferron.file_resolve.request_path`        | string | Decoded request path that Ferron resolves (error paths only).                 |
 | `ferron.file_resolve.root_path`           | string | Configured document root (error paths only).                                   |
 | `ferron.file_resolve.outcome`             | string | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only). |
 | `ferron.file_resolve.last_candidate_path` | string | Last filesystem path attempted before failure (error paths only).              |
@@ -190,17 +194,17 @@ The static file stage sets the following attributes on its `ferron.stage.static_
 | `http.response.status_code`             | int    | HTTP status code of the file response.                  |
 | `ferron.static.file_path`               | string | The file path relative to the document root.            |
 | `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable).            |
-| `ferron.static.precompressed`           | bool   | Whether a precompressed variant of the file was served. |
+| `ferron.static.precompressed`           | bool   | Whether Ferron served a precompressed variant of the file.                   |
 
 The directory listing stage sets the following attributes on its `ferron.stage.directory_listing` span:
 
 | Attribute                   | Type   | Description                       |
 | --------------------------- | ------ | --------------------------------- |
 | `http.response.status_code` | int    | HTTP status code of the response. |
-| `ferron.static.dir_path`    | string | The directory path being listed.  |
+| `ferron.static.dir_path`    | string | The directory path that Ferron lists.  |
 
 ## Best practices
 
-The following best-practice check is reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice check for the directives on this page.
 
-- **`directory_listing` enabled** — Auto-generated directory indexes expose file structure. Enable only for intentionally public file listings.
+- **`directory_listing` enabled**: Auto-generated directory indexes expose file structure. Enable only for intentionally public file listings.

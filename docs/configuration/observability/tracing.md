@@ -3,7 +3,7 @@ title: "Configuration: tracing"
 description: "W3C Trace Context propagation, trace spans, trace sampling, and trace ID response headers."
 ---
 
-This page documents Ferron's tracing system, including W3C Trace Context propagation, internal trace spans, trace sampling, and trace ID response headers.
+This page describes the tracing system of Ferron. The system covers W3C Trace Context propagation, internal trace spans, trace sampling, and trace ID response headers.
 
 > [!info]
 >
@@ -16,32 +16,32 @@ Ferron 3 supports W3C Trace Context (`traceparent` and `tracestate`) and W3C Bag
 
 ### Incoming trace context
 
-By default, Ferron discards any incoming `traceparent`, `tracestate`, and `baggage` headers and generates a new trace ID for each request. This makes sure that each request within Ferron's boundary starts with a fresh, server-generated trace identity.
+By default, Ferron discards incoming `traceparent`, `tracestate`, and `baggage` headers. It generates a new trace ID for each request. Each request in the Ferron boundary then starts with a fresh server-generated trace identity.
 
-When the `trust_request` directive is enabled in the `trace` block, Ferron parses the incoming `traceparent` and `tracestate` headers. It uses them as the parent for its internal `ferron.request` span. In this mode, Ferron creates a local request span with the same trace ID and a new span ID. It reuses that local request span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request arrives without trace context, Ferron can still generate a new one when `generate` is enabled.
+When the `trace` block enables `trust_request`, Ferron parses the incoming `traceparent` and `tracestate` headers. It uses them as the parent for the internal `ferron.request` span. Ferron creates a local request span with the same trace ID and a new span ID. It reuses that span context for upstream propagation, access logs, and request-scoped OTLP logs. If the request has no trace context, Ferron can still generate a new one when `generate` is active.
 
-When `trust_request` is enabled, the incoming `baggage` header is also parsed and attached to the local request span context. Baggage is then propagated to upstream services and included in OTLP span exports, allowing application-defined key-value pairs to flow through the entire request path.
+With `trust_request` enabled, Ferron also parses the incoming `baggage` header and attaches it to the local request span context. Ferron then propagates baggage to upstream services and includes it in OTLP span exports. This lets application-defined key-value pairs flow through the entire request path.
 
 ### Trace configuration
 
-These directives are configured within the `http` block.
+These directives go inside the `http` block.
 
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
 | `trace` | none | Opens a block for trace-related configuration. | - |
-| `generate` | boolean | Specifies whether a new trace context should be generated if no context exists (either from trust or generation). | `true` |
-| `trust_request` | boolean | When enabled, incoming `traceparent`, `tracestate`, and `baggage` headers are parsed and used as the parent trace context. When disabled (default), incoming trace headers are discarded and a new trace ID is generated. | `false` |
+| `generate` | boolean | Chooses whether to generate a new trace context when none exists, either from trust or from generation. | `true` |
+| `trust_request` | boolean | When enabled, Ferron uses the incoming `traceparent`, `tracestate`, and `baggage` headers as the parent trace context. When disabled (the default), Ferron discards incoming trace headers and generates a new trace ID. | `false` |
 
 ### W3C Baggage
 
-Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (for example, tenant ID, user segment, request flags) across service boundaries without requiring explicit configuration.
+Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (for example, tenant ID, user segment, request flags) across service boundaries with no explicit configuration.
 
 #### How baggage propagation works
 
-1. By default, incoming `baggage` headers are discarded (unless `trust_request` is enabled). When `trust_request` is enabled, Ferron reads the incoming `baggage` header from the request.
-2. The baggage string (when available) is stored in the request's trace context.
-3. When forwarding the request to an upstream service, Ferron includes the `baggage` header alongside `traceparent` and `tracestate`. It does this only if the trace context carries non-empty baggage values.
-4. When exporting via OTLP, baggage is parsed and attached to the OpenTelemetry span context as OpenTelemetry baggage.
+1. By default, Ferron discards incoming `baggage` headers. With `trust_request`, Ferron reads the incoming `baggage` header from the request instead.
+2. Ferron stores the baggage string (when available) in the request trace context.
+3. When Ferron forwards the request to an upstream service, it includes the `baggage` header alongside `traceparent` and `tracestate`. It does this only when the trace context carries non-empty baggage values.
+4. When Ferron exports via OTLP, it parses baggage and attaches it to the OpenTelemetry span context as OpenTelemetry baggage.
 
 #### Baggage header format
 
@@ -51,11 +51,11 @@ The `baggage` header follows the [W3C Baggage specification](https://www.w3.org/
 baggage: userId=alice,serverNode=5;props;otherKey=otherValue
 ```
 
-Each item is a `key=value` pair with optional semicolon-separated properties. Values are URL-encoded.
+Each item is a `key=value` pair with optional semicolon-separated properties. Values use URL encoding.
 
 #### Baggage promotion to telemetry attributes
 
-In addition to propagating baggage to upstream services, you can promote specific baggage keys into OpenTelemetry attributes on your telemetry signals (logs, metrics, traces). This is configured via the `baggage` sub-directive within each observability backend block:
+You can also promote specific baggage keys into OpenTelemetry attributes on telemetry signals (logs, metrics, traces). The `baggage` sub-directive inside each observability backend block configures this promotion:
 
 ```ferron
 {
@@ -78,7 +78,7 @@ In addition to propagating baggage to upstream services, you can promote specifi
 ```
 
 > [!info]
-> See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for full documentation of the `baggage` directive.
+> See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for complete documentation about the `baggage` directive.
 
 #### Examples
 
@@ -93,7 +93,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 baggage: userId=alice,tenantId=acme
 ```
 
-The incoming `traceparent` and `baggage` are ignored. Ferron generates a fresh trace ID and new span ID. No baggage is propagated upstream unless a module explicitly adds it.
+Ferron ignores the incoming `traceparent` and `baggage`. It generates a fresh trace ID and a new span ID. No baggage goes upstream unless a module adds it explicitly.
 
 **With `trust_request true`:**
 
@@ -106,26 +106,23 @@ http {
 }
 ```
 
-When `trust_request` is enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers. It stores the baggage in the request trace context and propagates the headers to upstream services. When using the OTLP provider, the baggage is attached to the span context and visible in your observability backend.
+With `trust_request` enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers. It stores baggage in the request trace context and passes the trace headers to upstream services. With the OTLP provider, Ferron attaches the baggage to the span context, and the observability backend sees it.
+
+> The reverse proxy, CGI, FastCGI, and SCGI modules inject trace context headers into outgoing requests when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`, and they need no per-module configuration. The `trace` block with `generate` and `trust_request` controls this injection globally, and a configured trace sink also matters. For CGI, FastCGI, and SCGI backends, the modules map these headers to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). Application code can then read the variables without special header parsing.
 
 > [!note]
 >
-> - The reverse proxy, CGI, FastCGI, and SCGI modules automatically inject trace context headers into outgoing requests to backend services when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`. No per-module configuration is needed. The `trace` block (directives `generate` and `trust_request`) controls trace context injection globally. Whether a trace sink is configured also matters.
-> - For CGI, FastCGI, and SCGI backends, trace context headers are mapped to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This makes them accessible to application code without any special header parsing.
-
-> [!note]
->
-> - Generating and propagating trace headers carries unique identifiers — make sure this complies with your privacy requirements.
-> - By default, incoming baggage values are discarded. When `trust_request` is enabled, baggage values are propagated as-is and Ferron does not validate or modify them.
-> - Baggage items are attached to OpenTelemetry spans when using the OTLP provider — high-cardinality baggage keys may increase span storage costs.
+> - Trace header generation and propagation carry unique identifiers, so confirm this complies with your privacy requirements.
+> - By default, Ferron discards incoming baggage values, but with `trust_request` enabled it propagates them as-is without validation or modification.
+> - With the OTLP provider, Ferron attaches baggage items to OpenTelemetry spans. High-cardinality baggage keys may increase span storage costs.
 
 ### Trace ID response header
 
-Ferron can inject the current request's trace ID into HTTP response headers. This makes it easy for clients to correlate their requests with server-side traces and logs.
+Ferron can inject the trace ID of the current request into HTTP response headers. Clients can then correlate their requests with the server-side traces and logs.
 
 #### `trace_id_header`
 
-The `trace_id_header` directive configures whether and how the trace ID is injected into response headers.
+The `trace_id_header` directive configures whether and how Ferron injects the trace ID into response headers.
 
 ```ferron
 example.com {
@@ -140,7 +137,7 @@ example.com {
 | `header_name` | `<string>` | Name of the response header to inject the trace ID into. | `X-Ferron-Trace-Id` |
 | `reflect_request` | `[bool]` | Only inject the trace ID when the incoming request contains `X-Ferron-Trace-Reflect: 1`. | `false` |
 
-**Configuration example — default behavior:**
+**Configuration example (default behavior):**
 
 ```ferron
 example.com {
@@ -148,9 +145,9 @@ example.com {
 }
 ```
 
-Injects the current request's trace ID into the `X-Ferron-Trace-Id` response header for every response (including error responses).
+Ferron injects the trace ID into the `X-Ferron-Trace-Id` response header for every response, including error responses.
 
-**Configuration example — custom header name:**
+**Configuration example (custom header name):**
 
 ```ferron
 example.com {
@@ -160,9 +157,9 @@ example.com {
 }
 ```
 
-Injects the trace ID into a custom `X-Request-Trace-Id` header.
+Ferron injects the trace ID into the custom `X-Request-Trace-Id` header.
 
-**Configuration example — conditional injection:**
+**Configuration example (conditional injection):**
 
 ```ferron
 example.com {
@@ -172,9 +169,9 @@ example.com {
 }
 ```
 
-Only injects the trace ID when the incoming request includes `X-Ferron-Trace-Reflect: 1`. This is useful for development or debugging scenarios where you only want trace IDs on demand.
+Ferron injects the trace ID only when the incoming request includes `X-Ferron-Trace-Reflect: 1`. This is useful for development or debugging when you want trace IDs on demand.
 
-**Configuration example — disable:**
+**Configuration example (disabled):**
 
 ```ferron
 example.com {
@@ -182,16 +179,16 @@ example.com {
 }
 ```
 
-Explicitly disables trace ID injection.
+Ferron explicitly disables trace ID injection.
 
 #### Behavior
 
-- The trace ID is taken from the current request's trace context (W3C `traceparent` if present, or the generated trace ID).
-- The header is injected into both custom responses (for example, from reverse proxy, static file serving) and built-in error responses (for example, 404, 500).
-- When `reflect_request` is enabled, the trace ID is only injected if the request carries the `X-Ferron-Trace-Reflect: 1` header.
+- Ferron takes the trace ID from the trace context of the current request. This is the W3C `traceparent` context if present, or the generated trace ID.
+- Ferron injects the header into custom responses (for example, from reverse proxy, static file serving). It also injects it into built-in error responses, such as 404 and 500.
+- With `reflect_request` enabled, Ferron injects the trace ID only when the request carries the `X-Ferron-Trace-Reflect: 1` header.
 
 > [!note]
-> If no trace context exists for the request, the header is not injected. This can happen when `trace { generate false }` is configured and the incoming request lacks a `traceparent` header.
+> If no trace context exists for the request, Ferron does not inject the header. This can happen when the config sets `trace { generate false }` and the request has no `traceparent` header.
 
 ## Trace spans
 
@@ -199,46 +196,46 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 
 ### Root request span
 
-- **`StartSpan("ferron.request")`** — emitted when the request enters the handler.
+- **`StartSpan("ferron.request")`** emits when the request enters the handler.
   - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
   - For HTTPS connections: `tls.protocol.version` (for example, `"TLSv1.3"`), `tls.cipher_suite` (for example, `"TLS_AES_256_GCM_SHA384"`)
-- **`EndSpan("ferron.request", error)`** — emitted when the request completes.
+- **`EndSpan("ferron.request", error)`** emits when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 
 ### Pipeline execution span
 
-- **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages. This span is a child of `ferron.request`.
+- **`ferron.pipeline.execute`** wraps the entire pipeline execution, including all forward and inverse stages. The span is a child of `ferron.request`.
 
 ### File resolution span
 
-- **`ferron.pipeline.file_resolve`** — wraps static file path resolution when a `root` directive is configured. This span is a child of `ferron.pipeline.execute`.
+- **`ferron.pipeline.file_resolve`** wraps static file path resolution with a `root` directive. The span is a child of `ferron.pipeline.execute`.
   - Attributes: `ferron.file_resolve.request_path`, `ferron.file_resolve.root_path`, `ferron.file_resolve.outcome`
   - On success: `ferron.file_resolve.resolved_path`
   - On error: `ferron.file_resolve.last_candidate_path`
 
 ### Per-stage spans
 
-Each pipeline and file-serving stage generates its own forward (`ferron.stage.<stage_name>`) and inverse (`ferron.stage.<stage_name>.inverse`) span as a child of `ferron.pipeline.execute`, enabling flame graph analysis. Every per-stage span carries a `ferron.stage.name` attribute.
+Each pipeline stage and file-serving stage generates a forward span (`ferron.stage.<stage_name>`) and an inverse span (`ferron.stage.<stage_name>.inverse`). These are children of `ferron.pipeline.execute`, which enables flame graph analysis. Every per-stage span carries a `ferron.stage.name` attribute.
 
 ### Error pipeline span
 
-- **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
+- **`ferron.pipeline.execute_error`** wraps error pipeline execution when Ferron generates error responses.
   - Attributes: `http.response.status_code`
 
-Trace events are consumed by observability backends that support tracing (for example, OTLP). All spans from the same request share the same `trace_id`, and access logs carry the matching request span context when available.
+Observability backends that support tracing (for example, OTLP) consume the trace events. All spans from one request share the same `trace_id`. Access logs carry the matching request span context when available.
 
 ## Trace sampling
 
-The `trace_sampling` directive (in `http` block) controls which traces are sampled and exported. Sampling reduces the volume of trace data sent to your collector while maintaining representative coverage.
+The `trace_sampling` directive (in the `http` block) controls which traces Ferron samples and exports. Sampling reduces the volume of trace data that Ferron sends to the collector while keeping representative coverage.
 
 | Mode | Description |
 | --- | --- |
 | `always_on` | Sample every trace. Useful for development. |
-| `always_off` | Sample no traces. Effectively disables trace export. |
-| `parentbased_always_on` | Respect the parent span's sampling decision. Always sample root spans (no parent). **This is the default.** |
-| `traceidratio` | Sample a fixed ratio of traces based on trace ID. |
-| `parentbased_traceidratio` | Parent-based sampling with ratio-based sampling for root spans. Recommended for production. |
-| `attribute_based` | Sample based on span attributes visible at span creation time. |
+| `always_off` | Sample no traces. This disables trace export effectively. |
+| `parentbased_always_on` | Follow the parent sampling decision. Always sample root spans, which have no parent. **This is the default.** |
+| `traceidratio` | Sample a fixed ratio of traces based on the trace ID. |
+| `parentbased_traceidratio` | Sample root spans by ratio, and follow the parent decision for child spans. Recommended for production. |
+| `attribute_based` | Sample based on span attributes visible when Ferron creates the span. |
 
 **Configuration example:**
 
@@ -258,7 +255,7 @@ example.com {
 ```
 
 > [!note]
-> The default trace sampling mode (`parentbased_always_on`) samples all traces. In production use `parentbased_traceidratio`.
+> The default trace sampling mode (`parentbased_always_on`) samples all traces. In production, use `parentbased_traceidratio`.
 
 ### Ratio-based sampling
 
@@ -274,11 +271,11 @@ example.com {
 }
 ```
 
-Use `parentbased_traceidratio` (not bare `traceidratio`) in distributed systems to make sure sampling decisions are consistent across service boundaries. With `traceidratio`, child spans may be sampled even if the parent was not, leading to partial traces.
+Use `parentbased_traceidratio` instead of bare `traceidratio` in distributed systems. It makes sampling decisions consistent across service boundaries. With `traceidratio`, a child span may get sampled even when the parent is not, which produces partial traces.
 
 ### Attribute-based sampling
 
-The `attribute_based` mode samples spans based on attributes visible at span creation time. Configure rules inside a `rules` block:
+The `attribute_based` mode samples spans from the attributes that exist when Ferron creates the span. Configure rules inside a `rules` block:
 
 ```ferron
 example.com {
@@ -310,23 +307,23 @@ Each `rule` takes 2 or 3 arguments:
 | `<attribute>` | The span attribute key to match. |
 | `<value>` | The value to match (required for `exact` and `prefix`, omitted for `exists`). |
 
-A span is sampled if **any** rule matches. When no rules match, the `default_action` directive controls the outcome:
+**Any** matching rule samples the span. When no rule matches, the `default_action` directive controls the outcome:
 
 | Value | Behavior |
 | --- | --- |
-| `drop` | Spans not matching any rule are dropped. **This is the default.** |
-| `sample` | Spans not matching any rule are still sampled. |
+| `drop` | Ferron drops spans that match no rule. **This is the default.** |
+| `sample` | Ferron samples spans even when they match no rule. |
 
 > [!warning]
-> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually unintended — for example, adding rules to sample `/api/` routes also drops health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
+> Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually not intended. For example, adding rules to sample `/api/` routes also drops health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
 
 > [!note]
-> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) are set at this stage and are available for sampling decisions for attribute-based sampling.
+> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) appear during this stage. They drive the sampling decisions for attribute-based sampling.
 
 ## See also
 
-- [W3C Trace Context](#w3c-trace-context) — incoming trace context parsing, trace configuration, Baggage propagation, and trace ID response headers
-- [Trace sampling](#trace-sampling) — trace sampling modes and configuration
-- [OTLP observability](/docs/v3/configuration/observability/otlp) — exporting traces via OpenTelemetry Protocol
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus) — native Prometheus metrics export
-- [Access logging](/docs/v3/configuration/observability/logging) — access log configuration
+- [W3C Trace Context](#w3c-trace-context): incoming trace context parsing, trace configuration, Baggage propagation, and trace ID response headers
+- [Trace sampling](#trace-sampling): trace sampling modes and configuration
+- [OTLP observability](/docs/v3/configuration/observability/otlp): export traces via OpenTelemetry Protocol
+- [Prometheus metrics](/docs/v3/configuration/observability/prometheus): native Prometheus metrics export
+- [Access logging](/docs/v3/configuration/observability/logging): access log configuration

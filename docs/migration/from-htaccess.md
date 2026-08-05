@@ -1,15 +1,15 @@
 ---
 title: "Migrating from Apache .htaccess to Ferron 3 (PHP hosting)"
-description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting (with .htaccess) to Ferron 3 with PHP-FPM, covering the front-controller pattern, www/HTTPS redirects, IP ACLs, error pages, directory listings, and more."
+description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting to Ferron 3 with PHP-FPM."
 ---
 
-This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you already know to Ferron 3 directives, and highlights the differences in how the two servers think about configuration.
+This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you already know to Ferron 3 directives. It also highlights the differences in how the two servers think about configuration.
 
-The examples assume a single WordPress-style site served through PHP-FPM over a Unix socket, but the patterns apply equally to Joomla and other PHP applications.
+The examples assume a single WordPress-style site served through PHP-FPM over a Unix socket. The patterns apply equally to Joomla and other PHP applications.
 
 ## Before you start: how Ferron differs from `.htaccess`
 
-Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) that is loaded and **validated at startup**. There is no per-directory `.htaccess` file, and changes require a server reload.
+Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) and **validates it at startup**. There is no per-directory `.htaccess` file, and changes require a server reload.
 
 | Concept | Apache `.htaccess` | Ferron 3 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses
 | Auth | `AuthType Basic` + `htpasswd` | `basic_auth` (hashed passwords) |
 
 > [!important]
-> Ferron deliberately does **not** read `.htaccess` files. After migration, leaving an `.htaccess` in the document root has no effect — move every relevant rule into `ferron.conf`.
+> Ferron deliberately does **not** read `.htaccess` files. After migration, leaving an `.htaccess` in the document root has no effect. Move every relevant rule into `ferron.conf`.
 
 ### PHP-FPM prerequisites
 
@@ -47,7 +47,7 @@ Then reference it from Ferron with `fcgi_php "unix:///run/php/php8.4-fpm.sock"`.
 
 ## A complete WordPress example
 
-Here is a full Ferron 3 configuration that reproduces what a typical `WordPress` `.htaccess` + Apache vhost provides. It covers PHP-FPM execution, the front-controller rewrite, HTTPS enforcement, a www→non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
+Here is a full Ferron 3 configuration that reproduces the typical `WordPress` `.htaccess` + Apache vhost setup. It covers PHP-FPM execution, the front-controller rewrite, and HTTPS enforcement. It also covers a www→non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
 
 ```ferron
 example.com {
@@ -113,7 +113,7 @@ RewriteRule . /index.php [L]
 
 The goal: serve real files directly, and send everything else to `index.php`, which uses the request path to route internally.
 
-In Ferron, `fcgi_php` already sends `.php` files to PHP-FPM, and `root` serves existing static files. The only remaining piece is the fallback for URLs that do not map to real files — use `rewrite` with `file false` and `directory false`:
+In Ferron, `fcgi_php` already sends `.php` files to PHP-FPM, and `root` serves existing static files. The only remaining piece is the fallback for URLs that do not map to real files. Use `rewrite` with `file false` and `directory false`:
 
 ```ferron
 example.com {
@@ -128,10 +128,10 @@ example.com {
 }
 ```
 
-- `file false` — do not apply this rule when the URL corresponds to an existing file.
-- `directory false` — do not apply when it corresponds to an existing directory.
+- `file false`: do not apply this rule when the URL corresponds to an existing file.
+- `directory false`: do not apply when it corresponds to an existing directory.
 
-This produces the same behavior as the Apache rules: existing files (CSS, images, uploaded `.php`) are served as-is, and clean URLs fall through to `index.php`. WordPress/Joomla read `REQUEST_URI` (set automatically by Ferron to the original request URI), so no query-string juggling is needed.
+This produces the same behavior as the Apache rules. Ferron serves existing files (CSS, images, uploaded `.php`) as-is, and clean URLs fall through to `index.php`. WordPress/Joomla read `REQUEST_URI` (set automatically by Ferron to the original request URI), so you do not need query-string juggling.
 
 > [!tip]
 > If your application expects the original path in `PATH_INFO` instead of `REQUEST_URI`, rewrite to the script plus the captured group: `rewrite "^(.*)$" "/index.php/$1"`.
@@ -154,7 +154,7 @@ example.com {
 
 ### Serving some paths without PHP
 
-If a subtree should be static-only (no PHP execution), disable FastCGI with `fcgi_php false` in a `location` block. This mirrors Apache's `SetHandler none` / `<Files>` exceptions:
+If a subtree should be static-only (no PHP execution), disable FastCGI with `fcgi_php false` in a `location` block. This mirrors the `SetHandler none` / `<Files>` exceptions in Apache:
 
 ```ferron
 example.com {
@@ -209,7 +209,7 @@ RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 ```
 
-In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (for example, `example.com`) with no explicit port, Ferron starts both an HTTP (`:80`) and HTTPS (`:443`) listener. It issues a **308 Permanent Redirect** from HTTP to HTTPS by default. There is nothing to configure unless you want to disable it:
+In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (for example, `example.com`) with no explicit port, Ferron starts two listeners. It listens on HTTP (`:80`) and HTTPS (`:443`). It issues a **308 Permanent Redirect** from HTTP to HTTPS by default. Unless you want to disable it, you do not need to configure anything:
 
 ```ferron
 example.com {
@@ -222,7 +222,7 @@ example.com {
 Set `https_redirect false` only if you intentionally serve plain HTTP (for example, behind a TLS-terminating load balancer that already redirects).
 
 > [!note]
-> The 308 status preserves the request method and body, so `POST` form submissions redirect correctly. This differs from Apache's common `R=301`, which can change `POST` to `GET`.
+> The 308 status preserves the request method and body, so `POST` form submissions redirect correctly. This differs from the common Apache `R=301`, which can change `POST` to `GET`.
 
 ## IP-based access control (ACLs)
 
@@ -240,7 +240,7 @@ Apache (current `Require`):
 Require ip 203.0.113.0/24
 ```
 
-Ferron uses `allow` and `block`. When `allow` is present, **only** the listed networks are permitted. Everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
+Ferron uses `allow` and `block`. When `allow` is present, Ferron permits **only** the listed networks. Everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
 
 ```ferron
 example.com {
@@ -256,7 +256,7 @@ example.com {
 Place these inside a `location` or `if` block to protect a single path (such as `/wp-admin` or `/administrator`).
 
 > [!important]
-> If Ferron sits behind a reverse proxy or load balancer, configure `client_ip_from_header` with a `trusted_proxy` list. The IP rules then evaluate the real client IP rather than the proxy's address.
+> If Ferron sits behind a reverse proxy or load balancer, configure `client_ip_from_header` with a `trusted_proxy` list. The IP rules then evaluate the real client IP rather than the address of the proxy.
 
 ### Deny access to sensitive files
 
@@ -308,7 +308,7 @@ example.com {
 }
 ```
 
-When reverse proxying (rather than serving PHP directly), enable `intercept_errors` on the `proxy` block so upstream 5xx responses are replaced with your custom page:
+When reverse proxying (rather than serving PHP directly), enable `intercept_errors` on the `proxy` block. Ferron then replaces upstream 5xx responses with your custom page:
 
 ```ferron
 example.com {
@@ -336,7 +336,7 @@ Options +Indexes
 Options -Indexes
 ```
 
-Ferron's `directory_listing` is disabled by default. Enable it to mirror `+Indexes`. Leave it off (the default) to mirror `-Indexes`:
+Ferron disables `directory_listing` by default. Enable it to mirror `+Indexes`. Leave it off (the default) to mirror `-Indexes`:
 
 ```ferron
 example.com {
@@ -348,7 +348,7 @@ example.com {
 }
 ```
 
-`index` controls the files tried when a directory is requested. Ferron defaults to `index.html index.htm index.xhtml`, and `index.php` is included as well for PHP entry points when using PHP-FPM.
+`index` controls the files that Ferron tries when a client requests a directory. Ferron defaults to `index.html index.htm index.xhtml` and also includes `index.php` for PHP entry points when using PHP-FPM.
 
 ## Security and other response headers
 
@@ -360,7 +360,7 @@ Header always set Content-Security-Policy "default-src 'self'"
 Header unset X-Powered-By
 ```
 
-Ferron's `header` directive has three forms — add (`+`), remove (`-`), and replace (bare name):
+The `header` directive has three forms: add (`+`), remove (`-`), and replace (bare name):
 
 ```ferron
 example.com {
@@ -387,7 +387,7 @@ AuthUserFile /etc/apache2/.htpasswd
 Require valid-user
 ```
 
-Ferron's `basic_auth` does **not** read `htpasswd` files. It expects **hashed** passwords (Argon2id recommended). Generate a hash with the `ferron-passwd` tool that ships with Ferron, then list the user in the config:
+The `basic_auth` directive does **not** read `htpasswd` files. It expects **hashed** passwords (Argon2id recommended). Generate a hash with the `ferron-passwd` tool that ships with Ferron, then list the user in the config:
 
 ```ferron
 example.com {
@@ -408,7 +408,7 @@ example.com {
 }
 ```
 
-Brute-force protection is enabled by default. You can tune it:
+Brute-force protection is on by default. You can tune it:
 
 ```ferron
 example.com {
@@ -428,7 +428,7 @@ example.com {
 ```
 
 > [!important]
-> Basic Auth must be used over HTTPS — credentials travel in the `Authorization` header on every request.
+> Use Basic Auth only over HTTPS. Credentials travel in the `Authorization` header on every request.
 
 ## Forcing download / MIME types
 
@@ -587,13 +587,13 @@ example.com {
    - Protected areas require a password or allowed IP.
 
 > [!tip]
-> Keep the old Apache config until Ferron has served production traffic successfully, so you can roll back by repointing the service.
+> Keep the old Apache config until Ferron has served production traffic successfully. You can then roll back by repointing the service.
 
 ## See also
 
-- [PHP hosting](/docs/v3/use-cases/content/php) — PHP via FastCGI and CGI, plus troubleshooting.
-- [FastCGI support](/docs/v3/configuration/content/fastcgi) — `fcgi`/`fcgi_php` directives and environment variables.
-- [URL rewriting](/docs/v3/configuration/routing/rewrite) — `rewrite` syntax and regex engine.
-- [Access control](/docs/v3/use-cases/security/access-control) — `allow`/`block`, `basic_auth`, and `auth_to`.
-- [Error pages](/docs/v3/use-cases/traffic/error-pages) — `error_page` and `intercept_errors`.
-- [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals) — `match`/`if` and available variables.
+- [PHP hosting](/docs/v3/use-cases/content/php): use FastCGI and CGI for PHP, plus troubleshooting.
+- [FastCGI support](/docs/v3/configuration/content/fastcgi): configure the `fcgi`/`fcgi_php` directives and environment variables.
+- [URL rewriting](/docs/v3/configuration/routing/rewrite): see `rewrite` syntax and the regex engine.
+- [Access control](/docs/v3/use-cases/security/access-control): combine `allow`/`block`, `basic_auth`, and `auth_to`.
+- [Error pages](/docs/v3/use-cases/traffic/error-pages): use `error_page` and `intercept_errors`.
+- [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals): use `match`/`if` and available variables.

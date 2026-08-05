@@ -1,9 +1,9 @@
 ---
 title: Installation via Docker
-description: "Run Ferron in Docker or Docker Compose: pull the image, start a container, verify, manage containers, and see available image tags."
+description: "Run Ferron in Docker or Docker Compose: pull the image, start a container, verify, manage containers, and see image tags."
 ---
 
-Ferron can be installed via a Docker image, for containerized deployments.
+You can install Ferron via a Docker image for containerized deployments.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ docker pull ferronserver/ferron:3
 
 ### 2. Run the Ferron container
 
-Once the image is downloaded, start a Ferron container using the command below:
+Once you download the image, start a Ferron container with the command below:
 
 ```sh
 docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:3
@@ -39,7 +39,7 @@ This command does the following:
 
 ## Verifying the installation
 
-To confirm that Ferron is running, execute:
+To confirm that Ferron runs, execute:
 
 ```sh
 docker ps
@@ -47,7 +47,7 @@ docker ps
 
 This should display a running container with the name `myferron`.
 
-To test the web server, open a browser and navigate to `http://localhost`. If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
+To test the web server, open a browser and navigate to `http://localhost`. If you see the `Ferron is installed successfully!` message on the page, the web server works correctly.
 
 You can also use `curl` instead:
 
@@ -65,8 +65,9 @@ Ferron on Docker has the following file structure:
 - `/usr/local/bin/ferron-passwd` - Ferron user password generation tool
 - `/usr/local/bin/ferron-precompress` - Ferron static files precompression tool
 - `/usr/local/bin/ferron-serve` - command for serving static files with Ferron with zero configuration
-- `/var/cache/ferron-acme` - Ferron's ACME cache directory (if not explicitly specified in the server configuration)
-- `/var/www/ferron` - Ferron's default web root
+
+- `/var/cache/ferron-acme` - the ACME cache directory for Ferron (if not explicitly specified in the server configuration)
+- `/var/www/ferron` - the default web root for Ferron
 - `/etc/ferron/conf.d` - Directory for split Ferron configuration files
 - `/etc/ferron/conf.d/00-default.conf` - Default Ferron configuration
 
@@ -98,18 +99,18 @@ docker rm -f myferron
 
 ### Viewing the logs
 
-To view the Ferron access and error logs, use Docker's `logs` command with the container name or ID:
+To view the Ferron access and error logs, use the Docker `logs` command with the container name or ID:
 
 ```sh
 docker logs myferron
 ```
 
 > [!tip]
-> Ferron's Docker image is configured to output structured, JSON-format access logs with `grep`-able trace ID correlation to error logs by default.
+> By default, the Ferron Docker image outputs structured JSON-format access logs. These logs carry `grep`-able trace IDs that correlate with error logs.
 
 ## Using Ferron with Docker Compose
 
-If you are using Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
+If you use Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
 
 ```yaml
 services:
@@ -164,7 +165,7 @@ docker compose up -d
 
 ## Ferron image tags
 
-Ferron 3 provides the following tags for the Ferron image:
+The Ferron 3 image has the following tags:
 
 - `3` - Based on Distroless, statically-linked binaries
 - `3-alpine` - Based on Alpine Linux, statically-linked binaries

@@ -16,7 +16,8 @@ http example.com:8080 {
 > [!note]
 >
 > - These directives are host-scoped rather than global.
-> - The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1, HTTP/2, and experimental HTTP/3 protocol support.
+> - The HTTP server engine (`http-server` module) handles connection management, request routing, and TLS termination.
+> - The engine supports HTTP/1, HTTP/2, and experimental HTTP/3.
 
 > [!info]
 > For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme). For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
@@ -25,16 +26,16 @@ http example.com:8080 {
 
 ### Automatic TLS
 
-When a hostname is specified (for example, `example.com`) and no explicit port is given, Ferron starts **two listeners**:
+When you give a hostname (for example, `example.com`) without an explicit port, Ferron starts **two listeners**:
 
-- One on `default_http_port` (default: 80) — serves plain HTTP with no TLS
-- One on `default_https_port` (default: 443) — serves HTTPS with automatic ACME TLS
+- One on `default_http_port` (default: 80) serves plain HTTP with no TLS
+- One on `default_https_port` (default: 443) serves HTTPS with automatic ACME TLS
 
-On the HTTPS listener, if no explicit `tls` directive is present, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). The ACME provider gets and renews certificates automatically at startup.
+On the HTTPS listener, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default) unless an explicit `tls` directive exists. The ACME provider gets and renews certificates at startup.
 
 Hostnames that have **special automatic TLS behavior**:
 
-- `localhost`, `127.0.0.1`, `::1` — These loopback addresses automatically use the **local TLS provider** instead of ACME, enabling HTTPS for development without requiring public certificates.
+- `localhost`, `127.0.0.1`, `::1` — these loopback addresses use the **local TLS provider** instead of ACME. This gives HTTPS for development without public certificates.
 
 To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
 

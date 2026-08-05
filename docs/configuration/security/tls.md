@@ -3,14 +3,14 @@ title: "Configuration: security and TLS"
 description: "Cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
 ---
 
-This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional — safe defaults are used when omitted. The TLS crypto configuration applies to all TLS providers (`manual`, `acme`, and `local`).
+This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional. Ferron uses safe defaults when you omit a setting. The TLS crypto configuration applies to all TLS providers (`manual`, `acme`, and `local`).
 
 ## Directives
 
 ### Cipher suites
 
 - `cipher_suite <suite: string>`
-  - This directive specifies a cipher suite to add to the allowed list. Repeatable — each occurrence adds one suite. When omitted, rustls defaults are used. Default: rustls defaults
+  - This directive specifies a cipher suite to add to the allowed list. Repeatable. Each occurrence adds one suite. When you omit it, rustls defaults apply. Default: rustls defaults
 
 **Configuration example:**
 
@@ -44,7 +44,7 @@ tls {
 ### ECDH curves
 
 - `ecdh_curve <curve: string>`
-  - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable — each occurrence adds one curve. When omitted, rustls defaults are used. Default: rustls defaults
+  - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable. Each occurrence adds one curve. When you omit it, rustls defaults apply. Default: rustls defaults
 
 #### Supported curves
 
@@ -63,7 +63,7 @@ tls {
 - `max_version <version: string>`
   - This directive specifies the maximum allowed TLS version. Supported values: `TLSv1.2`, `TLSv1.3`. Default: `max_version TLSv1.3`
 
-**Configuration example — TLS 1.3 only:**
+**Configuration example: TLS 1.3 only**
 
 ```ferron
 tls {
@@ -75,16 +75,16 @@ tls {
 }
 ```
 
-If both are omitted, the safe default range (TLS 1.2–1.3) is used. Setting only `min_version` restricts the lower bound. Setting only `max_version` restricts the upper bound. An error is returned if `max_version` is older than `min_version`.
+If you omit both, Ferron uses the safe default range (TLS 1.2 to 1.3). Setting only `min_version` restricts the lower bound. Setting only `max_version` restricts the upper bound. Ferron returns an error if `max_version` is older than `min_version`.
 
 ### Client certificate authentication (mTLS)
 
 - `client_auth [bool: boolean]`
-  - This directive specifies whether client certificate authentication is enabled. When `true`, clients **must** present a valid certificate. Default: `client_auth false`
+  - This directive turns client certificate authentication on or off. When `true`, clients **must** present a valid certificate. Default: `client_auth false`
 - `client_auth_ca <source: string>`
   - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle, requires `webpki-roots` feature). Default: `client_auth_ca webpki`
 
-**Configuration example — full mTLS:**
+**Configuration example: full mTLS**
 
 ```ferron
 api.example.com {
@@ -110,8 +110,8 @@ api.example.com {
 
 > [!note]
 >
-> - Client certificate verification uses the same trust model as server-side TLS: the client cert chain must validate against the configured CA roots.
-> - When `client_auth_ca` points to a file containing multiple CA certificates (a bundle), all of them are loaded into the trust store.
+> - Client certificate verification uses the same trust model as server-side TLS. The client cert chain must validate against the configured CA roots.
+> - When `client_auth_ca` points to a file with multiple CA certificates (a bundle), Ferron loads all of them into the trust store.
 > - The `system` trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
 > - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
@@ -125,9 +125,9 @@ api.example.com {
 
 ## Security considerations
 
-- Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`) — they are simpler and avoid known TLS 1.2 weaknesses.
+- Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`). They are simpler and avoid known TLS 1.2 weaknesses.
 - `x25519` is the recommended default for ECDH curves: fast, secure, and widely supported.
-- Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental — use only in testing environments.
+- Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only in testing environments.
 
 ## Troubleshooting
 

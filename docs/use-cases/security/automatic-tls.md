@@ -1,17 +1,17 @@
 ---
 title: Automatic TLS
-description: "Set up automatic TLS in Ferron with Let's Encrypt and ACME challenges (HTTP-01, TLS-ALPN-01, DNS-01)."
+description: "Set up automatic TLS with ACME challenges (HTTP-01, TLS-ALPN-01, DNS-01)."
 ---
 
 Ferron supports automatic TLS via ACME-compatible Certificate Authorities such as **Let's Encrypt**. It supports three challenge types:
 
-- **HTTP-01** (default) — serves a token at `/.well-known/acme-challenge/`
-- **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake
-- **DNS-01** — creates a TXT record at `_acme-challenge.<domain>` (required for wildcard domains)
+- **HTTP-01** (default): serves a token at `/.well-known/acme-challenge/`
+- **TLS-ALPN-01**: responds with a self-signed cert during the TLS handshake
+- **DNS-01**: creates a TXT record at `_acme-challenge.<domain>` (required for wildcard domains)
 
 Ferron caches certificates and renews them automatically before expiration.
 
-Below is the example Ferron configuration that configures automatic TLS with the production Let's Encrypt directory:
+Below is the example Ferron configuration for automatic TLS with the production ACME directory:
 
 ```ferron
 example.com {
@@ -25,7 +25,7 @@ example.com {
 }
 ```
 
-Or simply (since automatic TLS via ACME is enabled by default in Ferron for public hosts):
+Or simply (Ferron enables automatic TLS via ACME by default for public hosts):
 
 ```ferron
 example.com {
@@ -40,9 +40,9 @@ example.com {
 
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
-Ferron uses HTTP-01 ACME challenge by default, which requires the server to be reachable on port 80. If your website is behind a proxy that terminates TLS (like Cloudflare's proxy mode), the HTTP-01 challenge may not work unless port 80 is accessible.
+Ferron uses the HTTP-01 ACME challenge by default. The challenge requires the server to be reachable on port 80. If your website is behind a TLS-terminating proxy, the HTTP-01 challenge may not work unless port 80 is accessible. Cloudflare in proxy mode is such a case.
 
-You can use TLS-ALPN-01 challenge instead, which works at the TLS handshake level and only requires port 443:
+You can use the TLS-ALPN-01 challenge instead. It works at the TLS handshake level and only requires port 443:
 
 ```ferron
 example.com {
@@ -58,7 +58,7 @@ example.com {
 
 ## Using Ferron as an ACME client for other servers
 
-If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron as an ACME client. It can get TLS certificates for those servers:
+If you run other servers alongside Ferron that support TLS but not automatic TLS, use Ferron as an ACME client. It gets TLS certificates for those servers:
 
 ```ferron
 example.com {
@@ -81,7 +81,7 @@ If you give only one path for `save`, the key path defaults to the certificate p
 
 ## Automatic TLS on demand
 
-Ferron can also get certificates on demand when a hostname is accessed for the first time (`on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
+Ferron can also get certificates on demand when a client accesses a hostname for the first time (`on_demand`). This helps multi-tenant setups where hostnames are not fully known in advance.
 
 When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron calls the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
@@ -102,7 +102,7 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
 
 ## DNS providers (DNS-01 challenge)
 
-Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for wildcard certificates. The DNS-01 challenge requires a DNS provider inside the `tls` block.
+Ferron supports the DNS-01 ACME challenge for automatic TLS. Wildcard certificates require this challenge. The DNS-01 challenge needs a DNS provider inside the `tls` block.
 
 Below is an example configuration for DNS-01 with Cloudflare:
 
@@ -124,14 +124,14 @@ Below is an example configuration for DNS-01 with Cloudflare:
 ```
 
 > [!important]
-> Make sure your public DNS records point to the Ferron server before requesting certificates. ACME challenges fail if traffic goes elsewhere.
+> Before you request certificates, make sure your public DNS records point to the Ferron server. The ACME challenges fail if traffic goes elsewhere.
 
 > [!info]
-> For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).
+> For the DNS providers Ferron supports and their configuration properties, see the [configuration reference](/docs/v3/configuration/security/acme).
 
 ## Certificate caching
 
-Ferron caches certificates both in-memory and on disk (when a `cache` path is configured). This makes sure certificates survive restarts and are automatically renewed.
+Ferron caches certificates both in-memory and on disk (when you configure a `cache` path). This makes sure certificates survive restarts and renew automatically.
 
 ```ferron
 example.com {

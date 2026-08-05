@@ -1,12 +1,12 @@
 ---
 title: "Migrating from Ferron 2 to Ferron 3"
-description: "Step-by-step guide for migrating a Ferron 2 KDL configuration to Ferron 3, including the migration tool, rollback steps, manual adjustments, and a verification checklist."
+description: "Step-by-step guide for migrating a Ferron 2 KDL config to Ferron 3, including the migration tool, rollback, and verification checklist."
 
 ---
 
 This guide shows how to migrate your Ferron 2 configuration (`.kdl`) to Ferron 3 (`.conf`).
 
-Ferron 3 uses a new configuration format, updated observability, and a more explicit routing model. **Most Ferron 2 configs can be migrated with only a few manual changes.** The safest approach is to keep the original Ferron 2 config untouched, generate a new Ferron 3 config beside it, and validate before switching traffic.
+Ferron 3 uses a new configuration format, updated observability, and a more explicit routing model. Most Ferron 2 configs need only a few manual changes. The safest path keeps the original Ferron 2 config unchanged. Generate the new Ferron 3 config beside it, and validate it before switching traffic.
 
 ## Quick summary
 
@@ -92,8 +92,8 @@ If you need to roll back, stop Ferron 3 and restore the Ferron 2 config backup. 
 
 - **Docker**: switch the image tag back from `:3` to `:2`.
 - **Windows installer**: uninstall Ferron 3, reinstall Ferron 2, then restore `ferron.kdl`.
-- **Debian/RPM**: remove `ferron3`, reinstall the Ferron 2 package you were using before, then copy back the old config.
-- **Linux installer script**: remove the Ferron 3 files, reinstall Ferron 2 from the previous script or package, then restore the old config and service setup.
+- **Debian/RPM**: remove `ferron3`, reinstall the Ferron 2 package you used before, then copy back the old config.
+- **Linux installer script**: remove the Ferron 3 files. Reinstall Ferron 2 from the previous script or package, then restore the old config and service setup.
 
 ## Using the migration tool
 
@@ -128,15 +128,15 @@ The tool handles these conversions automatically:
 
 ### Known limitations
 
-The migration tool provides a **starting point**, not a perfect conversion. Keep these limitations in mind:
+The migration tool gives you a **starting point**, not a perfect conversion. Keep these limitations in mind:
 
 1. **`location` with `remove_base=#false`** - the tool generates `match` + `if` blocks that may need manual adjustment.
 2. **Match names** - generated `match` block names may be verbose. You should rename them for clarity.
 3. **Complex `log_format`** - custom log format strings may need manual review to make sure placeholder names are correct.
-4. **`fcgi_php`** - the `fcgi_php` directive is preserved but may need adjustment depending on your FastCGI setup.
+4. **`fcgi_php`** - the `fcgi_php` directive stays the same but may need adjustment depending on your FastCGI setup.
 5. **Rego subconditions** - Rego-based conditions are not migrated. You need to rewrite them using standard match expressions.
 
-## What's changed
+## What has changed
 
 ### Configuration format
 
@@ -174,7 +174,7 @@ globals {
 
 ### `location` behavior
 
-In Ferron 2, `location` blocks used a `remove_base` property to control whether the matched prefix was stripped from the URL. In Ferron 3, the base path is **always automatically removed** — there is no `remove_base` property.
+In Ferron 2, `location` blocks used a `remove_base` property to control whether Ferron stripped the matched prefix from the URL. In Ferron 3, the base path is **always automatically removed**. There is no `remove_base` property.
 
 ```kdl
 // Ferron 2
@@ -244,13 +244,13 @@ example.com {
 
 Key differences:
 
-- `condition` is replaced by `match`
+- `condition` becomes `match`
 - Subconditions become expressions (for example, `request.uri.path ~ "/api"`)
-- Placeholders like `{path}` are replaced by variables like `request.uri.path`
-- `is_language` is replaced by `in` operator on `request.header.accept_language`
+- Placeholders like `{path}` become variables like `request.uri.path`
+- `is_language` becomes the `in` operator on `request.header.accept_language`
 - `is_equal` / `is_not_equal` / `is_regex` / `is_not_regex` become `==`, `!=`, `~`, `!~`
 - `is_remote_ip` / `is_forwarded_for` become `remote.ip ==` comparisons
-- Rego subconditions are deprecated — use standard match expressions instead
+- Rego subconditions are no longer supported. Use standard match expressions instead
 
 ### Placeholders in match blocks
 
@@ -271,7 +271,7 @@ Ferron 2 used `{placeholder}` syntax throughout. Ferron 3 uses `request.*` varia
 
 ### TLS / ACME
 
-The TLS configuration has been restructured. In Ferron 2, `auto_tls` and `auto_tls_contact` were separate directives. In Ferron 3, everything is configured inside a `tls` block:
+Ferron restructured the TLS configuration. In Ferron 2, `auto_tls` and `auto_tls_contact` were separate directives. In Ferron 3, you configure everything inside a `tls` block:
 
 ```kdl
 // Ferron 2
@@ -358,7 +358,7 @@ Ferron 3 also introduces a `log_style modern` directive in the OTLP observabilit
 
 ### Reverse proxying
 
-The `proxy` directive syntax changed slightly. In Ferron 2, backends were specified as positional arguments. In Ferron 3, upstreams use the `upstream` directive inside a `proxy` block:
+The `proxy` directive syntax changed slightly. In Ferron 2, you specified backends as positional arguments. In Ferron 3, upstreams use the `upstream` directive inside a `proxy` block:
 
 ```kdl
 // Ferron 2
@@ -443,7 +443,7 @@ example.com {
 }
 ```
 
-The `/api` prefix is stripped from the request URL before proxying, so the backend still receives `/api` from the proxy URL.
+Ferron strips the `/api` prefix from the request URL before proxying. The backend still receives `/api` from the proxy URL.
 
 ### Handler execution order
 
@@ -472,7 +472,7 @@ example.com {
 
 ### Header name normalization
 
-In Ferron 3 `match` blocks, header names are normalized: lowercased with `_` converted to `-`. So `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
+In Ferron 3 `match` blocks, header names use lowercase letters and `-` instead of `_`. So `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
 
 ### Duration strings
 
@@ -489,13 +489,13 @@ Ferron 2 used `duration 30000` syntax. Ferron 3 accepts bare duration strings:
 
 ### Mixing `condition` blocks with `match` blocks
 
-The most common pitfall is mixing the old `condition`/`if`/`if_not` syntax with the new `match`/`if`/`if_not` syntax. **These are not interchangeable** — they are two entirely different systems.
+The most common pitfall mixes the old `condition`/`if`/`if_not` syntax with the new `match`/`if`/`if_not` syntax. These are not interchangeable. They are two entirely different systems.
 
-In Ferron 2, `condition` blocks used subconditions like `is_equal`, `is_not_equal`, `is_regex`, `is_not_regex`, `is_remote_ip`, `is_forwarded_for`, and `is_language`. In Ferron 3, these are replaced by `match` blocks with expression operators (`==`, `!=`, `~`, `!~`, `in`).
+In Ferron 2, `condition` blocks used subconditions like `is_equal`, `is_not_equal`, `is_regex`, `is_not_regex`, `is_remote_ip`, `is_forwarded_for`, and `is_language`. In Ferron 3, `match` blocks replace these with expression operators (`==`, `!=`, `~`, `!~`, `in`).
 
-If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, when a Ferron 2 `if`/`if_not` references an old `condition` name and a `match` block has a similar name, the two systems will not connect. The `if`/`if_not` will reference the old condition name, not the new `match` block.
+If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, when a Ferron 2 `if`/`if_not` names an old `condition`, the two systems do not connect. This happens even if a `match` block has a similar name. The `if`/`if_not` will reference the old condition name, not the new `match` block.
 
-**Example of the pitfall** — this will **not** work:
+**Example of the pitfall**. This will **not** work:
 
 ```ferron
 # INVALID: mixing condition (Ferron 2) with if (Ferron 3)
@@ -510,7 +510,7 @@ example.com {
 }
 ```
 
-**Correct approach** — use `match` throughout:
+**Correct approach**. Use `match` throughout:
 
 ```ferron
 # VALID: all Ferron 3
@@ -529,7 +529,7 @@ example.com {
 
 Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` etc. inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` etc. inside `match` blocks.
 
-**Example of the pitfall** — this will **not** work:
+**Example of the pitfall**. This will **not** work:
 
 ```ferron
 # INVALID: match block using Ferron 2 placeholders
@@ -538,7 +538,7 @@ match api_request {
 }
 ```
 
-**Correct approach** — use Ferron 3 variables:
+**Correct approach**. Use Ferron 3 variables:
 
 ```ferron
 # VALID: match block using Ferron 3 variables
@@ -551,14 +551,14 @@ match api_request {
 
 Before switching to production:
 
-- [ ] Run `ferron validate ferron.conf` — no errors
+- [ ] Run `ferron validate ferron.conf`: no errors
 - [ ] Test routes behave as expected (proxy, static files, rewrites)
-- [ ] TLS works (if enabled) — check certificate issuance and renewal
+- [ ] TLS works (if enabled): check certificate issuance and renewal
 - [ ] Logs show no errors or warnings on startup
 - [ ] Conditionals (`match`/`if`) evaluate correctly for your traffic patterns
 - [ ] Proxy backends receive expected paths and headers
 - [ ] DNS-01 challenge works (if using wildcard certificates)
-- [ ] Observability (logging, OTLP) is sending data correctly
+- [ ] Observability (logging, OTLP) sends data correctly
 
 > [!important]
 > If `ferron validate` reports errors, address them before deploying to production.

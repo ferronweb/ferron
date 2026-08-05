@@ -3,16 +3,17 @@ title: Abuse protection
 description: "Protect Ferron from brute-force attacks, rate limit abuse, and other malicious behavior with temporary IP banning."
 ---
 
-Ferron's `abuse_protection` directive provides lightweight, Fail2ban-style IP banning. When a client exceeds configured thresholds (for example, repeated rate limit breaches or failed login attempts), Ferron temporarily bans their IP address. Bans are stored in memory and automatically expire after the configured duration.
+The `abuse_protection` directive of Ferron implements lightweight, Fail2ban-style IP banning. When a client exceeds configured thresholds, Ferron temporarily bans the client IP. Repeated rate limit breaches or failed login attempts are examples. Ferron stores bans in memory. They expire automatically after the configured duration.
 
 This page covers common deployment patterns. For full configuration details, see [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban).
 
 > [!important]
 >
-> - Bans are in-memory only — they are not preserved across server restarts. There is no admin API for manual unban — you must wait for the ban to expire naturally.
-> - If your IP is banned immediately, check your thresholds — you may have `events 1` or very short `window` values that are too aggressive.
-> - If legitimate clients are being banned, add their IP or CIDR range to the `allowlist`.
-> - If Ferron is behind a reverse proxy, configure `client_ip_from_header` so Ferron sees the real client IP, not the proxy's IP. See [HTTP host directives](/docs/v3/configuration/server/host).
+> - Bans exist in memory only and do not survive server restarts. No admin API exists for a manual unban, so you must wait for the ban to expire naturally.
+> - If Ferron bans your IP immediately, check your thresholds. You may have `events 1` or very short `window` values that are too strict.
+>
+> - If Ferron bans legitimate clients, add their IP or CIDR range to the `allowlist`.
+> - If Ferron runs behind a reverse proxy, configure `client_ip_from_header` so it sees the real client IP, not the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
 
 ## Basic abuse protection
 
@@ -113,7 +114,7 @@ example.com {
 }
 ```
 
-IPs in the allowlist are **never banned**, even if they exceed thresholds. You can specify individual IPs or CIDR ranges. Use `allowlist` multiple times to add more entries.
+Ferron never bans IPs in the allowlist, even if they exceed thresholds. You can specify individual IPs or CIDR ranges. Use `allowlist` multiple times to add more entries.
 
 ## Combining with rate limiting for defense in depth
 
@@ -146,7 +147,7 @@ The flow works as follows:
 
 1. The rate limiter throttles individual clients that exceed their token bucket.
 2. Ferron records each rate limit breach as an abuse event.
-3. If the client accumulates enough breaches within the window, Ferron bans the client's IP.
+3. If the client accumulates enough breaches within the window, Ferron bans the client IP.
 4. While banned, the client receives a **403 Forbidden** response with a `Retry-After` header.
 
 ## Detecting automated scans by URL pattern
@@ -178,7 +179,7 @@ example.com {
 }
 ```
 
-Requests matching this pattern trigger a custom abuse event. Ferron bans the client's IP after 5 such events within 300 seconds. The ban duration follows the default or configured `ban_duration`.
+Requests matching this pattern trigger a custom abuse event. Ferron bans the client IP after 5 such events within 300 seconds. The ban duration follows the default or configured `ban_duration`.
 
 ## Detecting hostile scanning by error rate
 
@@ -200,7 +201,7 @@ example.com {
 }
 ```
 
-This bans an IP for **15 minutes** if they trigger 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together. For example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
+Ferron bans an IP for **15 minutes** after enough error responses. The threshold is 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together. For example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
 
 **Stricter threshold for vulnerability scanners:**
 
@@ -220,7 +221,7 @@ example.com {
 }
 ```
 
-This bans an IP for **1 hour** after just 5 error responses within 30 seconds, also counting `405 Method Not Allowed` responses.
+Ferron bans an IP for **1 hour** after just 5 error responses within 30 seconds. The count includes `405 Method Not Allowed` responses.
 
 ## Disabling abuse protection
 
@@ -236,7 +237,7 @@ example.com {
 
 ## Reporting to AbuseIPDB
 
-Ferron's native abuse protection bans IPs for a limited duration in memory. For persistent threat intelligence sharing, you can run a lightweight sidecar that tails Ferron's WARN-level logs and reports banned IPs to [AbuseIPDB](https://www.abuseipdb.com/).
+Ferron bans IPs in memory for a limited duration with its native abuse protection. For persistent threat intelligence sharing, you can run a lightweight sidecar. The sidecar tails the WARN-level logs of Ferron and reports banned IPs to [AbuseIPDB](https://www.abuseipdb.com/).
 
 The sidecar watches for `Ban triggered` log lines and extracts the IP address and reason. It maps the reason to an [AbuseIPDB category](https://www.abuseipdb.com/categories) and posts a report to the AbuseIPDB API.
 
@@ -248,7 +249,7 @@ The sidecar parses lines matching this pattern:
 [2026-06-22 19:46:28.902 WARN] [trace=4dae55577f57aac23bdcffa24b38a31a] Ban triggered: IP ::1 - Custom abuse event: example_ban
 ```
 
-- The `[trace=...]` block is optional (only present when tracing is enabled).
+- The `[trace=...]` block is optional. It appears only when tracing is on.
 - The IP address follows `IP `.
 - The reason follows ` - ` and varies by event source:
 
@@ -269,7 +270,7 @@ The sidecar parses lines matching this pattern:
 
 ### Sample script
 
-The script reads the `ABUSEIPDB_API_KEY` environment variable, tails Ferron's log file, and reports each banned IP.
+The script reads the `ABUSEIPDB_API_KEY` environment variable. It tails the Ferron log file and reports each banned IP.
 
 ```python
 #!/usr/bin/env python3
@@ -374,7 +375,7 @@ if __name__ == "__main__":
 
 ### Deployment
 
-**Systemd service** — run the sidecar alongside Ferron:
+**Systemd service**: run the sidecar alongside Ferron:
 
 ```ini
 [Unit]
@@ -393,14 +394,15 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-**Docker** — run as a sidecar container sharing the log volume or using a logging driver that writes to a file.
+**Docker**: run the sidecar as a container. It shares the log volume or uses a logging driver that writes to a file.
 
 ### Limitations
 
-- AbuseIPDB API daily quotas apply — plan your thresholds accordingly.
+- AbuseIPDB API daily quotas apply. Plan your thresholds accordingly.
 - The script is best-effort. It does not retry failed reports or maintain a queue.
-- There is no bidirectional sync — the sidecar cannot query or clear Ferron's internal ban state.
-- Bans are lost on Ferron restart, but the sidecar already reported them by that point.
+
+- There is no bidirectional sync. The sidecar cannot query or clear the internal ban state of Ferron.
+- Bans disappear when Ferron restarts, but the sidecar already reported them by that point.
 
 ## See also
 

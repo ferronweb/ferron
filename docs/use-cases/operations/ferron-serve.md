@@ -41,7 +41,7 @@ ferron-serve --listen-ip 0.0.0.0 --port 8080
 
 You can protect the served files with HTTP Basic Authentication by passing one or more credentials with `-c, --credential`.
 
-Each credential must be formatted as:
+Format each credential like this:
 
 ```text
 username:hashed_password
@@ -58,7 +58,7 @@ ferron-serve \
   --credential "bob:$BOB_HASH"
 ```
 
-If needed, brute-force protection can be disabled with `--disable-brute-protection`.
+If needed, disable brute-force protection with `--disable-brute-protection`.
 
 ## Forward proxy mode
 
@@ -68,7 +68,7 @@ If needed, brute-force protection can be disabled with `--disable-brute-protecti
 ferron-serve --forward-proxy --listen-ip 127.0.0.1 --port 3128
 ```
 
-When `--forward-proxy` is enabled, treat it as a network proxy setup rather than static file hosting.
+When you use `--forward-proxy`, treat it as a network proxy setup, not static file hosting.
 
 ## Additional options
 
@@ -96,7 +96,7 @@ Enable or disable on-the-fly response body compression:
 ferron-serve --compress
 ```
 
-Compression is enabled by default.
+Compression is on by default.
 
 ## How it works
 
@@ -107,4 +107,4 @@ When you run `ferron-serve`, the utility:
 3. Starts Ferron with the generated configuration.
 4. Exits when the Ferron process terminates.
 
-This means the `ferron-serve` command is essentially a convenient wrapper around Ferron's configuration system, allowing you to quickly serve files without writing a configuration file.
+This makes the `ferron-serve` command a convenient wrapper around the Ferron configuration system. It lets you serve files quickly without writing a configuration file.

@@ -31,4 +31,4 @@ If you are new to Ferron, follow this path:
 - [Automatic TLS](/docs/v3/use-cases/security/automatic-tls)
 
 > [!tip]
-> If a guide references a directive you have not seen yet, open the related configuration reference page from the links above.
+> If a guide references a directive you have not seen yet, open the related reference page from the links above.

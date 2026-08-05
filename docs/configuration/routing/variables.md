@@ -3,7 +3,7 @@ title: "Configuration: Variable setting"
 description: "The `set_var` and `log_field` directives for setting variables based on request conditions and custom access log fields."
 ---
 
-This page documents the `set_var` and `log_field` directives, which set interpolation variables based on request conditions and map variables to custom access log fields.
+This page documents the `set_var` and `log_field` directives. They set interpolation variables based on request conditions and map them to custom access log fields.
 
 ## Directives
 
@@ -13,14 +13,14 @@ This page documents the `set_var` and `log_field` directives, which set interpol
   - Sets a variable when the source value matches the regular expression. By default, Ferron sets the variable to `"1"` on match. Default: none
 
 > [!note]
-> The `set_var` directive is similar to Apache's `SetEnvIf` — it evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable. Ferron evaluates them in declaration order with last-match-wins semantics.
+> The `set_var` directive is similar to the `SetEnvIf` directive in Apache. It evaluates a regex against a resolved variable and conditionally sets a new variable. Multiple `set_var` directives can target the same variable. Ferron evaluates them in declaration order with last-match-wins semantics.
 
 #### Block sub-directives
 
 | Sub-directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `value` | `<string>` | The value to assign when the pattern matches. | `"1"` |
-| `case_insensitive` | `<bool>` | When `true`, Ferron performs the regex match case-insensitively. | `false` |
+| `case_insensitive` | `<bool>` | When `true`, Ferron matches the regex case-insensitively. | `false` |
 | `negate` | `<bool>` | When `true`, Ferron sets the variable when the pattern does **not** match. | `false` |
 
 **Configuration example:**
@@ -130,7 +130,7 @@ http * {
 }
 ```
 
-Ferron resolves the interpolated string at log time using the full variable resolution system, including request headers, URI components, and custom variables.
+Ferron resolves the interpolated string at log time. It uses the full variable resolution system, including request headers, URI components, and custom variables.
 
 ### Using `set_var` with other directives
 
@@ -154,7 +154,7 @@ http * {
 
 The `set_var` directive runs after client IP resolution and before URL rewriting and the `map` directive. This means variables set by `set_var` are available for `map` evaluation, `rewrite` patterns, and all downstream pipeline stages.
 
-The `log_field` directive runs during the inverse (post-response) phase, after the content-generating stages (reverse proxy, static file, CGI, etc.) have produced a response.
+The `log_field` directive runs during the inverse (post-response) phase. It runs after the content-generating stages (reverse proxy, static file, CGI, etc.) have produced a response.
 
 > [!info]
 > For variable mapping based on complex patterns, see [HTTP map](./map.md). For URL rewriting, see [URL rewriting](./rewrite.md).

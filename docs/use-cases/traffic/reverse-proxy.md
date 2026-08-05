@@ -3,7 +3,7 @@ title: Reverse proxying
 description: "Configure Ferron as a reverse proxy with WebSocket support, optional static/SPA hosting, multiple locations, load balancing, and header manipulation."
 ---
 
-Configuring Ferron as a reverse proxy is straightforward — you just need to specify the backend server URL using the `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:
+To use Ferron as a reverse proxy, set the backend server URL with the `proxy` directive. You can use the configuration below:
 
 ```ferron
 example.com {
@@ -11,10 +11,10 @@ example.com {
 }
 ```
 
-This configuration supports the WebSocket protocol out of the box — no additional configuration is required.
+This configuration supports the WebSocket protocol out of the box. You need no extra configuration.
 
 > [!tip]
-> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `circuit_breaker` and `connection_timeout` upstream settings.
+> If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify that the `upstream` URL is reachable. Also check the `circuit_breaker` and `connection_timeout` upstream settings.
 
 ## Reverse proxy with static file serving support
 
@@ -36,7 +36,7 @@ example.com {
 ```
 
 > [!tip]
-> If only some paths fail, review `location` matching order — more specific locations win over less specific ones.
+> If only some paths fail, review `location` matching order. More specific locations win over less specific ones.
 
 ## Reverse proxy with a single-page application
 
@@ -63,7 +63,7 @@ example.com {
 
 ## Load balancing
 
-Ferron supports load balancing by specifying multiple upstream backends inside a `proxy` block. To configure Ferron as a load balancer, you can use the configuration below:
+Ferron supports load balancing by specifying multiple upstream backends inside a `proxy` block. To set up Ferron as a load balancer, use the configuration below:
 
 ```ferron
 example.com {
@@ -88,11 +88,11 @@ example.com {
 
 ## A/B testing with backends
 
-Ferron supports A/B testing (traffic splitting) between multiple backends using weighted load balancing and session affinity. This is especially useful when migrating between different tech stacks, where application-level routing logic would be difficult or impossible to implement.
+Ferron supports A/B testing (traffic splitting) between multiple backends using weighted load balancing and session affinity. This helps a lot when you migrate between tech stacks. There, application-level routing logic would be difficult or impossible to implement.
 
 ### Weighted traffic splitting
 
-You can split traffic between backends using the `weight` directive with the `round_robin` or `least_conn` algorithm. This is useful for gradual rollouts or A/B tests where you want precise control over traffic distribution.
+You can split traffic between backends using the `weight` directive with the `round_robin` or `least_conn` algorithm. This helps for gradual rollouts or A/B tests where you want precise control over traffic distribution.
 
 ```ferron
 example.com {
@@ -112,7 +112,7 @@ example.com {
 }
 ```
 
-In this example, approximately 90% of requests go to the legacy backend and 10% to the new tech stack. Adjust the weights to increase the new backend's traffic share as you gain confidence.
+In this example, about 90% of requests go to the legacy backend and 10% to the new tech stack. Adjust the weights to increase the traffic share of the new backend as you gain confidence.
 
 ### Sticky session A/B testing
 
@@ -136,11 +136,11 @@ example.com {
 }
 ```
 
-With cookie affinity, the first request assigns a backend and sets a `ab_test_variant` cookie. Ferron routes later requests from the same browser to the same backend for the duration of the cookie TTL.
+With cookie affinity, the first request assigns a backend and sets a `ab_test_variant` cookie. Ferron routes later requests from the same browser to the same backend until the cookie TTL expires.
 
 ### Header-based variant selection
 
-For controlled testing or developer previews, you can route based on a request header. This is useful for internal testing or when you want to force a specific variant.
+For controlled testing or developer previews, you can route based on a request header. This helps for internal testing, or when you want to force a specific variant.
 
 ```ferron
 example.com {
@@ -162,7 +162,7 @@ With this configuration, Ferron routes requests containing `X-AB-Variant: b` to 
 
 ### Migrating tech stacks at the proxy layer
 
-When rewriting a legacy application in a new technology, proxy-level A/B testing lets you gradually shift traffic without modifying either codebase. The proxy intercepts incoming requests and routes them to the appropriate backend.
+When you rewrite a legacy application in a new technology, proxy-level A/B testing shifts traffic gradually. It needs no changes to either codebase. The proxy intercepts incoming requests and routes them to the appropriate backend.
 
 ```ferron
 example.com {
@@ -197,23 +197,23 @@ example.com {
 }
 ```
 
-This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity makes sure each visitor stays on the same backend during the migration window. Circuit breakers are enabled by default, so passive health checking is active without any configuration — the `circuit_breaker` block above only customizes the thresholds.
+This configuration gradually shifts 20% of traffic to the new stack while keeping 80% on the legacy backend. Cookie affinity makes sure each visitor stays on the same backend during the migration window. Circuit breakers turn on by default, so passive health checking works with no configuration. The `circuit_breaker` block above only customizes the thresholds.
 
 ### Observing A/B test results
 
-Ferron's proxy metrics make it easy to compare backend performance in Prometheus and Grafana:
+Ferron proxy metrics make it easy to compare backend performance in Prometheus and Grafana:
 
-- `ferron.proxy.backends.selected` — track which backends receive traffic and at what rate.
-- `ferron.proxy.backends.unhealthy` — monitor when backends are marked unhealthy by health checks.
-- `ferron.proxy.requests` — compare request counts, status codes, and latency across backends.
+- `ferron.proxy.backends.selected` tracks which backends receive traffic and at what rate.
+- `ferron.proxy.backends.unhealthy` monitors when health checks mark a backend as unhealthy.
+- `ferron.proxy.requests` compares request counts, status codes, and latency across backends.
 
-You can create Grafana panels to visualize the ratio of requests between backends. You can also compare p99 latency per backend and alert on increased error rates in the new backend.
+You can create Grafana panels to show the request ratio between backends. You can also compare p99 latency per backend and alert on higher error rates in the new backend.
 
 ## Passive health checking
 
-Ferron provides passive health checking — tracking request-time failures per backend without background probes — through its circuit breaker. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses, then temporarily ejects unstable backends from the load balancer.
+Ferron does passive health checking through its circuit breaker. It tracks request-time failures per backend without background probes. The circuit breaker records transport failures (TCP connect errors, TLS errors) and optionally upstream `5xx` responses. It then ejects unstable backends from the load balancer temporarily.
 
-Circuit breakers are enabled by default, so passive health checking is active without any configuration:
+Circuit breakers turn on by default. Passive health checking works with no configuration:
 
 ```ferron
 example.com {
@@ -276,7 +276,7 @@ example.com {
 
 ## Circuit breaking
 
-Circuit breakers are enabled by default and protect against upstream failures by temporarily ejecting unstable backends from the load balancer. This section covers customizing the default behavior.
+Circuit breakers turn on by default. They protect against upstream failures by temporarily ejecting unstable backends from the load balancer. This section explains how to customize this default behavior.
 
 To customize the default circuit breaker settings:
 
@@ -301,7 +301,7 @@ example.com {
 ```
 
 > [!important]
-> Circuit breaking counts transport failures by default. Upstream `5xx` responses count only when `record_5xx true` is set. Circuit breaking does not automatically retry upstream `5xx` responses.
+> Circuit breaking counts transport failures by default. Upstream `5xx` responses count only when you set `record_5xx true`. Circuit breaking does not automatically retry upstream `5xx` responses.
 
 > [!info]
 > For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy#circuit-breaking).
@@ -374,8 +374,8 @@ In this example, the `example.com` and `bar.example.com` domains point to a serv
 
 Below are the assumptions for this example:
 
-- `https://example.com` is "main site", while `https://example.com/agenda` is hosting a calendar service.
-- `https://foo.example.com` is passed to `https://saas.foo.net`
+- `https://example.com` is the main site, while `https://example.com/agenda` hosts a calendar service.
+- The proxy routes `https://foo.example.com` to `https://saas.foo.net`.
 - `https://bar.example.com` is the front for an internal backend.
 
 You can configure Ferron like this:
@@ -410,7 +410,7 @@ For `http://calender.example.net:5000/agenda/example`, you probably need to conf
 
 ## Trace context propagation
 
-The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests when a trace context exists. This enables end-to-end distributed tracing — your backend services can read these headers to create child spans that connect to the trace started by Ferron.
+The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests. It does this when a trace context exists. This enables end-to-end distributed tracing. Your backend services can then read the headers and create child spans that join the trace Ferron started.
 
 > [!info]
 > For details on trace context configuration, sampling, and header behavior, see [Tracing configuration](/docs/v3/configuration/observability/tracing) and [Reverse proxy configuration](/docs/v3/configuration/proxy/reverse-proxy#trace-context-injection).
@@ -419,9 +419,11 @@ The reverse proxy automatically injects W3C Trace Context headers (`traceparent`
 
 ### SSRF risk with interpolated upstream URLs
 
-The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. **Never use user-controlled request headers** (for example `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs. An attacker can craft requests to redirect the proxy to internal services.
+The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values.
 
-**Unsafe — user-controlled header in upstream URL:**
+**Never use user-controlled request headers** (for example `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs. An attacker can craft requests that redirect the proxy to internal services.
+
+**Unsafe: user-controlled header in upstream URL**
 
 ```ferron
 example.com {
@@ -430,7 +432,7 @@ example.com {
 }
 ```
 
-**Safe — static upstream URL:**
+**Safe: static upstream URL**
 
 ```ferron
 example.com {
@@ -438,7 +440,7 @@ example.com {
 }
 ```
 
-**Safe — upstream URL derived from trusted, server-controlled variables:**
+**Safe: upstream URL derived from trusted, server-controlled variables**
 
 ```ferron
 example.com {

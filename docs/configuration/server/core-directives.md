@@ -24,9 +24,10 @@ This page documents directives that belong in top-level global blocks:
 ### Default ports
 
 - `default_http_port <port: integer | false>`
-  - This directive specifies the default HTTP port when no port is specified in a host block. Must be a positive integer ≤ 65535, or `false` to disable the default HTTP listener entirely. Default: `default_http_port 80`
+  - This directive sets the default HTTP port when a host block does not specify a port. The value must be a positive integer ≤ 65535, or `false` to disable the default HTTP listener. Default: `default_http_port 80`
+
 - `default_https_port <port: integer | false>`
-  - This directive specifies the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. Must be a positive integer ≤ 65535, or `false` to disable the default HTTPS listener entirely. Default: `default_https_port 443`
+  - This directive sets the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. The value must be a positive integer ≤ 65535, or `false` to disable the default HTTPS listener. Default: `default_https_port 443`
 
 **Configuration example:**
 
@@ -39,11 +40,10 @@ This page documents directives that belong in top-level global blocks:
 
 > [!note]
 >
-> - When no explicit port is specified for a host, Ferron starts both an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
+> - When a host does not specify an explicit port, Ferron starts an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
 > - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
-> - Setting `default_http_port false` disables the automatic HTTP listener for hosts without explicit ports.
-> - Setting `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects for hosts without explicit ports.
-> - If **both** directives are set to `false`, host blocks without explicit ports do not create any listeners, and Ferron logs a warning.
+> - Setting `default_http_port false` disables the automatic HTTP listener, and `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects.
+> - If you set **both** directives to `false`, host blocks without explicit ports create no listeners, and Ferron logs a warning.
 
 **Disable default HTTP listener (HTTPS only):**
 
@@ -65,7 +65,7 @@ This page documents directives that belong in top-level global blocks:
 ### Runtime
 
 - `io_uring <bool>`
-  - This directive specifies whether `io_uring` is enabled for the primary runtime when available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
+  - This directive turns on `io_uring` for the primary runtime when it is available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
 
 **Configuration example:**
 
@@ -80,15 +80,19 @@ This page documents directives that belong in top-level global blocks:
 ### Network and listeners
 
 - `listen <address: string>`
-  - This directive specifies the listener bind address for HTTP TCP listeners. Accepts either an IP address or a full socket address. If a socket address is used, its port must match the HTTP port being started. Default: `[::]:<http-port>`
+  - This directive sets the bind address for HTTP TCP listeners. It accepts either an IP address or a full socket address. If you use a socket address, its port must match the HTTP port that Ferron starts. Default: `[::]:<http-port>`
+
 - `send_buf <size: integer>`
-  - This directive specifies the TCP send buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
+  - This directive sets the TCP send buffer size. It must resolve to a non-negative integer at runtime. Default: OS default
+
 - `recv_buf <size: integer>`
-  - This directive specifies the TCP receive buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
+  - This directive sets the TCP receive buffer size. It must resolve to a non-negative integer at runtime. Default: OS default
+
 - `backlog <size: integer>`
-  - This directive specifies the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
+  - This directive sets the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
+
 - `multipath <bool>`
-  - This directive specifies whether Multipath TCP (MPTCP) is enabled for the listener. MPTCP allows a single TCP connection to use multiple network interfaces simultaneously, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel does not support MPTCP or it is disabled, Ferron logs a warning and the listener falls back to standard TCP. Default: disabled
+  - This directive turns on Multipath TCP (MPTCP) for the listener. MPTCP allows a single TCP connection to use multiple network interfaces at the same time, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel lacks MPTCP support or MPTCP is off, Ferron logs a warning and falls back to standard TCP. Default: disabled
 
 **Configuration example:**
 
@@ -106,15 +110,15 @@ This page documents directives that belong in top-level global blocks:
 ### PROXY protocol
 
 - `protocol_proxy [bool]`
-  - This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses for the duration of the connection. Default: `protocol_proxy false`
+  - This directive turns on PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses while the connection is open. Default: `protocol_proxy false`
 
 > [!note]
-> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, the connection is rejected with an error logged.
+> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, Ferron rejects the connection and logs an error.
 
 ### Reverse proxy connection limits
 
 - `concurrent_conns <limit: integer>`
-  - This directive specifies the global maximum number of concurrent TCP connections maintained in the reverse proxy keep-alive connection pool. The limit is shared across all hosts that use the `proxy` directive. Unix socket connections are always unbounded. Default: `concurrent_conns 16384`
+  - This directive sets the global maximum number of concurrent TCP connections maintained in the reverse proxy keep-alive connection pool. All hosts that use the `proxy` directive share the limit. Unix socket connections have no limit. Default: `concurrent_conns 16384`
 
 **Configuration example:**
 
@@ -126,24 +130,31 @@ This page documents directives that belong in top-level global blocks:
 
 ### Admin API
 
-The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, the admin API is **disabled** entirely.
+The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, Ferron disables the admin API entirely.
 
 - `listen <address: string>` (`admin-api`)
-  - This directive specifies the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
+  - This directive sets the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
+
 - `auth_token <token: string>` (`admin-api`)
   - This directive sets a bearer token for authenticating admin API requests. When set, clients must send `Authorization: Bearer <token>` header. The `/health` endpoint is always exempt from authentication (required by load balancers and orchestrators). Default: none (authentication disabled)
+
 - `health [bool]` (`admin-api`)
-  - This directive specifies whether the `GET /health` endpoint is enabled. Returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
+  - This directive enables the `GET /health` endpoint. It returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
+
 - `status [bool]` (`admin-api`)
-  - This directive specifies whether the `GET /status` endpoint is enabled. Returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
+  - This directive enables the `GET /status` endpoint. It returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
+
 - `config [bool]` (`admin-api`)
-  - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
+  - This directive enables the `GET /config` endpoint. It returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
+
 - `reload [bool]` (`admin-api`)
-  - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
+  - This directive enables the `POST /reload` endpoint. It triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
+
 - `reload_get [bool]` (`admin-api`)
-  - This directive specifies whether the `GET /reload` endpoint is enabled. Returns the current reload status. Default: `reload_get true`
+  - This directive enables the `GET /reload` endpoint. It returns the current reload status. Default: `reload_get true`
+
 - `runtime [bool]` (`admin-api`)
-  - This directive specifies whether the `GET /runtime` endpoint is enabled. Returns runtime information such as thread count and io_uring status. Default: `runtime true`
+  - This directive enables the `GET /runtime` endpoint. It returns runtime information such as thread count and io_uring status. Default: `runtime true`
 
 **Configuration example:**
 
@@ -171,7 +182,7 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 The `observability` block configures per-host event sinks for logging and metrics. Multiple `observability` directives for the same host accumulate event sinks.
 
 - `provider <name: string>` (`observability-consolelog`, `observability-logfile`)
-  - This directive specifies the observability provider name. Required when observability is enabled through the block form. Supported providers: `console` (`observability-consolelog`), `file` (`observability-logfile`). Default: none
+  - This directive sets the observability provider name. Required when observability is enabled through the block form. Supported providers: `console` (`observability-consolelog`), `file` (`observability-logfile`). Default: none
 
 **Configuration example:**
 
@@ -185,7 +196,7 @@ example.com {
 
 #### `provider console`
 
-The bundled `console` provider (`observability-consolelog`) takes no additional subdirectives and writes supported observability events to Ferron's logs.
+The bundled `console` provider (`observability-consolelog`) takes no additional subdirectives and writes supported observability events to Ferron logs.
 
 #### `provider file`
 
@@ -218,16 +229,15 @@ example.com {
 ```
 
 > [!note]
->
-> - Log files are created if they do not exist and opened in append mode.
-> - Writes are buffered and flushed periodically (every 1 second) and on shutdown.
-> - If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
-> - When rotation is enabled, the current log file is renamed to `<filename>.1`. Existing rotated files are shifted up, and a new empty log file is created.
-> - If `access_log_rotate_keep` (or `error_log_rotate_keep`) is set to `0`, the log file is deleted on rotation instead of being renamed.
+> - Ferron creates log files in append mode if they do not exist.
+> - Ferron buffers writes and flushes them every 1 second and on shutdown.
+> - If you omit `access_log`, Ferron ignores access events, and the same applies to `error_log`.
+> - With rotation on, Ferron renames the current log file to `<filename>.1`, shifts rotated files up, and creates a new log file.
+> - If you set `access_log_rotate_keep` (or `error_log_rotate_keep`) to `0`, Ferron deletes the log file on rotation instead of renaming it.
 
 ## Observability aliases
 
-Ferron provides shorthand directives for common observability configurations. These are automatically transformed into equivalent `observability` blocks.
+Ferron has shorthand directives for common observability configurations. Ferron transforms these automatically into equivalent `observability` blocks.
 
 ### `log`
 
@@ -333,11 +343,11 @@ example.com {
 
 ## Admin API
 
-The admin API provides a built-in HTTP interface for server health checks, status monitoring, configuration inspection, and reload control. It is designed for local access and debugging purposes.
+The admin API is a built-in HTTP interface for server health checks, status monitoring, configuration inspection, and reload control. It is meant for local access and debugging purposes.
 
 ### Security considerations
 
-The admin API is a **privileged control plane** that provides full server configuration access and reload capability. It is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
+The admin API is a **privileged control plane** with full server configuration access and reload capability. It has no encryption and no authentication by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
 
 #### Current limitations
 
@@ -353,9 +363,9 @@ Setting `listen "0.0.0.0:<port>"` makes the admin API **completely open to any c
 
 Consequences of an open admin API:
 
-- **Denial of service**: Anyone can send `POST /reload` continuously, causing configuration reload loops that degrade performance.
-- **Configuration leak**: Anyone can send `GET /config` to retrieve the full server configuration. While sensitive values (TLS keys, passwords, tokens) are redacted, the structure reveals hostnames, upstream addresses, routing rules, and other operational details.
-- **Service disruption**: Any endpoint can be disabled via reload with modified configuration, or misconfigured directives can be injected.
+- **Denial of service**: Anyone can send `POST /reload` continuously, causing reload loops that degrade performance.
+- **Configuration leak**: `GET /config` reveals the full server configuration, including hostnames, upstream addresses, and routing rules, with sensitive values redacted.
+- **Service disruption**: Anyone can use reload with modified configuration to disable any endpoint or inject misconfigured directives.
 
 #### Hardening recommendations
 
@@ -387,7 +397,7 @@ Consequences of an open admin API:
    }
    ```
 
-3. **Use a reverse proxy for remote access**. If you need to access the admin API from a remote machine, front it with an authenticating reverse proxy rather than binding to `0.0.0.0`:
+3. **Use a reverse proxy for remote access**. If you need to access the admin API from a remote machine, front it with an authenticating reverse proxy. Do not bind to `0.0.0.0`:
 
    ```text
    Remote user → reverse proxy (auth required) → 127.0.0.1:8081 (admin API)
@@ -406,11 +416,11 @@ Consequences of an open admin API:
 
 ### API reference
 
-The admin API provides a RESTful interface for server configuration and control. Below are the available endpoints:
+The admin API is a RESTful interface for server configuration and control. Below are the available endpoints:
 
 #### `GET /health`
 
-Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been started. Suitable for load balancer and orchestration health checks.
+It returns `200 OK` while the server runs, or `503 Service Unavailable` when shutdown starts. Suitable for load balancer and orchestration health checks.
 
 #### `GET /status`
 
@@ -432,13 +442,13 @@ Returns JSON with server metrics:
 | `uptime_sec` | Seconds since the server started. |
 | `connections_active` | Currently open TCP connections across all HTTP listeners. |
 | `requests_total` | Total HTTP requests served across all listeners. |
-| `reloads` | Number of configuration reloads performed. |
+| `reloads` | Number of configuration reloads. |
 | `observability_events_dropped` | Total number of observability events dropped due to backpressure. |
 | `observability_event_queue_len` | Approximate current length of the observability event queue. |
 
 #### `GET /config`
 
-Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
+It returns the full effective server configuration as sanitized JSON. Ferron replaces sensitive directives (TLS keys, passwords, tokens) with `"[redacted]"`. Useful for debugging and auditing.
 
 #### `GET /reload`
 
@@ -460,7 +470,7 @@ Returns the current reload status as JSON:
 
 #### `POST /reload`
 
-Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process.
+It triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process.
 
 Returns the reload status as JSON:
 
@@ -491,31 +501,31 @@ Returns the runtime status as JSON:
 | Field | Description |
 | --- | --- |
 | `primary_threads` | Number of primary threads (typically equal to CPU count). |
-| `io_uring_supported` | Whether `io_uring` is supported on the current system. |
+| `io_uring_supported` | Whether the current system supports `io_uring`. |
 | `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime. |
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 ### Log rotation
 
-- **`log` without rotation** — File-based access logging should include `access_log_rotate_size` (or an external log rotation policy) to prevent unbounded disk growth.
-- **`error_log` without rotation** — File-based error logging should include `error_log_rotate_size` (or an external log rotation policy).
+- **`log` without rotation**: File-based access logging should include `access_log_rotate_size` (or an external log rotation policy) to prevent unbounded disk growth.
+- **`error_log` without rotation**: File-based error logging should include `error_log_rotate_size` (or an external log rotation policy).
 
 ### Default ports
 
-- **Both default ports disabled** — Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Make sure all host blocks specify explicit ports, or keep at least one default listener enabled.
+- **Both default ports disabled**: Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Make sure all host blocks specify explicit ports, or keep at least one default listener enabled.
 
 ### PROXY protocol
 
-- **`protocol_proxy` enabled** — PROXY protocol trusts client-provided addresses. Enable it only on listeners reachable exclusively by trusted load balancers.
+- **`protocol_proxy` enabled**: PROXY protocol trusts addresses from clients. Enable it only on listeners reachable exclusively by trusted load balancers.
 
 ### Admin API
 
-- **`admin.listen` on non-loopback address** — The admin API is unencrypted and unauthenticated by default (use `auth_token` to enable bearer token auth). Bind to a loopback address or restrict access via network controls.
-- **`admin` without `auth_token`** — The admin API has no authentication by default. Use `auth_token` to require a bearer token on all endpoints except `/health` when the listener is reachable from untrusted networks.
+- **`admin.listen` on non-loopback address**: The admin API has no encryption and no authentication by default. Use `auth_token` to enable bearer token auth. Bind to a loopback address or restrict access via network controls.
+- **`admin` without `auth_token`**: The admin API has no authentication by default. Use `auth_token` to require a bearer token on all endpoints except `/health` when the listener is reachable from untrusted networks.
 
 ### Location blocks
 
-- **No duplicate `location` block pathnames** — Duplicate pathnames in location blocks cause the server to return an ambiguous response, so avoid them.
+- **No duplicate `location` block pathnames**: Duplicate pathnames in location blocks cause the server to return an ambiguous response, so avoid them.

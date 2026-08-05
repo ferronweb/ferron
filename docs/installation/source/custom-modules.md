@@ -7,8 +7,8 @@ The default `ferron` binary includes a broad set of modules. You can build your 
 
 ## Prerequisites
 
-- **Rust toolchain** — Install from [rustup.rs](https://rustup.rs/).
-- **Access to Ferron source** — You will need the Ferron repository or reference `ferron-entrypoint` via git/path.
+- **Rust toolchain**: Install from [rustup.rs](https://rustup.rs/).
+- **Access to Ferron source**: You will need the Ferron repository or reference `ferron-entrypoint` via git/path.
 
 ## Creating a custom binary project
 
@@ -64,7 +64,7 @@ fn main() {
 > If you want a minimal binary, disable `profile-default` for `ferron-entrypoint` and add only the specific modules you need to your `Cargo.toml`.
 
 > [!note]
-> Make sure your custom modules are compatible with the version of `ferron-core` and `ferron-entrypoint` you are using. Ferron modules are statically linked — any change to your module list requires a recompilation of the binary.
+> Make sure your custom modules work with the version of `ferron-core` and `ferron-entrypoint` you use. Ferron statically links modules. Any change to your module list requires you to recompile the binary.
 
 ## Building and running
 
@@ -82,7 +82,7 @@ Run your custom server with a configuration file:
 
 ## How it works
 
-Ferron uses a **module profile** system. The `ferron-entrypoint` crate provides the CLI logic and runtime management. It does not know about specific modules until they are registered in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
+Ferron uses a **module profile** system. The `ferron-entrypoint` crate contains the CLI logic and runtime management. It does not know the specific modules until you register them in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
 
 - `ferron_entrypoint::init()`: Sets up `malloc-best-effort` and crash reporting.
 - `ferron_entrypoint::default_profile()`: Returns a list of all loaders for modules bundled with Ferron.

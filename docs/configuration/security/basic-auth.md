@@ -3,7 +3,7 @@ title: "Configuration: HTTP basic authentication"
 description: "HTTP Basic Authentication with hashed passwords, brute-force protection, and forward proxy support."
 ---
 
-This page documents the `basic_auth` directive for configuring HTTP Basic Authentication for request-level access control. Only **hashed passwords** are supported — plaintext passwords are rejected at configuration validation time for security reasons.
+This page documents the `basic_auth` directive for HTTP Basic Authentication that requests use for access control. Ferron supports only **hashed passwords**. For security reasons, plaintext passwords cause a configuration validation error.
 
 ## Global directives
 
@@ -22,7 +22,7 @@ This is a **global-only** directive that limits the number of concurrent passwor
 | `<positive integer>` | Maximum concurrent password verification tasks. | `128` |
 | `false` | Disable the limit (unlimited concurrency). | disabled |
 
-**Configuration example — reduce concurrency:**
+**Configuration example: reduce concurrency**
 
 ```ferron
 {
@@ -30,7 +30,7 @@ This is a **global-only** directive that limits the number of concurrent passwor
 }
 ```
 
-**Configuration example — disable the limit:**
+**Configuration example: disable the limit**
 
 ```ferron
 {
@@ -38,7 +38,7 @@ This is a **global-only** directive that limits the number of concurrent passwor
 }
 ```
 
-**Configuration example — set minimum of 1:**
+**Configuration example: set minimum of 1**
 
 ```ferron
 {
@@ -48,10 +48,10 @@ This is a **global-only** directive that limits the number of concurrent passwor
 
 > [!note]
 >
-> - Values less than `1` are treated as `1`.
+> - Ferron treats values less than `1` as `1`.
 > - Setting this too low may cause authentication requests to queue under load, increasing latency.
-> - Setting this to `false` removes the limit entirely — use only if you understand the resource implications.
-> - When the limit is reached, additional authentication requests will wait until a slot becomes available rather than being rejected.
+> - Set this to `false` only if you understand the resource implications, since that removes the limit.
+> - When Ferron reaches the limit, further authentication requests wait for a free slot instead of failing.
 
 ## `basic_auth`
 
@@ -74,7 +74,7 @@ example.com {
 }
 ```
 
-Multiple `basic_auth` blocks can be defined — users from all blocks are merged.
+You can define multiple `basic_auth` blocks. Ferron merges the users from all blocks.
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
@@ -93,7 +93,7 @@ users {
 }
 ```
 
-**Only hashed passwords are accepted.** The following hash formats are supported:
+**Ferron accepts only hashed passwords.** Ferron supports the following hash formats:
 
 | Prefix | Algorithm |
 | --- | --- |
@@ -106,8 +106,8 @@ users {
 
 > [!note]
 >
-> - It is recommended to use the `ferron-passwd` utility (that comes with Ferron) to generate the password hashes.
-> - The `realm` value is shown in the browser's authentication dialog.
+> - Use the `ferron-passwd` utility, which ships with Ferron, to create password hashes.
+> - Ferron shows the `realm` value in the browser authentication dialog.
 > - Configuration validation fails if any password value is not a recognized hash format.
 
 ### `brute_force_protection` block
@@ -121,14 +121,14 @@ Brute-force protection is **enabled by default** to protect against credential-g
 | `lockout_duration` | `<duration>` | `15m` | How long to lock the account after exceeding max attempts. |
 | `window` | `<duration>` | `5m` | Sliding window for counting attempts. |
 
-Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Plain numbers without a suffix are treated as seconds.
+Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Ferron treats plain numbers without a suffix as seconds.
 
 ### Authentication flow
 
 1. The stage extracts the `Authorization: Basic <credentials>` header from the request.
-2. If the header is missing or malformed, the stage returns a 401 response with a `WWW-Authenticate` challenge.
+2. If the Authorization header is absent or malformed, the stage returns a 401 response with a `WWW-Authenticate` challenge.
 3. The stage decodes the credentials from base64 (`username:password`).
-4. The stage checks brute-force lockout — if the IP is locked, it rejects the request immediately with a 429 response.
+4. The stage checks the brute-force lockout. A locked IP gets an immediate 429 response.
 5. The stage looks up the username in the configured `users` block.
 6. If the user exists, the stage verifies the password against the stored hash.
 7. On success, the stage sets `ctx.auth_user` to the authenticated username.
@@ -136,14 +136,14 @@ Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Plain numbers withou
 
 ### Forward proxy (CONNECT) support
 
-When a CONNECT request is received and authentication fails, the stage returns a **407 Proxy Authentication Required** response instead of 401.
+When authentication fails for a CONNECT request, the stage returns a **407 Proxy Authentication Required** response instead of 401.
 
 ### Brute-force protection behavior
 
-When brute-force protection is enabled:
+When brute-force protection is active:
 
 - The stage records each failed authentication attempt per-IP with a timestamp.
-- If `max_attempts` failures occur within the `window` duration, the IP is locked.
+- If `max_attempts` failures occur within the `window` duration, Ferron locks the IP.
 - During lockout, the stage rejects **all** authentication attempts for that IP immediately.
 - After `lockout_duration`, the lockout expires and the stage resets the attempt history.
 
@@ -220,20 +220,20 @@ example.com {
 
 ## Security considerations
 
-- **Always use TLS.** Basic Auth credentials are sent in the `Authorization` header, which is base64-encoded (not encrypted). Without TLS, credentials can be intercepted in transit.
-- **Use Argon2id.** This is the recommended algorithm for password hashing — it is resistant to GPU-based attacks and side-channel attacks.
+- **Always use TLS.** Basic Auth credentials travel in the `Authorization` header. Ferron base64-encodes them but does not encrypt them. Without TLS, an attacker can intercept the credentials in transit.
+- **Use Argon2id.** This is the recommended algorithm for password hashing. It resists GPU-based attacks and side-channel attacks.
 - **Use strong passwords.** The security of the hash depends on the entropy of the original password.
-- **Plaintext passwords are rejected.** This module does not support plaintext passwords at all.
-- **Brute-force protection is enabled by default.** This provides a reasonable baseline of protection without requiring additional configuration.
+- **Ferron rejects plaintext passwords.** It does not accept plaintext passwords at all.
+- **Brute-force protection runs by default.** This gives a reasonable baseline of protection without requiring additional configuration.
 - **Tune `basic_auth_concurrency` to your workload.** Setting it too low may cause authentication queuing under high load. Setting it too high may allow a flood of expensive hash operations to exhaust resources.
 
 ## Best practices
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`basic_auth_concurrency false`** — Disabling the global password-verification concurrency limit removes backpressure on expensive hash checks. Keep a bounded limit.
-- **Non-Argon2id password hashes** — Prefer Argon2id for new Basic Auth credentials. Other hash algorithms are weaker against offline attacks.
-- **`brute_force_protection { enabled false }`** — Disabling credential-guessing protection removes a layer of security. Only disable when equivalent protection exists at another layer.
+- **`basic_auth_concurrency false`**: Disabling the global password-verification concurrency limit removes backpressure on expensive hash checks. Keep a bounded limit.
+- **Non-Argon2id password hashes**: Prefer Argon2id for new Basic Auth credentials. Other hash algorithms are weaker against offline attacks.
+- **`brute_force_protection { enabled false }`**: Disabling credential-guessing protection removes a layer of security. Only disable when equivalent protection exists at another layer.
 
 ## Observability
 

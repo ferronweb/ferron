@@ -18,7 +18,7 @@ This page documents the `json_errors` directive for generating structured JSON e
 | --- | --- | --- | --- |
 | `format` | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`). `"simple"` uses plain JSON (`application/json`). | `"problem"` |
 | `type_uri` | `<string>` | URI for the `type` field in RFC 9457 format. Ferron replaces the `{status}` placeholder with the HTTP status code. | `"about:blank"` |
-| `trace_id` | `<bool>` | Include the request's trace ID in the response when available. | `true` |
+| `trace_id` | `<bool>` | Include the trace ID of the request in the response when available. | `true` |
 
 **Configuration example:**
 
@@ -95,9 +95,9 @@ example.com {
 
 You can place the `json_errors` directive at different configuration levels:
 
-- **Host level** — applies to all requests for that host
-- **`location` block** — applies only to requests matching that path prefix
-- **`if` / `if_not` blocks** — applies conditionally based on a matcher
+- **Host level**: applies to all requests for that host
+- **`location` block**: applies only to requests matching that path prefix
+- **`if` / `if_not` blocks**: applies conditionally based on a matcher
 
 ```ferron
 example.com {
@@ -117,10 +117,10 @@ example.com {
 
 ## Interaction with error pages
 
-When `json_errors` is enabled, the JSON error stage runs **before** the `error_page` stage (which serves custom HTML error pages). This means:
+When you enable `json_errors`, the JSON error stage runs **before** the `error_page` stage, which serves custom HTML error pages. This means:
 
 - JSON errors take precedence over `error_page` file-based error pages
-- The built-in HTML error page fallback is never reached when JSON errors are enabled
+- With JSON errors enabled, Ferron never reaches the built-in HTML error page fallback
 - To use both HTML and JSON error pages for different paths, use `location` blocks
 
 ## Observability

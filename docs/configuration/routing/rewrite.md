@@ -40,10 +40,10 @@ example.com {
 }
 ```
 
-Ferron internally rewrites all `/old-path/anything` requests to `/new-path/anything`. The client sees no redirect — the rewrite is transparent.
+Ferron internally rewrites all `/old-path/anything` requests to `/new-path/anything`. The client sees no redirect. The rewrite is transparent.
 
 > [!tip]
-> If you get unexpected routing behavior, verify that Ferron applies rewrite rules in the order you expect — rules with `last` stop further processing.
+> If you get unexpected routing behavior, check the order of the rewrite rules. Rules with `last` stop further processing.
 
 #### Stop processing with `last`
 
@@ -107,7 +107,7 @@ The regular expression engine used is [`fancy-regex`](https://crates.io/crates/f
 
 ## URL sanitation interaction
 
-When URL sanitization is enabled (the default), Ferron normalizes dangerous path sequences like `/../` before applying rewrite rules. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./url-processing.md)).
+When URL sanitization is on (the default), Ferron normalizes dangerous path sequences like `/../` before it applies rewrite rules. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./url-processing.md)).
 
 ## Pipeline position
 
@@ -124,13 +124,13 @@ Ferron applies rewrite rules after client IP resolution and before reverse proxy
 
 ### Logs
 
-When `rewrite_log` is enabled, Ferron logs each rewrite operation to the error log at `INFO` level.
+When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at `INFO` level.
 
 ### Structured logs
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| URL rewritten         | INFO  | `ferron.rewrite.from` (string) — original request path + query string, `ferron.rewrite.to` (string) — rewritten path + query string |
+| URL rewritten         | INFO  | `ferron.rewrite.from` (string) shows the original path + query string. `ferron.rewrite.to` (string) shows the rewritten path + query string |
 
 ### Access log fields
 
@@ -138,7 +138,7 @@ The rewrite module contributes the following field to the HTTP access log line:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `ferron.rewrite.applied` | bool | Whether a URL rewrite was applied. |
+| `ferron.rewrite.applied` | bool | Whether Ferron applied a URL rewrite to the request. |
 
 ### Trace spans
 
@@ -146,5 +146,5 @@ The rewrite stage sets the following attributes on its `ferron.stage.rewrite` sp
 
 | Attribute | Type | Description |
 | --- | --- | --- |
-| `ferron.rewrite.applied` | bool | Whether a rewrite rule was applied to the request. |
+| `ferron.rewrite.applied` | bool | Whether Ferron applied a rewrite rule to the request. |
 | `ferron.rewrite.pattern_count` | int | Number of rewrite rules that matched. |

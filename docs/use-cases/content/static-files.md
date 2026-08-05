@@ -3,7 +3,7 @@ title: Static file serving
 description: "Serve static sites with Ferron using root, compression, directory listings, SPA rewrites, caching, and precompressed assets."
 ---
 
-Configuring Ferron as a static file server is straightforward — you just need to specify the directory containing your static files using the `root` directive. To configure Ferron as a static file server, you can use the configuration below:
+Configure Ferron as a static file server with the `root` directive. The directive sets the directory that contains your static files. Use this configuration:
 
 ```ferron
 example.com {
@@ -13,7 +13,7 @@ example.com {
 
 ## HTTP compression for static files
 
-HTTP compression for static files is enabled by default. To disable it, you can use this configuration:
+Ferron enables HTTP compression for static files by default. To disable it, use this configuration:
 
 ```ferron
 example.com {
@@ -24,7 +24,7 @@ example.com {
 
 ## Directory listings
 
-Directory listings are disabled by default. To enable them, you can use this configuration:
+Ferron disables directory listings by default. To enable them, use this configuration:
 
 ```ferron
 example.com {
@@ -38,7 +38,7 @@ example.com {
 
 ## Single-page applications
 
-Ferron also supports single-page applications (SPAs) by adding a URL rewrite rule in addition to the static file serving configuration. You can use this configuration:
+Ferron also supports single-page applications (SPAs). Add a URL rewrite rule to the static file serving configuration. Use this configuration:
 
 ```ferron
 example.com {
@@ -83,4 +83,4 @@ example.com {
 In this configuration, Ferron serves precompressed versions of static files if they exist. The precompressed files use the `.gz` extension for gzip, `.br` for Brotli, `.deflate` for Deflate, and `.zst` for Zstandard.
 
 > [!tip]
-> If precompressed assets are not served, check that matching files exist (for example `app.js.br` or `app.js.gz`) and regenerate them after changing source assets.
+> If Ferron does not serve precompressed assets, check that the matching files exist (for example `app.js.br` or `app.js.gz`). Regenerate the files after you change the source assets.

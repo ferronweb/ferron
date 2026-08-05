@@ -35,15 +35,15 @@ You can define multiple `rate_limit` blocks to apply different rules simultaneou
 | `rate` | `<int>` | Sustained requests per second (required). | — |
 | `burst` | `<int>` | Extra tokens above `rate` (bucket capacity = `rate + burst`). | `0` |
 | `key` | `<string>` | What to key buckets on. See key types below. | `remote_address` |
-| `deny_status` | `<int>` | HTTP status code when rate is exceeded. | `429` |
-| `bucket_ttl` | `<int>` | Seconds before an unused bucket is evicted. | `600` |
+| `deny_status` | `<int>` | HTTP status code when a client exceeds the rate limit. | `429` |
+| `bucket_ttl` | `<int>` | Seconds before Ferron removes an unused bucket. | `600` |
 | `max_buckets` | `<int>` | Maximum buckets per rule (prevents memory exhaustion). | `100000` |
 | `zone` | `<string>` | Named zone for sharing rate limit buckets across hosts. | — |
-| `throttle` | `<bool>` | If `true`, requests are delayed instead of rejected when the bucket is empty. | `false` |
+| `throttle` | `<bool>` | If `true`, Ferron delays requests instead of rejecting them when the bucket is empty. | `false` |
 
 ### Key types
 
-The `key` directive determines what each bucket is keyed on:
+The `key` directive determines which value each bucket uses:
 
 | Value | Description |
 | --- | --- |
@@ -54,7 +54,7 @@ The `key` directive determines what each bucket is keyed on:
 ## Behavior
 
 > [!important]
-> Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (for example, Redis). The rate limiting module does not support this.
+> Ferron applies rate limiting per server instance. For distributed rate limiting, use an external service (for example, Redis). The rate limiting module does not support this.
 
 ### Token bucket algorithm
 
@@ -64,15 +64,15 @@ Each key gets its own token bucket:
 - **Refill rate** = `rate` tokens per second (refilled lazily on each request)
 - **Consumption** = 1 token per request
 
-When the bucket is empty, the server rejects the request with the configured `deny_status` and a `Retry-After` header indicating how many seconds to wait.
+When the bucket is empty, the server rejects the request with the configured `deny_status`. The response includes a `Retry-After` header that shows how many seconds to wait.
 
 ### Bucket eviction
 
-To prevent unbounded memory growth from one-shot clients, the module evicts buckets after `bucket_ttl` seconds of inactivity. The `max_buckets` setting provides a hard upper limit. When reached, the module rejects new requests until it evicts stale buckets.
+To prevent unbounded memory growth from one-shot clients, the module evicts buckets after `bucket_ttl` seconds of inactivity. The `max_buckets` setting enforces a hard upper limit. When the registry reaches this limit, the module rejects new requests until it removes stale buckets.
 
 ### Per-location limits
 
-`rate_limit` blocks inside `location` blocks apply only to requests matching that path. Ferron evaluates both host-level and location-level rules. A request must pass all rules before it is served.
+`rate_limit` blocks inside `location` blocks apply only to requests matching that path. Ferron evaluates both host-level and location-level rules. A request must pass all rules before Ferron serves it.
 
 ### Rate limit zones
 
@@ -81,7 +81,7 @@ By default, each host gets its own isolated set of rate limit buckets. Rate limi
 **Zone resolution order:**
 
 1. If the host-level `rate_limit` block contains `zone "name"`, the host joins the named zone.
-2. If the host has its own `rate_limit` block (without `zone`) and a global zone exists, the host gets its own per-host zone (opting out of the global zone).
+2. If the host has its own `rate_limit` block (without `zone`) and a global zone exists, the host gets a per-host zone. This opts out of the global zone.
 3. If a global `rate_limit` block exists without `zone` blocks, all hosts without explicit zones share the global zone.
 4. Otherwise, each host gets its own per-host zone.
 
@@ -113,7 +113,7 @@ api.example.com {
 }
 ```
 
-Both `example.com` and `api.example.com` share the same global zone. Their rate limit buckets are keyed by IP, so a client hitting both hosts shares the same token pool.
+Both `example.com` and `api.example.com` share the same global zone. Buckets use the client IP as the key, so a client hitting both hosts shares the same token pool.
 
 **Named zones:**
 
@@ -143,7 +143,7 @@ api-v2.example.com {
 }
 ```
 
-Both `api.example.com` and `api-v2.example.com` share the named zone `"api"`. Their rate limit buckets are shared.
+Both `api.example.com` and `api-v2.example.com` share the named zone `"api"` and the same rate limit buckets.
 
 **Opting out of the global zone:**
 
@@ -172,7 +172,7 @@ internal.example.com {
 
 ### Configuration reload
 
-Rate limit buckets are stored in memory and are **not** preserved across configuration reloads. A reload creates fresh buckets with the new configuration.
+Ferron stores rate limit buckets in memory. They do not survive a configuration reload. A reload creates fresh buckets with the new configuration.
 
 ## Examples
 
@@ -205,7 +205,7 @@ api.example.com {
 Each unique API key gets 150 requests burst, then 50/second.
 
 > [!note]
-> Requests where the key cannot be extracted (for example, a missing header) skip that rule.
+> When a request has no valid key, for example because a header is absent, the request skips that rule.
 
 ### Strict endpoint with custom status
 
@@ -235,18 +235,18 @@ The rate limiting module emits the following metrics:
 | `ferron.ratelimit.rejected` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests rejected due to exhausted buckets or registry at capacity |
 | `ferron.ratelimit.throttled` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests delayed due to throttling |
 
-The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It is set to `"global"` for the shared global zone, the zone name for named zones, or the hostname for per-host zones.
+The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It has the value `"global"` for the shared global zone. It uses the zone name for named zones and the hostname for per-host zones.
 
 ### Logs
 
-- **`DEBUG`**: logged when a rate limit bucket is exhausted for a key.
+- **`DEBUG`**: logged when a rate limit bucket has no tokens left for a key.
 - **`WARN`**: logged when the registry reaches `max_buckets` capacity and applies backpressure.
 
 ### Structured logs
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.zone` (string) — zone identifier, `ferron.ratelimit.key` (string) — the rate limit key value, `ferron.ratelimit.key_type` (string) — key type (`"ip"`, `"uri"`, or `"header"`) |
+| Rate limit bucket exhausted | DEBUG | `ferron.ratelimit.zone` (string). Zone identifier. `ferron.ratelimit.key` (string). The rate limit key value. `ferron.ratelimit.key_type` (string). Key type (`"ip"`, `"uri"`, or `"header"`). |
 
 ### Access log fields
 

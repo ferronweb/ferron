@@ -3,7 +3,7 @@ title: "Configuration: FastCGI support"
 description: "Server-side FastCGI protocol support for backend application servers with connection pooling and keepalive."
 ---
 
-This page documents the `fcgi` directive for configuring Ferron's FastCGI support. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets. It also supports connection pooling and keepalive for improved performance.
+This page documents the `fcgi` directive, which configures FastCGI support in Ferron. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets. It also supports connection pooling and keepalive for improved performance.
 
 ## `fcgi`
 
@@ -16,12 +16,12 @@ example.com {
 }
 ```
 
-The `fcgi` directive enables FastCGI protocol support. You can write it as a boolean flag to enable with defaults, or with a backend URL to set the target. You can also write it as a block with nested directives to customize behavior.
+The `fcgi` directive enables FastCGI protocol support. You can write it as a boolean flag to enable with defaults. You can write a backend URL to set the target. You can also write it as a block with nested directives to customize behavior.
 
 | Form | Description |
 | --- | --- |
-| `fcgi` | Enables FastCGI with all defaults. Backend URL must be set via the `backend` nested directive. |
-| `fcgi true` | Explicitly enables FastCGI. Backend URL must be set via the `backend` nested directive. |
+| `fcgi` | Enables FastCGI with all defaults. Set the backend URL with the `backend` nested directive. |
+| `fcgi true` | Explicitly enables FastCGI. Set the backend URL with the `backend` nested directive. |
 | `fcgi false` | Disables FastCGI for the current scope. |
 | `fcgi <url: string>` | Enables FastCGI and sets the backend URL directly. |
 | `fcgi <url: string> { ... }` | Enables FastCGI, sets the backend URL, and configures nested directives. |
@@ -80,9 +80,9 @@ example.com {
 
 > [!note]
 >
-> - Extensions are matched case-insensitively.
-> - Files with these extensions are processed by the FastCGI backend regardless of their location in the document root.
-> - When `fcgi_php` is used instead, `.php` is registered automatically.
+> - Ferron matches extensions case-insensitively.
+> - The FastCGI backend processes files with these extensions, regardless of their location in the document root.
+> - When you use `fcgi_php` instead, Ferron registers `.php` automatically.
 
 ### `environment`
 

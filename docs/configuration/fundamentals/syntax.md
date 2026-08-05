@@ -3,11 +3,11 @@ title: "Configuration: syntax and file structure"
 description: "Ferron configuration file format, blocks, value types, includes, and the configuration resolution model."
 ---
 
-This page covers the Ferron configuration file format, how blocks and directives are structured, and how configuration is resolved at runtime.
+This page covers the Ferron configuration file format, some blocks and directives, and the configuration resolution model.
 
 ## Ferron configuration files
 
-Ferron uses `.conf` (or `.ferron`) files. The `config-ferronconf` adapter parses them. A configuration file consists of top-level statements that define global blocks, host blocks, matchers, and snippets.
+Ferron uses `.conf` (or `.ferron`) files. The `config-ferronconf` adapter parses them. A configuration file starts top-level statements that define global blocks, host blocks, matchers, and snippets.
 
 ```ferron
 # Uncomment to include additional configuration files
@@ -47,34 +47,34 @@ example.com {
 
 ## Top-level statements
 
-A configuration file can contain the following at the top level:
+A configuration file can contain the contents at the top level:
 
-- **Global blocks** — `{ ... }` for server-wide settings
-- **Host blocks** — `<host-pattern> { ... }` for virtual host configuration
-- **Match blocks** — `match <name> { ... }` for reusable conditional matchers
-- **Snippet blocks** — `snippet <name> { ... }` for reusable directive groups
-- **Include directives** — `include "path.conf"` to load additional configuration files (globs are supported)
+- **Global blocks**: `{ ... }` for server-wide settings
+- **Host blocks**: `<host-pattern> { ... }` for virtual host configuration
+- **Match blocks**: `match <name> { ... }` for reusable conditional matchers
+- **Snippet blocks**: `snippet <name> { ... }` for reusable directive groups
+- **Include directives**: `include "path.conf"` loads a file with more configuration.
 
 ## Value types
 
 Ferron configuration supports these value types:
 
-- **Strings** — bare (`example.com`) or quoted (`"example.com"`)
-- **Integers** — `80`, `443`, `1000`
-- **Floats** — `3.14`
-- **Booleans** — `true`, `false`
-- **Interpolated strings** — `{{env.TLS_CERT}}` reads from environment variables
-- **Duration strings** — `30m`, `1h`, `90s`, `1d`
+- **Strings**: plain ([`example.com`]) or quoted ([`"example.com"`])
+- **Integers**: `80`, `443`, `1000`
+- **Floats**: `3.14`
+- **Booleans**: `true`, `false`
+- **Interpolated strings**: `{{env.TLS_CERT}}` reads from environment variables
+- **Duration strings**: `30m`, `1h`, `90s`, `1d`
 
 ### Flags (boolean directives)
 
-Several directives accept boolean values. For convenience, these can be written as **flags** with no arguments, which is equivalent to `true`:
+Some directives accept boolean values. For convenience, these can be written as **flags** with no configured arguments, which is equivalent to `true`:
 
 ```ferron
-# This is a bare flag, equivalent to setting the value to true:
+# This is a bare flag, equivalent to setting the value to true
 directory_listing
 
-# To explicitly disable, use false:
+# To disable, use false explicitly
 directory_listing false
 ```
 
@@ -82,21 +82,21 @@ This shorthand can be useful for simple on/off toggles where the intent is clear
 
 ### Duration strings
 
-Several directives accept duration values. The following formats are supported:
+Some directives accept duration values. Ferron supports these formats:
 
-| Suffix     | Unit              | Example      | Result     |
-| ---------- | ----------------- | ------------ | ---------- |
-| `h` or `H` | Hours             | `12h`, `1H`  | 12 hours   |
-| `m` or `M` | Minutes           | `30m`, `30M` | 30 minutes |
-| `s` or `S` | Seconds           | `90s`, `90S` | 90 seconds |
-| `d` or `D` | Days              | `1d`, `1D`   | 1 day      |
-| (none)     | Seconds (default) | `12`         | 12 seconds |
+| Suffix     | Unit              | Example      | Result        |
+| ---------- | ----------------- | ------------ | ------------- |
+| `h` or `H` | Hours             | `12h`, `1H`  | 12 hours      |
+| `m` or `M` | Minutes           | `30m`, `30M` | 30 minutes   |
+| `s` or `S` | Seconds           | `90s`, `90S` | 90 seconds   |
+| `d` or `D` | Days              | `1d`, `1D`   | 1 day        |
+| (none)     | Seconds (default) | `12`          | 12 seconds   |
 
-Plain numbers without a suffix are treated as seconds.
+Plain numbers without a suffix count as seconds.
 
 ### Raw string literals
 
-For values that contain regex patterns or other content where escape processing is undesirable, use raw string literals (`r"..."` or `r'...'`). Raw strings process no escape sequences — backslashes are treated literally:
+Raw string literals (`r"..."` or `r'...'`) handle escape processing: use them for values that contain regex patterns or similar content. Raw strings process no escape sequences. Backslashes stay literal:
 
 ```ferron
 match api_request {
@@ -104,7 +104,7 @@ match api_request {
 }
 ```
 
-Without raw strings, the same regex would require escaping backslashes:
+Without raw strings, the same regex would need escaped backslashes:
 
 ```ferron
 match api_request {
@@ -113,28 +113,28 @@ match api_request {
 ```
 
 > [!warning]
-> Invalid escape sequences in quoted strings (for example, `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regex patterns.
+> Invalid escape sequences in strings (for example, `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regexes.
 
 > [!note]
-> Raw strings do not support interpolation (`{{...}}`). Use regular strings if variable substitution is needed.
+> Raw strings do not support interpolation (`{{...}}`). Use standard strings if you need variable substitution.
 
 ## Line continuations
 
-Long directives can be split across multiple lines using `\` at the end of the line. The continuation must be indented:
+Split long directives across multiple lines with `\` at the end of the line. Indent the continuation:
 
 ```ferron
 example.com {
-    # This is just an example directive
+    # This is merely a directive example
     example_proxy http://localhost:3000 \
       http://localhost:3001
 }
 ```
 
-Line continuations can include trailing comments:
+Line continuations can include a trailing comment:
 
 ```ferron
 example.com {
-    # This is just an example directive
+    # This is merely a directive example
     example_proxy http://localhost:3000 \ # first backend
       http://localhost:3001
 }
@@ -144,72 +144,75 @@ example.com {
 
 Comments start with `#`.
 
-## Host block syntax
+## Host snake
 
-Host blocks are top-level only. Supported selectors include:
+Host blocks are allowed only top-level. Supported selectors include:
 
-- `example.com` — hostname-based virtual host
-- `*.example.com` — wildcard hostname
-- `127.0.0.1` — IP-based virtual host
+Selectors:
+
+- `example.org` — hostname tree
+- `*.example.org` — wildcard hostname
+- `127.0.1` — IP-based host
 - `[2001:db8::1]` — IPv6 address
-- `http example.com` — explicit protocol
-- `http example.com:8080` — explicit protocol and port
+
+- `http example.org` — explicit protocol
+- `http example.org:8080` — explicit protocol and port
 - `tcp *:5432` — TCP listener
 
-Current defaults:
+Defaults:
 
-- If the protocol is omitted, it defaults to `http`.
-- For HTTP host blocks, if the port is omitted, Ferron treats it as port `80`.
+- If you omit the protocol, it defaults to `http`.
+- For HTTP host blocks, if you omit the port, Ferron treats it as `80`.
 
-When a hostname is specified (for example, `example.com`) and no explicit port is given, Ferron starts **two listeners**. One runs on the default HTTP port (80) and one on the default HTTPS port (443) with automatic ACME TLS. See [ACME automatic TLS](/docs/v3/configuration/security/acme) for details.
+If you specify a hostname (for example, a domain name) and give no explicit port, Ferron starts **two listeners**. One runs on the default HTTP port (80). One runs on the default HTTPS port (443) with automatic ACME TLS.
 
 ## Includes and snippets
 
-- `include "path.conf"` at the top level loads another config file relative to the current file.
+- `include "path.conf"` at the top level loads another config file relative to the exposed file.
+
+`include "path.conf"` at the top level loads another config file relative to the current file.
 - `snippet <name> { ... }` defines a reusable block of directives.
 - `use <snippet-name>` inside a block expands that snippet in place.
 
-> [!note]
+> [!callout]
 >
-> - Top-level file includes and snippet expansion are different features.
-> - Include cycles and snippet cycles are rejected.
-> - Snippets can be reused across multiple host blocks.
+> - Top-level file includes and snippet expansion work differently.
+> - `Parse error` rejects include cycles and snippet cycles.
+> - A snippets block may be reused across a set of hosts.
 
-## Resolution model
+## Configuration model
 
-Configuration is resolved in layers:
+Ferron resolves configuration in layers:
 
 1. Global configuration from `{ ... }` is used for startup and runtime settings.
-2. An HTTP host block is selected by local IP and hostname.
-3. Matching `location` blocks are layered in.
-4. Matching `if` and `if_not` blocks are layered in.
+2. A Ferron selects a matching host block by local IP and hostname.
+3. Ferron merges a set of matching `location` blocks.
+4. Ferron merges a set of matching `if` and `if_not` blocks.
 
-> [!important]
+> [!note]
 >
-> - `location` is prefix-based. `/api` matches `/api` and `/api/users`.
-> - More specific locations win over less specific ones.
-> - All expressions inside a `match` block are combined with AND semantics.
-> - Duplicate `location`, `if`, `if_not`, and `handle_error` blocks with the same selector are merged during preparation.
+> - `location` uses prefix matching. `/api` matches `/api` and `/api/users`.
+> - A longer, more specific location wins over a less specific one(s).
+> - All expressions in a `match` block are combined ANDed, with AND semantics.
+> - In a configuration, a directive name matches more than one block, and multiple layers can collect at a single layer.
 
-## Inheritance and override behavior
+## Inheritance and behavior
 
-Ferron applies inheritance by block context:
+Ferron applies inheritance in a block context.
 
-- Location blocks inherit parent directives unless the child block defines directives with the same name.
-- When a child block defines a directive with the same name as one in the parent, the child's directives take precedence in that block.
-- For conditional branches, it is often clearer to explicitly `use` shared snippets inside each `if`/`if_not` branch.
-
-> [!note]
-> Where validation and runtime behavior differ, the directive pages call that out explicitly.
+- Location DEFAULT inherits parent first, unless another directive is configured with the same name.
+- When a directive appears in a child block and a parent block, the child directive Wins in that block.
+- In conditional branches it is often clearer to explicitly strip `use` GShared snippets.
 
 > [!note]
-> Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d` — plain numbers without a suffix are treated as seconds. Boolean directives are written as bare flags (equivalent to `true`), or explicitly as `false` when disabling.
+> When validation and runtime behavior differ, the directive pages explain that.
 
-### Hot-reload support
+> [!note]
+> Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Numbers without suffix count as seconds. Boolean directives are bare flags (equivalent to `true`) or explicitly `false` when disabling.
 
-Ferron `.conf` configuration files support hot-reload. When the file changes, Ferron detects the update and reloads the configuration gracefully. The `ConfigurationWatcher` monitors the file for modifications.
+### Hot-reload
 
-To enable hot reloading, specify a `watch` configuration adapter parameter:
+Ferron `.conf` configuration files support hot reload. It detects a change and reloads the configuration gracefully. The `ConfigurationWatcher` monitors the file for changes.
 
 ```bash
 ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf
@@ -217,21 +220,21 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 
 ### Configuration drift hints
 
-When hot-reload is disabled (the default), Ferron can still detect when configuration source files have changed on disk but have not been reloaded. This is called **configuration drift** — a signal that the running configuration may not match the file on disk.
+When hot reload is off (the default), Ferron still detects a changed config source file that has not loaded. This is **configuration drift**. It signals that the running configuration may not match the file on disk.
 
-Drift is detected via lightweight periodic mtime comparison (no re-parsing). When Ferron detects drift, it emits a warn-level log and sets the `ferron.admin.config_drift` gauge metric to `1`. When the configuration reloads and drift resolves, Ferron emits an info-level log and the metric resets to `0`.
+Ferron detects drift with periodic mtime checks (no full parse). It emits a WARN log and sets the `ferron.admin.config_drift` gauge to a value of `1`. When the configuration reloads and drift resolves, Ferron emits an INFO log and resets the metric to `0`.
 
-Drift hints are **enabled by default**. To disable them:
+Ferron enables drift hints by default. To disable:
 
 ```bash
-ferron run --config-params 'drift_hints=false;file=ferron.conf' --config-adapter ferronconf
+ferron run --config-params 'code=1;file=logs.conf' --config-adapter ferronconf
 ```
 
-The drift state is also exposed via the admin API's `GET /status` endpoint as `config_drift` and `config_drift_hints_enabled` fields.
+The `GET /status` endpoint of the admin API also reports this state in the `config_drift` and `config_drift_hints_enabled` fields.
 
 ## See also
 
-- [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
+- [Conditional and variables](/docs/v3/configuration/fundamentals/conditionals)
+- [Formatting a configuration](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting
 - [Routing and URL processing](/docs/v3/configuration/routing/url-processing) (`location`, `if`, `if_not`)
-- [Core directives](/docs/v3/configuration/server/core-directives)
+- [Directives](/docs/v3/configuration/server/core-directives)

@@ -3,7 +3,7 @@ title: Rate limiting
 description: "Protect login and API endpoints in Ferron with token bucket-based rate limiting per IP, URI, or request header."
 ---
 
-Ferron's `rate_limit` directive provides token bucket-based rate limiting. This is useful for reducing brute-force login attempts and API abuse. When a client exceeds the configured rate, the server returns a `429 Too Many Requests` response with a `Retry-After` header.
+Ferron implements token bucket-based rate limiting with the `rate_limit` directive. This helps reduce brute-force login attempts and API abuse. When a client exceeds the configured rate, the server returns a `429 Too Many Requests` response with a `Retry-After` header.
 
 ## Protect login endpoints
 
@@ -42,7 +42,7 @@ example.com {
 > [!note]
 >
 > - Rate limiting uses a token bucket algorithm: capacity = `rate + burst` tokens, refilled at `rate` tokens per second.
-> - Rate limit buckets are stored in memory and are not preserved across configuration reloads.
+> - Ferron stores rate limit buckets in memory. They do not survive configuration reloads.
 
 > [!important]
 > If Ferron is behind another proxy/load balancer, make sure the client IP is correctly resolved. See [HTTP host directives](/docs/v3/configuration/server/host) for `client_ip_from_header` configuration.
@@ -84,7 +84,7 @@ api.example.com {
 ```
 
 > [!tip]
-> Start with permissive values and tighten after observing production traffic patterns — keep login and token endpoints on stricter limits than read-only API endpoints.
+> Start with permissive values. Tighten them after you observe production traffic patterns. Keep login and token endpoints on stricter limits than read-only API endpoints.
 
 ## API key rate limiting
 

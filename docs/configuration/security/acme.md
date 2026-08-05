@@ -3,7 +3,7 @@ title: "Configuration: ACME automatic TLS"
 description: "Automatic TLS certificate issuance via ACME, including HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
 ---
 
-This page documents the ACME TLS provider (`tls-acme` module), which automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. It supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance, with three challenge types:
+This page documents the ACME TLS provider (the `tls-acme` module). It automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. The provider supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance. It offers three challenge types:
 
 - **HTTP-01** — serves a token at `/.well-known/acme-challenge/` (default)
 - **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake
@@ -11,7 +11,7 @@ This page documents the ACME TLS provider (`tls-acme` module), which automatical
 
 Ferron **caches** certificates (both in-memory and file-based) and **renews** them automatically before expiration.
 
-Automatic TLS via ACME is enabled by default in Ferron for public hosts:
+Ferron enables automatic TLS via ACME by default for public hosts:
 
 ```ferron
 example.com {
@@ -41,7 +41,7 @@ example.com {
 
 #### TLS-ALPN-01
 
-Responds with a self-signed certificate when the CA connects with the `acme-tls/1` ALPN protocol. No additional port is needed.
+The server responds with a self-signed certificate when the CA connects with the `acme-tls/1` ALPN protocol. It needs no additional port.
 
 ```ferron
 example.com {
@@ -73,13 +73,13 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 }
 ```
 
-**Requirements:** A DNS provider module must be configured. Wildcard domains are supported. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/v3/configuration/security/dns-providers) for the full list of supported providers and their directives.
+**Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/v3/configuration/security/dns-providers) for the full list of supported providers and their directives.
 
 ### Configuration parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `provider` | `acme` | — | Must be set to `"acme"` |
+| `provider` | `acme` | — | Must be `"acme"` |
 | `challenge` | `http-01`, `tls-alpn-01`, `dns-01` | `http-01` | ACME challenge type |
 | `contact` | `<string>` | — | Email for ACME account |
 | `directory` | `<string>` | LE Production | ACME directory URL |
@@ -120,11 +120,11 @@ example.com {
 
 ## Eager mode (recommended for known domains)
 
-Eager mode gets certificates at **server startup**, before any client traffic is received. This is ideal for static configurations where all domain names are known in advance.
+Eager mode gets certificates at **server startup**, before any client traffic arrives. This is ideal for static configurations where you know all domain names in advance.
 
 ## On-demand mode
 
-On-demand mode defers certificate issuance until the **first TLS handshake** for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when domains are not known at startup.
+On-demand mode defers certificate issuance until the **first TLS handshake** for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
 
 ```ferron
 *.example.com {
@@ -139,7 +139,7 @@ On-demand mode defers certificate issuance until the **first TLS handshake** for
 
 ### On-demand approval endpoint
 
-To prevent abuse, you can configure an approval endpoint. Before issuing a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>` as a query parameter. If the response is `200`, the certificate is issued.
+To prevent abuse, you can configure an approval endpoint. Before issuing a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>` as a query parameter. If the response is `200`, Ferron issues the certificate.
 
 ```ferron
 *.example.com {
@@ -157,7 +157,7 @@ To prevent abuse, you can configure an approval endpoint. Before issuing a certi
 
 ### In-memory cache (default)
 
-When no `cache` path is specified, Ferron stores certificates and account data in memory.
+Without a `cache` path, Ferron stores certificates and account data in memory.
 
 ### File-based cache
 
@@ -193,7 +193,7 @@ Ferron automatically renews certificates before expiration. The renewal check ru
 
 ## External Account Binding (EAB)
 
-Some CAs (especially enterprise/internal ACME servers) require External Account Binding. Provide the key ID and HMAC secret:
+Some CAs (especially enterprise/internal ACME servers) require External Account Binding. Set the key ID and HMAC secret:
 
 ```ferron
 tls {
@@ -233,7 +233,7 @@ example.com {
 }
 ```
 
-Each `fallback` block accepts the same provider-level directives as the primary configuration: `directory`, `contact`, `eab`, and `profile`. The primary provider's settings are inherited — you only need to specify the fields that differ.
+Each `fallback` block accepts the same provider-level directives as the primary configuration: `directory`, `contact`, `eab`, and `profile`. The `fallback` block inherits the settings of the primary provider. You only need to specify the fields that differ.
 
 ### How fallback works
 

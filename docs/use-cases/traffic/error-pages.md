@@ -20,7 +20,7 @@ You can map multiple status codes to the same error page in a single directive.
 
 ### Including trace information
 
-Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, Ferron replaces the placeholders with the request's trace context before serving the page.
+Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, Ferron replaces the placeholders with the trace context of the request. This happens before Ferron serves the page.
 
 ```ferron
 example.com {

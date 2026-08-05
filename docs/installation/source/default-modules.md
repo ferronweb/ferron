@@ -9,8 +9,8 @@ This page describes how to build Ferron 3 from source, with default modules.
 
 Before building Ferron, make sure you have the following installed:
 
-- **Rust toolchain** — Ferron is written in Rust and requires `cargo` to build. You can install Rust from [rustup.rs](https://rustup.rs/).
-- **Git** — needed to clone the repository.
+- **Rust toolchain**: Ferron uses the Rust language and requires `cargo` to build. You can install Rust from [rustup.rs](https://rustup.rs/).
+- **Git**: use it to clone the repository.
 
 ## Building from source
 
@@ -48,7 +48,7 @@ cargo run -r -p ferron -- run -c ferron.conf --verbose
 
 ### Other CLI commands
 
-Ferron provides several commands for working with configuration files:
+Ferron has several commands for working with configuration files:
 
 ```sh
 cargo run -r -p ferron -- validate -c ferron.conf   # validate configuration without starting

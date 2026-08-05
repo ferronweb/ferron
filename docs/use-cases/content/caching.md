@@ -1,9 +1,9 @@
 ---
 title: HTTP caching
-description: "Use Ferron's HTTP response cache to improve performance for frequently accessed content with minimal backend load."
+description: "Use the Ferron HTTP response cache to improve performance for frequently accessed content with minimal backend load."
 ---
 
-Ferron's HTTP response cache stores complete `GET` response representations in memory and serves them directly to clients, reducing backend load and improving response times. This is especially useful for frequently accessed content like HTML pages, API responses, and static assets.
+The Ferron HTTP response cache stores complete `GET` response representations in memory and serves them directly to clients. This reduces backend load and improves response times. It is especially useful for frequently accessed content like HTML pages, API responses, and static assets.
 
 ## Basic HTTP caching
 
@@ -21,10 +21,10 @@ This configuration caches responses up to 1MB in size. The default `max_response
 
 > [!important]
 >
-> - Only `GET` and `HEAD` requests are cached. `HEAD` requests reuse cached `GET` representations.
-> - Responses with `Vary: *` are never stored.
-> - Public responses containing `Set-Cookie` are not stored.
-> - The cache is in-memory and clears on server restart — for persistent caching, consider using an external cache like Redis.
+> - The cache stores only `GET` and `HEAD` requests, and `HEAD` requests reuse cached `GET` representations.
+> - The cache never stores responses with `Vary: *`.
+> - The cache does not store public responses containing `Set-Cookie`.
+> - The in-memory cache clears on server restart, so use an external cache like Redis for persistent caching.
 
 ## Caching with Vary headers
 
@@ -41,7 +41,7 @@ example.com {
 Without `vary`, Ferron could cache responses with different headers together and serve the wrong content to clients.
 
 > [!tip]
-> If you see unexpected cache misses, check that `vary` headers are configured correctly for your use case. If cache size is growing unbounded, check for frequently accessed large responses and consider reducing `max_response_size`.
+> If you see unexpected cache misses, check that the `vary` headers match your use case. If the cache size keeps growing, check for frequently accessed large responses and consider reducing `max_response_size`.
 
 ## Excluding sensitive responses from cache
 
@@ -93,7 +93,7 @@ example.com {
 }
 ```
 
-This tells Ferron to prioritize `X-LiteSpeed-Cache-Control` headers over standard `Cache-Control` and `Expires` headers when deciding whether to store responses and what TTL to use.
+This tells Ferron to prioritize `X-LiteSpeed-Cache-Control` headers over standard `Cache-Control` and `Expires` headers. Ferron uses this when deciding whether to store a response and what TTL to use.
 
 ## Caching with authentication
 
@@ -157,7 +157,7 @@ Cache-Control: public, max-age=10, stale-while-revalidate=300
 
 With this configuration:
 
-- Responses are cached for 10 seconds.
+- The cache stores responses for 10 seconds.
 - After 10 seconds, the first request revalidates with the backend and gets fresh content.
 - Concurrent requests during revalidation receive the stale response immediately.
 
@@ -173,17 +173,17 @@ example.com {
 ```
 
 > [!note]
-> Ferron 3 does not support background revalidation — stale-while-revalidate always involves a synchronous upstream request for one request (the leader). Other concurrent requests see the stale content. This is a known limitation stemming from the absence of internal route invocation in Ferron 3.
+> Ferron 3 does not support background revalidation. Stale-while-revalidate always involves a synchronous upstream request for one request (the leader). Other concurrent requests see the stale content. This is a known limitation stemming from the absence of internal route invocation in Ferron 3.
 
 ## Stale-if-error
 
-Stale-if-error provides resilience against transient backend failures by falling back to stale cached content when revalidation encounters a 5xx error:
+Stale-if-error falls back to stale cached content when revalidation encounters a 5xx error. This protects the service against transient backend failures:
 
 ```http
 Cache-Control: public, max-age=60, stale-if-error=3600
 ```
 
-If the backend returns a 5xx error during revalidation, Ferron serves the stale cached response instead of forwarding the error to the client. This keeps your application running during brief backend outages.
+If the backend returns a 5xx error during revalidation, Ferron serves the stale cached response. It does not forward the error to the client. This keeps your application running during brief backend outages.
 
 ```ferron
 example.com {
@@ -219,7 +219,7 @@ Cached responses bypass the rate limiter and backend entirely, providing maximum
 
 ## Multi-instance cache purge propagation
 
-When running multiple Ferron instances behind a load balancer, a cache purge on one instance does not automatically invalidate entries on other instances. The `purge_propagation` directive solves this by sending purge events to an external control-plane service, which broadcasts them to all other registered edge instances.
+Multiple Ferron instances may run behind a load balancer. In that case, a cache purge on one instance does not invalidate entries on other instances. The `purge_propagation` directive solves this. It sends purge events to an external control-plane service. That service broadcasts them to all other registered edge instances.
 
 **Edge instance configuration:**
 
@@ -264,4 +264,4 @@ X-Purge-Secret: edge-to-plane-secret
 }
 ```
 
-The control-plane must accept this POST, authenticate via `X-Purge-Secret`, and fan out `PURGE` requests to all registered edges except the origin. Ferron does not include a built-in control-plane — operators can implement one using any HTTP framework.
+The control-plane must accept this POST, authenticate via `X-Purge-Secret`, and fan out `PURGE` requests to all registered edges except the origin. Ferron does not include a built-in control-plane. Operators can implement one with any HTTP framework.

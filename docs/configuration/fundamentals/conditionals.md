@@ -3,14 +3,14 @@ title: "Configuration: conditionals and variables"
 description: "Named matchers, conditional operators, built-in variables, and interpolated string syntax."
 ---
 
-This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the `http-server` module's request resolution pipeline.
+This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the request resolution pipeline of the `http-server` module.
 
 > [!info]
 > For URL rewriting with regex, see [URL rewriting](/docs/v3/configuration/routing/rewrite). For HTTP response control with regex matching, see [HTTP response control](/docs/v3/configuration/routing/response).
 
 ## Named matchers
 
-Named matchers are declared with `match <name> { ... }` and referenced by `if <name> { ... }` or `if_not <name> { ... }` inside host blocks.
+Declare a named matcher with `match <name> { ... }`. Inside a host block, reference it with `if <name> { ... }` or `if_not <name> { ... }`.
 
 ```ferron
 match curl_client {
@@ -53,11 +53,11 @@ The following operators are available inside `match` blocks:
 > [!note]
 >
 > - `in` splits the right-hand string on commas and trims each item.
-> - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` matches languages with support for base language codes. For example, `en` matches `en-US`.
-> - All expressions inside a single `match` block must pass (AND semantics).
+> - When the right value looks like an `Accept-Language` header, `in` matches by base language code. For example, `en` matches `en-US`.
+> - The header contains quality values or multiple language ranges.
 
 > [!note]
-> All expressions inside a single `match` block must pass (AND semantics). If a variable cannot be resolved, the placeholder is kept as `{{name}}`.
+> All expressions inside one `match` block must pass (AND semantics). If Ferron cannot resolve a variable, it keeps the placeholder as `{{name}}`.
 
 ## Built-in variables
 
@@ -97,12 +97,12 @@ Interpolated strings use `{{name}}` syntax:
 
 - `{{env.NAME}}` reads the `NAME` environment variable.
 - Other interpolation variables depend on the consumer of that directive.
-- If a variable cannot be resolved, the placeholder is kept as `{{name}}`.
+- If Ferron cannot resolve a variable, it keeps the placeholder as `{{name}}`.
 
 For startup-only TLS settings such as `cert` and `key`, the bundled `manual` TLS provider relies on plain strings or `env.*` interpolation.
 
 ## Related directives
 
-- [`if`](/docs/v3/configuration/routing/url-processing#if) — applies a block when a named matcher evaluates to true
-- [`if_not`](/docs/v3/configuration/routing/url-processing#if_not) — applies a block when a named matcher evaluates to false
-- [`location`](/docs/v3/configuration/routing/url-processing#path-matching) — path-based matching
+- [`if`](/docs/v3/configuration/routing/url-processing#if): applies a block when a named matcher evaluates to true
+- [`if_not`](/docs/v3/configuration/routing/url-processing#if_not): applies a block when a named matcher evaluates to false
+- [`location`](/docs/v3/configuration/routing/url-processing#path-matching): path-based matching

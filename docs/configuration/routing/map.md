@@ -3,7 +3,7 @@ title: "Configuration: HTTP map"
 description: "The `map` directive for creating variables whose values depend on values of other variables."
 ---
 
-This page documents the `map` directive, which creates variables whose values come from matching a source variable against a set of patterns. Mapped variables are available via `{{variable}}` interpolation in other directives.
+This page documents the `map` directive. It creates variables whose values come from matching a source variable against a set of patterns. Mapped variables are available via `{{variable}}` interpolation in other directives.
 
 ## Directives
 
@@ -13,7 +13,7 @@ This page documents the `map` directive, which creates variables whose values co
   - This directive specifies a source variable to match and a destination variable name to create. The nested block defines the mapping rules. Default: none
 
 > [!note]
-> The destination variable name can be any identifier — Ferron stores it in the request's variable map and you access it via `{{name}}` interpolation.
+> The destination variable name can be any identifier. Ferron stores it in the request variable map. You access it via `{{name}}` interpolation.
 
 #### Block sub-directives
 
@@ -21,19 +21,19 @@ This page documents the `map` directive, which creates variables whose values co
 | ------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- | ------------ |
 | `default`     | `<value: string>`                    | The fallback value when no entry matches the source.                                         | Empty string |
 | `exact`       | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`.                           | None         |
-| `regex`       | `<pattern: string> <result: string>` | Regular expression match. Capture groups can be referenced in the result as `$1`, `$2`, etc. | None         |
+| `regex`       | `<pattern: string> <result: string>` | Regular expression match. You can reference capture groups in the result as `$1`, `$2`, etc. | None         |
 
 > [!note]
-> If Ferron cannot resolve the source variable, it treats the source value as an empty string and uses the `default` value. Ferron compiles regex patterns at parse time — it rejects invalid patterns during validation. Ferron converts wildcard patterns (`*`) to regex internally.
+> If Ferron cannot resolve the source variable, it treats the source value as an empty string and uses the `default` value. Ferron compiles regex patterns at parse time. It rejects invalid patterns during validation. Ferron converts wildcard patterns (`*`) to regex internally.
 
 > [!tip]
-> Values can also contain variable interpolations (`{{name}}`) that are resolved at runtime.
+> Values can also contain variable interpolations (`{{name}}`) that Ferron resolves at runtime.
 
 #### Block options (inside `regex { ... }`)
 
 | Option             | Arguments | Description                                                                | Default |
 | ------------------ | --------- | -------------------------------------------------------------------------- | ------- |
-| `case_insensitive` | `<bool>`  | When `true`, the regular expression pattern is matched case-insensitively. | `false` |
+| `case_insensitive` | `<bool>`  | When `true`, Ferron matches the regular expression pattern case-insensitively. | `false` |
 
 **Configuration example:**
 
@@ -49,12 +49,12 @@ http * {
 
 ### Matching priority
 
-When evaluating a `map` block, entries are checked in this order:
+When Ferron evaluates a `map` block, it checks the entries in this order:
 
-1. **Exact match** — the source value equals the pattern string exactly.
-2. **Wildcard match** — the pattern contains `*` which matches any characters (equivalent to `.*` in regex). The longest-matching wildcard wins.
-3. **Regex match** — the first regular expression in declaration order that matches the source value.
-4. **Default** — the `default` value, or an empty string if not specified.
+1. **Exact match**: the source value equals the pattern string exactly.
+2. **Wildcard match**: the pattern contains `*` which matches any characters (equivalent to `.*` in regex). The longest-matching wildcard wins.
+3. **Regex match**: the first regular expression in declaration order that matches the source value.
+4. **Default**: the `default` value, or an empty string if not specified.
 
 ### Simple variable mapping
 
@@ -155,5 +155,5 @@ The map stage sets the following attributes on its `ferron.stage.map` span:
 
 | Attribute             | Type   | Description                                            |
 | --------------------- | ------ | ------------------------------------------------------ |
-| `ferron.map.variable` | string | The variable name being mapped.                        |
-| `ferron.map.edited`   | bool   | Whether the variable value was changed by the mapping. |
+| `ferron.map.variable` | string | The variable name that Ferron maps.                        |
+| `ferron.map.edited`   | bool   | Whether the mapping changed the variable value. |

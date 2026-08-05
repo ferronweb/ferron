@@ -3,7 +3,7 @@ title: "Configuration: CGI support"
 description: "Server-side CGI script execution with per-extension interpreters, environment variables, and shebang-line detection."
 ---
 
-This page documents the `cgi` directive for configuring Ferron's CGI (Common Gateway Interface) support. CGI enables dynamic content by spawning external interpreters for scripts matched by file extension or placed under a `cgi-bin` directory.
+This page documents the `cgi` directive for configuring CGI (Common Gateway Interface) support in Ferron. CGI enables dynamic content by spawning external interpreters for scripts matched by file extension or placed under a `cgi-bin` directory.
 
 ## `cgi`
 
@@ -45,9 +45,9 @@ example.com {
 
 > [!note]
 >
-> - Extensions are matched case-insensitively.
-> - Files with these extensions are treated as CGI scripts regardless of their location in the file tree.
-> - This is complementary to `cgi-bin` directory matching — files inside `cgi-bin` are always treated as CGI scripts.
+> - Ferron matches extensions case-insensitively.
+> - Ferron treats files with these extensions as CGI scripts wherever they appear in the file tree.
+> - This complements `cgi-bin` directory matching. Ferron always treats files inside `cgi-bin` as CGI scripts.
 
 ### `interpreter`
 
@@ -71,16 +71,16 @@ example.com {
 > [!note]
 >
 > - The file path is automatically appended as the final argument.
-> - When `false` is used as the second argument, the interpreter list is cleared. The file must then be directly executable (for example, via a shebang line or native executable).
+> - When you pass `false` as the second argument, Ferron clears the interpreter list. The file must then run directly, for example via a shebang line or native executable.
 > - For Unix systems, files without a matching interpreter must have the executable permission bit set.
-> - On Unix systems, Ferron parses scripts with a shebang line (for example, `#!/usr/bin/env python3`) and derives the interpreter from the shebang.
-> - On Windows, Ferron executes `.exe` files directly. `.bat`/`.cmd` files use `cmd /c`, and scripts with shebangs are parsed similarly to Unix.
+> - On Unix systems, Ferron parses scripts with a shebang line (for example, `#!/usr/bin/env python3`). It derives the interpreter from the shebang.
+> - On Windows, Ferron executes `.exe` files directly. It uses `cmd /c` for `.bat` and `.cmd` files. Ferron parses shebang scripts in the same way as on Unix.
 
 ### `environment`
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Ferron resolves values with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -98,13 +98,14 @@ example.com {
 >
 > - Environment variables take precedence over any existing variables with the same name.
 > - Ferron automatically removes the `Proxy` header from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-> - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
+> - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, and `SERVER_PORT` automatically.
+> - Ferron also sets `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN`.
 
 > [!note]
 >
 > - Ferron always removes the `Proxy` header to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response. It trims stderr output and logs it as a warning.
-> - The working directory is set to the directory containing the script file.
+> - If a CGI script exits with a non-zero status, Ferron returns a `500 Internal Server Error` response. Ferron trims the stderr output and logs a `WARN` message.
+> - Ferron sets the working directory to the directory that contains the script file.
 
 ## Default interpreters
 
@@ -125,7 +126,7 @@ The following built-in interpreters are available when no custom `interpreter` d
 
 ## Default index files
 
-When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, Ferron checks the following files in order: `index.html`, `index.htm`, `index.xhtml`.
+When you enable CGI and do not set an explicit `index` directive, Ferron adds default index file names. By default, Ferron checks `index.html`, `index.htm`, and `index.xhtml` in order.
 
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
@@ -136,19 +137,19 @@ If you register additional extensions via the `extension` directive, Ferron also
 
 For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
-This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron uses that instead.
+This injection applies only when you do not set an explicit `index` directive. With your own `index` directive, Ferron uses it instead.
 
 > [!important]
-> CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive. On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, shebang lines are supported for `.bat`, `.cmd`, and other script files — native `.exe` files are executed directly.
+> CGI scripts must be inside a `cgi-bin` directory or have an extension registered via the `extension` directive. On Unix, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, shebang lines work for `.bat`, `.cmd`, and other script files. Ferron executes native `.exe` files directly.
 
 ## CGI script locations
 
-A request is handled as a CGI script when:
+Ferron treats a request as a CGI script when:
 
 1. The resolved path is inside a `cgi-bin` directory (case-insensitive match on the first path component after the document root), **or**
 2. The file extension matches one registered via the `extension` directive.
 
-When a matching file is found, Ferron checks for an interpreter using the following priority:
+When Ferron finds a matching file, it looks for an interpreter in this priority:
 
 1. Custom `interpreter` directive matching the file extension.
 2. Built-in default interpreter for the extension.
@@ -176,13 +177,13 @@ Ferron automatically sets the following CGI environment variables:
 | `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Set to `on` when the connection is encrypted. |
+| `HTTPS` | `on` when the server encrypts the connection. |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
 
 ## Trace context injection
 
-When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the CGI request. These headers are mapped to standard CGI environment variables:
+When the request has a trace context, Ferron injects W3C Trace Context headers into the CGI request. These headers (`traceparent`, `tracestate`, and `baggage`) map to standard CGI environment variables:
 
 | Header | CGI environment variable |
 | --- | --- |
@@ -190,10 +191,10 @@ When a trace context exists for the request, Ferron automatically injects W3C Tr
 | `tracestate` | `HTTP_TRACESTATE` |
 | `baggage` | `HTTP_BAGGAGE` |
 
-This enables end-to-end distributed tracing with CGI scripts. For example, a PHP script running with the official OpenTelemetry SDK for PHP can read these headers to create child spans automatically.
+This enables end-to-end distributed tracing with CGI scripts. For example, a PHP script running with the official OpenTelemetry SDK for PHP can read these headers. It then creates child spans automatically.
 
 > [!info]
-> No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> You need no per-module configuration. Trace context injection depends globally on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Observability
 
@@ -205,7 +206,7 @@ This enables end-to-end distributed tracing with CGI scripts. For example, a PHP
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| CGI errors on stderr  | WARN  | `error.message` (string) — trimmed stderr output from the CGI process |
+| CGI errors on stderr  | WARN  | `error.message` (string): trimmed stderr output from the CGI process |
 
 ### Metrics
 
@@ -213,7 +214,7 @@ This enables end-to-end distributed tracing with CGI scripts. For example, a PHP
 |--------|------|------------|-------------|
 | `ferron.cgi.requests` | Counter | — | Number of CGI requests processed |
 | `ferron.cgi.failures` | Counter | `error.type` (`"non_zero_exit_code"`), `ferron.cgi.exit_code` | Number of CGI requests that failed with a non-zero exit code |
-| `ferron.cgi.process.duration` | Histogram | — | Duration of CGI process execution |
+| `ferron.cgi.process.duration` | Histogram | — | How long a CGI process runs |
 | `ferron.cgi.stderr_errors` | Counter | — | Number of CGI requests that produced non-empty stderr output |
 
 ### Access log fields

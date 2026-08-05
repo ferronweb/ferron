@@ -17,15 +17,15 @@ If the configuration is valid and contains no best-practice violations, the comm
 
 > [!note]
 >
-> - Best-practice violations are advisory — they do not prevent the server from starting. Treat the findings as opinionated guidance, not absolute truth.
-> - The `ferron validate` command suppresses doctor diagnostics — use `ferron doctor` to see them.
+> - Best-practice violations are advisory and do not prevent the server from starting. Treat the findings as opinionated guidance, not absolute truth.
+> - The `ferron validate` command suppresses doctor diagnostics. Use `ferron doctor` to see them.
 
 > [!tip]
-> Some checks are contextual and only fire when the doctor detects specific directive combinations. The doctor cannot detect all security-relevant patterns at configuration time — runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
+> Some checks are contextual and only fire when the doctor detects specific directive combinations. The doctor cannot detect all security-relevant patterns at configuration time. Runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
 
 ### Log output
 
-By default, diagnostics are printed as log messages:
+By default, Ferron prints diagnostics as log messages:
 
 ```text
 $ ferron doctor -c ferron.conf
@@ -65,7 +65,7 @@ ferron doctor -c ferron.conf --json
 | Invalid configuration | Reported (errors) | Reported (errors) |
 | Best practice violations | Suppressed | Reported (advisory) |
 
-The `validate` command strips `BestPracticeViolation` diagnostics from its output. The `doctor` command retains them. All other behavior is identical — the same validators run in the same order.
+The `validate` command strips `BestPracticeViolation` diagnostics from its output. The `doctor` command retains them. All other behavior is identical. The same validators run in the same order.
 
 ## Diagnostic kind
 
@@ -74,6 +74,6 @@ Best-practice violations use the `"Best practice violation"` diagnostic kind. Th
 ## See also
 
 - [Configuration validation](/docs/v3/configuration/fundamentals/validation)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
 - [Security and TLS](/docs/v3/configuration/security/tls)
