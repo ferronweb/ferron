@@ -161,16 +161,14 @@ For deployments where only health monitoring matters:
 }
 ```
 
-## Hardening checklist
+## Security hardening checklist
 
-Use this checklist to verify your admin API is properly secured:
-
-- [ ] Set the `listen` address to `127.0.0.1` (or another loopback address).
-- [ ] Disable unnecessary endpoints (`status false`, `config false`, `reload false`, `reload_get false`, `runtime false`).
-- [ ] Make sure no firewall rule allows external traffic to the admin port.
-- [ ] Use SSH tunneling or an authenticating reverse proxy for remote access.
-- [ ] Never bind the admin API to `0.0.0.0` or a public IP address.
-- [ ] Do not publish the admin port to the host network when the server runs in a container.
+- Set the `listen` address to `127.0.0.1` (or another loopback address).
+- Disable unnecessary endpoints (`status false`, `config false`, `reload false`, `reload_get false`, `runtime false`).
+- Make sure no firewall rule allows external traffic to the admin port.
+- Use SSH tunneling or an authenticating reverse proxy for remote access.
+- Never bind the admin API to `0.0.0.0` or a public IP address.
+- Do not publish the admin port to the host network when the server runs in a container.
 
 ## Troubleshooting
 

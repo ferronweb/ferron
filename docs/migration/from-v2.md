@@ -550,14 +550,14 @@ match api_request {
 
 Before switching to production:
 
-- [ ] Run `ferron validate ferron.conf`: no errors
-- [ ] Test routes behave as expected (proxy, static files, rewrites)
-- [ ] TLS works (if enabled): check certificate issuance and renewal
-- [ ] Logs show no errors or warnings on startup
-- [ ] Conditionals (`match`/`if`) evaluate correctly for your traffic patterns
-- [ ] Proxy backends receive expected paths and headers
-- [ ] DNS-01 challenge works (if using wildcard certificates)
-- [ ] Observability (logging, OTLP) sends data correctly
+- Run `ferron validate ferron.conf`: no errors
+- Test routes behave as expected (proxy, static files, rewrites)
+- TLS works (if enabled): check certificate issuance and renewal
+- Logs show no errors or warnings on startup
+- Conditionals (`match`/`if`) evaluate correctly for your traffic patterns
+- Proxy backends receive expected paths and headers
+- DNS-01 challenge works (if using wildcard certificates)
+- Observability (logging, OTLP) sends data correctly
 
 > [!important]
 > If `ferron validate` reports errors, address them before deploying to production.

@@ -6,7 +6,7 @@ description: "Use Ferron as an edge caching proxy for Apache PHP hosting with LS
 Serving PHP through Apache proves reliable. `.htaccess` files, `mod_rewrite`, `mod_php`, and decades of hosting infrastructure all rely on it. Ferron can sit in front of this setup as an edge caching proxy. It adds high-performance HTTP caching, TLS termination, rate limiting, and DDoS protection. You do not need to change your Apache configuration.
 
 ```text
-Client ──► Ferron (edge cache) ──► Apache (PHP origin) ──► PHP-FPM / mod_php
+Client -> Ferron (edge cache) -> Apache (PHP origin) -> PHP-FPM / mod_php
 ```
 
 Ferron works with LSCache-compatible PHP plugins such as LiteSpeed Cache for WordPress, Joomla, or OpenCart. Ferron respects `X-LiteSpeed-Cache-Control` headers from the PHP application. This gives you cache control directly from your app. You do not need server-level tuning.
