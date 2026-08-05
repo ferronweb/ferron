@@ -38,7 +38,7 @@
 
 #### Access control
 
-- **Interpolated strings as passwords (HTTP basic auth)** — interpolated strings can now be used as passwords for HTTP basic authentication (for example when moving from a static password to an environment variable).
+- **Interpolated strings as password hashes (HTTP basic auth)** — interpolated strings can now be used as password hashes for HTTP basic authentication (for example when moving from a static password to an environment variable).
 
 ### Fixed
 
