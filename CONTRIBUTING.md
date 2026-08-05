@@ -68,6 +68,8 @@ rumdl fmt docs
 rumdl check --fix docs
 ```
 
+For other guidelines for writing documentation, see [docs/README.md](./docs/README.md).
+
 ## Pull request guidelines
 
 - Open pull requests against `develop-3.x` by default.
