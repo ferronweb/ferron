@@ -17,7 +17,7 @@ The `control_plane` block accepts two sub-blocks:
 | Sub-block    | Arguments       | Description                                                                                                                   |
 | ------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `metadata`   | `<key> <value>` | Arbitrary key-value pairs injected as `ferron.control_plane.*` attributes on all observability signals.                       |
-| `span_links` | —               | Static OpenTelemetry span links attached to every `ferron.request` span, creating causal connections to control plane traces. |
+| `span_links` | N/A             | Static OpenTelemetry span links attached to every `ferron.request` span, creating causal connections to control plane traces. |
 
 ### Metadata injection
 

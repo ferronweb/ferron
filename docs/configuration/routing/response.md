@@ -20,12 +20,12 @@ This page documents directives for returning custom status codes, aborting conne
 
 #### Block form options
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `url` | `<string>` | Only apply this status to requests matching this exact path. | all requests |
-| `regex` | `<string>` | Only apply this status to requests matching this regular expression. | all requests |
-| `body` | `<string>` | Response body to include. | empty body |
-| `location` | `<string>` | Redirect destination for 3xx responses. | no redirect |
+| Nested directive | Arguments  | Description                                                          | Default      |
+| ---------------- | ---------- | -------------------------------------------------------------------- | ------------ |
+| `url`            | `<string>` | Only apply this status to requests matching this exact path.         | all requests |
+| `regex`          | `<string>` | Only apply this status to requests matching this regular expression. | all requests |
+| `body`           | `<string>` | Response body to include.                                            | empty body   |
+| `location`       | `<string>` | Redirect destination for 3xx responses.                              | no redirect  |
 
 **Configuration example:**
 
@@ -112,9 +112,9 @@ In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.
 
 #### Subdirectives
 
-| Subdirective | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `link` | `<string>` | A `Link` header value to include in the 103 response. Multiple `link` entries produce multiple `Link` headers. | none |
+| Subdirective | Arguments  | Description                                                                                                    | Default |
+| ------------ | ---------- | -------------------------------------------------------------------------------------------------------------- | ------- |
+| `link`       | `<string>` | A `Link` header value to include in the 103 response. Multiple `link` entries produce multiple `Link` headers. | none    |
 
 **Configuration example:**
 
@@ -167,26 +167,26 @@ You can place all directives (`status`, `abort`, `block`, `allow`, `early_hints`
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.response.aborted` | Counter | — | Connections aborted via the `abort` directive |
-| `ferron.response.ip_blocked` | Counter | — | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
-| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives |
+| Metric                                | Type    | Attributes                                    | Description                                                                               |
+| ------------------------------------- | ------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                             |
+| `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
+| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives                                      |
 
 ### Access log fields
 
 The response control module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                    | Type   | Description                                     |
+| ------------------------ | ------ | ----------------------------------------------- |
 | `ferron.response.action` | string | Response action: `abort`, `block`, or `status`. |
 
 ### Trace spans
 
 The response control stage sets the following attributes on its `ferron.stage.http_response` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.response.action` | string | Action taken: `abort`, `ip_block`, or `status_rule`. |
-| `http.response.status_code` | int | HTTP status code returned to the client. |
-| `error.type` | string | Set when the action results in an error, enabling trace UI highlighting. |
+| Attribute                   | Type   | Description                                                              |
+| --------------------------- | ------ | ------------------------------------------------------------------------ |
+| `ferron.response.action`    | string | Action taken: `abort`, `ip_block`, or `status_rule`.                     |
+| `http.response.status_code` | int    | HTTP status code returned to the client.                                 |
+| `error.type`                | string | Set when the action results in an error, enabling trace UI highlighting. |

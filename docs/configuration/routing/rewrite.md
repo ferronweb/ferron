@@ -17,12 +17,12 @@ This page documents the `rewrite` directive for transforming request URLs using 
 
 #### Block options
 
-| Option | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `last` | `<bool>` | When `true`, stop processing further rewrite rules after this one matches. | `false` |
-| `directory` | `<bool>` | When `true`, apply this rule when the URL corresponds to a directory. | `true` |
-| `file` | `<bool>` | When `true`, apply this rule when the URL corresponds to a file. | `true` |
-| `allow_double_slashes` | `<bool>` | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them. | `false` |
+| Option                 | Arguments | Description                                                                        | Default |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------- | ------- |
+| `last`                 | `<bool>`  | When `true`, stop processing further rewrite rules after this one matches.         | `false` |
+| `directory`            | `<bool>`  | When `true`, apply this rule when the URL corresponds to a directory.              | `true`  |
+| `file`                 | `<bool>`  | When `true`, apply this rule when the URL corresponds to a file.                   | `true`  |
+| `allow_double_slashes` | `<bool>`  | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them. | `false` |
 
 **Configuration example:**
 
@@ -117,10 +117,10 @@ Ferron applies rewrite rules after client IP resolution and before reverse proxy
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.rewrite.rewrites_applied` | Counter | — | URLs successfully rewritten |
-| `ferron.rewrite.invalid` | Counter | — | Rewrite rules that produced an invalid path (resulting in a 400 response) |
+| Metric                            | Type    | Attributes | Description                                                               |
+| --------------------------------- | ------- | ---------- | ------------------------------------------------------------------------- |
+| `ferron.rewrite.rewrites_applied` | Counter | None       | URLs successfully rewritten                                               |
+| `ferron.rewrite.invalid`          | Counter | None       | Rewrite rules that produced an invalid path (resulting in a 400 response) |
 
 ### Logs
 
@@ -128,23 +128,23 @@ When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
+| Description (summary) | Level | Attributes                                                                                                                                  |
+| --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | URL rewritten         | INFO  | `ferron.rewrite.from` (string) shows the original path + query string. `ferron.rewrite.to` (string) shows the rewritten path + query string |
 
 ### Access log fields
 
 The rewrite module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                    | Type | Description                                          |
+| ------------------------ | ---- | ---------------------------------------------------- |
 | `ferron.rewrite.applied` | bool | Whether Ferron applied a URL rewrite to the request. |
 
 ### Trace spans
 
 The rewrite stage sets the following attributes on its `ferron.stage.rewrite` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.rewrite.applied` | bool | Whether Ferron applied a rewrite rule to the request. |
-| `ferron.rewrite.pattern_count` | int | Number of rewrite rules that matched. |
+| Attribute                      | Type | Description                                           |
+| ------------------------------ | ---- | ----------------------------------------------------- |
+| `ferron.rewrite.applied`       | bool | Whether Ferron applied a rewrite rule to the request. |
+| `ferron.rewrite.pattern_count` | int  | Number of rewrite rules that matched.                 |

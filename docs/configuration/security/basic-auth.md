@@ -17,10 +17,10 @@ This page documents the `basic_auth` directive for HTTP Basic Authentication tha
 
 This is a **global-only** directive that limits the number of concurrent password verification tasks across all `basic_auth` blocks. Password hashing is computationally expensive, and this limit prevents a flood of authentication requests from exhausting server resources.
 
-| Value type | Description | Default |
-| --- | --- | --- |
-| `<positive integer>` | Maximum concurrent password verification tasks. | `128` |
-| `false` | Disable the limit (unlimited concurrency). | disabled |
+| Value type           | Description                                     | Default  |
+| -------------------- | ----------------------------------------------- | -------- |
+| `<positive integer>` | Maximum concurrent password verification tasks. | `128`    |
+| `false`              | Disable the limit (unlimited concurrency).      | disabled |
 
 **Configuration example: reduce concurrency**
 
@@ -76,11 +76,11 @@ example.com {
 
 You can define multiple `basic_auth` blocks. Ferron merges the users from all blocks.
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `realm` | `<string>` | Authentication realm shown in the browser auth dialog. | `Restricted Access` |
-| `users` | block | User credentials block (username to hash mappings). Required. | — |
-| `brute_force_protection` | block | Brute-force attack protection settings. | enabled (see below) |
+| Nested directive         | Arguments  | Description                                                   | Default             |
+| ------------------------ | ---------- | ------------------------------------------------------------- | ------------------- |
+| `realm`                  | `<string>` | Authentication realm shown in the browser auth dialog.        | `Restricted Access` |
+| `users`                  | block      | User credentials block (username to hash mappings). Required. | none                |
+| `brute_force_protection` | block      | Brute-force attack protection settings.                       | enabled (see below) |
 
 ### `users` block
 
@@ -95,14 +95,14 @@ users {
 
 **Ferron accepts only hashed passwords.** Ferron supports the following hash formats:
 
-| Prefix | Algorithm |
-| --- | --- |
-| `$argon2id$` | Argon2id (recommended) |
-| `$argon2i$` | Argon2i |
-| `$argon2d$` | Argon2d |
-| `$pbkdf2$` | PBKDF2 |
-| `$pbkdf2-sha256$` | PBKDF2-SHA256 |
-| `$scrypt$` | scrypt |
+| Prefix            | Algorithm              |
+| ----------------- | ---------------------- |
+| `$argon2id$`      | Argon2id (recommended) |
+| `$argon2i$`       | Argon2i                |
+| `$argon2d$`       | Argon2d                |
+| `$pbkdf2$`        | PBKDF2                 |
+| `$pbkdf2-sha256$` | PBKDF2-SHA256          |
+| `$scrypt$`        | scrypt                 |
 
 > [!note]
 >
@@ -114,12 +114,12 @@ users {
 
 Brute-force protection is **enabled by default** to protect against credential-guessing attacks.
 
-| Nested directive | Type | Default | Description |
-| --- | --- | --- | --- |
-| `enabled` | `<bool>` | `true` | Whether brute-force protection is active. |
-| `max_attempts` | `<int>` | `5` | Maximum failed attempts before lockout. |
-| `lockout_duration` | `<duration>` | `15m` | How long to lock the account after exceeding max attempts. |
-| `window` | `<duration>` | `5m` | Sliding window for counting attempts. |
+| Nested directive   | Type         | Default | Description                                                |
+| ------------------ | ------------ | ------- | ---------------------------------------------------------- |
+| `enabled`          | `<bool>`     | `true`  | Whether brute-force protection is active.                  |
+| `max_attempts`     | `<int>`      | `5`     | Maximum failed attempts before lockout.                    |
+| `lockout_duration` | `<duration>` | `15m`   | How long to lock the account after exceeding max attempts. |
+| `window`           | `<duration>` | `5m`    | Sliding window for counting attempts.                      |
 
 Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Ferron treats plain numbers without a suffix as seconds.
 
@@ -241,16 +241,16 @@ example.com {
 
 The basic authentication module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                     | Type   | Description                                    |
+| ------------------------- | ------ | ---------------------------------------------- |
 | `ferron.basicauth.result` | string | Auth outcome: `skip`, `failure`, or `success`. |
 
 ### Trace spans
 
 The basic authentication stage sets the following attributes on its `ferron.stage.basicauth` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.basicauth.result` | string | Authentication result: `success`, `failure`, or `skip`. |
-| `user.name` | string | The authenticated username, on success. |
-| `error.type` | string | Set to `auth_failed` on authentication failure, enabling trace UI highlighting. |
+| Attribute                 | Type   | Description                                                                     |
+| ------------------------- | ------ | ------------------------------------------------------------------------------- |
+| `ferron.basicauth.result` | string | Authentication result: `success`, `failure`, or `skip`.                         |
+| `user.name`               | string | The authenticated username, on success.                                         |
+| `error.type`              | string | Set to `auth_failed` on authentication failure, enabling trace UI highlighting. |

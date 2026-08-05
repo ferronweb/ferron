@@ -25,16 +25,16 @@ example.com {
 
 ### Configuration parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | `http` | — | Must be `"http"` |
-| `url` | `<string>` | — | URL to fetch the certificate from (required) |
-| `refresh_interval` | `<duration>` | `1h` | How often to poll or refresh certificates |
-| `no_verification` | `<bool>` | `false` | Skip TLS verification for the certificate endpoint |
-| `on_demand` | `<bool>` | `false` | Enable on-demand (lazy) certificate fetching |
-| `on_demand_ask` | `<string>` | — | Approval endpoint URL for on-demand requests |
-| `on_demand_ask_auth` | `<string>` | — | Authorization header for the approval endpoint |
-| `on_demand_ask_no_verification` | `<bool>` | `false` | Skip TLS verification for the approval endpoint |
+| Parameter                       | Type         | Default | Description                                        |
+| ------------------------------- | ------------ | ------- | -------------------------------------------------- |
+| `provider`                      | `http`       | none    | Must be `"http"`                                   |
+| `url`                           | `<string>`   | none    | URL to fetch the certificate from (required)       |
+| `refresh_interval`              | `<duration>` | `1h`    | How often to poll or refresh certificates          |
+| `no_verification`               | `<bool>`     | `false` | Skip TLS verification for the certificate endpoint |
+| `on_demand`                     | `<bool>`     | `false` | Enable on-demand (lazy) certificate fetching       |
+| `on_demand_ask`                 | `<string>`   | none    | Approval endpoint URL for on-demand requests       |
+| `on_demand_ask_auth`            | `<string>`   | none    | Authorization header for the approval endpoint     |
+| `on_demand_ask_no_verification` | `<bool>`     | `false` | Skip TLS verification for the approval endpoint    |
 
 **Polling mode configuration example:**
 
@@ -120,8 +120,8 @@ The endpoint must return a JSON object with the following structure:
 
 ```json
 {
-    "private_key": "-----BEGIN PRIVATE KEY-----\n...",
-    "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
 }
 ```
 
@@ -214,56 +214,56 @@ The `tls-http` module emits log events and metrics through the configured observ
 
 ### Log events
 
-| Level | Message | When |
-|-------|---------|------|
-| `INFO` | `TLS-HTTP certificate polling started for <url>` | Background polling task started |
-| `INFO` | `TLS certificate refreshed successfully from HTTP endpoint` | Certificate updated (polling or on-demand refresh) |
-| `INFO` | `On-demand certificate requested` | On-demand certificate request received |
-| `INFO` | `On-demand certificate fetched` | On-demand certificate fetched successfully |
-| `WARN` | `Failed to build HTTP request for 'tls-http': <error>` | Request construction failed |
-| `WARN` | `Failed to send HTTP request for 'tls-http': <error>` | HTTP request failed |
-| `WARN` | `Failed to parse the HTTP response from TLS certificate endpoint: <error>` | JSON parse error |
-| `WARN` | `Failed to parse the TLS certificate chain from TLS endpoint response: <error>` | PEM chain parse error |
-| `WARN` | `Failed to parse the TLS private key from TLS endpoint response: <error>` | PEM key parse error |
-| `WARN` | `Failed to load the TLS private key: <error>` | Key loading error |
-| `WARN` | `Can't build TLS client configuration for 'tls-http'` | Invalid TLS config |
-| `ERROR` | `Certificate issuance denied` | Ask endpoint denied the request |
-| `ERROR` | `Ask endpoint error` | Ask endpoint request failed |
-| `ERROR` | `On-demand config not found` | No matching on-demand config for request |
+| Level   | Message                                                                         | When                                               |
+| ------- | ------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `INFO`  | `TLS-HTTP certificate polling started for <url>`                                | Background polling task started                    |
+| `INFO`  | `TLS certificate refreshed successfully from HTTP endpoint`                     | Certificate updated (polling or on-demand refresh) |
+| `INFO`  | `On-demand certificate requested`                                               | On-demand certificate request received             |
+| `INFO`  | `On-demand certificate fetched`                                                 | On-demand certificate fetched successfully         |
+| `WARN`  | `Failed to build HTTP request for 'tls-http': <error>`                          | Request construction failed                        |
+| `WARN`  | `Failed to send HTTP request for 'tls-http': <error>`                           | HTTP request failed                                |
+| `WARN`  | `Failed to parse the HTTP response from TLS certificate endpoint: <error>`      | JSON parse error                                   |
+| `WARN`  | `Failed to parse the TLS certificate chain from TLS endpoint response: <error>` | PEM chain parse error                              |
+| `WARN`  | `Failed to parse the TLS private key from TLS endpoint response: <error>`       | PEM key parse error                                |
+| `WARN`  | `Failed to load the TLS private key: <error>`                                   | Key loading error                                  |
+| `WARN`  | `Can't build TLS client configuration for 'tls-http'`                           | Invalid TLS config                                 |
+| `ERROR` | `Certificate issuance denied`                                                   | Ask endpoint denied the request                    |
+| `ERROR` | `Ask endpoint error`                                                            | Ask endpoint request failed                        |
+| `ERROR` | `On-demand config not found`                                                    | No matching on-demand config for request           |
 
 ### Structured logs
 
 In OTLP `log_style modern`, the `summary` field becomes the log body. The `attributes` become typed OpenTelemetry log record attributes.
 
-| Summary | Level | Attributes |
-|---------|-------|------------|
-| TLS-HTTP polling started | INFO | `ferron.tls_http.url` (string): certificate endpoint URL |
-| TLS-HTTP client config build failed | WARN | — |
-| TLS-HTTP request build failed | WARN | `error.message` (string) |
-| TLS-HTTP request failed | WARN | `error.message` (string) |
-| TLS-HTTP endpoint error | WARN | `http.status_code` (int): HTTP status returned by endpoint |
-| TLS-HTTP response read failed | WARN | `error.message` (string) |
-| TLS-HTTP response parse failed | WARN | `error.message` (string) |
-| TLS-HTTP certificate chain parse failed | WARN | `error.message` (string) |
-| TLS-HTTP private key parse failed | WARN | `error.message` (string) |
-| TLS-HTTP private key load failed | WARN | `error.message` (string) |
-| TLS-HTTP certificate refreshed | INFO | `ferron.tls_http.host` (string): hostname this certificate serves |
-| On-demand certificate requested | INFO | `tls.sni` (string), `tls.port` (int) |
-| On-demand certificate fetched | INFO | `tls.sni` (string), `tls.port` (int) |
-| Certificate issuance denied | ERROR | `tls.sni` (string): hostname blocked by ask endpoint |
-| Ask endpoint error | ERROR | `tls.sni` (string), `error.message` (string) |
-| On-demand config not found | ERROR | `tls.sni` (string), `tls.port` (int) |
+| Summary                                 | Level | Attributes                                                        |
+| --------------------------------------- | ----- | ----------------------------------------------------------------- |
+| TLS-HTTP polling started                | INFO  | `ferron.tls_http.url` (string): certificate endpoint URL          |
+| TLS-HTTP client config build failed     | WARN  | none                                                              |
+| TLS-HTTP request build failed           | WARN  | `error.message` (string)                                          |
+| TLS-HTTP request failed                 | WARN  | `error.message` (string)                                          |
+| TLS-HTTP endpoint error                 | WARN  | `http.status_code` (int): HTTP status returned by endpoint        |
+| TLS-HTTP response read failed           | WARN  | `error.message` (string)                                          |
+| TLS-HTTP response parse failed          | WARN  | `error.message` (string)                                          |
+| TLS-HTTP certificate chain parse failed | WARN  | `error.message` (string)                                          |
+| TLS-HTTP private key parse failed       | WARN  | `error.message` (string)                                          |
+| TLS-HTTP private key load failed        | WARN  | `error.message` (string)                                          |
+| TLS-HTTP certificate refreshed          | INFO  | `ferron.tls_http.host` (string): hostname this certificate serves |
+| On-demand certificate requested         | INFO  | `tls.sni` (string), `tls.port` (int)                              |
+| On-demand certificate fetched           | INFO  | `tls.sni` (string), `tls.port` (int)                              |
+| Certificate issuance denied             | ERROR | `tls.sni` (string): hostname blocked by ask endpoint              |
+| Ask endpoint error                      | ERROR | `tls.sni` (string), `error.message` (string)                      |
+| On-demand config not found              | ERROR | `tls.sni` (string), `tls.port` (int)                              |
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|--------|-------------|
-| `ferron.tls_http.requests_total` | Counter | `status` (`success`, `error`) | Total HTTP requests to the certificate endpoint |
-| `ferron.tls_http.request_duration_seconds` | Histogram | `status` (`success`, `error`) | HTTP request duration in seconds |
-| `ferron.tls_http.certificates_refreshed_total` | Counter | `status` (`success`, `error`) | Certificate refresh outcomes |
-| `ferron.tls_http.on_demand_requests_total` | Counter | — | On-demand certificate requests |
-| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
-| `ferron.tls_http.next_refresh_seconds` | Gauge | — | Seconds until next certificate refresh |
+| Metric                                         | Type      | Attributes                                                                        | Description                                     |
+| ---------------------------------------------- | --------- | --------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `ferron.tls_http.requests_total`               | Counter   | `status` (`success`, `error`)                                                     | Total HTTP requests to the certificate endpoint |
+| `ferron.tls_http.request_duration_seconds`     | Histogram | `status` (`success`, `error`)                                                     | HTTP request duration in seconds                |
+| `ferron.tls_http.certificates_refreshed_total` | Counter   | `status` (`success`, `error`)                                                     | Certificate refresh outcomes                    |
+| `ferron.tls_http.on_demand_requests_total`     | Counter   | None                                                                              | On-demand certificate requests                  |
+| `ferron.tls.certificate_not_after`             | Gauge     | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds    |
+| `ferron.tls_http.next_refresh_seconds`         | Gauge     | None                                                                              | Seconds until next certificate refresh          |
 
 All TLS providers share the certificate expiration gauge (manual, ACME, HTTP, local). Ferron emits the gauge every time it mounts a certificate into the in-memory context.
 

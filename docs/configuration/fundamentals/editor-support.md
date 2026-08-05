@@ -7,13 +7,13 @@ A range of editor integrations support Ferron configuration files (`.conf` / `.f
 
 ## Feature overview
 
-| Feature                   | Description                                                                            |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| **Syntax highlighting**   | TextMate grammar and tree-sitter grammar for `.conf` / `.ferron` files                 |
+| Feature                   | Description                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| **Syntax highlighting**   | TextMate grammar and tree-sitter grammar for `.conf` / `.ferron` files               |
 | **Language server (LSP)** | `ferron-language-server` — offers formatting, directive completions, and diagnostics |
-| **VS Code extension**     | Official extension bundling syntax highlighting and LSP                                |
-| **Zed extension**         | Official extension for Zed (submission under review)                                   |
-| **Neovim**                | Manual configuration using tree-sitter and LSP                                         |
+| **VS Code extension**     | Official extension bundling syntax highlighting and LSP                              |
+| **Zed extension**         | Official extension for Zed (submission under review)                                 |
+| **Neovim**                | Manual configuration using tree-sitter and LSP                                       |
 
 ## Syntax highlighting
 
@@ -69,7 +69,7 @@ The language server accepts the following options:
 
 | Option     | Default | Description                                                                                                              |
 | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `--ferron` | —       | Path to the directory containing the `ferron` binary (used for validation) and `ferron-fmt` binary (used for formatting) |
+| `--ferron` | none    | Path to the directory containing the `ferron` binary (used for validation) and `ferron-fmt` binary (used for formatting) |
 
 ## VS Code
 

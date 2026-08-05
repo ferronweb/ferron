@@ -77,23 +77,23 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 
 ### Configuration parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | `acme` | — | Must be `"acme"` |
-| `challenge` | `http-01`, `tls-alpn-01`, `dns-01` | `http-01` | ACME challenge type |
-| `contact` | `<string>` | — | Email for ACME account |
-| `directory` | `<string>` | LE Production | ACME directory URL |
-| `profile` | `<string>` | — | ACME profile name (optional) |
-| `eab` | `"<key-id>" "<hmac>"` | — | External Account Binding |
-| `cache` | `<string>` | `/var/cache/ferron-acme` if on Unix and writable, otherwise platform data dir | Path for file-based certificate caching |
-| `save` | `<cert> [key]` | — | Save cert (and optionally key) to disk |
-| `post_obtain_command` | `<string>` | — | Command to run after certificate issuance |
-| `no_verification` | `<bool>` | `false` | Skip ACME directory TLS verification |
-| `on_demand` | `<bool>` | `false` | Enable on-demand certificate issuance |
-| `on_demand_ask` | `<string>` | — | Approval endpoint URL |
-| `on_demand_ask_auth` | `<string>` | — | Authorization header for approval endpoint (optional) |
-| `on_demand_ask_no_verification` | `<bool>` | `false` | Skip TLS verification for approval endpoint |
-| `fallback` | `{ ... }` | — | Fallback provider block (repeatable) |
+| Parameter                       | Type                               | Default                                                                       | Description                                           |
+| ------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `provider`                      | `acme`                             | none                                                                          | Must be `"acme"`                                      |
+| `challenge`                     | `http-01`, `tls-alpn-01`, `dns-01` | `http-01`                                                                     | ACME challenge type                                   |
+| `contact`                       | `<string>`                         | none                                                                          | Email for ACME account                                |
+| `directory`                     | `<string>`                         | LE Production                                                                 | ACME directory URL                                    |
+| `profile`                       | `<string>`                         | none                                                                          | ACME profile name (optional)                          |
+| `eab`                           | `"<key-id>" "<hmac>"`              | none                                                                          | External Account Binding                              |
+| `cache`                         | `<string>`                         | `/var/cache/ferron-acme` if on Unix and writable, otherwise platform data dir | Path for file-based certificate caching               |
+| `save`                          | `<cert> [key]`                     | none                                                                          | Save cert (and optionally key) to disk                |
+| `post_obtain_command`           | `<string>`                         | none                                                                          | Command to run after certificate issuance             |
+| `no_verification`               | `<bool>`                           | `false`                                                                       | Skip ACME directory TLS verification                  |
+| `on_demand`                     | `<bool>`                           | `false`                                                                       | Enable on-demand certificate issuance                 |
+| `on_demand_ask`                 | `<string>`                         | none                                                                          | Approval endpoint URL                                 |
+| `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for approval endpoint (optional) |
+| `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for approval endpoint           |
+| `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable)                  |
 
 **Configuration example:**
 
@@ -314,82 +314,82 @@ The ACME background task emits log events and metrics through the configured obs
 
 ### Logs
 
-| Level | Message | When |
-|-------|---------|------|
-| `INFO` | `ACME background task started with N configuration(s) for domains: ...` | Service initialization |
-| `INFO` | `On-demand certificate requested for SNI <host>:<port>` | On-demand certificate request received |
-| `INFO` | `ACME certificate issued for domains: ...` | Successful certificate issuance |
-| `INFO` | `ACME account created for directory ..., contact: ...` | New ACME account registration |
-| `INFO` | `Post-obtain command started for ...: <cmd>` | Post-obtain hook execution |
-| `WARN` | `ACME certificate provisioning error for ...: <error>` | Certificate issuance failure |
-| `WARN` | `ACME account not found on server for ..., recreating` | Account expired/removed on CA side |
-| `WARN` | `Post-obtain command failed for ...: <error>` | Post-obtain hook error |
-| `DEBUG` | `ACME provisioning cycle started — checking N configurations` | Each background loop iteration |
-| `DEBUG` | `ACME account loaded from cache for ...` | Account reused from cache |
-| `DEBUG` | `ACME order created for domains: ...` | New order placed with CA |
-| `DEBUG` | `ACME <type> challenge initiated for ...` | Challenge setup started |
-| `DEBUG` | `ACME <type> challenge solved for ...` | Challenge ready for validation |
-| `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>` | DNS record published |
-| `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>` | DNS record removed |
-| `DEBUG` | `Certificate installed for ..., chain length: N` | Certificate loaded into TLS config |
+| Level   | Message                                                                 | When                                   |
+| ------- | ----------------------------------------------------------------------- | -------------------------------------- |
+| `INFO`  | `ACME background task started with N configuration(s) for domains: ...` | Service initialization                 |
+| `INFO`  | `On-demand certificate requested for SNI <host>:<port>`                 | On-demand certificate request received |
+| `INFO`  | `ACME certificate issued for domains: ...`                              | Successful certificate issuance        |
+| `INFO`  | `ACME account created for directory ..., contact: ...`                  | New ACME account registration          |
+| `INFO`  | `Post-obtain command started for ...: <cmd>`                            | Post-obtain hook execution             |
+| `WARN`  | `ACME certificate provisioning error for ...: <error>`                  | Certificate issuance failure           |
+| `WARN`  | `ACME account not found on server for ..., recreating`                  | Account expired/removed on CA side     |
+| `WARN`  | `Post-obtain command failed for ...: <error>`                           | Post-obtain hook error                 |
+| `DEBUG` | `ACME provisioning cycle started — checking N configurations`           | Each background loop iteration         |
+| `DEBUG` | `ACME account loaded from cache for ...`                                | Account reused from cache              |
+| `DEBUG` | `ACME order created for domains: ...`                                   | New order placed with CA               |
+| `DEBUG` | `ACME <type> challenge initiated for ...`                               | Challenge setup started                |
+| `DEBUG` | `ACME <type> challenge solved for ...`                                  | Challenge ready for validation         |
+| `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`         | DNS record published                   |
+| `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`          | DNS record removed                     |
+| `DEBUG` | `Certificate installed for ..., chain length: N`                        | Certificate loaded into TLS config     |
 
 ### Structured logs
 
 In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron emits `attributes` as typed OpenTelemetry log record attributes.
 
-| Summary | Level | Attributes |
-|---------|-------|------------|
-| ACME background task started | INFO | `ferron.acme.config_count` (int), `ferron.acme.domains` (string) |
-| ACME account created | INFO | `ferron.acme.directory` (string) — ACME directory URL, `ferron.acme.contact` (string) — account email |
-| ACME certificate issued | INFO | `ferron.acme.domains` (string) |
-| ACME post-obtain command started | INFO | `ferron.acme.domains` (string) |
-| On-demand certificate pre-loaded | INFO | `tls.sni` (string), `tls.port` (int) |
-| On-demand certificate requested | INFO | `tls.sni` (string), `tls.port` (int) |
-| ACME account recreated | WARN | `ferron.acme.domains` (string), `ferron.acme.directory` (string) |
-| ACME certificate provisioning error | WARN | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME post-obtain command malformed | WARN | `ferron.acme.domains` (string) |
-| ACME post-obtain command failed | WARN | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME post-obtain command empty | WARN | `ferron.acme.domains` (string) |
-| ACME account cache save failed | WARN | `error.message` (string) |
-| ACME certificate cache save failed | WARN | `error.message` (string) |
-| ACME provisioning cycle started | DEBUG | `ferron.acme.config_count` (int) |
-| ACME account loaded from cache | DEBUG | `ferron.acme.domains` (string) |
-| ACME order created | DEBUG | `ferron.acme.domains` (string) |
-| ACME certificate installed | DEBUG | `ferron.acme.domains` (string), `ferron.acme.chain_length` (int) |
-| ACME challenge initiated | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
-| ACME challenge solved | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
-| ACME DNS-01 record created | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int) |
-| ACME DNS-01 record cleanup | DEBUG | `ferron.acme.dns_challenge_domain` (string) |
-| ACME account load/create failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME order creation failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME authorization failed | ERROR | `ferron.acme.domains` (string), `ferron.acme.auth_status` (string) |
-| ACME challenge type unsupported | ERROR | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string) |
-| ACME identifier type unsupported | ERROR | `ferron.acme.domains` (string), `ferron.acme.identifier_type` (string) |
-| ACME challenge ready failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME order finalization failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME order invalid | ERROR | `ferron.acme.domains` (string) |
-| ACME order not ready | ERROR | `ferron.acme.domains` (string), `ferron.acme.order_status` (string) |
-| ACME finalize failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| ACME certificate obtain failed | ERROR | `ferron.acme.domains` (string), `error.message` (string) |
-| Certificate issuance denied | ERROR | `tls.sni` (string) — hostname blocked by ask endpoint |
-| Ask endpoint error | ERROR | `tls.sni` (string), `error.message` (string) |
+| Summary                             | Level | Attributes                                                                                            |
+| ----------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
+| ACME background task started        | INFO  | `ferron.acme.config_count` (int), `ferron.acme.domains` (string)                                      |
+| ACME account created                | INFO  | `ferron.acme.directory` (string) — ACME directory URL, `ferron.acme.contact` (string) — account email |
+| ACME certificate issued             | INFO  | `ferron.acme.domains` (string)                                                                        |
+| ACME post-obtain command started    | INFO  | `ferron.acme.domains` (string)                                                                        |
+| On-demand certificate pre-loaded    | INFO  | `tls.sni` (string), `tls.port` (int)                                                                  |
+| On-demand certificate requested     | INFO  | `tls.sni` (string), `tls.port` (int)                                                                  |
+| ACME account recreated              | WARN  | `ferron.acme.domains` (string), `ferron.acme.directory` (string)                                      |
+| ACME certificate provisioning error | WARN  | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME post-obtain command malformed  | WARN  | `ferron.acme.domains` (string)                                                                        |
+| ACME post-obtain command failed     | WARN  | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME post-obtain command empty      | WARN  | `ferron.acme.domains` (string)                                                                        |
+| ACME account cache save failed      | WARN  | `error.message` (string)                                                                              |
+| ACME certificate cache save failed  | WARN  | `error.message` (string)                                                                              |
+| ACME provisioning cycle started     | DEBUG | `ferron.acme.config_count` (int)                                                                      |
+| ACME account loaded from cache      | DEBUG | `ferron.acme.domains` (string)                                                                        |
+| ACME order created                  | DEBUG | `ferron.acme.domains` (string)                                                                        |
+| ACME certificate installed          | DEBUG | `ferron.acme.domains` (string), `ferron.acme.chain_length` (int)                                      |
+| ACME challenge initiated            | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                 |
+| ACME challenge solved               | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                 |
+| ACME DNS-01 record created          | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int)                              |
+| ACME DNS-01 record cleanup          | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                           |
+| ACME account load/create failed     | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME order creation failed          | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME authorization failed           | ERROR | `ferron.acme.domains` (string), `ferron.acme.auth_status` (string)                                    |
+| ACME challenge type unsupported     | ERROR | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                 |
+| ACME identifier type unsupported    | ERROR | `ferron.acme.domains` (string), `ferron.acme.identifier_type` (string)                                |
+| ACME challenge ready failed         | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME order finalization failed      | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME order invalid                  | ERROR | `ferron.acme.domains` (string)                                                                        |
+| ACME order not ready                | ERROR | `ferron.acme.domains` (string), `ferron.acme.order_status` (string)                                   |
+| ACME finalize failed                | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| ACME certificate obtain failed      | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                              |
+| Certificate issuance denied         | ERROR | `tls.sni` (string) — hostname blocked by ask endpoint                                                 |
+| Ask endpoint error                  | ERROR | `tls.sni` (string), `error.message` (string)                                                          |
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|--------|-------------|
-| `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
-| `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
-| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
+| Metric                                  | Type    | Attributes                                                                        | Description                                  |
+| --------------------------------------- | ------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
+| `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type`                                   | Certificate issuance outcomes                |
+| `ferron.acme.on_demand_requests_total`  | Counter | None                                                                              | On-demand certificate requests               |
+| `ferron.tls.certificate_not_after`      | Gauge   | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ### Trace spans
 
 The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.stage.acme_http01` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.acme.domain` | string | The domain that Ferron validates. |
-| `ferron.acme.challenge_type` | string | Challenge type (`http01`). |
+| Attribute                    | Type   | Description                       |
+| ---------------------------- | ------ | --------------------------------- |
+| `ferron.acme.domain`         | string | The domain that Ferron validates. |
+| `ferron.acme.challenge_type` | string | Challenge type (`http01`).        |
 
 ## See also
 

@@ -51,12 +51,12 @@ This configuration:
 
 ### Configuration parameters
 
-| Parameter | Type | Default | Required | Description |
-|-----------|------|---------|----------|-------------|
-| `file` | `<string>` | — | Yes | Path to the ticket key file |
-| `auto_rotate` | `[<bool>]` | `false` | No | Enable automatic key rotation |
-| `rotation_interval` | `<duration>` | `12h` | No | How often to rotate keys |
-| `max_keys` | `<int>` | `3` | No | Maximum keys to retain (2–5) |
+| Parameter           | Type         | Default | Required | Description                   |
+| ------------------- | ------------ | ------- | -------- | ----------------------------- |
+| `file`              | `<string>`   | none    | Yes      | Path to the ticket key file   |
+| `auto_rotate`       | `[<bool>]`   | `false` | No       | Enable automatic key rotation |
+| `rotation_interval` | `<duration>` | `12h`   | No       | How often to rotate keys      |
+| `max_keys`          | `<int>`      | `3`     | No       | Maximum keys to retain (2–5)  |
 
 ## Key file format
 

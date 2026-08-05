@@ -18,16 +18,16 @@ example.com {
 
 The `scgi` directive enables SCGI protocol support. When specified, Ferron forwards requests to the configured SCGI backend using the SCGI protocol instead of spawning local processes.
 
-| Form | Description |
-| --- | --- |
-| `scgi { ... }` | Enables SCGI and configures nested directives. |
+| Form                         | Description                                     |
+| ---------------------------- | ----------------------------------------------- |
+| `scgi { ... }`               | Enables SCGI and configures nested directives.  |
 | `scgi <url: string> { ... }` | Enables SCGI and sets the backend URL directly. |
 
 ### `backend`
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `backend` | `<url: string>` | This directive specifies the SCGI backend server URL. Supports TCP URLs (`tcp://host:port`) and Unix socket URLs (`unix:///path/to/socket`). | — |
+| Nested directive | Arguments       | Description                                                                                                                                  | Default |
+| ---------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `backend`        | `<url: string>` | This directive specifies the SCGI backend server URL. Supports TCP URLs (`tcp://host:port`) and Unix socket URLs (`unix:///path/to/socket`). | none    |
 
 **Configuration example:**
 
@@ -57,9 +57,9 @@ example.com {
 
 ### `environment`
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values use the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
+| Nested directive | Arguments                        | Description                                                                                                                                                                                 | Default |
+| ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `environment`    | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values use the same interpolation syntax as other directives. You can specify this directive multiple times. | none    |
 
 **Configuration example:**
 
@@ -84,21 +84,21 @@ example.com {
 
 Ferron automatically sets the following SCGI environment variables:
 
-| Variable | Description |
-| --- | --- |
-| `SERVER_SOFTWARE` | Always `Ferron`. |
-| `SERVER_NAME` | Server hostname. |
-| `SERVER_ADDR` | Local server address. |
-| `SERVER_PORT` | Server port. |
-| `REQUEST_METHOD` | HTTP method. |
-| `REQUEST_URI` | Original request URI. |
-| `QUERY_STRING` | Query string (empty string if none). |
-| `PATH_INFO` | Path info extracted from the request. |
-| `SCRIPT_NAME` | The script path relative to the document root. |
-| `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
-| `REMOTE_USER` | Authenticated username, if available. |
-| `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Set to `on` when the connection uses encryption. |
+| Variable          | Description                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `SERVER_SOFTWARE` | Always `Ferron`.                                                                      |
+| `SERVER_NAME`     | Server hostname.                                                                      |
+| `SERVER_ADDR`     | Local server address.                                                                 |
+| `SERVER_PORT`     | Server port.                                                                          |
+| `REQUEST_METHOD`  | HTTP method.                                                                          |
+| `REQUEST_URI`     | Original request URI.                                                                 |
+| `QUERY_STRING`    | Query string (empty string if none).                                                  |
+| `PATH_INFO`       | Path info extracted from the request.                                                 |
+| `SCRIPT_NAME`     | The script path relative to the document root.                                        |
+| `AUTH_TYPE`       | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
+| `REMOTE_USER`     | Authenticated username, if available.                                                 |
+| `SERVER_ADMIN`    | Server administrator email (from `admin_email` configuration).                        |
+| `HTTPS`           | Set to `on` when the connection uses encryption.                                      |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
 
@@ -113,11 +113,11 @@ When used alongside an authentication module (for example, `http-basicauth`), Fe
 
 When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the SCGI request. The server maps these headers to standard CGI environment variables:
 
-| Header | SCGI environment variable |
-| --- | --- |
-| `traceparent` | `HTTP_TRACEPARENT` |
-| `tracestate` | `HTTP_TRACESTATE` |
-| `baggage` | `HTTP_BAGGAGE` |
+| Header        | SCGI environment variable |
+| ------------- | ------------------------- |
+| `traceparent` | `HTTP_TRACEPARENT`        |
+| `tracestate`  | `HTTP_TRACESTATE`         |
+| `baggage`     | `HTTP_BAGGAGE`            |
 
 This enables end-to-end distributed tracing with SCGI backend applications.
 
@@ -132,35 +132,35 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
+| Description (summary)    | Level | Attributes                                       |
+| ------------------------ | ----- | ------------------------------------------------ |
 | SCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.scgi.requests` | Counter | — | Number of SCGI requests processed |
-| `ferron.scgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before the backend returned a response |
-| `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url` | Duration of SCGI upstream request processing |
+| Metric                          | Type      | Attributes                                                        | Description                                                                |
+| ------------------------------- | --------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `ferron.scgi.requests`          | Counter   | None                                                              | Number of SCGI requests processed                                          |
+| `ferron.scgi.failures`          | Counter   | `error.type` (`"service_unavailable"`), `ferron.scgi.backend_url` | Number of SCGI requests that failed before the backend returned a response |
+| `ferron.scgi.upstream.duration` | Histogram | `ferron.scgi.backend_url`                                         | Duration of SCGI upstream request processing                               |
 
 ### Access log fields
 
 The SCGI module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                     | Type   | Description       |
+| ------------------------- | ------ | ----------------- |
 | `ferron.scgi.backend_url` | string | SCGI backend URL. |
 
 ### Trace spans
 
 The SCGI stage sets the following attributes on its `ferron.stage.scgi` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `http.response.status_code` | int | HTTP status code returned by the SCGI backend. |
-| `ferron.scgi.backend_url` | string | URL of the SCGI backend. |
-| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+| Attribute                   | Type   | Description                                            |
+| --------------------------- | ------ | ------------------------------------------------------ |
+| `http.response.status_code` | int    | HTTP status code returned by the SCGI backend.         |
+| `ferron.scgi.backend_url`   | string | URL of the SCGI backend.                               |
+| `error.type`                | string | Error type on failure, enabling trace UI highlighting. |
 
 ## Examples
 

@@ -24,11 +24,11 @@ This page documents the metrics emitted by Ferron. Ferron emits OpenTelemetry-st
 
 Ferron uses OpenTelemetry metric types. Understanding the type helps you write correct PromQL or OTLP queries:
 
-| Type | Behavior | Typical use |
-|------|----------|-------------|
-| `Counter` | Monotonically increases. Resets to zero on process restart. | Request counts, error counts, reload counts |
-| `Gauge` | Can go up or down. Represents an absolute value at time of measurement. | Active connections, queue length, uptime |
-| `UpDownCounter` | Can go up or down. Represents a delta since the last measurement. | Memory usage, file descriptor count |
+| Type            | Behavior                                                                | Typical use                                 |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
+| `Counter`       | Monotonically increases. Resets to zero on process restart.             | Request counts, error counts, reload counts |
+| `Gauge`         | Can go up or down. Represents an absolute value at time of measurement. | Active connections, queue length, uptime    |
+| `UpDownCounter` | Can go up or down. Represents a delta since the last measurement.       | Memory usage, file descriptor count         |
 
 ## Exponential histograms
 
@@ -62,38 +62,38 @@ The `metrics-process` module collects process-level metrics automatically when y
 
 **Platform support:** Linux and Windows. On other platforms, the module is a no-op.
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `process.cpu.time` | Counter | `cpu.mode` (`"user"` or `"system"`) | Total CPU seconds broken down by different states |
-| `process.cpu.utilization` | Gauge | `cpu.mode` (`"user"` or `"system"`) | CPU use since the last measurement |
-| `process.memory.usage` | UpDownCounter | — | The change in physical memory (RSS) since the last measurement |
-| `process.memory.virtual` | UpDownCounter | — | The change in committed virtual memory (VMS) since the last measurement |
-| `process.unix.file_descriptor.count` | UpDownCounter | — | The change in number of unix file descriptors since the last measurement (Linux only) |
+| Metric                               | Type          | Attributes                          | Description                                                                           |
+| ------------------------------------ | ------------- | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `process.cpu.time`                   | Counter       | `cpu.mode` (`"user"` or `"system"`) | Total CPU seconds broken down by different states                                     |
+| `process.cpu.utilization`            | Gauge         | `cpu.mode` (`"user"` or `"system"`) | CPU use since the last measurement                                                    |
+| `process.memory.usage`               | UpDownCounter | None                                | The change in physical memory (RSS) since the last measurement                        |
+| `process.memory.virtual`             | UpDownCounter | None                                | The change in committed virtual memory (VMS) since the last measurement               |
+| `process.unix.file_descriptor.count` | UpDownCounter | None                                | The change in number of unix file descriptors since the last measurement (Linux only) |
 
 ## Admin API metrics
 
 The `metrics-admin` module collects metrics exposed via admin API automatically when you configure an observability backend.
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.admin.uptime` | Gauge | — | Time since the server started |
-| `ferron.admin.connections_active` | Gauge | — | Currently open TCP connections across all HTTP listeners |
-| `ferron.admin.requests_total` | Counter | — | Total HTTP requests served across all listeners |
-| `ferron.admin.reloads` | Counter | — | Number of configuration reloads performed |
-| `ferron.admin.observability_events_dropped` | Counter | — | Total number of observability events dropped due to backpressure |
-| `ferron.admin.observability_event_queue_len` | Gauge | — | Approximate current length of the observability event queue |
-| `ferron.admin.config_mtime` | Gauge | — | Last modification time of the configuration source (epoch seconds) |
-| `ferron.admin.config_drift` | Gauge | — | Whether the system detects configuration drift (1 = drift, 0 = no drift) |
+| Metric                                       | Type    | Attributes | Description                                                              |
+| -------------------------------------------- | ------- | ---------- | ------------------------------------------------------------------------ |
+| `ferron.admin.uptime`                        | Gauge   | None       | Time since the server started                                            |
+| `ferron.admin.connections_active`            | Gauge   | None       | Currently open TCP connections across all HTTP listeners                 |
+| `ferron.admin.requests_total`                | Counter | None       | Total HTTP requests served across all listeners                          |
+| `ferron.admin.reloads`                       | Counter | None       | Number of configuration reloads performed                                |
+| `ferron.admin.observability_events_dropped`  | Counter | None       | Total number of observability events dropped due to backpressure         |
+| `ferron.admin.observability_event_queue_len` | Gauge   | None       | Approximate current length of the observability event queue              |
+| `ferron.admin.config_mtime`                  | Gauge   | None       | Last modification time of the configuration source (epoch seconds)       |
+| `ferron.admin.config_drift`                  | Gauge   | None       | Whether the system detects configuration drift (1 = drift, 0 = no drift) |
 
 ### Admin API request metrics
 
 The admin API emits per-request metrics for all endpoints except `/health` (which is a high-frequency probe with low signal per-request).
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.admin.request.duration` | Histogram | `http.request.method`, `url.path`, `http.response.status_code` | How long admin API requests take in seconds |
-| `ferron.admin.request.count` | Counter | `http.request.method`, `url.path`, `http.response.status_code` | Total number of admin API requests |
-| `ferron.admin.reload.count` | Counter | `http.response.status_code` | Total number of admin config reload attempts (POST /reload only) |
+| Metric                          | Type      | Attributes                                                     | Description                                                      |
+| ------------------------------- | --------- | -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ferron.admin.request.duration` | Histogram | `http.request.method`, `url.path`, `http.response.status_code` | How long admin API requests take in seconds                      |
+| `ferron.admin.request.count`    | Counter   | `http.request.method`, `url.path`, `http.response.status_code` | Total number of admin API requests                               |
+| `ferron.admin.reload.count`     | Counter   | `http.response.status_code`                                    | Total number of admin config reload attempts (POST /reload only) |
 
 ### Admin API runtime metrics
 
@@ -109,31 +109,31 @@ These metrics correspond to the same data that the admin API `GET /status` endpo
 
 The `metrics-reload` module emits a counter metric around configuration reload lifecycle events when you configure an observability backend.
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
+| Metric           | Type    | Attributes                                                              | Description                                                                  |
+| ---------------- | ------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `ferron.reloads` | Counter | `ferron.reload.successful` (bool), `error.message` (string, on failure) | Number of configuration reloads performed, annotated with success or failure |
 
 ## HTTP metrics
 
 Ferron also emits common request-path metrics:
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.http.server.pre_handler_request_count` | Counter | — | Malformed or timed-out requests rejected before the normal HTTP handler completes |
-| `ferron.http.server.redirects` | Counter | — | Redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects |
-| `ferron.http.server.client_ip_rewrites` | Counter | — | Requests whose client IP was rewritten from a trusted proxy header |
-| `ferron.http.server.cors_preflights` | Counter | — | CORS preflight requests handled before the main pipeline |
-| `ferron.http.server.connection_errors` | Counter | transport, lifecycle stage | Listener and handshake failures |
+| Metric                                         | Type    | Attributes                 | Description                                                                                |
+| ---------------------------------------------- | ------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `ferron.http.server.pre_handler_request_count` | Counter | None                       | Malformed or timed-out requests rejected before the normal HTTP handler completes          |
+| `ferron.http.server.redirects`                 | Counter | None                       | Redirects emitted by the core server, including trailing-slash and HTTP-to-HTTPS redirects |
+| `ferron.http.server.client_ip_rewrites`        | Counter | None                       | Requests whose client IP was rewritten from a trusted proxy header                         |
+| `ferron.http.server.cors_preflights`           | Counter | None                       | CORS preflight requests handled before the main pipeline                                   |
+| `ferron.http.server.connection_errors`         | Counter | transport, lifecycle stage | Listener and handshake failures                                                            |
 
 ## Prometheus scrape metrics
 
 The Prometheus endpoint emits self-referential metrics about its own scrape performance. Ferron registers them in the same registry that serves `/metrics`. They appear in every scrape response.
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron_prometheus_scrape_duration_seconds` | Histogram | — | How long Prometheus scrape requests take in seconds |
-| `ferron_prometheus_scrape_total` | Counter | — | Total number of Prometheus scrape requests |
-| `ferron_prometheus_scrape_errors_total` | Counter | — | Total number of failed Prometheus scrape requests |
+| Metric                                      | Type      | Attributes | Description                                         |
+| ------------------------------------------- | --------- | ---------- | --------------------------------------------------- |
+| `ferron_prometheus_scrape_duration_seconds` | Histogram | None       | How long Prometheus scrape requests take in seconds |
+| `ferron_prometheus_scrape_total`            | Counter   | None       | Total number of Prometheus scrape requests          |
+| `ferron_prometheus_scrape_errors_total`     | Counter   | None       | Total number of failed Prometheus scrape requests   |
 
 > [!tip]
 > Use `ferron_prometheus_scrape_duration_seconds` to monitor scrape latency. If p99 exceeds your Prometheus `scrape_timeout`, consider reducing the number of registered metrics or increasing the timeout.
@@ -142,29 +142,29 @@ The Prometheus endpoint emits self-referential metrics about its own scrape perf
 
 The core server emits per-host TLS metrics for every HTTPS connection. Each metric carries a `ferron.host` attribute (the SNI hostname, or `"_global"` for connections without SNI) for per-host filtering and multi-tenant monitoring.
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider`, `crypto.certificate.serial_number` | Certificate `notAfter` field as Unix epoch seconds |
-| `ferron.tls.handshake.duration` | Histogram | `ferron.host`, `tls.protocol.version`, `tls.cipher_suite`, `ferron.tls.handshake.result` | TLS handshake latency |
-| `ferron.tls.handshake.total` | Counter | `ferron.host`, `ferron.tls.handshake.result` | Total TLS handshake attempts |
-| `ferron.tls.connections.active` | UpDownCounter | `ferron.host` | Currently open TLS connections |
+| Metric                             | Type          | Attributes                                                                               | Description                                        |
+| ---------------------------------- | ------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `ferron.tls.certificate_not_after` | Gauge         | `ferron.host`, `ferron.tls.provider`, `crypto.certificate.serial_number`                 | Certificate `notAfter` field as Unix epoch seconds |
+| `ferron.tls.handshake.duration`    | Histogram     | `ferron.host`, `tls.protocol.version`, `tls.cipher_suite`, `ferron.tls.handshake.result` | TLS handshake latency                              |
+| `ferron.tls.handshake.total`       | Counter       | `ferron.host`, `ferron.tls.handshake.result`                                             | Total TLS handshake attempts                       |
+| `ferron.tls.connections.active`    | UpDownCounter | `ferron.host`                                                                            | Currently open TLS connections                     |
 
 ## Common alerting patterns
 
 The table below maps core metrics to practical alerting thresholds. Adjust thresholds based on your deployment size and traffic patterns.
 
-| Alert | Metric | Suggested threshold |
-|-------|--------|---------------------|
-| High error rate | `ferron.http.server.connection_errors` | Rate > 10/s for 1m |
-| Connection saturation | `ferron.admin.connections_active` | Approaching configured limit |
-| Config reload failures | `ferron.admin.reloads` | Count > 0 with error attribute |
-| Config drift detected | `ferron.admin.config_drift` | Value = 1 for > 1m |
-| Export backpressure | `ferron.admin.observability_events_dropped` | Rate > 0 |
-| Queue buildup | `ferron.admin.observability_event_queue_len` | > 1000 |
-| Memory growth | `process.memory.usage` | Sustained increase over hours |
-| CPU saturation | `process.cpu.utilization` | > 0.9 sustained |
-| TLS handshake failures | `ferron.tls.handshake.total{result="error"}` | Rate > 5/s for 1m |
-| Slow TLS handshakes | `ferron.tls.handshake.duration` p99 | > 500ms |
+| Alert                  | Metric                                       | Suggested threshold            |
+| ---------------------- | -------------------------------------------- | ------------------------------ |
+| High error rate        | `ferron.http.server.connection_errors`       | Rate > 10/s for 1m             |
+| Connection saturation  | `ferron.admin.connections_active`            | Approaching configured limit   |
+| Config reload failures | `ferron.admin.reloads`                       | Count > 0 with error attribute |
+| Config drift detected  | `ferron.admin.config_drift`                  | Value = 1 for > 1m             |
+| Export backpressure    | `ferron.admin.observability_events_dropped`  | Rate > 0                       |
+| Queue buildup          | `ferron.admin.observability_event_queue_len` | > 1000                         |
+| Memory growth          | `process.memory.usage`                       | Sustained increase over hours  |
+| CPU saturation         | `process.cpu.utilization`                    | > 0.9 sustained                |
+| TLS handshake failures | `ferron.tls.handshake.total{result="error"}` | Rate > 5/s for 1m              |
+| Slow TLS handshakes    | `ferron.tls.handshake.duration` p99          | > 500ms                        |
 
 ## Cardinality guidance
 

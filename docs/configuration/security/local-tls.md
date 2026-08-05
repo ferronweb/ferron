@@ -9,7 +9,7 @@ This page documents the `local` TLS provider, which generates and manages locall
 
 | Directive  | Type       | Default           | Description                  |
 | ---------- | ---------- | ----------------- | ---------------------------- |
-| `provider` | `local`    | —                 | Set to `"local"`             |
+| `provider` | `local`    | none              | Set to `"local"`             |
 | `cache`    | `<string>` | platform data dir | Path for certificate caching |
 
 **Configuration example:**

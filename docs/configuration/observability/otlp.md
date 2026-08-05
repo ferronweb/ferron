@@ -27,18 +27,18 @@ example.com {
 
 You configure each signal type (`logs`, `metrics`, `traces`) independently. Omitting a signal disables it for that host.
 
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `logs` | `<endpoint>` | OTLP logs endpoint. | disabled |
+| Directive | Arguments    | Description            | Default  |
+| --------- | ------------ | ---------------------- | -------- |
+| `logs`    | `<endpoint>` | OTLP logs endpoint.    | disabled |
 | `metrics` | `<endpoint>` | OTLP metrics endpoint. | disabled |
-| `traces` | `<endpoint>` | OTLP traces endpoint. | disabled |
+| `traces`  | `<endpoint>` | OTLP traces endpoint.  | disabled |
 
 Each signal sub-block supports these nested directives:
 
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
-| `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
+| Directive       | Arguments  | Description                                                      | Default                                      |
+| --------------- | ---------- | ---------------------------------------------------------------- | -------------------------------------------- |
+| `protocol`      | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
+| `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC).      | none                                         |
 
 > [!tip]
 > If you have connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
@@ -48,12 +48,12 @@ Each signal sub-block supports these nested directives:
 
 ### Global options
 
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
-| `no_verification` | `[bool]` | Disable TLS certificate verification. Use with caution. | `false` |
-| `log_style` | `<string>` | Log style for log records. `legacy` keeps the `message` body. `modern` publishes a `summary` with typed attributes and remaps fields. | `"modern"` |
-| `authorization` | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one is not configured. | none |
+| Directive         | Arguments  | Description                                                                                                                           | Default    |
+| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `service_name`    | `<string>` | OTLP resource service name.                                                                                                           | `"ferron"` |
+| `no_verification` | `[bool]`   | Disable TLS certificate verification. Use with caution.                                                                               | `false`    |
+| `log_style`       | `<string>` | Log style for log records. `legacy` keeps the `message` body. `modern` publishes a `summary` with typed attributes and remaps fields. | `"modern"` |
+| `authorization`   | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one is not configured.                        | none       |
 
 > [!tip]
 > The OTLP resource automatically includes `process.pid` and `process.start_time` attributes. These attributes let backends distinguish concurrent processes (same PID range after restart) from sequential lifetimes (different start times). This prevents cumulative counters from adjacent process lifetimes from mixing in dashboards.
@@ -82,12 +82,12 @@ The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry at
 
 Each `key` entry configures one baggage key to promote:
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
-| `attribute` | `<string>` | The OpenTelemetry attribute name to use. | same as the baggage key |
-| `signals` | `<string>...` | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`. | all signals |
-| `max_distinct` | `<number> \| false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100 |
+| Nested directive | Arguments           | Description                                                                                    | Default                 |
+| ---------------- | ------------------- | ---------------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                      | none                    |
+| `attribute`      | `<string>`          | The OpenTelemetry attribute name to use.                                                       | same as the baggage key |
+| `signals`        | `<string>...`       | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`.                   | all signals             |
+| `max_distinct`   | `<number> \| false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100                     |
 
 > [!tip]
 > Ferron parses the `baggage` header and attaches it to spans automatically. Use the `baggage` sub-directive to promote specific keys into telemetry attributes.
@@ -104,25 +104,25 @@ The `log_style` directive selects how log records go over OTLP:
 
 The most common access-log field remappings in modern mode are:
 
-| Legacy field | OTEL semantic-convention attribute |
-| --- | --- |
-| `path` | `url.path` |
-| `path_and_query` | `url.full` |
-| `method` | `http.request.method` |
-| `version` | `network.protocol.version` |
-| `scheme` | `url.scheme` |
-| `client_ip_canonical` | `client.address` |
-| `client_port` | `client.port` |
-| `server_ip_canonical` | `server.address` |
-| `server_port` | `server.port` |
-| `auth_user` | `user.name` |
-| `status` | `http.response.status_code` |
-| `content_length` | `http.response.body.size` |
-| `duration_secs` | `http.server.request.duration` |
-| `header_<name>` | `http.request.header.<name>` |
+| Legacy field                               | OTEL semantic-convention attribute                                 |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `path`                                     | `url.path`                                                         |
+| `path_and_query`                           | `url.full`                                                         |
+| `method`                                   | `http.request.method`                                              |
+| `version`                                  | `network.protocol.version`                                         |
+| `scheme`                                   | `url.scheme`                                                       |
+| `client_ip_canonical`                      | `client.address`                                                   |
+| `client_port`                              | `client.port`                                                      |
+| `server_ip_canonical`                      | `server.address`                                                   |
+| `server_port`                              | `server.port`                                                      |
+| `auth_user`                                | `user.name`                                                        |
+| `status`                                   | `http.response.status_code`                                        |
+| `content_length`                           | `http.response.body.size`                                          |
+| `duration_secs`                            | `http.server.request.duration`                                     |
+| `header_<name>`                            | `http.request.header.<name>`                                       |
 | `timestamp`, `trace_id`, `span_id`, `*_ip` | dropped (use the record timestamp and standard attributes instead) |
-| fields with `.` | `<field_name>`  |
-| other fields | `ferron.custom.<field_name>` |
+| fields with `.`                            | `<field_name>`                                                     |
+| other fields                               | `ferron.custom.<field_name>`                                       |
 
 Example:
 
@@ -334,11 +334,11 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
-| Error with logs provider | WARN  | `error.message` (string) — error details |
+| Description (summary)       | Level | Attributes                               |
+| --------------------------- | ----- | ---------------------------------------- |
+| Error with logs provider    | WARN  | `error.message` (string) — error details |
 | Error with metrics provider | WARN  | `error.message` (string) — error details |
-| Error with traces provider | WARN  | `error.message` (string) — error details |
+| Error with traces provider  | WARN  | `error.message` (string) — error details |
 
 ## Best practices
 

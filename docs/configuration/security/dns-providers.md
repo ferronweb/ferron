@@ -28,13 +28,13 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 **Provider name:** `alidns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key_id` | `<string>` | Alibaba Cloud AccessKey ID. | — (required) |
-| `access_key_secret` | `<string>` | Alibaba Cloud AccessKey secret. | — (required) |
-| `region` | `<string>` | Alibaba Cloud region. | — (optional) |
-| `security_token` | `<string>` | STS security token for temporary credentials. | — (optional) |
-| `line` | `<string>` | DNS line/zone identifier. | — (optional) |
+| Directive           | Arguments  | Description                                   | Default         |
+| ------------------- | ---------- | --------------------------------------------- | --------------- |
+| `access_key_id`     | `<string>` | Alibaba Cloud AccessKey ID.                   | none (required) |
+| `access_key_secret` | `<string>` | Alibaba Cloud AccessKey secret.               | none (required) |
+| `region`            | `<string>` | Alibaba Cloud region.                         | none (optional) |
+| `security_token`    | `<string>` | STS security token for temporary credentials. | none (optional) |
+| `line`              | `<string>` | DNS line/zone identifier.                     | none (optional) |
 
 **Configuration example:**
 
@@ -60,9 +60,9 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 **Provider name:** `arvancloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | ArvanCloud API key. | — (required) |
+| Directive | Arguments  | Description         | Default         |
+| --------- | ---------- | ------------------- | --------------- |
+| `api_key` | `<string>` | ArvanCloud API key. | none (required) |
 
 **Configuration example:**
 
@@ -86,11 +86,11 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 **Provider name:** `autodns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | AutoDNS username. | — (required) |
-| `password` | `<string>` | AutoDNS password. | — (required) |
-| `context` | `<number>` | AutoDNS context ID. | — (optional) |
+| Directive  | Arguments  | Description         | Default         |
+| ---------- | ---------- | ------------------- | --------------- |
+| `username` | `<string>` | AutoDNS username.   | none (required) |
+| `password` | `<string>` | AutoDNS password.   | none (required) |
+| `context`  | `<number>` | AutoDNS context ID. | none (optional) |
 
 **Configuration example:**
 
@@ -115,14 +115,14 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 **Provider name:** `azuredns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `tenant_id` | `<string>` | Azure tenant ID. | — (required) |
-| `client_id` | `<string>` | Azure client/application ID. | — (required) |
-| `client_secret` | `<string>` | Azure client secret. | — (required) |
-| `subscription_id` | `<string>` | Azure subscription ID. | — (required) |
-| `resource_group` | `<string>` | Azure resource group name. | — (required) |
-| `endpoint` | `AzurePublicCloud`, `AzureChinaCloud`, `AzureUSGovernment` | Azure environment. | — (required) |
+| Directive         | Arguments                                                  | Description                  | Default         |
+| ----------------- | ---------------------------------------------------------- | ---------------------------- | --------------- |
+| `tenant_id`       | `<string>`                                                 | Azure tenant ID.             | none (required) |
+| `client_id`       | `<string>`                                                 | Azure client/application ID. | none (required) |
+| `client_secret`   | `<string>`                                                 | Azure client secret.         | none (required) |
+| `subscription_id` | `<string>`                                                 | Azure subscription ID.       | none (required) |
+| `resource_group`  | `<string>`                                                 | Azure resource group name.   | none (required) |
+| `endpoint`        | `AzurePublicCloud`, `AzureChinaCloud`, `AzureUSGovernment` | Azure environment.           | none (required) |
 
 **Configuration example:**
 
@@ -151,10 +151,10 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 **Provider name:** `baiducloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key_id` | `<string>` | Baidu Cloud AccessKey ID. | — (required) |
-| `access_key_secret` | `<string>` | Baidu Cloud AccessKey secret. | — (required) |
+| Directive           | Arguments  | Description                   | Default         |
+| ------------------- | ---------- | ----------------------------- | --------------- |
+| `access_key_id`     | `<string>` | Baidu Cloud AccessKey ID.     | none (required) |
+| `access_key_secret` | `<string>` | Baidu Cloud AccessKey secret. | none (required) |
 
 **Configuration example:**
 
@@ -181,14 +181,14 @@ All DNS provider implementations are currently part of the `dns-stalwart` module
 
 Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `server_url` | `<string>` | BlueCat gateway URL. | — (required) |
-| `username` | `<string>` | BlueCat username. | — (required) |
-| `password` | `<string>` | BlueCat password. | — (required) |
-| `config_name` | `<string>` | BlueCat configuration name. | — (required) |
-| `view_name` | `<string>` | DNS view name. | — (required) |
-| `skip_deploy` | `<bool>` | Skip the deployment step after updating records. | `false` |
+| Directive     | Arguments  | Description                                      | Default         |
+| ------------- | ---------- | ------------------------------------------------ | --------------- |
+| `server_url`  | `<string>` | BlueCat gateway URL.                             | none (required) |
+| `username`    | `<string>` | BlueCat username.                                | none (required) |
+| `password`    | `<string>` | BlueCat password.                                | none (required) |
+| `config_name` | `<string>` | BlueCat configuration name.                      | none (required) |
+| `view_name`   | `<string>` | DNS view name.                                   | none (required) |
+| `skip_deploy` | `<bool>`   | Skip the deployment step after updating records. | `false`         |
 
 **Configuration example:**
 
@@ -216,9 +216,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `bunny`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Bunny DNS API key. | — (required) |
+| Directive | Arguments  | Description        | Default         |
+| --------- | ---------- | ------------------ | --------------- |
+| `api_key` | `<string>` | Bunny DNS API key. | none (required) |
 
 **Configuration example:**
 
@@ -242,11 +242,11 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `cloudns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `auth_id` | `<string>` | ClouDNS Auth ID. | — (optional) |
-| `sub_auth_id` | `<string>` | ClouDNS sub-auth ID. | — (optional) |
-| `password` | `<string>` | ClouDNS password (required if `auth_id`/`sub_auth_id` not used). | — (optional) |
+| Directive     | Arguments  | Description                                                      | Default         |
+| ------------- | ---------- | ---------------------------------------------------------------- | --------------- |
+| `auth_id`     | `<string>` | ClouDNS Auth ID.                                                 | none (optional) |
+| `sub_auth_id` | `<string>` | ClouDNS sub-auth ID.                                             | none (optional) |
+| `password`    | `<string>` | ClouDNS password (required if `auth_id`/`sub_auth_id` not used). | none (optional) |
 
 **Configuration example:**
 
@@ -271,10 +271,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `constellix`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Constellix API key. | — (required) |
-| `secret_key` | `<string>` | Constellix secret key. | — (required) |
+| Directive    | Arguments  | Description            | Default         |
+| ------------ | ---------- | ---------------------- | --------------- |
+| `api_key`    | `<string>` | Constellix API key.    | none (required) |
+| `secret_key` | `<string>` | Constellix secret key. | none (required) |
 
 **Configuration example:**
 
@@ -299,11 +299,11 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `cpanel`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `base_url` | `<string>` | cPanel host URL (for example `https://example.com:2083`). | — (required) |
-| `username` | `<string>` | cPanel account username. | — (required) |
-| `token` | `<string>` | cPanel API token. | — (required) |
+| Directive  | Arguments  | Description                                               | Default         |
+| ---------- | ---------- | --------------------------------------------------------- | --------------- |
+| `base_url` | `<string>` | cPanel host URL (for example `https://example.com:2083`). | none (required) |
+| `username` | `<string>` | cPanel account username.                                  | none (required) |
+| `token`    | `<string>` | cPanel API token.                                         | none (required) |
 
 **Configuration example:**
 
@@ -329,9 +329,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `cloudflare`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Cloudflare API token (scoped token). | — (required) |
+| Directive | Arguments  | Description                          | Default         |
+| --------- | ---------- | ------------------------------------ | --------------- |
+| `api_key` | `<string>` | Cloudflare API token (scoped token). | none (required) |
 
 **Configuration example:**
 
@@ -356,9 +356,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `ddnss`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `key` | `<string>` | DDNSS.de API key. | — (required) |
+| Directive | Arguments  | Description       | Default         |
+| --------- | ---------- | ----------------- | --------------- |
+| `key`     | `<string>` | DDNSS.de API key. | none (required) |
 
 **Configuration example:**
 
@@ -382,9 +382,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `desec`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `auth_token` | `<string>` | deSEC API token. | — (required) |
+| Directive    | Arguments  | Description      | Default         |
+| ------------ | ---------- | ---------------- | --------------- |
+| `auth_token` | `<string>` | deSEC API token. | none (required) |
 
 **Configuration example:**
 
@@ -408,9 +408,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `digitalocean`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `auth_token` | `<string>` | DigitalOcean personal access token (OAuth token). | — (required) |
+| Directive    | Arguments  | Description                                       | Default         |
+| ------------ | ---------- | ------------------------------------------------- | --------------- |
+| `auth_token` | `<string>` | DigitalOcean personal access token (OAuth token). | none (required) |
 
 **Configuration example:**
 
@@ -434,10 +434,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `dnsmadeeasy`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | DNS Made Easy API key. | — (required) |
-| `api_secret` | `<string>` | DNS Made Easy API secret. | — (required) |
+| Directive    | Arguments  | Description               | Default         |
+| ------------ | ---------- | ------------------------- | --------------- |
+| `api_key`    | `<string>` | DNS Made Easy API key.    | none (required) |
+| `api_secret` | `<string>` | DNS Made Easy API secret. | none (required) |
 
 **Configuration example:**
 
@@ -462,10 +462,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `dnsimple`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `oauth_token` | `<string>` | DNSimple OAuth token. | — (required) |
-| `account_id` | `<string>` | DNSimple account ID. | — (required) |
+| Directive     | Arguments  | Description           | Default         |
+| ------------- | ---------- | --------------------- | --------------- |
+| `oauth_token` | `<string>` | DNSimple OAuth token. | none (required) |
+| `account_id`  | `<string>` | DNSimple account ID.  | none (required) |
 
 **Configuration example:**
 
@@ -490,10 +490,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `domeneshop`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Domeneshop API token. | — (required) |
-| `api_secret` | `<string>` | Domeneshop API secret. | — (required) |
+| Directive    | Arguments  | Description            | Default         |
+| ------------ | ---------- | ---------------------- | --------------- |
+| `api_token`  | `<string>` | Domeneshop API token.  | none (required) |
+| `api_secret` | `<string>` | Domeneshop API secret. | none (required) |
 
 **Configuration example:**
 
@@ -518,9 +518,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `dreamhost`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | DreamHost API key. | — (required) |
+| Directive | Arguments  | Description        | Default         |
+| --------- | ---------- | ------------------ | --------------- |
+| `api_key` | `<string>` | DreamHost API key. | none (required) |
 
 **Configuration example:**
 
@@ -544,9 +544,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `duckdns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `token` | `<string>` | DuckDNS account token. | — (required) |
+| Directive | Arguments  | Description            | Default         |
+| --------- | ---------- | ---------------------- | --------------- |
+| `token`   | `<string>` | DuckDNS account token. | none (required) |
 
 **Configuration example:**
 
@@ -570,9 +570,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `dynu`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Dynu API key. | — (required) |
+| Directive | Arguments  | Description   | Default         |
+| --------- | ---------- | ------------- | --------------- |
+| `api_key` | `<string>` | Dynu API key. | none (required) |
 
 **Configuration example:**
 
@@ -596,10 +596,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `easydns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `token` | `<string>` | EasyDNS API token. | — (required) |
-| `key` | `<string>` | EasyDNS API key. | — (required) |
+| Directive | Arguments  | Description        | Default         |
+| --------- | ---------- | ------------------ | --------------- |
+| `token`   | `<string>` | EasyDNS API token. | none (required) |
+| `key`     | `<string>` | EasyDNS API key.   | none (required) |
 
 **Configuration example:**
 
@@ -624,13 +624,13 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `edgedns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `host` | `<string>` | Edge DNS server hostname. | — (required) |
-| `client_token` | `<string>` | Edge DNS client token. | — (required) |
-| `client_secret` | `<string>` | Edge DNS client secret. | — (required) |
-| `access_token` | `<string>` | Edge DNS access token. | — (required) |
-| `account_switch_key` | `<string>` | Account switch key for multi-account setups. | — (optional) |
+| Directive            | Arguments  | Description                                  | Default         |
+| -------------------- | ---------- | -------------------------------------------- | --------------- |
+| `host`               | `<string>` | Edge DNS server hostname.                    | none (required) |
+| `client_token`       | `<string>` | Edge DNS client token.                       | none (required) |
+| `client_secret`      | `<string>` | Edge DNS client secret.                      | none (required) |
+| `access_token`       | `<string>` | Edge DNS access token.                       | none (required) |
+| `account_switch_key` | `<string>` | Account switch key for multi-account setups. | none (optional) |
 
 **Configuration example:**
 
@@ -657,10 +657,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `exoscale`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Exoscale API key. | — (required) |
-| `api_secret` | `<string>` | Exoscale API secret. | — (required) |
+| Directive    | Arguments  | Description          | Default         |
+| ------------ | ---------- | -------------------- | --------------- |
+| `api_key`    | `<string>` | Exoscale API key.    | none (required) |
+| `api_secret` | `<string>` | Exoscale API secret. | none (required) |
 
 **Configuration example:**
 
@@ -685,9 +685,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `freemyip`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `token` | `<string>` | FreeMyIP token. | — (required) |
+| Directive | Arguments  | Description     | Default         |
+| --------- | ---------- | --------------- | --------------- |
+| `token`   | `<string>` | FreeMyIP token. | none (required) |
 
 **Configuration example:**
 
@@ -711,9 +711,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `gandiv5`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `personal_access_token` | `<string>` | Gandi v5 personal access token. | — (required) |
+| Directive               | Arguments  | Description                     | Default         |
+| ----------------------- | ---------- | ------------------------------- | --------------- |
+| `personal_access_token` | `<string>` | Gandi v5 personal access token. | none (required) |
 
 **Configuration example:**
 
@@ -737,9 +737,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `gcore`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Gcore API token. | — (required) |
+| Directive   | Arguments  | Description      | Default         |
+| ----------- | ---------- | ---------------- | --------------- |
+| `api_token` | `<string>` | Gcore API token. | none (required) |
 
 **Configuration example:**
 
@@ -763,10 +763,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `glesys`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_user` | `<string>` | GleSYS API username. | — (required) |
-| `api_key` | `<string>` | GleSYS API key. | — (required) |
+| Directive  | Arguments  | Description          | Default         |
+| ---------- | ---------- | -------------------- | --------------- |
+| `api_user` | `<string>` | GleSYS API username. | none (required) |
+| `api_key`  | `<string>` | GleSYS API key.      | none (required) |
 
 **Configuration example:**
 
@@ -791,10 +791,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `godaddy`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | GoDaddy API key. | — (required) |
-| `api_secret` | `<string>` | GoDaddy API secret. | — (required) |
+| Directive    | Arguments  | Description         | Default         |
+| ------------ | ---------- | ------------------- | --------------- |
+| `api_key`    | `<string>` | GoDaddy API key.    | none (required) |
+| `api_secret` | `<string>` | GoDaddy API secret. | none (required) |
 
 **Configuration example:**
 
@@ -819,13 +819,13 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `googlecloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `service_account_json` | `<string>` | Contents of the Google Cloud service account JSON key file. | — (required) |
-| `project_id` | `<string>` | Google Cloud project ID. | — (required) |
-| `managed_zone` | `<string>` | Name of the Cloud DNS managed zone. Ferron resolves the zone automatically if omitted. | — (optional) |
-| `private_zone` | `<bool>` | Set to `true` to target a private zone. | `false` |
-| `impersonate_service_account` | `<string>` | Service account email to impersonate. | — (optional) |
+| Directive                     | Arguments  | Description                                                                            | Default         |
+| ----------------------------- | ---------- | -------------------------------------------------------------------------------------- | --------------- |
+| `service_account_json`        | `<string>` | Contents of the Google Cloud service account JSON key file.                            | none (required) |
+| `project_id`                  | `<string>` | Google Cloud project ID.                                                               | none (required) |
+| `managed_zone`                | `<string>` | Name of the Cloud DNS managed zone. Ferron resolves the zone automatically if omitted. | none (optional) |
+| `private_zone`                | `<bool>`   | Set to `true` to target a private zone.                                                | `false`         |
+| `impersonate_service_account` | `<string>` | Service account email to impersonate.                                                  | none (optional) |
 
 **Configuration example:**
 
@@ -851,9 +851,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `hetzner`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Hetzner DNS API token. | — (required) |
+| Directive   | Arguments  | Description            | Default         |
+| ----------- | ---------- | ---------------------- | --------------- |
+| `api_token` | `<string>` | Hetzner DNS API token. | none (required) |
 
 **Configuration example:**
 
@@ -877,9 +877,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `hostingde`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Hosting.de API key. | — (required) |
+| Directive | Arguments  | Description         | Default         |
+| --------- | ---------- | ------------------- | --------------- |
+| `api_key` | `<string>` | Hosting.de API key. | none (required) |
 
 **Configuration example:**
 
@@ -903,9 +903,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `hostinger`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Hostinger API token. | — (required) |
+| Directive   | Arguments  | Description          | Default         |
+| ----------- | ---------- | -------------------- | --------------- |
+| `api_token` | `<string>` | Hostinger API token. | none (required) |
 
 **Configuration example:**
 
@@ -929,11 +929,11 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `huaweicloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key_id` | `<string>` | Huawei Cloud AccessKey ID. | — (required) |
-| `access_key_secret` | `<string>` | Huawei Cloud AccessKey secret. | — (required) |
-| `region` | `<string>` | Huawei Cloud region. | — (required) |
+| Directive           | Arguments  | Description                    | Default         |
+| ------------------- | ---------- | ------------------------------ | --------------- |
+| `access_key_id`     | `<string>` | Huawei Cloud AccessKey ID.     | none (required) |
+| `access_key_secret` | `<string>` | Huawei Cloud AccessKey secret. | none (required) |
+| `region`            | `<string>` | Huawei Cloud region.           | none (required) |
 
 **Configuration example:**
 
@@ -959,9 +959,9 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `hurricane`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `credentials` | `<string>` | Comma-separated key=value pairs (for example `domain1=ip1,domain2=ip2`). | — (required) |
+| Directive     | Arguments  | Description                                                              | Default         |
+| ------------- | ---------- | ------------------------------------------------------------------------ | --------------- |
+| `credentials` | `<string>` | Comma-separated key=value pairs (for example `domain1=ip1,domain2=ip2`). | none (required) |
 
 **Configuration example:**
 
@@ -985,10 +985,10 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 **Provider name:** `ibmcloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | IBM Cloud username. | — (required) |
-| `api_key` | `<string>` | IBM Cloud API key. | — (required) |
+| Directive  | Arguments  | Description         | Default         |
+| ---------- | ---------- | ------------------- | --------------- |
+| `username` | `<string>` | IBM Cloud username. | none (required) |
+| `api_key`  | `<string>` | IBM Cloud API key.  | none (required) |
 
 **Configuration example:**
 
@@ -1015,14 +1015,14 @@ Updates DNS records on BlueCat Address Manager v2 via its REST API.
 
 Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `host` | `<string>` | Infoblox NIOS server hostname. | — (required) |
-| `username` | `<string>` | Infoblox username. | — (required) |
-| `password` | `<string>` | Infoblox password. | — (required) |
-| `port` | `<string>` | Infoblox WAPI port. | — (optional) |
-| `wapi_version` | `<string>` | WAPI API version. | — (optional) |
-| `dns_view` | `<string>` | DNS view name. | — (optional) |
+| Directive      | Arguments  | Description                    | Default         |
+| -------------- | ---------- | ------------------------------ | --------------- |
+| `host`         | `<string>` | Infoblox NIOS server hostname. | none (required) |
+| `username`     | `<string>` | Infoblox username.             | none (required) |
+| `password`     | `<string>` | Infoblox password.             | none (required) |
+| `port`         | `<string>` | Infoblox WAPI port.            | none (optional) |
+| `wapi_version` | `<string>` | WAPI API version.              | none (optional) |
+| `dns_view`     | `<string>` | DNS view name.                 | none (optional) |
 
 **Configuration example:**
 
@@ -1050,9 +1050,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `infomaniak`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Infomaniak API token. | — (required) |
+| Directive   | Arguments  | Description           | Default         |
+| ----------- | ---------- | --------------------- | --------------- |
+| `api_token` | `<string>` | Infomaniak API token. | none (required) |
 
 **Configuration example:**
 
@@ -1076,11 +1076,11 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `inwx`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | INWX username. | — (required) |
-| `password` | `<string>` | INWX password. | — (required) |
-| `sandbox` | `<bool>` | Use sandbox environment. | `false` |
+| Directive  | Arguments  | Description              | Default         |
+| ---------- | ---------- | ------------------------ | --------------- |
+| `username` | `<string>` | INWX username.           | none (required) |
+| `password` | `<string>` | INWX password.           | none (required) |
+| `sandbox`  | `<bool>`   | Use sandbox environment. | `false`         |
 
 **Configuration example:**
 
@@ -1106,9 +1106,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `ionos`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | IONOS API key. | — (required) |
+| Directive | Arguments  | Description    | Default         |
+| --------- | ---------- | -------------- | --------------- |
+| `api_key` | `<string>` | IONOS API key. | none (required) |
 
 **Configuration example:**
 
@@ -1132,9 +1132,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `ipv64`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | IPv64 API key. | — (required) |
+| Directive | Arguments  | Description    | Default         |
+| --------- | ---------- | -------------- | --------------- |
+| `api_key` | `<string>` | IPv64 API key. | none (required) |
 
 **Configuration example:**
 
@@ -1158,11 +1158,11 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `joker`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Joker API key (alternative to username/password). | — (optional) |
-| `username` | `<string>` | Joker username (alternative to api_key). | — (optional) |
-| `password` | `<string>` | Joker password (alternative to api_key). | — (optional) |
+| Directive  | Arguments  | Description                                       | Default         |
+| ---------- | ---------- | ------------------------------------------------- | --------------- |
+| `api_key`  | `<string>` | Joker API key (alternative to username/password). | none (optional) |
+| `username` | `<string>` | Joker username (alternative to api_key).          | none (optional) |
+| `password` | `<string>` | Joker password (alternative to api_key).          | none (optional) |
 
 > [!note]
 > Either `api_key` **or** the pair `username` + `password` must exist.
@@ -1189,13 +1189,13 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `lightsail`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key_id` | `<string>` | AWS AccessKey ID. | — (required) |
-| `secret_access_key` | `<string>` | AWS SecretAccessKey. | — (required) |
-| `region` | `<string>` | AWS region. | — (optional) |
-| `session_token` | `<string>` | AWS session token (STS). | — (optional) |
-| `domain` | `<string>` | Domain name filter. | — (optional) |
+| Directive           | Arguments  | Description              | Default         |
+| ------------------- | ---------- | ------------------------ | --------------- |
+| `access_key_id`     | `<string>` | AWS AccessKey ID.        | none (required) |
+| `secret_access_key` | `<string>` | AWS SecretAccessKey.     | none (required) |
+| `region`            | `<string>` | AWS region.              | none (optional) |
+| `session_token`     | `<string>` | AWS session token (STS). | none (optional) |
+| `domain`            | `<string>` | Domain name filter.      | none (optional) |
 
 **Configuration example:**
 
@@ -1222,9 +1222,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `linode`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Linode API v4 token. | — (required) |
+| Directive   | Arguments  | Description          | Default         |
+| ----------- | ---------- | -------------------- | --------------- |
+| `api_token` | `<string>` | Linode API v4 token. | none (required) |
 
 **Configuration example:**
 
@@ -1248,10 +1248,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `luadns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_username` | `<string>` | LuaDNS API username. | — (required) |
-| `api_token` | `<string>` | LuaDNS API token. | — (required) |
+| Directive      | Arguments  | Description          | Default         |
+| -------------- | ---------- | -------------------- | --------------- |
+| `api_username` | `<string>` | LuaDNS API username. | none (required) |
+| `api_token`    | `<string>` | LuaDNS API token.    | none (required) |
 
 **Configuration example:**
 
@@ -1276,10 +1276,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `mythicbeasts`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | Mythic Beasts username. | — (required) |
-| `password` | `<string>` | Mythic Beasts password. | — (required) |
+| Directive  | Arguments  | Description             | Default         |
+| ---------- | ---------- | ----------------------- | --------------- |
+| `username` | `<string>` | Mythic Beasts username. | none (required) |
+| `password` | `<string>` | Mythic Beasts password. | none (required) |
 
 **Configuration example:**
 
@@ -1304,12 +1304,12 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `namecheap`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Namecheap API key. | — (required) |
-| `api_secret` | `<string>` | Namecheap API secret. | — (required) |
-| `client_ip` | `<string>` | Client IP address (used for API access control / IP restriction). | — (required) |
-| `username` | `<string>` | Namecheap username. | — (optional) |
+| Directive    | Arguments  | Description                                                       | Default         |
+| ------------ | ---------- | ----------------------------------------------------------------- | --------------- |
+| `api_key`    | `<string>` | Namecheap API key.                                                | none (required) |
+| `api_secret` | `<string>` | Namecheap API secret.                                             | none (required) |
+| `client_ip`  | `<string>` | Client IP address (used for API access control / IP restriction). | none (required) |
+| `username`   | `<string>` | Namecheap username.                                               | none (optional) |
 
 **Configuration example:**
 
@@ -1335,10 +1335,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `namedotcom`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | Name.com username. | — (required) |
-| `api_token` | `<string>` | Name.com API token. | — (required) |
+| Directive   | Arguments  | Description         | Default         |
+| ----------- | ---------- | ------------------- | --------------- |
+| `username`  | `<string>` | Name.com username.  | none (required) |
+| `api_token` | `<string>` | Name.com API token. | none (required) |
 
 **Configuration example:**
 
@@ -1363,9 +1363,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `namesilo`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | NameSilo API token. | — (required) |
+| Directive   | Arguments  | Description         | Default         |
+| ----------- | ---------- | ------------------- | --------------- |
+| `api_token` | `<string>` | NameSilo API token. | none (required) |
 
 **Configuration example:**
 
@@ -1389,11 +1389,11 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `netcup`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `customer_number` | `<string>` | Netcup customer number. | — (required) |
-| `api_key` | `<string>` | Netcup API key. | — (required) |
-| `api_password` | `<string>` | Netcup API password. | — (required) |
+| Directive         | Arguments  | Description             | Default         |
+| ----------------- | ---------- | ----------------------- | --------------- |
+| `customer_number` | `<string>` | Netcup customer number. | none (required) |
+| `api_key`         | `<string>` | Netcup API key.         | none (required) |
+| `api_password`    | `<string>` | Netcup API password.    | none (required) |
 
 **Configuration example:**
 
@@ -1419,9 +1419,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `netlify`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_token` | `<string>` | Netlify access token. | — (required) |
+| Directive      | Arguments  | Description           | Default         |
+| -------------- | ---------- | --------------------- | --------------- |
+| `access_token` | `<string>` | Netlify access token. | none (required) |
 
 **Configuration example:**
 
@@ -1445,10 +1445,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `nifcloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Nifty Cloud API key. | — (required) |
-| `api_secret` | `<string>` | Nifty Cloud API secret. | — (required) |
+| Directive    | Arguments  | Description             | Default         |
+| ------------ | ---------- | ----------------------- | --------------- |
+| `api_key`    | `<string>` | Nifty Cloud API key.    | none (required) |
+| `api_secret` | `<string>` | Nifty Cloud API secret. | none (required) |
 
 **Configuration example:**
 
@@ -1473,9 +1473,9 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `ns1`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | NS1 API key. | — (required) |
+| Directive | Arguments  | Description  | Default         |
+| --------- | ---------- | ------------ | --------------- |
+| `api_key` | `<string>` | NS1 API key. | none (required) |
 
 **Configuration example:**
 
@@ -1499,15 +1499,15 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `oraclecloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `tenancy_ocid` | `<string>` | Oracle tenancy OCID. | — (required) |
-| `user_ocid` | `<string>` | Oracle user OCID. | — (required) |
-| `compartment_ocid` | `<string>` | Oracle compartment OCID. | — (required) |
-| `region` | `<string>` | Oracle Cloud region. | — (required) |
-| `fingerprint` | `<string>` | API fingerprint. | — (required) |
-| `private_key_pem` | `<string>` | Private key in PEM format. | — (required) |
-| `private_key_password` | `<string>` | Private key password (if encrypted). | — (optional) |
+| Directive              | Arguments  | Description                          | Default         |
+| ---------------------- | ---------- | ------------------------------------ | --------------- |
+| `tenancy_ocid`         | `<string>` | Oracle tenancy OCID.                 | none (required) |
+| `user_ocid`            | `<string>` | Oracle user OCID.                    | none (required) |
+| `compartment_ocid`     | `<string>` | Oracle compartment OCID.             | none (required) |
+| `region`               | `<string>` | Oracle Cloud region.                 | none (required) |
+| `fingerprint`          | `<string>` | API fingerprint.                     | none (required) |
+| `private_key_pem`      | `<string>` | Private key in PEM format.           | none (required) |
+| `private_key_password` | `<string>` | Private key password (if encrypted). | none (optional) |
 
 **Configuration example:**
 
@@ -1536,12 +1536,12 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `ovh`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `application_key` | `<string>` | OVH application key. | — (required) |
-| `application_secret` | `<string>` | OVH application secret. | — (required) |
-| `consumer_key` | `<string>` | OVH consumer key. | — (required) |
-| `endpoint` | `ovh-eu`, `ovh-ca`, `kimsufi-eu`, `kimsufi-ca`, `soyoustart-eu`, `soyoustart-ca` | OVH API endpoint region. | — (required) |
+| Directive            | Arguments                                                                        | Description              | Default         |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------------ | --------------- |
+| `application_key`    | `<string>`                                                                       | OVH application key.     | none (required) |
+| `application_secret` | `<string>`                                                                       | OVH application secret.  | none (required) |
+| `consumer_key`       | `<string>`                                                                       | OVH consumer key.        | none (required) |
+| `endpoint`           | `ovh-eu`, `ovh-ca`, `kimsufi-eu`, `kimsufi-ca`, `soyoustart-eu`, `soyoustart-ca` | OVH API endpoint region. | none (required) |
 
 **Configuration example:**
 
@@ -1568,10 +1568,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `plesk`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `base_url` | `<string>` | Plesk server URL. | — (required) |
-| `api_key` | `<string>` | Plesk API key. | — (required) |
+| Directive  | Arguments  | Description       | Default         |
+| ---------- | ---------- | ----------------- | --------------- |
+| `base_url` | `<string>` | Plesk server URL. | none (required) |
+| `api_key`  | `<string>` | Plesk API key.    | none (required) |
 
 **Configuration example:**
 
@@ -1596,10 +1596,10 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 **Provider name:** `porkbun`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Porkbun API key. | — (required) |
-| `secret_key` | `<string>` | Porkbun secret API key. | — (required) |
+| Directive    | Arguments  | Description             | Default         |
+| ------------ | ---------- | ----------------------- | --------------- |
+| `api_key`    | `<string>` | Porkbun API key.        | none (required) |
+| `secret_key` | `<string>` | Porkbun secret API key. | none (required) |
 
 **Configuration example:**
 
@@ -1626,12 +1626,12 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 
 Updates DNS records on any authoritative server that supports dynamic updates (RFC 2136) authenticated with TSIG.
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `server` | `<uri>` | DNS server address as a URI with scheme `tcp` or `udp` (for example `udp://ns1.example.com:53`). | — (required) |
-| `key_name` | `<string>` | TSIG key name. | — (required) |
-| `key_secret` | `<string>` | TSIG key secret, Base64-encoded. | — (required) |
-| `key_algorithm` | `HMAC-MD5`, `GSS`, `HMAC-SHA1`, `HMAC-SHA224`, `HMAC-SHA256`, `HMAC-SHA256-128`, `HMAC-SHA384`, `HMAC-SHA384-192`, `HMAC-SHA512`, `HMAC-SHA512-256` | TSIG algorithm. | — (required) |
+| Directive       | Arguments                                                                                                                                           | Description                                                                                      | Default         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------- |
+| `server`        | `<uri>`                                                                                                                                             | DNS server address as a URI with scheme `tcp` or `udp` (for example `udp://ns1.example.com:53`). | none (required) |
+| `key_name`      | `<string>`                                                                                                                                          | TSIG key name.                                                                                   | none (required) |
+| `key_secret`    | `<string>`                                                                                                                                          | TSIG key secret, Base64-encoded.                                                                 | none (required) |
+| `key_algorithm` | `HMAC-MD5`, `GSS`, `HMAC-SHA1`, `HMAC-SHA224`, `HMAC-SHA256`, `HMAC-SHA256-128`, `HMAC-SHA384`, `HMAC-SHA384-192`, `HMAC-SHA512`, `HMAC-SHA512-256` | TSIG algorithm.                                                                                  | none (required) |
 
 **Configuration example:**
 
@@ -1658,15 +1658,15 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `route53`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key_id` | `<string>` | AWS access key ID. | — (required) |
-| `secret_access_key` | `<string>` | AWS secret access key. | — (required) |
-| `region` | `<string>` | AWS region (for example `us-east-1`). | — (optional) |
-| `session_token` | `<string>` | AWS session token for temporary credentials. | — (optional) |
-| `hosted_zone_id` | `<string>` | Route 53 hosted zone ID. Ferron resolves the zone automatically if omitted. | — (optional) |
-| `private_zone_only` | `<bool>` | Set to `true` to target a private hosted zone only. | `false` |
-| `endpoint` | `<string>` | Route 53 endpoint URL. | — (optional) |
+| Directive           | Arguments  | Description                                                                 | Default         |
+| ------------------- | ---------- | --------------------------------------------------------------------------- | --------------- |
+| `access_key_id`     | `<string>` | AWS access key ID.                                                          | none (required) |
+| `secret_access_key` | `<string>` | AWS secret access key.                                                      | none (required) |
+| `region`            | `<string>` | AWS region (for example `us-east-1`).                                       | none (optional) |
+| `session_token`     | `<string>` | AWS session token for temporary credentials.                                | none (optional) |
+| `hosted_zone_id`    | `<string>` | Route 53 hosted zone ID. Ferron resolves the zone automatically if omitted. | none (optional) |
+| `private_zone_only` | `<bool>`   | Set to `true` to target a private hosted zone only.                         | `false`         |
+| `endpoint`          | `<string>` | Route 53 endpoint URL.                                                      | none (optional) |
 
 **Configuration example:**
 
@@ -1693,9 +1693,9 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `safedns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `auth_token` | `<string>` | SafeDNS authentication token. | — (required) |
+| Directive    | Arguments  | Description                   | Default         |
+| ------------ | ---------- | ----------------------------- | --------------- |
+| `auth_token` | `<string>` | SafeDNS authentication token. | none (required) |
 
 **Configuration example:**
 
@@ -1719,9 +1719,9 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `scaleway`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_token` | `<string>` | Scaleway API token. | — (required) |
+| Directive   | Arguments  | Description         | Default         |
+| ----------- | ---------- | ------------------- | --------------- |
+| `api_token` | `<string>` | Scaleway API token. | none (required) |
 
 **Configuration example:**
 
@@ -1745,10 +1745,10 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `spaceship`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Spaceship API key. | — (required) |
-| `api_secret` | `<string>` | Spaceship API secret. | — (required) |
+| Directive    | Arguments  | Description           | Default         |
+| ------------ | ---------- | --------------------- | --------------- |
+| `api_key`    | `<string>` | Spaceship API key.    | none (required) |
+| `api_secret` | `<string>` | Spaceship API secret. | none (required) |
 
 **Configuration example:**
 
@@ -1773,12 +1773,12 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `tencentcloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `secret_id` | `<string>` | Tencent Cloud SecretId. | — (required) |
-| `secret_key` | `<string>` | Tencent Cloud SecretKey. | — (required) |
-| `region` | `<string>` | Tencent Cloud region. | — (optional) |
-| `session_token` | `<string>` | Temporary session token. | — (optional) |
+| Directive       | Arguments  | Description              | Default         |
+| --------------- | ---------- | ------------------------ | --------------- |
+| `secret_id`     | `<string>` | Tencent Cloud SecretId.  | none (required) |
+| `secret_key`    | `<string>` | Tencent Cloud SecretKey. | none (required) |
+| `region`        | `<string>` | Tencent Cloud region.    | none (optional) |
+| `session_token` | `<string>` | Temporary session token. | none (optional) |
 
 **Configuration example:**
 
@@ -1804,11 +1804,11 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `transip`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `login` | `<string>` | TransIP account login. | — (required) |
-| `private_key_pem` | `<string>` | Private key in PEM format. | — (required) |
-| `global_key` | `<boolean>` | Use global key for authentication. | `false` |
+| Directive         | Arguments   | Description                        | Default         |
+| ----------------- | ----------- | ---------------------------------- | --------------- |
+| `login`           | `<string>`  | TransIP account login.             | none (required) |
+| `private_key_pem` | `<string>`  | Private key in PEM format.         | none (required) |
+| `global_key`      | `<boolean>` | Use global key for authentication. | `false`         |
 
 **Configuration example:**
 
@@ -1834,11 +1834,11 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `ultradns`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `username` | `<string>` | UltraDNS username. | — (required) |
-| `password` | `<string>` | UltraDNS password. | — (required) |
-| `endpoint` | `<string>` | Custom endpoint URL. | — (optional) |
+| Directive  | Arguments  | Description          | Default         |
+| ---------- | ---------- | -------------------- | --------------- |
+| `username` | `<string>` | UltraDNS username.   | none (required) |
+| `password` | `<string>` | UltraDNS password.   | none (required) |
+| `endpoint` | `<string>` | Custom endpoint URL. | none (optional) |
 
 **Configuration example:**
 
@@ -1863,10 +1863,10 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `vercel`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `auth_token` | `<string>` | Vercel auth token. | — (required) |
-| `team_id` | `<string>` | Team ID for team-managed DNS. | — (optional) |
+| Directive    | Arguments  | Description                   | Default         |
+| ------------ | ---------- | ----------------------------- | --------------- |
+| `auth_token` | `<string>` | Vercel auth token.            | none (required) |
+| `team_id`    | `<string>` | Team ID for team-managed DNS. | none (optional) |
 
 **Configuration example:**
 
@@ -1890,9 +1890,9 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `vultr`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | Vultr API key. | — (required) |
+| Directive | Arguments  | Description    | Default         |
+| --------- | ---------- | -------------- | --------------- |
+| `api_key` | `<string>` | Vultr API key. | none (required) |
 
 **Configuration example:**
 
@@ -1916,10 +1916,10 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `websupport`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `api_key` | `<string>` | WebSupport API key. | — (required) |
-| `secret` | `<string>` | WebSupport secret. | — (required) |
+| Directive | Arguments  | Description         | Default         |
+| --------- | ---------- | ------------------- | --------------- |
+| `api_key` | `<string>` | WebSupport API key. | none (required) |
+| `secret`  | `<string>` | WebSupport secret.  | none (required) |
 
 **Configuration example:**
 
@@ -1944,13 +1944,13 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `volcengine`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `access_key` | `<string>` | Volcengine AccessKey. | — (required) |
-| `secret_key` | `<string>` | Volcengine SecretKey. | — (required) |
-| `region` | `<string>` | Volcengine region. | — (optional) |
-| `host` | `<string>` | Custom API host. | — (optional) |
-| `scheme` | `http`, `https` | HTTP scheme. | — (optional) |
+| Directive    | Arguments       | Description           | Default         |
+| ------------ | --------------- | --------------------- | --------------- |
+| `access_key` | `<string>`      | Volcengine AccessKey. | none (required) |
+| `secret_key` | `<string>`      | Volcengine SecretKey. | none (required) |
+| `region`     | `<string>`      | Volcengine region.    | none (optional) |
+| `host`       | `<string>`      | Custom API host.      | none (optional) |
+| `scheme`     | `http`, `https` | HTTP scheme.          | none (optional) |
 
 **Configuration example:**
 
@@ -1976,10 +1976,10 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 **Provider name:** `yandexcloud`
 
-| Directive | Arguments | Description | Default |
-|-----------|-----------|-------------|---------|
-| `iam_token_b64` | `<string>` | IAM token (base64-encoded). | — (required) |
-| `folder_id` | `<string>` | Yandex folder ID. | — (required) |
+| Directive       | Arguments  | Description                 | Default         |
+| --------------- | ---------- | --------------------------- | --------------- |
+| `iam_token_b64` | `<string>` | IAM token (base64-encoded). | none (required) |
+| `folder_id`     | `<string>` | Yandex folder ID.           | none (required) |
 
 **Configuration example:**
 
@@ -2022,17 +2022,17 @@ All string directives support environment variable interpolation. This keeps sec
 
 After Ferron creates the `_acme-challenge` TXT record, the ACME CA must be able to resolve it. Propagation time varies by provider:
 
-| Provider | Typical minimum TTL |
-|----------|-------------------|
-| `bluecatv2`, `exoscale`, `ns1`, `yandexcloud` | 0 s |
-| `rfc2136`, `azuredns`, `gcore`, `huaweicloud`, `route53` | 1 s |
-| `bunny` | 15 s |
-| `constellix`, `dnsmadeeasy`, `dynu`, `digitalocean`, `infoblox`, `oraclecloud` | 30 s |
-| `cloudflare`, `dnsimple`, `googlecloud`, `ovh`, `spaceship`, `arvancloud`, `cloudns`, `dreamhost`, `duckdns`, `freemyip`, `glesys`, `hetzner`, `hostingde`, `ibmcloud`, `infomaniak`, `ionos`, `ipv64`, `lightsail`, `luadns`, `mythicbeasts`, `namecheap`, `namesilo`, `netcup`, `netlify`, `nifcloud`, `scaleway`, `ultradns`, `vercel`, `vultr`, `volcengine` | 60 s (1 min) |
-| `autodns`, `cpanel`, `domeneshop`, `easydns`, `gandiv5`, `hostinger`, `hurricane`, `inwx`, `joker`, `linode`, `plesk`, `safedns`, `websupport`, `baiducloud`, `transip` | 300 s (5 min) |
-| `alidns`, `godaddy`, `namedotcom`, `tencentcloud`, `porkbun` | 600 s (10 min) |
-| `ddnss` | 900 s (15 min) |
-| `desec` | 3600 s (1 h) |
+| Provider                                                                                                                                                                                                                                                                                                                                                         | Typical minimum TTL |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `bluecatv2`, `exoscale`, `ns1`, `yandexcloud`                                                                                                                                                                                                                                                                                                                    | 0 s                 |
+| `rfc2136`, `azuredns`, `gcore`, `huaweicloud`, `route53`                                                                                                                                                                                                                                                                                                         | 1 s                 |
+| `bunny`                                                                                                                                                                                                                                                                                                                                                          | 15 s                |
+| `constellix`, `dnsmadeeasy`, `dynu`, `digitalocean`, `infoblox`, `oraclecloud`                                                                                                                                                                                                                                                                                   | 30 s                |
+| `cloudflare`, `dnsimple`, `googlecloud`, `ovh`, `spaceship`, `arvancloud`, `cloudns`, `dreamhost`, `duckdns`, `freemyip`, `glesys`, `hetzner`, `hostingde`, `ibmcloud`, `infomaniak`, `ionos`, `ipv64`, `lightsail`, `luadns`, `mythicbeasts`, `namecheap`, `namesilo`, `netcup`, `netlify`, `nifcloud`, `scaleway`, `ultradns`, `vercel`, `vultr`, `volcengine` | 60 s (1 min)        |
+| `autodns`, `cpanel`, `domeneshop`, `easydns`, `gandiv5`, `hostinger`, `hurricane`, `inwx`, `joker`, `linode`, `plesk`, `safedns`, `websupport`, `baiducloud`, `transip`                                                                                                                                                                                          | 300 s (5 min)       |
+| `alidns`, `godaddy`, `namedotcom`, `tencentcloud`, `porkbun`                                                                                                                                                                                                                                                                                                     | 600 s (10 min)      |
+| `ddnss`                                                                                                                                                                                                                                                                                                                                                          | 900 s (15 min)      |
+| `desec`                                                                                                                                                                                                                                                                                                                                                          | 3600 s (1 h)        |
 
 If certificate issuance fails with a DNS validation error, verify that the TXT record is resolvable from the public internet before retrying.
 
@@ -2044,23 +2044,23 @@ The `key_secret` value must be the raw TSIG key bytes encoded as **standard Base
 
 Choose the `endpoint` that matches where your DNS zone runs:
 
-| Value | Region |
-|-------|--------|
-| `AzurePublicCloud` | Azure (default) |
-| `AzureChinaCloud` | Azure China |
+| Value               | Region           |
+| ------------------- | ---------------- |
+| `AzurePublicCloud`  | Azure (default)  |
+| `AzureChinaCloud`   | Azure China      |
 | `AzureUSGovernment` | Azure Government |
 
 ### OVH endpoint selection
 
 Choose the `endpoint` that matches where your domain resides:
 
-| Value | Region |
-|-------|--------|
-| `ovh-eu` | OVH Europe |
-| `ovh-ca` | OVH North America / Canada |
-| `kimsufi-eu` | Kimsufi Europe |
-| `kimsufi-ca` | Kimsufi North America |
-| `soyoustart-eu` | So you Start Europe |
+| Value           | Region                     |
+| --------------- | -------------------------- |
+| `ovh-eu`        | OVH Europe                 |
+| `ovh-ca`        | OVH North America / Canada |
+| `kimsufi-eu`    | Kimsufi Europe             |
+| `kimsufi-ca`    | Kimsufi North America      |
+| `soyoustart-eu` | So you Start Europe        |
 | `soyoustart-ca` | So you Start North America |
 
 ## See also

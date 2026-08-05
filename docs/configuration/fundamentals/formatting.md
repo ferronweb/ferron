@@ -71,18 +71,18 @@ ferron-fmt --check ferron.conf && echo "Formatted" || echo "Needs formatting"
 
 ## Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--indent-width <n>` | `4` | Number of spaces per indentation level |
-| `--indent-style <style>` | `spaces` | Indentation style: `spaces` or `tabs` |
-| `--quote-style <style>` | `auto` | Quote style: `auto`, `always-double`, or `always-bare` |
-| `--no-normalize-quotes` | — | Preserve original quoting style instead of normalizing |
-| `--max-blank-lines <n>` | `2` | Maximum number of consecutive blank lines to preserve |
-| `--no-trailing-newline` | — | Do not add a trailing newline at the end of the file |
-| `--sort-directives` | — | Sort directives alphabetically within blocks |
-| `--check` | — | Check if input is already formatted (exit 1 if not) |
-| `-i, --in-place` | — | Edit file in place |
-| `-o, --output <file>` | — | Write output to file instead of stdout |
+| Option                   | Default  | Description                                            |
+| ------------------------ | -------- | ------------------------------------------------------ |
+| `--indent-width <n>`     | `4`      | Number of spaces per indentation level                 |
+| `--indent-style <style>` | `spaces` | Indentation style: `spaces` or `tabs`                  |
+| `--quote-style <style>`  | `auto`   | Quote style: `auto`, `always-double`, or `always-bare` |
+| `--no-normalize-quotes`  | none     | Preserve original quoting style instead of normalizing |
+| `--max-blank-lines <n>`  | `2`      | Maximum number of consecutive blank lines to preserve  |
+| `--no-trailing-newline`  | none     | Do not add a trailing newline at the end of the file   |
+| `--sort-directives`      | none     | Sort directives alphabetically within blocks           |
+| `--check`                | none     | Check if input is already formatted (exit 1 if not)    |
+| `-i, --in-place`         | none     | Edit file in place                                     |
+| `-o, --output <file>`    | none     | Write output to file instead of stdout                 |
 
 ## Indentation
 

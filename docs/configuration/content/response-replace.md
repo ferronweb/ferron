@@ -14,9 +14,9 @@ This page documents the `replace`, `replace_last_modified`, and `replace_filter_
 
 #### Block options
 
-| Option | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `once` | `<bool>` | When `true`, Ferron replaces only the first time the searched string appears. | `false` |
+| Option | Arguments | Description                                                                   | Default |
+| ------ | --------- | ----------------------------------------------------------------------------- | ------- |
+| `once` | `<bool>`  | When `true`, Ferron replaces only the first time the searched string appears. | `false` |
 
 **Configuration example:**
 
@@ -186,17 +186,17 @@ This ordering makes sure that string replacement operates on raw, uncompressed r
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.replace.replacements_applied` | Counter | — | Responses successfully modified by replacement rules |
-| `ferron.replace.skipped_compressed` | Counter | — | Responses skipped due to `Content-Encoding` header (compressed data) |
-| `ferron.replace.skipped_mime` | Counter | — | Responses skipped due to MIME type mismatch |
+| Metric                                | Type    | Attributes | Description                                                          |
+| ------------------------------------- | ------- | ---------- | -------------------------------------------------------------------- |
+| `ferron.replace.replacements_applied` | Counter | None       | Responses successfully modified by replacement rules                 |
+| `ferron.replace.skipped_compressed`   | Counter | None       | Responses skipped due to `Content-Encoding` header (compressed data) |
+| `ferron.replace.skipped_mime`         | Counter | None       | Responses skipped due to MIME type mismatch                          |
 
 ### Trace spans
 
 The response replacement stage sets the following attributes on its `ferron.stage.http_replace` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.replace.applied` | bool | Whether Ferron applied the replacement. |
+| Attribute                    | Type   | Description                                                                                                  |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| `ferron.replace.applied`     | bool   | Whether Ferron applied the replacement.                                                                      |
 | `ferron.replace.skip_reason` | string | Reason Ferron skipped the replacement, when applicable (for example, `compressed_body`, `unsupported_mime`). |

@@ -20,13 +20,13 @@ observability {
 
 ### Configuration directives
 
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `provider` | `"prometheus"` | Specifies the Prometheus observability provider. Required. | none |
-| `endpoint_listen` | `<socket_address>` | Socket address to listen on for Prometheus metrics requests. Supports IPv4, IPv6, and port specifications. | `"127.0.0.1:8889"` |
-| `endpoint_format` | `<format>` | Output format for metrics. Supported values: `"text"` (Prometheus text format), `"protobuf"` (Prometheus protobuf format). | `"text"` |
-| `endpoint_native_histograms` | `<bool>` | Enable native exponential histograms in protobuf format. When enabled, histogram metrics include both classic buckets and native histogram data in protobuf output. Text format always shows classic buckets regardless of this setting. | `false` |
-| `endpoint_auth_token` | `<token>` | Bearer token for authenticating Prometheus scrape requests. When set, scrapers must send `Authorization: Bearer <token>` header. | none (authentication disabled) |
+| Directive                    | Arguments          | Description                                                                                                                                                                                                                              | Default                        |
+| ---------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `provider`                   | `"prometheus"`     | Specifies the Prometheus observability provider. Required.                                                                                                                                                                               | none                           |
+| `endpoint_listen`            | `<socket_address>` | Socket address to listen on for Prometheus metrics requests. Supports IPv4, IPv6, and port specifications.                                                                                                                               | `"127.0.0.1:8889"`             |
+| `endpoint_format`            | `<format>`         | Output format for metrics. Supported values: `"text"` (Prometheus text format), `"protobuf"` (Prometheus protobuf format).                                                                                                               | `"text"`                       |
+| `endpoint_native_histograms` | `<bool>`           | Enable native exponential histograms in protobuf format. When enabled, histogram metrics include both classic buckets and native histogram data in protobuf output. Text format always shows classic buckets regardless of this setting. | `false`                        |
+| `endpoint_auth_token`        | `<token>`          | Bearer token for authenticating Prometheus scrape requests. When set, scrapers must send `Authorization: Bearer <token>` header.                                                                                                         | none (authentication disabled) |
 
 ### Socket address format
 
@@ -90,11 +90,11 @@ observability {
 
 Each `key` entry configures one baggage key to promote:
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `key` | `<string>` | The W3C Baggage key to extract. Required. | - |
-| `attribute` | `<string>` | The Prometheus label name to use. | same as the baggage key |
-| `max_distinct` | `<number> \| false` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | 100 |
+| Nested directive | Arguments           | Description                                                                              | Default                 |
+| ---------------- | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                | none                    |
+| `attribute`      | `<string>`          | The Prometheus label name to use.                                                        | same as the baggage key |
+| `max_distinct`   | `<number> \| false` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | 100                     |
 
 > [!warning]
 > Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
@@ -244,9 +244,9 @@ Add the following to your `prometheus.yml` to scrape Ferron metrics:
 
 ```yaml
 scrape_configs:
-  - job_name: 'ferron'
+  - job_name: "ferron"
     static_configs:
-      - targets: ['localhost:8889']
+      - targets: ["localhost:8889"]
     scrape_interval: 15s
     scrape_timeout: 10s
 ```

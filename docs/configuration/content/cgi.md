@@ -19,18 +19,18 @@ example.com {
 
 You can write the `cgi` block as a boolean flag to enable CGI with all defaults. You can also write it as a block with nested directives to customize behavior.
 
-| Form | Description |
-| --- | --- |
-| `cgi` | Enables CGI with all defaults. |
-| `cgi true` | Explicitly enables CGI. |
-| `cgi false` | Disables CGI for the current scope. |
+| Form          | Description                                   |
+| ------------- | --------------------------------------------- |
+| `cgi`         | Enables CGI with all defaults.                |
+| `cgi true`    | Explicitly enables CGI.                       |
+| `cgi false`   | Disables CGI for the current scope.           |
 | `cgi { ... }` | Enables CGI and configures nested directives. |
 
 ### `extension`
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `extension` | `<string>` | This directive registers an additional file extension that Ferron treats as a CGI script. Unlike `cgi-bin` directory matching, the file does not need to be executable. You can specify this directive multiple times. | — |
+| Nested directive | Arguments  | Description                                                                                                                                                                                                            | Default |
+| ---------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `extension`      | `<string>` | This directive registers an additional file extension that Ferron treats as a CGI script. Unlike `cgi-bin` directory matching, the file does not need to be executable. You can specify this directive multiple times. | none    |
 
 **Configuration example:**
 
@@ -51,9 +51,9 @@ example.com {
 
 ### `interpreter`
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `interpreter` | `<extension: string> <arg: string>...` | This directive maps a file extension to a custom interpreter command. The first argument is the extension (with a leading dot, for example `.php`). Later arguments form the interpreter command line. Pass `false` as the second argument to disable the interpreter for that extension. You can specify this directive multiple times. | built-in defaults |
+| Nested directive | Arguments                              | Description                                                                                                                                                                                                                                                                                                                              | Default           |
+| ---------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `interpreter`    | `<extension: string> <arg: string>...` | This directive maps a file extension to a custom interpreter command. The first argument is the extension (with a leading dot, for example `.php`). Later arguments form the interpreter command line. Pass `false` as the second argument to disable the interpreter for that extension. You can specify this directive multiple times. | built-in defaults |
 
 **Configuration example:**
 
@@ -78,9 +78,9 @@ example.com {
 
 ### `environment`
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Ferron resolves values with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
+| Nested directive | Arguments                        | Description                                                                                                                                                                                                     | Default |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `environment`    | `<name: string> <value: string>` | This directive sets a CGI environment variable passed to the interpreter process. Ferron resolves values with the same interpolation syntax as other directives. You can specify this directive multiple times. | none    |
 
 **Configuration example:**
 
@@ -111,18 +111,18 @@ example.com {
 
 The following built-in interpreters are available when no custom `interpreter` directive matches:
 
-| Extension | Default interpreter |
-| --- | --- |
-| `.pl` | `perl` |
-| `.py` | `python` |
-| `.sh` | `bash` |
-| `.ksh` | `ksh` |
-| `.csh` | `csh` |
-| `.rb` | `ruby` |
-| `.php` | `php-cgi` |
-| `.exe` (Windows) | *(direct execution)* |
-| `.bat` (Windows) | `cmd /c` |
-| `.vbs` (Windows) | `cscript` |
+| Extension        | Default interpreter  |
+| ---------------- | -------------------- |
+| `.pl`            | `perl`               |
+| `.py`            | `python`             |
+| `.sh`            | `bash`               |
+| `.ksh`           | `ksh`                |
+| `.csh`           | `csh`                |
+| `.rb`            | `ruby`               |
+| `.php`           | `php-cgi`            |
+| `.exe` (Windows) | _(direct execution)_ |
+| `.bat` (Windows) | `cmd /c`             |
+| `.vbs` (Windows) | `cscript`            |
 
 ## Default index files
 
@@ -131,9 +131,9 @@ When you enable CGI and do not set an explicit `index` directive, Ferron adds de
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
 | Registered extension | Prepend to index list |
-| --- | --- |
-| `.cgi` | `index.cgi` |
-| `.php` | `index.php` |
+| -------------------- | --------------------- |
+| `.cgi`               | `index.cgi`           |
+| `.php`               | `index.php`           |
 
 For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
@@ -163,21 +163,21 @@ When Ferron finds a matching file, it looks for an interpreter in this priority:
 
 Ferron automatically sets the following CGI environment variables:
 
-| Variable | Description |
-| --- | --- |
-| `SERVER_SOFTWARE` | Always `Ferron`. |
-| `SERVER_NAME` | Server hostname. |
-| `SERVER_ADDR` | Local server address. |
-| `SERVER_PORT` | Server port. |
-| `REQUEST_METHOD` | HTTP method. |
-| `REQUEST_URI` | Original request URI. |
-| `QUERY_STRING` | Query string (empty string if none). |
-| `PATH_INFO` | Path info extracted from the request. |
-| `SCRIPT_NAME` | The script path relative to the document root. |
-| `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
-| `REMOTE_USER` | Authenticated username, if available. |
-| `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | `on` when the server encrypts the connection. |
+| Variable          | Description                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `SERVER_SOFTWARE` | Always `Ferron`.                                                                      |
+| `SERVER_NAME`     | Server hostname.                                                                      |
+| `SERVER_ADDR`     | Local server address.                                                                 |
+| `SERVER_PORT`     | Server port.                                                                          |
+| `REQUEST_METHOD`  | HTTP method.                                                                          |
+| `REQUEST_URI`     | Original request URI.                                                                 |
+| `QUERY_STRING`    | Query string (empty string if none).                                                  |
+| `PATH_INFO`       | Path info extracted from the request.                                                 |
+| `SCRIPT_NAME`     | The script path relative to the document root.                                        |
+| `AUTH_TYPE`       | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
+| `REMOTE_USER`     | Authenticated username, if available.                                                 |
+| `SERVER_ADMIN`    | Server administrator email (from `admin_email` configuration).                        |
+| `HTTPS`           | `on` when the server encrypts the connection.                                         |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
 
@@ -185,11 +185,11 @@ Additional variables set by `environment` directives override any automatically 
 
 When the request has a trace context, Ferron injects W3C Trace Context headers into the CGI request. These headers (`traceparent`, `tracestate`, and `baggage`) map to standard CGI environment variables:
 
-| Header | CGI environment variable |
-| --- | --- |
-| `traceparent` | `HTTP_TRACEPARENT` |
-| `tracestate` | `HTTP_TRACESTATE` |
-| `baggage` | `HTTP_BAGGAGE` |
+| Header        | CGI environment variable |
+| ------------- | ------------------------ |
+| `traceparent` | `HTTP_TRACEPARENT`       |
+| `tracestate`  | `HTTP_TRACESTATE`        |
+| `baggage`     | `HTTP_BAGGAGE`           |
 
 This enables end-to-end distributed tracing with CGI scripts. For example, a PHP script running with the official OpenTelemetry SDK for PHP can read these headers. It then creates child spans automatically.
 
@@ -204,38 +204,38 @@ This enables end-to-end distributed tracing with CGI scripts. For example, a PHP
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
+| Description (summary) | Level | Attributes                                                           |
+| --------------------- | ----- | -------------------------------------------------------------------- |
 | CGI errors on stderr  | WARN  | `error.message` (string): trimmed stderr output from the CGI process |
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.cgi.requests` | Counter | — | Number of CGI requests processed |
-| `ferron.cgi.failures` | Counter | `error.type` (`"non_zero_exit_code"`), `ferron.cgi.exit_code` | Number of CGI requests that failed with a non-zero exit code |
-| `ferron.cgi.process.duration` | Histogram | — | How long a CGI process runs |
-| `ferron.cgi.stderr_errors` | Counter | — | Number of CGI requests that produced non-empty stderr output |
+| Metric                        | Type      | Attributes                                                    | Description                                                  |
+| ----------------------------- | --------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
+| `ferron.cgi.requests`         | Counter   | None                                                          | Number of CGI requests processed                             |
+| `ferron.cgi.failures`         | Counter   | `error.type` (`"non_zero_exit_code"`), `ferron.cgi.exit_code` | Number of CGI requests that failed with a non-zero exit code |
+| `ferron.cgi.process.duration` | Histogram | None                                                          | How long a CGI process runs                                  |
+| `ferron.cgi.stderr_errors`    | Counter   | None                                                          | Number of CGI requests that produced non-empty stderr output |
 
 ### Access log fields
 
 The CGI module contributes the following fields to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                    | Type   | Description                  |
+| ------------------------ | ------ | ---------------------------- |
 | `ferron.cgi.script_path` | string | Path to CGI script executed. |
-| `ferron.cgi.exit_code` | int | CGI process exit code. |
+| `ferron.cgi.exit_code`   | int    | CGI process exit code.       |
 
 ### Trace spans
 
 The CGI stage sets the following attributes on its `ferron.stage.cgi` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `http.response.status_code` | int | HTTP status code returned by the CGI script. |
-| `ferron.cgi.script_path` | string | Path to the CGI script. |
-| `ferron.cgi.exit_code` | int | Exit code of the CGI process. |
-| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+| Attribute                   | Type   | Description                                            |
+| --------------------------- | ------ | ------------------------------------------------------ |
+| `http.response.status_code` | int    | HTTP status code returned by the CGI script.           |
+| `ferron.cgi.script_path`    | string | Path to the CGI script.                                |
+| `ferron.cgi.exit_code`      | int    | Exit code of the CGI process.                          |
+| `error.type`                | string | Error type on failure, enabling trace UI highlighting. |
 
 ## Examples
 

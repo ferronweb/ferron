@@ -23,15 +23,15 @@ example.com {
 }
 ```
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `url` | `<string>` | Backend server URL (http:// or https://). Required if you do not provide it as an argument. | — |
-| `unix` | `<path>` | Connect to the backend via Unix domain socket instead of TCP. | TCP |
-| `limit` | `<number>` | Maximum concurrent connections to this backend. | No limit (per upstream) |
-| `idle_timeout` | `<duration>` | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s` |
-| `no_verification` | `[bool]` | Skip TLS certificate verification for HTTPS backends. | `false` |
-| `copy` | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers. | none |
-| `last` | `[bool]` | Whether this is the last backend in the chain (no further verification). | `false` |
+| Nested directive  | Arguments     | Description                                                                                               | Default                 |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `url`             | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
+| `unix`            | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
+| `limit`           | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
+| `idle_timeout`    | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
+| `no_verification` | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
+| `copy`            | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
+| `last`            | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
 
 > [!note]
 >
@@ -123,10 +123,10 @@ example.com {
 }
 ```
 
-| Argument | Description |
-| --- | --- |
+| Argument   | Description                                        |
+| ---------- | -------------------------------------------------- |
 | `<number>` | Maximum concurrent connections (positive integer). |
-| `false` | Disable the limit (unbounded). |
+| `false`    | Disable the limit (unbounded).                     |
 
 Default: `auth_to_concurrent_conns 16384`
 
@@ -231,18 +231,18 @@ example.com {
 
 The forwarded authentication module contributes the following fields to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `ferron.fauth.result` | string | Forwarded auth outcome: `success` or `failure`. |
-| `ferron.fauth.backend_url` | string | Auth backend URL contacted. |
+| Field                      | Type   | Description                                     |
+| -------------------------- | ------ | ----------------------------------------------- |
+| `ferron.fauth.result`      | string | Forwarded auth outcome: `success` or `failure`. |
+| `ferron.fauth.backend_url` | string | Auth backend URL contacted.                     |
 
 ### Trace spans
 
 The forwarded authentication stage sets the following attributes on its `ferron.stage.forwarded_auth` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.fauth.result` | string | Authentication result: `success` or `failure`. |
-| `ferron.fauth.backend_url` | string | URL of the authentication backend. |
-| `http.response.status_code` | int | HTTP status code returned on authentication failure. |
-| `error.type` | string | Set to `auth_failed` on failure, enabling trace UI highlighting. |
+| Attribute                   | Type   | Description                                                      |
+| --------------------------- | ------ | ---------------------------------------------------------------- |
+| `ferron.fauth.result`       | string | Authentication result: `success` or `failure`.                   |
+| `ferron.fauth.backend_url`  | string | URL of the authentication backend.                               |
+| `http.response.status_code` | int    | HTTP status code returned on authentication failure.             |
+| `error.type`                | string | Set to `auth_failed` on failure, enabling trace UI highlighting. |

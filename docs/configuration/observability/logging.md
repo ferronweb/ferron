@@ -14,10 +14,10 @@ This page documents logging configuration for Ferron. It covers log signals, log
 
 Ferron emits two log signals: **access logs** and **application logs**.
 
-| Signal | What it captures |
-|---|---|
-| Access logs | Per-request HTTP request/response data (method, path, status, duration, etc.) |
-| Application logs | Server-level messages (startup, config reloads, errors, debug output) |
+| Signal           | What it captures                                                              |
+| ---------------- | ----------------------------------------------------------------------------- |
+| Access logs      | Per-request HTTP request/response data (method, path, status, duration, etc.) |
+| Application logs | Server-level messages (startup, config reloads, errors, debug output)         |
 
 Configure access logs per-host with the `log` directive. Configure application logs with the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal. The `error_log` directive is the file sink for the application log signal.
 
@@ -36,36 +36,36 @@ example.com {
 }
 ```
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `format` | `<string>` | Log formatter to use. The available formatters depend on which observability modules load. | none |
-| `fields` | `<string>...` | Field names to include in the log output. When you omit this, the server emits all available fields. | all fields |
+| Nested directive | Arguments     | Description                                                                                          | Default    |
+| ---------------- | ------------- | ---------------------------------------------------------------------------------------------------- | ---------- |
+| `format`         | `<string>`    | Log formatter to use. The available formatters depend on which observability modules load.           | none       |
+| `fields`         | `<string>...` | Field names to include in the log output. When you omit this, the server emits all available fields. | all fields |
 
 #### Access log fields
 
 Each access log entry contains the following fields:
 
-| Field | Description |
-| --- | --- |
-| `path` | The request URI path (e.g. `/index.html`) |
-| `path_and_query` | The request URI with path and query |
-| `method` | The HTTP request method (e.g. `GET`, `POST`) |
-| `version` | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`) |
-| `scheme` | The request scheme (`http` or `https`) |
-| `client_ip` | The client IP address |
-| `client_port` | The client port number |
-| `client_ip_canonical` | The client IP in canonical form |
-| `server_ip` | The server IP address |
-| `server_port` | The server port number |
-| `server_ip_canonical` | The server IP in canonical form |
-| `auth_user` | The authenticated username, or `-` if not authenticated |
-| `status` | The HTTP response status code |
-| `content_length` | The response content length, or `-` if not available |
-| `duration_secs` | Request processing duration in seconds |
-| `timestamp` | Request timestamp in CLF format |
-| `header_<name>` | Request header values (one field per header) |
-| `span_id` | Optional trace span ID for the request (if W3C trace context is available) |
-| `trace_id` | Optional trace ID for the request (if W3C trace context is available) |
+| Field                 | Description                                                                |
+| --------------------- | -------------------------------------------------------------------------- |
+| `path`                | The request URI path (e.g. `/index.html`)                                  |
+| `path_and_query`      | The request URI with path and query                                        |
+| `method`              | The HTTP request method (e.g. `GET`, `POST`)                               |
+| `version`             | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`)                             |
+| `scheme`              | The request scheme (`http` or `https`)                                     |
+| `client_ip`           | The client IP address                                                      |
+| `client_port`         | The client port number                                                     |
+| `client_ip_canonical` | The client IP in canonical form                                            |
+| `server_ip`           | The server IP address                                                      |
+| `server_port`         | The server port number                                                     |
+| `server_ip_canonical` | The server IP in canonical form                                            |
+| `auth_user`           | The authenticated username, or `-` if not authenticated                    |
+| `status`              | The HTTP response status code                                              |
+| `content_length`      | The response content length, or `-` if not available                       |
+| `duration_secs`       | Request processing duration in seconds                                     |
+| `timestamp`           | Request timestamp in CLF format                                            |
+| `header_<name>`       | Request header values (one field per header)                               |
+| `span_id`             | Optional trace span ID for the request (if W3C trace context is available) |
+| `trace_id`            | Optional trace ID for the request (if W3C trace context is available)      |
 
 > [!important]
 > Access logs do not contain sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.
@@ -90,7 +90,14 @@ example.com {
 Example output:
 
 ```json
-{"method":"GET","path":"/index.html","status":200,"duration_secs":0.012,"client_ip":"127.0.0.1","remote_ip":"127.0.0.1"}
+{
+  "method": "GET",
+  "path": "/index.html",
+  "status": 200,
+  "duration_secs": 0.012,
+  "client_ip": "127.0.0.1",
+  "remote_ip": "127.0.0.1"
+}
 ```
 
 Use the `fields` directive to limit which fields appear in the JSON output. If you do not specify `fields`, the server emits all available access log fields.
@@ -181,13 +188,13 @@ The `json` formatter produces structured JSON records:
 {"timestamp":1781327818364,"summary":"Upstream connection refused","level":"ERROR","target":"ferron::proxy","attributes":{"upstream":"http://10.0.0.1:3000"},"trace_context":{"trace_id":"abc123def456","span_id":"789012345678","sampled":true}}
 ```
 
-| Field | Description |
-|-------|-------------|
-| `timestamp` | The Unix timestamp in milliseconds when the log event occurred |
-| `summary` | The log message summary |
-| `level` | Log severity level (`ERROR`, `WARN`, `INFO`, `DEBUG`) |
-| `target` | The web server module target that emitted the log |
-| `attributes` | Typed key-value pairs attached to the log event |
+| Field           | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| `timestamp`     | The Unix timestamp in milliseconds when the log event occurred  |
+| `summary`       | The log message summary                                         |
+| `level`         | Log severity level (`ERROR`, `WARN`, `INFO`, `DEBUG`)           |
+| `target`        | The web server module target that emitted the log               |
+| `attributes`    | Typed key-value pairs attached to the log event                 |
 | `trace_context` | W3C trace context (`trace_id`, `span_id`, `sampled`), or `null` |
 
 > [!note]
@@ -197,12 +204,12 @@ The `json` formatter produces structured JSON records:
 
 The `log_level` directive (in the `observability` block or via `console_log`/`error_log` aliases) controls the minimum severity level for application logs:
 
-| Level | When to use |
-|-------|-------------|
+| Level   | When to use                                      |
+| ------- | ------------------------------------------------ |
 | `error` | Production default. The server logs only errors. |
-| `warn` | Debugging performance issues. |
-| `info` | Request-level detail. Use for troubleshooting. |
-| `debug` | Deep debugging. High volume. |
+| `warn`  | Debugging performance issues.                    |
+| `info`  | Request-level detail. Use for troubleshooting.   |
+| `debug` | Deep debugging. High volume.                     |
 
 **Configuration example:**
 
@@ -219,12 +226,12 @@ example.com {
 
 The `format` directive (json/text) applies to **file and console** sinks. OTLP also uses a different mechanism:
 
-| Sink | Formatting directive | Configuration |
-|------|---------------------|---------------|
-| File (`provider file`) | `format` (access) / `error_format` (application) | `observability { provider file }` |
-| Console (`provider console`) | `format` (access only) | `observability { provider console }` |
-| OTLP (`provider otlp`) | `log_style modern` or `log_style legacy` (with `format json` or `format text`) | `observability { provider otlp }` |
-| Prometheus | N/A (metrics only) | `observability { provider prometheus }` |
+| Sink                         | Formatting directive                                                           | Configuration                           |
+| ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------- |
+| File (`provider file`)       | `format` (access) / `error_format` (application)                               | `observability { provider file }`       |
+| Console (`provider console`) | `format` (access only)                                                         | `observability { provider console }`    |
+| OTLP (`provider otlp`)       | `log_style modern` or `log_style legacy` (with `format json` or `format text`) | `observability { provider otlp }`       |
+| Prometheus                   | N/A (metrics only)                                                             | `observability { provider prometheus }` |
 
 > [!note]
 > Prometheus is metrics-only. It does not export logs. For log export, configure OTLP or use file/console sinks.
@@ -236,40 +243,40 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 
 The admin API emits structured log events through the observability pipeline for important operational events:
 
-| Event | Level | Condition |
-|-------|-------|-----------|
-| Admin config reload completed | INFO | `POST /reload` succeeds |
-| Admin config reload failed | ERROR | `POST /reload` fails |
-| Admin config queried | INFO | `GET /config` requested |
+| Event                         | Level | Condition               |
+| ----------------------------- | ----- | ----------------------- |
+| Admin config reload completed | INFO  | `POST /reload` succeeds |
+| Admin config reload failed    | ERROR | `POST /reload` fails    |
+| Admin config queried          | INFO  | `GET /config` requested |
 
 ## Reload log events
 
 The `metrics-reload` module emits application log events during configuration reloads:
 
-| Level | Message | Trigger |
-|-------|---------|---------|
-| `INFO` | `Reloading configuration...` | A reload starts |
+| Level  | Message                                                                               | Trigger                   |
+| ------ | ------------------------------------------------------------------------------------- | ------------------------- |
+| `INFO` | `Reloading configuration...`                                                          | A reload starts           |
 | `WARN` | `Can't reload the server, continuing to run with the previous configuration: {error}` | The reload attempt failed |
 
 These events carry the `ferron-metrics-reload` target, and the observability event system emits them.
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
-| Configuration reload | `INFO` | — |
+| Description (summary)      | Level  | Attributes                                          |
+| -------------------------- | ------ | --------------------------------------------------- |
+| Configuration reload       | `INFO` | none                                                |
 | Configuration reload error | `WARN` | `error.message` (string) — the reload error message |
 
 ### Error log attributes
 
 Structured error logs include contextual attributes to aid troubleshooting:
 
-| Attribute | Description |
-|-----------|-------------|
-| `error.type` | Error category (e.g. `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
-| `error.message` | The human-readable error description |
-| `client.address` | The client IP address, when available |
-| `server.address` | The server IP address, when available |
+| Attribute        | Description                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `error.type`     | Error category (e.g. `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
+| `error.message`  | The human-readable error description                                                              |
+| `client.address` | The client IP address, when available                                                             |
+| `server.address` | The server IP address, when available                                                             |
 
 Ferron includes the `client.address` and `server.address` attributes in:
 
