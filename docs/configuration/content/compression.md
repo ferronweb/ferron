@@ -1,5 +1,5 @@
 ---
-title: Configuration: HTTP compression
+title: "Configuration: HTTP compression"
 description: On-the-fly and pre-compressed HTTP response body compression, algorithm preference, and configuration.
 ---
 
@@ -51,12 +51,12 @@ example.com {
 
 ## Algorithm details
 
-| Algorithm | `Content-Encoding` value | Pre-compressed file extension | ETag suffix | Encoding parameters |
-|---|---|---|---|---|
-| Zstandard | `zstd` | `.zst` | `-zstd` (static files), `-dynamic-zstd` (dynamic responses) | Quality level 4, window log 17, hash log 10 |
-| Brotli | `br` | `.br` | `-br` (static files), `-dynamic-br` (dynamic responses) | Quality level 4, window size 17, block size 18 |
-| gzip | `gzip` | `.gz` | `-gzip` (static files), `-dynamic-gzip` (dynamic responses) | Quality level 4 |
-| Deflate | `deflate` | `.deflate` | `-deflate` (static files), `-dynamic-deflate` (dynamic responses) | Quality level 4 |
+| Algorithm | `Content-Encoding` value | Pre-compressed file extension | ETag suffix                                                       | Encoding parameters                            |
+| --------- | ------------------------ | ----------------------------- | ----------------------------------------------------------------- | ---------------------------------------------- |
+| Zstandard | `zstd`                   | `.zst`                        | `-zstd` (static files), `-dynamic-zstd` (dynamic responses)       | Quality level 4, window log 17, hash log 10    |
+| Brotli    | `br`                     | `.br`                         | `-br` (static files), `-dynamic-br` (dynamic responses)           | Quality level 4, window size 17, block size 18 |
+| gzip      | `gzip`                   | `.gz`                         | `-gzip` (static files), `-dynamic-gzip` (dynamic responses)       | Quality level 4                                |
+| Deflate   | `deflate`                | `.deflate`                    | `-deflate` (static files), `-dynamic-deflate` (dynamic responses) | Quality level 4                                |
 
 ## Browser compatibility
 
@@ -85,15 +85,15 @@ When compression is possible (based on file size and extension), the server adds
 
 The compression module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                          | Type   | Description                                                            |
+| ------------------------------ | ------ | ---------------------------------------------------------------------- |
 | `ferron.compression.algorithm` | string | Compression algorithm: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
 
 ### Trace spans
 
 The dynamic compression stage sets the following attributes on its `ferron.stage.dynamic_compression` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.compression.algorithm` | string | Compression algorithm used: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
-| `ferron.compression.precompressed` | bool | Whether the server served a precompressed file variant. |
+| Attribute                          | Type   | Description                                                                 |
+| ---------------------------------- | ------ | --------------------------------------------------------------------------- |
+| `ferron.compression.algorithm`     | string | Compression algorithm used: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
+| `ferron.compression.precompressed` | bool   | Whether the server served a precompressed file variant.                     |

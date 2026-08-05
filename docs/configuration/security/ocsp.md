@@ -1,5 +1,5 @@
 ---
-title: Configuration: OCSP stapling
+title: "Configuration: OCSP stapling"
 description: OCSP stapling for TLS. Attaches signed OCSP responses during the TLS handshake.
 ---
 

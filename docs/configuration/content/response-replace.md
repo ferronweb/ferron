@@ -1,5 +1,5 @@
 ---
-title: Configuration: HTTP response body replacement
+title: "Configuration: HTTP response body replacement"
 description: The `replace` directive for string replacement in HTTP response bodies.
 ---
 
