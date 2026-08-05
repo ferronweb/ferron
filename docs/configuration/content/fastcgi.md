@@ -3,7 +3,7 @@ title: "Configuration: FastCGI support"
 description: "Server-side FastCGI protocol support for backend application servers with connection pooling and keepalive."
 ---
 
-This page documents the `fcgi` directive, which configures FastCGI support in Ferron. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets. It also supports connection pooling and keepalive for improved performance.
+This page documents the `fcgi` directive, which configures FastCGI support in Ferron. FastCGI enables dynamic content by forwarding requests to external application servers over TCP or Unix sockets. It also supports connection pooling and keepalive.
 
 ## `fcgi`
 
@@ -88,7 +88,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets a FastCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets a FastCGI environment variable passed to the backend server. The server resolves values with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -108,7 +108,7 @@ example.com {
 > - Environment variables take precedence over any existing variables with the same name.
 > - The `Proxy` header is automatically removed from the request to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
 > - Ferron always sets `SERVER_SOFTWARE`, `SERVER_NAME`, `SERVER_ADDR`, `SERVER_PORT`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`, `SCRIPT_NAME`, `AUTH_TYPE`, `REMOTE_USER`, and `SERVER_ADMIN` automatically.
-> - The working directory is set to the directory containing the script file.
+> - Ferron sets the working directory to the directory containing the script file.
 
 ### `pass`
 
@@ -130,14 +130,14 @@ example.com {
 
 > [!note]
 >
-> - When `pass` is `false`, the FastCGI backend is only invoked for files matching a registered extension.
+> - When `pass` is `false`, Ferron only invokes the FastCGI backend for files matching a registered extension.
 > - This is useful for routing specific file types to the FastCGI backend while serving other files statically.
 
 ### `keepalive`
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `keepalive` | `<boolean: optional>` | This directive enables connection keepalive to the FastCGI backend. When enabled, Ferron reuses connections across requests, reducing connection setup overhead. | `false` |
+| `keepalive` | `<boolean: optional>` | This directive enables connection keepalive to the FastCGI backend. When enabled, Ferron reuses connections across requests. This reduces connection setup overhead. | `false` |
 
 **Configuration example:**
 
@@ -152,9 +152,9 @@ example.com {
 
 > [!note]
 >
-> - Keepalive connections are managed in a connection pool.
-> - When combined with the `limit` directive, each upstream can have its own pool limit.
-> - Useful for high-traffic sites where connection setup overhead is significant.
+> - Ferron manages keepalive connections in a connection pool.
+> - When you combine this with the `limit` directive, each upstream can have its own pool limit.
+> - This is useful for high-traffic sites where connection setup overhead is significant.
 
 ## `fcgi_php`
 
@@ -164,7 +164,7 @@ example.com {
 }
 ```
 
-The `fcgi_php` directive is a convenience alias for PHP FastCGI backends. It enables FastCGI and automatically registers the `.php` file extension. This is the recommended way to host PHP applications with PHP-FPM.
+The `fcgi_php` directive is an alias for PHP FastCGI backends. It enables FastCGI and automatically registers the `.php` file extension. This is the recommended way to host PHP applications with PHP-FPM.
 
 | Form | Description |
 | --- | --- |
@@ -193,7 +193,7 @@ example.com {
 >
 > - `fcgi_php` automatically registers `.php` as a file extension.
 > - Use `fcgi_php false` to disable PHP FastCGI for a specific scope.
-> - For PHP-FPM over Unix sockets, make sure the socket is accessible by the Ferron process (check owner/group/mode in your PHP-FPM pool configuration).
+> - For PHP-FPM over Unix sockets, make sure the Ferron process can access the socket. Check the owner, group, and mode in your PHP-FPM pool configuration.
 
 ## Connection pooling
 
@@ -221,7 +221,7 @@ fcgi_concurrent_conns false
 >
 > - This is a global setting that applies to all FastCGI backends.
 > - Individual backends can also have their own per-upstream limits via the `limit` nested directive inside `fcgi`.
-> - When the pool is exhausted, new requests wait for a connection to become available.
+> - When the pool runs out of connections, new requests wait for a connection to become available.
 > - Setting to `false` disables the global limit (unlimited concurrent connections).
 
 ### Per-upstream connection limits
@@ -257,9 +257,9 @@ Ferron automatically sets the following FastCGI environment variables:
 | `AUTH_TYPE` | Authentication type from the `Authorization` header. |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Set to `on` when the connection is encrypted. |
+| `HTTPS` | Set to `on` for encrypted connections. |
 
-Additional variables set by `environment` directives override any automatically set variables with the same name.
+Additional variables that `environment` directives define override any variables with the same name.
 
 > [!tip]
 > FastCGI applications receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
@@ -270,7 +270,7 @@ When used alongside an authentication module (for example, `http-basicauth`), Fe
 
 ## Trace context injection
 
-When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the FastCGI request. These headers are mapped to standard CGI environment variables:
+When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the FastCGI request. Ferron maps these headers to standard CGI environment variables:
 
 | Header | FastCGI environment variable |
 | --- | --- |
@@ -278,10 +278,10 @@ When a trace context exists for the request, Ferron automatically injects W3C Tr
 | `tracestate` | `HTTP_TRACESTATE` |
 | `baggage` | `HTTP_BAGGAGE` |
 
-This works in both `pass true` and `pass false` modes. The trace context headers are available to the FastCGI backend application, enabling end-to-end distributed tracing. For example, a PHP application running with the official OpenTelemetry SDK for PHP can read these headers to create child spans automatically.
+This works in both `pass true` and `pass false` modes. The FastCGI backend application can read the trace context headers. This enables end-to-end distributed tracing. For example, a PHP application can use the official OpenTelemetry SDK for PHP to read these headers. The application creates child spans automatically.
 
 > [!info]
-> No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> You do not need per-module configuration. The system controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on trace generation and sampling.
 
 ## Observability
 
@@ -294,8 +294,8 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| FastCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
-| FastCGI errors on stderr  | WARN  | `error.message` (string) — trimmed stderr output from the FastCGI process |
+| FastCGI service unavailable | ERROR | `upstream.address` (string): backend server URL |
+| FastCGI errors on stderr  | WARN  | `error.message` (string): trimmed stderr output from the FastCGI process |
 
 ### Metrics
 
@@ -303,7 +303,7 @@ This works in both `pass true` and `pass false` modes. The trace context headers
 |--------|------|------------|-------------|
 | `ferron.fcgi.requests` | Counter | — | Number of FastCGI requests processed |
 | `ferron.fcgi.failures` | Counter | `error.type` (`"service_unavailable"`), `ferron.fcgi.backend_url` | Number of FastCGI requests that failed before the backend returned a response |
-| `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | Duration of FastCGI upstream request processing |
+| `ferron.fcgi.upstream.duration` | Histogram | `ferron.fcgi.backend_url` | FastCGI upstream request processing time |
 | `ferron.fcgi.stderr_errors` | Counter | — | Number of FastCGI requests that produced non-empty stderr output |
 
 ### Access log fields
@@ -324,7 +324,7 @@ The FastCGI stage sets the following attributes on its `ferron.stage.fcgi_pass` 
 | `http.response.status_code` | int | HTTP status code returned by the FastCGI backend. |
 | `ferron.fcgi.backend_url` | string | URL of the FastCGI backend. |
 | `ferron.fcgi.script_filename` | string | Absolute path to the script on the backend filesystem, when available. |
-| `error.type` | string | Error type on failure (for example, `service_unavailable`), enabling trace UI highlighting. |
+| `error.type` | string | Error type on failure (for example, `service_unavailable`). This enables trace UI highlighting. |
 
 ## Examples
 

@@ -6,12 +6,12 @@ description: "Quick checks for Ferron 3 when a site, listener, proxy, TLS setup,
 When something goes wrong with Ferron or your site, start here. The fastest way to find the cause is to separate service state, networking, TLS, routing, permissions, and configuration.
 
 > [!tip]
-> If you are asking for help, include the Ferron version, your deployment type, a minimal config snippet, and the relevant error-log lines. If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
+> If you ask for help, include the Ferron version, your deployment type, a minimal config snippet, and the error-log lines. If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
 
 ## Quick diagnostic checklist
 
 1. Check the logs.
-2. Confirm Ferron is running.
+2. Confirm Ferron runs.
 3. Test the upstream directly if you proxy requests.
 4. Confirm the port and firewall.
 5. Validate the config after changes.
@@ -40,7 +40,7 @@ If you start Ferron manually, keep the terminal open and read stderr first.
 - If you set an explicit port in the host block, Ferron starts a single listener on that port.
 - If you bind to a specific interface, check the `listen` directive too.
 
-If you are testing the wrong port, the server can be healthy but still appear down.
+If you test the wrong port, the server can be healthy but still appear down.
 
 ### Are the logs enabled?
 
@@ -72,7 +72,7 @@ If direct access fails, fix the upstream first. Ferron cannot proxy to an unreac
 
 ### Is the upstream bound to `127.0.0.1` instead of `0.0.0.0`?
 
-If Ferron and the upstream are in different hosts, containers, or namespaces, binding the upstream to `127.0.0.1` can make it unreachable externally. Bind to `0.0.0.0` or the correct interface when needed.
+If Ferron and the upstream are in different hosts, containers, or namespaces, do not bind the upstream to `127.0.0.1`. Bind to `0.0.0.0` or the correct interface when needed.
 
 ### Is TLS verification failing?
 
@@ -101,7 +101,7 @@ For automatic TLS, DNS must point the hostname to the Ferron server.
 
 ### Port `80` or `443` is blocked
 
-ACME validation can fail when these ports are blocked by a firewall, cloud policy, or proxy path.
+ACME validation can fail when a firewall, cloud policy, or proxy path blocks these ports.
 
 ### ACME challenge is failing
 
@@ -125,7 +125,7 @@ Ferron must be able to read files and traverse directories.
 
 ### Path rewriting confusion
 
-For SPAs, route fallback rewrites are commonly required. If rewrites are involved, enable `rewrite_log` while diagnosing.
+For SPAs, you commonly need route fallback rewrites. If you use rewrites, enable `rewrite_log` while diagnosing.
 
 > [!info]
 > See [Static file serving](/docs/v3/use-cases/content/static-files), [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/v3/configuration/routing/url-processing).
@@ -138,7 +138,7 @@ Check `status` rules, `allow`/`block`, and conditional logic.
 
 ### Is client IP detection correct?
 
-If Ferron is behind a proxy or load balancer and client IP handling is wrong, access control and rate limiting can be wrong too.
+If Ferron is behind a proxy or load balancer, verify client IP handling. Wrong client IP handling can break access control and rate limiting.
 
 ### Is `client_ip_from_header` configured correctly?
 
@@ -167,7 +167,7 @@ All subconditions in one `condition` block must pass. If one fails, the conditio
 
 ### Quick isolation method
 
-Start with a minimal known-good config, validate it with `ferron validate -c ferron.conf`, then add one change at a time.
+Start with a minimal known-good config. Validate it with `ferron validate -c ferron.conf`. Then add one change at a time.
 
 > [!info]
 > See [Getting started](/docs/v3/getting-started), [Configuration syntax](/docs/v3/configuration/fundamentals/syntax), and [Core directives](/docs/v3/configuration/server/core-directives).
@@ -178,8 +178,8 @@ Start with a minimal known-good config, validate it with `ferron validate -c fer
 
 Ferron does not have a single global debug mode. For troubleshooting visibility:
 
-- Make sure `error_log` is enabled.
-- Make sure access logging is enabled via `log`.
+- Make sure `error_log` is on.
+- Make sure access logging is on via `log`.
 - Temporarily enable `rewrite_log` when debugging rewrites.
 - Use OTLP export if you already have centralized tracing or metrics.
 

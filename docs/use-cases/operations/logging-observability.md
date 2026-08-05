@@ -3,7 +3,7 @@ title: Logging & observability
 description: "Practical Ferron setups for access logs, JSON formatting, container-friendly outputs, and OTLP export for centralized observability."
 ---
 
-Ferron supports multiple observability outputs, so you can start with local log files and later move to centralized telemetry without changing your application stack.
+Ferron supports multiple observability outputs. You can start with local log files and later move to centralized telemetry without changing your application stack.
 
 This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/v3/configuration/observability/logging).
 
@@ -31,7 +31,7 @@ The text formatter uses the Combined Log Format (CLF) by default, the same forma
 
 ## JSON-format access logs
 
-Use this when you need structured logs for easier parsing by log aggregation tools (for example, ELK Stack, Splunk, or cloud-native log processors):
+Use this when you need structured logs for easier parsing by log aggregation tools. For example, ELK Stack, Splunk, or cloud-native log processors:
 
 ```ferron
 example.com {
@@ -97,7 +97,7 @@ example.com {
 
 ## Trace ID logging for debugging
 
-Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a variation of Combined Log Format with additional hostname and trace ID fields (Enhanced Combined Log Format) by default. You do not need to configure it manually in most cases.
+Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a different variant of Combined Log Format. This variant adds hostname and trace ID fields (Enhanced Combined Log Format) by default. You do not need to configure it manually in most cases.
 
 Example log output:
 
@@ -161,7 +161,7 @@ example.com {
 
 ### Structured (OTEL-style) logs over OTLP
 
-If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record's body is a short summary (for example, `"Upstream circuit opened"`). Ferron publishes per-event attributes as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"`. Ferron remaps them to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks are unaffected.
+If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record body is a short summary (for example, `"Upstream circuit opened"`). Ferron publishes per-event attributes as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"`. Ferron remaps them to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks remain unaffected.
 
 ```ferron
 example.com {
@@ -181,7 +181,7 @@ example.com {
 
 ### "Traditional" logs over OTLP
 
-If you want to send traditional, human-readable log records via OTLP (for example, for compatibility with existing logging systems), set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
+If you want to send traditional, human-readable log records via OTLP, set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
 
 ```ferron
 example.com {

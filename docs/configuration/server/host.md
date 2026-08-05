@@ -15,7 +15,7 @@ http example.com:8080 {
 
 > [!note]
 >
-> - These directives are host-scoped rather than global.
+> - Ferron scopes these directives to individual hosts, not globally.
 > - The HTTP server engine (`http-server` module) handles connection management, request routing, and TLS termination.
 > - The engine supports HTTP/1, HTTP/2, and experimental HTTP/3.
 
@@ -31,7 +31,7 @@ When you give a hostname (for example, `example.com`) without an explicit port, 
 - One on `default_http_port` (default: 80) serves plain HTTP with no TLS
 - One on `default_https_port` (default: 443) serves HTTPS with automatic ACME TLS
 
-On the HTTPS listener, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default) unless an explicit `tls` directive exists. The ACME provider gets and renews certificates at startup.
+On the HTTPS listener, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). An explicit `tls` directive overrides this behavior. The ACME provider gets and renews certificates at startup.
 
 Hostnames that have **special automatic TLS behavior**:
 
@@ -68,7 +68,7 @@ example.com {
 }
 ```
 
-When an **explicit port** is specified (for example, `example.com:8080`), only a single listener is started on that port. No automatic ACME TLS is applied — you must configure TLS explicitly.
+When you specify an **explicit port** (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS — you must configure TLS explicitly.
 
 > [!info]
 > See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
@@ -76,7 +76,7 @@ When an **explicit port** is specified (for example, `example.com:8080`), only a
 ### HTTPS redirect
 
 - `https_redirect <bool>`
-  - This directive specifies whether automatic HTTP-to-HTTPS redirects are enabled. The redirect uses **308 Permanent Redirect**, which preserves the HTTP method and request body. Default: `https_redirect true` (when TLS is enabled)
+  - This directive enables or disables automatic HTTP-to-HTTPS redirects. The redirect uses **308 Permanent Redirect**, which preserves the HTTP method and request body. Default: `https_redirect true` (when you enable TLS)
 
 **Configuration example:**
 
@@ -88,9 +88,9 @@ example.com {
 
 > [!note]
 >
-> - `localhost` hostnames never get redirected — there is no HTTPS listener for them.
-> - When an explicit port is specified (for example, `example.com:8080`), no redirect happens since no separate HTTPS listener exists.
-> - The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
+> - Ferron never redirects `localhost` hostnames — no HTTPS listener exists for them.
+> - When you specify an explicit port (for example, `example.com:8080`), no redirect happens since no separate HTTPS listener exists.
+> - The target port is `default_https_port` (default: `443`). When the port is `443`, Ferron omits it from the URL.
 
 ### Client IP from forwarded headers
 
@@ -99,7 +99,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `trusted_proxy` | `<ip-or-cidr: string>...` | Trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. | none |
+| `trusted_proxy` | `<ip-or-cidr: string>...` | Reverse-proxy IPs or CIDR ranges that you trust to supply forwarded client IP headers. | none |
 
 **Configuration example:**
 
@@ -123,35 +123,45 @@ Reads the `X-Forwarded-For` header and extracts the **first (leftmost)** IP addr
 
 #### `forwarded` (RFC 7239)
 
-Reads the `Forwarded` header and extracts the first `for=` token. Both quoted and unquoted values are supported. IPv6 addresses are also supported.
+Reads the `Forwarded` header and extracts the first `for=` token. Ferron supports both quoted and unquoted values. Ferron also supports IPv6 addresses.
 
 > [!warning]
-> Ferron only trusts forwarded client IP headers when the connecting peer matches at least one `trusted_proxy` entry. If the `trusted_proxy` list is empty, the header is ignored. Keep this list limited to the reverse proxies or load balancers that you control.
+> Ferron only trusts forwarded client IP headers when the connecting peer matches at least one `trusted_proxy` entry. If the `trusted_proxy` list is empty, Ferron ignores the header. Keep this list limited to the reverse proxies or load balancers that you control.
 
 ### HTTP protocol settings
 
 - `protocols <protocols: string>...`
   - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3, experimental). Default: `protocols h1 h2`
+
 - `options_allowed_methods <methods: string>`
-  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
+  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
+
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
+
 - `h1_enable_early_hints <bool>`
-  - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
+  - This directive enables or disables HTTP/1.1 early hints support. Default: `h1_enable_early_hints false`
+
 - `h2_initial_window_size <size: integer>`
   - This directive specifies the HTTP/2 initial flow-control window size. Default: unset
+
 - `h2_max_frame_size <size: integer>`
   - This directive specifies the HTTP/2 maximum frame size. Default: unset
+
 - `h2_max_concurrent_streams <count: integer>`
   - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset
+
 - `h2_max_header_list_size <size: integer>`
   - This directive specifies the HTTP/2 maximum header list size. Default: unset
+
 - `h2_enable_connect_protocol <bool>`
-  - This directive specifies whether the HTTP/2 extended CONNECT protocol setting is enabled. Default: `h2_enable_connect_protocol false`
+  - This directive enables or disables the HTTP/2 extended CONNECT protocol setting. Default: `h2_enable_connect_protocol false`
+
 - `url_sanitize [bool: boolean]`
-  - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. This directive is applicable only for global scope. Default: `url_sanitize true`
+  - This directive enables or disables URL path sanitization. When enabled (the default), Ferron removes or normalizes dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings. This directive applies only to global scope. Default: `url_sanitize true`
+
 - `url_reject_backslash [bool: boolean]`
-  - This directive specifies whether URLs containing backslashes are rejected. When enabled (the default), requests with literal `\` or percent-encoded backslashes (`%5C`) in the path are rejected with a 400 Bad Request response. This prevents path interpretation issues on Windows backends where backslashes may be treated as path separators. This directive is applicable only for global scope. Default: `url_reject_backslash true`
+  - This directive controls whether Ferron rejects URLs containing backslashes. When enabled (the default), Ferron responds with 400 Bad Request for requests containing literal `\` or percent-encoded backslashes (`%5C`) in the path. This prevents path interpretation issues on Windows backends where systems may treat backslashes as path separators. This directive applies only to global scope. Default: `url_reject_backslash true`
 
 **Configuration example:**
 
@@ -169,25 +179,31 @@ example.com {
 > [!note]
 >
 > - `protocols` must leave at least one supported protocol enabled.
-> - HTTP/3 (`h3`) is currently **experimental**. When enabled, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
-> - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE`. This reduces the attack surface reported by security scanners. You can customize this list based on your server's requirements.
-> - When HTTP/3 is enabled, the server automatically adds an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
+> - HTTP/3 (`h3`) is currently **experimental**. When you enable it, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
+
+> [!note]
+>
+> - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE`. This reduces the attack surface reported by security scanners. You can customize this list based on the requirements of your server.
+> - When you enable HTTP/3, the server automatically adds an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
 
 > [!note] Notes for "url_sanitize"
 >
-> - URL sanitization is applied early in request processing, before configuration resolution.
+> - Ferron applies URL sanitization early in request processing, before configuration resolution.
 > - This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+
+> [!note]
+>
 > - Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
 > - Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
 
 > [!warning]
-> When `url_sanitize` is disabled, Ferron does not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
+> When you disable `url_sanitize`, Ferron does not protect backend services from path traversal attacks if you implement reverse proxying. Use with caution.
 
 > [!note] Notes for "url_reject_backslash"
 >
-> - Backslash rejection is applied early in request processing, before configuration resolution and URL sanitization.
+> - Ferron applies backslash rejection early in request processing, before configuration resolution and URL sanitization.
 > - This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
-> - Both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`) are rejected.
+> - Ferron rejects both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`).
 
 > [!warning]
 > Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs. However, this can expose backends to path interpretation vulnerabilities.
@@ -195,7 +211,7 @@ example.com {
 ### TLS
 
 - `provider <name: string>` (`tls-manual`, `tls-acme`)
-  - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual` (`tls-manual`), `acme` (`tls-acme`). Default: none
+  - This directive specifies the TLS provider name. Required when you enable TLS through the block form. Supported providers: `manual` (`tls-manual`), `acme` (`tls-acme`). Default: none
 
 > [!info]
 >
@@ -206,7 +222,7 @@ example.com {
 ### `admin_email`
 
 - `admin_email <email: string>`
-  - This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported. Default: none
+  - This directive specifies the email address of the server administrator. Ferron uses it in built-in error responses. Ferron supports interpolation. Default: none
 
 ## Metrics
 
@@ -215,19 +231,19 @@ The HTTP server emits the following OpenTelemetry-style metrics via the observab
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
 | `http.server.active_requests` | UpDownCounter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version` | Number of active HTTP requests |
-| `http.server.request.duration` | Histogram | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Duration of HTTP requests in seconds |
+| `http.server.request.duration` | Histogram | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | How long HTTP requests take, in seconds |
 | `ferron.http.server.request_count` | Counter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Total number of HTTP requests completed |
 
 All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
 ### Client IP resolution
 
 - **`trusted_proxy 0.0.0.0/0` or `::/0`** — Trusting every source address for forwarded client IP headers allows spoofing. Restrict `trusted_proxy` to specific reverse proxy addresses.
-- **`client_ip_from_header` without `trusted_proxy`** — If `client_ip_from_header` is configured without trusted proxy ranges, forwarded headers are either ignored or untrusted. Add explicit `trusted_proxy` entries for your reverse proxies.
+- **`client_ip_from_header` without `trusted_proxy`** — If you configure `client_ip_from_header` without trusted proxy ranges, Ferron either ignores or does not trust forwarded headers. Add explicit `trusted_proxy` entries for your reverse proxies.
 
 ### URL processing
 
@@ -236,7 +252,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### Timeouts
 
-- **`timeout false`** — Disabling request pipeline timeouts exposes the server to slow-request resource exhaustion. Set a bounded timeout value.
+- **`timeout false`** — Disabling request pipeline timeouts lets slow requests exhaust server resources. Set a bounded timeout value.
 
 ### HTTP methods
 
@@ -248,7 +264,7 @@ The following best-practice checks are reported by `ferron doctor` for directive
 
 ### TLS deployment
 
-- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits an informational reminder. The reminder states that an upstream proxy or load balancer should perform TLS termination. This is informational rather than prescriptive — legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
+- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits a reminder. The reminder states that an upstream proxy or load balancer should terminate TLS. This is informational, not prescriptive. Legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
 
 ## Observability
 

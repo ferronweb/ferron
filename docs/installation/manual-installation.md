@@ -3,7 +3,7 @@ title: Manual installation from archive
 description: "Install Ferron 3 from a pre-built archive: download, extract, configure, and run on Windows, macOS, or Unix-like systems."
 ---
 
-Ferron 3 can be installed manually from pre-built binaries from an archive. Archives are provided for Windows, macOS, Linux and FreeBSD.
+You can install Ferron 3 manually from pre-built binaries in an archive. Archives are available for Windows, macOS, Linux, and FreeBSD.
 
 ## Prerequisites
 
@@ -39,11 +39,11 @@ Visit the [Ferron downloads page](/download) and choose the archive that matches
   tar -xzf ferron-*.tar.gz -C ferron
   ```
 
-  This will create a directory containing the Ferron binaries and configuration files.
+  This creates a directory containing the Ferron binaries and configuration files.
 
 ### 2. Verify the archive (Linux, FreeBSD)
 
-Run the following command to verify the archive's integrity:
+Run the following command to verify the archive integrity:
 
 ```sh
 # 1. Import the signing key (if not already imported)
@@ -60,12 +60,12 @@ gpg --verify ferron-*.tar.gz.asc
 
 ### 3. Review the extracted contents
 
-After extraction, you should see the following files and directories:
+After extraction, you see these files and directories:
 
 - `ferron` or `ferron.exe` — the main Ferron web server executable.
 - `ferron-fmt` or `ferron-fmt.exe` — a tool for formatting Ferron configuration files.
 - `ferron-kdl2ferron` or `ferron-kdl2ferron.exe` — a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
-- `ferron-passwd` or `ferron-passwd.exe` — a tool for generating hashed passwords for the server's configuration.
+- `ferron-passwd` or `ferron-passwd.exe` — a tool for generating hashed passwords for the server configuration.
 - `ferron-precompress` or `ferron-precompress.exe` — a tool for precompressing static files.
 - `ferron-serve` or `ferron-serve.exe` — a command for serving static files with Ferron with zero configuration.
 - `ferron.conf` — an example configuration file for Ferron.
@@ -73,13 +73,13 @@ After extraction, you should see the following files and directories:
 
 ### 4. Configure Ferron
 
-Open the `ferron.conf` file in a text editor and modify it to suit your server's requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are available in the [server configuration reference](/docs/v3/configuration/server/core-directives).
+Open the `ferron.conf` file in a text editor. Modify it to suit your server requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are in the [server configuration reference](/docs/v3/configuration/server/core-directives).
 
 ### 5. Run Ferron
 
 - **Windows**:
 
-  Open Command Prompt, navigate to the extracted directory, and run:
+  Open Command Prompt. Navigate to the extracted directory and run:
 
   ```cmd
   ferron.exe
@@ -111,12 +111,12 @@ Open the `ferron.conf` file in a text editor and modify it to suit your server's
 
 ### 6. Access the web server
 
-By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server is running.
+By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server works.
 
-If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
+If you see a **"Ferron is installed successfully!"** message on the page, the web server works correctly.
 
 > [!tip]
-> If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is already in use, you can change the listen port in `ferron.conf` and update your firewall rules accordingly.
+> If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is in use, change the listen port in `ferron.conf`. Then update your firewall rules.
 
 ## Reloading the configuration (Unix)
 
@@ -152,7 +152,7 @@ kill -HUP $(cat /var/run/ferron.pid)
 
 ## Other CLI commands
 
-Ferron also provides several commands for working with configuration files:
+Ferron also gives you several commands for working with configuration files:
 
 ```sh
 ./ferron validate -c ferron.conf   # validate configuration without starting

@@ -9,7 +9,7 @@ This page documents the `header` and `cors` directives for configuring response 
 
 ### `header`
 
-The `header` directive manipulates response headers before sending to the client. Three forms are supported:
+The `header` directive manipulates response headers before sending to the client. The directive supports three forms:
 
 | Syntax                 | Effect                                                |
 | ---------------------- | ----------------------------------------------------- |
@@ -33,10 +33,10 @@ example.com {
 
 | Variable             | Description                       |
 | -------------------- | --------------------------------- |
-| `{{remote.ip}}`      | The client's IP address           |
-| `{{remote.port}}`    | The client's port                 |
-| `{{server.ip}}`      | The server's listening IP address |
-| `{{server.port}}`    | The server's listening port       |
+| `{{remote.ip}}`      | IP address of the client           |
+| `{{remote.port}}`    | Port of the client                 |
+| `{{server.ip}}`      | Listening IP address of the server |
+| `{{server.port}}`    | Listening port of the server       |
 | `{{request.host}}`   | The matched hostname              |
 | `{{request.scheme}}` | `http` or `https`                 |
 | `{{env.NAME}}`       | Environment variable `NAME`       |
@@ -47,7 +47,7 @@ example.com {
 > [!info]
 > For the complete variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).
 
-Unresolved variables are left as `{{name}}` in the output.
+Ferron leaves unresolved variables as `{{name}}` in the output.
 
 ### `cors`
 
@@ -79,14 +79,14 @@ example.com {
 
 1. **Preflight handling**: When an `OPTIONS` request includes `Origin` and `Access-Control-Request-Method` headers, the module returns `204 No Content` with the appropriate CORS response headers.
 
-2. **Response headers**: When enabled, the module adds CORS headers to all responses (including error responses): `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
+2. **Response headers**: When enabled, the module adds CORS headers to all responses (including error responses). The headers include `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
 
 #### Origin matching
 
-- If `origins` contains `"*"`, any origin is allowed and `Access-Control-Allow-Origin` is set to `*`.
+- If `origins` contains `"*"`, the module allows any origin and sets `Access-Control-Allow-Origin` to `*`.
 - Otherwise, the module compares the incoming `Origin` header against the list. If it matches, the module echoes the header back. If it does not match, the module adds no CORS headers.
 
-**Configuration example — allow all origins:**
+**Configuration example: allow all origins**
 
 ```ferron
 api.example.com {
@@ -100,7 +100,7 @@ api.example.com {
 }
 ```
 
-**Configuration example — specific origins with credentials:**
+**Configuration example: specific origins with credentials**
 
 ```ferron
 api.example.com {
@@ -116,13 +116,13 @@ api.example.com {
 ```
 
 > [!note]
-> If CORS headers do not appear in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
+> If CORS headers do not appear in responses, verify that you set `origins`. Ferron disables CORS by default if `origins` is empty.
 
 ## Best practices
 
-The following best-practice check is reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice check for directives on this page.
 
-- **`cors { credentials true }` with `origins "*"`** — Allowing credentials with wildcard origins defeats the browser's same-origin protection. Use explicit trusted origins when credentials are allowed.
+- **`cors { credentials true }` with `origins "*"`**. Allowing credentials with wildcard origins defeats browser same-origin protection. Use explicit trusted origins when you allow credentials.
 
 ## Observability
 

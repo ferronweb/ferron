@@ -3,13 +3,13 @@ title: "Migrating from Apache .htaccess to Ferron 3 (PHP hosting)"
 description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting to Ferron 3 with PHP-FPM."
 ---
 
-This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you already know to Ferron 3 directives. It also highlights the differences in how the two servers think about configuration.
+This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you know to Ferron 3 directives. It also highlights differences in how the two servers approach configuration.
 
 The examples assume a single WordPress-style site served through PHP-FPM over a Unix socket. The patterns apply equally to Joomla and other PHP applications.
 
 ## Before you start: how Ferron differs from `.htaccess`
 
-Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) and **validates it at startup**. There is no per-directory `.htaccess` file, and changes require a server reload.
+Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) and **validates it at startup**. There is no per-directory `.htaccess` file. Changes require a server reload.
 
 | Concept | Apache `.htaccess` | Ferron 3 |
 | --- | --- | --- |

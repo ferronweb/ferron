@@ -5,7 +5,7 @@ description: "Lightweight Fail2ban-like IP banning with temporary lockouts for a
 
 This page documents `abuse_protection` and `abuse_event` directives for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (for example, rate limit breaches or brute-force failures), Ferron temporarily bans the IP address.
 
-The abuse protection module works by tracking abuse events emitted by other HTTP modules (such as rate limiting and basic authentication). It temporarily bans IPs that exceed configured thresholds within time windows. Bans are stored in memory and automatically expire after the configured duration.
+The abuse protection module tracks abuse events that other HTTP modules emit. These modules include rate limiting and basic authentication. It temporarily bans IPs that exceed configured thresholds within time windows. The system stores bans in memory and they automatically expire after the configured duration.
 
 ## `abuse_protection`
 
@@ -57,7 +57,7 @@ The `error_rate_threshold` block configures when error response patterns trigger
 | `window` | `<duration>` | Time window for counting error responses. | `"60s"` |
 | `status_codes` | `<string> [<string> ...]` | HTTP status codes that count as errors (for example, `"404"`, `"403"`). | `"404"` |
 
-**Configuration example — stricter thresholds:**
+**Configuration example, stricter thresholds:**
 
 ```ferron
 example.com {
@@ -82,7 +82,7 @@ Ban after:
 - 3 rate limit events in 60s (30-min ban), OR
 - 2 brute force failures in 120s (30-min ban)
 
-**Configuration example — lenient thresholds:**
+**Configuration example, lenient thresholds:**
 
 ```ferron
 example.com {
@@ -107,7 +107,7 @@ Ban after:
 - 10 rate limit events in 10 minutes (5-min ban), OR
 - 10 brute force failures in 10 minutes (5-min ban)
 
-**Configuration example — trusted IP list:**
+**Configuration example, trusted IP list:**
 
 ```ferron
 example.com {
@@ -119,7 +119,7 @@ example.com {
 
 Ferron never bans IPs in the `allowlist`, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
 
-**Configuration example — error rate threshold:**
+**Configuration example, error rate threshold:**
 
 ```ferron
 example.com {
@@ -162,7 +162,7 @@ example.com {
 
 You can place the `abuse_event` block inside an HTTP host block.
 
-You can use this directive to define custom abuse protection rules (for example, to protect your website from automated vulnerability scanners). It is also useful when configuring a honeypot within Ferron.
+You can use this directive to define custom abuse protection rules. For example, it can protect your website from automated vulnerability scanners. It is also useful when configuring a honeypot within Ferron.
 
 ## Behavior
 
@@ -170,22 +170,22 @@ You can use this directive to define custom abuse protection rules (for example,
 
 The module tracks events per IP address and event type:
 
-- **Rate limit events** — the rate limiting module emits them when a client exceeds its rate limit.
-- **Brute force events** — the basic authentication module emits them when a client has repeated failed authentication attempts.
-- **Custom events** — available for other modules (and `abuse_event` directive) to emit custom abuse events.
-- **Error rate events** — the abuse protection module emits them when a response status code matches configured error codes (for example, 404 and 403). It uses `run_inverse` to observe responses after the pipeline completes.
+- **Rate limit events**: the rate limiting module emits them when a client exceeds its rate limit.
+- **Brute force events**: the basic authentication module emits them when a client has repeated failed authentication attempts.
+- **Custom events**: available for other modules (and `abuse_event` directive) to emit custom abuse events.
+- **Error rate events**: the abuse protection module emits them when a response status code matches configured error codes. For example, 404 and 403. It uses `run_inverse` to observe responses after the pipeline completes.
 
-Events are stored in a sliding time window. When the number of events within the window reaches the configured threshold, the IP is immediately banned.
+The system stores events in a sliding time window. When the number of events within the window reaches the configured threshold, the system immediately bans the IP.
 
 ### Ban mechanics
 
-- **Ban duration** — fixed duration (default 15 minutes). It is independent from the event counting window.
-- **TTL-based expiry** — bans automatically expire after the configured duration. No background eviction threads are needed.
-- **Per-IP tracking** — the module tracks each IP address independently. It tracks different event types separately for the same IP.
-- **No persistence** — bans are stored in memory and are **not** preserved across server restarts.
+- **Ban duration**: fixed duration (default 15 minutes). It is independent from the event counting window.
+- **TTL-based expiry**: bans automatically expire after the configured duration. The system needs no background eviction threads.
+- **Per-IP tracking**: the module tracks each IP address independently. It tracks different event types separately for the same IP.
+- **No persistence**: the system stores bans in memory. They are **not** preserved across server restarts.
 
 > [!tip]
-> If your IP is banned immediately, check configured thresholds. You may have `events 1` or `events 2`, or very short `window` values (for example, 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
+> If the system bans your IP immediately, check configured thresholds. You may have `events 1` or `events 2`, or very short `window` values (for example, 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
 
 > [!warning]
 > For manual unbanning, you must wait for the ban to expire naturally.
@@ -194,16 +194,16 @@ Events are stored in a sliding time window. When the number of events within the
 
 1. Client sends a request.
 2. The abuse protection stage runs early in the pipeline (after `client_ip_from_header`, before `rate_limit` and `basicauth`).
-3. The stage checks if the client's IP is currently banned.
+3. The stage checks if the system currently bans the client IP.
 4. If banned: returns **403 Forbidden** with a `Retry-After` header indicating seconds until ban expiry.
 5. If not banned: request continues through the pipeline normally.
 6. When other modules detect abuse (rate limit breach, brute force attempt), they emit events to the abuse registry.
-7. If an event causes a threshold to be exceeded, the IP is immediately banned.
-8. After the pipeline completes, the abuse protection stage's `run_inverse` observes the response status code. If it matches a configured `error_rate_threshold` status code, the stage records an error rate event.
+7. If an event exceeds a threshold, the system immediately bans the IP.
+8. After the pipeline completes, the `run_inverse` method of the abuse protection stage observes the response status code. If it matches a configured `error_rate_threshold` status code, the stage records an error rate event.
 
 ### Allowlist behavior
 
-The stage skips any IP that matches an entry in the `allowlist` before it performs ban checks. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
+The stage skips any IP that matches an entry in the `allowlist` before it runs ban checks. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
 
 ## Examples
 
@@ -248,8 +248,8 @@ The abuse protection module emits the following metrics:
 
 | Description (summary) | Level | Attributes |
 |-----------------------|-------|------------|
-| Ban rejection         | DEBUG | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
-| Ban triggered         | WARN  | `client.address` (client's IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
+| Ban rejection         | DEBUG | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
+| Ban triggered         | WARN  | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
 
 ### Access log fields
 
@@ -270,7 +270,7 @@ The abuse protection stage sets the following attributes on its `ferron.stage.ab
 | `ferron.abuseban.action` | string | Action taken: `skip` (not banned) or `rejected` (banned). |
 | `ferron.abuseban.reason` | string | The reason for the ban, when rejected. |
 | `ferron.abuseban.remaining_secs` | int | Remaining ban duration in seconds, when rejected. |
-| `error.type` | string | Set to `ip_banned` when the request is rejected, enabling trace UI highlighting. |
+| `error.type` | string | Set to `ip_banned` when Ferron rejects the request, enabling trace UI highlighting. |
 
 ## See also
 
@@ -280,7 +280,7 @@ The abuse protection stage sets the following attributes on its `ferron.stage.ab
 
 ## Best practices
 
-The following best-practice checks are reported by `ferron doctor` for directives on this page.
+`ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`abuse_protection false`** — Disabling IP banning for repeated abuse events removes a layer of protection. Keep it enabled unless another layer handles abusive clients.
-- **`allowlist` with wildcard** — Exempting every source address from abuse protection should be restricted to known trusted clients.
+- **`abuse_protection false`**: Disabling IP banning for repeated abuse events removes a layer of protection. Keep it enabled unless another layer handles abusive clients.
+- **`allowlist` with wildcard**: Exempting every source address from abuse protection should apply only to known trusted clients.

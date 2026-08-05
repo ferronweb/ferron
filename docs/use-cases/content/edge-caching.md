@@ -1,13 +1,13 @@
 ---
 title: Edge caching (CDN)
-description: "Deploy Ferron as a CDN edge node with HTTP caching, ACME TLS with fallback providers for resilience, global cache purging, and GeoDNS routing."
+description: "Deploy Ferron as a CDN edge node with HTTP caching, ACME TLS with fallback providers, cache purging, and GeoDNS routing."
 ---
 
-You can deploy Ferron as an edge caching node in a content delivery network (CDN). Its HTTP cache, automatic TLS, and purge propagation features make it suitable for serving cached content close to end users with centralized cache management.
+You can deploy Ferron as an edge caching node in a content delivery network (CDN). Its HTTP cache, automatic TLS, and purge propagation features make it suitable for serving cached content close to end users. You can manage all cache nodes from a central location.
 
 ## Automatic TLS with ACME fallback
 
-When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail, leaving edge nodes without valid TLS certificates. Ferron supports **ACME fallback providers** to handle this — if the primary provider fails, Ferron tries the next configured fallback automatically.
+When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail. Edge nodes then lack valid TLS certificates. Ferron supports **ACME fallback providers** to handle this. If the primary provider fails, Ferron tries the next configured fallback automatically.
 
 This is especially important for CDN deployments. A single edge node may terminate TLS for hundreds of domains and cannot afford downtime from CA outages.
 
@@ -40,11 +40,11 @@ This is especially important for CDN deployments. A single edge node may termina
 }
 ```
 
-Ferron tries providers **sequentially**: it attempts the primary first, then each `fallback` block in order. Ferron starts a fallback when account creation with the previous provider fails. Once a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
+Ferron tries providers in order: it attempts the primary first, then each `fallback` block. Ferron starts a fallback when account creation with the previous provider fails. After a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
 
 ## On-demand TLS for wildcard domains
 
-Wildcard certificates normally require the **DNS-01** challenge, which means configuring and securing DNS provider API credentials on every edge node. **On-demand mode** avoids this by deferring certificate issuance until the first TLS handshake for a hostname. This lets you use the simpler **HTTP-01** challenge while still covering arbitrary subdomains under a wildcard.
+Wildcard certificates normally require the **DNS-01** challenge. This means you must configure and secure DNS provider API credentials on every edge node. **On-demand mode** avoids this. It defers certificate issuance until the first TLS handshake for a hostname. This approach lets you use the simpler **HTTP-01** challenge while covering arbitrary subdomains under a wildcard.
 
 ```ferron
 *.customer.example.com {
@@ -75,11 +75,11 @@ Wildcard certificates normally require the **DNS-01** challenge, which means con
 > [!warning]
 > Always configure `on_demand_ask` in production. Without an approval endpoint, Ferron issues certificates for any hostname under the wildcard. Attackers can exploit this for abuse.
 
-The approval endpoint receives `?domain=<sni>` as a query parameter and must return `200` to approve issuance. This gives you control over which subdomains receive certificates without needing DNS provider keys on the edge.
+The approval endpoint receives `?domain=<sni>` as a query parameter and must return `200` to approve issuance. This gives you control over which subdomains receive certificates. You do not need DNS provider keys on the edge.
 
 ## Global cache purging
 
-You can purge a single edge node's cache locally with `PURGE` requests, but a CDN spans many nodes. Ferron supports multi-instance cache purge propagation via an external control-plane:
+You can purge the cache of a single edge node locally with `PURGE` requests. A CDN spans many nodes. Ferron supports multi-instance cache purge propagation via an external control-plane:
 
 ```ferron
 *.customer.example.com {
@@ -96,14 +96,14 @@ You can purge a single edge node's cache locally with `PURGE` requests, but a CD
 }
 ```
 
-When a client triggers a purge (via `PURGE` request or `X-LiteSpeed-Purge` header), the edge node notifies the control-plane. The control-plane fans out the invalidation to every registered edge. This means a single origin webhook or admin request invalidates content across the entire CDN.
+When a client triggers a purge (via `PURGE` request or `X-LiteSpeed-Purge` header), the edge node notifies the control-plane. The control-plane fans out the invalidation to every registered edge. A single origin webhook or admin request then invalidates content across the entire CDN.
 
 > [!info]
-> For a full explanation of the purge propagation protocol and control-plane implementation, see [HTTP caching — Multi-instance cache purge propagation](/docs/v3/use-cases/content/caching#multi-instance-cache-purge-propagation).
+> For details on the purge propagation protocol and control-plane implementation, see [HTTP caching — Multi-instance cache purge propagation](/docs/v3/use-cases/content/caching#multi-instance-cache-purge-propagation).
 
 ## GeoDNS for traffic routing
 
-To direct users to the nearest edge node, use **GeoDNS** (geographic DNS) in front of your Ferron instances. A GeoDNS provider like Amazon Route 53, Google Cloud DNS, or DNS Made Easy returns different `A`/`AAAA` records based on the requester's location.
+To direct users to the nearest edge node, use **GeoDNS** (geographic DNS) in front of your Ferron instances. A GeoDNS provider like Amazon Route 53, Google Cloud DNS, or DNS Made Easy returns different `A`/`AAAA` records. It uses the location of the requester to select the response.
 
 ```text
 us-east.example.com  A  203.0.113.10   (North America)

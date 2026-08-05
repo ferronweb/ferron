@@ -3,10 +3,10 @@ title: mTLS (mutual TLS)
 description: "Require client TLS certificates in Ferron for internal/admin traffic and service-to-service access, and present client certificates to upstream backends."
 ---
 
-Mutual TLS (mTLS) adds client certificate verification on top of normal server TLS. Ferron supports mTLS in two directions:
+Mutual TLS (mTLS) adds client certificate verification on top of normal server TLS. Ferron supports mTLS in two directions.
 
-- **Inbound** — require clients connecting to Ferron to present a valid certificate (server-side mTLS).
-- **Outbound** — present a client certificate when Ferron connects to an upstream backend via the reverse proxy (client-side mTLS).
+- **Inbound**: require clients connecting to Ferron to present a valid certificate (server-side mTLS).
+- **Outbound**: present a client certificate when Ferron connects to an upstream backend via the reverse proxy (client-side mTLS).
 
 ## Require client certificates
 
@@ -28,7 +28,7 @@ admin.example.com:443 {
 }
 ```
 
-You can also use the OS trust store or Mozilla's root bundle:
+You can also use the OS trust store or the Mozilla root bundle:
 
 ```ferron
 admin.example.com:443 {
@@ -46,10 +46,10 @@ admin.example.com:443 {
 ```
 
 > [!warning]
-> When you use `client_auth_ca system`, the OS trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA (rarely the right choice for mTLS).
+> When you use `client_auth_ca system`, the OS trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
 
 > [!important]
-> For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path. Keep private internal CA material protected and rotate client certificates regularly.
+> For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path. Protect private internal CA material and rotate client certificates regularly.
 
 ## mTLS with TLS 1.3 only
 
@@ -75,7 +75,7 @@ internal-api.example.com:443 {
 
 ## Scope planning for admin/internal endpoints
 
-`client_auth` is configured inside a `tls` block, which is scoped to a specific host. This means you can enable mTLS for some hosts while keeping others public — no separate Ferron instance is needed.
+`client_auth` lives inside a `tls` block, which scopes to a specific host. You can enable mTLS for some hosts while keeping others public. A separate Ferron instance is unnecessary.
 
 ```ferron
 # Public website — no client auth
@@ -106,7 +106,7 @@ admin.example.com:443 {
 
 ## Presenting client certificates to upstream backends
 
-When the reverse proxy connects to an HTTPS upstream, Ferron can present a client certificate to authenticate itself to the backend. Configure `cert` and `key` on the upstream block:
+When the reverse proxy connects to an HTTPS upstream, Ferron can present a client certificate. This authenticates the proxy to the backend. Configure `cert` and `key` on the upstream block:
 
 ```ferron
 example.com {
@@ -119,11 +119,11 @@ example.com {
 }
 ```
 
-You must provide both `cert` and `key` for mTLS to activate. The certificate chain and private key must be PEM-encoded.
+You must supply both `cert` and `key` for mTLS to activate. The certificate chain and private key must be PEM-encoded.
 
 ### Per-upstream credentials
 
-mTLS credentials are scoped per-upstream, so different backends can require different client certificates:
+mTLS credentials scope per-upstream. Different backends can require different client certificates:
 
 ```ferron
 example.com {
@@ -142,7 +142,7 @@ example.com {
 
 ### mTLS with SRV upstreams
 
-When using SRV-record-based upstreams, the same mTLS credentials are applied to all backends resolved from that SRV record:
+When using SRV-record-based upstreams, the same mTLS credentials apply to all backends resolved from that SRV record:
 
 ```ferron
 example.com {
@@ -157,4 +157,4 @@ example.com {
 
 ### Health checks and mTLS
 
-Active health check probes use the same mTLS credentials configured on the upstream, ensuring probes accurately reflect backend reachability with client authentication.
+Active health check probes use the same mTLS credentials configured on the upstream. Probes then accurately reflect backend reachability with client authentication.

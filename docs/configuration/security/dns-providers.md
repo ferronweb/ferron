@@ -3,7 +3,7 @@ title: "Configuration: DNS providers"
 description: "Reference for all built-in DNS providers used with the ACME DNS-01 challenge."
 ---
 
-The `tls-acme` module uses DNS providers to solve the **DNS-01 ACME challenge** — the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block, selecting it by name with the `provider` directive.
+The `tls-acme` module uses DNS providers to solve the **DNS-01 ACME challenge**. This is the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block. Select it by name with the `provider` directive.
 
 ```ferron
 *.example.com {
@@ -2002,7 +2002,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
 ### Using environment variables for credentials
 
-All string directives support environment variable interpolation. This avoids storing secrets directly in your configuration file:
+All string directives support environment variable interpolation. This keeps secrets out of your configuration file:
 
 ```ferron
 *.example.com {
@@ -2072,4 +2072,4 @@ Choose the `endpoint` that matches where your domain is registered:
 
 `ferron doctor` reports the following best-practice check for DNS provider directives.
 
-- **Secrets in plain configuration** — DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings. This avoids leaking secrets in version control or logs.
+- **Secrets in plain configuration.** DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings. This avoids leaking secrets in version control or logs.

@@ -3,7 +3,7 @@ title: "Grafana reference dashboard"
 description: "Modular Grafana dashboard for Ferron 3 covering RED and USE methods, edge cache, retry budgets, and connection pools."
 ---
 
-Ferron ships a reference Grafana dashboard ([`dashboards/ferron-3-reference.json` in the repository](https://github.com/ferronweb/ferron/blob/3.x/dashboards/ferron-3-reference.json)) that adapts to different operational roles from a single layout. Maintaining separate dashboards for a CDN edge, an API gateway, and a shared-hosting box is a lot of work. The reference template uses template variables and collapsible rows instead. One structure serves all three.
+Ferron ships a reference Grafana dashboard ([`dashboards/ferron-3-reference.json` in the repository](https://github.com/ferronweb/ferron/blob/3.x/dashboards/ferron-3-reference.json)). It adapts to different operational roles from a single layout. Maintaining separate dashboards for a CDN edge, an API gateway, and a shared-hosting box is a lot of work. The reference template uses template variables and collapsible rows. One structure serves all three.
 
 > [!note]
 > The dashboard targets a Prometheus-compatible datasource (such as [Prometheus metrics](/docs/v3/configuration/observability/prometheus) exported by Ferron or scraped through Mimir/Cortex). It expects OpenTelemetry-style metric names from Ferron converted to Prometheus snake_case. Counters gain a `_total` suffix.
@@ -98,7 +98,7 @@ curl -u admin:admin -X POST \
 
 ### Required Ferron configuration
 
-The dashboard reads metrics Ferron only emits when observability is configured:
+The dashboard reads metrics that Ferron emits only when you configure observability:
 
 ```ferron
 example.com {
@@ -117,10 +117,10 @@ Enable the features whose rows you care about:
 
 ## Known gaps
 
-- **Per-route filtering** is unavailable without baggage promotion, as noted above.
-- **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today, so you must measure proxy-dominated CDN egress at the load balancer or add it to Ferron later.
-- **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when HTTPS is configured. Those panels render empty on HTTP-only instances.
-- Rows whose Ferron modules are disabled show empty panels by design. The dashboard degrades gracefully rather than erroring.
+- **Per-route filtering** is unavailable without baggage promotion.
+- **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today. You must measure proxy-dominated CDN egress at the load balancer or add it to Ferron later.
+- **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when you configure HTTPS. Those panels render empty on HTTP-only instances.
+- Rows whose Ferron modules are not active show empty panels by design. The dashboard degrades gracefully rather than erroring.
 
 ## See also
 

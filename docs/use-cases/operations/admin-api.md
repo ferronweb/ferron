@@ -3,7 +3,7 @@ title: Admin API
 description: "Securely configure, access, and harden the Ferron admin API for server management."
 ---
 
-The admin API is a built-in control plane that provides health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server. Treat it with the same security as a root shell on your server.
+The admin API includes a built-in control plane with health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server. Treat it with the same security as a root shell on your server.
 
 > [!warning]
 > The admin API is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. All other security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
@@ -31,7 +31,7 @@ This configuration is safe for most deployments because `127.0.0.1` is only reac
 
 ## Health checks in containers and orchestration
 
-If your server runs inside a container or an orchestrator manages it (Docker, Kubernetes, systemd, etc.), you may need the `health` endpoint. Use it for liveness or readiness probes. The health endpoint returns `200 OK` while the server is running and `503 Service Unavailable` during shutdown.
+Use the `health` endpoint for liveness or readiness probes when running inside a container or an orchestrator. Running the server normally returns `200 OK`. Shutdown returns `503 Service Unavailable`.
 
 ```ferron
 {
@@ -48,7 +48,7 @@ If your server runs inside a container or an orchestrator manages it (Docker, Ku
 }
 ```
 
-With `127.0.0.1`, the health check works for any process running on the same host, including container orchestrators that inspect the container's network namespace.
+With `127.0.0.1`, the health check works for any process running on the same host. This includes container orchestrators that inspect the container network namespace.
 
 ## Accessing the admin API from a remote machine
 
@@ -73,7 +73,7 @@ curl http://127.0.0.1:8081/reload
 curl http://127.0.0.1:8081/runtime
 ```
 
-The SSH connection provides encryption and authentication, compensating for the lack of TLS in the admin API itself.
+The SSH connection gives you encryption and authentication. This compensates for the lack of TLS in the admin API itself.
 
 ### Reverse proxy with authentication
 
@@ -98,11 +98,11 @@ admin.example.com {
 }
 ```
 
-With this pattern, the admin API remains bound to `127.0.0.1`, and the proxy handles TLS termination and authentication.
+With this pattern, the admin API remains bound to `127.0.0.1`. The proxy handles TLS termination and authentication.
 
 ## Managing endpoints by role
 
-You can adjust the admin API configuration to the operator's role by enabling only the necessary endpoints.
+You can adjust the admin API configuration to the operator role by enabling only the necessary endpoints.
 
 ### Read-only operator (monitoring only)
 
@@ -144,7 +144,7 @@ For operators who need to manage the server:
 
 ### Minimal operator (health check only)
 
-For deployments where only health monitoring is needed:
+For deployments where only health monitoring matters:
 
 ```ferron
 {
@@ -165,13 +165,12 @@ For deployments where only health monitoring is needed:
 
 Use this checklist to verify your admin API is properly secured:
 
-- [ ] The `listen` address is set to `127.0.0.1` (or another loopback address).
-- [ ] Unnecessary endpoints are disabled (`status false`, `config false`, `reload false`, `reload_get false`, `runtime false`).
-- [ ] No firewall rule allows external traffic to the admin port.
-- [ ] Remote access uses SSH tunneling or an authenticating reverse proxy.
-- [ ] The admin API is **never** bound to `0.0.0.0` or a public IP address.
-- [ ] If the server is in a container, the admin port is not published to the host network.
-- [ ] Observability sinks are configured to log admin API requests for auditing.
+- [ ] Set the `listen` address to `127.0.0.1` (or another loopback address).
+- [ ] Disable unnecessary endpoints (`status false`, `config false`, `reload false`, `reload_get false`, `runtime false`).
+- [ ] Make sure no firewall rule allows external traffic to the admin port.
+- [ ] Use SSH tunneling or an authenticating reverse proxy for remote access.
+- [ ] Never bind the admin API to `0.0.0.0` or a public IP address.
+- [ ] Do not publish the admin port to the host network when the server runs in a container.
 
 ## Troubleshooting
 
@@ -183,7 +182,7 @@ Verify that the admin listener is actually running and bound to the expected add
 ss -tlnp | grep 8081
 ```
 
-If nothing is listed, check Ferron's logs for startup errors. The admin block must be present in your configuration for the listener to start.
+If the command shows nothing, check the Ferron logs for startup errors. The admin block must be present in your configuration for the listener to start.
 
 ### "Connection refused" from a remote machine
 
@@ -191,15 +190,15 @@ The admin API is not designed for remote access. Use SSH tunneling or a reverse 
 
 ### `GET /reload` returns an error
 
-The `GET /reload` endpoint requires `reload_get true` in the admin configuration. If it returns an error, check that the endpoint is enabled.
+The `GET /reload` endpoint requires `reload_get true` in the admin configuration. If it returns an error, verify that you enabled the endpoint.
 
 ### `POST /reload` returns an error
 
-The `POST /reload` endpoint requires `reload true` in the admin configuration. If it returns an error, check that the endpoint is enabled and that the new configuration file is valid. Use `ferron validate -c ferron.conf` before reloading to catch configuration errors.
+The `POST /reload` endpoint requires `reload true` in the admin configuration. If it returns an error, verify that you enabled the endpoint and that the new configuration file is valid. Use `ferron validate -c ferron.conf` before reloading to catch configuration errors.
 
 ### `GET /config` shows redacted values
 
-Sensitive values (TLS keys, passwords, tokens, bearer credentials, and htpasswd entries) are automatically redacted and replaced with `"[redacted]"`. This is intentional and cannot be disabled. The redacted configuration is still useful for auditing routing rules, upstream addresses, and host configuration.
+Ferron automatically redacts sensitive values (TLS keys, passwords, tokens, bearer credentials, and htpasswd entries) and replaces them with `"[redacted]"`. You cannot disable this. The redacted configuration still helps audit routing rules, upstream addresses, and host configuration.
 
 ### Admin API stops responding after a configuration change
 
@@ -233,7 +232,7 @@ The output should show `127.0.0.1:8081`, not `0.0.0.0:8081`.
 
 ## See also
 
-- [Core directives](/docs/v3/configuration/server/core-directives) — full admin block configuration reference.
-- [Security and TLS](/docs/v3/configuration/security/tls) — TLS configuration for your web server hosts.
-- [Observability & logging](/docs/v3/configuration/observability/logging) — configure observability sinks to audit admin API access.
-- [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy) — front the admin API with an authenticating reverse proxy.
+- [Core directives](/docs/v3/configuration/server/core-directives), full admin block configuration reference.
+- [Security and TLS](/docs/v3/configuration/security/tls), TLS configuration for your web server hosts.
+- [Observability & logging](/docs/v3/configuration/observability/logging), configure observability sinks to audit admin API access.
+- [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy), front the admin API with an authenticating reverse proxy.

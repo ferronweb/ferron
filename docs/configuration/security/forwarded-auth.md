@@ -3,9 +3,9 @@ title: "Configuration: forwarded authentication"
 description: "External authentication backend integration with connection pooling, header copying, and configurable backends."
 ---
 
-This page documents the `auth_to` directive for configuring forwarded authentication. Forwarded authentication sends every incoming request to an external backend server for verification before the request is processed. If the backend returns a success status (2xx), the request continues through the pipeline. If it returns a failure status (4xx/5xx), the backend's response is returned directly to the client.
+This page documents the `auth_to` directive for configuring forwarded authentication. Forwarded authentication sends every incoming request to an external backend server for verification before the server processes the request. If the backend returns a success status (2xx), the request continues through the pipeline. If it returns a failure status (4xx/5xx), the backend sends its response directly to the client.
 
-This pattern is commonly used with authentication proxies like [Authelia](https://www.authelia.com/), [Keycloak](https://www.keycloak.org/), or custom authentication services.
+This pattern works with authentication proxies like [Authelia](https://www.authelia.com/), [Keycloak](https://www.keycloak.org/), or custom services.
 
 ## Directives
 
@@ -25,17 +25,17 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `url` | `<string>` | Backend server URL (http:// or https://). Required if not provided as an argument. | — |
+| `url` | `<string>` | Backend server URL (http:// or https://). Required if you do not provide it as an argument. | — |
 | `unix` | `<path>` | Connect to the backend via Unix domain socket instead of TCP. | TCP |
 | `limit` | `<number>` | Maximum concurrent connections to this backend. | No limit (per upstream) |
 | `idle_timeout` | `<duration>` | Keep-alive idle timeout for connections. Connections idle longer than this are evicted. | `60s` |
 | `no_verification` | `[bool]` | Skip TLS certificate verification for HTTPS backends. | `false` |
 | `copy` | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers. | none |
-| `last` | `[bool]` | Whether this is the last backend in the chain (no further verification will be performed). | `false` |
+| `last` | `[bool]` | Whether this is the last backend in the chain (no further verification). | `false` |
 
 > [!note]
 >
-> - When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. Upgrade and Connection headers are removed from auth requests.
+> - When `client_ip_from_header` is enabled, `X-Forwarded-For` is **appended** to the existing chain rather than replaced. Ferron removes Upgrade and Connection headers from auth requests.
 > - The forwarded authentication module supports chaining multiple backends together. To terminate the chain, set `last` to `true`.
 
 #### Backend URL
@@ -55,7 +55,7 @@ example.com {
 ```
 
 > [!note]
-> The forwarded auth request uses the **same path and query string** as the original request. If the backend is unreachable or returns a non-2xx status, the request is **blocked** and the backend's response is returned to the client.
+> The forwarded auth request uses the **same path and query string** as the original request. If the backend is unreachable or returns a non-2xx status, Ferron blocks the request and returns the backend's response to the client.
 
 #### Unix socket connections
 
@@ -69,7 +69,7 @@ example.com {
 }
 ```
 
-When `unix` is specified, the URL host is ignored for the actual connection but must still be present for the HTTP scheme.
+When `unix` is specified, Ferron ignores the URL host for the actual connection but the host must still be present for the HTTP scheme.
 
 #### Connection limits
 
@@ -94,7 +94,7 @@ Multiple `auth_to` blocks can be defined for different backends. Ferron uses the
 
 #### Header copying
 
-When authentication succeeds, headers from the backend response can be copied to the original request. This is useful for passing user identity, roles, or other metadata downstream:
+When authentication succeeds, Ferron can copy headers from the backend response to the original request. This is useful for passing user identity, roles, or other metadata downstream:
 
 ```ferron
 example.com {
@@ -107,7 +107,7 @@ example.com {
 }
 ```
 
-Headers are copied by name — if the auth response contains the specified header, Ferron adds it to the original request. Multiple values are preserved.
+Headers are copied by name. If the auth response contains the specified header, Ferron adds it to the original request. Multiple values are preserved.
 
 ### Global connection limit
 
@@ -144,7 +144,7 @@ Default: `auth_to_concurrent_conns 16384`
 The `forwarded_auth` stage runs in the following position in the pipeline:
 
 - **After** `cache` (caching occurs before authentication)
-- **After** `basicauth` (basic auth is checked before forwarded auth)
+- **After** `basicauth` (basic auth check runs before forwarded auth)
 - **Before** `reverse_proxy` (authentication before proxying)
 - **Before** `forward_proxy` (authentication before forwarding)
 
@@ -222,8 +222,8 @@ example.com {
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`auth_to_concurrent_conns false`** — Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
-- **`auth_to { no_verification }`** — Disabling TLS verification for the authentication backend should only be used in tightly controlled internal test environments.
+- **`auth_to_concurrent_conns false`**. Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
+- **`auth_to { no_verification }`**. Disabling TLS verification for the authentication backend should only be used in tightly controlled internal test environments.
 
 ## Observability
 

@@ -3,7 +3,7 @@ title: Access control
 description: "Protect routes in Ferron with IP-based access control, Basic Auth, forwarded authentication, and conditional configuration."
 ---
 
-Ferron supports several access control patterns, from simple IP-based `block`/`allow` rules to authenticated areas with HTTP Basic Authentication or an external authentication backend.
+Ferron supports several access control patterns. These range from simple IP-based `block`/`allow` rules to authenticated areas with HTTP Basic Authentication or an external authentication backend.
 
 > [!tip]
 > Test restrictive rules with a temporary endpoint first to avoid locking yourself out. Prefer `location` matches when possible. Use conditional matchers only when you need pattern matching.
@@ -27,14 +27,14 @@ example.com {
 }
 ```
 
-When `allow` is configured, only the listed IPs/CIDRs are permitted. All others receive a **403 Forbidden** response.
+When you configure `allow`, only the listed IPs/CIDRs receive permission. All others receive a **403 Forbidden** response.
 
 > [!important]
-> If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header` so IP-based rules use the client IP rather than the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
+> If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header`. This makes sure IP-based rules use the client IP instead of the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
 
 ### Combined block and allow
 
-When both `block` and `allow` are configured:
+When you configure both `block` and `allow`:
 
 1. If the IP matches an `allow` entry **and** a `block` entry → **blocked** (block takes precedence)
 2. If the IP matches only an `allow` entry → **allowed**
@@ -87,7 +87,7 @@ example.com {
 }
 ```
 
-Only **hashed passwords** are supported. The following hash formats are accepted:
+Ferron supports only **hashed passwords**. Ferron accepts the following hash formats:
 
 | Prefix | Algorithm |
 | --- | --- |
@@ -99,7 +99,7 @@ Only **hashed passwords** are supported. The following hash formats are accepted
 | `$scrypt$` | scrypt |
 
 > [!important]
-> For Basic Auth, always use TLS — credentials are sent in the `Authorization` header on every request.
+> For Basic Auth, always use TLS. The `Authorization` header sends credentials on every request.
 
 ### Brute-force protection
 
@@ -179,7 +179,7 @@ example.com {
 }
 ```
 
-When the backend returns a success status (2xx), the request continues. On failure (4xx/5xx), Ferron returns the backend's response to the client. You can copy headers from the auth response to the original request for downstream use:
+When the backend returns a success status (2xx), the request continues. On failure (4xx/5xx), Ferron returns the response of the backend to the client. You can copy headers from the auth response to the original request for downstream use:
 
 ```ferron
 api.example.com {

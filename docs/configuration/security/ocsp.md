@@ -1,19 +1,19 @@
 ---
-title: "Configuration: OCSP stapling"
-description: "OCSP stapling for TLS — attaching signed OCSP responses during the TLS handshake."
+title: Configuration: OCSP stapling
+description: OCSP stapling for TLS. Attaches signed OCSP responses during the TLS handshake.
 ---
 
-This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake. This eliminates the need for clients to contact the CA's OCSP responder directly. This improves:
+This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake. This eliminates the need for clients to contact the CA OCSP responder directly. This improves:
 
-- **Privacy** — clients no longer reveal their browsing habits to the CA
-- **Performance** — eliminates the extra round-trip to the OCSP responder
-- **Reliability** — works even when the CA's OCSP responder is unreachable
+- **Privacy**. Clients no longer reveal their browsing habits to the CA.
+- **Performance**. Eliminates the extra round-trip to the OCSP responder.
+- **Reliability**. Works even when the CA OCSP responder is unreachable.
 
 OCSP stapling works with all TLS providers (`manual`, `acme`, etc.).
 
 ## Default behavior (recommended)
 
-OCSP stapling is **enabled by default**. No configuration is required:
+OCSP stapling is **enabled by default**. You do not need any configuration.
 
 ```ferron
 example.com {
@@ -23,7 +23,7 @@ example.com {
 
 The server will:
 
-1. Extract the OCSP responder URL from the certificate's AIA extension
+1. Extract the OCSP responder URL from the AIA extension of the certificate
 2. Fetch an OCSP response on startup
 3. Cache and staple the response during TLS handshakes
 4. Automatically refresh responses before they expire
@@ -88,7 +88,7 @@ example.com {
 1. The OCSP module initializes a background service on the secondary tokio runtime
 2. The TLS provider loads or gets certificates
 3. The OCSP module **preloads** the certificate into the service immediately
-4. The background task fetches an OCSP response from the CA's responder
+4. The background task fetches an OCSP response from the CA responder
 5. The OCSP module verifies the response to make sure it is valid and matches the certificate
 6. The OCSP module caches the response and attaches it to later TLS handshakes
 
@@ -97,21 +97,21 @@ example.com {
 The background task maintains fresh OCSP responses:
 
 1. **Initial fetch**: triggered by preloading on config load
-2. **Safety margin**: responses are refreshed before expiry (25% of validity period)
+2. **Safety margin**: the service refreshes responses before expiry (25% of validity period)
 3. **Jitter**: randomized delay (up to 5 minutes) prevents refresh storms
-4. **Error handling**: failed fetches are retried with exponential backoff
+4. **Error handling**: the service retries failed fetches with exponential backoff
 
 ### OCSP Must-Staple
 
-The module automatically detects certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates **require** a stapled OCSP response — clients that enforce Must-Staple will reject connections without one. Preloading makes sure the response is fetched immediately on startup.
+The module automatically detects certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates **require** a stapled OCSP response. Clients that enforce Must-Staple will reject connections without one. Preloading makes sure the service fetches the response immediately on startup.
 
 ## Response verification
 
-When an OCSP response is fetched, the OCSP stapler runs several checks before caching and stapling it:
+When the OCSP stapler fetches an OCSP response, it runs several checks before caching and stapling it.
 
 ### Signature verification
 
-The OCSP response is signed by the CA (or an intermediate CA). The server verifies this signature using the issuer certificate's public key. Supported signature algorithms:
+The CA (or an intermediate CA) signs the OCSP response. The server verifies this signature using the public key of the issuer certificate. Supported signature algorithms:
 
 | Algorithm | OID | Notes |
 |-----------|-----|-------|
@@ -124,11 +124,11 @@ If the issuer certificate is not directly available, the OCSP response may inclu
 
 ### Issuer name and key hash verification
 
-The OCSP response contains hashes of the issuer certificate's subject and public key. The server verifies these match the actual issuer certificate to prevent replay attacks where a valid OCSP response for one certificate is presented for another.
+The OCSP response contains hashes of the subject and public key of the issuer certificate. The server verifies that these hashes match the actual issuer certificate. This prevents replay attacks where someone presents a valid OCSP response for one certificate as if it were for another.
 
 ### Serial number verification
 
-The server verifies that the serial number in the OCSP response matches the leaf certificate's serial number. This prevents an attacker from reusing a valid OCSP response for a different certificate.
+The server verifies that the serial number in the OCSP response matches the serial number of the leaf certificate. This prevents an attacker from reusing a valid OCSP response for a different certificate.
 
 ### Hash algorithms
 
@@ -141,31 +141,31 @@ The OCSP response specifies a hash algorithm used for the issuer name and key ha
 | SHA-512 | `2.16.840.1.101.3.4.2.3` |
 | SHA-1 | `1.3.14.3.2.26` |
 
-If an unsupported algorithm is encountered, the fetch fails with a verification error.
+If the OCSP response uses an unsupported algorithm, the fetch fails with a verification error.
 
 ## OCSP responder URL
 
-The responder URL is extracted from the certificate's **Authority Information Access (AIA)** extension. Most CA-issued certificates include this automatically.
+The responder URL comes from the **Authority Information Access (AIA)** extension of the certificate. Most CA-issued certificates include this automatically.
 
-If no OCSP URL is found in the certificate, OCSP stapling is silently skipped for that certificate (no error is raised).
+If the certificate has no OCSP URL, OCSP stapling is silently skipped for that certificate. The server does not raise an error.
 
 ## Security considerations
 
-- If the OCSP responder is unreachable, the last cached response is kept and used until a new one is fetched. However, the service does not serve responses past their `nextUpdate` time — it will keep retrying until it gets a fresh response.
+- If the OCSP responder is unreachable, the service keeps the last cached response. It uses that response until it fetches a new one. The service does not serve responses past their `nextUpdate` time. It keeps retrying until it gets a fresh response.
 
 ## Troubleshooting
 
 ### "OCSP fetch failed: ..."
 
-The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the certificate's subject common name (or a SPKI hash prefix if the CN is unavailable). This helps identify which certificate is affected. Common causes:
+The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the common name of the certificate subject. If the CN is unavailable, the message includes a SPKI hash prefix instead. This helps identify which certificate has the issue. Common causes:
 
 - Network issues
-- CA's OCSP responder is down
+- CA OCSP responder is down
 - Certificate has no OCSP URL in AIA extension
 
 ### Verifying stapling
 
-Use OpenSSL to verify that OCSP stapling is working:
+Use OpenSSL to verify that OCSP stapling works:
 
 ```bash
 openssl s_client -connect example.com:443 -status -servername example.com </dev/null 2>/dev/null | grep -A 20 "OCSP response"
@@ -190,7 +190,7 @@ The OCSP background task emits log events and metrics through the configured obs
 
 ### Structured logs
 
-In OTLP `log_style modern`, the `summary` field is used as the log body and `attributes` are emitted as typed OpenTelemetry log record attributes.
+In OTLP `log_style modern`, the `summary` field is the log body. The system types `attributes` as OpenTelemetry log record attributes.
 
 | Summary | Level | Attributes |
 |---------|-------|------------|
@@ -214,6 +214,6 @@ In OTLP `log_style modern`, the `summary` field is used as the log body and `att
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls) — cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme) — OCSP stapling with ACME-obtained certificates
+- [Security and TLS](/docs/v3/configuration/security/tls). Cipher suites, ECDH curves, mTLS.
+- [ACME automatic TLS](/docs/v3/configuration/security/acme). OCSP stapling with ACME-obtained certificates.
 - [TLS session ticket keys](/docs/v3/configuration/security/session-tickets)

@@ -3,7 +3,7 @@ title: "CGI applications"
 description: "Host legacy CGI applications on Ferron, including extension mapping, interpreters, environment variables, and security considerations."
 ---
 
-Ferron supports classic CGI (Common Gateway Interface) applications through the `http-cgi` module. This is mainly useful for legacy stacks and script-based workflows.
+Ferron supports classic CGI (Common Gateway Interface) applications through the `http-cgi` module. This is useful for legacy stacks and script-based workflows.
 
 For new deployments, prefer HTTP reverse proxying or FastCGI when possible, because it avoids starting a new process per request and usually performs better.
 
@@ -18,7 +18,7 @@ example.com {
 }
 ```
 
-In this setup, Ferron automatically treats scripts inside a `cgi-bin` directory as CGI programs. The directory must be named exactly `cgi-bin` (case-insensitive) and must be directly under the document root.
+Ferron automatically treats scripts inside a `cgi-bin` directory as CGI programs. The directory must be named exactly `cgi-bin` (case-insensitive) and must be directly under the document root.
 
 Example directory structure:
 
@@ -32,9 +32,9 @@ Example directory structure:
 
 > [!note]
 >
-> - The `Proxy` header is always removed to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+> - Ferron always removes the `Proxy` header to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
 > - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response. Ferron logs stderr output from the script as a warning, trimmed before logging.
-> - The working directory is set to the directory containing the script file.
+> - Ferron sets the working directory to the directory containing the script file.
 
 ## Executing scripts by extension
 
@@ -53,15 +53,15 @@ example.com {
 
 With this configuration:
 
-- `/var/www/html/scripts/process.php` is treated as a CGI script
-- `/var/www/html/scripts/convert.py` is treated as a CGI script
-- `/var/www/html/static/style.css` is served as a static file
+- Ferron treats `/var/www/html/scripts/process.php` as a CGI script
+- Ferron treats `/var/www/html/scripts/convert.py` as a CGI script
+- Ferron serves `/var/www/html/static/style.css` as a static file
 
 > [!note]
 >
 > - Ferron matches extensions case-insensitively (`.PHP` matches `.php`).
 > - Ferron executes files with registered extensions as CGI scripts regardless of their location.
-> - This is complementary to `cgi-bin` directory matching — a file can be CGI either by being in `cgi-bin` or by having a registered extension.
+> - This is complementary to `cgi-bin` directory matching. A file can be CGI either by being in `cgi-bin` or by having a registered extension.
 
 ## Custom CGI interpreters
 
@@ -78,7 +78,7 @@ example.com {
 }
 ```
 
-Ferron automatically appends the file path as the final argument to the interpreter command. For example, a request to `/cgi-bin/handler.php` with the above configuration runs:
+Ferron automatically appends the file path as the final argument to the interpreter command. A request to `/cgi-bin/handler.php` with the above configuration runs:
 
 ```bash
 php-cgi -c /etc/php/8.2/cgi/php.ini /var/www/html/cgi-bin/handler.php
@@ -182,7 +182,7 @@ example.com {
 
 ### Interpreter permissions
 
-On Unix systems, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, Ferron executes `.exe` files directly and parses scripts with shebangs similarly to Unix.
+On Unix systems, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, Ferron executes `.exe` files directly and parses scripts with shebangs like Unix.
 
 ### Distributed tracing
 
@@ -193,7 +193,7 @@ When tracing is enabled in Ferron, CGI scripts automatically receive W3C Trace C
 
 ## Default index files
 
-When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, Ferron checks the following files in order: `index.html`, `index.htm`, `index.xhtml`.
+When CGI is enabled and you do not configure an explicit `index` directive, Ferron automatically injects default index file names. Ferron checks these files in order: `index.html`, `index.htm`, `index.xhtml`.
 
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
@@ -204,7 +204,7 @@ If you register additional extensions via the `extension` directive, Ferron also
 
 For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
-This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron uses that instead.
+This injection only applies when you do not set an explicit `index` directive. If you configure your own `index` directive, Ferron uses that instead.
 
 ## Examples
 

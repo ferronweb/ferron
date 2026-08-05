@@ -1,22 +1,22 @@
 ---
-title: "Configuration: HTTP response body replacement"
-description: "The `replace` directive for string replacement in HTTP response bodies."
+title: Configuration: HTTP response body replacement
+description: The `replace` directive for string replacement in HTTP response bodies.
 ---
 
-This page documents the `replace`, `replace_last_modified`, and `replace_filter_types` directives for modifying HTTP response bodies on the fly. String replacement is applied after all content generation (static files, proxy responses, etc.) and before caching. The modified content is what clients receive and what gets cached.
+This page documents the `replace`, `replace_last_modified`, and `replace_filter_types` directives for modifying HTTP response bodies on the fly. Ferron applies string replacement after all content generation (static files, proxy responses, etc.) and before caching. Clients receive the modified content, and the cache stores it.
 
 ## Directives
 
 ### String replacement
 
 - `replace <search: string> <replacement: string>`
-  - This directive specifies a string to search for in the response body and its replacement. You can define multiple `replace` directives. They are applied in order. Default: none
+  - This directive specifies a string to search for in the response body and its replacement. You can define multiple `replace` directives. Ferron applies them in order. Default: none
 
 #### Block options
 
 | Option | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `once` | `<bool>` | When `true`, Ferron replaces only the first occurrence of the searched string. | `false` |
+| `once` | `<bool>` | When `true`, Ferron replaces only the first time the searched string appears. | `false` |
 
 **Configuration example:**
 
@@ -34,7 +34,7 @@ example.com {
 
 > [!note]
 >
-> - Multiple `replace` directives are applied in order — later replacements operate on the output of earlier ones.
+> - Ferron applies multiple `replace` directives in order. Later replacements operate on the output of earlier ones.
 > - The `once` option defaults to `false` (replace all occurrences). Use `once true` to replace only the first.
 
 #### Simple replacement
@@ -45,10 +45,10 @@ example.com {
 }
 ```
 
-Ferron replaces all occurrences of `foo` in the response body with `bar`.
+Ferron replaces every time `foo` appears in the response body with `bar`.
 
 > [!tip]
-> If replacements are not being applied, verify that HTTP compression is disabled for the affected responses. For JSON replacement, add `application/json` to `replace_filter_types`.
+> If Ferron does not apply replacements, verify that you disabled HTTP compression for the affected responses. For JSON replacement, add `application/json` to `replace_filter_types`.
 
 #### Replace only first occurrence
 
@@ -60,7 +60,7 @@ example.com {
 }
 ```
 
-Ferron replaces only the first occurrence of `old` in the response body. Later occurrences remain unchanged.
+Ferron replaces only the first time `old` appears in the response body. Later appearances remain unchanged.
 
 #### Chained replacements
 
@@ -71,7 +71,7 @@ example.com {
 }
 ```
 
-The replacements are applied in order. A response body containing `foo and foo` becomes `bar and bar` after the first replacement. It becomes `baz and baz` after the second. Note that the second replacement also affects the output of the first.
+Ferron applies the replacements in order. A response body containing `foo and foo` becomes `bar and bar` after the first replacement. It becomes `baz and baz` after the second. Note that the second replacement also affects the output of the first.
 
 ### MIME type filtering
 
@@ -101,7 +101,7 @@ example.com {
 
 #### Default behavior
 
-When `replace_filter_types` is not configured, only `text/html` responses are processed:
+When `replace_filter_types` is not configured, Ferron processes only `text/html` responses:
 
 ```ferron
 example.com {
@@ -113,7 +113,7 @@ example.com {
 ### Last-Modified header handling
 
 - `replace_last_modified <preserve: bool>`
-  - This directive specifies whether the `Last-Modified` response header is preserved when the body is modified. When `false`, Ferron removes the `Last-Modified` header from responses that undergo replacement. Default: `replace_last_modified false`
+  - This directive specifies whether Ferron preserves the `Last-Modified` response header when it modifies the body. When `false`, Ferron removes the `Last-Modified` header from responses that undergo replacement. Default: `replace_last_modified false`
 
 **Configuration example:**
 
@@ -129,9 +129,9 @@ example.com {
 
 You can place the `replace`, `replace_last_modified`, and `replace_filter_types` directives at different configuration levels:
 
-- **Host level** — applies to all requests for that host
-- **`location` block** — applies only to requests matching that path prefix
-- **`if` / `if_not` blocks** — applies conditionally based on a matcher
+- **Host level**: applies to all requests for that host
+- **`location` block**: applies only to requests matching that path prefix
+- **`if` / `if_not` blocks**: applies conditionally based on a matcher
 
 ```ferron
 example.com {
@@ -153,9 +153,9 @@ example.com {
 
 ## HTTP compression interaction
 
-String replacement **requires HTTP compression to be disabled** for the affected responses. When a response has a `Content-Encoding` header (indicating it is compressed with gzip, brotli, etc.), Ferron skips the replacement. This avoids corrupting the compressed data.
+String replacement **requires you to disable HTTP compression** for the affected responses. When a response has a `Content-Encoding` header, the data is already compressed with gzip, brotli, or another algorithm. Ferron skips the replacement to avoid corrupting the compressed data.
 
-If you need to replace strings in responses that would otherwise be compressed, you must disable compression:
+If you need to replace strings in responses that gzip, brotli, or another algorithm would compress, you must disable compression:
 
 ```ferron
 example.com {
@@ -171,13 +171,13 @@ example.com {
 ```
 
 > [!note]
-> If compression is enabled and a response is compressed, Ferron silently skips the replacement and emits a `ferron.replace.skipped_compressed` metric.
+> If you enable compression and the algorithm compresses a response, Ferron silently skips the replacement and emits a `ferron.replace.skipped_compressed` metric.
 
 ## Pipeline position
 
 The replace stage runs:
 
-- **After** the dynamic compression stage (to make sure the data is uncompressed)
+- **After** the dynamic compression stage (to make sure the data is not compressed)
 - **Before** the HTTP cache stage (so cached content is already replaced)
 
 This ordering makes sure that string replacement operates on raw, uncompressed response bodies. It also makes sure that the modified content is what gets stored in the cache.
@@ -198,5 +198,5 @@ The response replacement stage sets the following attributes on its `ferron.stag
 
 | Attribute | Type | Description |
 | --- | --- | --- |
-| `ferron.replace.applied` | bool | Whether a replacement was applied. |
-| `ferron.replace.skip_reason` | string | Reason the replacement was skipped, when applicable (for example, `compressed_body`, `unsupported_mime`). |
+| `ferron.replace.applied` | bool | Whether Ferron applied the replacement. |
+| `ferron.replace.skip_reason` | string | Reason Ferron skipped the replacement, when applicable (for example, `compressed_body`, `unsupported_mime`). |

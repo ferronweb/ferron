@@ -3,7 +3,7 @@ title: "Configuration: logging"
 description: "Log signals, log formatters (JSON and text), log levels, and trace ID display in logs."
 ---
 
-This page documents logging configuration for Ferron, including log signals, log formatters, available fields, and how trace IDs appear in log output.
+This page documents logging configuration for Ferron. It covers log signals, log formatters, available fields, and trace ID display in log output.
 
 > [!info]
 >
@@ -19,7 +19,7 @@ Ferron emits two log signals: **access logs** and **application logs**.
 | Access logs | Per-request HTTP request/response data (method, path, status, duration, etc.) |
 | Application logs | Server-level messages (startup, config reloads, errors, debug output) |
 
-Configure access logs per-host via the `log` directive. Configure application logs via the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal — the `error_log` directive is simply the file sink for the application log signal.
+Configure access logs per-host with the `log` directive. Configure application logs with the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal. The `error_log` directive is the file sink for the application log signal.
 
 ## Directives
 
@@ -38,8 +38,8 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `format` | `<string>` | Log formatter to use. Available formatters depend on which observability modules are loaded. | none |
-| `fields` | `<string>...` | Field names to include in the log output. When omitted, all available fields are emitted. | all fields |
+| `format` | `<string>` | Log formatter to use. The available formatters depend on which observability modules load. | none |
+| `fields` | `<string>...` | Field names to include in the log output. When you omit this, the server emits all available fields. | all fields |
 
 #### Access log fields
 
@@ -71,13 +71,13 @@ Each access log entry contains the following fields:
 > Access logs do not contain sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.
 
 > [!info]
-> Pipeline modules can contribute additional access log fields when active. These fields are only present when the corresponding module handles the request. For the list of module-contributed access log fields, see the respective module's documentation.
+> Pipeline modules can contribute additional access log fields when active. These fields are only present when the corresponding module handles the request. For the list of module-contributed access log fields, see the documentation for the respective module.
 
 ### Log formatters
 
 #### `json`
 
-The JSON formatter serializes each access log entry as a single-line JSON object. Provided by the `logformat-json` module.
+The JSON formatter serializes each access log entry as a single-line JSON object. Use the `logformat-json` module for this formatter.
 
 ```ferron
 example.com {
@@ -93,13 +93,13 @@ Example output:
 {"method":"GET","path":"/index.html","status":200,"duration_secs":0.012,"client_ip":"127.0.0.1","remote_ip":"127.0.0.1"}
 ```
 
-Use the `fields` directive to limit which fields appear in the JSON output. If `fields` is not specified, all available access log fields are emitted.
+Use the `fields` directive to limit which fields appear in the JSON output. If you do not specify `fields`, the server emits all available access log fields.
 
 #### `text`
 
-The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `logformat-text` module.
+The text formatter generates each access log entry as a plain text string using a configurable pattern. Use the `logformat-text` module for this formatter.
 
-By default, it uses the **Enhanced Combined Log Format** (ECLF). This is Ferron's extended version of CLF. It extends Combined Log Format with `Host` header and trace ID fields.
+By default, it uses the **Enhanced Combined Log Format** (ECLF). Ferron extends CLF with `Host` header and trace ID fields.
 
 **Configuration example:**
 
@@ -152,11 +152,11 @@ The `access_pattern` directive supports the following tokens:
 | `%%`              | Literal `%` character                              | `%%`                               |
 | Other text        | Passed through literally                           | `"`, ``, `-`                       |
 
-Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
+You can access request headers via the `%{Header-Name}i` syntax. The header name is case-insensitive, and Ferron converts hyphens to underscores internally.
 
 ### Application log formats
 
-The `error_format` directive (in the `observability { provider file ... }` block or the `error_log` shorthand block) controls how application log messages are formatted. It supports the same formatters as access logs: `text` (default) and `json`.
+The `error_format` directive (in the `observability { provider file ... }` block or the `error_log` shorthand block) controls how the server formats application log messages. It supports the same formatters as access logs: `text` (default) and `json`.
 
 ```ferron
 example.com {
@@ -199,7 +199,7 @@ The `log_level` directive (in the `observability` block or via `console_log`/`er
 
 | Level | When to use |
 |-------|-------------|
-| `error` | Production default. Only errors are logged. |
+| `error` | Production default. The server logs only errors. |
 | `warn` | Debugging performance issues. |
 | `info` | Request-level detail. Use for troubleshooting. |
 | `debug` | Deep debugging. High volume. |
@@ -227,10 +227,10 @@ The `format` directive (json/text) applies to **file and console** sinks. OTLP a
 | Prometheus | N/A (metrics only) | `observability { provider prometheus }` |
 
 > [!note]
-> Prometheus is metrics-only — it does not export logs. For log export, configure OTLP or use file/console sinks.
+> Prometheus is metrics-only. It does not export logs. For log export, configure OTLP or use file/console sinks.
 
 > [!tip]
-> If log files are not being written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
+> If log files are not written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
 
 ## Admin API structured logs
 
@@ -248,10 +248,10 @@ The `metrics-reload` module emits application log events during configuration re
 
 | Level | Message | Trigger |
 |-------|---------|---------|
-| `INFO` | `Reloading configuration...` | A reload is started |
+| `INFO` | `Reloading configuration...` | A reload starts |
 | `WARN` | `Can't reload the server, continuing to run with the previous configuration: {error}` | The reload attempt failed |
 
-These events carry the `ferron-metrics-reload` target and are emitted through the observability event system.
+These events carry the `ferron-metrics-reload` target, and the observability event system emits them.
 
 ### Structured logs
 
@@ -271,19 +271,19 @@ Structured error logs include contextual attributes to aid troubleshooting:
 | `client.address` | The client IP address, when available |
 | `server.address` | The server IP address, when available |
 
-The `client.address` and `server.address` attributes are included in:
+Ferron includes the `client.address` and `server.address` attributes in:
 
-- **Bad request (400) and timeout (408) logs** — emitted when a request is rejected before handler execution.
-- **TLS handshake failure logs** — emitted when a TLS connection fails to establish or negotiate a protocol.
-- **TCP connection error logs** — emitted when an HTTP/1.x or HTTP/2 connection encounters a transport-level error.
-- **Request validation error logs** — emitted for invalid Host headers, malformed URLs, CONNECT path errors, and URL sanitization failures.
+- **Bad request (400) and timeout (408) logs**: Ferron emits these logs when a request fails before handler execution.
+- **TLS handshake failure logs**: emitted when a TLS connection fails to establish or negotiate a protocol.
+- **TCP connection error logs**: emitted when an HTTP/1.x or HTTP/2 connection encounters a transport-level error.
+- **Request validation error logs**: emitted for invalid Host headers, malformed URLs, CONNECT path errors, and URL sanitization failures.
 
 > [!note]
-> Connection-level errors that occur before the socket address is resolved (for example, accept failures, PROXY protocol errors) do not include IP attributes.
+> Connection-level errors (for example, accept failures, PROXY protocol errors) do not include IP attributes. These errors occur before the server resolves the socket address.
 
 ## Trace ID in console and file logs
 
-Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context is available. This enables grep-based filtering by trace ID without requiring an OTLP backend.
+Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context exists. This enables grep-based filtering by trace ID without requiring an OTLP backend.
 
 **Example log output:**
 
@@ -293,4 +293,4 @@ Console and file loggers prefix log messages with `[trace=<trace_id>]` when a tr
 ```
 
 > [!tip]
-> Trace context is always enabled, so trace IDs are automatically available in console and file log messages as `[trace=<trace_id>]` prefixes. No additional configuration is needed.
+> Ferron always enables trace context, so trace IDs appear automatically in console and file log messages as `[trace=<trace_id>]` prefixes. You do not need additional configuration.

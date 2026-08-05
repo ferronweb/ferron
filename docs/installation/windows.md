@@ -3,7 +3,7 @@ title: Installation via Windows installer
 description: "Install Ferron 3 on Windows using the official setup installer: download, run the setup wizard, and manage the Windows service."
 ---
 
-Ferron 3 provides an official Windows installer for easy setup on Windows and Windows Server. The installer supports both x64 and ARM64 architectures.
+Ferron 3 offers an official Windows installer for easy setup on Windows and Windows Server. The installer supports x64 and ARM64 architectures.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Visit the [Ferron downloads page](/download) and download the installer that mat
 - **ARM64**: `ferron-<version>-aarch64-pc-windows-msvc-setup.exe`
 
 > [!note]
-> The x64 installer is compatible with x64 emulated mode on Windows ARM devices, but for best performance use the native ARM64 installer on ARM64 hardware.
+> The x64 installer works with x64 emulated mode on Windows ARM devices. For best performance, use the native ARM64 installer on ARM64 hardware.
 
 ## Installation steps
 
@@ -34,14 +34,10 @@ Double-click the downloaded `.exe` installer to launch the setup wizard.
 
 ### 2. Follow the setup wizard
 
-The installer will guide you through the following steps:
-
-1. **License agreement** — Review the license and accept the terms to continue.
-2. **Installation directory** — By default, Ferron is installed to `C:\Program Files\Ferron`. You may change this location if needed.
-3. **Setup options** — You can choose to:
-   - **Add Ferron to the system PATH** — This lets you run `ferron` from any command prompt or PowerShell session.
-   - **Install Ferron as a Windows service** — This makes Ferron start automatically with Windows and run in the background.
-4. **Ready to install** — Review your choices and click **"Install"** to begin.
+1. **License agreement**: review and accept the terms to continue.
+2. **Installation directory**: Ferron installs to `C:\Program Files\Ferron` by default.
+3. **Setup options**: add Ferron to the system PATH and install it as a Windows service.
+4. **Ready to install**: review your choices and click **"Install"**.
 
 ### 3. Finish the installation
 
@@ -53,29 +49,27 @@ After installing Ferron, start a Windows service by following these steps:
 
 1. Open the Services app (`services.msc`).
 2. Find and double-click on the `Ferron web server` service.
-3. Click **Start** in the Actions pane to begin.
+3. Click **Start** in the Actions pane.
 
 ### 5. Access the web server
 
-By default, Ferron serves content from its `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server is running.
+By default, Ferron serves content from its `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server works.
 
-If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
+If you see a **"Ferron is installed successfully!"** message on the page, the web server works.
 
 > [!tip]
-> If you cannot access the server from another machine, make sure Windows Defender Firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use (for example, by IIS), change the listen port in `C:\ProgramData\Ferron\ferron.conf` and restart the service.
+> If you cannot access the server from another machine, make sure Windows Defender Firewall allows incoming connections on port 80. If port 80 is already in use, change the listen port in `C:\ProgramData\Ferron\ferron.conf` and restart the service.
 
 ## File structure
 
 Ferron 3 installed via the Windows installer has the following file structure:
 
-- `C:\Program Files\Ferron\ferron.exe` — the main Ferron web server executable.
-- `C:\Program Files\Ferron\ferron-fmt.exe` - a tool for formatting Ferron configuration files.
-- `C:\Program Files\Ferron\ferron-kdl2ferron.exe` — a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
-- `C:\Program Files\Ferron\ferron-passwd.exe` — a tool for generating hashed passwords for the server's configuration.
-- `C:\Program Files\Ferron\ferron-precompress.exe` — a tool for precompressing static files.
-- `C:\Program Files\Ferron\ferron-serve.exe` — a command for serving static files with Ferron with zero configuration.
-- `C:\Program Files\Ferron\wwwroot\` — the webroot directory containing the default `index.html` file.
-- `C:\ProgramData\Ferron\ferron.conf` — the default configuration file (created on first installation).
+- `C:\Program Files\Ferron\ferron.exe`, the main Ferron web server executable.
+- `C:\Program Files\Ferron\ferron-fmt.exe`, a tool for formatting Ferron configuration files.
+- `C:\Program Files\Ferron\ferron-kdl2ferron.exe`, a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
+- `C:\Program Files\Ferron\ferron-passwd.exe`, a tool for generating hashed passwords for the server configuration.
+- `C:\Program Files\Ferron\ferron-precompress.exe`, a tool for precompressing static files.
+- `C:\Program Files\Ferron\ferron-serve.exe`, a command for serving static files with zero configuration.
 
 ## Managing Ferron as a Windows service
 
@@ -130,7 +124,7 @@ ferron winservice uninstall
 
 ## Other CLI commands
 
-Ferron also provides several commands for working with configuration files. Open Command Prompt or PowerShell and run:
+Ferron also offers several commands for working with configuration files. Open Command Prompt or PowerShell and run:
 
 ```cmd
 ferron validate -c C:\ProgramData\Ferron\ferron.conf

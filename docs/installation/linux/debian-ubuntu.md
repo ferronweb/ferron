@@ -1,15 +1,15 @@
 ---
 title: Installation via package managers (Debian/Ubuntu)
-description: "Install Ferron 3 on Debian/Ubuntu using official APT packages: add the repository key, install the ferron3 package, and manage the systemd service."
+description: "Install Ferron 3 on Debian/Ubuntu using official APT packages: add the repository key, install ferron3, and manage the systemd service."
 ---
 
 Ferron 3 has official packages available for Debian, Ubuntu, and derivatives. Below are the instructions on how to install Ferron 3 on Debian or Ubuntu via a package manager.
 
 ## Installation steps
 
-### 1. Add Ferron's repository
+### 1. Add the Ferron repository
 
-To add Ferron's repository, run the following commands (applicable for Debian and Ubuntu). If you are using a derivative, replace `$(lsb_release -cs)` with the closest matching Debian or Ubuntu version codename:
+To add the Ferron repository, run the following commands (applicable for Debian and Ubuntu). If you use a derivative, replace `$(lsb_release -cs)` with the closest matching Debian or Ubuntu version codename:
 
 ```bash
 # Install packages required for adding a new repository
@@ -38,12 +38,12 @@ sudo apt install ferron3
 
 ### 3. Access the web server
 
-By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
+By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server works and serves the default `index.html` file.
 
-If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
+If you see a "Ferron is installed successfully!" message on the page, the web server works correctly.
 
 > [!tip]
-> If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
+> If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80. If port 80 is in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 
@@ -57,7 +57,7 @@ Ferron 3 installed via the package for Debian/Ubuntu has the following file stru
 - `/usr/sbin/ferron-serve` - Ferron zero-configuration static file serving
 - `/var/log/ferron/access.log` - Ferron access log in Combined Log Format
 - `/var/log/ferron/error.log` - Ferron error log
-- `/var/www/ferron` - Ferron's web root
+- `/var/www/ferron` - the Ferron web root
 - `/etc/ferron/ferron.conf` - Ferron configuration
 
 ## Managing the Ferron service

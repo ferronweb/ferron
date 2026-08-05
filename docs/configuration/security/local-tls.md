@@ -3,7 +3,7 @@ title: "Configuration: local TLS provider"
 description: "Locally-trusted certificates for development and testing environments using loopback addresses."
 ---
 
-This page documents the `local` TLS provider, which generates and manages locally-trusted certificates for development and testing environments. It is automatically selected for loopback addresses (`localhost`, `127.0.0.1`, `::1`) when no explicit TLS configuration is provided.
+This page documents the `local` TLS provider, which generates and manages locally-trusted certificates for development and testing environments. Ferron selects this provider automatically for loopback addresses (`localhost`, `127.0.0.1`, `::1`) when you do not provide explicit TLS configuration.
 
 ## Directives
 
@@ -27,9 +27,9 @@ localhost:443 {
 
 For loopback addresses, Ferron automatically selects the `local` provider when:
 
-1. No explicit `tls` directive is configured
+1. You have not configured an explicit `tls` directive
 2. The host matches loopback criteria (`localhost`, `127.0.0.1`, `::1`)
-3. The `local` provider is available
+3. Ferron has the `local` provider available
 
 This means you can use HTTPS for development without any configuration:
 
@@ -60,11 +60,11 @@ localhost:443 {
 
 ### Certificate Authority
 
-Ferron generates a local root CA on first use. The CA certificate is cached in the data directory and is valid for 10 years. **Manual trust is required** — you must import the CA into your OS or browser trust store.
+Ferron generates a local root CA on first use. Ferron caches the CA certificate in the data directory. The certificate is valid for 10 years. **Manual trust is required.** You must import the CA into your OS or browser trust store.
 
 ### Leaf certificates
 
-Ferron generates leaf certificates for each unique set of Subject Alternative Names (SANs). They are valid for 1 year. Ferron regenerates them automatically when they expire or when SANs change. When any loopback address is detected, Ferron automatically includes all loopback addresses (`localhost`, `127.0.0.1`, `::1`) in the certificate.
+Ferron generates leaf certificates for each unique set of Subject Alternative Names (SANs). The certificates are valid for 1 year. Ferron regenerates them automatically when they expire or when SANs change. When Ferron detects any loopback address, it includes all loopback addresses (`localhost`, `127.0.0.1`, `::1`) in the certificate.
 
 ### Cache location
 
@@ -73,7 +73,7 @@ By default, certificates are stored in:
 - **Linux/macOS**: `~/.local/share/ferron-local-tls/`
 - **Windows**: `%LOCALAPPDATA%\ferron-local-tls\`
 
-If the cache directory could not be used, a temporary fallback location is used instead.
+If Ferron cannot use the cache directory, it uses a temporary fallback location instead.
 
 You can customize the cache location with the `cache` directive:
 
@@ -90,16 +90,16 @@ example.com {
 
 ### Trust requirements
 
-The local CA is **not automatically trusted** by your system or browser. You must manually import the CA certificate:
+Your system or browser does **not automatically trust** the local CA. You must manually import the CA certificate:
 
 1. Find the CA certificate path (logged at server startup)
 2. Import into your OS trust store or browser
 
 ### Development use only
 
-- **Not suitable for production** — local certificates are not publicly trusted
-- **Development and testing only** — use the ACME provider for public-facing sites
-- **Manual trust management** — you control which devices trust your local CA
+- **Not suitable for production.** Local certificates are not publicly trusted.
+- **Development and testing only.** Use the ACME provider for public-facing sites.
+- **Manual trust management.** You control which devices trust your local CA.
 
 ## Advanced configuration
 
@@ -145,11 +145,11 @@ localhost {
 The local provider offers the same security with less manual certificate management.
 
 > [!warning]
-> Never use the local provider in production — local certificates are not publicly trusted and will cause security warnings for all visitors. Use the ACME provider for public-facing websites.
+> Never use the local provider in production. Local certificates are not publicly trusted and will cause security warnings for all visitors. Use the ACME provider for public-facing websites.
 
 ### Certificate trust requirements
 
-The local CA certificate must be manually imported into your system or browser trust store. The server logs the CA certificate path at startup — use this file to import the certificate.
+You must manually import the local CA certificate into your system or browser trust store. The server logs the CA certificate path at startup. Use this file to import the certificate.
 
 ### Cache directory permissions
 
@@ -161,35 +161,35 @@ If Ferron cannot write to the default cache directory, either:
 
 ### Certificate regeneration
 
-Leaf certificates are automatically regenerated when:
+Ferron automatically regenerates leaf certificates when:
 
 - They expire (after 1 year)
 - The set of Subject Alternative Names (SANs) changes
 - The cached certificate files are deleted
 
-The CA certificate is regenerated only if the cached files are missing or corrupted.
+Ferron regenerates the CA certificate only if the cached files are missing or corrupted.
 
 ### Browser certificate warnings
 
 If you see security warnings in your browser:
 
-1. **Check the certificate details** — make sure it is issued by "Ferron Local Root CA"
-2. **Import the CA certificate** — add the CA to your OS or browser trust store
-3. **Clear browser cache** — some browsers cache certificate trust decisions
-4. **Restart your browser** — changes to certificate trust may require a restart
+1. **Check the certificate details.** Make sure the issuer is "Ferron Local Root CA"
+2. **Import the CA certificate.** Add the CA to your OS or browser trust store
+3. **Clear browser cache.** Some browsers cache certificate trust decisions
+4. **Restart your browser.** Changes to certificate trust may require a restart
 
 ### Multiple loopback addresses
 
-When any loopback address is detected, the local provider automatically includes all loopback addresses (`localhost`, `127.0.0.1`, `::1`) in the generated certificate for convenience.
+When Ferron detects any loopback address, the local provider includes all loopback addresses (`localhost`, `127.0.0.1`, `::1`) in the generated certificate for convenience.
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls) — cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme) — production TLS certificates
-- [HTTP host directives](/docs/v3/configuration/server/host) — per-host TLS configuration
+- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/v3/configuration/security/acme): production TLS certificates
+- [HTTP host directives](/docs/v3/configuration/server/host): per-host TLS configuration
 
 ## Best practices
 
 `ferron doctor` reports the following best-practice check for directives on this page.
 
-- **`provider local` on non-loopback hosts** — The local TLS provider issues self-signed certificates. Use ACME or manual certificates for production hostnames.
+- **`provider local` on non-loopback hosts.** The local TLS provider issues self-signed certificates. Use ACME or manual certificates for production hostnames.

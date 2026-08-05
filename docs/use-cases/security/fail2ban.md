@@ -1,16 +1,16 @@
 ---
 title: Fail2ban integration
-description: "Block abusive IPs at the firewall level by combining Ferron's access logs with Fail2ban filters and actions."
+description: "Block abusive IPs at the firewall level by combining the Ferron access logs with Fail2ban filters and actions."
 ---
 
-Ferron's access logs use an extended variant of Combined Log Format by default (the same format NGINX and Apache use). This makes them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules) to ban offending IPs at the firewall level.
+Ferron access logs use an extended variant of Combined Log Format by default (the same format NGINX and Apache use). This makes them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules). It bans offending IPs at the firewall level.
 
-Unlike Ferron's built-in [abuse protection](/docs/v3/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban provides persistent bans managed by the OS firewall. This is useful when you want bans to survive Ferron restarts or when you need to block IPs across multiple services.
+Unlike the built-in [abuse protection](/docs/v3/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban gives persistent bans managed by the OS firewall. Use Fail2ban when you want bans to survive Ferron restarts. Use it also when you need to block IPs across multiple services.
 
 > [!note]
 >
-> - Ferron's built-in `abuse_protection` and external Fail2ban serve complementary purposes. Use `abuse_protection` for fast, in-process banning with fine-grained HTTP thresholds, and Fail2ban for firewall-level bans that persist across restarts.
-> - If you only need temporary bans and do not require firewall integration, prefer `abuse_protection` — it is simpler and does not require external software.
+> - Ferron built-in `abuse_protection` and external Fail2ban serve complementary purposes. Use `abuse_protection` for fast, in-process banning with fine-grained HTTP thresholds. Use Fail2ban for firewall-level bans that persist across restarts.
+> - If you only need temporary bans and do not require firewall integration, prefer `abuse_protection`. It is simpler and does not require external software.
 
 ## Prerequisites
 
@@ -170,7 +170,7 @@ bantime  = 86400
 action   = iptables-multiport[name=ferron-scanner, port="http,https"]
 ```
 
-This bans IPs for **24 hours** after just 5 probe attempts within 10 minutes — scanner traffic is almost always malicious.
+This bans IPs for **24 hours** after just 5 probe attempts within 10 minutes. Scanner traffic is almost always malicious.
 
 ## Using nftables instead of iptables
 
@@ -219,9 +219,9 @@ sudo fail2ban-client set ferron-404 unbanip 203.0.113.50
 sudo fail2ban-client banned
 ```
 
-## Combining with Ferron's built-in abuse protection
+## Combining with built-in abuse protection
 
-For defense in depth, use both Ferron's `abuse_protection` and Fail2ban together:
+For defense in depth, use both built-in `abuse_protection` and Fail2ban together:
 
 ```ferron
 example.com {
@@ -247,16 +247,16 @@ example.com {
 
 The flow works as follows:
 
-1. Ferron's `abuse_protection` provides fast, in-process banning for repeat offenders (bans expire after 15 minutes).
-2. Fail2ban monitors the same access log and applies firewall-level bans for persistent abusers (bans can last hours or days).
-3. Both systems ban an IP that triggers them — Ferron returns HTTP 403 responses, and Fail2ban drops traffic at the firewall.
+1. The built-in `abuse_protection` gives fast, in-process banning for repeat offenders. Bans expire after 15 minutes.
+2. Fail2ban monitors the same access log and applies firewall-level bans for persistent abusers. Bans can last hours or days.
+3. Both systems ban an IP that triggers them. Ferron returns HTTP 403 responses, and Fail2ban drops traffic at the firewall.
 
 > [!tip]
-> Keep `abuse_protection` thresholds tighter (lower `events`, shorter `window`) and Fail2ban thresholds looser (higher `maxretry`, longer `bantime`). This way, Ferron handles quick reactions while Fail2ban handles sustained abuse.
+> Keep `abuse_protection` thresholds tighter (lower `events`, shorter `window`). Keep Fail2ban thresholds looser (higher `maxretry`, longer `bantime`). This way, Ferron handles quick reactions while Fail2ban handles sustained abuse.
 
 ## Custom access log format for better parsing
 
-If you prefer a simpler log format that Fail2ban can parse easily, use the `access_pattern` directive. It outputs standard Combined Log Format (without the extra Host and trace ID fields):
+If you prefer a simpler log format that Fail2ban can parse easily, use the `access_pattern` directive. It outputs standard Combined Log Format without the extra Host and trace ID fields:
 
 ```ferron
 example.com {

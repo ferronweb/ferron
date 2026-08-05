@@ -209,7 +209,7 @@ The HMAC secret must be base64url-encoded (without padding).
 
 ## Fallback providers
 
-When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron automatically tries the next configured fallback provider.
+When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron tries the next configured fallback provider.
 
 ```ferron
 example.com {
@@ -240,11 +240,11 @@ Each `fallback` block accepts the same provider-level directives as the primary 
 - Ferron tries providers **sequentially**: the primary first, then each `fallback` block in order.
 - Ferron triggers a fallback when account creation with the previous provider fails.
 - Once a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
-- Account cache keys are scoped per-provider, so each provider maintains its own cached credentials.
+- Ferron scopes account cache keys per-provider, so each provider maintains its own cached credentials.
 
 ### Example: primary with staging fallback
 
-A common pattern is to configure production as the primary and staging as a fallback for testing or when production is unavailable:
+A common pattern is to configure production as the primary and staging as a fallback. Use this for testing or when production is unavailable:
 
 ```ferron
 example.com {
@@ -275,12 +275,12 @@ tls {
 }
 ```
 
-If only one path is given, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
+If you give only one path, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
 
 ## Security considerations
 
 - **Private keys are never logged** or exposed in error messages.
-- When saved to disk, keys are written with `0600` permissions on Unix.
+- When saved to disk, Ferron writes keys with `0600` permissions on Unix.
 - When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate issuance for arbitrary hostnames.
 
 ## Troubleshooting
@@ -291,7 +291,7 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 
 ### DNS-01 issues
 
-- Make sure the DNS provider is configured correctly with valid credentials.
+- Make sure you configure the DNS provider correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
 - DNS propagation may take longer than 60 seconds for some providers — the ACME CA will retry validation.
 
@@ -310,7 +310,7 @@ openssl s_client -connect example.com -status -servername example.com </dev/null
 The ACME background task emits log events and metrics through the configured observability pipeline:
 
 > [!note]
-> The ACME log events are global-only. This means they will not be emitted via per-host observability sinks.
+> The ACME log events are global-only. Ferron does not emit them via per-host observability sinks.
 
 ### Logs
 
@@ -335,7 +335,7 @@ The ACME background task emits log events and metrics through the configured obs
 
 ### Structured logs
 
-In OTLP `log_style modern`, the `summary` field is used as the log body and `attributes` are emitted as typed OpenTelemetry log record attributes.
+In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron emits `attributes` as typed OpenTelemetry log record attributes.
 
 | Summary | Level | Attributes |
 |---------|-------|------------|
@@ -388,7 +388,7 @@ The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.st
 
 | Attribute | Type | Description |
 | --- | --- | --- |
-| `ferron.acme.domain` | string | The domain being validated. |
+| `ferron.acme.domain` | string | The domain that Ferron validates. |
 | `ferron.acme.challenge_type` | string | Challenge type (`http01`). |
 
 ## See also
@@ -403,8 +403,8 @@ The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.st
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`no_verification` for ACME directory** — Disabling TLS verification for the ACME directory should only be used for testing.
+- **`no_verification` for ACME directory** — Only disable TLS verification for the ACME directory in testing.
 - **`on_demand` without `on_demand_ask`** — On-demand certificate issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
-- **`on_demand_ask_no_verification`** — Disabling TLS verification for the approval endpoint should only be used for strictly internal and otherwise authenticated endpoints.
+- **`on_demand_ask_no_verification`** — Only disable TLS verification for the approval endpoint on strictly internal and otherwise authenticated endpoints.
 - **Missing `contact`** — Without an ACME account email, the certificate authority cannot send expiry or account notices.
-- **Non-public domain** — Domains using non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. Certificate issuance via ACME will fail because the CA cannot complete domain validation. This check applies to both explicit `domains` directives and to the host block's hostname when `on_demand` TLS is used.
+- **Non-public domain** — Domains using non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. Certificate issuance via ACME will fail because the CA cannot complete domain validation. This check applies to both explicit `domains` directives and to the host block's hostname when you use `on_demand` TLS.

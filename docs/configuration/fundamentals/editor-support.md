@@ -3,25 +3,25 @@ title: "Editor support"
 description: "Syntax highlighting, language server, and editor extensions for Ferron configuration files."
 ---
 
-A range of editor integrations support Ferron configuration files (`.conf` / `.ferron`). These cover syntax highlighting, formatting, completions, and diagnostics, useful for GitOps operators and anyone editing Ferron configuration by hand.
+A range of editor integrations support Ferron configuration files (`.conf` / `.ferron`). These integrations cover syntax highlighting, formatting, completions, and diagnostics. They are useful for GitOps operators and anyone editing Ferron configuration by hand.
 
 ## Feature overview
 
 | Feature                   | Description                                                                            |
 | ------------------------- | -------------------------------------------------------------------------------------- |
 | **Syntax highlighting**   | TextMate grammar and tree-sitter grammar for `.conf` / `.ferron` files                 |
-| **Language server (LSP)** | `ferron-language-server` — provides formatting, directive completions, and diagnostics |
+| **Language server (LSP)** | `ferron-language-server` — offers formatting, directive completions, and diagnostics |
 | **VS Code extension**     | Official extension bundling syntax highlighting and LSP                                |
 | **Zed extension**         | Official extension for Zed (submission under review)                                   |
 | **Neovim**                | Manual configuration using tree-sitter and LSP                                         |
 
 ## Syntax highlighting
 
-Two independent grammars provide syntax highlighting. Use the one compatible with your editor.
+Two independent grammars give syntax highlighting. Use the one compatible with your editor.
 
 ### TextMate grammar
 
-The TextMate grammar is hosted at [ferronweb/ferronconf](https://github.com/ferronweb/ferronconf) and distributed as `ferron.tmLanguage.json`:
+The [ferronweb/ferronconf](https://github.com/ferronweb/ferronconf) repository hosts the TextMate grammar and distributes it as `ferron.tmLanguage.json`.
 
 ```text
 https://raw.githubusercontent.com/ferronweb/ferronconf/refs/heads/main/ferron.tmLanguage.json
@@ -36,7 +36,7 @@ This grammar works with any editor that accepts TextMate grammars, including:
 
 ### tree-sitter grammar
 
-The tree-sitter grammar is hosted at [ferronweb/tree-sitter-ferron](https://github.com/ferronweb/tree-sitter-ferron) and published as `tree-sitter-ferron` on [npm](https://www.npmjs.com/package/tree-sitter-ferron) and [crates.io](https://crates.io/crates/tree-sitter-ferron).
+The [ferronweb/tree-sitter-ferron](https://github.com/ferronweb/tree-sitter-ferron) repository hosts the tree-sitter grammar and publishes it as `tree-sitter-ferron` on [npm](https://www.npmjs.com/package/tree-sitter-ferron) and [crates.io](https://crates.io/crates/tree-sitter-ferron).
 
 This grammar works with editors that use tree-sitter, including:
 
@@ -47,15 +47,15 @@ This grammar works with editors that use tree-sitter, including:
 
 ## Language server (LSP)
 
-The Ferron language server provides:
+The Ferron language server offers:
 
-- **Formatting** — formats `.conf` files using the same rules as `ferron-fmt`
-- **Directive completions** — suggests valid directives based on the loaded module set and current block context
-- **Diagnostics** — reports parse errors, unknown directives, and invalid configurations, based on the same validation logic as `ferron validate`
+- **Formatting**: formats `.conf` files with the same rules as `ferron-fmt`
+- **Directive completions**: suggests valid directives based on the loaded module set and current block context
+- **Diagnostics**: reports parse errors, unknown directives, and invalid configurations, based on the same validation logic as `ferron validate`
 
 ### Installation
 
-The language server is published as `ferron-language-server` on [npm](https://www.npmjs.com/package/ferron-language-server) and [crates.io](https://crates.io/crates/ferron-language-server).
+[npm](https://www.npmjs.com/package/ferron-language-server) and [crates.io](https://crates.io/crates/ferron-language-server) carry the `ferron-language-server` package.
 
 ```bash
 npm install -g ferron-language-server
@@ -73,12 +73,12 @@ The language server accepts the following options:
 
 ## VS Code
 
-The official VS Code extension is published as **Ferron** by `Ferron.ferron`:
+`Ferron.ferron` publishes the official VS Code extension as **Ferron**:
 
 - [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=Ferron.ferron)
 - [Open VSX Registry](https://open-vsx.org/extension/Ferron/ferron)
 
-The extension bundles both the TextMate grammar and the language server, so no separate installation is needed.
+The extension bundles the TextMate grammar and the language server, so you do not need a separate installation.
 
 ### Manual setup
 
@@ -91,11 +91,11 @@ If you prefer not to use the extension, you can install the TextMate grammar man
      -o ~/.vscode/extensions/ferron.tmLanguage.json
    ```
 
-2. Install the language server separately (see [Installation](#installation) above) and configure it in your editor's LSP settings.
+2. Install the language server separately (see [Installation](#installation) above) and configure it in the LSP settings of your editor.
 
 ## Zed
 
-The official Zed extension is hosted at [ferronweb/ferron-zed](https://github.com/ferronweb/ferron-zed). It is not yet published to the Zed extension registry (the submission is under review), but it can be installed manually:
+The [ferronweb/ferron-zed](https://github.com/ferronweb/ferron-zed) repository hosts the official Zed extension. The Zed extension registry does not yet carry it (the submission is under review), but you can install it manually:
 
 1. Clone the extension:
 
