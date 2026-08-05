@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use ferron_core::config::layer::LayeredConfiguration;
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{ServerConfigurationBlock, Variables};
 
 use crate::brute_force::BruteForceConfig;
 
@@ -30,7 +30,10 @@ impl BasicAuthConfig {
 ///
 /// Returns `Some(config)` if at least one `basicauth` block is found,
 /// merging users from all blocks. Returns `None` if no `basicauth` is configured.
-pub fn parse_basicauth_config(config: &LayeredConfiguration) -> Option<BasicAuthConfig> {
+pub fn parse_basicauth_config(
+    config: &LayeredConfiguration,
+    vars: &impl Variables,
+) -> Option<BasicAuthConfig> {
     let entries = config.get_entries("basic_auth", true);
     if entries.is_empty() {
         return None;
@@ -44,7 +47,7 @@ pub fn parse_basicauth_config(config: &LayeredConfiguration) -> Option<BasicAuth
 
     for entry in entries {
         if let Some(children) = &entry.children {
-            parse_basicauth_block(children, &mut merged_config);
+            parse_basicauth_block(children, &mut merged_config, vars);
         }
     }
 
@@ -55,7 +58,11 @@ pub fn parse_basicauth_config(config: &LayeredConfiguration) -> Option<BasicAuth
     }
 }
 
-fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAuthConfig) {
+fn parse_basicauth_block(
+    block: &ServerConfigurationBlock,
+    config: &mut BasicAuthConfig,
+    vars: &impl Variables,
+) {
     if let Some(realm_val) = block.get_value("realm") {
         if let Some(realm_str) = realm_val.as_str() {
             config.realm = realm_str.to_string();
@@ -65,7 +72,7 @@ fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAut
     if let Some(users_entries) = block.directives.get("users") {
         for users_entry in users_entries {
             if let Some(ref users_block) = users_entry.children {
-                parse_users_block(users_block, &mut config.users);
+                parse_users_block(users_block, &mut config.users, vars);
             }
         }
     }
@@ -79,13 +86,17 @@ fn parse_basicauth_block(block: &ServerConfigurationBlock, config: &mut BasicAut
     }
 }
 
-fn parse_users_block(block: &ServerConfigurationBlock, users: &mut HashMap<String, String>) {
+fn parse_users_block(
+    block: &ServerConfigurationBlock,
+    users: &mut HashMap<String, String>,
+    vars: &impl Variables,
+) {
     // Each directive inside `users { ... }` is a username with the hash as its argument.
     // e.g.: `alice "$argon2id$..."`
     for (username, entries) in block.directives.iter() {
         for entry in entries {
             if let Some(hash_val) = entry.args.first() {
-                if let Some(hash_str) = hash_val.as_str() {
+                if let Some(hash_str) = hash_val.as_string_with_interpolations(vars) {
                     users.insert(username.clone(), hash_str.to_string());
                 }
             }

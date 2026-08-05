@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ferron_core::config::validator::{
     entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
@@ -261,7 +263,10 @@ impl BasicAuthValidator {
             .with_span(entry_span(entry))
         })?;
 
-        if value.as_str().is_none() {
+        if value
+            .as_string_with_interpolations(&HashMap::new())
+            .is_none()
+        {
             return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — {name} must be a string value"
             ))

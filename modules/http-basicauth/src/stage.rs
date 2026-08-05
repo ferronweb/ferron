@@ -151,7 +151,7 @@ impl Stage<HttpContext> for BasicAuthStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = match parse_basicauth_config(&ctx.configuration) {
+        let config = match parse_basicauth_config(&ctx.configuration, ctx) {
             Some(cfg) => cfg,
             None => return Ok(true), // No basicauth configured — pass through
         };
