@@ -79,13 +79,13 @@ example.com {
 
 Use GFM alert syntax inline with the relevant content. Do not gather callouts into a separate section at the end of the page.
 
-| Alert type | Usage |
-|------------|-------|
-| `> [!tip]` | Best practices, shortcuts, recommendations |
-| `> [!note]` | Neutral clarification or supplementary detail |
-| `> [!important]` | Critical requirement or consequence |
-| `> [!warning]` | Potential pitfall or configuration risk |
-| `> [!info]` | Cross-reference to related documentation |
+| Alert type       | Usage                                         |
+| ---------------- | --------------------------------------------- |
+| `> [!tip]`       | Best practices, shortcuts, recommendations    |
+| `> [!note]`      | Neutral clarification or supplementary detail |
+| `> [!important]` | Critical requirement or consequence           |
+| `> [!warning]`   | Potential pitfall or configuration risk       |
+| `> [!info]`      | Cross-reference to related documentation      |
 
 ### Links
 
@@ -97,12 +97,24 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 
 ### Writing principles
 
-- **Describe behavior, not labels** — explain what the system actually does, not just what people call the feature.
+- **Describe behavior, not labels** — explain what the system actually does, not just what the feature is called.
 - **Functional precision first** — prefer clear, explicit descriptions over clever phrasing.
 - **Consistency over novelty** — if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
 - **Inline callouts** — no separate notes section at the end of a page.
 - **No emojis** unless the content explicitly calls for them.
-- **Linters are guidance** — do not let woke or other terminology linters override clarity or consistency.
+- **Linters are guidance** — do not let `woke` or other terminology linters override clarity or consistency.
+- **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text — not code blocks, inline code, directive names, or URLs):
+  - **Active voice**: "Ferron reads the file", not "the file is read by the parser". Use "Ferron" or "the server" as the subject when the actor is the software.
+  - **No contractions**: Write "do not", "cannot", "will not", "it is".
+  - **Sentence length**: Max 20 words for instructions, max 25 for descriptive sentences. Split longer sentences.
+  - **No semicolons**: Use a period and split into two sentences.
+  - **Replace banned words**: begin→start, ensure→make sure, utilize→use, "prior to"→before, "subsequent to"→after, obtain→get, demonstrate→show, additionally→also, "in order to"→to, "a variety of"→various, "it is important to note"→delete/restate, "due to the fact that"→because.
+  - **No marketing adjectives**: seamless, robust, powerful, effortless, etc.
+  - **No nominalizations**: "perform an analysis"→"analyze", "provide documentation"→"document".
+  - **No "-ing" main verbs**: "is creating"→"creates", "is running"→"runs".
+  - **One topic per paragraph**, max six sentences per paragraph.
+  - **No em dashes as separators**: Use a period, comma, or restructure instead. Keep numeric ranges (1-2).
+  - **American spelling**.
 
 ## Sidebar
 
@@ -110,10 +122,10 @@ Define the sidebar navigation in `links.json`. Add new pages there to make them 
 
 **Fields:**
 
-| Name | Description |
-|------|-------------|
-| `href` | The URL path of the page (for example, `/docs/v3/installation/linux/rhel-fedora`) |
-| `target` | The target window or tab (`"_self"` for current, `"_blank"` for new) |
-| `label` | The display text in the sidebar |
-| `sub` | Whether this is a sub-item (indented under another category) |
-| `category` | Whether the item should function as a category header only |
+| Name       | Description                                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| `href`     | The URL path of the page (for example, `/docs/v3/installation/linux/rhel-fedora`) |
+| `target`   | The target window or tab (`"_self"` for current, `"_blank"` for new)              |
+| `label`    | The display text in the sidebar                                                   |
+| `sub`      | Whether this is a sub-item (indented under another category)                      |
+| `category` | Whether the item should function as a category header only                        |

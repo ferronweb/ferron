@@ -120,3 +120,15 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Inline callouts over separate notes sections**: Use GFM alert syntax (`> [!note]`, `> [!warning]`, `> [!important]`, `> [!tip]`) for brief callouts inline with the relevant content. Do not use a separate `## Notes and troubleshooting` section at the end of a page.
 - **Linters as guidance**: Treat terminology linters (e.g., `woke`) as soft suggestions. Do not let them override clarity, break consistency, or trigger unnecessary diffs.
 - **"Simple English"**: Write in clear, straightforward language that is easy to understand. Use [ASD-STE100](https://asd-ste100.org/) as a reference for writing simplified English.
+- **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text — not code blocks, inline code, directive names, or URLs):
+  - **Active voice**: "Ferron reads the file", not "the file is read by the parser". Use "Ferron" or "the server" as the subject when the actor is the software.
+  - **No contractions**: Write "do not", "cannot", "will not", "it is".
+  - **Sentence length**: Max 20 words for instructions, max 25 for descriptive sentences. Split longer sentences.
+  - **No semicolons**: Use a period and split into two sentences.
+  - **Replace banned words**: begin→start, ensure→make sure, utilize→use, "prior to"→before, "subsequent to"→after, obtain→get, demonstrate→show, additionally→also, "in order to"→to, "a variety of"→various, "it is important to note"→delete/restate, "due to the fact that"→because.
+  - **No marketing adjectives**: seamless, robust, powerful, effortless, etc.
+  - **No nominalizations**: "perform an analysis"→"analyze", "provide documentation"→"document".
+  - **No "-ing" main verbs**: "is creating"→"creates", "is running"→"runs".
+  - **One topic per paragraph**, max six sentences per paragraph.
+  - **No em dashes as separators**: Use a period, comma, or restructure instead. Keep numeric ranges (1-2).
+  - **American spelling**.
