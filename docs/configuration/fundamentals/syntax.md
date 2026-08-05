@@ -154,7 +154,6 @@ Selectors:
 - `*.example.org` — wildcard hostname
 - `127.0.1` — IP-based host
 - `[2001:db8::1]` — IPv6 address
-
 - `http example.org` — explicit protocol
 - `http example.org:8080` — explicit protocol and port
 - `tcp *:5432` — TCP listener
@@ -171,6 +170,7 @@ If you specify a hostname (for example, a domain name) and give no explicit port
 - `include "path.conf"` at the top level loads another config file relative to the exposed file.
 
 `include "path.conf"` at the top level loads another config file relative to the current file.
+
 - `snippet <name> { ... }` defines a reusable block of directives.
 - `use <snippet-name>` inside a block expands that snippet in place.
 

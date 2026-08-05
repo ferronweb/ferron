@@ -39,7 +39,6 @@ The installer for Linux creates the following file structure:
 - `/usr/sbin/ferron-passwd` - Ferron user password generation tool
 - `/usr/sbin/ferron-precompress` - Ferron static files precompression tool
 - `/usr/sbin/ferron-serve` - Ferron zero-configuration static file serving
-
 - `/var/log/ferron/access.log` - Ferron access log in Combined Log Format
 - `/var/log/ferron/error.log` - Ferron error log
 - `/var/www/ferron` - the web root for Ferron

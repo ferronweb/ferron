@@ -272,10 +272,8 @@ All TLS providers share the certificate expiration gauge (manual, ACME, HTTP, lo
 - **Private keys are never logged** or exposed in error messages.
 - The module loads the private key into memory and uses it only for TLS. It never writes the key to disk.
 - Protect the certificate endpoint URL with authentication (for example, API keys, mTLS) in production.
-
 - Use `no_verification` only for internal endpoints with self-signed certificates. Do not use it for public endpoints.
 - If the certificate endpoint returns a valid but untrusted certificate chain, Ferron will still use it. Make sure your endpoint only returns certificates from trusted CAs.
-
 - When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate fetching for arbitrary hostnames.
 - The `url` endpoint receives the domain in the `?domain=` query parameter. Make sure it validates and authenticates requests.
 
@@ -345,6 +343,5 @@ If metrics or logs are not appearing:
 
 - **`url` with plain HTTP**: Certificate endpoints returning private keys should use HTTPS with authentication.
 - **`no_verification` for certificate endpoint**: Use it to disable TLS verification for the certificate endpoint only when the endpoint is strictly internal and otherwise authenticated.
-
 - **`on_demand` without `on_demand_ask`**: On-demand certificate fetching without an approval endpoint allows certificate fetching for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
 - **`on_demand_ask_no_verification`**: Use it to disable TLS verification for the approval endpoint only when the endpoint is strictly internal and otherwise authenticated.

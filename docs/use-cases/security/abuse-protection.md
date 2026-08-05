@@ -11,7 +11,6 @@ This page covers common deployment patterns. For full configuration details, see
 >
 > - Bans exist in memory only and do not survive server restarts. No admin API exists for a manual unban, so you must wait for the ban to expire naturally.
 > - If Ferron bans your IP immediately, check your thresholds. You may have `events 1` or very short `window` values that are too strict.
->
 > - If Ferron bans legitimate clients, add their IP or CIDR range to the `allowlist`.
 > - If Ferron runs behind a reverse proxy, configure `client_ip_from_header` so it sees the real client IP, not the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
 
@@ -400,7 +399,6 @@ WantedBy=multi-user.target
 
 - AbuseIPDB API daily quotas apply. Plan your thresholds accordingly.
 - The script is best-effort. It does not retry failed reports or maintain a queue.
-
 - There is no bidirectional sync. The sidecar cannot query or clear the internal ban state of Ferron.
 - Bans disappear when Ferron restarts, but the sidecar already reported them by that point.
 

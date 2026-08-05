@@ -65,7 +65,6 @@ Ferron on Docker has the following file structure:
 - `/usr/local/bin/ferron-passwd` - Ferron user password generation tool
 - `/usr/local/bin/ferron-precompress` - Ferron static files precompression tool
 - `/usr/local/bin/ferron-serve` - command for serving static files with Ferron with zero configuration
-
 - `/var/cache/ferron-acme` - the ACME cache directory for Ferron (if not explicitly specified in the server configuration)
 - `/var/www/ferron` - the default web root for Ferron
 - `/etc/ferron/conf.d` - Directory for split Ferron configuration files

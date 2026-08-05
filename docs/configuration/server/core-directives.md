@@ -229,6 +229,7 @@ example.com {
 ```
 
 > [!note]
+>
 > - Ferron creates log files in append mode if they do not exist.
 > - Ferron buffers writes and flushes them every 1 second and on shutdown.
 > - If you omit `access_log`, Ferron ignores access events, and the same applies to `error_log`.
