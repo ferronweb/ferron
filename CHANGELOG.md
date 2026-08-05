@@ -32,6 +32,10 @@
 
 - **Diagnostic span location improvements** — diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
 
+#### Container images
+
+- **"Slim" Debian-based Docker images** — `ferronserver/ferron:3-debian` (and other Debian-base image tags) now are based on a "slim" variant of Debian instead of the full Debian image, making the image smaller and removing unnecessary packages. The slim variant is still compatible with the full Debian image, so it should not break existing deployments.
+
 ### Fixed
 
 #### HTTP server core
