@@ -6,7 +6,7 @@ description: "Using ferron-fmt to format, check, and style Ferron configuration 
 This page documents the `ferron-fmt` tool, a formatter for Ferron configuration files. It formats `.conf` files with configurable indentation, quote style, and other styling options.
 
 > [!tip]
-> The idiomatic Ferron 3 configuration style uses bare strings without quotes (when possible), 4-space indentation, bare boolean flags, and raw string literals for regex patterns. The `ferron-fmt` formatter defaults to this style.
+> The idiomatic Ferron 3 configuration style uses bare strings without quotes (when possible), 4-space indentation, and bare boolean flags. The `ferron-fmt` formatter also supports raw string literals for regex patterns and defaults to this style.
 
 ## What it does
 
@@ -17,10 +17,10 @@ This page documents the `ferron-fmt` tool, a formatter for Ferron configuration 
 - **Blank lines** — normalization with a configurable maximum consecutive blank lines
 - **Trailing newline** — optional trailing newline
 - **Directive sorting** — optional alphabetical sorting of directives within blocks
-- **Comment preservation** — inline and trailing comments are preserved
+- **Comment preservation** — the formatter preserves inline and trailing comments
 - **Quoting normalization** — bare strings when possible, double-quoted when necessary (for example, values that would be ambiguous)
-- **Raw string preservation** — `r"..."` syntax is preserved for strings that were originally raw
-- **Line continuation preservation** — `\` at end of line is preserved at the same position
+- **Raw string preservation** — the formatter preserves `r"..."` syntax for strings that were originally raw
+- **Line continuation preservation** — the formatter preserves `\` at end of line at the same position
 
 Use this tool to make sure formatting is consistent across multiple Ferron configuration files.
 
@@ -29,7 +29,7 @@ Use this tool to make sure formatting is consistent across multiple Ferron confi
 
 ## Installation
 
-`ferron-fmt` is included in all Ferron distributions alongside the main server binary. See [Installation](/docs/v3/installation) for details.
+All Ferron distributions include `ferron-fmt` alongside the main server binary. See [Installation](/docs/v3/installation) for details.
 
 ## Usage
 
@@ -188,7 +188,7 @@ example.com {
 ```
 
 > [!note]
-> `always-bare` produces a parse error if any value cannot be represented as a bare string (for example, values containing spaces or special characters).
+> `always-bare` produces a parse error if the formatter cannot represent a value as a bare string. For example, values containing spaces or special characters cause this error.
 
 ## Preserving original quoting
 
@@ -268,7 +268,7 @@ example.com {
 }
 ```
 
-After formatting, the continuation is preserved at the same position. Line continuations with trailing comments are also preserved:
+After formatting, the formatter preserves the continuation at the same position. Line continuations with trailing comments are also preserved:
 
 ```ferron
 example.com {

@@ -68,7 +68,7 @@ Ferron configuration supports these value types:
 
 ### Flags (boolean directives)
 
-Some directives accept boolean values. For convenience, these can be written as **flags** with no configured arguments, which is equivalent to `true`:
+Some directives accept boolean values. For convenience, you can write these as **flags** with no configured arguments, which is equivalent to `true`:
 
 ```ferron
 # This is a bare flag, equivalent to setting the value to true
@@ -146,7 +146,7 @@ Comments start with `#`.
 
 ## Host snake
 
-Host blocks are allowed only top-level. Supported selectors include:
+Host blocks appear only at the top level. Supported selectors include:
 
 Selectors:
 
@@ -178,13 +178,13 @@ If you specify a hostname (for example, a domain name) and give no explicit port
 >
 > - Top-level file includes and snippet expansion work differently.
 > - `Parse error` rejects include cycles and snippet cycles.
-> - A snippets block may be reused across a set of hosts.
+> - A snippets block may span a set of hosts.
 
 ## Configuration model
 
 Ferron resolves configuration in layers:
 
-1. Global configuration from `{ ... }` is used for startup and runtime settings.
+1. Global configuration from `{ ... }` provides startup and runtime settings.
 2. A Ferron selects a matching host block by local IP and hostname.
 3. Ferron merges a set of matching `location` blocks.
 4. Ferron merges a set of matching `if` and `if_not` blocks.
@@ -193,14 +193,14 @@ Ferron resolves configuration in layers:
 >
 > - `location` uses prefix matching. `/api` matches `/api` and `/api/users`.
 > - A longer, more specific location wins over a less specific one(s).
-> - All expressions in a `match` block are combined ANDed, with AND semantics.
+> - All expressions in a `match` block use AND semantics.
 > - In a configuration, a directive name matches more than one block, and multiple layers can collect at a single layer.
 
 ## Inheritance and behavior
 
 Ferron applies inheritance in a block context.
 
-- Location DEFAULT inherits parent first, unless another directive is configured with the same name.
+- Location DEFAULT inherits parent first, unless another directive shares the same name.
 - When a directive appears in a child block and a parent block, the child directive Wins in that block.
 - In conditional branches it is often clearer to explicitly strip `use` GShared snippets.
 

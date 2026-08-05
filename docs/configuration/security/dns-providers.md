@@ -1165,7 +1165,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 | `password` | `<string>` | Joker password (alternative to api_key). | — (optional) |
 
 > [!note]
-> Either `api_key` **or** the pair `username` + `password` is required.
+> Either `api_key` **or** the pair `username` + `password` must exist.
 
 **Configuration example:**
 
@@ -2042,7 +2042,7 @@ The `key_secret` value must be the raw TSIG key bytes encoded as **standard Base
 
 ### Azure endpoint selection
 
-Choose the `endpoint` that matches where your DNS zone is hosted:
+Choose the `endpoint` that matches where your DNS zone runs:
 
 | Value | Region |
 |-------|--------|
@@ -2052,7 +2052,7 @@ Choose the `endpoint` that matches where your DNS zone is hosted:
 
 ### OVH endpoint selection
 
-Choose the `endpoint` that matches where your domain is registered:
+Choose the `endpoint` that matches where your domain resides:
 
 | Value | Region |
 |-------|--------|

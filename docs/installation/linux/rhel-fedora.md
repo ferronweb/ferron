@@ -41,9 +41,9 @@ sudo systemctl start ferron
 
 ### 4. Access the web server
 
-By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
+By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check whether the server runs and serves the default `index.html` file.
 
-If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
+If you see a "Ferron is installed successfully!" message on the page, the web server installed successfully and runs.
 
 > [!tip]
 > If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80 (or whichever port you configured). If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.

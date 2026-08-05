@@ -3,7 +3,7 @@ title: Status codes & redirects
 description: "Configure Ferron to respond with custom HTTP status codes, or redirect old URLs."
 ---
 
-Redirects are useful for example for preventing search engines from indexing duplicate content (so to not fragment search traffic between duplicates), and legacy website migration.
+Redirects help prevent search engines from indexing duplicate content. They also help with legacy website migration.
 
 You can also use HTTP status codes for specific paths to signal temporary maintenance (`503 Service Not Available`) or intentionally-deleted content (`410 Gone`).
 
@@ -14,7 +14,7 @@ Ferron has `status` directive for configuring both custom HTTP status codes, and
 
 ## Domain canonicalization
 
-A common pattern is redirecting URLs from `www` subdomain to an apex domain (or apex domain to `www` subdomain):
+A common pattern redirects URLs from a `www` subdomain to an apex domain (or from an apex domain to a `www` subdomain):
 
 ```ferron
 www.example.com {
@@ -52,7 +52,7 @@ example.com {
 
 ## Legacy route migration
 
-Some websites have legacy routes that need to be migrated (for example, for legacy clients or software). In this case you can configure Ferron below:
+Some websites have legacy routes that you must migrate (for example, for legacy clients or software). You can configure Ferron to handle these routes:
 
 ```ferron
 blog.example.com {

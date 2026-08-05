@@ -91,7 +91,7 @@ The admin API emits per-request metrics for all endpoints except `/health` (whic
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron.admin.request.duration` | Histogram | `http.request.method`, `url.path`, `http.response.status_code` | Duration of admin API requests in seconds |
+| `ferron.admin.request.duration` | Histogram | `http.request.method`, `url.path`, `http.response.status_code` | How long admin API requests take in seconds |
 | `ferron.admin.request.count` | Counter | `http.request.method`, `url.path`, `http.response.status_code` | Total number of admin API requests |
 | `ferron.admin.reload.count` | Counter | `http.response.status_code` | Total number of admin config reload attempts (POST /reload only) |
 
@@ -131,7 +131,7 @@ The Prometheus endpoint emits self-referential metrics about its own scrape perf
 
 | Metric | Type | Attributes | Description |
 |--------|------|------------|-------------|
-| `ferron_prometheus_scrape_duration_seconds` | Histogram | — | Duration of Prometheus scrape requests in seconds |
+| `ferron_prometheus_scrape_duration_seconds` | Histogram | — | How long Prometheus scrape requests take in seconds |
 | `ferron_prometheus_scrape_total` | Counter | — | Total number of Prometheus scrape requests |
 | `ferron_prometheus_scrape_errors_total` | Counter | — | Total number of failed Prometheus scrape requests |
 

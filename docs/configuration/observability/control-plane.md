@@ -3,7 +3,7 @@ title: "Configuration: control plane"
 description: "Embed contextual metadata and span links from the control plane into access logs and traces."
 ---
 
-This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into access logs and traces. This bridges the gap between a control plane (for example, a Kubernetes ingress controller) that writes the configuration and the data plane that serves requests.
+This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into access logs and traces. A control plane (for example, a Kubernetes ingress controller) writes the configuration. The data plane serves requests. The `control_plane` directive bridges the gap between them.
 
 > [!info]
 >
@@ -52,7 +52,7 @@ The `control_plane` directive can appear at three levels. When present at multip
 Metadata and span links from more specific levels **fully replace** those from less specific levels — they are not merged.
 
 > [!tip]
-> Unlike most Ferron directives, metadata and span links are not merged across levels. A more specific `control_plane` block completely replaces the one from a less specific level.
+> Unlike most Ferron directives, metadata and span links are not merged across levels. A more specific `control_plane` block replaces the one from a less specific level.
 
 ## Variable interpolation
 
@@ -159,7 +159,7 @@ This enables operators to:
 
 ### Observability signal examples
 
-When metadata `{ org_id acme team platform }` is configured:
+When you configure metadata `{ org_id acme team platform }`:
 
 | Signal                  | Appearance                                  |
 | ----------------------- | ------------------------------------------- |

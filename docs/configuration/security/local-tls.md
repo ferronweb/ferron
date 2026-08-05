@@ -9,7 +9,7 @@ This page documents the `local` TLS provider, which generates and manages locall
 
 | Directive  | Type       | Default           | Description                  |
 | ---------- | ---------- | ----------------- | ---------------------------- |
-| `provider` | `local`    | —                 | Must be set to `"local"`     |
+| `provider` | `local`    | —                 | Set to `"local"`           |
 | `cache`    | `<string>` | platform data dir | Path for certificate caching |
 
 **Configuration example:**
@@ -60,7 +60,7 @@ localhost:443 {
 
 ### Certificate Authority
 
-Ferron generates a local root CA on first use. Ferron caches the CA certificate in the data directory. The certificate is valid for 10 years. **Manual trust is required.** You must import the CA into your OS or browser trust store.
+Ferron generates a local root CA on first use. Ferron caches the CA certificate in the data directory. The certificate is valid for 10 years. You must manually trust the CA. Import it into your OS or browser trust store.
 
 ### Leaf certificates
 
@@ -68,7 +68,7 @@ Ferron generates leaf certificates for each unique set of Subject Alternative Na
 
 ### Cache location
 
-By default, certificates are stored in:
+By default, the server stores certificates in:
 
 - **Linux/macOS**: `~/.local/share/ferron-local-tls/`
 - **Windows**: `%LOCALAPPDATA%\ferron-local-tls\`
@@ -165,7 +165,7 @@ Ferron automatically regenerates leaf certificates when:
 
 - They expire (after 1 year)
 - The set of Subject Alternative Names (SANs) changes
-- The cached certificate files are deleted
+- You delete the cached certificate files
 
 Ferron regenerates the CA certificate only if the cached files are missing or corrupted.
 

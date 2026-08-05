@@ -37,7 +37,7 @@ docs/
 Two tiers of documentation:
 
 - **Use-case guides** (`use-cases/`) — task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
-- **Configuration reference** (`configuration/`) — exhaustive directive-level pages organized by functional area. Expects the reader to already know what they are looking for.
+- **Configuration reference** (`configuration/`) — exhaustive directive-level pages organized by functional area. Expects the reader to already know what they need.
 
 The `getting-started.md` and `index.md` pages bridge the two tiers with recommended reading paths.
 
@@ -97,7 +97,7 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 
 ### Writing principles
 
-- **Describe behavior, not labels** — explain what the system actually does, not just what the feature is called.
+- **Describe behavior, not labels** — explain what the system actually does, not just what people call the feature.
 - **Functional precision first** — prefer clear, explicit descriptions over clever phrasing.
 - **Consistency over novelty** — if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
 - **Inline callouts** — no separate notes section at the end of a page.
@@ -106,7 +106,7 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 
 ## Sidebar
 
-The sidebar navigation is defined in `links.json`. Add new pages there to make them discoverable on the documentation website.
+Define the sidebar navigation in `links.json`. Add new pages there to make them discoverable on the documentation website.
 
 **Fields:**
 
@@ -116,4 +116,4 @@ The sidebar navigation is defined in `links.json`. Add new pages there to make t
 | `target` | The target window or tab (`"_self"` for current, `"_blank"` for new) |
 | `label` | The display text in the sidebar |
 | `sub` | Whether this is a sub-item (indented under another category) |
-| `category` | Whether this item should be treated as a category header only |
+| `category` | Whether the item should function as a category header only |

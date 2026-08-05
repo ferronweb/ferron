@@ -3,7 +3,7 @@ title: PHP hosting
 description: "Host PHP sites on Ferron using CGI or FastCGI (PHP-FPM or PHP-CGI), with Ferron configuration examples and troubleshooting notes."
 ---
 
-Ferron can run PHP applications through CGI or FastCGI. For most deployments, FastCGI is the recommended approach because PHP worker processes stay alive between requests, which reduces process startup overhead and improves throughput.
+Ferron can run PHP applications through CGI or FastCGI. FastCGI is the recommended approach for most deployments. PHP worker processes stay alive between requests. This reduces process startup overhead and improves throughput.
 
 ## PHP through FastCGI (recommended)
 
@@ -22,11 +22,11 @@ example.com {
 }
 ```
 
-You can also point `fcgi_php` to TCP listeners (for example `tcp://127.0.0.1:9000/`) when your PHP FastCGI server is not exposed through a Unix socket.
+You can also point `fcgi_php` to TCP listeners (for example `tcp://127.0.0.1:9000/`). Use this when your PHP FastCGI server does not use a Unix socket.
 
 ### Disabling PHP in specific locations
 
-You can disable PHP FastCGI for specific locations within a domain that has `fcgi_php` enabled globally. Use `fcgi_php false` in a `location` block to stop the PHP backend from processing `.php` files in that scope:
+You can disable PHP FastCGI for specific locations within a domain that has `fcgi_php` enabled globally. Use `fcgi_php false` in a `location` block. This stops the PHP backend from processing `.php` files in that scope:
 
 ```ferron
 example.com {
@@ -47,7 +47,7 @@ example.com {
 }
 ```
 
-This is useful when you have a mixed deployment. For example, a PHP application that serves static files or proxies to another backend for certain paths. Without `fcgi_php false`, Ferron would attempt to process `.php` files in those locations through the PHP backend, which could cause unexpected behavior.
+This is useful when you have a mixed deployment. For example, a PHP application that serves static files or proxies to another backend for certain paths. Without `fcgi_php false`, Ferron attempts to process `.php` files in those locations through the PHP backend. This could cause unexpected behavior.
 
 ## PHP through CGI
 
@@ -63,25 +63,25 @@ example.com {
 }
 ```
 
-CGI is functional but usually slower than FastCGI for production workloads because Ferron starts a PHP process per request. For more control, see [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).
+CGI is functional but usually slower than FastCGI for production workloads. Ferron starts a PHP process per request. For more control, see [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).
 
 > [!tip]
 >
-> - If using PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`. Otherwise, requests can fail with a force-cgi-redirect warning.
+> - If you use PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`. Without this setting, requests can fail with a force-cgi-redirect warning.
 > - If PHP files download instead of executing, verify you enabled either `fcgi_php` or `cgi` + `extension ".php"` in the correct domain/location block.
 
 ## Distributed tracing with PHP
 
-PHP applications served through CGI or FastCGI automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) when tracing is enabled in Ferron. These headers are available as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`).
+PHP applications that use CGI or FastCGI automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) when tracing is enabled in Ferron. These headers appear as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`).
 
-With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/), these headers enable distributed tracing out of the box. The SDK automatically reads the incoming `traceparent` header and creates child spans, connecting your PHP backend traces to the rest of your infrastructure.
+With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/), these headers enable distributed tracing out of the box. The SDK reads the incoming `traceparent` header and creates child spans. This connects your PHP backend traces to the rest of your infrastructure.
 
 > [!info]
-> No additional PHP-side configuration is needed beyond installing and configuring the OpenTelemetry SDK. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
+> You need only install and configure the OpenTelemetry SDK. No other PHP-side configuration is required. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
 
 > [!important]
 > Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
 
 ## See also
 
-- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache) — use Ferron as an edge caching proxy in front of Apache for PHP hosting with LSCache plugin compatibility
+- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache) — Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.

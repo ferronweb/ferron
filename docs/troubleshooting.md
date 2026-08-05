@@ -99,11 +99,11 @@ Make sure the requested hostname matches the certificate SAN or CN and the corre
 
 For automatic TLS, DNS must point the hostname to the Ferron server.
 
-### Port `80` or `443` is blocked
+### A firewall blocks port `80` or `443`
 
 ACME validation can fail when a firewall, cloud policy, or proxy path blocks these ports.
 
-### ACME challenge is failing
+### ACME challenge fails
 
 - Use the Let's Encrypt staging endpoint first if you are still testing.
 - If Ferron sits behind an HTTPS-terminating proxy, choose the challenge type that matches that setup.
@@ -140,7 +140,7 @@ Check `status` rules, `allow`/`block`, and conditional logic.
 
 If Ferron is behind a proxy or load balancer, verify client IP handling. Wrong client IP handling can break access control and rate limiting.
 
-### Is `client_ip_from_header` configured correctly?
+### Does the configuration set `client_ip_from_header` correctly?
 
 Set `client_ip_from_header` only when the trusted proxy path supplies forwarded client IP headers. Use `trusted_proxy` to restrict who can provide them. For PROXY protocol frontends, use `protocol_proxy`.
 

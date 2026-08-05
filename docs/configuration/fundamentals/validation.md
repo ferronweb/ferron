@@ -16,7 +16,7 @@ ferron validate -c ferron.conf
 If the configuration is valid, the command exits with code 0. If there are errors, it exits with code 1.
 
 > [!note]
-> Validation is module-aware: a directive recognized by a loaded module is valid. An unrecognized one is flagged as unknown. Validation does not guarantee runtime correctness — some issues can only be detected at runtime.
+> Validation is module-aware: a directive recognized by a loaded module is valid. The server flags an unrecognized directive as unknown. Validation does not guarantee runtime correctness — some issues can only surface at runtime.
 
 ### Log output
 
@@ -67,7 +67,7 @@ The JSON response contains two top-level fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `valid` | `bool` | Whether the configuration is valid. `false` only when invalid directives are found. |
+| `valid` | `bool` | Whether the configuration is valid. `false` only when the server finds invalid directives. |
 | `diagnostics` | `Vec<Diagnostic>` | List of diagnostic messages, warnings, and errors. |
 
 ### Diagnostic fields
@@ -85,7 +85,7 @@ Each diagnostic entry contains:
 
 ### Unknown directive
 
-A directive in the configuration is not recognized by any loaded module. This is reported as a **warning** — the server can still start.
+A directive in the configuration is not recognized by any loaded module. The server reports this as a **warning** — the server can still start.
 
 ```ferron
 example.com {
@@ -177,7 +177,7 @@ Validation runs against two levels:
 - **Global configuration** — directives inside the top-level `{ ... }` block
 - **Per-protocol blocks** — host blocks such as `example.com`, `*:443`, `http *:8080`
 
-Each protocol registers its own validators via the module system. If a module is not loaded (for example, a custom build with a reduced feature set), its directives appear as unknown.
+Each protocol registers its own validators via the module system. If a module is not loaded, its directives appear as unknown. A custom build with a reduced feature set may trigger this.
 
 ## Configuration adapters and validation
 
@@ -194,7 +194,7 @@ You can also specify an adapter explicitly:
 ferron validate -c config.json --config-adapter json
 ```
 
-Validation runs after the adapter has loaded and parsed the configuration. If the configuration file cannot be parsed, validation reports the parse error directly.
+Validation runs after the adapter has loaded and parsed the configuration. If the configuration file has parse errors, validation reports the parse error directly.
 
 ## Related commands
 

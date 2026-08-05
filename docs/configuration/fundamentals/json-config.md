@@ -3,14 +3,14 @@ title: "JSON configuration and adapt command"
 description: "Use ferron adapt to output configuration as JSON. Work with JSON-formatted configurations."
 ---
 
-This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. The `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files) handles configuration file parsing.
+This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. The `config-ferronconf` module parses `.conf` files. The `config-json` module parses `.json` files.
 
 > [!info]
 > For configuration format details, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax), [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals), and [Core directives](/docs/v3/configuration/server/core-directives).
 
 ## The adapt command
 
-The `adapt` command converts `.conf` configuration files into their JSON representation. This is useful for debugging, programmatic configuration generation, or understanding how Ferron parses your configuration.
+The `adapt` command converts `.conf` configuration files to JSON. This is useful for debugging, programmatic configuration generation, or understanding how Ferron parses your configuration.
 
 ```bash
 ferron adapt -c ferron.conf
@@ -141,7 +141,7 @@ Running `ferron adapt -c ferron.conf` outputs:
 ```
 
 > [!note]
-> The JSON output from `ferron adapt` is a faithful representation of the parsed configuration. You can represent Boolean directives as `"args": []` (flag-style, treated as `true`) or with explicit booleans. When spans are `null`, the system likely constructed the configuration programmatically.
+> The `ferron adapt` command produces JSON that faithfully represents the parsed configuration. You can represent Boolean directives as `"args": []` (flag-style, treated as `true`) or with explicit booleans. When spans are `null`, the system likely constructed the configuration programmatically.
 
 ## JSON configuration structure
 
@@ -164,7 +164,7 @@ A `ServerConfigurationBlock` represents a scope of directives:
 |-------|------|-------------|
 | `directives` | `HashMap<String, Vec<ServerConfigurationDirectiveEntry>>` | All directives in this block, indexed by name |
 | `matchers` | `HashMap<String, ServerConfigurationMatcher>` | Named matcher expressions for conditional directives |
-| `span` | `ServerConfigurationSpan \| null` | Source location of this block |
+| `span` | `ServerConfigurationSpan \| null` | Where this block is |
 
 Blocks appear at multiple levels:
 
@@ -174,19 +174,19 @@ Blocks appear at multiple levels:
 
 ### Directive entries
 
-Each directive entry represents one instance of a directive:
+Each directive entry represents one directive:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `args` | `Vec<ServerConfigurationValue>` | Arguments provided to this directive |
 | `children` | `ServerConfigurationBlock \| null` | Optional nested configuration block |
-| `span` | `ServerConfigurationSpan \| null` | Source location of this directive |
+| `span` | `ServerConfigurationSpan \| null` | Where this directive is |
 
 Multiple entries with the same name can exist in a single block, allowing for repeated directives.
 
 ### Configuration values
 
-`ServerConfigurationValue` is a tagged union representing different value types:
+`ServerConfigurationValue` uses a tagged union to represent different value types:
 
 | Variant | JSON structure | Example |
 |---------|----------------|---------|
@@ -196,7 +196,7 @@ Multiple entries with the same name can exist in a single block, allowing for re
 | `Boolean` | `["Boolean", [value, span]]` | `["Boolean", [true, {"line": 3, "column": 14, "file": "ferron.conf"}]]` |
 | `InterpolatedString` | `["InterpolatedString", [parts, span]]` | See interpolated strings section below |
 
-Span information is optional. It can be `null`.
+Span information can be null.
 
 ### Interpolated strings
 
@@ -205,7 +205,7 @@ Interpolated strings use `{{name}}` syntax. The system represents them as an arr
 | Part type | JSON structure | Description |
 |-----------|----------------|-------------|
 | `String` | `["String", literal_text]` | Literal text content |
-| `Variable` | `["Variable", var_name]` | Variable reference to be resolved |
+| `Variable` | `["Variable", var_name]` | Variable reference that the system resolves |
 
 Variables resolve at runtime:
 
@@ -239,7 +239,7 @@ Each entry in the `ports` map represents a protocol:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `port` | `u16 \| null` | Port number (may be inherited from protocol defaults) |
+| `port` | `u16 \| null` | Port number (the protocol may provide a default) |
 | `hosts` | `Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>` | Host configurations with filters |
 
 ### Host filters
@@ -314,7 +314,7 @@ Ferron uses a pluggable adapter system for loading configuration from different 
 
 ### Selecting an adapter
 
-The adapter is auto-detected based on file extension. You can override it explicitly:
+Ferron detects the adapter based on file extension. You can override it explicitly:
 
 ```bash
 ferron run -c config.json --config-adapter json
@@ -416,7 +416,7 @@ ferron run -c config.json
 ferron validate -c config.json
 ```
 
-The adapter is auto-detected from the `.json` extension.
+Ferron detects the adapter from the `.json` extension.
 
 ### Hot-reload support
 
@@ -430,7 +430,7 @@ ferron run --config-params 'watch=1;file=ferron.json' --config-adapter json
 
 ### Configuration drift hints
 
-By default, hot-reload is off. Ferron can still detect when the JSON configuration file changes on disk but has not been reloaded. Drift hints are on by default. Disable with `drift_hints=false`:
+By default, hot-reload is off. Ferron can still detect when the JSON configuration file changes on disk but you have not reloaded it. Drift hints are on by default. Disable with `drift_hints=false`:
 
 ```bash
 ferron run --config-params 'drift_hints=false;file=ferron.json' --config-adapter json

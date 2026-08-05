@@ -59,7 +59,7 @@ example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `environment` | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values are resolved with the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
+| `environment` | `<name: string> <value: string>` | This directive sets an SCGI environment variable passed to the backend server. Values use the same interpolation syntax as other directives. You can specify this directive multiple times. | — |
 
 **Configuration example:**
 
@@ -98,7 +98,7 @@ Ferron automatically sets the following SCGI environment variables:
 | `AUTH_TYPE` | Authentication type from the `Authorization` header (for example, `Basic`, `Bearer`). |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Set to `on` when the connection is encrypted. |
+| `HTTPS` | Set to `on` when the connection uses encryption. |
 
 Additional variables set by `environment` directives override any automatically set variables with the same name.
 
@@ -111,7 +111,7 @@ When used alongside an authentication module (for example, `http-basicauth`), Fe
 
 ## Trace context injection
 
-When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the SCGI request. These headers are mapped to standard CGI environment variables:
+When a trace context exists for the request, Ferron automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into the SCGI request. The server maps these headers to standard CGI environment variables:
 
 | Header | SCGI environment variable |
 | --- | --- |
@@ -122,7 +122,7 @@ When a trace context exists for the request, Ferron automatically injects W3C Tr
 This enables end-to-end distributed tracing with SCGI backend applications.
 
 > [!info]
-> No per-module configuration is needed. Trace context injection is controlled globally by whether a trace context exists — see [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> No per-module configuration is necessary. The server controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Observability
 

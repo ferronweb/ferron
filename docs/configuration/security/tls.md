@@ -3,14 +3,14 @@ title: "Configuration: security and TLS"
 description: "Cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
 ---
 
-This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional. Ferron uses safe defaults when you omit a setting. The TLS crypto configuration applies to all TLS providers (`manual`, `acme`, and `local`).
+This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional. Ferron uses safe defaults when you omit a setting. The TLS crypto configuration applies to all TLS providers: `manual`, `acme`, and `local`.
 
 ## Directives
 
 ### Cipher suites
 
 - `cipher_suite <suite: string>`
-  - This directive specifies a cipher suite to add to the allowed list. Repeatable. Each occurrence adds one suite. When you omit it, rustls defaults apply. Default: rustls defaults
+  - This directive specifies a cipher suite to add to the allowed list. Repeatable. Each occurrence adds one suite. When you omit it, rustls defaults apply. Default: rustls defaults.
 
 **Configuration example:**
 
@@ -44,7 +44,7 @@ tls {
 ### ECDH curves
 
 - `ecdh_curve <curve: string>`
-  - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable. Each occurrence adds one curve. When you omit it, rustls defaults apply. Default: rustls defaults
+  - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable. Each occurrence adds one curve. When you omit it, rustls defaults apply. Default: rustls defaults.
 
 #### Supported curves
 
@@ -143,7 +143,7 @@ The `min_version` or `max_version` value is not recognized. Make sure you use ex
 
 - Verify the client certificate chain validates against the CA specified in `client_auth_ca`.
 - Check that the CA certificate file is a valid PEM and has not expired.
-- If using `client_auth_ca system`, make sure the issuing CA is trusted by the OS.
+- If you use `client_auth_ca system`, make sure the OS trusts the issuing CA.
 
 ## See also
 
@@ -156,9 +156,9 @@ The `min_version` or `max_version` value is not recognized. Make sure you use ex
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
 - **`max_version TLSv1.2`** — Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
-- **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS.
+- **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
 - **`ocsp` disabled** — OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
-- **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use only when all clients are expected to support them.
+- **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only when all clients support them.
 - **`ticket_keys` without `auto_rotate`** — Session ticket keys should rotate automatically in production to limit the impact of key compromise.
 - **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
 - **`ticket_keys.rotation_interval` > 24h** — Rotate session ticket keys every 12–24 hours in production.

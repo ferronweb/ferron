@@ -70,7 +70,7 @@ The ticket key file follows a specific format:
 
 ### Generating a key file manually
 
-If `auto_rotate` is disabled, you can generate keys externally:
+If you disable `auto_rotate`, you can generate keys externally:
 
 ```bash
 # Generate a single 80-byte key
@@ -83,7 +83,7 @@ openssl rand 80 >> session_tickets.keys
 ```
 
 > [!important]
-> Keys must be generated using cryptographically secure randomness.
+> Use cryptographically secure randomness to generate keys.
 
 #### Rotating key files
 
@@ -111,7 +111,7 @@ chown ferron:ferron session_tickets.keys
 
 ## How rotation works
 
-When `auto_rotate` is enabled:
+When you enable `auto_rotate`:
 
 1. **Initial setup**: If the key file does not exist, Ferron generates `max_keys` random keys
 2. **Validation**: Ferron validates the existing file (size must be a multiple of 80 bytes)
@@ -155,7 +155,7 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
 ### "Ticket keys file not found"
 
-The key file does not exist and `auto_rotate` is disabled.
+The key file does not exist and you have disabled `auto_rotate`.
 
 **Fix:** Either enable `auto_rotate` or create the file manually with `openssl rand 80 > session_tickets.keys`.
 

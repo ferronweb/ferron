@@ -32,7 +32,7 @@ Choose **reverse proxying** if:
 
 - You already have an app process listening on a port or socket.
 - You want Ferron in front for TLS, routing, access control, or observability.
-- You are exposing a backend service such as Node.js, Python, Go, Java, or an API gateway.
+- You expose a backend service such as Node.js, Python, Go, Java, or an API gateway.
 
 Choose a **mixed setup** if:
 
@@ -100,4 +100,4 @@ Ferron 3 strips the matched `location` prefix before the next stage runs, so the
 - Copying a complex configuration before verifying a minimal working setup.
 
 > [!tip]
-> If you are testing locally, start with a single host block and one directive at a time. If validation fails, fix the reported config error before trying to restart the server.
+> If you test locally, start with a single host block and one directive at a time. If validation fails, fix the reported config error before you try to restart the server.

@@ -18,7 +18,7 @@ example.com {
 }
 ```
 
-Ferron automatically treats scripts inside a `cgi-bin` directory as CGI programs. The directory must be named exactly `cgi-bin` (case-insensitive) and must be directly under the document root.
+Ferron automatically treats scripts inside a `cgi-bin` directory as CGI programs. The directory must carry the exact name `cgi-bin` (case-insensitive) and must sit directly under the document root.
 
 Example directory structure:
 
@@ -153,7 +153,7 @@ example.com {
 | `AUTH_TYPE` | Authentication type from the `Authorization` header. |
 | `REMOTE_USER` | Authenticated username, if available. |
 | `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Set to `on` when the connection is encrypted. |
+| `HTTPS` | Ferron sets this to `on` when the connection uses encryption. |
 
 ## Security considerations
 
@@ -186,14 +186,14 @@ On Unix systems, scripts without a matching `interpreter` directive must have th
 
 ### Distributed tracing
 
-When tracing is enabled in Ferron, CGI scripts automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, `baggage`) as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This enables end-to-end distributed tracing without any CGI-side configuration.
+When you enable tracing in Ferron, CGI scripts automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, `baggage`) as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This enables end-to-end distributed tracing without any CGI-side configuration.
 
 > [!info]
 > See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Default index files
 
-When CGI is enabled and you do not configure an explicit `index` directive, Ferron automatically injects default index file names. Ferron checks these files in order: `index.html`, `index.htm`, `index.xhtml`.
+When you enable CGI and you do not configure an explicit `index` directive, Ferron automatically injects default index file names. Ferron checks these files in order: `index.html`, `index.htm`, `index.xhtml`.
 
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
