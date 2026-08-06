@@ -52,6 +52,7 @@
 - **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
 - **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 - **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
+- **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
 
 #### Observability
 
