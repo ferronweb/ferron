@@ -1382,7 +1382,7 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "sum(rate(ferron_static_bytes_sent$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum($metric_type_hsum_fn(rate(ferron_static_bytes_sent$metric_type_hsum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "A",
           "legendFormat": "bytes/s"
         }
@@ -1679,6 +1679,50 @@
         "query": "[{\"text\":\"classic\",\"value\":\"_bucket\"},{\"text\":\"native\",\"value\":\"\"}]",
         "skipUrlSync": false,
         "valuesFormat": "json"
+      },
+      {
+        "allowCustomValue": true,
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${data_source}"
+        },
+        "definition": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"_sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
+        "hide": 2,
+        "includeAll": false,
+        "name": "metric_type_hsum",
+        "options": [],
+        "query": {
+          "qryType": 3,
+          "query": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"_sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "/\\{[^},]*(?:, *)?(?:b=\")?(?<value>[^\"}]*)\"?/",
+        "regexApplyTo": "value",
+        "type": "query"
+      },
+      {
+        "allowCustomValue": true,
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${data_source}"
+        },
+        "definition": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"histogram_sum\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
+        "hide": 2,
+        "includeAll": false,
+        "name": "metric_type_hsum_fn",
+        "options": [],
+        "query": {
+          "qryType": 3,
+          "query": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"histogram_sum\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "/\\{[^},]*(?:, *)?(?:b=\")?(?<value>[^\"}]*)\"?/",
+        "regexApplyTo": "value",
+        "type": "query"
       },
       {
         "allowCustomValue": true,

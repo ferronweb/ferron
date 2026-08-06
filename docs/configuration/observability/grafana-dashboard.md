@@ -12,23 +12,23 @@ Ferron ships a reference Grafana dashboard ([`dashboards/ferron-3-reference.json
 
 The dashboard splits along the classic RED versus USE boundary. This layout lets a user move from symptom to root cause during an incident:
 
-| Dashboard section | Methodology | Reports | Best used for |
-| --- | --- | --- | --- |
-| Top half (always expanded) | **RED** (Rate, Errors, Duration) | User-facing symptoms: p99 latency spikes, exploding 5xx rates | High-level triage and SLA verification |
+| Dashboard section              | Methodology                               | Reports                                                                     | Best used for                            |
+| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------- |
+| Top half (always expanded)     | **RED** (Rate, Errors, Duration)          | User-facing symptoms: p99 latency spikes, exploding 5xx rates               | High-level triage and SLA verification   |
 | Bottom half (collapsible rows) | **USE** (Utilization, Saturation, Errors) | Internal proxy causes: pool exhaustion, drained retry budget, circuit trips | Root-cause analysis after an alert fires |
 
 ## Template variables
 
 Top-level variables let a single dashboard adapt to any deployment without editing panels:
 
-| Variable | Selects | Source label |
-| --- | --- | --- |
-| `Job` | Scrape job (default `ferron`) | `job` |
-| `Instance` | Scrape target | `instance` |
-| `Upstream backend` | Reverse-proxy backend | `ferron_proxy_backend_url` |
-| `Host (tenant)` | SNI / tenant (TLS metrics only) | `ferron.host` |
-| `Cache zone` | Named cache zone | `ferron.cache.zone` |
-| `Rate-limit zone` | Named rate-limit zone | `ferron.ratelimit.zone` |
+| Variable           | Selects                         | Source label               |
+| ------------------ | ------------------------------- | -------------------------- |
+| `Job`              | Scrape job (default `ferron`)   | `job`                      |
+| `Instance`         | Scrape target                   | `instance`                 |
+| `Upstream backend` | Reverse-proxy backend           | `ferron_proxy_backend_url` |
+| `Host (tenant)`    | SNI / tenant (TLS metrics only) | `ferron.host`              |
+| `Cache zone`       | Named cache zone                | `ferron.cache.zone`        |
+| `Rate-limit zone`  | Named rate-limit zone           | `ferron.ratelimit.zone`    |
 
 > [!warning]
 > Ferron does **not** expose a per-route (request-path) metric label. The sketch `$route` variable from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/v3/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
@@ -73,7 +73,7 @@ Connection-pool and host-pressure panels, crucial for multi-tenant edges and ser
 - **Cache hit ratio**: `rate(ferron_cache_requests_total{...,result="hit"})` / total
 - **Cache entries**: `ferron_cache_entries` by zone
 - **Cache evictions /s (by reason)**: `rate(ferron_cache_evictions_total)` split by `ferron.cache.reason`
-- **Egress bandwidth**: `rate(ferron_static_bytes_sent_sum)` (static-file and PHP-accelerator egress. See the gap below)
+- **Egress bandwidth**: `sum(rate(ferron_static_bytes_sent_sum))` (static-file and PHP-accelerator egress. See the gap below)
 - **DNS cache TTL remaining**: `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 
 A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can ignore it.
