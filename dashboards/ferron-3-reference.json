@@ -1382,7 +1382,7 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "sum(rate(ferron_static_bytes_sent_sum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum(rate(ferron_static_bytes_sent$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
           "refId": "A",
           "legendFormat": "bytes/s"
         }
