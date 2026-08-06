@@ -4,9 +4,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 400;
-    src:
-        url(./miranda-sans-latin-400-normal.woff2) format("woff2"),
-        url(./miranda-sans-latin-400-normal.woff) format("woff");
+    src: url(./miranda-sans-latin-400-normal.woff2) format("woff2");
     unicode-range:
         U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
         U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
@@ -19,9 +17,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 700;
-    src:
-        url(./miranda-sans-latin-700-normal.woff2) format("woff2"),
-        url(./miranda-sans-latin-700-normal.woff) format("woff");
+    src: url(./miranda-sans-latin-700-normal.woff2) format("woff2");
     unicode-range:
         U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
         U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
@@ -34,7 +30,5 @@
     font-style: normal;
     font-display: swap;
     font-weight: 400;
-    src:
-        url(./monaspace-neon-latin-400-normal.woff2) format("woff2"),
-        url(./monaspace-neon-latin-400-normal.woff) format("woff");
+    src: url(./monaspace-neon-latin-400-normal.woff2) format("woff2");
 }
