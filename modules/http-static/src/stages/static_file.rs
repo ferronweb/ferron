@@ -12,7 +12,7 @@ use ferron_http::file_descriptor::ReusedFile;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;
-use ferron_http::{HttpFileContext, HttpResponse};
+use ferron_http::{HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
     Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
 };
@@ -77,11 +77,10 @@ fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome:
 }
 
 /// Helper: set a builtin error response, emit metrics, and set span attribute.
-type ReqBody = UnsyncBoxBody<Bytes, io::Error>;
-
+#[inline]
 fn respond_with_builtin(
     ctx: &mut HttpFileContext,
-    request: http::Request<ReqBody>,
+    request: HttpRequest,
     status_code: u16,
     headers: Option<HeaderMap>,
     outcome: &'static str,
@@ -89,15 +88,18 @@ fn respond_with_builtin(
     ctx.http.req = Some(request);
     ctx.http.res = Some(HttpResponse::BuiltinError(status_code, headers));
     emit_static_response_metric(ctx, status_code, outcome);
-    ctx.get_span_attributes()
-        .insert("http.response.status_code", TraceAttributeValue::I64(status_code as i64));
+    ctx.get_span_attributes().insert(
+        "http.response.status_code",
+        TraceAttributeValue::I64(status_code as i64),
+    );
     Ok(false)
 }
 
 /// Helper: set a pre-constructed HttpResponse (Custom or Builtin), emit metrics, and set span attribute.
+#[inline]
 fn respond_with_httpresponse(
     ctx: &mut HttpFileContext,
-    request: http::Request<ReqBody>,
+    request: HttpRequest,
     res: HttpResponse,
     status_code: u16,
     outcome: &'static str,
@@ -105,8 +107,10 @@ fn respond_with_httpresponse(
     ctx.http.req = Some(request);
     ctx.http.res = Some(res);
     emit_static_response_metric(ctx, status_code, outcome);
-    ctx.get_span_attributes()
-        .insert("http.response.status_code", TraceAttributeValue::I64(status_code as i64));
+    ctx.get_span_attributes().insert(
+        "http.response.status_code",
+        TraceAttributeValue::I64(status_code as i64),
+    );
     Ok(false)
 }
 
@@ -182,7 +186,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 header::ALLOW,
                 HeaderValue::from_static("GET, HEAD, POST, OPTIONS"),
             );
-            return respond_with_builtin(ctx, request, 405, Some(allow_headers), "method_not_allowed");
+            return respond_with_builtin(
+                ctx,
+                request,
+                405,
+                Some(allow_headers),
+                "method_not_allowed",
+            );
         }
 
         let config = &ctx.http.configuration;
@@ -259,7 +269,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     None,
                                     cache_control.as_deref(),
                                 );
-                                return respond_with_builtin(ctx, request, 412, Some(header_map), "precondition_failed");
+                                return respond_with_builtin(
+                                    ctx,
+                                    request,
+                                    412,
+                                    Some(header_map),
+                                    "precondition_failed",
+                                );
                             }
 
                             // Ferron only emits weak ETags, and strong comparison won't match
@@ -270,7 +286,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 None,
                                 cache_control.as_deref(),
                             );
-                            return respond_with_builtin(ctx, request, 412, Some(header_map), "precondition_failed");
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                412,
+                                Some(header_map),
+                                "precondition_failed",
+                            );
                         }
                     }
                     Err(_) => {
@@ -280,7 +302,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             None,
                             cache_control.as_deref(),
                         );
-                        return respond_with_builtin(ctx, request, 400, Some(header_map), "bad_request");
+                        return respond_with_builtin(
+                            ctx,
+                            request,
+                            400,
+                            Some(header_map),
+                            "bad_request",
+                        );
                     }
                 }
             }
@@ -304,7 +332,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             None,
                             cache_control.as_deref(),
                         );
-                        return respond_with_builtin(ctx, request, 412, Some(header_map), "precondition_failed");
+                        return respond_with_builtin(
+                            ctx,
+                            request,
+                            412,
+                            Some(header_map),
+                            "precondition_failed",
+                        );
                     }
                 }
                 None => {
@@ -314,7 +348,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         None,
                         cache_control.as_deref(),
                     );
-                    return respond_with_builtin(ctx, request, 400, Some(header_map), "bad_request");
+                    return respond_with_builtin(
+                        ctx,
+                        request,
+                        400,
+                        Some(header_map),
+                        "bad_request",
+                    );
                 }
             }
         }
@@ -340,7 +380,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         None,
                                         cache_control.as_deref(),
                                     );
-                                    return respond_with_builtin(ctx, request, 412, Some(header_map), "precondition_failed");
+                                    return respond_with_builtin(
+                                        ctx,
+                                        request,
+                                        412,
+                                        Some(header_map),
+                                        "precondition_failed",
+                                    );
                                 }
                                 let suffix = suffix_opt
                                     .and_then(|s| COMP_SUFFIXES.contains(&s.as_str()).then_some(s));
@@ -597,7 +643,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         .expect("invalid content range header"),
                                 );
                                 header_map.insert(header::VARY, vary);
-                                return respond_with_builtin(ctx, request, 416, Some(header_map), "range_not_satisfiable");
+                                return respond_with_builtin(
+                                    ctx,
+                                    request,
+                                    416,
+                                    Some(header_map),
+                                    "range_not_satisfiable",
+                                );
                             }
 
                             if ranges.len() > 1 {
@@ -639,7 +691,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                         )
                                         .expect("failed to build 206 HEAD response");
-                                    return respond_with_httpresponse(ctx, request, HttpResponse::Custom(response), 206, "partial_content");
+                                    return respond_with_httpresponse(
+                                        ctx,
+                                        request,
+                                        HttpResponse::Custom(response),
+                                        206,
+                                        "partial_content",
+                                    );
                                 } else {
                                     let response = builder
                                         .body(
@@ -653,9 +711,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .boxed_unsync(),
                                         )
                                         .expect("failed to build 206 response");
-                                    return respond_with_httpresponse(ctx, request, HttpResponse::Custom(response), 206, "partial_content");
+                                    return respond_with_httpresponse(
+                                        ctx,
+                                        request,
+                                        HttpResponse::Custom(response),
+                                        206,
+                                        "partial_content",
+                                    );
                                 }
-                                return Ok(false);
                             } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e))
                             {
                                 let end = end.min(file_length - 1);
@@ -695,7 +758,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                         )
                                         .expect("failed to build 206 HEAD response");
-                                    return respond_with_httpresponse(ctx, request, HttpResponse::Custom(response), 206, "partial_content");
+                                    return respond_with_httpresponse(
+                                        ctx,
+                                        request,
+                                        HttpResponse::Custom(response),
+                                        206,
+                                        "partial_content",
+                                    );
                                 } else {
                                     let response = builder
                                         .body(
@@ -706,9 +775,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .boxed_unsync(),
                                         )
                                         .expect("failed to build 206 response");
-                                    return respond_with_httpresponse(ctx, request, HttpResponse::Custom(response), 206, "partial_content");
+                                    return respond_with_httpresponse(
+                                        ctx,
+                                        request,
+                                        HttpResponse::Custom(response),
+                                        206,
+                                        "partial_content",
+                                    );
                                 }
-                                return Ok(false);
                             } else {
                                 let vary = vary_header
                                     .unwrap_or_else(|| HeaderValue::from_static("Range"));
@@ -719,7 +793,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         .expect("invalid content range header"),
                                 );
                                 header_map.insert(header::VARY, vary);
-                                return respond_with_builtin(ctx, request, 416, Some(header_map), "range_not_satisfiable");
+                                return respond_with_builtin(
+                                    ctx,
+                                    request,
+                                    416,
+                                    Some(header_map),
+                                    "range_not_satisfiable",
+                                );
                             }
                         }
                         Err(RangeParseError::Unsatisfiable) => {
