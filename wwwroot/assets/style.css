@@ -70,7 +70,6 @@ h2 {
 }
 
 a {
-    font-weight: 600;
     color: var(--fg);
     transition: color 0.1s ease;
 }
