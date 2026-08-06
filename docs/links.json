@@ -297,11 +297,6 @@
     "label": "Commands"
   },
   {
-    "href": "/docs/reference/ferrbench",
-    "target": "_self",
-    "label": "FerrBench"
-  },
-  {
     "href": "https://rustdocs-v2.ferron.sh",
     "target": "_self",
     "label": "Rust crate documentation"
