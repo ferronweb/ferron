@@ -223,18 +223,16 @@ impl TcpTlsResolver for TcpTlsAcmeResolver {
                     return Ok(None);
                 }
                 None => {
-                    ferron_core::log_warn!("TLS-ALPN-01 challenge requested for unknown domain");
+                    return Err(std::io::Error::other(
+                        "TLS-ALPN-01 challenge requested for unknown domain",
+                    ));
                 }
             }
         }
 
-        match io.into_stream(Arc::new(self.build_normal_config())).await {
-            Ok(stream) => Ok(Some(stream)),
-            Err(err) => {
-                ferron_core::log_warn!("Error during TLS handshake: {err}");
-                Ok(None)
-            }
-        }
+        Ok(Some(
+            io.into_stream(Arc::new(self.build_normal_config())).await?,
+        ))
     }
 
     #[inline]

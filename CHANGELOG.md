@@ -51,6 +51,7 @@
 - **Symlink ownership check** — previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
 - **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
 - **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
+- **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
 
 #### Observability
 
