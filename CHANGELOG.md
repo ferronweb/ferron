@@ -47,16 +47,13 @@
 - **Trailing slash redirects** — trailing slash redirection logic now correctly handle index files (e.g., `index.html`) and redirects to the correct URL (with trailing slash) rather than serving two URLs (both with and without trailing slash)
 - **Connection accept fix for `poll`** — previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
 - **HTTP/2 host header handling correctness** — previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
-- **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
 - **Symlink ownership check** — previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
-- **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
-- **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
-- **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
-- **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
 
 #### Observability
 
 - **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
+- **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
+- **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
 
 #### Configuration validation
 
@@ -67,6 +64,12 @@
 - **Config reload cleanup** — on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
 - **Upstream resolution cache fix** - in earlier versions of Ferron 3 beta, stale upstream resolution cache (with infinite TTL) could have caused upstream connection errors, due to drift between cached state and actual DNS state. This has been fixed by removing the infinite-TTL internal upstream resolution cache.
 - **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
+
+#### CORS
+
+- **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
+- **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
+- **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 
 ## Ferron 3.0.0-beta.8
 
