@@ -8,16 +8,18 @@ use crate::util::compression::COMP_SUFFIXES;
 
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
-    etag: &str,
+    etag: Option<&str>,
     vary: Option<HeaderValue>,
     content_type: Option<&str>,
     cache_control: Option<&str>,
 ) -> http::HeaderMap {
     let mut header_map = http::HeaderMap::new();
-    header_map.insert(
-        header::ETAG,
-        HeaderValue::from_str(&construct_etag(etag, None, true)).expect("invalid etag header"),
-    );
+    if let Some(e) = etag {
+        header_map.insert(
+            header::ETAG,
+            HeaderValue::from_str(&construct_etag(e, None, true)).expect("invalid etag header"),
+        );
+    }
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }

@@ -34,7 +34,7 @@ static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
 
 use crate::util::compression::{
     compress_streaming_brotli, compress_streaming_deflate, compress_streaming_gzip,
-    compress_streaming_zstd, Compression, NON_COMPRESSIBLE_FILE_EXTENSIONS,
+    compress_streaming_zstd, Compression, COMP_SUFFIXES, NON_COMPRESSIBLE_FILE_EXTENSIONS,
     PREFERRED_CONTENT_ENCODING,
 };
 use crate::util::etag::{
@@ -224,7 +224,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             if !matches!(request.method(), &Method::GET | &Method::HEAD) {
                                 // Precondition failed when method is not GET or HEAD
                                 let header_map = build_etag_header_map(
-                                    etag,
+                                    (!request.headers().contains_key(header::RANGE))
+                                        .then_some(etag),
                                     vary_header,
                                     None,
                                     cache_control.as_deref(),
@@ -243,7 +244,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             // Ferron only emits weak ETags, and strong comparison won't match
                             // for specific ETags
                             let header_map = build_etag_header_map(
-                                etag,
+                                (!request.headers().contains_key(header::RANGE)).then_some(etag),
                                 vary_header,
                                 None,
                                 cache_control.as_deref(),
@@ -258,7 +259,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     }
                     Err(_) => {
                         let header_map = build_etag_header_map(
-                            etag,
+                            (!request.headers().contains_key(header::RANGE)).then_some(etag),
                             vary_header,
                             None,
                             cache_control.as_deref(),
@@ -324,9 +325,16 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     for tag in split_etag_request(val) {
                         if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
                             if &extracted == etag {
-                                if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                                // RFC 7232 mandates that clients MUST NOT use weak validators
+                                // for range requests
+                                //
+                                // And Ferron's static file serving only emits weak ETags...
+                                if !matches!(request.method(), &Method::GET | &Method::HEAD)
+                                    || request.headers().contains_key(header::RANGE)
+                                {
                                     let header_map = build_etag_header_map(
-                                        etag,
+                                        (!request.headers().contains_key(header::RANGE))
+                                            .then_some(etag),
                                         vary_header,
                                         None,
                                         cache_control.as_deref(),
@@ -341,10 +349,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     );
                                     return Ok(false);
                                 }
-                                let suffix = suffix_opt.and_then(|s| match s.as_str() {
-                                    "gzip" | "deflate" | "br" | "zstd" => Some(s),
-                                    _ => None,
-                                });
+                                let suffix = suffix_opt
+                                    .and_then(|s| COMP_SUFFIXES.contains(&s.as_str()).then_some(s));
                                 let full_etag = construct_etag(etag, suffix.as_deref(), true);
                                 let mut builder = Response::builder()
                                     .status(StatusCode::NOT_MODIFIED)
@@ -560,12 +566,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             mdate.as_ref().is_none_or(|mdate| *mdate == if_range_date)
                         } else if if_range_str == "*" {
                             true
-                        } else if let Some(etag) = &etag_value {
-                            split_etag_request(if_range_str)
-                                .iter()
-                                .filter_map(|tag| extract_etag_inner(tag, true))
-                                .any(|(extracted, _, _)| &extracted == etag)
                         } else {
+                            // From https://http.dev/if-range:
+                            // "weak ETags prefixed with W/ are not permitted in If-Range."
+                            //
+                            // Since Ferron's static file serving only emits weak ETags,
+                            // just reject the requests
                             false
                         };
                     is_valid
@@ -629,9 +635,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         httpdate::fmt_http_date(*mdate),
                                     );
                                 }
-                                if let Some(ref etag) = etag_value {
-                                    builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
-                                }
+
+                                // According to RFC 7233 (HTTP/1.1: Range Requests), weak
+                                // validators cannot be used in a 206 Partial Content response.
+
                                 if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
@@ -696,9 +703,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         header::LAST_MODIFIED,
                                         httpdate::fmt_http_date(*mdate),
                                     );
-                                }
-                                if let Some(ref etag) = etag_value {
-                                    builder = builder.header(header::ETAG, format!("W/\"{etag}\""));
                                 }
                                 if let Some(ref ct) = content_type {
                                     builder = builder.header(header::CONTENT_TYPE, ct);

@@ -65,6 +65,10 @@
 - **Upstream resolution cache fix** - in earlier versions of Ferron 3 beta, stale upstream resolution cache (with infinite TTL) could have caused upstream connection errors, due to drift between cached state and actual DNS state. This has been fixed by removing the infinite-TTL internal upstream resolution cache.
 - **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
 
+#### Static file serving
+
+- **`Range` request correctness** — previously, weak ETags were included with `206 Partial Content` responses (and some other responses with `Range` request header), which is a violation of HTTP spec (RFC 7232, RFC 7233). This has been fixed to remove ETags from responses to range requests.
+
 #### CORS
 
 - **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
