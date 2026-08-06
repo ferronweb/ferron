@@ -85,14 +85,13 @@ fn respond_with_builtin(
     headers: Option<HeaderMap>,
     outcome: &'static str,
 ) -> Result<bool, PipelineError> {
-    ctx.http.req = Some(request);
-    ctx.http.res = Some(HttpResponse::BuiltinError(status_code, headers));
-    emit_static_response_metric(ctx, status_code, outcome);
-    ctx.get_span_attributes().insert(
-        "http.response.status_code",
-        TraceAttributeValue::I64(status_code as i64),
-    );
-    Ok(false)
+    respond_with_httpresponse(
+        ctx,
+        request,
+        HttpResponse::BuiltinError(status_code, headers),
+        status_code,
+        outcome,
+    )
 }
 
 /// Helper: set a pre-constructed HttpResponse (Custom or Builtin), emit metrics, and set span attribute.
