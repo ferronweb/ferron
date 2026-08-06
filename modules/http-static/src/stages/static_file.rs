@@ -929,13 +929,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         ctx.get_span_attributes()
             .insert("http.response.status_code", TraceAttributeValue::I64(200));
 
-        let compression_label = match used_compression {
-            Compression::Brotli => "br",
-            Compression::Zstd => "zstd",
-            Compression::Deflate => "deflate",
-            Compression::Gzip => "gzip",
-            Compression::Identity => "identity",
-        };
+        let compression_label = used_compression.header_value().unwrap_or("identity");
         let cache_hit = is_precompressed_file;
         let file_size = file_length;
 
