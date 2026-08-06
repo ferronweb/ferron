@@ -43,9 +43,9 @@ code {
 }
 
 header {
-    grid-column: 1 / -1;
     text-align: center;
     margin-bottom: 1em;
+    padding-bottom: 1.5em;
 }
 
 .logo {
@@ -67,10 +67,6 @@ h1 {
 h2 {
     font-size: 1.35em;
     margin-top: 0;
-}
-
-.clearfix {
-    display: none;
 }
 
 a {
@@ -108,16 +104,22 @@ a:focus {
     line-height: 1.6;
     width: 100%;
     max-width: 1280px;
+    position: relative;
+}
+
+main {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.5em;
     align-items: start;
-    position: relative;
 }
 
 @media screen and (max-width: 768px) {
     .body-main {
         font-size: 1em;
+    }
+
+    main {
         grid-template-columns: repeat(1, minmax(0, 1fr));
     }
 
