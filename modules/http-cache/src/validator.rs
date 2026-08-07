@@ -1,4 +1,3 @@
-use cidr::IpCidr;
 use ferron_core::config::validator::{
     entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
@@ -6,6 +5,7 @@ use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use http::header::HeaderName;
+use ipnet::IpNet;
 
 const GLOBAL_CACHE_DIRECTIVES: &[&str] = &["max_entries", "zone"];
 const HOST_CACHE_DIRECTIVES: &[&str] = &[
@@ -407,7 +407,7 @@ fn validate_cidr_list(
                 ))
                 .with_span(entry_span(entry))
             })?;
-            value.parse::<IpCidr>().map_err(|_| {
+            value.parse::<IpNet>().map_err(|_| {
                 ConfigurationValidationError::from(format!(
                     "Invalid `{name}` - invalid IP or CIDR `{value}`"
                 ))

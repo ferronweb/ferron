@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use cidr::IpCidr;
+use ipnet::IpNet;
 
 use crate::HttpContext;
 
@@ -35,7 +35,7 @@ impl ClientIpHeader {
 #[derive(Clone, Debug)]
 pub struct ClientIpFromHeaderConfig {
     header: ClientIpHeader,
-    trusted_proxies: Vec<IpCidr>,
+    trusted_proxies: Vec<IpNet>,
 }
 
 impl ClientIpFromHeaderConfig {
@@ -172,7 +172,7 @@ fn find_forwarded_param<'a>(element: &'a str, param_name: &str) -> Option<&'a st
 fn parse_trusted_proxy_allowlist(
     children: Option<&ferron_core::config::ServerConfigurationBlock>,
     ctx: &HttpContext,
-) -> Vec<IpCidr> {
+) -> Vec<IpNet> {
     let mut trusted_proxies = Vec::new();
     let Some(children) = children else {
         return trusted_proxies;
@@ -182,7 +182,7 @@ fn parse_trusted_proxy_allowlist(
         for entry in entries {
             for arg in &entry.args {
                 if let Some(value) = arg.as_string_with_interpolations(ctx) {
-                    if let Ok(cidr) = value.parse::<IpCidr>() {
+                    if let Ok(cidr) = value.parse::<IpNet>() {
                         trusted_proxies.push(cidr);
                     }
                 }

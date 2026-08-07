@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use cidr::IpCidr;
 use ferron_core::config::validator::{
     entry_span, first_entry_span, validate_scoped_block, ConfigurationValidationError,
     ConfigurationValidatorContext,
@@ -9,6 +8,7 @@ use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
 use ferron_core::{check_unused_subdirectives, validate_directive, validate_nested};
+use ipnet::IpNet;
 
 pub struct HttpConfigurationValidator;
 
@@ -230,7 +230,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                                         .with_span(entry_span(trusted_proxy_entry)));
                                     }
                                 };
-                                if expanded.parse::<IpCidr>().is_err() {
+                                if expanded.parse::<IpNet>().is_err() {
                                     return Err(ConfigurationValidationError::from(format!(
                                         "Invalid directive 'trusted_proxy': '{expanded}' is not a valid IP or CIDR"
                                     ))

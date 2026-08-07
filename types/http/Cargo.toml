@@ -11,7 +11,7 @@ vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
 typemap_rev = "0.4"
 rustc-hash = "2"
 rand = "0.10"
-cidr = "0.3"
+ipnet = "2"
 rustls-pki-types = { version = "1.14.1", optional = true }
 hex = "0.4.3"
 x509-parser = "0.18.1"

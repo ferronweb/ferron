@@ -1,10 +1,10 @@
-use cidr::IpCidr;
 use ferron_core::config::validator::{
     entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
+use ipnet::IpNet;
 
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "enabled",
@@ -131,7 +131,7 @@ impl AbuseProtectionValidator {
                         )
                         .with_span(entry_span(entry))
                     })?;
-                    value.parse::<IpCidr>().map_err(|_| {
+                    value.parse::<IpNet>().map_err(|_| {
                         ConfigurationValidationError::from(format!(
                             "Invalid `allowlist` — invalid IP or CIDR `{value}`"
                         ))

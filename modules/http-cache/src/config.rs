@@ -1,5 +1,5 @@
-use cidr::IpCidr;
 use http::header::HeaderName;
+use ipnet::IpNet;
 
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationBlock;
@@ -61,7 +61,7 @@ pub struct CacheConfig {
     pub vary_cookies: Vec<String>,
     pub ignored_store_headers: Vec<HeaderName>,
     pub purge_method: bool,
-    pub purge_allowed_ips: Vec<IpCidr>,
+    pub purge_allowed_ips: Vec<IpNet>,
     pub purge_propagation: PurgePropagationConfig,
     /// Cache zone this host belongs to. Determines which physical cache store
     /// is used. Resolved by `resolve_zone_id()` based on the host directive
@@ -250,14 +250,14 @@ fn collect_string_values(configuration: &LayeredConfiguration, directive: &str) 
     values
 }
 
-fn collect_purge_allowed_ips(configuration: &LayeredConfiguration) -> Vec<IpCidr> {
+fn collect_purge_allowed_ips(configuration: &LayeredConfiguration) -> Vec<IpNet> {
     let mut ips = Vec::new();
     for block in cache_blocks(configuration) {
         if let Some(entries) = block.directives.get("purge_allowed_ips") {
             for entry in entries {
                 for arg in &entry.args {
                     if let Some(value) = arg.as_str() {
-                        if let Ok(cidr) = value.parse::<IpCidr>() {
+                        if let Ok(cidr) = value.parse::<IpNet>() {
                             ips.push(cidr);
                         }
                     }

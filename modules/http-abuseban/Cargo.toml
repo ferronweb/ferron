@@ -7,7 +7,7 @@ edition = "2021"
 async-trait = "0.1"
 dashmap = "6"
 http = "1"
-cidr = "0.3"
+ipnet = "2"
 rustc-hash = "2"
 
 ferron-core = { path = "../../core" }
