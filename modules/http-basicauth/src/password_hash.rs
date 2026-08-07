@@ -237,8 +237,7 @@ mod tests {
     const PASSWORD: &str = "test";
 
     const ARGON2ID_HASH_1: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
-        p4ZwOkPf#[inline]
-fNeVtgmOBgr/ZA$bPiMPdlq3NoWLe0ogU4XBTc/PjXAHAEDuYXSka2xKtU";
+        p4ZwOkPffNeVtgmOBgr/ZA$bPiMPdlq3NoWLe0ogU4XBTc/PjXAHAEDuYXSka2xKtU";
     const ARGON2ID_HASH_2: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
         ZiPoEVmYo3b2r6Y2oZ8+JA$23gV15+t9eGAkldj1mkCEJXmwkxR9uoq65B4bG29I34";
     const SCRYPT_HASH: &str = "$scrypt$ln=14,r=8,p=1$\
