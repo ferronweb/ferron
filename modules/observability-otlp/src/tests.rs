@@ -1,58 +1,124 @@
-use crate::providers::{sanitize_label_value, CorrelationContext};
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::*;
-use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker, SignalSet};
-use ferron_observability::{MetricAttributeValue, TraceAttributeValue, TraceEvent};
+use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
+use ferron_observability::{
+    AccessEvent, AccessVisitor, EventTraceContext, LogAttributeValue, LogEvent, LogLevel,
+    MetricAttributeValue, Parent, SpanLink, TraceAttributeValue, TraceEvent,
+};
 
-// TODO: migrate to future custom exporter
-/*
+use crate::config::LogStyle;
+use crate::convert::CorrelationContext;
+use crate::convert::{
+    build_access_log_record, build_log_record, build_resource, end_span, metric_key_values, nanos,
+    sanitize_label_value, start_span, OtelAccessAttributeVisitor,
+};
+use crate::proto::opentelemetry::proto::common::v1::any_value::Value;
+use crate::proto::opentelemetry::proto::common::v1::{AnyValue, KeyValue};
+use crate::proto::opentelemetry::proto::logs::v1::SeverityNumber;
+use crate::proto::opentelemetry::proto::trace::v1::{span, status};
+
+const TRACE_ID_HEX: &str = "0123456789abcdef0123456789abcdef";
+const SPAN_ID_HEX: &str = "0123456789abcdef";
+
+fn now() -> SystemTime {
+    UNIX_EPOCH + Duration::from_secs(1_700_000_000)
+}
+
+fn later() -> SystemTime {
+    UNIX_EPOCH + Duration::from_secs(1_700_000_001)
+}
+
+fn start_event(name: &'static str) -> TraceEvent {
+    TraceEvent::StartSpan {
+        key: Cow::Borrowed(name),
+        name: Cow::Borrowed(name),
+        parent: None,
+        trace_context: None,
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    }
+}
+
+fn find_attr<'a>(attrs: &'a [KeyValue], key: &str) -> Option<&'a AnyValue> {
+    attrs
+        .iter()
+        .find(|kv| kv.key == key)
+        .and_then(|kv| kv.value.as_ref())
+}
+
+fn str_value(value: &AnyValue) -> Option<&str> {
+    match value.value.as_ref()? {
+        Value::StringValue(s) => Some(s),
+        _ => None,
+    }
+}
+
+fn int_value(value: &AnyValue) -> Option<i64> {
+    match value.value.as_ref()? {
+        Value::IntValue(i) => Some(*i),
+        _ => None,
+    }
+}
+
+fn bool_value(value: &AnyValue) -> Option<bool> {
+    match value.value.as_ref()? {
+        Value::BoolValue(b) => Some(*b),
+        _ => None,
+    }
+}
+
+fn double_value(value: &AnyValue) -> Option<f64> {
+    match value.value.as_ref()? {
+        Value::DoubleValue(d) => Some(*d),
+        _ => None,
+    }
+}
+
 #[test]
 fn correlation_context_tracks_active_spans() {
-    use opentelemetry::trace::{Span, Tracer, TracerProvider};
-
     let mut ctx = CorrelationContext::new();
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let tracer = provider.tracer("test");
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("ferron.request_handler"),
+        name: Cow::Borrowed("ferron.request_handler"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: Some("a=b".to_string()),
+            sampled: Some(true),
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut ctx, &[], &None, now());
 
-    let span = tracer.start("ferron.request_handler");
-    let trace_id_hex = span.span_context().trace_id().to_string();
-    let span_id_hex = span.span_context().span_id().to_string();
-    let sampled = span.span_context().trace_flags().is_sampled();
-    let baggage = Some("a=b".to_string());
-
-    ctx.insert_span(
-        "ferron.request_handler".to_string(),
-        trace_id_hex.clone(),
-        span_id_hex.clone(),
-        sampled,
-        span,
-        baggage.clone(),
-    );
-
-    let (t_id, s_id, is_sampled, baggage2) = ctx
+    let (trace_id, span_id, baggage) = ctx
         .get_parent_ids("ferron.request_handler")
         .expect("should have active span");
-    assert_eq!(t_id, trace_id_hex);
-    assert_eq!(s_id, span_id_hex);
-    assert_eq!(is_sampled, sampled);
-    assert_eq!(baggage2, baggage);
+    assert_eq!(trace_id.len(), 16);
+    assert_eq!(span_id.len(), 8);
+    assert_eq!(baggage.as_deref(), Some("a=b"));
 }
-*/
 
 #[test]
-fn emit_trace_start_span_stores_span_object() {
-    use ferron_observability::TraceAttributeValue;
-    use std::borrow::Cow;
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+fn start_span_stores_span_with_attributes() {
     let mut correlation = CorrelationContext::new();
-
     let event = TraceEvent::StartSpan {
         key: Cow::Borrowed("test.span"),
         name: Cow::Borrowed("test.span"),
         parent: None,
         trace_context: None,
-        builder_attributes: vec![],
+        builder_attributes: vec![(
+            Cow::Borrowed("builder.key"),
+            TraceAttributeValue::String("builder-value".to_string()),
+        )],
         attributes: vec![
             (
                 "http.request.method",
@@ -62,38 +128,307 @@ fn emit_trace_start_span_stores_span_object() {
                 "url.path",
                 TraceAttributeValue::String("/api/test".to_string()),
             ),
+            ("http.response.status_code", TraceAttributeValue::I64(200)),
+            ("flag", TraceAttributeValue::Bool(true)),
+            ("ratio", TraceAttributeValue::F64(0.5)),
         ],
         links: vec![],
         control_plane_metadata: None,
     };
+    start_span(&event, &mut correlation, &[], &None, now());
 
-    emit_trace(&provider, &event, &mut correlation, &[], &None);
+    let span = correlation.get_span("test.span").expect("span stored");
+    assert_eq!(span.name, "test.span");
+    assert_eq!(span.kind, span::SpanKind::Internal as i32);
+    assert_eq!(span.trace_id.len(), 16);
+    assert_eq!(span.span_id.len(), 8);
+    assert!(span.parent_span_id.is_empty());
+    assert_eq!(span.start_time_unix_nano, nanos(now()));
+    assert_eq!(span.end_time_unix_nano, 0);
+    assert_eq!(span.flags, 1, "AlwaysOn sampler: span is sampled");
 
-    assert!(correlation.get_parent_ids("test.span").is_some());
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "builder.key").unwrap()).unwrap(),
+        "builder-value"
+    );
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "http.request.method").unwrap()).unwrap(),
+        "GET"
+    );
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "url.path").unwrap()).unwrap(),
+        "/api/test"
+    );
+    assert_eq!(
+        int_value(find_attr(&span.attributes, "http.response.status_code").unwrap()).unwrap(),
+        200
+    );
+    assert!(bool_value(find_attr(&span.attributes, "flag").unwrap()).unwrap());
+    assert_eq!(
+        double_value(find_attr(&span.attributes, "ratio").unwrap()).unwrap(),
+        0.5
+    );
 }
 
 #[test]
-fn emit_trace_end_span_ends_properly() {
-    use ferron_observability::TraceAttributeValue;
-    use std::borrow::Cow;
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+fn start_span_ferron_request_uses_server_kind() {
     let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("ferron.request"),
+        name: Cow::Borrowed("ferron.request"),
+        parent: None,
+        trace_context: None,
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut correlation, &[], &None, now());
 
-    let start_event = TraceEvent::StartSpan {
+    let span = correlation.get_span("ferron.request").unwrap();
+    assert_eq!(span.kind, span::SpanKind::Server as i32);
+}
+
+#[test]
+fn start_span_uses_requested_trace_and_span_ids() {
+    let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: [b'0'; 32],
+            span_id: [b'0'; 16],
+            baggage: None,
+            sampled: Some(true),
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    // Zero IDs are invalid: the span must fall back to generated IDs.
+    start_span(&event, &mut correlation, &[], &None, now());
+    let span = correlation.get_span("test.span").unwrap();
+    assert_ne!(span.trace_id, vec![0u8; 16]);
+    assert_ne!(span.span_id, vec![0u8; 8]);
+
+    let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: None,
+            sampled: Some(true),
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut correlation, &[], &None, now());
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(span.trace_id, hex::decode(TRACE_ID_HEX).unwrap());
+    assert_eq!(span.span_id, hex::decode(SPAN_ID_HEX).unwrap());
+    assert_eq!(span.flags, 1);
+}
+
+#[test]
+fn start_span_child_by_key_inherits_trace_and_parent() {
+    let mut correlation = CorrelationContext::new();
+    start_span(
+        &start_event("parent.span"),
+        &mut correlation,
+        &[],
+        &None,
+        now(),
+    );
+    let parent = correlation.get_span("parent.span").unwrap().clone();
+
+    let child = TraceEvent::StartSpan {
+        key: Cow::Borrowed("child.span"),
+        name: Cow::Borrowed("child.span"),
+        parent: Some(Parent::ByKey("parent.span".to_string())),
+        trace_context: None,
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&child, &mut correlation, &[], &None, later());
+
+    let span = correlation.get_span("child.span").unwrap();
+    assert_eq!(span.trace_id, parent.trace_id);
+    assert_eq!(span.parent_span_id, parent.span_id);
+    assert_ne!(span.span_id, parent.span_id);
+}
+
+#[test]
+fn start_span_child_by_id_sets_parent_span_id() {
+    let mut correlation = CorrelationContext::new();
+    let child = TraceEvent::StartSpan {
+        key: Cow::Borrowed("child.span"),
+        name: Cow::Borrowed("child.span"),
+        parent: Some(Parent::ById {
+            trace_id: TRACE_ID_HEX.to_string(),
+            span_id: SPAN_ID_HEX.to_string(),
+            sampled: Some(true),
+            baggage: None,
+        }),
+        trace_context: None,
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&child, &mut correlation, &[], &None, now());
+
+    let span = correlation.get_span("child.span").unwrap();
+    assert_eq!(span.trace_id, hex::decode(TRACE_ID_HEX).unwrap());
+    assert_eq!(span.parent_span_id, hex::decode(SPAN_ID_HEX).unwrap());
+}
+
+#[test]
+fn start_span_promotes_baggage_per_signal() {
+    let mut correlation = CorrelationContext::new();
+    let promotions = vec![
+        BaggageKeyPromotion {
+            baggage_key: "tenant.id".to_string(),
+            attribute_name: None,
+            signals: None,
+            max_distinct: None,
+        },
+        BaggageKeyPromotion {
+            baggage_key: "user.role".to_string(),
+            attribute_name: Some("ferron.user_role".to_string()),
+            signals: Some(SignalSet::LOGS),
+            max_distinct: None,
+        },
+    ];
+
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: Some("tenant.id=acme,user.role=admin,other=skip".to_string()),
+            sampled: Some(true),
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut correlation, &promotions, &None, now());
+
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "tenant.id").unwrap()).unwrap(),
+        "acme"
+    );
+    // Promoted only to logs, not traces.
+    assert!(find_attr(&span.attributes, "ferron.user_role").is_none());
+    // Not a configured promotion.
+    assert!(find_attr(&span.attributes, "other").is_none());
+}
+
+#[test]
+fn start_span_includes_links_and_drops_malformed_ones() {
+    let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
         key: Cow::Borrowed("test.span"),
         name: Cow::Borrowed("test.span"),
         parent: None,
         trace_context: None,
         builder_attributes: vec![],
-        attributes: vec![(
-            "http.request.method",
-            TraceAttributeValue::String("POST".to_string()),
-        )],
-        links: vec![],
+        attributes: vec![],
+        links: vec![
+            SpanLink {
+                trace_id: TRACE_ID_HEX.to_string(),
+                span_id: SPAN_ID_HEX.to_string(),
+                sampled: Some(true),
+                attributes: vec![(
+                    "link.key",
+                    TraceAttributeValue::String("link-value".to_string()),
+                )],
+            },
+            SpanLink {
+                trace_id: "zzzz".to_string(),
+                span_id: "zzzz".to_string(),
+                sampled: None,
+                attributes: vec![],
+            },
+        ],
         control_plane_metadata: None,
     };
-    emit_trace(&provider, &start_event, &mut correlation, &[], &None);
+    start_span(&event, &mut correlation, &[], &None, now());
+
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(span.links.len(), 1);
+    assert_eq!(span.links[0].trace_id, hex::decode(TRACE_ID_HEX).unwrap());
+    assert_eq!(span.links[0].span_id, hex::decode(SPAN_ID_HEX).unwrap());
+    assert_eq!(
+        str_value(find_attr(&span.links[0].attributes, "link.key").unwrap()).unwrap(),
+        "link-value"
+    );
+}
+
+#[test]
+fn start_span_includes_control_plane_metadata() {
+    let mut correlation = CorrelationContext::new();
+    let event_metadata = Some(Arc::new(BTreeMap::from([(
+        "tenant".to_string(),
+        "acme".to_string(),
+    )])));
+    start_span(
+        &start_event("test.span"),
+        &mut correlation,
+        &[],
+        &event_metadata,
+        now(),
+    );
+
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "ferron.control_plane.tenant").unwrap()).unwrap(),
+        "acme"
+    );
+
+    // Provider-level metadata applies when the event carries none.
+    let mut correlation = CorrelationContext::new();
+    let provider_metadata = Some(Arc::new(BTreeMap::from([(
+        "region".to_string(),
+        "eu".to_string(),
+    )])));
+    start_span(
+        &start_event("test.span"),
+        &mut correlation,
+        &[],
+        &provider_metadata,
+        now(),
+    );
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(
+        str_value(find_attr(&span.attributes, "ferron.control_plane.region").unwrap()).unwrap(),
+        "eu"
+    );
+}
+
+#[test]
+fn end_span_merges_attributes_and_error() {
+    let mut correlation = CorrelationContext::new();
+    start_span(
+        &start_event("test.span"),
+        &mut correlation,
+        &[],
+        &None,
+        now(),
+    );
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -102,29 +437,30 @@ fn emit_trace_end_span_ends_properly() {
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
         control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
+    let span = end_span(&end_event, &mut correlation, later()).expect("finished span");
 
-    assert!(correlation.get_parent_ids("test.span").is_none());
+    assert_eq!(span.start_time_unix_nano, nanos(now()));
+    assert_eq!(span.end_time_unix_nano, nanos(later()));
+    let status = span.status.as_ref().expect("error status set");
+    assert_eq!(status.code, status::StatusCode::Error as i32);
+    assert_eq!(status.message, "test error");
+    assert_eq!(
+        int_value(find_attr(&span.attributes, "http.response.status_code").unwrap()).unwrap(),
+        500
+    );
+    assert!(correlation.get_span("test.span").is_none());
 }
 
 #[test]
-fn emit_trace_end_span_without_error() {
-    use std::borrow::Cow;
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+fn end_span_without_error_keeps_status_unset() {
     let mut correlation = CorrelationContext::new();
-
-    let start_event = TraceEvent::StartSpan {
-        key: Cow::Borrowed("test.span"),
-        name: Cow::Borrowed("test.span"),
-        parent: None,
-        trace_context: None,
-        builder_attributes: vec![],
-        attributes: vec![],
-        links: vec![],
-        control_plane_metadata: None,
-    };
-    emit_trace(&provider, &start_event, &mut correlation, &[], &None);
+    start_span(
+        &start_event("test.span"),
+        &mut correlation,
+        &[],
+        &None,
+        now(),
+    );
 
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("test.span"),
@@ -133,18 +469,13 @@ fn emit_trace_end_span_without_error() {
         attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
         control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
-
-    assert!(correlation.get_parent_ids("test.span").is_none());
+    let span = end_span(&end_event, &mut correlation, now()).expect("finished span");
+    assert!(span.status.is_none(), "no error means unset status");
 }
 
 #[test]
-fn emit_trace_end_span_on_unknown_name_does_nothing() {
-    use std::borrow::Cow;
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+fn end_span_on_unknown_key_does_nothing() {
     let mut correlation = CorrelationContext::new();
-
     let end_event = TraceEvent::EndSpan {
         key: Cow::Borrowed("unknown.span"),
         name: Cow::Borrowed("unknown.span"),
@@ -152,8 +483,403 @@ fn emit_trace_end_span_on_unknown_name_does_nothing() {
         attributes: vec![],
         control_plane_metadata: None,
     };
-    emit_trace(&provider, &end_event, &mut correlation, &[], &None);
-    assert!(correlation.get_parent_ids("unknown.span").is_none());
+    assert!(end_span(&end_event, &mut correlation, now()).is_none());
+}
+
+#[test]
+fn end_span_never_before_start_time() {
+    let mut correlation = CorrelationContext::new();
+    start_span(
+        &start_event("test.span"),
+        &mut correlation,
+        &[],
+        &None,
+        later(),
+    );
+
+    let end_event = TraceEvent::EndSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        error: None,
+        attributes: vec![],
+        control_plane_metadata: None,
+    };
+    let span = end_span(&end_event, &mut correlation, now()).expect("finished span");
+    assert_eq!(span.end_time_unix_nano, span.start_time_unix_nano);
+}
+
+#[test]
+fn start_span_with_end_event_is_noop() {
+    let mut correlation = CorrelationContext::new();
+    let end_event = TraceEvent::EndSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("test.span"),
+        error: None,
+        attributes: vec![],
+        control_plane_metadata: None,
+    };
+    assert!(start_span(&end_event, &mut correlation, &[], &None, now()).is_none());
+}
+
+#[test]
+fn correlation_context_evicts_oldest_span() {
+    let mut correlation = CorrelationContext::new();
+    let mut evicted = None;
+    for i in 0..65537 {
+        let event = TraceEvent::StartSpan {
+            key: Cow::Owned(format!("span.{i}")),
+            name: Cow::Borrowed("test.span"),
+            parent: None,
+            trace_context: None,
+            builder_attributes: vec![],
+            attributes: vec![],
+            links: vec![],
+            control_plane_metadata: None,
+        };
+        evicted = start_span(&event, &mut correlation, &[], &None, now());
+    }
+    let evicted = evicted.expect("first span evicted on overflow");
+    assert_eq!(evicted.name, "test.span");
+    assert_eq!(
+        evicted.status.as_ref().unwrap().code,
+        status::StatusCode::Error as i32
+    );
+    assert_eq!(evicted.end_time_unix_nano, nanos(now()));
+}
+
+#[test]
+fn build_log_record_legacy_uses_message_as_body() {
+    let event = LogEvent {
+        level: LogLevel::Info,
+        message: "Legacy message".to_string(),
+        summary: "Summary ignored in legacy".into(),
+        target: "ferron-http-proxy",
+        attributes: vec![(
+            "upstream.address",
+            LogAttributeValue::String("backend.example:8080".to_string()),
+        )],
+        trace_context: None,
+    };
+    let record = build_log_record(&event, &[], LogStyle::Legacy, now());
+
+    assert_eq!(
+        str_value(record.body.as_ref().unwrap()).unwrap(),
+        "Legacy message"
+    );
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "log.target").unwrap()).unwrap(),
+        "ferron-http-proxy"
+    );
+    // Legacy mode does not expose typed attributes.
+    assert!(find_attr(&record.attributes, "upstream.address").is_none());
+    assert_eq!(record.time_unix_nano, nanos(now()));
+    assert_eq!(record.observed_time_unix_nano, nanos(now()));
+}
+
+#[test]
+fn build_log_record_modern_uses_summary_and_typed_attributes() {
+    let event = LogEvent {
+        level: LogLevel::Warn,
+        message: "Ignored in modern".to_string(),
+        summary: "Upstream circuit opened".into(),
+        target: "test",
+        attributes: vec![
+            (
+                "attr.string",
+                LogAttributeValue::String("value".to_string()),
+            ),
+            ("attr.str", LogAttributeValue::StaticStr("static")),
+            ("attr.bool", LogAttributeValue::Bool(true)),
+            ("attr.i64", LogAttributeValue::I64(42)),
+            ("attr.f64", LogAttributeValue::F64(1.5)),
+        ],
+        trace_context: None,
+    };
+    let record = build_log_record(&event, &[], LogStyle::Modern, now());
+
+    assert_eq!(
+        str_value(record.body.as_ref().unwrap()).unwrap(),
+        "Upstream circuit opened"
+    );
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "attr.string").unwrap()).unwrap(),
+        "value"
+    );
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "attr.str").unwrap()).unwrap(),
+        "static"
+    );
+    assert!(bool_value(find_attr(&record.attributes, "attr.bool").unwrap()).unwrap());
+    assert_eq!(
+        int_value(find_attr(&record.attributes, "attr.i64").unwrap()).unwrap(),
+        42
+    );
+    assert_eq!(
+        double_value(find_attr(&record.attributes, "attr.f64").unwrap()).unwrap(),
+        1.5
+    );
+}
+
+#[test]
+fn build_log_record_maps_severity() {
+    let levels = [
+        (LogLevel::Error, SeverityNumber::Error as i32, "ERROR"),
+        (LogLevel::Warn, SeverityNumber::Warn as i32, "WARN"),
+        (LogLevel::Info, SeverityNumber::Info as i32, "INFO"),
+        (LogLevel::Debug, SeverityNumber::Debug as i32, "DEBUG"),
+    ];
+    for (level, number, text) in levels {
+        let event = LogEvent {
+            level,
+            message: "m".to_string(),
+            summary: "s".into(),
+            target: "t",
+            attributes: vec![],
+            trace_context: None,
+        };
+        let record = build_log_record(&event, &[], LogStyle::Legacy, now());
+        assert_eq!(record.severity_number, number);
+        assert_eq!(record.severity_text, text);
+    }
+}
+
+#[test]
+fn build_log_record_sets_trace_context() {
+    let event = LogEvent {
+        level: LogLevel::Info,
+        message: "m".to_string(),
+        summary: "s".into(),
+        target: "t",
+        attributes: vec![],
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: None,
+            sampled: Some(true),
+        }),
+    };
+    let record = build_log_record(&event, &[], LogStyle::Modern, now());
+    assert_eq!(record.trace_id, hex::decode(TRACE_ID_HEX).unwrap());
+    assert_eq!(record.span_id, hex::decode(SPAN_ID_HEX).unwrap());
+    assert_eq!(record.flags, 1);
+}
+
+#[test]
+fn build_log_record_skips_malformed_trace_context() {
+    let event = LogEvent {
+        level: LogLevel::Info,
+        message: "m".to_string(),
+        summary: "s".into(),
+        target: "t",
+        attributes: vec![],
+        trace_context: Some(EventTraceContext {
+            trace_id: [b'z'; 32],
+            span_id: [b'0'; 16],
+            baggage: None,
+            sampled: Some(true),
+        }),
+    };
+    let record = build_log_record(&event, &[], LogStyle::Modern, now());
+    assert!(record.trace_id.is_empty());
+    assert!(record.span_id.is_empty());
+    assert_eq!(record.flags, 0);
+}
+
+#[test]
+fn build_log_record_promotes_baggage() {
+    let promotions = vec![BaggageKeyPromotion {
+        baggage_key: "tenant.id".to_string(),
+        attribute_name: Some("ferron.tenant".to_string()),
+        signals: None,
+        max_distinct: None,
+    }];
+    let event = LogEvent {
+        level: LogLevel::Info,
+        message: "m".to_string(),
+        summary: "s".into(),
+        target: "t",
+        attributes: vec![],
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: Some("tenant.id=acme".to_string()),
+            sampled: Some(true),
+        }),
+    };
+    let record = build_log_record(&event, &promotions, LogStyle::Legacy, now());
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "ferron.tenant").unwrap()).unwrap(),
+        "acme"
+    );
+}
+
+struct DummyAccess {
+    proto: &'static str,
+    event_time: Option<SystemTime>,
+}
+
+impl AccessEvent for DummyAccess {
+    fn protocol(&self) -> &'static str {
+        self.proto
+    }
+    fn visit(&self, visitor: &mut dyn AccessVisitor) {
+        visitor.field_string("path", "/");
+        visitor.field_string("method", "GET");
+        visitor.field_u64("status", 200);
+    }
+    fn event_time(&self) -> Option<SystemTime> {
+        self.event_time
+    }
+}
+
+fn dummy_access(proto: &'static str) -> Arc<dyn AccessEvent> {
+    Arc::new(DummyAccess {
+        proto,
+        event_time: None,
+    })
+}
+
+#[test]
+fn build_access_log_record_modern_maps_semantic_conventions() {
+    let registry = ferron_core::registry::Registry::new();
+    let log_config = Arc::new(ferron_core::config::ServerConfigurationBlock::default());
+    let record = build_access_log_record(
+        &dummy_access("http"),
+        &log_config,
+        &registry,
+        &[],
+        LogStyle::Modern,
+        &None,
+        now(),
+    );
+
+    assert_eq!(
+        str_value(record.body.as_ref().unwrap()).unwrap(),
+        "Access log (http)"
+    );
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "url.path").unwrap()).unwrap(),
+        "/"
+    );
+    assert_eq!(
+        str_value(find_attr(&record.attributes, "http.request.method").unwrap()).unwrap(),
+        "GET"
+    );
+    assert_eq!(
+        int_value(find_attr(&record.attributes, "http.response.status_code").unwrap()).unwrap(),
+        200
+    );
+    assert_eq!(record.time_unix_nano, nanos(now()));
+}
+
+#[test]
+fn build_access_log_record_modern_uses_event_time() {
+    let registry = ferron_core::registry::Registry::new();
+    let log_config = Arc::new(ferron_core::config::ServerConfigurationBlock::default());
+    let event: Arc<dyn AccessEvent> = Arc::new(DummyAccess {
+        proto: "http",
+        event_time: Some(UNIX_EPOCH),
+    });
+    let record = build_access_log_record(
+        &event,
+        &log_config,
+        &registry,
+        &[],
+        LogStyle::Modern,
+        &None,
+        now(),
+    );
+    assert_eq!(record.time_unix_nano, 0);
+    assert_eq!(record.observed_time_unix_nano, nanos(now()));
+}
+
+#[test]
+fn build_access_log_record_legacy_falls_back_without_formatter() {
+    let registry = ferron_core::registry::Registry::new();
+    let log_config = Arc::new(ferron_core::config::ServerConfigurationBlock::default());
+    let record = build_access_log_record(
+        &dummy_access("http"),
+        &log_config,
+        &registry,
+        &[],
+        LogStyle::Legacy,
+        &None,
+        now(),
+    );
+    assert_eq!(
+        str_value(record.body.as_ref().unwrap()).unwrap(),
+        "<unknown access log>"
+    );
+}
+
+#[test]
+fn otel_access_attribute_visitor_maps_to_otel_semantic_conventions() {
+    let mut visitor = OtelAccessAttributeVisitor::default();
+    visitor.field_string("path", "/api/v1/users");
+    visitor.field_string("path_and_query", "/api/v1/users?id=42");
+    visitor.field_string("method", "GET");
+    visitor.field_string("version", "1.1");
+    visitor.field_string("scheme", "https");
+    visitor.field_string("client_ip", "203.0.113.1");
+    visitor.field_string("server_ip", "198.51.100.1");
+    visitor.field_string("auth_user", "alice");
+    visitor.field_u64("client_port", 54321);
+    visitor.field_u64("server_port", 443);
+    visitor.field_u64("status", 200);
+    visitor.field_u64("content_length", 1024);
+    visitor.field_f64("duration_secs", 0.123);
+    visitor.field_string("header_user_agent", "Mozilla/5.0");
+    // Legacy-only fields, should be dropped in modern mode.
+    visitor.field_string("timestamp", "01/Jan/2026:00:00:00 +0000");
+    visitor.field_string("trace_id", &"0".repeat(32));
+    visitor.field_string("client_ip_canonical", "203.0.113.1");
+    visitor.field_string("server_ip_canonical", "198.51.100.1");
+
+    let attrs: std::collections::HashMap<String, ()> = visitor
+        .attributes
+        .iter()
+        .map(|(k, _)| (k.clone(), ()))
+        .collect();
+    assert!(attrs.contains_key("url.path"));
+    assert!(attrs.contains_key("url.full"));
+    assert!(attrs.contains_key("http.request.method"));
+    assert!(attrs.contains_key("network.protocol.version"));
+    assert!(attrs.contains_key("url.scheme"));
+    assert!(attrs.contains_key("client.address"));
+    assert!(attrs.contains_key("server.address"));
+    assert!(attrs.contains_key("user.name"));
+    assert!(attrs.contains_key("client.port"));
+    assert!(attrs.contains_key("server.port"));
+    assert!(attrs.contains_key("http.response.status_code"));
+    assert!(attrs.contains_key("http.response.body.size"));
+    assert!(attrs.contains_key("http.server.request.duration"));
+    assert!(attrs.contains_key("http.request.header.user_agent"));
+    // Dropped in modern mode.
+    for key in &[
+        "timestamp",
+        "trace_id",
+        "client_ip_canonical",
+        "server_ip_canonical",
+    ] {
+        assert!(
+            !attrs.contains_key(*key),
+            "key {key} should be absent in modern mode"
+        );
+    }
+
+    // Typed values survive the mapping.
+    let status = visitor
+        .attributes
+        .iter()
+        .find(|(k, _)| k == "http.response.status_code")
+        .unwrap();
+    assert_eq!(int_value(&status.1).unwrap(), 200);
+    let duration = visitor
+        .attributes
+        .iter()
+        .find(|(k, _)| k == "http.server.request.duration")
+        .unwrap();
+    assert_eq!(double_value(&duration.1).unwrap(), 0.123);
 }
 
 #[test]
@@ -216,486 +942,49 @@ fn sanitize_label_value_only_control_chars() {
     assert_eq!(result, "????");
 }
 
-#[tokio::test]
-async fn emit_metric_with_high_cardinality_label_is_sanitized() {
-    use ferron_observability::{MetricEvent, MetricType, MetricValue};
-
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
-    let mut instruments = HashMap::new();
-
-    // Simulate an attacker sending 1000 different custom HTTP methods
-    let mut unique_values = std::collections::HashSet::new();
-    for i in 0..1000 {
-        let method = format!("CUSTOM_{i:04}");
-        let event = MetricEvent {
-            name: "test.cardinality",
-            attributes: vec![("http.request.method", MetricAttributeValue::String(method))],
-            ty: MetricType::Counter,
-            value: MetricValue::U64(1),
-            unit: None,
-            description: None,
-            trace_context: None,
-        };
-        emit_metric(
-            &provider,
-            &event,
-            &mut instruments,
-            &[],
-            &mut DistinctValueTracker::new(),
-        );
-
-        // Verify the sanitized value is bounded
-        let sanitized = sanitize_label_value(&format!("CUSTOM_{i:04}"));
-        unique_values.insert(sanitized);
-    }
-
-    // The number of unique sanitized values should be much less than 1000
-    // because values > 128 chars get hashed (these are short, so they won't be
-    // hashed, but the test verifies the sanitization path works).
-    assert!(unique_values.len() <= 1000);
-}
-
-#[tokio::test]
-async fn emit_metric_with_long_label_value_is_hashed() {
-    use ferron_observability::{MetricEvent, MetricType, MetricValue};
-
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
-    let mut instruments = HashMap::new();
-
-    // Simulate a very long User-Agent string (classic telemetry poisoning vector)
-    let long_ua = "A".repeat(1000);
-    let event = MetricEvent {
-        name: "test.long.label",
-        attributes: vec![("user_agent", MetricAttributeValue::String(long_ua.clone()))],
-        ty: MetricType::Counter,
-        value: MetricValue::U64(1),
-        unit: None,
-        description: None,
-        trace_context: None,
-    };
-
-    // Should not panic or OOM
-    emit_metric(
-        &provider,
-        &event,
-        &mut instruments,
-        &[],
-        &mut DistinctValueTracker::new(),
-    );
-
-    // The internal sanitization should have hashed the value
-    let sanitized = sanitize_label_value(&long_ua);
-    assert!(sanitized.starts_with("hash_"));
-}
-
 #[test]
-fn emit_trace_promotes_baggage_to_span_attributes() {
-    use std::borrow::Cow;
+fn metric_key_values_preserves_types_and_sanitizes_strings() {
+    let long = "A".repeat(1000);
+    let attrs = metric_key_values(&[
+        (
+            "http.request.method",
+            MetricAttributeValue::String("GET\r\nX-Injected: true".to_string()),
+        ),
+        ("user_agent", MetricAttributeValue::String(long.clone())),
+        ("static", MetricAttributeValue::StaticStr("plain")),
+        ("flag", MetricAttributeValue::Bool(true)),
+        ("count", MetricAttributeValue::I64(-7)),
+        ("ratio", MetricAttributeValue::F64(0.25)),
+    ]);
 
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let mut correlation = CorrelationContext::new();
-
-    let promotions = vec![
-        BaggageKeyPromotion {
-            baggage_key: "tenant.id".to_string(),
-            attribute_name: None,
-            signals: None,
-            max_distinct: None,
-        },
-        BaggageKeyPromotion {
-            baggage_key: "user.role".to_string(),
-            attribute_name: Some("ferron.user_role".to_string()),
-            signals: None,
-            max_distinct: None,
-        },
-    ];
-
-    let event = TraceEvent::StartSpan {
-        key: Cow::Borrowed("test.span"),
-        name: Cow::Borrowed("test.span"),
-        parent: None,
-        trace_context: Some(ferron_observability::EventTraceContext {
-            trace_id: [b'0'; 32],
-            span_id: [b'0'; 16],
-            baggage: Some("tenant.id=acme,user.role=admin,other=skip".to_string()),
-            sampled: Some(true),
-        }),
-        builder_attributes: vec![],
-        attributes: vec![],
-        links: vec![],
-        control_plane_metadata: None,
-    };
-
-    emit_trace(&provider, &event, &mut correlation, &promotions, &None);
-
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
-    let mut correlation = CorrelationContext::new();
-
-    // Only promote to logs, not traces
-    let promotions = vec![BaggageKeyPromotion {
-        baggage_key: "tenant.id".to_string(),
-        attribute_name: None,
-        signals: Some(SignalSet::LOGS),
-        max_distinct: None,
-    }];
-
-    let event = TraceEvent::StartSpan {
-        key: Cow::Borrowed("test.span"),
-        name: Cow::Borrowed("test.span"),
-        parent: None,
-        trace_context: Some(ferron_observability::EventTraceContext {
-            trace_id: [b'0'; 32],
-            span_id: [b'0'; 16],
-            baggage: Some("tenant.id=acme".to_string()),
-            sampled: Some(true),
-        }),
-        builder_attributes: vec![],
-        attributes: vec![],
-        links: vec![],
-        control_plane_metadata: None,
-    };
-
-    // Should not panic, and the baggage should not be promoted to traces
-    emit_trace(&provider, &event, &mut correlation, &promotions, &None);
-    assert!(correlation.get_parent_ids("test.span").is_some());
-}
-
-#[test]
-fn emit_log_promotes_baggage_to_log_attributes() {
-    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
-
-    let promotions = vec![BaggageKeyPromotion {
-        baggage_key: "tenant.id".to_string(),
-        attribute_name: Some("ferron.tenant".to_string()),
-        signals: None,
-        max_distinct: None,
-    }];
-
-    let event = ferron_observability::LogEvent {
-        level: ferron_observability::LogLevel::Info,
-        message: "test message".to_string(),
-        summary: "Test log message".into(),
-        target: "test",
-        attributes: Vec::new(),
-        trace_context: Some(ferron_observability::EventTraceContext {
-            trace_id: [b'0'; 32],
-            span_id: [b'0'; 16],
-            baggage: Some("tenant.id=acme".to_string()),
-            sampled: Some(true),
-        }),
-    };
-
-    // Should not panic
-    emit_log(
-        &provider,
-        &event,
-        &promotions,
-        crate::config::LogStyle::Legacy,
+    assert_eq!(
+        str_value(find_attr(&attrs, "http.request.method").unwrap()).unwrap(),
+        "GET??X-Injected: true"
     );
-}
-
-#[tokio::test]
-async fn emit_metric_promotes_baggage_to_metric_attributes() {
-    use ferron_observability::{MetricEvent, MetricType, MetricValue};
-
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
-    let mut instruments = HashMap::new();
-    let mut tracker = DistinctValueTracker::new();
-
-    let promotions = vec![BaggageKeyPromotion {
-        baggage_key: "tenant.id".to_string(),
-        attribute_name: None,
-        signals: None,
-        max_distinct: None,
-    }];
-
-    let event = MetricEvent {
-        name: "test.baggage.metric",
-        attributes: vec![],
-        ty: MetricType::Counter,
-        value: MetricValue::U64(1),
-        unit: None,
-        description: None,
-        trace_context: Some(ferron_observability::EventTraceContext {
-            trace_id: [b'0'; 32],
-            span_id: [b'0'; 16],
-            baggage: Some("tenant.id=acme".to_string()),
-            sampled: Some(true),
-        }),
-    };
-
-    // Should not panic and should include baggage attribute
-    emit_metric(
-        &provider,
-        &event,
-        &mut instruments,
-        &promotions,
-        &mut tracker,
+    let ua = str_value(find_attr(&attrs, "user_agent").unwrap()).unwrap();
+    assert!(ua.starts_with("hash_"));
+    assert_eq!(
+        str_value(find_attr(&attrs, "static").unwrap()).unwrap(),
+        "plain"
     );
-}
-
-#[tokio::test]
-async fn emit_metric_baggage_cardinality_cap() {
-    use ferron_observability::{MetricEvent, MetricType, MetricValue};
-
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
-    let mut instruments = HashMap::new();
-    let mut tracker = DistinctValueTracker::new();
-
-    let promotions = vec![BaggageKeyPromotion {
-        baggage_key: "user.id".to_string(),
-        attribute_name: None,
-        signals: None,
-        max_distinct: Some(2),
-    }];
-
-    // First two distinct values should pass through
-    for i in 0..2 {
-        let event = MetricEvent {
-            name: "test.cardinality.baggage",
-            attributes: vec![],
-            ty: MetricType::Counter,
-            value: MetricValue::U64(1),
-            unit: None,
-            description: None,
-            trace_context: Some(ferron_observability::EventTraceContext {
-                trace_id: [b'0'; 32],
-                span_id: [b'0'; 16],
-                baggage: Some(format!("user.id=value{i}")),
-                sampled: Some(true),
-            }),
-        };
-        emit_metric(
-            &provider,
-            &event,
-            &mut instruments,
-            &promotions,
-            &mut tracker,
-        );
-    }
-
-    // Third distinct value should be hashed (no panic)
-    let event = MetricEvent {
-        name: "test.cardinality.baggage",
-        attributes: vec![],
-        ty: MetricType::Counter,
-        value: MetricValue::U64(1),
-        unit: None,
-        description: None,
-        trace_context: Some(ferron_observability::EventTraceContext {
-            trace_id: [b'0'; 32],
-            span_id: [b'0'; 16],
-            baggage: Some("user.id=value2".to_string()),
-            sampled: Some(true),
-        }),
-    };
-    emit_metric(
-        &provider,
-        &event,
-        &mut instruments,
-        &promotions,
-        &mut tracker,
+    assert!(bool_value(find_attr(&attrs, "flag").unwrap()).unwrap());
+    assert_eq!(int_value(find_attr(&attrs, "count").unwrap()).unwrap(), -7);
+    assert_eq!(
+        double_value(find_attr(&attrs, "ratio").unwrap()).unwrap(),
+        0.25
     );
 }
 
 #[test]
-fn emit_log_modern_uses_summary_as_body() {
-    use crate::config::LogStyle;
-    use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
-
-    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
-    let event = LogEvent {
-        level: LogLevel::Info,
-        message: "Legacy message that should be ignored in modern mode".to_string(),
-        summary: "Upstream circuit opened".into(),
-        target: "ferron-http-proxy",
-        attributes: vec![
-            (
-                "upstream.address",
-                LogAttributeValue::String("backend.example:8080".to_string()),
-            ),
-            ("http.response.status_code", LogAttributeValue::I64(502)),
-        ],
-        trace_context: None,
-    };
-
-    // Should not panic.
-    emit_log(&provider, &event, &[], LogStyle::Modern);
-}
-
-#[test]
-fn emit_log_modern_preserves_attribute_types() {
-    use crate::config::LogStyle;
-    use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
-
-    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
-    let event = LogEvent {
-        level: LogLevel::Warn,
-        message: "Should not appear in modern body".to_string(),
-        summary: "Test summary".into(),
-        target: "test",
-        attributes: vec![
-            (
-                "attr.string",
-                LogAttributeValue::String("value".to_string()),
-            ),
-            ("attr.str", LogAttributeValue::StaticStr("static")),
-            ("attr.bool", LogAttributeValue::Bool(true)),
-            ("attr.i64", LogAttributeValue::I64(42)),
-            ("attr.f64", LogAttributeValue::F64(1.5)),
-        ],
-        trace_context: None,
-    };
-
-    // Smoke test: must not panic and must accept all attribute variants.
-    emit_log(&provider, &event, &[], LogStyle::Modern);
-}
-
-#[test]
-fn otel_access_attribute_visitor_maps_to_otel_semantic_conventions() {
-    use crate::providers::OtelAccessAttributeVisitor;
-    use ferron_observability::AccessVisitor;
-
-    let mut visitor = OtelAccessAttributeVisitor::default();
-    visitor.field_string("path", "/api/v1/users");
-    visitor.field_string("path_and_query", "/api/v1/users?id=42");
-    visitor.field_string("method", "GET");
-    visitor.field_string("version", "1.1");
-    visitor.field_string("scheme", "https");
-    visitor.field_string("client_ip", "203.0.113.1");
-    visitor.field_string("server_ip", "198.51.100.1");
-    visitor.field_string("auth_user", "alice");
-    visitor.field_u64("client_port", 54321);
-    visitor.field_u64("server_port", 443);
-    visitor.field_u64("status", 200);
-    visitor.field_u64("content_length", 1024);
-    visitor.field_f64("duration_secs", 0.123);
-    visitor.field_string("header_user_agent", "Mozilla/5.0");
-    // Legacy-only fields, should be dropped in modern mode.
-    visitor.field_string("timestamp", "01/Jan/2026:00:00:00 +0000");
-    visitor.field_string("trace_id", &"0".repeat(32));
-    visitor.field_string("client_ip_canonical", "203.0.113.1");
-    visitor.field_string("server_ip_canonical", "198.51.100.1");
-
-    let attrs: std::collections::HashMap<String, ()> = visitor
-        .attributes
-        .iter()
-        .map(|(k, _)| (k.clone(), ()))
-        .collect();
-    assert!(attrs.contains_key("url.path"));
-    assert!(attrs.contains_key("url.full"));
-    assert!(attrs.contains_key("http.request.method"));
-    assert!(attrs.contains_key("network.protocol.version"));
-    assert!(attrs.contains_key("url.scheme"));
-    assert!(attrs.contains_key("client.address"));
-    assert!(attrs.contains_key("server.address"));
-    assert!(attrs.contains_key("user.name"));
-    assert!(attrs.contains_key("client.port"));
-    assert!(attrs.contains_key("server.port"));
-    assert!(attrs.contains_key("http.response.status_code"));
-    assert!(attrs.contains_key("http.response.body.size"));
-    assert!(attrs.contains_key("http.server.request.duration"));
-    assert!(attrs.contains_key("http.request.header.user_agent"));
-    // Dropped in modern mode.
-    for key in &[
-        "timestamp",
-        "trace_id",
-        "client_ip_canonical",
-        "server_ip_canonical",
-    ] {
-        assert!(
-            !attrs.contains_key(*key),
-            "key {key} should be absent in modern mode"
-        );
-    }
-}
-
-#[test]
-fn emit_access_log_modern_smoke() {
-    use crate::config::LogStyle;
-    use std::sync::Arc;
-
-    struct DummyAccess {
-        proto: &'static str,
-    }
-    impl ferron_observability::AccessEvent for DummyAccess {
-        fn protocol(&self) -> &'static str {
-            self.proto
-        }
-        fn visit(&self, visitor: &mut dyn ferron_observability::AccessVisitor) {
-            visitor.field_string("path", "/");
-            visitor.field_string("method", "GET");
-            visitor.field_u64("status", 200);
-        }
-    }
-
-    let registry = Registry::new();
-    let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder().build();
-    let event: Arc<dyn ferron_observability::AccessEvent> = Arc::new(DummyAccess { proto: "http" });
-    let log_config = Arc::new(ferron_core::config::ServerConfigurationBlock::default());
-    // Should not panic.
-    emit_access_log(
-        &provider,
-        &event,
-        &log_config,
-        &registry,
-        &[],
-        LogStyle::Modern,
-        &None,
+fn build_resource_includes_service_and_process_identity() {
+    let resource = build_resource("test-service".to_string());
+    assert_eq!(
+        str_value(find_attr(&resource.attributes, "service.name").unwrap()).unwrap(),
+        "test-service"
     );
-}
-
-#[tokio::test]
-async fn emit_metric_histogram_uses_exponential_aggregation_with_view() {
-    use ferron_observability::{MetricEvent, MetricType, MetricValue};
-
-    let view = |i: &opentelemetry_sdk::metrics::Instrument| {
-        if i.kind() == opentelemetry_sdk::metrics::InstrumentKind::Histogram {
-            Some(
-                opentelemetry_sdk::metrics::Stream::builder()
-                    .with_aggregation(
-                        opentelemetry_sdk::metrics::Aggregation::Base2ExponentialHistogram {
-                            max_size: 160,
-                            max_scale: 20,
-                            record_min_max: true,
-                        },
-                    )
-                    .build()
-                    .unwrap(),
-            )
-        } else {
-            None
-        }
-    };
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-        .with_view(view)
-        .build();
-    let mut instruments = HashMap::new();
-
-    let event = MetricEvent {
-        name: "test.exponential.histogram",
-        attributes: vec![],
-        ty: MetricType::Histogram(Some(std::borrow::Cow::Borrowed(&[
-            0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
-        ]))),
-        value: MetricValue::F64(0.075),
-        unit: Some("s"),
-        description: Some("Test exponential histogram."),
-        trace_context: None,
-    };
-
-    emit_metric(
-        &provider,
-        &event,
-        &mut instruments,
-        &[],
-        &mut DistinctValueTracker::new(),
-    );
-
-    // Verify the instrument was created as a Histogram type
-    let instrument = instruments.get("test.exponential.histogram");
-    assert!(
-        instrument.is_some(),
-        "Histogram instrument should be created"
-    );
+    let pid = int_value(find_attr(&resource.attributes, "process.pid").unwrap()).unwrap();
+    assert_eq!(pid, std::process::id() as i64);
+    let start_time =
+        int_value(find_attr(&resource.attributes, "process.start_time").unwrap()).unwrap();
+    assert!(start_time > 0);
 }

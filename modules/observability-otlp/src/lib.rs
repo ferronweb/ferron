@@ -8,6 +8,10 @@ pub mod proto;
 #[allow(dead_code)]
 mod transport;
 
+// TODO: wire the conversion layer into the module event loop (pipeline steps)
+#[allow(dead_code)]
+mod convert;
+
 // TODO: remove them (they would be replaced with custom OTLP exporter logic)
 mod client;
 mod providers;

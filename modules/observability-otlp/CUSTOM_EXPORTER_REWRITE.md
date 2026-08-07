@@ -238,31 +238,38 @@ this step.
 the test server receives and decodes it correctly (protobuf bytes + JSON
 parse). `client.rs` no longer depends on `opentelemetry_http`.
 
-### Step 2 — Encoding: Event → proto (`src/encode.rs`)
+### Step 2 — Encoding: Event → proto (`src/convert/`)
 
 Move and adapt the conversion logic from `providers/`:
 
-- [ ] `LogEvent` → `proto::logs::v1::LogRecord`: severity number/text mapping,
-      body per `log_style` (legacy `message` / modern `summary` +
-      attributes), `log.target` attribute, trace/span ID hex-decode +
-      sampled flags, baggage promotion, control-plane attributes.
-- [ ] Access events → log records (port `emit_access_log` from
-      `providers/access_log.rs`, incl. the `log_style` remap table in
-      `docs/configuration/observability/otlp.md`).
-- [ ] `TraceEvent::{StartSpan,EndSpan}` → `proto::trace::v1::Span`: ID
-      handling (requested IDs via `CorrelationContext`/thread-local — port
-      `providers/context.rs`), parent resolution (`Parent::ByKey` / `ById`),
-      kind mapping (`ferron.request` → SERVER), links, status (error
-      message → `STATUS_CODE_ERROR`), attributes, start/end timestamps
-      (span start = `StartSpan` ingestion time, end = `EndSpan` time).
-- [ ] `MetricEvent` → instrument series (Step 4) — only attribute/type
-      conversion helpers here (typed `KeyValueList` from
-      `MetricAttributeValue`, `sanitize_label_value`).
-- [ ] Resource (`build_resource`), scope, control-plane metadata helpers.
-- [ ] Port existing unit tests from `src/tests.rs` (the `emit_trace_*`,
-      `emit_metric_*`, `sanitize_label_value_*` tests) to assert against
-      the produced proto messages instead of SDK providers. Un-comment the
-      tests marked `TODO: migrate to future custom exporter` (`tests.rs:7-40`).
+- [x] `LogEvent` → `proto::logs::v1::LogRecord`: severity number/text mapping
+      (Error=17, Warn=13, Info=9, Debug=5), body per `log_style` (legacy
+      `message` / modern `summary` + typed attributes), `log.target`
+      attribute, trace/span ID hex-decode + sampled flags, baggage
+      promotion, control-plane attributes.
+- [x] Access events → log records (port `emit_access_log` from
+      `providers/access_log.rs`, incl. the `log_style` remap via
+      `OtelAccessAttributeVisitor`; legacy mode renders via the formatter
+      registry with `<unknown access log>` fallback).
+- [x] `TraceEvent::{StartSpan,EndSpan}` → `proto::trace::v1::Span`: ID
+      handling (requested IDs via `EventTraceContext` hex-decode, random
+      fallback with `rand`, never zero), parent resolution
+      (`Parent::ByKey` via correlation context / `ById`), kind mapping
+      (`ferron.request` → SERVER), links (malformed dropped), status
+      (error message → `STATUS_CODE_ERROR`), attributes (builder + semantic
+      + control plane + baggage promotions), start = `StartSpan` ingestion
+      time, end = `EndSpan` time (clamped to start). LRU overflow finishes
+      the evicted span with an error status instead of dropping it.
+- [x] `MetricEvent` attribute conversion helpers: typed `metric_key_values`
+      from `MetricAttributeValue`, `sanitize_label_value` (128-char cap,
+      control-char replacement). Series accumulation is Step 5.
+- [x] Resource (`build_resource` with `service.name`, `process.pid`,
+      `process.start_time`), scope (`build_scope`), shared
+      `kv`/`any_*`/`nanos` helpers.
+- [x] Port existing unit tests from `src/tests.rs` to assert against the
+      produced proto messages instead of SDK providers; un-comment the
+      `correlation_context_tracks_active_spans` test marked
+      `TODO: migrate to future custom exporter`.
 
 **Definition of done:** `cargo test -p ferron-observability-otlp` green with
 proto-level assertions (e.g. `span.attributes[0].key == "http.request.method"`,
