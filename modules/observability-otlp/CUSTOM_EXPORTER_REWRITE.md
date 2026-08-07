@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Steps 0-6 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed; Step 7 (E2E tests + docs) pending
+**Status:** Steps 0-6 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed. The §5.6 optional config additions (`export_interval`/`export_batch_size`/`read_interval`, `gzip`, `exemplars`, `native_histograms`; each with directive + validator + docs + changelog) are also committed; Step 7 (E2E tests + docs) pending
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -325,11 +325,10 @@ retry ≤3 times then drop and increment the dropped counter.
       per-bucket `exemplars`;
     - **explicit** buckets: **deferred** behind the §5.6 `native_histograms
       false` directive (see next note).
-- [ ] Explicit-bucket accumulator (`native_histograms false` + event
-      boundaries) — deferred to the §5.6 optional-directive step, which also
-      adds `native_histograms` and the config/validator/docs/e2e surface for
-      it. Parity today is exponential-always, so the explicit path would be
-      dead code if added now.
+- [x] Explicit-bucket accumulator (`native_histograms false` + event
+      boundaries) — implemented with the §5.6 optional-directive step:
+      explicit-boundary accumulator using the OTel SDK default buckets,
+      exported as a plain `Histogram` data point with `explicit_bounds`.
 - [x] Exemplars (D5): on `observe`/`add` with `trace_context` present, push
       `{trace_id, span_id, value, time_unix_nano}` (hex → raw bytes) into the
       series' ring buffer; attach to the exported data point.
@@ -365,7 +364,7 @@ proto-level assertions on sums, histograms, and exemplars; a manual
 - [x] Remove SDK crates from `Cargo.toml`; run `cargo shear`, `cargo clippy
       --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
       `cargo fmt --all --check`.
-- [ ] Optional config additions (only if you want user-facing control; each
+- [x] Optional config additions (only if you want user-facing control; each
       needs a directive + validator + docs + changelog):
   - `native_histograms [bool]` (per-signal or global; default `true` for
     parity with the current exponential behavior);
