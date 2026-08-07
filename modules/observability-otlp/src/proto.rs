@@ -5,7 +5,16 @@ pub mod opentelemetry {
         pub mod common {
             #[allow(clippy::all)]
             pub mod v1 {
-                tonic::include_proto!("opentelemetry.proto.common.v1");
+                #[cfg(test)]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/with_server/opentelemetry.proto.common.v1.rs"
+                ));
+                #[cfg(not(test))]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/opentelemetry.proto.common.v1.rs"
+                ));
                 include!(concat!(
                     env!("OUT_DIR"),
                     "/opentelemetry.proto.common.v1.serde.rs"
@@ -15,7 +24,16 @@ pub mod opentelemetry {
         pub mod resource {
             #[allow(clippy::all)]
             pub mod v1 {
-                tonic::include_proto!("opentelemetry.proto.resource.v1");
+                #[cfg(test)]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/with_server/opentelemetry.proto.resource.v1.rs"
+                ));
+                #[cfg(not(test))]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/opentelemetry.proto.resource.v1.rs"
+                ));
                 include!(concat!(
                     env!("OUT_DIR"),
                     "/opentelemetry.proto.resource.v1.serde.rs"
@@ -25,7 +43,13 @@ pub mod opentelemetry {
         pub mod logs {
             #[allow(clippy::all)]
             pub mod v1 {
-                tonic::include_proto!("opentelemetry.proto.logs.v1");
+                #[cfg(test)]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/with_server/opentelemetry.proto.logs.v1.rs"
+                ));
+                #[cfg(not(test))]
+                include!(concat!(env!("OUT_DIR"), "/opentelemetry.proto.logs.v1.rs"));
                 include!(concat!(
                     env!("OUT_DIR"),
                     "/opentelemetry.proto.logs.v1.serde.rs"
@@ -35,7 +59,16 @@ pub mod opentelemetry {
         pub mod metrics {
             #[allow(clippy::all)]
             pub mod v1 {
-                tonic::include_proto!("opentelemetry.proto.metrics.v1");
+                #[cfg(test)]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/with_server/opentelemetry.proto.metrics.v1.rs"
+                ));
+                #[cfg(not(test))]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/opentelemetry.proto.metrics.v1.rs"
+                ));
                 include!(concat!(
                     env!("OUT_DIR"),
                     "/opentelemetry.proto.metrics.v1.serde.rs"
@@ -45,7 +78,13 @@ pub mod opentelemetry {
         pub mod trace {
             #[allow(clippy::all)]
             pub mod v1 {
-                tonic::include_proto!("opentelemetry.proto.trace.v1");
+                #[cfg(test)]
+                include!(concat!(
+                    env!("OUT_DIR"),
+                    "/with_server/opentelemetry.proto.trace.v1.rs"
+                ));
+                #[cfg(not(test))]
+                include!(concat!(env!("OUT_DIR"), "/opentelemetry.proto.trace.v1.rs"));
                 include!(concat!(
                     env!("OUT_DIR"),
                     "/opentelemetry.proto.trace.v1.serde.rs"
@@ -56,7 +95,16 @@ pub mod opentelemetry {
             pub mod logs {
                 #[allow(clippy::all)]
                 pub mod v1 {
-                    tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
+                    #[cfg(test)]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/with_server/opentelemetry.proto.collector.logs.v1.rs"
+                    ));
+                    #[cfg(not(test))]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/opentelemetry.proto.collector.logs.v1.rs"
+                    ));
                     include!(concat!(
                         env!("OUT_DIR"),
                         "/opentelemetry.proto.collector.logs.v1.serde.rs"
@@ -66,7 +114,16 @@ pub mod opentelemetry {
             pub mod metrics {
                 #[allow(clippy::all)]
                 pub mod v1 {
-                    tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
+                    #[cfg(test)]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/with_server/opentelemetry.proto.collector.metrics.v1.rs"
+                    ));
+                    #[cfg(not(test))]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/opentelemetry.proto.collector.metrics.v1.rs"
+                    ));
                     include!(concat!(
                         env!("OUT_DIR"),
                         "/opentelemetry.proto.collector.metrics.v1.serde.rs"
@@ -76,7 +133,16 @@ pub mod opentelemetry {
             pub mod trace {
                 #[allow(clippy::all)]
                 pub mod v1 {
-                    tonic::include_proto!("opentelemetry.proto.collector.trace.v1");
+                    #[cfg(test)]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/with_server/opentelemetry.proto.collector.trace.v1.rs"
+                    ));
+                    #[cfg(not(test))]
+                    include!(concat!(
+                        env!("OUT_DIR"),
+                        "/opentelemetry.proto.collector.trace.v1.rs"
+                    ));
                     include!(concat!(
                         env!("OUT_DIR"),
                         "/opentelemetry.proto.collector.trace.v1.serde.rs"

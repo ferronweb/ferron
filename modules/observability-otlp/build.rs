@@ -48,7 +48,17 @@ fn main() {
     .expect("failed to compile opentelemetry protobufs");
 
     // This wouldn't be an OTLP observability backends, just an OTLP exporter...
+    // Also, separate builds: client-only for production, client-and-server for tests
     tonic_prost_build::configure()
+        .build_server(false)
+        .build_client(true)
+        .compile_fds(file_descriptors.clone())
+        .expect("failed to compile opentelemetry protobufs");
+
+    let test_out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("with_server");
+    let _ = std::fs::create_dir_all(&test_out_dir);
+    tonic_prost_build::configure()
+        .out_dir(test_out_dir)
         .build_server(true)
         .build_client(true)
         .compile_fds(file_descriptors.clone())
