@@ -7,14 +7,28 @@ fn main() {
     let opentelemetry_proto_dir = crate_root_dir.join("opentelemetry-proto");
 
     if !opentelemetry_proto_dir.join("opentelemetry/proto").exists() {
-        let repo = git2::Repository::open(&crate_root_dir)
+        /*let repo = git2::Repository::open(&crate_root_dir)
             .expect("failed to open the ferron3 Git repository");
         let mut submodule = repo
             .find_submodule("opentelemetry-proto")
             .expect("failed to find the opentelemetry-proto submodule");
         submodule
             .update(true, None)
-            .expect("failed to update the opentelemetry-proto submodule");
+            .expect("failed to update the opentelemetry-proto submodule");*/
+        // Execute a `git` command instead, because git2 depends indirectly on zlib (`libz-sys`),
+        // which fails to build for some CPU architectures
+        if let Some(git_path) = find_git::git_path() {
+            std::process::Command::new(git_path)
+                .arg("submodule")
+                .arg("update")
+                .arg("--init")
+                .arg("--recursive")
+                .arg("--")
+                .arg("opentelemetry-proto")
+                .current_dir(&crate_root_dir)
+                .status()
+                .expect("failed to update the opentelemetry-proto submodule");
+        }
     }
 
     if !opentelemetry_proto_dir.join("opentelemetry/proto").exists() {
