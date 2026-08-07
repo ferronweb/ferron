@@ -44,6 +44,10 @@ pub struct SignalConfig {
     /// Attach the last sampled measurement per series as an exemplar
     /// (`exemplars`; default `true`).
     pub exemplars: Option<bool>,
+    /// Aggregate histograms with the exponential (native) layout
+    /// (`native_histograms`; default `true`). When `false`, histograms use
+    /// explicit bucket boundaries.
+    pub native_histograms: Option<bool>,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -120,6 +124,7 @@ impl SignalConfig {
                 read_interval: None,
                 gzip: false,
                 exemplars: None,
+                native_histograms: None,
             });
         };
 
@@ -155,6 +160,12 @@ impl SignalConfig {
             .and_then(|entries| entries.first())
             .map(|entry| entry.get_flag());
 
+        let native_histograms = children
+            .directives
+            .get("native_histograms")
+            .and_then(|entries| entries.first())
+            .map(|entry| entry.get_flag());
+
         Some(Self {
             endpoint,
             protocol,
@@ -164,6 +175,7 @@ impl SignalConfig {
             read_interval,
             gzip,
             exemplars,
+            native_histograms,
         })
     }
 }

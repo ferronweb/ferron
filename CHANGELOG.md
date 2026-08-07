@@ -16,6 +16,7 @@
 - **OTLP export batching tuning** — the `logs` and `traces` OTLP signal sub-blocks now accept `export_interval <duration>` and `export_batch_size <number>`, and the `metrics` sub-block accepts `read_interval <duration>`. This controls how often partially full batches flush and how many finished items trigger an export.
 - **OTLP gzip compression** — the `logs`, `metrics`, and `traces` OTLP signal sub-blocks now accept `gzip [bool]` (default `false`). When enabled, export requests are compressed with gzip (HTTP `Content-Encoding: gzip`, gRPC gzip compression).
 - **OTLP exemplar toggle** — the `metrics` sub-block now accepts `exemplars [bool]` (default `true`). Set it to `false` to stop attaching the last sampled measurement per series as an exemplar.
+- **OTLP native histogram toggle** — the `metrics` sub-block now accepts `native_histograms [bool]` (default `true`). Set it to `false` to aggregate histograms with explicit bucket boundaries instead of the exponential layout.
 
 #### HTTP server core
 

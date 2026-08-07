@@ -284,6 +284,7 @@ impl MetricPipelineEntry {
                         signal.read_interval.unwrap_or(DEFAULT_READ_INTERVAL),
                         DEFAULT_EXPORT_TIMEOUT,
                         signal.exemplars.unwrap_or(true),
+                        signal.native_histograms.unwrap_or(true),
                     ))
                 }
                 Err(err) => {
@@ -506,13 +507,14 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}|{:?}|{}|{:?}",
+                "{}|{}|{}|{:?}|{}|{:?}|{:?}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
                 s.read_interval,
                 s.gzip,
-                s.exemplars
+                s.exemplars,
+                s.native_histograms
             )
         })
         .unwrap_or_default();

@@ -42,8 +42,8 @@ use crate::proto::opentelemetry::proto::collector::metrics::v1::ExportMetricsSer
 use crate::proto::opentelemetry::proto::common::v1::{any_value, KeyValue};
 use crate::proto::opentelemetry::proto::metrics::v1::{
     exemplar, exponential_histogram_data_point::Buckets, number_data_point, AggregationTemporality,
-    ExponentialHistogram, ExponentialHistogramDataPoint, Gauge, Metric, NumberDataPoint,
-    ResourceMetrics, ScopeMetrics, Sum,
+    ExponentialHistogram, ExponentialHistogramDataPoint, Gauge, Histogram, HistogramDataPoint,
+    Metric, NumberDataPoint, ResourceMetrics, ScopeMetrics, Sum,
 };
 use crate::proto::opentelemetry::proto::resource::v1::Resource;
 use crate::transport::client::{ExportResult, OtlpTransport};
@@ -107,14 +107,31 @@ enum Op {
 enum Aggregate {
     Sum { value: Scalar, monotonic: bool },
     Gauge { value: Scalar },
-    Histogram(ExpoHistogram),
+    Histogram(HistogramAgg),
+}
+
+/// The histogram layout selected for a series: the base-2 exponential
+/// (native) layout, or explicit bucket boundaries.
+#[derive(Debug)]
+enum HistogramAgg {
+    Expo(ExpoHistogram),
+    Explicit(ExplicitHistogram),
+}
+
+impl HistogramAgg {
+    fn record(&mut self, value: f64) {
+        match self {
+            HistogramAgg::Expo(histogram) => histogram.record(value),
+            HistogramAgg::Explicit(histogram) => histogram.record(value),
+        }
+    }
 }
 
 impl Aggregate {
     /// Resolve the aggregate variant for a metric's instrument type and first
     /// value. Combinations the SDK never supported return `None` (the event
     /// is dropped, matching the old `emit_metric` fall-through).
-    fn for_event(ty: &MetricType, value: MetricValue) -> Option<Self> {
+    fn for_event(ty: &MetricType, value: MetricValue, native_histograms: bool) -> Option<Self> {
         match (ty, value) {
             (MetricType::Counter, MetricValue::F64(_)) => Some(Aggregate::Sum {
                 value: Scalar::Double(0.0),
@@ -142,7 +159,12 @@ impl Aggregate {
             }
             (MetricType::Histogram(_), MetricValue::F64(_))
             | (MetricType::Histogram(_), MetricValue::U64(_)) => {
-                Some(Aggregate::Histogram(ExpoHistogram::new()))
+                let aggregate = if native_histograms {
+                    HistogramAgg::Expo(ExpoHistogram::new())
+                } else {
+                    HistogramAgg::Explicit(ExplicitHistogram::new())
+                };
+                Some(Aggregate::Histogram(aggregate))
             }
             _ => None,
         }
@@ -295,17 +317,30 @@ impl Series {
                     value: Some(number_value(*value)),
                 }),
             ),
-            Aggregate::Histogram(histogram) => {
-                let point =
-                    histogram.to_proto(attributes, self.start_time, self.last_time, exemplars);
-                (
-                    self.name.clone(),
-                    self.description.clone(),
-                    self.unit.clone(),
-                    MetricKind::ExponentialHistogram,
-                    Point::Exponential(point),
-                )
-            }
+            Aggregate::Histogram(histogram) => match histogram {
+                HistogramAgg::Expo(histogram) => {
+                    let point =
+                        histogram.to_proto(attributes, self.start_time, self.last_time, exemplars);
+                    (
+                        self.name.clone(),
+                        self.description.clone(),
+                        self.unit.clone(),
+                        MetricKind::ExponentialHistogram,
+                        Point::Exponential(point),
+                    )
+                }
+                HistogramAgg::Explicit(histogram) => {
+                    let point =
+                        histogram.to_proto(attributes, self.start_time, self.last_time, exemplars);
+                    (
+                        self.name.clone(),
+                        self.description.clone(),
+                        self.unit.clone(),
+                        MetricKind::Histogram,
+                        Point::Explicit(point),
+                    )
+                }
+            },
         }
     }
 }
@@ -341,12 +376,14 @@ enum MetricKind {
     Gauge,
     Sum { monotonic: bool },
     ExponentialHistogram,
+    Histogram,
 }
 
 /// The serialized form of one data point.
 enum Point {
     Number(NumberDataPoint),
     Exponential(ExponentialHistogramDataPoint),
+    Explicit(HistogramDataPoint),
 }
 
 /// An in-progress group of points that share a metric name and representation.
@@ -381,6 +418,14 @@ impl MetricGroup {
                     },
                 )
             }
+            MetricKind::Histogram => {
+                crate::proto::opentelemetry::proto::metrics::v1::metric::Data::Histogram(
+                    Histogram {
+                        data_points: self.points.into_iter().map(point_explicit).collect(),
+                        aggregation_temporality: AggregationTemporality::Cumulative as i32,
+                    },
+                )
+            }
         };
         Metric {
             name: self.name,
@@ -395,14 +440,27 @@ impl MetricGroup {
 fn point_number(point: Point) -> NumberDataPoint {
     match point {
         Point::Number(point) => point,
-        Point::Exponential(_) => unreachable!("point kind does not match metric group"),
+        Point::Exponential(_) | Point::Explicit(_) => {
+            unreachable!("point kind does not match metric group")
+        }
     }
 }
 
 fn point_exponential(point: Point) -> ExponentialHistogramDataPoint {
     match point {
         Point::Exponential(point) => point,
-        Point::Number(_) => unreachable!("point kind does not match metric group"),
+        Point::Number(_) | Point::Explicit(_) => {
+            unreachable!("point kind does not match metric group")
+        }
+    }
+}
+
+fn point_explicit(point: Point) -> HistogramDataPoint {
+    match point {
+        Point::Explicit(point) => point,
+        Point::Number(_) | Point::Exponential(_) => {
+            unreachable!("point kind does not match metric group")
+        }
     }
 }
 
@@ -418,15 +476,19 @@ struct MetricStoreInner {
     dropped: AtomicU64,
     /// Whether exemplar samples are captured (`exemplars` config directive).
     capture_exemplars: bool,
+    /// Whether histogram series use the exponential (native) layout
+    /// (`native_histograms` config directive).
+    native_histograms: bool,
 }
 
 impl MetricStore {
-    fn new(capture_exemplars: bool) -> Self {
+    fn new(capture_exemplars: bool, native_histograms: bool) -> Self {
         Self {
             inner: Arc::new(MetricStoreInner {
                 series: Mutex::new(HashMap::new()),
                 dropped: AtomicU64::new(0),
                 capture_exemplars,
+                native_histograms,
             }),
         }
     }
@@ -439,10 +501,11 @@ impl MetricStore {
         promotions: &[BaggageKeyPromotion],
         tracker: &mut DistinctValueTracker,
     ) {
-        let aggregate = match Aggregate::for_event(&event.ty, event.value) {
-            Some(aggregate) => aggregate,
-            None => return,
-        };
+        let aggregate =
+            match Aggregate::for_event(&event.ty, event.value, self.inner.native_histograms) {
+                Some(aggregate) => aggregate,
+                None => return,
+            };
         let attributes = attributes_for(event, promotions, tracker);
         let key = series_key(event.name, &attributes);
         let now = nanos(SystemTime::now());
@@ -673,8 +736,9 @@ impl MetricPipeline {
         interval: Duration,
         export_timeout: Duration,
         capture_exemplars: bool,
+        native_histograms: bool,
     ) -> Self {
-        let store = MetricStore::new(capture_exemplars);
+        let store = MetricStore::new(capture_exemplars, native_histograms);
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         let reader = MetricReader {
             store: store.clone(),
@@ -696,6 +760,77 @@ impl MetricPipeline {
     /// Wait for the reader task to finish its final collection.
     pub(crate) async fn wait_done(self) {
         let _ = self.done.await;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Explicit-boundary histogram. Used when the `native_histograms` config
+// directive is `false`; the bucket boundaries mirror the OTel SDK default
+// (`f64::MAX` sentinel replaced by the implicit +Inf bucket).
+// ---------------------------------------------------------------------------
+
+/// The upper bounds of the buckets; the final bucket has no upper bound.
+const EXPLICIT_BOUNDS: &[f64] = &[
+    0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0, 5000.0, 7500.0,
+    10000.0,
+];
+
+/// A histogram aggregated into fixed, explicit buckets.
+#[derive(Debug)]
+pub(crate) struct ExplicitHistogram {
+    count: u64,
+    min: f64,
+    max: f64,
+    sum: f64,
+    bucket_counts: Vec<u64>,
+}
+
+impl ExplicitHistogram {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            min: f64::MAX,
+            max: f64::MIN,
+            sum: 0.0,
+            bucket_counts: vec![0; EXPLICIT_BOUNDS.len() + 1],
+        }
+    }
+
+    /// Record one measurement into the bucket that holds it.
+    fn record(&mut self, value: f64) {
+        self.count += 1;
+        if value < self.min {
+            self.min = value;
+        }
+        if value > self.max {
+            self.max = value;
+        }
+        self.sum += value;
+        let index = EXPLICIT_BOUNDS.partition_point(|bound| value > *bound);
+        self.bucket_counts[index] += 1;
+    }
+
+    /// Export the histogram as an OTLP data point.
+    fn to_proto(
+        &self,
+        attributes: Vec<KeyValue>,
+        start_time_unix_nano: u64,
+        time_unix_nano: u64,
+        exemplars: Vec<crate::proto::opentelemetry::proto::metrics::v1::Exemplar>,
+    ) -> HistogramDataPoint {
+        HistogramDataPoint {
+            attributes,
+            start_time_unix_nano,
+            time_unix_nano,
+            count: self.count,
+            sum: Some(self.sum),
+            min: Some(self.min),
+            max: Some(self.max),
+            explicit_bounds: EXPLICIT_BOUNDS.to_vec(),
+            bucket_counts: self.bucket_counts.clone(),
+            flags: 0,
+            exemplars,
+        }
     }
 }
 
@@ -1059,13 +1194,14 @@ mod tests {
         exporter: Arc<MockExporter>,
         interval: Duration,
     ) -> (MetricPipeline, tokio_util::sync::CancellationToken) {
-        spawn_pipeline_with(exporter, interval, true)
+        spawn_pipeline_with(exporter, interval, true, true)
     }
 
     fn spawn_pipeline_with(
         exporter: Arc<MockExporter>,
         interval: Duration,
         capture_exemplars: bool,
+        native_histograms: bool,
     ) -> (MetricPipeline, tokio_util::sync::CancellationToken) {
         let cancel = tokio_util::sync::CancellationToken::new();
         let pipeline = MetricPipeline::spawn_with_config(
@@ -1075,6 +1211,7 @@ mod tests {
             interval,
             Duration::from_secs(5),
             capture_exemplars,
+            native_histograms,
         );
         (pipeline, cancel)
     }
@@ -1279,6 +1416,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn explicit_histogram_exports_fixed_buckets() {
+        let mock = mock_exporter();
+        let (pipeline, cancel) =
+            spawn_pipeline_with(mock.clone(), Duration::from_secs(3600), true, false);
+
+        let values = [1u64, 60, 0, 5000, 20_000];
+        let mut tracker = DistinctValueTracker::new();
+        for value in values {
+            pipeline.store.record(
+                &event(
+                    "latency",
+                    MetricType::Histogram(None),
+                    MetricValue::U64(value),
+                ),
+                &[],
+                &mut tracker,
+            );
+        }
+
+        cancel.cancel();
+        pipeline.wait_done().await;
+
+        let requests = mock.requests.lock().await;
+        let metrics = &requests[0].resource_metrics[0].scope_metrics[0].metrics;
+        let histogram = metrics
+            .iter()
+            .find(|metric| metric.name == "latency")
+            .unwrap();
+        let crate::proto::opentelemetry::proto::metrics::v1::metric::Data::Histogram(data) =
+            histogram.data.as_ref().unwrap()
+        else {
+            panic!("latency is not an explicit histogram");
+        };
+        assert_eq!(
+            data.aggregation_temporality,
+            AggregationTemporality::Cumulative as i32
+        );
+        let point = &data.data_points[0];
+        assert_eq!(point.count, 5);
+        assert_eq!(point.sum, Some(25_061.0));
+        assert_eq!(point.min, Some(0.0));
+        assert_eq!(point.max, Some(20_000.0));
+        // One bucket count per bound, plus the implicit +Inf bucket.
+        assert_eq!(point.explicit_bounds.len() + 1, point.bucket_counts.len());
+        assert_eq!(point.bucket_counts.iter().sum::<u64>(), 5);
+        // 1 falls in the 0-5 bucket, 60 in the 50-75 bucket, 5000 in the
+        // 2500-5000 bucket, and 20000 beyond the last bound.
+        assert_eq!(point.bucket_counts[0], 1);
+        assert_eq!(point.bucket_counts[1], 1);
+        assert_eq!(point.bucket_counts[5], 1);
+        assert_eq!(point.bucket_counts[12], 1);
+        assert_eq!(point.bucket_counts[15], 1);
+    }
+
+    #[tokio::test]
     async fn negative_and_positive_buckets_are_kept_separate() {
         let mock = mock_exporter();
         let (pipeline, cancel) = spawn_pipeline(mock.clone(), Duration::from_secs(3600));
@@ -1407,7 +1599,7 @@ mod tests {
     async fn exemplars_disabled_do_not_attach_samples() {
         let mock = mock_exporter();
         let (pipeline, cancel) =
-            spawn_pipeline_with(mock.clone(), Duration::from_secs(3600), false);
+            spawn_pipeline_with(mock.clone(), Duration::from_secs(3600), false, true);
 
         let mut event = event("hits", MetricType::Counter, MetricValue::U64(2));
         event.trace_context = Some(::ferron_observability::EventTraceContext {

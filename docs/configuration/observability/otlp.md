@@ -54,6 +54,7 @@ The `metrics` sub-block supports collection tuning:
 | --------------- | ------------ | -------------------------------------------------------------------- | ------- |
 | `read_interval` | `<duration>` | Interval at which the metric reader collects and exports all series. | `30s`   |
 | `exemplars`     | `[bool]`     | Attach the last sampled measurement per series as an exemplar.       | `true`  |
+| `native_histograms` | `[bool]` | Aggregate histograms with the exponential layout. Set to `false` for explicit bucket boundaries. | `true` |
 
 Durations accept a number (seconds), a float (seconds), or a string such as `10s`, `5m`, or `1h`.
 
