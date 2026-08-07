@@ -2,8 +2,11 @@ mod config;
 mod validator;
 
 // New OTLP exporter logic
-mod json;
 pub mod proto;
+
+// TODO: wire the transports into the module event loop (pipeline steps)
+#[allow(dead_code)]
+mod transport;
 
 // TODO: remove them (they would be replaced with custom OTLP exporter logic)
 mod client;

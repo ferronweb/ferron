@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::{HeaderValue, Response};
+use http::Response;
+use http_body_util::Full;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 
@@ -48,6 +49,26 @@ fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error + Send
 
     Ok(root_store)
 }
+
+/// Error produced by [`HyperOtelClient::send`].
+#[derive(Debug)]
+pub enum ClientError {
+    /// The response body exceeded the configured size cap.
+    TooLargeResponse,
+    /// Transport-level failure (connect, TLS, timeout, body read).
+    Transport(String),
+}
+
+impl std::fmt::Display for ClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooLargeResponse => write!(f, "OTLP response body exceeds the size cap"),
+            Self::Transport(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for ClientError {}
 
 /// Wrapper adapting hyper-util + hyper-rustls to opentelemetry-http's HttpClient trait.
 #[derive(Clone, Debug)]
@@ -151,36 +172,38 @@ impl HyperOtelClient {
             timeout: Duration::from_secs(10),
         })
     }
-}
 
-#[async_trait::async_trait]
-impl opentelemetry_http::HttpClient for HyperOtelClient {
-    async fn send_bytes(
+    /// Send a request and collect the full response body, capping the body
+    /// size at `max_response_size` bytes. This is the plain hyper interface
+    /// used by the custom OTLP exporter (no `opentelemetry-http` types).
+    pub async fn send(
         &self,
-        request: opentelemetry_http::Request<Bytes>,
-    ) -> Result<Response<Bytes>, opentelemetry_http::HttpError> {
+        request: hyper::Request<Full<Bytes>>,
+        max_response_size: usize,
+    ) -> Result<Response<Bytes>, ClientError> {
         use tokio::time::timeout;
 
-        let (parts, body) = request.into_parts();
-
-        let mut req = hyper::Request::builder()
-            .method(parts.method)
-            .uri(parts.uri);
-
-        for (key, value) in &parts.headers {
-            req = req.header(key.as_str(), HeaderValue::from_bytes(value.as_ref())?);
-        }
-
-        let full_body = http_body_util::Full::new(body);
-        let req = req.body(full_body)?;
-
-        let fut = self.inner.request(req);
-        let resp = timeout(self.timeout, fut).await??;
+        let fut = self.inner.request(request);
+        let resp = timeout(self.timeout, fut)
+            .await
+            .map_err(|_| ClientError::Transport("OTLP request timed out".into()))?
+            .map_err(|err| ClientError::Transport(err.to_string()))?;
 
         let status = resp.status();
         let headers = resp.headers().clone();
-        let body_bytes: Bytes = http_body_util::BodyExt::collect(resp.into_body())
-            .await?
+        let limited = http_body_util::Limited::new(resp.into_body(), max_response_size);
+        let body_bytes: Bytes = http_body_util::BodyExt::collect(limited)
+            .await
+            .map_err(|err| {
+                if err
+                    .downcast_ref::<http_body_util::LengthLimitError>()
+                    .is_some()
+                {
+                    ClientError::TooLargeResponse
+                } else {
+                    ClientError::Transport(err.to_string())
+                }
+            })?
             .to_bytes();
 
         let mut response = http::Response::builder().status(status);
@@ -189,7 +212,23 @@ impl opentelemetry_http::HttpClient for HyperOtelClient {
             response = response.header(key.as_str(), value.clone());
         }
 
-        Ok(response.body(body_bytes)?)
+        response
+            .body(body_bytes)
+            .map_err(|err| ClientError::Transport(err.to_string()))
+    }
+}
+
+#[async_trait::async_trait]
+impl opentelemetry_http::HttpClient for HyperOtelClient {
+    async fn send_bytes(
+        &self,
+        request: opentelemetry_http::Request<Bytes>,
+    ) -> Result<Response<Bytes>, opentelemetry_http::HttpError> {
+        let (parts, body) = request.into_parts();
+        let request = hyper::Request::from_parts(parts, Full::new(body));
+        self.send(request, usize::MAX)
+            .await
+            .map_err(|err| err.to_string().into())
     }
 }
 

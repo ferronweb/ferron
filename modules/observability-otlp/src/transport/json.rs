@@ -172,9 +172,10 @@ mod tests {
         // (examples/trace.json), exercising the OTLP/HTTP JSON encoding
         // deviations: hex IDs, integer enums, and string-encoded 64-bit
         // integers.
-        let fixture: Value =
-            serde_json::from_str(include_str!("../opentelemetry-proto/examples/trace.json"))
-                .unwrap();
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../opentelemetry-proto/examples/trace.json"
+        ))
+        .unwrap();
 
         let request = ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {

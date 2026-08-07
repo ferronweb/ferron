@@ -49,7 +49,7 @@ fn main() {
 
     // This wouldn't be an OTLP observability backends, just an OTLP exporter...
     tonic_prost_build::configure()
-        .build_server(false)
+        .build_server(true)
         .build_client(true)
         .compile_fds(file_descriptors.clone())
         .expect("failed to compile opentelemetry protobufs");

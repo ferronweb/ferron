@@ -1882,6 +1882,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tonic",
  "tonic-prost",

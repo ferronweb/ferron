@@ -211,33 +211,29 @@ a test that round-trips a `Span` with `traceId`/`spanId` through
 `serde_json` and asserts the hex (not base64) representation. No SDK usage in
 this step.
 
-### Step 1 — Transport layer: `src/transport/`
-
-- [ ] `client.rs`: define `trait OtlpTransport` (or enum with match arms) with
-      per-signal `export(&self, request) -> ExportResult` and a common
-      `ExportResult { Success, PartialSuccess{rejected, message}, Failure(retryable) }`.
-      Move retry/backoff into a shared `retry_with_backoff` helper.
-- [ ] `grpc.rs`: wrap the generated clients (`LogsServiceClient`,
-      `MetricsServiceClient`, `TraceServiceClient`) over
-      `build_tonic_channel` (reuse `src/client.rs` as-is). Apply authorization
-      as gRPC metadata (`authorization` key). Map `tonic::Status::code()` to
-      retryable per the spec table (D9); decode `RetryInfo` for
+- [x] `client.rs`: `ExportResult { Success, PartialSuccess{rejected, message},
+      Failure{retryable, retry_after, message} }`, `RetryConfig`, shared
+      `retry_with_backoff` (jitter 0.5-1.5x, `Retry-After` cap 60 s), and size
+      caps 64 MiB request / 4 MiB response.
+- [x] `grpc.rs`: wrap the generated clients (`LogsServiceClient`,
+      `MetricsServiceClient`, `TraceServiceClient`) over the tonic channel
+      (reuse `src/client.rs` as-is). Apply authorization as gRPC metadata
+      (`authorization` key). Map `tonic::Status::code()` to retryable per the
+      spec table (D9); decode `RetryInfo` from `grpc-status-details-bin` for
       `RESOURCE_EXHAUSTED`.
-- [ ] `http.rs`: reuse `HyperOtelClient` logic (drop the
-      `opentelemetry_http::HttpClient` impl; keep the hyper-util client).
-      POST to the configured endpoint (already contains `/v1/...`). Set
+- [x] `http.rs`: reuse `HyperOtelClient` (the hyper-util client). POST to the
+      configured endpoint (already contains `/v1/...`). Set
       `Content-Type: application/x-protobuf` or `application/json`. Handle
       status → retryable mapping, `Retry-After`, partial-success body
       parsing, 4 MiB response cap.
-- [ ] `json.rs`: pbjson serialization + D6 hex-ID handling.
-- [ ] Unit tests: each protocol path against `127.0.0.1` test servers
+- [x] `json.rs`: pbjson serialization + D6 hex-ID handling (moved from
+      `src/json.rs`, now `src/transport/json.rs`).
+- [x] Unit tests: each protocol path against `127.0.0.1` test servers
       (hyper server for HTTP; `tonic::transport::Server` with the generated
-      `*_service_server` traits — build_server is currently off; enable it
-      **only in dev-dependencies/build for tests** or add a `#[cfg(test)]`
-      build step; see §7) verifying: payload bytes decode back to identical
-      proto; content types; retryable vs. non-retryable classification;
-      `Retry-After`/`RetryInfo` respect; partial success reporting.
-
+      `*_service_server` traits — `build_server(true)` added to `build.rs`)
+      verifying: payload bytes decode back to identical proto; content types;
+      retryable vs. non-retryable classification; `Retry-After`/`RetryInfo`
+      respect; partial success reporting.
 **Definition of done:** all three transports send a hand-built request and
 the test server receives and decodes it correctly (protobuf bytes + JSON
 parse). `client.rs` no longer depends on `opentelemetry_http`.
