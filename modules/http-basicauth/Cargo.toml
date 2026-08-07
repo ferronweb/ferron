@@ -13,7 +13,7 @@ bytes = "1"
 base64 = "0.23"
 aws-lc-rs = { version = "1", features = ["bindgen"] }
 aws-lc-sys = "0"
-argon2-kdf = "1.7"
+argon2-rs = "0.2"
 tokio = { version = "1", features = ["sync"] }
 rustc-hash = "2"
 

@@ -12,7 +12,6 @@
 //! Base64 salt and hash fields accept both padded and unpadded encodings.
 
 use std::num::NonZeroU32;
-use std::str::FromStr;
 
 use base64::engine::general_purpose::STANDARD_NO_PAD;
 use base64::Engine;
@@ -21,6 +20,14 @@ use base64::Engine;
 /// built-in default limit of 32 MiB, which prevents hostile hashes from
 /// exhausting server memory during verification.
 const SCRYPT_MAX_MEM: usize = 0;
+
+/// Upper bounds for Argon2 cost parameters accepted during verification.
+/// These prevent a hostile hash from exhausting server memory or CPU.
+const MAX_MEMORY_COST_KIB: u32 = 4 * 1024 * 1024;
+const MAX_ITERATIONS: u32 = 32_768;
+const MAX_THREADS: u32 = 512;
+const MAX_SALT_LEN: usize = 1024;
+const MAX_HASH_LEN: usize = 4096;
 
 /// Verify a plaintext password against a stored password hash.
 ///
@@ -42,39 +49,82 @@ pub(crate) fn verify_password(plain: &str, hash: &str) -> bool {
 /// Verify a password against an Argon2 hash string.
 #[inline]
 fn verify_argon2(plain: &str, hash: &str) -> bool {
-    // `argon2-kdf` decodes base64 without padding, so strip trailing `=`
-    // padding from the salt and hash segments to accept both encodings.
-    let normalized = match strip_base64_padding(hash) {
-        Some(normalized) => normalized,
+    let segments: Vec<&str> = hash.split('$').collect();
+    // `$argon2id$v=<v>$m=<m>,t=<t>,p=<p>$<salt_b64>$<hash_b64>`
+    if segments.len() != 6 || !segments[0].is_empty() {
+        return false;
+    }
+
+    let algorithm = match segments[1] {
+        "argon2id" => argon2_rs::Algorithm::Argon2id,
+        "argon2i" => argon2_rs::Algorithm::Argon2i,
+        "argon2d" => argon2_rs::Algorithm::Argon2d,
+        _ => return false,
+    };
+    let version = match parse_argon2_version(segments[2]) {
+        Some(version) => version,
         None => return false,
     };
-    match argon2_kdf::Hash::from_str(&normalized) {
-        Ok(parsed) => parsed.verify(plain.as_bytes()),
-        Err(_) => false,
+    let (m_cost, t_cost, p_cost) = match parse_argon2_params(segments[3]) {
+        Some(params) => params,
+        None => return false,
+    };
+    // Bound the cost parameters so a hostile hash cannot exhaust server
+    // memory or CPU during verification.
+    if m_cost > MAX_MEMORY_COST_KIB || t_cost > MAX_ITERATIONS || p_cost > MAX_THREADS {
+        return false;
+    }
+
+    let salt = match decode_b64_ignore_padding(segments[4]) {
+        Some(salt) if !salt.is_empty() && salt.len() <= MAX_SALT_LEN => salt,
+        _ => return false,
+    };
+    let expected = match decode_b64_ignore_padding(segments[5]) {
+        Some(hash) if !hash.is_empty() && hash.len() <= MAX_HASH_LEN => hash,
+        _ => return false,
+    };
+
+    // `argon2-rs` has no verify function, so re-derive the hash and compare
+    // the result in constant time.
+    let argon2 = argon2_rs::Argon2::new(m_cost, t_cost, p_cost)
+        .with_algorithm(algorithm)
+        .with_version(version)
+        .with_hash_length(expected.len() as u64);
+    let derived = match argon2.hash_password(plain, salt) {
+        Ok(derived) => derived,
+        Err(_) => return false,
+    };
+
+    aws_lc_rs::constant_time::verify_slices_are_equal(&derived, &expected).is_ok()
+}
+
+/// Parse an Argon2 version segment of the form `v=<version>`.
+#[inline]
+fn parse_argon2_version(segment: &str) -> Option<argon2_rs::Version> {
+    let value = segment.strip_prefix("v=")?;
+    match value.parse::<u32>().ok()? {
+        0x10 => Some(argon2_rs::Version::V0x10),
+        0x13 => Some(argon2_rs::Version::V0x13),
+        _ => None,
     }
 }
 
-/// Strip trailing `=` padding from the salt and hash segments of an Argon2
-/// hash string. Returns `None` if the string does not have the expected
-/// structure.
+/// Parse an Argon2 params segment of the form `m=<m>,t=<t>,p=<p>`.
 #[inline]
-fn strip_base64_padding(hash: &str) -> Option<String> {
-    let segments: Vec<&str> = hash.split('$').collect();
-    if segments.len() != 6 {
-        return None;
-    }
-    let mut normalized = String::with_capacity(hash.len());
-    for (index, segment) in segments.iter().enumerate() {
-        if index > 0 {
-            normalized.push('$');
-        }
-        if index == 4 || index == 5 {
-            normalized.push_str(segment.trim_end_matches('='));
-        } else {
-            normalized.push_str(segment);
+fn parse_argon2_params(params: &str) -> Option<(u32, u32, u32)> {
+    let mut m_cost = None;
+    let mut t_cost = None;
+    let mut p_cost = None;
+    for pair in params.split(',') {
+        let (key, value) = pair.split_once('=')?;
+        match key {
+            "m" => m_cost = Some(value.parse::<u32>().ok()?),
+            "t" => t_cost = Some(value.parse::<u32>().ok()?),
+            "p" => p_cost = Some(value.parse::<u32>().ok()?),
+            _ => return None,
         }
     }
-    Some(normalized)
+    Some((m_cost?, t_cost?, p_cost?))
 }
 
 /// Verify a password against a PBKDF2 hash string.
@@ -369,24 +419,70 @@ mod tests {
         }
     }
 
+    /// Encode an Argon2 hash as a PHC string.
+    #[inline]
+    fn argon2_phc_string(
+        algorithm: argon2_rs::Algorithm,
+        version: argon2_rs::Version,
+        m_cost: u32,
+        t_cost: u32,
+        p_cost: u32,
+        salt: &[u8],
+        hash: &[u8],
+    ) -> String {
+        let ident = match algorithm {
+            argon2_rs::Algorithm::Argon2id => "argon2id",
+            argon2_rs::Algorithm::Argon2i => "argon2i",
+            argon2_rs::Algorithm::Argon2d => "argon2d",
+        };
+        let version = match version {
+            argon2_rs::Version::V0x10 => 16,
+            argon2_rs::Version::V0x13 => 19,
+        };
+        format!(
+            "${ident}$v={version}$m={m_cost},t={t_cost},p={p_cost}${}${}",
+            B64.encode(salt),
+            B64.encode(hash)
+        )
+    }
+
     #[test]
     #[inline]
     fn verifies_roundtripped_argon2_variants() {
-        for algorithm in [
-            argon2_kdf::Algorithm::Argon2id,
-            argon2_kdf::Algorithm::Argon2i,
-            argon2_kdf::Algorithm::Argon2d,
+        let salt = b"argon2 roundtrip salt";
+        for (algorithm, ident) in [
+            (argon2_rs::Algorithm::Argon2id, "argon2id"),
+            (argon2_rs::Algorithm::Argon2i, "argon2i"),
+            (argon2_rs::Algorithm::Argon2d, "argon2d"),
         ] {
-            let hash = argon2_kdf::Hasher::new()
-                .algorithm(algorithm)
-                .iterations(2)
-                .memory_cost_kib(19456)
-                .hash(PASSWORD.as_bytes())
-                .unwrap();
-            let hash_string = hash.to_string();
-            assert!(verify(PASSWORD, &hash_string));
-            assert!(!verify("wrong", &hash_string));
+            let argon2 = argon2_rs::Argon2::new(19_456, 2, 1).with_algorithm(algorithm);
+            let derived = argon2.hash_password(PASSWORD, salt.to_vec()).unwrap();
+            let hash = argon2_phc_string(algorithm, argon2.version, 19_456, 2, 1, salt, &derived);
+            assert!(verify(PASSWORD, &hash), "failed for {ident}");
+            assert!(!verify("wrong", &hash), "failed for {ident}");
         }
+    }
+
+    #[test]
+    #[inline]
+    fn verifies_roundtripped_argon2_v16() {
+        let salt = b"argon2 v16 roundtrip";
+        let argon2 = argon2_rs::Argon2::new(19_456, 2, 1)
+            .with_algorithm(argon2_rs::Algorithm::Argon2id)
+            .with_version(argon2_rs::Version::V0x10);
+        let derived = argon2.hash_password(PASSWORD, salt.to_vec()).unwrap();
+        let hash = argon2_phc_string(
+            argon2.algorithm,
+            argon2.version,
+            19_456,
+            2,
+            1,
+            salt,
+            &derived,
+        );
+        assert_eq!(argon2_rs::Version::V0x10, argon2.version);
+        assert!(verify(PASSWORD, &hash));
+        assert!(!verify("wrong", &hash));
     }
 
     #[test]
@@ -397,6 +493,12 @@ mod tests {
             "$argon2id$v=19$m=19456,t=2,p=1",
             "$argon2id$v=19$m=19456,t=2,p=1$abc",
             "$argon2x$v=19$m=19456,t=2,p=1$abc$def",
+            "$argon2id$v=18$m=19456,t=2,p=1$c2FsdA$aGFzaA==",
+            "$argon2id$v=19$m=19456,t=2$c2FsdA$aGFzaA==",
+            "$argon2id$v=19$m=19456,t=2,p=1$x$aGFzaA==",
+            "$argon2id$v=19$m=99999999999,t=2,p=1$c2FsdA$aGFzaA==",
+            "$argon2id$v=19$m=8388608,t=99999999,p=1$c2FsdA$aGFzaA==",
+            "$argon2id$v=19$m=8388608,t=2,p=999$c2FsdA$aGFzaA==",
             "$pbkdf2-sha256$600000$!!!$!!!",
             "$pbkdf2-sha256$0$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
             "$pbkdf2-sha256$99999999999$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",

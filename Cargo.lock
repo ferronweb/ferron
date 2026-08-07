@@ -138,15 +138,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "argon2-kdf"
-version = "1.7.1"
+name = "argon2-rs"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5d14adc97284e2513ae5f30d87ba7b7f1e766daed63f079dd137d1b126e1600"
+checksum = "e9aa47f96ca0c1800ddcd702d71da0a61b3a84c2472affbfe8b05716441e2c1b"
 dependencies = [
- "base64 0.22.1",
- "bindgen",
+ "argon2-sys",
+]
+
+[[package]]
+name = "argon2-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "190bcd1a5417d25c2fff051cd443de3c9c348094d1cb5760d28ecf88428b76a0"
+dependencies = [
  "cc",
- "rand 0.10.2",
+ "libc",
 ]
 
 [[package]]
@@ -1294,7 +1301,7 @@ dependencies = [
 name = "ferron-http-basicauth"
 version = "3.0.0-beta.8"
 dependencies = [
- "argon2-kdf",
+ "argon2-rs",
  "async-trait",
  "aws-lc-rs",
  "aws-lc-sys",
