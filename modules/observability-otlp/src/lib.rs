@@ -1,6 +1,9 @@
 mod config;
 mod validator;
 
+// New OTLP exporter logic
+mod proto;
+
 // TODO: remove them (they would be replaced with custom OTLP exporter logic)
 mod client;
 mod providers;
