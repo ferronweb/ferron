@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 ferron-dns = { path = "../../types/dns" }
-dns-update = { git = "https://github.com/stalwartlabs/dns-update", rev = "bae0b909c9419f2b6d155cfd750adcc0d1d17188" } # Use upstream with updated `quick-xml` instead of crates.io version (that doesn't have that fix yet)
+dns-update = "0.5.5"
 async-trait = "0.1.89"
 base64 = "0.23.0"
 hex = "0.4.3"

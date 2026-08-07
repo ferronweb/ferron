@@ -1027,10 +1027,11 @@ dependencies = [
 [[package]]
 name = "dns-update"
 version = "0.5.5"
-source = "git+https://github.com/stalwartlabs/dns-update?rev=bae0b909c9419f2b6d155cfd750adcc0d1d17188#bae0b909c9419f2b6d155cfd750adcc0d1d17188"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80a322effc9082d62e1e0a46ac98ef9e1d3b168997174fc6ad9a49c39e1daefe"
 dependencies = [
  "aws-lc-rs",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "hex",
  "hickory-net",
