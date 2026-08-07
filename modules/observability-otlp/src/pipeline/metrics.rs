@@ -48,8 +48,6 @@ use crate::proto::opentelemetry::proto::metrics::v1::{
 use crate::proto::opentelemetry::proto::resource::v1::Resource;
 use crate::transport::client::{ExportResult, OtlpTransport};
 
-use super::{DEFAULT_EXPORT_TIMEOUT, DEFAULT_READ_INTERVAL};
-
 /// The instrumentation scope all metrics are reported under (parity with
 /// `meter("ferron")` in the SDK path).
 const METRIC_SCOPE: &str = "ferron";
@@ -662,25 +660,7 @@ pub(crate) struct MetricPipeline {
 }
 
 impl MetricPipeline {
-    /// Spawn the reader background task with the SDK-default 30 s interval.
-    ///
-    /// `cancel` is the module's `CancellationToken`: when it is cancelled the
-    /// reader performs one final collection and exits.
-    pub(crate) fn spawn(
-        exporter: Arc<dyn MetricExporter>,
-        service_name: String,
-        cancel: tokio_util::sync::CancellationToken,
-    ) -> Self {
-        Self::spawn_with_config(
-            exporter,
-            service_name,
-            cancel,
-            DEFAULT_READ_INTERVAL,
-            DEFAULT_EXPORT_TIMEOUT,
-        )
-    }
-
-    fn spawn_with_config(
+    pub(crate) fn spawn_with_config(
         exporter: Arc<dyn MetricExporter>,
         service_name: String,
         cancel: tokio_util::sync::CancellationToken,

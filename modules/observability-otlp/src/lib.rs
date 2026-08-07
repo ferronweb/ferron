@@ -29,13 +29,17 @@ use ferron_observability::{
     LogLevel, ObservabilityContext, TraceEvent,
 };
 
-use crate::config::OtlpBackendConfig;
+use crate::config::{OtlpBackendConfig, SignalConfig};
 use crate::convert::{
     build_access_log_record, build_log_record, end_span, start_span, CorrelationContext,
 };
 use crate::pipeline::logs::{LogExporter, LogPipeline};
 use crate::pipeline::metrics::{MetricExporter, MetricPipeline};
 use crate::pipeline::traces::{TraceExporter, TracePipeline};
+use crate::pipeline::{
+    BatchConfig, DEFAULT_BATCH_SIZE, DEFAULT_EXPORT_TIMEOUT, DEFAULT_FLUSH_INTERVAL,
+    DEFAULT_READ_INTERVAL,
+};
 use crate::transport::client::OtlpTransport;
 
 static DROPPED_EVENT: Once = Once::new();
@@ -161,14 +165,15 @@ impl TracePipelineEntry {
         cancel_token: tokio_util::sync::CancellationToken,
         event_sink: Option<&CompositeEventSink>,
     ) -> Self {
-        let pipeline = if config.traces.is_some() {
+        let pipeline = if let Some(signal) = &config.traces {
             match OtlpTransport::from_config(config) {
                 Ok(transport) => {
                     let exporter: Arc<dyn TraceExporter> = Arc::new(transport);
-                    Some(TracePipeline::spawn(
+                    Some(TracePipeline::spawn_with_config(
                         exporter,
                         config.service_name.clone(),
                         cancel_token,
+                        batch_config(signal),
                     ))
                 }
                 Err(err) => {
@@ -215,14 +220,15 @@ impl LogPipelineEntry {
         cancel_token: tokio_util::sync::CancellationToken,
         event_sink: Option<&CompositeEventSink>,
     ) -> Self {
-        let pipeline = if config.logs.is_some() {
+        let pipeline = if let Some(signal) = &config.logs {
             match OtlpTransport::from_config(config) {
                 Ok(transport) => {
                     let exporter: Arc<dyn LogExporter> = Arc::new(transport);
-                    Some(LogPipeline::spawn(
+                    Some(LogPipeline::spawn_with_config(
                         exporter,
                         config.service_name.clone(),
                         cancel_token,
+                        batch_config(signal),
                     ))
                 }
                 Err(err) => {
@@ -267,14 +273,16 @@ impl MetricPipelineEntry {
         cancel_token: tokio_util::sync::CancellationToken,
         event_sink: Option<&CompositeEventSink>,
     ) -> Self {
-        let pipeline = if config.metrics.is_some() {
+        let pipeline = if let Some(signal) = &config.metrics {
             match OtlpTransport::from_config(config) {
                 Ok(transport) => {
                     let exporter: Arc<dyn MetricExporter> = Arc::new(transport);
-                    Some(MetricPipeline::spawn(
+                    Some(MetricPipeline::spawn_with_config(
                         exporter,
                         config.service_name.clone(),
                         cancel_token,
+                        signal.read_interval.unwrap_or(DEFAULT_READ_INTERVAL),
+                        DEFAULT_EXPORT_TIMEOUT,
                     ))
                 }
                 Err(err) => {
@@ -465,6 +473,16 @@ impl Drop for OtlpObservabilityModule {
     }
 }
 
+/// Batch tuning for a logs/traces signal, falling back to the SDK-default
+/// values for anything the configuration does not override.
+fn batch_config(signal: &SignalConfig) -> BatchConfig {
+    BatchConfig {
+        batch_size: signal.export_batch_size.unwrap_or(DEFAULT_BATCH_SIZE),
+        interval: signal.export_interval.unwrap_or(DEFAULT_FLUSH_INTERVAL),
+        ..BatchConfig::default()
+    }
+}
+
 /// Create a cache key from the signal configs
 fn config_cache_key(config: &OtlpBackendConfig) -> String {
     let logs_key = config
@@ -472,10 +490,12 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}",
+                "{}|{}|{}|{:?}|{:?}",
                 s.endpoint,
                 s.protocol,
-                s.authorization.as_deref().unwrap_or("")
+                s.authorization.as_deref().unwrap_or(""),
+                s.export_interval,
+                s.export_batch_size
             )
         })
         .unwrap_or_default();
@@ -484,10 +504,11 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}",
+                "{}|{}|{}|{:?}",
                 s.endpoint,
                 s.protocol,
-                s.authorization.as_deref().unwrap_or("")
+                s.authorization.as_deref().unwrap_or(""),
+                s.read_interval
             )
         })
         .unwrap_or_default();
@@ -496,10 +517,12 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}",
+                "{}|{}|{}|{:?}|{:?}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
+                s.export_interval,
+                s.export_batch_size
             )
         })
         .unwrap_or_default();
@@ -612,7 +635,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
                 Directive {
                     name: "logs",
                     usage: "logs <endpoint>",
-                    description: "This directive specifies the OTLP logs endpoint. Contains optional protocol and authorization sub-directives.",
+                    description: "This directive specifies the OTLP logs endpoint. Contains optional protocol, authorization, export_interval, export_batch_size, and gzip sub-directives.",
                     applicable_protocols: None,
                     global_only: false,
                     subblock_link: None,
@@ -623,7 +646,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
                 Directive {
                     name: "metrics",
                     usage: "metrics <endpoint>",
-                    description: "This directive specifies the OTLP metrics endpoint. Contains optional protocol and authorization sub-directives.",
+                    description: "This directive specifies the OTLP metrics endpoint. Contains optional protocol, authorization, read_interval, gzip, native_histograms, and exemplars sub-directives.",
                     applicable_protocols: None,
                     global_only: false,
                     subblock_link: None,
@@ -634,7 +657,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
                 Directive {
                     name: "traces",
                     usage: "traces <endpoint>",
-                    description: "This directive specifies the OTLP traces endpoint. Contains optional protocol and authorization sub-directives.",
+                    description: "This directive specifies the OTLP traces endpoint. Contains optional protocol, authorization, export_interval, export_batch_size, and gzip sub-directives.",
                     applicable_protocols: None,
                     global_only: false,
                     subblock_link: None,

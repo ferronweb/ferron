@@ -18,6 +18,8 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(logs, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(logs, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(logs, used(sub), export_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(logs, used(sub), export_batch_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
             ferron_core::check_unused_subdirectives!(logs, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 
@@ -25,6 +27,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(metrics, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(metrics, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(metrics, used(sub), read_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
             ferron_core::check_unused_subdirectives!(metrics, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 
@@ -32,6 +35,8 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(traces, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(traces, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(traces, used(sub), export_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(traces, used(sub), export_batch_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
             ferron_core::check_unused_subdirectives!(traces, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 

@@ -13,6 +13,7 @@
 #### Observability & tracing
 
 - **Configuration drift hints** — new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
+- **OTLP export batching tuning** — the `logs` and `traces` OTLP signal sub-blocks now accept `export_interval <duration>` and `export_batch_size <number>`, and the `metrics` sub-block accepts `read_interval <duration>`. This controls how often partially full batches flush and how many finished items trigger an export.
 
 #### HTTP server core
 

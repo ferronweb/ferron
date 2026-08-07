@@ -211,19 +211,7 @@ pub(crate) struct TracePipeline {
 }
 
 impl TracePipeline {
-    /// Spawn the exporter background task with default batching parameters.
-    ///
-    /// `cancel` is the module's `CancellationToken`: when it is cancelled
-    /// the exporter drains the buffer and exits.
-    pub(crate) fn spawn(
-        exporter: Arc<dyn TraceExporter>,
-        service_name: String,
-        cancel: CancellationToken,
-    ) -> Self {
-        Self::spawn_with_config(exporter, service_name, cancel, BatchConfig::default())
-    }
-
-    fn spawn_with_config(
+    pub(crate) fn spawn_with_config(
         exporter: Arc<dyn TraceExporter>,
         service_name: String,
         cancel: CancellationToken,

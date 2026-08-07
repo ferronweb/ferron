@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
@@ -32,6 +33,12 @@ pub struct SignalConfig {
     pub endpoint: String,
     pub protocol: String,
     pub authorization: Option<String>,
+    /// Batch flush interval override for logs/traces (`export_interval`).
+    pub export_interval: Option<Duration>,
+    /// Batch size override for logs/traces (`export_batch_size`).
+    pub export_batch_size: Option<usize>,
+    /// Metrics collection interval override (`read_interval`).
+    pub read_interval: Option<Duration>,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -103,6 +110,9 @@ impl SignalConfig {
                 endpoint,
                 protocol: default_protocol.to_string(),
                 authorization: None,
+                export_interval: None,
+                export_batch_size: None,
+                read_interval: None,
             });
         };
 
@@ -117,10 +127,26 @@ impl SignalConfig {
             .and_then(|v| v.as_str())
             .map(|s: &str| s.to_string());
 
+        let export_interval = children
+            .get_value("export_interval")
+            .and_then(|v| v.as_duration());
+
+        let export_batch_size = children
+            .get_value("export_batch_size")
+            .and_then(|v| v.as_number())
+            .map(|n| n as usize);
+
+        let read_interval = children
+            .get_value("read_interval")
+            .and_then(|v| v.as_duration());
+
         Some(Self {
             endpoint,
             protocol,
             authorization,
+            export_interval,
+            export_batch_size,
+            read_interval,
         })
     }
 }

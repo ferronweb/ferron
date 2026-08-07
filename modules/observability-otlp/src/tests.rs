@@ -988,3 +988,118 @@ fn build_resource_includes_service_and_process_identity() {
         int_value(find_attr(&resource.attributes, "process.start_time").unwrap()).unwrap();
     assert!(start_time > 0);
 }
+
+// ---------------------------------------------------------------------------
+// Configuration parsing
+// ---------------------------------------------------------------------------
+
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+};
+
+type SubDirective = (String, Vec<ServerConfigurationValue>);
+type SignalDirective = (
+    &'static str,
+    Vec<ServerConfigurationValue>,
+    Option<Vec<SubDirective>>,
+);
+
+/// Build an `observability`-style block from signal sub-blocks.
+fn signal_block(signals: Vec<SignalDirective>) -> ServerConfigurationBlock {
+    ServerConfigurationBlock {
+        directives: Arc::new(
+            signals
+                .into_iter()
+                .map(|(name, args, children)| {
+                    (
+                        name.to_string(),
+                        vec![ServerConfigurationDirectiveEntry {
+                            args,
+                            children: children.map(|sub| ServerConfigurationBlock {
+                                directives: Arc::new(
+                                    sub.into_iter()
+                                        .map(|(n, a)| {
+                                            (
+                                                n,
+                                                vec![ServerConfigurationDirectiveEntry {
+                                                    args: a,
+                                                    children: None,
+                                                    span: None,
+                                                }],
+                                            )
+                                        })
+                                        .collect(),
+                                ),
+                                matchers: Default::default(),
+                                span: None,
+                            }),
+                            span: None,
+                        }],
+                    )
+                })
+                .collect(),
+        ),
+        matchers: Default::default(),
+        span: None,
+    }
+}
+
+#[test]
+fn signal_config_parses_batch_tuning_directives() {
+    use crate::config::OtlpBackendConfig;
+    use ferron_core::config::ServerConfigurationValue;
+
+    let block = signal_block(vec![
+        (
+            "logs",
+            vec![ServerConfigurationValue::String(
+                "http://collector:4318/v1/logs".to_string(),
+                None,
+            )],
+            Some(vec![
+                (
+                    "export_interval".to_string(),
+                    vec![ServerConfigurationValue::String("10s".to_string(), None)],
+                ),
+                (
+                    "export_batch_size".to_string(),
+                    vec![ServerConfigurationValue::Number(256, None)],
+                ),
+            ]),
+        ),
+        (
+            "metrics",
+            vec![ServerConfigurationValue::String(
+                "http://collector:4318/v1/metrics".to_string(),
+                None,
+            )],
+            Some(vec![(
+                "read_interval".to_string(),
+                vec![ServerConfigurationValue::String("60s".to_string(), None)],
+            )]),
+        ),
+        (
+            "traces",
+            vec![ServerConfigurationValue::String(
+                "http://collector:4318/v1/traces".to_string(),
+                None,
+            )],
+            Some(vec![(
+                "export_interval".to_string(),
+                vec![ServerConfigurationValue::Number(5, None)],
+            )]),
+        ),
+    ]);
+
+    let config = OtlpBackendConfig::parse_config(&block);
+
+    let logs = config.logs.unwrap();
+    assert_eq!(logs.export_interval, Some(Duration::from_secs(10)));
+    assert_eq!(logs.export_batch_size, Some(256));
+
+    let traces = config.traces.unwrap();
+    assert_eq!(traces.export_interval, Some(Duration::from_secs(5)));
+
+    let metrics = config.metrics.unwrap();
+    assert_eq!(metrics.read_interval, Some(Duration::from_secs(60)));
+}

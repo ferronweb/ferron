@@ -40,6 +40,42 @@ Each signal sub-block supports these nested directives:
 | `protocol`      | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC).      | none                                         |
 
+The `logs` and `traces` sub-blocks also support batching tuning:
+
+| Directive         | Arguments     | Description                                       | Default |
+| ----------------- | ------------- | ------------------------------------------------- | ------- |
+| `export_interval` | `<duration>`  | Flush interval for a partially full export batch. | `5s`    |
+| `export_batch_size` | `<number>`  | Number of finished items that trigger an export.  | `512`   |
+
+The `metrics` sub-block supports collection tuning:
+
+| Directive       | Arguments    | Description                                                          | Default |
+| --------------- | ------------ | -------------------------------------------------------------------- | ------- |
+| `read_interval` | `<duration>` | Interval at which the metric reader collects and exports all series. | `30s`   |
+
+Durations accept a number (seconds), a float (seconds), or a string such as `10s`, `5m`, or `1h`.
+
+Example with per-signal tuning:
+
+```ferron
+example.com {
+    observability {
+        provider otlp
+
+        logs https://collector:4318/v1/logs {
+            export_interval 10s
+            export_batch_size 256
+        }
+        metrics https://collector:4318/v1/metrics {
+            read_interval 60s
+        }
+        traces https://collector:4317/v1/traces {
+            export_interval 5s
+        }
+    }
+}
+```
+
 > [!tip]
 > If you have connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
 
