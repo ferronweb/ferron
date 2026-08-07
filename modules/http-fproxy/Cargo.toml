@@ -17,4 +17,3 @@ ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time", "net"] }
 ipnet = "2"
-globset = "0.4"

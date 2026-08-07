@@ -4,7 +4,6 @@ use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
 
-use globset::{Glob, GlobMatcher};
 use ipnet::IpNet;
 
 /// Default denied IP ranges: loopback, RFC 1918, link-local, shared,
@@ -34,12 +33,32 @@ fn default_allowed_ports() -> Vec<u16> {
     vec![80, 443]
 }
 
+/// A parsed domain name (supports `*` wildcards).
+#[derive(Clone)]
+pub struct Domain {
+    /// The domain name (e.g. `example.com`).
+    pub name: String,
+    /// Whether the domain name is a wildcard (e.g. `*.example.com`).
+    pub wildcard: bool,
+}
+
+impl Domain {
+    #[inline]
+    pub fn matches(&self, domain: &str) -> bool {
+        if self.wildcard {
+            domain.ends_with(&self.name)
+        } else {
+            domain == self.name
+        }
+    }
+}
+
 /// A parsed forward proxy configuration block.
 #[derive(Clone)]
 pub struct ForwardProxyConfig {
     /// Allowed destination domains (supports `*` wildcards).
     /// If empty, all domains are denied (deny-by-default).
-    pub allow_domains: Vec<GlobMatcher>,
+    pub allow_domains: Vec<Domain>,
     /// Allowed destination ports.
     pub allow_ports: Vec<u16>,
     /// Denied destination IP ranges (applied after DNS resolution).
@@ -104,8 +123,11 @@ fn parse_forward_proxy_block(
                 for entry in entries {
                     for arg in &entry.args {
                         if let Some(pattern) = arg.as_str() {
-                            let glob = Glob::new(&convert_wildcard_to_glob(pattern))?;
-                            cfg.allow_domains.push(glob.compile_matcher());
+                            let domain = Domain {
+                                name: pattern.strip_prefix("*").unwrap_or(pattern).to_string(),
+                                wildcard: pattern == "*" || pattern.starts_with("*."),
+                            };
+                            cfg.allow_domains.push(domain);
                         }
                     }
                 }
@@ -179,24 +201,17 @@ fn parse_forward_proxy_block(
     Ok(())
 }
 
-/// Convert a domain pattern with `*` wildcards to a glob pattern.
-///
-/// `*.example.com` becomes `*.example.com` (glob-compatible).
-/// `example.com` becomes `example.com` (exact match).
-fn convert_wildcard_to_glob(pattern: &str) -> String {
-    // The `*` in domain patterns maps directly to glob `*`
-    pattern.to_string()
-}
-
 /// Check if a domain matches any of the allowed domain patterns.
-pub fn domain_matches(allow_domains: &[GlobMatcher], domain: &str) -> bool {
+#[inline]
+pub fn domain_matches(allow_domains: &[Domain], domain: &str) -> bool {
     if allow_domains.is_empty() {
         return false; // deny-by-default
     }
-    allow_domains.iter().any(|m| m.is_match(domain))
+    allow_domains.iter().any(|d| d.matches(domain))
 }
 
 /// Check if a port is in the allowed ports list.
+#[inline]
 pub fn port_allowed(allow_ports: &[u16], port: u16) -> bool {
     if allow_ports.is_empty() {
         return false;
@@ -205,6 +220,7 @@ pub fn port_allowed(allow_ports: &[u16], port: u16) -> bool {
 }
 
 /// Check if an IP is in the denied IP list.
+#[inline]
 pub fn ip_denied(deny_ips: &[IpNet], ip: IpAddr) -> bool {
     deny_ips.iter().any(|net| net.contains(&ip))
 }
@@ -215,10 +231,16 @@ mod tests {
 
     #[test]
     fn test_domain_matches() {
-        let patterns: Vec<GlobMatcher> = ["example.com", "*.example.com"]
-            .iter()
-            .map(|p| Glob::new(p).unwrap().compile_matcher())
-            .collect();
+        let patterns: Vec<Domain> = vec![
+            Domain {
+                name: "example.com".to_string(),
+                wildcard: false,
+            },
+            Domain {
+                name: ".example.com".to_string(),
+                wildcard: true,
+            },
+        ];
 
         assert!(domain_matches(&patterns, "example.com"));
         assert!(domain_matches(&patterns, "api.example.com"));
@@ -229,7 +251,7 @@ mod tests {
     #[test]
     fn test_domain_matches_empty() {
         // deny-by-default when no patterns configured
-        let patterns: Vec<GlobMatcher> = vec![];
+        let patterns: Vec<Domain> = vec![];
         assert!(!domain_matches(&patterns, "example.com"));
     }
 
@@ -254,12 +276,5 @@ mod tests {
         assert!(ip_denied(&denied, metadata));
         let public: IpAddr = "8.8.8.8".parse().unwrap();
         assert!(!ip_denied(&denied, public));
-    }
-
-    #[test]
-    fn test_convert_wildcard_to_glob() {
-        assert_eq!(convert_wildcard_to_glob("example.com"), "example.com");
-        assert_eq!(convert_wildcard_to_glob("*.example.com"), "*.example.com");
-        assert_eq!(convert_wildcard_to_glob("*.corp.*"), "*.corp.*");
     }
 }
