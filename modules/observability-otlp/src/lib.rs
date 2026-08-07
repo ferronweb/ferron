@@ -293,7 +293,7 @@ impl Module for OtlpObservabilityModule {
                         };
                         if let Some(span) = finished {
                             if let Some(pipeline) = &trace.pipeline {
-                                pipeline.buffer.push(span).await;
+                                pipeline.buffer.push(span);
                             }
                         }
                     }

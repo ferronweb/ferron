@@ -31,6 +31,7 @@ serde_json = "1"
 base64 = "0.23"
 hex = "0.4"
 rand = "0.10"
+crossbeam-queue = "0.3.13"
 
 # TODO: remove the libraries below after migration
 opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [

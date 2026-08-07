@@ -12,14 +12,13 @@
 //! buffer refills to capacity), the newest finished span is dropped and a
 //! dropped counter is incremented.
 
-use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
 use std::time::Duration;
 
-use tokio::sync::{oneshot, Mutex, Notify};
+use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 
 use crate::convert::{build_resource, build_scope};
@@ -73,7 +72,7 @@ pub(crate) struct TraceBuffer {
 }
 
 struct TraceBufferInner {
-    spans: Mutex<VecDeque<Span>>,
+    spans: crossbeam_queue::SegQueue<Span>,
     notify: Notify,
     capacity: usize,
     dropped: AtomicU64,
@@ -83,7 +82,7 @@ impl TraceBuffer {
     fn new(capacity: usize) -> Self {
         Self {
             inner: Arc::new(TraceBufferInner {
-                spans: Mutex::new(VecDeque::new()),
+                spans: crossbeam_queue::SegQueue::new(),
                 notify: Notify::new(),
                 capacity,
                 dropped: AtomicU64::new(0),
@@ -93,29 +92,35 @@ impl TraceBuffer {
 
     /// Store a finished span, waking the exporter. Returns `false` (and
     /// increments the dropped counter) when the buffer is full.
-    pub(crate) async fn push(&self, span: Span) -> bool {
-        let mut guard = self.inner.spans.lock().await;
-        if guard.len() >= self.inner.capacity {
-            drop(guard);
+    pub(crate) fn push(&self, span: Span) -> bool {
+        let spans = &self.inner.spans;
+        if spans.len() >= self.inner.capacity {
             self.record_dropped(1);
             return false;
         }
-        guard.push_back(span);
-        drop(guard);
+        spans.push(span);
         self.inner.notify.notify_one();
         true
     }
 
     /// Remove up to `max` spans from the front of the queue.
-    pub(crate) async fn drain_batch(&self, max: usize) -> Vec<Span> {
-        let mut guard = self.inner.spans.lock().await;
-        let n = guard.len().min(max);
-        guard.drain(..n).collect()
+    pub(crate) fn drain_batch(&self, max: usize) -> Vec<Span> {
+        let spans = &self.inner.spans;
+        let n = spans.len().min(max);
+        let mut batch = Vec::with_capacity(n);
+        for _ in 0..n {
+            if let Some(span) = spans.pop() {
+                batch.push(span);
+            } else {
+                break;
+            }
+        }
+        batch
     }
 
     /// Current number of buffered spans.
-    pub(crate) async fn len(&self) -> usize {
-        self.inner.spans.lock().await.len()
+    pub(crate) fn len(&self) -> usize {
+        self.inner.spans.len()
     }
 
     /// Total number of spans dropped (queue full or export failure).
@@ -176,7 +181,7 @@ impl BatchTraceExporter {
     /// shutdown drain.
     async fn flush(&self) {
         loop {
-            let spans = self.buffer.drain_batch(self.config.batch_size).await;
+            let spans = self.buffer.drain_batch(self.config.batch_size);
             if spans.is_empty() {
                 return;
             }
@@ -221,7 +226,7 @@ impl BatchTraceExporter {
                 _ = cancel.cancelled() => break,
                 _ = interval.tick() => self.flush().await,
                 _ = self.buffer.inner.notify.notified() => {
-                    if self.buffer.len().await >= self.config.batch_size {
+                    if self.buffer.len() >= self.config.batch_size {
                         self.flush().await;
                     }
                 }
@@ -288,6 +293,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use tokio::sync::Mutex;
 
     fn test_config() -> BatchConfig {
         BatchConfig {
@@ -388,7 +394,7 @@ mod tests {
         let (pipeline, cancel) = spawn_test(mock.clone(), test_config());
 
         for i in 0..40 {
-            pipeline.buffer.push(span(&format!("s{i}"))).await;
+            pipeline.buffer.push(span(&format!("s{i}")));
         }
 
         cancel.cancel();
@@ -414,9 +420,9 @@ mod tests {
         config.interval = Duration::from_millis(50);
         let (pipeline, cancel) = spawn_test(mock.clone(), config);
 
-        pipeline.buffer.push(span("a")).await;
-        pipeline.buffer.push(span("b")).await;
-        pipeline.buffer.push(span("c")).await;
+        pipeline.buffer.push(span("a"));
+        pipeline.buffer.push(span("b"));
+        pipeline.buffer.push(span("c"));
 
         wait_until(|| async { mock.request_count().await == 1 }).await;
 
@@ -465,14 +471,14 @@ mod tests {
         let (block_tx, block_rx) = oneshot::channel();
         *mock.gate.lock().await = Some(block_rx);
         for i in 0..8 {
-            pipeline.buffer.push(span(&format!("s{i}"))).await;
+            pipeline.buffer.push(span(&format!("s{i}")));
         }
         wait_until(|| async { mock.request_count().await == 1 }).await;
 
         // 4 spans are drained into the blocked export; 4 more fill the
         // buffer, the last 2 are dropped.
         for i in 8..14 {
-            pipeline.buffer.push(span(&format!("s{i}"))).await;
+            pipeline.buffer.push(span(&format!("s{i}")));
         }
         assert_eq!(pipeline.buffer.dropped(), 2);
 
@@ -490,9 +496,9 @@ mod tests {
         let mock = Arc::new(MockExporter::default());
         let (pipeline, cancel) = spawn_test(mock.clone(), test_config());
 
-        pipeline.buffer.push(span("a")).await;
-        pipeline.buffer.push(span("b")).await;
-        pipeline.buffer.push(span("c")).await;
+        pipeline.buffer.push(span("a"));
+        pipeline.buffer.push(span("b"));
+        pipeline.buffer.push(span("c"));
 
         cancel.cancel();
         pipeline.wait_done().await;
@@ -509,10 +515,10 @@ mod tests {
         config.batch_size = 4;
         let (pipeline, cancel) = spawn_test(mock.clone(), config);
 
-        pipeline.buffer.push(span("a")).await;
-        pipeline.buffer.push(span("b")).await;
-        pipeline.buffer.push(span("c")).await;
-        pipeline.buffer.push(span("d")).await;
+        pipeline.buffer.push(span("a"));
+        pipeline.buffer.push(span("b"));
+        pipeline.buffer.push(span("c"));
+        pipeline.buffer.push(span("d"));
 
         wait_until(|| async { pipeline.buffer.dropped() == 4 }).await;
         cancel.cancel();
@@ -533,7 +539,7 @@ mod tests {
         let (_block_tx, block_rx) = oneshot::channel();
         *mock.gate.lock().await = Some(block_rx);
         for i in 0..4 {
-            pipeline.buffer.push(span(&format!("s{i}"))).await;
+            pipeline.buffer.push(span(&format!("s{i}")));
         }
 
         wait_until(|| async { pipeline.buffer.dropped() == 4 }).await;
