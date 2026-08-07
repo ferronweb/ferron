@@ -6,6 +6,7 @@
 //! second).
 
 pub mod logs;
+pub mod metrics;
 pub mod traces;
 
 use std::time::Duration;
@@ -19,6 +20,9 @@ pub const DEFAULT_QUEUE_CAPACITY: usize = 2048;
 pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 /// Default upper bound on one export round (including transport retries).
 pub const DEFAULT_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default interval at which the metric reader collects and exports all
+/// series (parity with the SDK `PeriodicReader`).
+pub const DEFAULT_READ_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Batching parameters for the exporters.
 #[derive(Debug, Clone, Copy)]

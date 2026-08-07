@@ -33,33 +33,10 @@ hex = "0.4"
 rand = "0.10"
 crossbeam-queue = "0.3.13"
 
-# TODO: remove the libraries below after migration
-opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [
-  "logs",
-  "metrics",
-  "trace",
-  "grpc-tonic",
-  "http-proto",
-  "http-json",
-  "hyper-client"
-]}
+# TODO: remove opentelemetry-http below after the transport owns the HTTP
+# client logic (Step 6).
 opentelemetry-http = { version = "0.32.0", default-features = false, features = [
   "hyper"
-]}
-opentelemetry_sdk = { version = "0.32.0", default-features = false, features = [
-  "logs",
-  "metrics",
-  "trace",
-  "spec_unstable_metrics_views",
-  "experimental_logs_batch_log_processor_with_async_runtime",
-  "experimental_metrics_periodicreader_with_async_runtime",
-  "experimental_trace_batch_span_processor_with_async_runtime",
-  "rt-tokio"
-]}
-opentelemetry = { version = "0.32.0", default-features = false, features = [
-  "logs",
-  "metrics",
-  "trace"
 ]}
 
 [build-dependencies]

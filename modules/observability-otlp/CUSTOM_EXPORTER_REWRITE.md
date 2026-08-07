@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Steps 0-4 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace exporter, and batch log exporter all implemented and committed; Step 5 (metrics pipeline) pending
+**Status:** Steps 0-5 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, and the metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader) all implemented and committed; Step 6 (integration, teardown, cleanup) pending
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -311,34 +311,38 @@ retry ≤3 times then drop and increment the dropped counter.
 
 ### Step 5 — Metrics pipeline: accumulation, native histograms, exemplars, periodic reader (`src/pipeline/metrics.rs`)
 
-- [ ] `MetricStore`: instrument series registry keyed by
+- [x] `MetricStore`: instrument series registry keyed by
       `(metric_name, attributes)`; created lazily per metric event (mirrors
       today's `CachedInstrument` + `Family::get_or_create` behavior). Records
       unit, description, instrument type.
-- [ ] Accumulators per series:
+- [x] Accumulators per series:
   - Counter (monotonic) / UpDownCounter (non-monotonic): running sum,
     `start_time_unix_nano` (first observation), exemplar ring buffer.
   - Gauge: last value + timestamp.
-  - Histogram: count, sum, min/max, and either
+  - Histogram: count, sum, min/max, and
     - **exponential** buckets (default, D4): base-2, scale adaptation
       (grow/shrink like `max_scale 20`, `max_size 160`), zero count,
-      per-bucket `exemplars`; or
-    - **explicit** buckets (only with `native_histograms false` + event
-      boundaries): bucket counts over the event's boundaries, min/max.
-- [ ] Exemplars (D5): on `observe`/`add` with `trace_context` present, push
+      per-bucket `exemplars`;
+    - **explicit** buckets: **deferred** behind the §5.6 `native_histograms
+      false` directive (see next note).
+- [ ] Explicit-bucket accumulator (`native_histograms false` + event
+      boundaries) — deferred to the §5.6 optional-directive step, which also
+      adds `native_histograms` and the config/validator/docs/e2e surface for
+      it. Parity today is exponential-always, so the explicit path would be
+      dead code if added now.
+- [x] Exemplars (D5): on `observe`/`add` with `trace_context` present, push
       `{trace_id, span_id, value, time_unix_nano}` (hex → raw bytes) into the
       series' ring buffer; attach to the exported data point.
-- [ ] `PeriodicMetricReader`: tokio task, 30 s interval, collects all series
+- [x] `PeriodicMetricReader`: tokio task, 30 s interval, collects all series
       → `ExportMetricsServiceRequest` (`ResourceMetrics`), exports via
       transport with the shared retry path; on config-change restart, fresh
       start times.
-- [ ] Wire into `lib.rs`; delete `providers/metrics.rs`, `providers/cache.rs`.
-- [ ] Unit tests:
+- [x] Wire into `lib.rs`; delete `providers/metrics.rs`, `providers/cache.rs`.
+- [x] Unit tests:
   - monotonic counter never decreases (negative delta dropped);
   - start/time stamps are ordered and correct;
   - exponential histogram bucket math (known values, scale/offset
     correctness, zero count, min/max);
-  - explicit-bucket path honors event boundaries;
   - exemplar ring buffer overwrite semantics and proto field values;
   - `sanitize_label_value` still applied to metric string attributes;
   - reader interval test with a mock clock (inject `Instant` source or use

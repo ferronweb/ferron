@@ -6,15 +6,15 @@ mod pipeline;
 pub mod proto;
 
 // TODO: wire the remaining transports into the module event loop
-// (metrics signal in pipeline step 5)
+// (traces and logs pipelines are wired; metrics is wired in pipeline step 5)
 #[allow(dead_code)]
 mod transport;
 
 mod convert;
 
-// TODO: remove them (they would be replaced with custom OTLP exporter logic)
+// Keep the HTTP client and channel constructors: the OTLP transports build on
+// them. Remaining SDK crates are removed in a later step.
 mod client;
-mod providers;
 
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
@@ -27,7 +27,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::{config_validator_scoped_key, log_warn, Module};
-use ferron_observability::baggage::BaggageKeyPromotion;
+use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker};
 use ferron_observability::{
     build_composite_sink, CompositeEventSink, Event, EventSink, LogAttributeValue, LogEvent,
     LogLevel, ObservabilityContext, TraceEvent,
@@ -38,8 +38,8 @@ use crate::convert::{
     build_access_log_record, build_log_record, end_span, start_span, CorrelationContext,
 };
 use crate::pipeline::logs::{LogExporter, LogPipeline};
+use crate::pipeline::metrics::{MetricExporter, MetricPipeline};
 use crate::pipeline::traces::{TraceExporter, TracePipeline};
-use crate::providers::{emit_metric, OtlpProviderCache};
 use crate::transport::client::OtlpTransport;
 
 static DROPPED_EVENT: Once = Once::new();
@@ -257,6 +257,58 @@ impl LogPipelineEntry {
     }
 }
 
+/// Per-config state for the metric pipeline: the reader handle, the baggage
+/// promotions, and the cardinality-limiting tracker shared by all series.
+struct MetricPipelineEntry {
+    pipeline: Option<MetricPipeline>,
+    baggage_promotions: Vec<BaggageKeyPromotion>,
+    baggage_tracker: DistinctValueTracker,
+}
+
+impl MetricPipelineEntry {
+    fn init(
+        config: &OtlpBackendConfig,
+        cancel_token: tokio_util::sync::CancellationToken,
+        event_sink: Option<&CompositeEventSink>,
+    ) -> Self {
+        let pipeline = if config.metrics.is_some() {
+            match OtlpTransport::from_config(config) {
+                Ok(transport) => {
+                    let exporter: Arc<dyn MetricExporter> = Arc::new(transport);
+                    Some(MetricPipeline::spawn(
+                        exporter,
+                        config.service_name.clone(),
+                        cancel_token,
+                    ))
+                }
+                Err(err) => {
+                    if let Some(sink) = event_sink {
+                        sink.emit(Event::Log(LogEvent {
+                            level: LogLevel::Warn,
+                            message: format!("Error with metrics pipeline: {err}"),
+                            summary: "Error with metrics pipeline".into(),
+                            target: "ferron-observability-otlp",
+                            attributes: vec![(
+                                "error.message",
+                                LogAttributeValue::String(err.to_string()),
+                            )],
+                            trace_context: None,
+                        }));
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        Self {
+            pipeline,
+            baggage_promotions: config.baggage_promotions.clone(),
+            baggage_tracker: DistinctValueTracker::new(),
+        }
+    }
+}
+
 impl Module for OtlpObservabilityModule {
     fn name(&self) -> &str {
         "observability-otlp"
@@ -276,12 +328,12 @@ impl Module for OtlpObservabilityModule {
         let event_sink = self.event_sink.clone();
 
         runtime.spawn_secondary_task(async move {
-            // Per-config exporter cache
-            let mut providers: HashMap<String, OtlpProviderCache> = HashMap::new();
             // Per-config trace pipelines
             let mut trace_pipelines: HashMap<String, TracePipelineEntry> = HashMap::new();
             // Per-config log pipelines
             let mut log_pipelines: HashMap<String, LogPipelineEntry> = HashMap::new();
+            // Per-config metric pipelines
+            let mut metric_pipelines: HashMap<String, MetricPipelineEntry> = HashMap::new();
 
             while let Some(msg) = tokio::select! {
                 result = rx.recv() => result.ok(),
@@ -294,9 +346,6 @@ impl Module for OtlpObservabilityModule {
                 let config = OtlpBackendConfig::parse_config(&msg.log_config);
 
                 let cache_key = config_cache_key(&config);
-                let entry = providers
-                    .entry(cache_key.clone())
-                    .or_insert_with(|| OtlpProviderCache::init(&config, event_sink.as_deref()));
                 let trace = trace_pipelines.entry(cache_key.clone()).or_insert_with(|| {
                     TracePipelineEntry::init(
                         &config,
@@ -313,6 +362,15 @@ impl Module for OtlpObservabilityModule {
                         event_sink.as_deref(),
                     )
                 });
+                let metrics = metric_pipelines
+                    .entry(cache_key.clone())
+                    .or_insert_with(|| {
+                        MetricPipelineEntry::init(
+                            &config,
+                            cancel_token.clone(),
+                            event_sink.as_deref(),
+                        )
+                    });
 
                 match &*msg.event {
                     Event::Log(log_event) => {
@@ -327,13 +385,11 @@ impl Module for OtlpObservabilityModule {
                         }
                     }
                     Event::Metric(metric_event) => {
-                        if let Some(ref provider) = entry.metrics_provider {
-                            emit_metric(
-                                provider,
+                        if let Some(metric) = &metrics.pipeline {
+                            metric.store.record(
                                 metric_event,
-                                &mut entry.metrics_instruments,
-                                &entry.baggage_promotions,
-                                &mut entry.baggage_tracker,
+                                &metrics.baggage_promotions,
+                                &mut metrics.baggage_tracker,
                             );
                         }
                     }
@@ -393,16 +449,14 @@ impl Module for OtlpObservabilityModule {
                 pipeline.wait_done().await;
             }
 
-            // Shutdown providers
-            // `tokio::task::spawn_blocking` is needed, because without it, there can be a deadlock.
-            // See https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/struct.BatchSpanProcessor.html
-            tokio::task::spawn_blocking(move || {
-                for (_, cache) in providers {
-                    if let Some(p) = cache.metrics_provider {
-                        let _ = p.shutdown();
-                    }
-                }
-            });
+            // Shutdown metric pipelines: one final collection.
+            let metric_pipelines: Vec<MetricPipeline> = metric_pipelines
+                .into_values()
+                .filter_map(|entry| entry.pipeline)
+                .collect();
+            for pipeline in metric_pipelines {
+                pipeline.wait_done().await;
+            }
         });
 
         Ok(())
