@@ -6,67 +6,46 @@ use http::header::{self, HeaderValue};
 
 use crate::util::compression::COMP_SUFFIXES;
 
-/// Build a header map with ETag and Vary headers.
-pub fn build_etag_header_map(
+/// Build a header map with common response headers (ETAG or Last-Modified, Vary, Content-Type, Cache-Control).
+pub fn build_response_header_map(
     etag: Option<&str>,
-    vary: Option<HeaderValue>,
-    content_type: Option<&str>,
-    cache_control: Option<&str>,
-) -> http::HeaderMap {
-    let mut header_map = http::HeaderMap::new();
-    if let Some(e) = etag {
-        header_map.insert(
-            header::ETAG,
-            HeaderValue::from_str(&construct_etag(e, None, true)).expect("invalid etag header"),
-        );
-    }
-    if let Some(v) = vary {
-        header_map.insert(header::VARY, v);
-    }
-    if let Some(ct) = content_type {
-        header_map.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(ct).expect("invalid content-type header"),
-        );
-    }
-    if let Some(cc) = cache_control {
-        header_map.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_str(cc).expect("invalid cache-control header"),
-        );
-    }
-    header_map
-}
-
-/// Build a header map with Last-Modified and Vary headers.
-pub fn build_last_modified_header_map(
     last_modified: Option<&SystemTime>,
     vary: Option<HeaderValue>,
     content_type: Option<&str>,
     cache_control: Option<&str>,
 ) -> http::HeaderMap {
     let mut header_map = http::HeaderMap::new();
-    if let Some(mdate) = last_modified {
-        header_map.insert(
-            header::LAST_MODIFIED,
-            HeaderValue::from_str(&httpdate::fmt_http_date(*mdate)).expect("invalid etag header"),
-        );
+
+    // ETag or Last-Modified (not both - last_modified takes precedence if provided)
+    if let Some(last_mod) = last_modified {
+        if let Ok(val) = HeaderValue::from_str(&httpdate::fmt_http_date(*last_mod)) {
+            header_map.insert(header::LAST_MODIFIED, val);
+        }
+    } else if let Some(e) = etag {
+        if let Ok(val) = HeaderValue::from_str(&construct_etag(e, None, true)) {
+            header_map.insert(header::ETAG, val);
+        }
     }
+
+    // Vary
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }
+
+    // Content-Type
     if let Some(ct) = content_type {
-        header_map.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(ct).expect("invalid content-type header"),
-        );
+        if let Ok(val) = HeaderValue::from_str(ct) {
+            header_map.insert(header::CONTENT_TYPE, val);
+        }
     }
+
+    // Cache-Control
     if let Some(cc) = cache_control {
-        header_map.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_str(cc).expect("invalid cache-control header"),
-        );
+        if let Ok(val) = HeaderValue::from_str(cc) {
+            header_map.insert(header::CACHE_CONTROL, val);
+        }
     }
+
     header_map
 }
 
@@ -249,5 +228,47 @@ mod tests {
         } else {
             panic!("extract_etag_inner returned None");
         }
+    }
+
+    #[test]
+    fn build_response_header_map_with_etag() {
+        let result = build_response_header_map(
+            Some("my-etag"),
+            None,
+            None,
+            Some("text/html"),
+            Some("no-store"),
+        );
+
+        assert_eq!(
+            result.get(header::ETAG),
+            Some(&HeaderValue::from_str("W/\"my-etag\"").unwrap())
+        );
+        assert_eq!(
+            result.get(header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("text/html"))
+        );
+        assert_eq!(
+            result.get(header::CACHE_CONTROL),
+            Some(&HeaderValue::from_static("no-store"))
+        );
+    }
+
+    #[test]
+    fn build_response_header_map_with_last_modified() {
+        let now = SystemTime::now();
+        let result = build_response_header_map(
+            None,
+            Some(&now),
+            None,
+            Some("text/html"),
+            Some("max-age=3600"),
+        );
+
+        assert_eq!(result.get(header::LAST_MODIFIED).is_some(), true);
+        assert_eq!(
+            result.get(header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("text/html"))
+        );
     }
 }

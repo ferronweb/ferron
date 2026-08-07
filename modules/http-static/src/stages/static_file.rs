@@ -1,9 +1,7 @@
 //! Static file serving stage with streaming I/O and optional zerocopy.
 
-use std::borrow::Cow;
 use std::io;
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
@@ -22,6 +20,7 @@ use http::{HeaderMap, Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, StreamBody};
+pub struct StaticFileStage;
 
 static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
     1024.0,
@@ -34,28 +33,23 @@ static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
 
 use crate::util::compression::{
     compress_streaming_brotli, compress_streaming_deflate, compress_streaming_gzip,
-    compress_streaming_zstd, Compression, COMP_SUFFIXES, NON_COMPRESSIBLE_FILE_EXTENSIONS,
+    compress_streaming_zstd, Compression, NON_COMPRESSIBLE_FILE_EXTENSIONS,
     PREFERRED_CONTENT_ENCODING,
 };
 use crate::util::etag::{
-    build_etag_header_map, build_last_modified_header_map, construct_etag, extract_etag_inner,
-    split_etag_request,
+    build_response_header_map, construct_etag, extract_etag_inner, split_etag_request,
 };
 use crate::util::file_stream::FileStream;
 use crate::util::mime::get_content_type;
 use crate::util::multipart_byterange::MultipartByterangeBody;
-use crate::util::range::{parse_range_header, RangeParseError};
+use crate::util::range::parse_range_header;
 
-pub struct StaticFileStage;
-
-impl Default for StaticFileStage {
-    #[inline]
-    fn default() -> Self {
-        Self
-    }
-}
-
-fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome: &'static str) {
+/// Helper: emit the static response metric AND insert the span attribute.
+fn emit_static_response_metric_and_span(
+    ctx: &mut HttpFileContext,
+    status_code: u16,
+    outcome: &'static str,
+) {
     ctx.http.events.emit(Event::Metric(MetricEvent {
         name: "ferron.static.responses",
         attributes: vec![
@@ -74,9 +68,27 @@ fn emit_static_response_metric(ctx: &HttpFileContext, status_code: u16, outcome:
         description: Some("Number of static file responses by outcome."),
         trace_context: current_event_trace_context(&ctx.http),
     }));
+    ctx.get_span_attributes().insert(
+        "http.response.status_code",
+        TraceAttributeValue::I64(status_code as i64),
+    );
 }
 
-/// Helper: set a builtin error response, emit metrics, and set span attribute.
+/// Helper: set a pre-constructed HttpResponse, emit the response metric + span attribute.
+fn respond_with_httpresponse(
+    ctx: &mut HttpFileContext,
+    request: HttpRequest,
+    res: HttpResponse,
+    status_code: u16,
+    outcome: &'static str,
+) -> Result<bool, PipelineError> {
+    ctx.http.req = Some(request);
+    ctx.http.res = Some(res);
+    emit_static_response_metric_and_span(ctx, status_code, outcome);
+    Ok(false)
+}
+
+/// Helper: set a builtin error response, emit the response metric + span attribute.
 #[inline]
 fn respond_with_builtin(
     ctx: &mut HttpFileContext,
@@ -94,26 +106,33 @@ fn respond_with_builtin(
     )
 }
 
-/// Helper: set a pre-constructed HttpResponse (Custom or Builtin), emit metrics, and set span attribute.
-#[inline]
-fn respond_with_httpresponse(
-    ctx: &mut HttpFileContext,
-    request: HttpRequest,
-    res: HttpResponse,
-    status_code: u16,
-    outcome: &'static str,
-) -> Result<bool, PipelineError> {
-    ctx.http.req = Some(request);
-    ctx.http.res = Some(res);
-    emit_static_response_metric(ctx, status_code, outcome);
-    ctx.get_span_attributes().insert(
-        "http.response.status_code",
-        TraceAttributeValue::I64(status_code as i64),
-    );
-    Ok(false)
+/// Helper: build a partial content response for a single range.
+/// Helper: get or create an ETag value from the file's metadata.
+fn get_or_create_etag(ctx: &HttpFileContext) -> String {
+    if !ctx.etag.is_empty() {
+        return ctx.etag.clone();
+    }
+    if let Some(file) = &ctx.file {
+        if let Ok(meta) = file.metadata() {
+            if let Ok(mdate) = meta.modified() {
+                let etag_value = format!("{mdate:?}");
+                return construct_etag(&etag_value, None, true);
+            }
+        }
+    }
+    construct_etag("default", None, true)
 }
 
-#[async_trait(?Send)]
+/// Helper: build a vary header based on compression capabilities and ETag settings.
+fn build_vary_header(compression_possible: bool, etag_enabled: bool) -> &'static str {
+    if !compression_possible || !etag_enabled {
+        "If-Modified-Since, If-Range, If-Unmodified-Since, Range"
+    } else {
+        "Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range"
+    }
+}
+
+#[async_trait::async_trait(?Send)]
 impl Stage<HttpFileContext> for StaticFileStage {
     #[inline]
     fn name(&self) -> &str {
@@ -164,6 +183,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         let method = request.method().clone();
 
+        // Handle OPTIONS
         if method == Method::OPTIONS {
             let res = Response::builder()
                 .status(StatusCode::NO_CONTENT)
@@ -172,13 +192,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .expect("failed to build OPTIONS response");
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(res));
-            emit_static_response_metric(ctx, 204, "options");
+            emit_static_response_metric_and_span(ctx, 204, "options");
             ctx.get_span_attributes()
                 .insert("http.response.status_code", TraceAttributeValue::I64(204));
             return Ok(false);
         }
 
-        // Only handle GET and HEAD
+        // Only handle GET and HEAD (and POST for some use cases)
         if method != Method::GET && method != Method::HEAD && method != Method::POST {
             let mut allow_headers = http::HeaderMap::new();
             allow_headers.insert(
@@ -194,18 +214,25 @@ impl Stage<HttpFileContext> for StaticFileStage {
             );
         }
 
+        // Read configuration
         let config = &ctx.http.configuration;
 
-        // Read configuration
+        // Compressed (on-the-fly)
         let compressed = config
             .get_value("compressed", true)
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
+
+        // Precompressed file serving
         let precompressed = config.get_flag("precompressed", true);
+
+        // ETag generation
         let etag_enabled = config
             .get_value("etag", true)
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
+
+        // Cache-Control header for static files
         let cache_control = config
             .get_value("file_cache_control", true)
             .and_then(|v| v.as_str().map(|s| s.to_string()));
@@ -224,63 +251,35 @@ impl Stage<HttpFileContext> for StaticFileStage {
             file_len > 256 && !NON_COMPRESSIBLE_FILE_EXTENSIONS.contains(ext.as_str())
         };
 
-        let mut etag_value: Option<String> = None;
-        #[allow(unused_assignments)]
-        let mut vary_header: Option<HeaderValue> = None;
-
-        let mdate = metadata.modified().ok();
-
-        if etag_enabled {
-            etag_value = Some(ctx.etag.clone());
-            vary_header = Some(HeaderValue::from_static(if compression_possible {
-                "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range"
-            } else {
-                "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range"
-            }));
+        let etag_value: Option<String> = if etag_enabled {
+            Some(get_or_create_etag(&ctx))
         } else {
-            vary_header = Some(HeaderValue::from_static(if compression_possible {
-                "Accept-Encoding, If-Modified-Since, If-Range, If-Unmodified-Since, Range"
-            } else {
-                "If-Modified-Since, If-Range, If-Unmodified-Since, Range"
-            }));
-        }
+            None
+        };
+
+        // Pre-declare used_compression so precondition handlers can reference it
+        let mut used_compression = Compression::Identity;
+
+        // Build vary header based on compression capabilities and ETag settings
+        let vary_header: Option<HeaderValue> =
+            HeaderValue::from_str(build_vary_header(compression_possible, etag_enabled)).ok();
 
         // If-Match -> If-Unmodified-Since -> If-None-Match -> If-Modified-Since
-        // (RFC 7232 compliant order)
-
-        // Handle If-Match (Ferron only emits weak ETags, so strong If-Match won't match)
-        if let Some(etag) = &etag_value {
+        if let Some(_etag) = &etag_value {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
                     Ok(if_match) => {
                         // "*" means any version is acceptable (RFC 7232 §3.1)
-                        // Check wildcard first, then method, then specific ETag
                         if !split_etag_request(if_match)
                             .into_iter()
                             .any(|tag| tag == "*")
                         {
-                            if !matches!(request.method(), &Method::GET | &Method::HEAD) {
-                                // Precondition failed when method is not GET or HEAD
-                                let header_map = build_etag_header_map(
-                                    (!request.headers().contains_key(header::RANGE))
-                                        .then_some(etag),
-                                    vary_header,
-                                    None,
-                                    cache_control.as_deref(),
-                                );
-                                return respond_with_builtin(
-                                    ctx,
-                                    request,
-                                    412,
-                                    Some(header_map),
-                                    "precondition_failed",
-                                );
-                            }
-
-                            // Ferron only emits weak ETags, and strong comparison won't match
-                            // for specific ETags
-                            let header_map = build_etag_header_map(
-                                (!request.headers().contains_key(header::RANGE)).then_some(etag),
+                            // Precondition failed when method is not GET or HEAD
+                            let header_map = build_response_header_map(
+                                (!request.headers().contains_key(header::RANGE))
+                                    .then_some(())
+                                    .and_then(|_| etag_value.as_deref()),
+                                None,
                                 vary_header,
                                 None,
                                 cache_control.as_deref(),
@@ -293,10 +292,63 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 "precondition_failed",
                             );
                         }
+
+                        // Ferron only emits weak ETags, and strong comparison won't match
+                        for tag in split_etag_request(if_match) {
+                            if let Some((extracted, _, _)) = extract_etag_inner(&tag, true) {
+                                if extracted == etag_value.as_deref().unwrap_or("") {
+                                    let header_map = build_response_header_map(
+                                        (!request.headers().contains_key(header::RANGE))
+                                            .then_some(())
+                                            .and_then(|_| etag_value.as_deref()),
+                                        None,
+                                        vary_header,
+                                        None,
+                                        cache_control.as_deref(),
+                                    );
+                                    return respond_with_builtin(
+                                        ctx,
+                                        request,
+                                        412,
+                                        Some(header_map),
+                                        "precondition_failed",
+                                    );
+                                }
+                            }
+                        }
+
+                        // No match found - 304 Not Modified
+                        let etag_str = etag_value.as_deref().unwrap_or("");
+                        let full_etag = format!("W/\"{etag_str}\"");
+                        let mut builder = Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &full_etag);
+
+                        if let Some(cc) = cache_control.as_deref() {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc)
+                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                            );
+                        }
+
+                        if let Some(v) = vary_header {
+                            builder = builder.header(header::VARY, v);
+                        }
+                        let response = builder
+                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                            .expect("failed to build 304 response");
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric_and_span(ctx, 304, "not_modified");
+                        return Ok(false);
                     }
                     Err(_) => {
-                        let header_map = build_etag_header_map(
-                            (!request.headers().contains_key(header::RANGE)).then_some(etag),
+                        let header_map = build_response_header_map(
+                            (!request.headers().contains_key(header::RANGE))
+                                .then_some(())
+                                .and_then(|_| etag_value.as_deref()),
+                            None,
                             vary_header,
                             None,
                             cache_control.as_deref(),
@@ -321,60 +373,58 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .and_then(|ius| httpdate::parse_http_date(ius).ok())
             {
                 Some(if_unmodified_since) => {
-                    if mdate
-                        .as_ref()
-                        .is_some_and(|mdate| mdate > &if_unmodified_since)
-                    {
-                        let header_map = build_last_modified_header_map(
-                            mdate.as_ref(),
-                            vary_header,
-                            None,
-                            cache_control.as_deref(),
-                        );
-                        return respond_with_builtin(
-                            ctx,
-                            request,
-                            412,
-                            Some(header_map),
-                            "precondition_failed",
-                        );
+                    if let Ok(mdate) = metadata.modified() {
+                        if mdate > if_unmodified_since {
+                            let header_map = build_response_header_map(
+                                None,
+                                Some(&mdate),
+                                vary_header,
+                                None,
+                                cache_control.as_deref(),
+                            );
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                412,
+                                Some(header_map),
+                                "precondition_failed",
+                            );
+                        }
                     }
                 }
                 None => {
-                    let header_map = build_last_modified_header_map(
-                        mdate.as_ref(),
+                    let header_map = build_response_header_map(
+                        None,
+                        metadata.modified().ok().as_ref(),
                         vary_header,
                         None,
                         cache_control.as_deref(),
                     );
-                    return respond_with_builtin(
-                        ctx,
-                        request,
-                        400,
-                        Some(header_map),
-                        "bad_request",
-                    );
+                    ctx.http.req = Some(request);
+                    ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
+                    emit_static_response_metric_and_span(ctx, 400, "bad_request");
+                    return Ok(false);
                 }
             }
         }
 
         // Handle If-None-Match
-        if let Some(etag) = &etag_value {
+        if let Some(_etag) = &etag_value {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
                 if let Ok(val) = if_none_match.to_str() {
                     for tag in split_etag_request(val) {
-                        if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
-                            if &extracted == etag {
+                        if let Some((extracted, _, _)) = extract_etag_inner(&tag, true) {
+                            if extracted == etag_value.as_deref().unwrap_or("") {
                                 // RFC 7232 mandates that clients MUST NOT use weak validators
                                 // for range requests
-                                //
-                                // And Ferron's static file serving only emits weak ETags...
                                 if !matches!(request.method(), &Method::GET | &Method::HEAD)
                                     || request.headers().contains_key(header::RANGE)
                                 {
-                                    let header_map = build_etag_header_map(
+                                    let header_map = build_response_header_map(
                                         (!request.headers().contains_key(header::RANGE))
-                                            .then_some(etag),
+                                            .then_some(())
+                                            .and_then(|_| etag_value.as_deref()),
+                                        None,
                                         vary_header,
                                         None,
                                         cache_control.as_deref(),
@@ -387,9 +437,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         "precondition_failed",
                                     );
                                 }
-                                let suffix = suffix_opt
-                                    .and_then(|s| COMP_SUFFIXES.contains(&s.as_str()).then_some(s));
-                                let full_etag = construct_etag(etag, suffix.as_deref(), true);
+
+                                let suffix = used_compression.etag_suffix().unwrap_or("");
+                                let etag_str = etag_value.as_deref().unwrap_or("");
+                                let full_etag = construct_etag(etag_str, Some(suffix), true);
                                 let mut builder = Response::builder()
                                     .status(StatusCode::NOT_MODIFIED)
                                     .header(header::ETAG, &full_etag)
@@ -397,6 +448,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         header::VARY,
                                         vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
                                     );
+
                                 if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
@@ -404,16 +456,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
                                 }
+
                                 let response = builder
                                     .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
                                     .expect("failed to build 304 response");
                                 ctx.http.req = Some(request);
                                 ctx.http.res = Some(HttpResponse::Custom(response));
-                                emit_static_response_metric(ctx, 304, "not_modified");
-                                ctx.get_span_attributes().insert(
-                                    "http.response.status_code",
-                                    TraceAttributeValue::I64(304),
-                                );
+                                emit_static_response_metric_and_span(ctx, 304, "not_modified");
                                 return Ok(false);
                             }
                         }
@@ -430,54 +479,45 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .and_then(|ims| httpdate::parse_http_date(ims).ok())
             {
                 Some(if_modified_since) => {
-                    if metadata
-                        .modified()
-                        .is_ok_and(|mdate| mdate <= if_modified_since)
-                    {
-                        let mut builder =
-                            Response::builder().status(StatusCode::NOT_MODIFIED).header(
-                                header::VARY,
-                                vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
-                            );
-                        if let Some(mdate) = &mdate {
-                            builder = builder
-                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                    if let Ok(mdate) = metadata.modified() {
+                        if mdate <= if_modified_since {
+                            let mut builder = Response::builder().status(StatusCode::NOT_MODIFIED);
+
+                            if let Some(cc) = cache_control.as_deref() {
+                                builder = builder.header(
+                                    header::CACHE_CONTROL,
+                                    HeaderValue::from_str(cc)
+                                        .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                );
+                            }
+
+                            let response = builder
+                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                                .expect("failed to build 304 response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric_and_span(ctx, 304, "not_modified");
+                            return Ok(false);
                         }
-                        if let Some(cc) = cache_control.as_deref() {
-                            builder = builder.header(
-                                header::CACHE_CONTROL,
-                                HeaderValue::from_str(cc)
-                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-                            );
-                        }
-                        let response = builder
-                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                            .expect("failed to build 304 response");
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(response));
-                        emit_static_response_metric(ctx, 304, "not_modified");
-                        ctx.get_span_attributes()
-                            .insert("http.response.status_code", TraceAttributeValue::I64(304));
-                        return Ok(false);
                     }
                 }
                 None => {
-                    let header_map = build_last_modified_header_map(
-                        mdate.as_ref(),
+                    let header_map = build_response_header_map(
+                        None,
+                        metadata.modified().ok().as_ref(),
                         vary_header,
                         None,
                         cache_control.as_deref(),
                     );
                     ctx.http.req = Some(request);
                     ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
-                    emit_static_response_metric(ctx, 400, "bad_request");
+                    emit_static_response_metric_and_span(ctx, 400, "bad_request");
                     return Ok(false);
                 }
             }
         }
 
         // Determine compression method
-        let mut used_compression = Compression::Identity;
         let mut precompressed_exts: Vec<&str> = Vec::new();
 
         if compression_possible {
@@ -486,20 +526,24 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .get(header::USER_AGENT)
                 .and_then(|h| h.to_str().ok())
                 .unwrap_or("");
-            let (broken_html, broken_compression) =
-                if let Some(rest) = user_agent.strip_prefix("Mozilla/4.") {
-                    if user_agent.contains(" MSIE ") {
-                        (false, false)
-                    } else {
-                        (
-                            true,
-                            matches!(rest.chars().nth(0), Some('0'))
-                                && matches!(rest.chars().nth(1), Some('6') | Some('7') | Some('8')),
-                        )
-                    }
-                } else {
+
+            let (broken_html, broken_compression) = if user_agent.starts_with("Mozilla/4.") {
+                let rest = &user_agent[9..];
+                if user_agent.contains(" MSIE ") {
                     (false, false)
-                };
+                } else {
+                    let m0 = rest.chars().nth(0).unwrap_or(' ');
+                    (
+                        !m0.is_ascii_alphabetic(),
+                        matches!(
+                            rest.chars().nth(1),
+                            Some('0') | Some('6') | Some('7') | Some('8')
+                        ),
+                    )
+                }
+            } else {
+                (false, false)
+            };
 
             let is_text_html = content_type.as_deref() == Some("text/html");
             let skip_compression = (is_text_html
@@ -507,44 +551,44 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 || broken_compression;
 
             if !skip_compression {
-                if let Some(accept_enc) = request
-                    .headers()
-                    .get(header::ACCEPT_ENCODING)
-                    .and_then(|h| h.to_str().ok())
-                {
-                    for enc in parse_q_value_header_grouped(accept_enc) {
-                        let mut compression_found = false;
-                        for penc in PREFERRED_CONTENT_ENCODING {
-                            if enc.contains(*penc) {
-                                let compression = Compression::from_header_value(penc);
-                                if let Some(compression) = compression {
-                                    if !compression_found {
-                                        used_compression = compression;
-                                        compression_found = true;
-                                    }
-                                    if precompressed {
-                                        precompressed_exts
-                                            .push(compression.precompressed_ext().unwrap_or(""));
-                                    } else {
-                                        break;
+                if let Some(accept_enc) = request.headers().get(header::ACCEPT_ENCODING) {
+                    if let Ok(accept_enc_str) = accept_enc.to_str() {
+                        for enc in parse_q_value_header_grouped(accept_enc_str) {
+                            let mut compression_found = false;
+                            for penc in PREFERRED_CONTENT_ENCODING.iter() {
+                                if enc.contains(*penc) {
+                                    if let Some(compression) = Compression::from_header_value(penc)
+                                    {
+                                        if !compression_found {
+                                            used_compression = compression;
+                                            compression_found = true;
+                                        }
+                                        if precompressed {
+                                            precompressed_exts.push(
+                                                used_compression.precompressed_ext().unwrap_or(""),
+                                            );
+                                        } else {
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
-                        if !precompressed && compression_found {
-                            break;
+                            if !precompressed && compression_found {
+                                break;
+                            }
                         }
                     }
                 }
             }
         }
 
+        // Determine precompressed file
         let mut file_path = ctx.file_path.clone();
         let mut file_length = metadata.len();
         let mut is_precompressed_file = false;
 
         if precompressed {
-            for ext in precompressed_exts {
+            for ext in &precompressed_exts {
                 if !ext.is_empty() {
                     let mut precomp_path = ctx.file_path.clone();
                     if let Some(orig_ext) = ctx.file_path.extension() {
@@ -591,57 +635,58 @@ impl Stage<HttpFileContext> for StaticFileStage {
         );
 
         // Handle If-Range (RFC 7233 §3.2)
-        // If-Range is ignored when If-Match or If-Unmodified-Since is present
-        let if_range_matches = if request.headers().contains_key(header::RANGE) {
-            if let Some(if_range) = request.headers().get(header::IF_RANGE) {
-                if request.headers().contains_key(header::IF_MATCH)
-                    || request.headers().contains_key(header::IF_UNMODIFIED_SINCE)
-                {
-                    true
-                } else if let Ok(if_range_str) = if_range.to_str() {
-                    let is_valid =
-                        if let Ok(if_range_date) = httpdate::parse_http_date(if_range_str) {
-                            mdate.as_ref().is_none_or(|mdate| *mdate == if_range_date)
-                        } else if if_range_str == "*" {
-                            true
-                        } else {
-                            // From https://http.dev/if-range:
-                            // "weak ETags prefixed with W/ are not permitted in If-Range."
-                            //
-                            // Since Ferron's static file serving only emits weak ETags,
-                            // just reject the requests
-                            false
-                        };
-                    is_valid
-                } else {
-                    true
+        if request.headers().contains_key(header::RANGE) {
+            let if_range_matches = etag_enabled;
+            if if_range_matches {
+                if let Some(if_range_date) = get_if_range_date(ctx, &request) {
+                    if let Ok(mdate) = metadata.modified() {
+                        if mdate != if_range_date {
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                412,
+                                None,
+                                "precondition_failed",
+                            );
+                        }
+                    } else {
+                        return respond_with_builtin(
+                            ctx,
+                            request,
+                            416,
+                            None,
+                            "range_not_satisfiable",
+                        );
+                    }
                 }
-            } else {
-                true
             }
-        } else {
-            true
-        };
 
-        if let Some(range_val) = request.headers().get(header::RANGE) {
-            if let Ok(range_str) = range_val.to_str() {
-                if if_range_matches {
+            if let Some(range_val) = request.headers().get(header::RANGE) {
+                if let Ok(range_str) = range_val.to_str() {
                     match parse_range_header(range_str, file_length.saturating_sub(1)) {
                         Ok(ranges) => {
-                            if file_length == 0
-                                || ranges
-                                    .iter()
-                                    .any(|(start, end)| *start >= file_length || *start > *end)
+                            // Check if ranges can be satisfied
+                            if ranges.is_empty()
+                                || ranges.iter().any(|(start, _)| *start >= file_length)
                             {
-                                let vary = vary_header
-                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
-                                let mut header_map = HeaderMap::new();
+                                let vary_str = etag_enabled
+                                    .then_some("Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range")
+                                    .or(Some("If-Modified-Since, If-Range, If-Unmodified-Since, Range"));
+
+                                let mut header_map = http::HeaderMap::new();
                                 header_map.insert(
                                     header::CONTENT_RANGE,
                                     HeaderValue::from_str(&format!("bytes */{file_length}"))
                                         .expect("invalid content range header"),
                                 );
-                                header_map.insert(header::VARY, vary);
+                                if let Some(v) = vary_str {
+                                    header_map.insert(
+                                        header::VARY,
+                                        HeaderValue::from_str(v)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
+
                                 return respond_with_builtin(
                                     ctx,
                                     request,
@@ -652,28 +697,28 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             }
 
                             if ranges.len() > 1 {
-                                let multipart_boundary = hex::encode(rand::random::<[u8; 12]>());
-                                let vary = vary_header
-                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
+                                // Multiple non-overlapping ranges → multipart byterange
+                                let boundaries = hex::encode(rand::random::<[u8; 12]>());
+                                let vary_str = etag_enabled
+                                    .then_some("Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range")
+                                    .or(Some("If-Modified-Since, If-Range, If-Unmodified-Since, Range"));
 
                                 let mut builder = Response::builder()
                                     .status(StatusCode::PARTIAL_CONTENT)
-                                    .header(
-                                        header::CONTENT_TYPE,
-                                        format!(
-                                            "multipart/byteranges; boundary={multipart_boundary}"
-                                        ),
-                                    );
+                                    .header(header::CONTENT_TYPE, "multipart/byteranges");
 
-                                if let Some(ref mdate) = mdate {
+                                if let Ok(mdate) = metadata.modified() {
                                     builder = builder.header(
                                         header::LAST_MODIFIED,
-                                        httpdate::fmt_http_date(*mdate),
+                                        httpdate::fmt_http_date(mdate),
                                     );
                                 }
 
-                                // According to RFC 7233 (HTTP/1.1: Range Requests), weak
-                                // validators cannot be used in a 206 Partial Content response.
+                                if let Some(etag) = &etag_value {
+                                    let suffix = used_compression.etag_suffix().unwrap_or("");
+                                    let full_etag = format!("W/\"{etag}{suffix}\"");
+                                    builder = builder.header(header::ETAG, &full_etag);
+                                }
 
                                 if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
@@ -682,34 +727,21 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
                                 }
-                                builder = builder.header(header::VARY, vary);
+
+                                if let Some(v) = vary_str {
+                                    builder = builder.header(
+                                        header::VARY,
+                                        HeaderValue::from_str(v)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
 
                                 if method == Method::HEAD {
                                     let response = builder
                                         .body(
                                             Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                         )
-                                        .expect("failed to build 206 HEAD response");
-                                    return respond_with_httpresponse(
-                                        ctx,
-                                        request,
-                                        HttpResponse::Custom(response),
-                                        206,
-                                        "partial_content",
-                                    );
-                                } else {
-                                    let response = builder
-                                        .body(
-                                            MultipartByterangeBody::new(
-                                                multipart_boundary,
-                                                file_length,
-                                                content_type,
-                                                ranges,
-                                                FileStream::new(file, 0, Some(file_length)),
-                                            )
-                                            .boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 response");
+                                        .expect("failed to build HEAD response");
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -718,12 +750,36 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         "partial_content",
                                     );
                                 }
-                            } else if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e))
-                            {
+
+                                // Use MultipartByterangeBody for multiple ranges
+                                let boundary = format!("{boundaries}--");
+                                let multipart_body = MultipartByterangeBody::new(
+                                    boundary,
+                                    file_length,
+                                    None,
+                                    ranges.into(),
+                                    FileStream::new(file, 0, Some(file_length)),
+                                );
+                                let response = builder
+                                    .body(multipart_body.boxed_unsync())
+                                    .expect("failed to build partial content response");
+                                return respond_with_httpresponse(
+                                    ctx,
+                                    request,
+                                    HttpResponse::Custom(response),
+                                    206,
+                                    "partial_content",
+                                );
+                            }
+
+                            // Single range → single FileStream
+                            if let Some((start, end)) = ranges.first().map(|(s, e)| (*s, *e)) {
                                 let end = end.min(file_length - 1);
                                 let content_len = end - start + 1;
-                                let vary = vary_header
-                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
+
+                                let vary_str = etag_enabled
+                                    .then_some("Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range")
+                                    .or(Some("If-Modified-Since, If-Range, If-Unmodified-Since, Range"));
 
                                 let mut builder = Response::builder()
                                     .status(StatusCode::PARTIAL_CONTENT)
@@ -733,15 +789,19 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         format!("bytes {start}-{end}/{file_length}"),
                                     );
 
-                                if let Some(ref mdate) = mdate {
+                                if let Ok(mdate) = metadata.modified() {
                                     builder = builder.header(
                                         header::LAST_MODIFIED,
-                                        httpdate::fmt_http_date(*mdate),
+                                        httpdate::fmt_http_date(mdate),
                                     );
                                 }
-                                if let Some(ref ct) = content_type {
-                                    builder = builder.header(header::CONTENT_TYPE, ct);
+
+                                if let Some(etag) = &etag_value {
+                                    let suffix = used_compression.etag_suffix().unwrap_or("");
+                                    let full_etag = format!("W/\"{etag}{suffix}\"");
+                                    builder = builder.header(header::ETAG, &full_etag);
                                 }
+
                                 if let Some(cc) = cache_control.as_deref() {
                                     builder = builder.header(
                                         header::CACHE_CONTROL,
@@ -749,31 +809,21 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .unwrap_or_else(|_| HeaderValue::from_static("")),
                                     );
                                 }
-                                builder = builder.header(header::VARY, vary);
+
+                                if let Some(v) = vary_str {
+                                    builder = builder.header(
+                                        header::VARY,
+                                        HeaderValue::from_str(v)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
 
                                 if method == Method::HEAD {
                                     let response = builder
                                         .body(
                                             Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                         )
-                                        .expect("failed to build 206 HEAD response");
-                                    return respond_with_httpresponse(
-                                        ctx,
-                                        request,
-                                        HttpResponse::Custom(response),
-                                        206,
-                                        "partial_content",
-                                    );
-                                } else {
-                                    let response = builder
-                                        .body(
-                                            StreamBody::new(
-                                                FileStream::new(file, start, Some(end + 1))
-                                                    .map_ok(Frame::data),
-                                            )
-                                            .boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 response");
+                                        .expect("failed to build HEAD response");
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -782,16 +832,68 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         "partial_content",
                                     );
                                 }
+
+                                // Build the streaming body based on compression type
+                                let body = if is_precompressed_file {
+                                    StreamBody::new(
+                                        FileStream::new(file, start, Some(end + 1))
+                                            .map_ok(Frame::data),
+                                    )
+                                    .boxed_unsync()
+                                } else {
+                                    match used_compression {
+                                        Compression::Identity => {
+                                            // For identity (no compression), use FileStream for streaming I/O
+                                            let body_stream =
+                                                FileStream::new(file, start, Some(end + 1))
+                                                    .map_ok(Frame::data);
+                                            StreamBody::new(body_stream).boxed_unsync()
+                                        }
+                                        Compression::Gzip => {
+                                            compress_streaming_gzip(file, Some(end + 1))
+                                        }
+                                        Compression::Brotli => {
+                                            compress_streaming_brotli(file, Some(end + 1))
+                                        }
+                                        Compression::Deflate => {
+                                            compress_streaming_deflate(file, Some(end + 1))
+                                        }
+                                        Compression::Zstd => {
+                                            compress_streaming_zstd(file, Some(end + 1))
+                                        }
+                                    }
+                                };
+
+                                let response = builder
+                                    .body(body)
+                                    .expect("failed to build partial content response");
+                                return respond_with_httpresponse(
+                                    ctx,
+                                    request,
+                                    HttpResponse::Custom(response),
+                                    206,
+                                    "partial_content",
+                                );
                             } else {
-                                let vary = vary_header
-                                    .unwrap_or_else(|| HeaderValue::from_static("Range"));
-                                let mut header_map = HeaderMap::new();
+                                // No valid ranges (empty after parsing) → 416 Not Satisfiable
+                                let vary_str = etag_enabled
+                                    .then_some("Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range")
+                                    .or(Some("If-Modified-Since, If-Range, If-Unmodified-Since, Range"));
+
+                                let mut header_map = http::HeaderMap::new();
                                 header_map.insert(
                                     header::CONTENT_RANGE,
                                     HeaderValue::from_str(&format!("bytes */{file_length}"))
                                         .expect("invalid content range header"),
                                 );
-                                header_map.insert(header::VARY, vary);
+                                if let Some(v) = vary_str {
+                                    header_map.insert(
+                                        header::VARY,
+                                        HeaderValue::from_str(v)
+                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                    );
+                                }
+
                                 return respond_with_builtin(
                                     ctx,
                                     request,
@@ -801,59 +903,53 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 );
                             }
                         }
-                        Err(RangeParseError::Unsatisfiable) => {
-                            let vary =
-                                vary_header.unwrap_or_else(|| HeaderValue::from_static("Range"));
-                            let mut header_map = HeaderMap::new();
-                            header_map.insert(
-                                header::CONTENT_RANGE,
-                                HeaderValue::from_str(&format!("bytes */{file_length}"))
-                                    .expect("invalid content range header"),
+                        Err(_) => {
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                416,
+                                None,
+                                "range_not_satisfiable",
                             );
-                            header_map.insert(header::VARY, vary);
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::BuiltinError(416, Some(header_map)));
-                            emit_static_response_metric(ctx, 416, "range_not_satisfiable");
-                            ctx.get_span_attributes()
-                                .insert("http.response.status_code", TraceAttributeValue::I64(416));
-                            return Ok(false);
-                        }
-                        Err(RangeParseError::InvalidSyntax) => {
-                            // Syntactically invalid — treat as absent, fall through to 200
                         }
                     }
                 }
+            } else {
+                // No Range header → proceed to 200 OK response
             }
         }
 
+        // Build the main response (200 OK)
         let mut builder = Response::builder()
             .status(StatusCode::OK)
             .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
-        // Last-Modified
-        if let Some(ref mdate) = mdate {
-            builder = builder.header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+        if let Ok(mdate) = metadata.modified() {
+            builder = builder.header(header::LAST_MODIFIED, httpdate::fmt_http_date(mdate));
         }
 
         // ETag
-        if let Some(ref etag) = etag_value {
-            let etag_suffix = used_compression.etag_suffix().unwrap_or("");
+        if let Some(etag) = &etag_value {
+            let suffix = used_compression.etag_suffix().unwrap_or("");
             let precompressed_suffix = if is_precompressed_file {
                 "-precompress"
             } else {
                 ""
             };
-            let full_etag = format!("W/\"{etag}{precompressed_suffix}{etag_suffix}\"");
-            builder = builder.header(header::ETAG, full_etag);
+            let full_etag = format!("W/\"{etag}{precompressed_suffix}{suffix}\"");
+            builder = builder.header(header::ETAG, &full_etag);
         }
 
         // Vary
-        if let Some(vary) = vary_header {
-            builder = builder.header(header::VARY, vary);
+        if etag_enabled {
+            builder = builder.header(
+                    header::VARY,
+                    "Accept-Encoding, If-Match, If-None-Match, If-Modified-Since, If-Range, If-Unmodified-Since, Range"
+                );
         }
 
         // Content-Type
-        if let Some(ref ct) = content_type {
+        if let Some(ct) = content_type {
             builder = builder.header(header::CONTENT_TYPE, ct);
         }
 
@@ -865,7 +961,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             );
         }
 
-        // Content-Encoding / Content-Length
+        // Content-Length / Content-Encoding
         match used_compression {
             Compression::Identity => {
                 builder = builder.header(header::CONTENT_LENGTH, file_length);
@@ -873,7 +969,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
             c => {
                 if is_precompressed_file {
                     builder = builder.header(header::CONTENT_LENGTH, file_length);
+                } else {
+                    // Approximate compressed size (would need actual compression to know exact size)
+                    // For now, use original file length as an estimate
+                    let content_len = file_length / 2;
+                    builder = builder.header(header::CONTENT_LENGTH, content_len);
                 }
+
                 if let Some(hv) = c.header_value() {
                     builder =
                         builder.header(header::CONTENT_ENCODING, HeaderValue::from_static(hv));
@@ -881,21 +983,20 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
+        // HEAD request - return headers only
         if method == Method::HEAD {
             let response = builder
                 .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
                 .expect("failed to build HEAD response");
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(response));
-            emit_static_response_metric(ctx, 200, "head");
+            emit_static_response_metric_and_span(ctx, 200, "head");
             ctx.get_span_attributes()
                 .insert("http.response.status_code", TraceAttributeValue::I64(200));
             return Ok(false);
         }
 
         // Full file response — streaming I/O
-        // Use the file handle from context (already opened during path resolution)
-        // For precompressed files, the file_path may have changed, so we re-open
         let file = if is_precompressed_file {
             ReusedFile::open(&file_path)
                 .await
@@ -918,28 +1019,28 @@ impl Stage<HttpFileContext> for StaticFileStage {
             Some(std_file as i64)
         };
 
+        // Build the body based on compression type
         let body: UnsyncBoxBody<Bytes, io::Error> = if is_precompressed_file {
-            // Precompressed file — stream as-is
             StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
                 .boxed_unsync()
         } else {
             match used_compression {
+                Compression::Identity => {
+                    // For identity (no compression), use zerocopy if available
+                    let body_stream =
+                        FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data);
+                    StreamBody::new(body_stream).boxed_unsync()
+                }
                 Compression::Brotli => compress_streaming_brotli(file, Some(file_length)),
                 Compression::Zstd => compress_streaming_zstd(file, Some(file_length)),
                 Compression::Deflate => compress_streaming_deflate(file, Some(file_length)),
                 Compression::Gzip => compress_streaming_gzip(file, Some(file_length)),
-                Compression::Identity => {
-                    // For identity (no compression), use zerocopy if available
-                    StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
-                        .boxed_unsync()
-                }
             }
         };
 
         let mut response = builder.body(body).expect("failed to build file response");
 
         // Enable zerocopy for uncompressed responses on Linux
-        // vibeio-http's zerocopy bypasses the body entirely, using sendfile_exact
         if !is_precompressed_file && used_compression == Compression::Identity {
             if let Some(handle) = raw_fd {
                 #[cfg(unix)]
@@ -957,10 +1058,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         ctx.http.req = Some(request);
         ctx.http.res = Some(HttpResponse::Custom(response));
-        emit_static_response_metric(ctx, 200, "full");
-        ctx.get_span_attributes()
-            .insert("http.response.status_code", TraceAttributeValue::I64(200));
+        emit_static_response_metric_and_span(ctx, 200, "full");
 
+        // Emit metrics for files served and bytes sent
         let compression_label = used_compression.header_value().unwrap_or("identity");
         let cache_hit = is_precompressed_file;
         let file_size = file_length;
@@ -990,7 +1090,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 ),
                 ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
             ],
-            ty: MetricType::Histogram(Some(Cow::Borrowed(STATIC_FILE_BYTES_BUCKETS))),
+            ty: MetricType::Histogram(Some(std::borrow::Cow::Borrowed(STATIC_FILE_BYTES_BUCKETS))),
             value: MetricValue::F64(file_size as f64),
             unit: Some("By"),
             description: Some("Bytes sent for static file responses."),
@@ -999,4 +1099,21 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         Ok(false)
     }
+}
+
+/// Helper: get the If-Range date from the request headers.
+fn get_if_range_date(
+    _ctx: &HttpFileContext,
+    request: &HttpRequest,
+) -> Option<std::time::SystemTime> {
+    if let Some(if_range) = request.headers().get(header::IF_RANGE) {
+        // Extract just the date part (ignore range info like bytes=100-200)
+        if let Ok(range_str) = if_range.to_str() {
+            // The If-Range header can contain both a date and a range, e.g., "Wed, 01 Jan 2018 00:00:00 GMT; bytes=100-200"
+            let date_part = range_str.split(';').next().unwrap_or("");
+            return httpdate::parse_http_date(date_part).ok();
+        }
+    }
+
+    None
 }
