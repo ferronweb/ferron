@@ -10,7 +10,7 @@ dashmap = "6.2.1"
 http = "1"
 http-body-util = "0.1"
 bytes = "1"
-base64 = "0.22"
+base64 = "0.23"
 aws-lc-rs = { version = "1", features = ["bindgen"] }
 aws-lc-sys = "0"
 argon2-kdf = "1.7"
