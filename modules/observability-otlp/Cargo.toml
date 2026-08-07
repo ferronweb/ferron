@@ -38,9 +38,9 @@ opentelemetry = { version = "0.32.0", default-features = false, features = [
 ]}
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
-hyper-rustls = { version = "0.27", features = ["http1", "http2", "rustls-native-certs", "webpki-roots"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
 tonic = "0.14"
-rustls = "0.23"
+rustls = { version = "0.23", default-features = false }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 async-trait = "0.1"

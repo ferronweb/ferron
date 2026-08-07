@@ -17,7 +17,7 @@ hyper = { version = "1", features = ["client", "http1", "http2"] }
 vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
 vibeio-hyper = { version = "0.2.7" }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
-tokio-rustls = "0.26"
+tokio-rustls = { version = "0.26", default-features = false }
 webpki-roots = "1.0"
 anyhow = "1.0.102"
 tokio = "1.52.1"

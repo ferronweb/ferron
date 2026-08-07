@@ -18,9 +18,9 @@ ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
-tokio-rustls = "0.26"
+tokio-rustls = { version = "0.26", default-features = false }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
-hyper-rustls = { version = "0.27", features = ["http1", "http2"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
