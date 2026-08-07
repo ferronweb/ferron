@@ -30,6 +30,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             validate_nested!(metrics, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(metrics, used(sub), read_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
             validate_nested!(metrics, used(sub), gzip, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(metrics, used(sub), exemplars, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
             ferron_core::check_unused_subdirectives!(metrics, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 

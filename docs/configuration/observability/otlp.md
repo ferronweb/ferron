@@ -53,6 +53,7 @@ The `metrics` sub-block supports collection tuning:
 | Directive       | Arguments    | Description                                                          | Default |
 | --------------- | ------------ | -------------------------------------------------------------------- | ------- |
 | `read_interval` | `<duration>` | Interval at which the metric reader collects and exports all series. | `30s`   |
+| `exemplars`     | `[bool]`     | Attach the last sampled measurement per series as an exemplar.       | `true`  |
 
 Durations accept a number (seconds), a float (seconds), or a string such as `10s`, `5m`, or `1h`.
 
@@ -81,7 +82,7 @@ example.com {
 > If you have connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
 
 > [!note]
-> Ferron does not currently support OTLP metric exemplars, due to OpenTelemetry SDK limitations.
+> Exemplar export follows the OpenTelemetry convention: only the last sample per series is kept, and only when the sample carries a trace and span ID.
 
 ### Global options
 

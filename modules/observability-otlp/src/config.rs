@@ -41,6 +41,9 @@ pub struct SignalConfig {
     pub read_interval: Option<Duration>,
     /// Compress export requests with gzip (`gzip`).
     pub gzip: bool,
+    /// Attach the last sampled measurement per series as an exemplar
+    /// (`exemplars`; default `true`).
+    pub exemplars: Option<bool>,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -116,6 +119,7 @@ impl SignalConfig {
                 export_batch_size: None,
                 read_interval: None,
                 gzip: false,
+                exemplars: None,
             });
         };
 
@@ -145,6 +149,12 @@ impl SignalConfig {
 
         let gzip = children.get_flag("gzip");
 
+        let exemplars = children
+            .directives
+            .get("exemplars")
+            .and_then(|entries| entries.first())
+            .map(|entry| entry.get_flag());
+
         Some(Self {
             endpoint,
             protocol,
@@ -153,6 +163,7 @@ impl SignalConfig {
             export_batch_size,
             read_interval,
             gzip,
+            exemplars,
         })
     }
 }

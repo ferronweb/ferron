@@ -233,8 +233,9 @@ struct Series {
 }
 
 impl Series {
-    /// Record one measurement, updating time bounds and the exemplar ring.
-    fn record(&mut self, event: &MetricEvent, now: u64) {
+    /// Record one measurement, updating time bounds and, when `capture` is
+    /// set, the exemplar ring.
+    fn record(&mut self, event: &MetricEvent, now: u64, capture: bool) {
         let op = op_for(&self.aggregate, &event.ty, event.value);
         if !apply(&mut self.aggregate, op) {
             return;
@@ -243,16 +244,18 @@ impl Series {
             self.start_time = now;
         }
         self.last_time = now;
-        if let Some(ctx) = &event.trace_context {
-            if let (Some(trace_id), Some(span_id)) =
-                (decode_trace_id(&ctx.trace_id), decode_span_id(&ctx.span_id))
-            {
-                self.exemplar = Some(StoredExemplar {
-                    trace_id,
-                    span_id,
-                    time: now,
-                    value: Scalar::of(event.value),
-                });
+        if capture {
+            if let Some(ctx) = &event.trace_context {
+                if let (Some(trace_id), Some(span_id)) =
+                    (decode_trace_id(&ctx.trace_id), decode_span_id(&ctx.span_id))
+                {
+                    self.exemplar = Some(StoredExemplar {
+                        trace_id,
+                        span_id,
+                        time: now,
+                        value: Scalar::of(event.value),
+                    });
+                }
             }
         }
     }
@@ -413,14 +416,17 @@ pub(crate) struct MetricStore {
 struct MetricStoreInner {
     series: Mutex<HashMap<String, Series>>,
     dropped: AtomicU64,
+    /// Whether exemplar samples are captured (`exemplars` config directive).
+    capture_exemplars: bool,
 }
 
 impl MetricStore {
-    fn new() -> Self {
+    fn new(capture_exemplars: bool) -> Self {
         Self {
             inner: Arc::new(MetricStoreInner {
                 series: Mutex::new(HashMap::new()),
                 dropped: AtomicU64::new(0),
+                capture_exemplars,
             }),
         }
     }
@@ -451,7 +457,7 @@ impl MetricStore {
             last_time: 0,
             exemplar: None,
         });
-        entry.record(event, now);
+        entry.record(event, now, self.inner.capture_exemplars);
     }
 
     /// Collect all series into per-name metric groups. Returns `None` when
@@ -666,8 +672,9 @@ impl MetricPipeline {
         cancel: tokio_util::sync::CancellationToken,
         interval: Duration,
         export_timeout: Duration,
+        capture_exemplars: bool,
     ) -> Self {
-        let store = MetricStore::new();
+        let store = MetricStore::new(capture_exemplars);
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         let reader = MetricReader {
             store: store.clone(),
@@ -1052,6 +1059,14 @@ mod tests {
         exporter: Arc<MockExporter>,
         interval: Duration,
     ) -> (MetricPipeline, tokio_util::sync::CancellationToken) {
+        spawn_pipeline_with(exporter, interval, true)
+    }
+
+    fn spawn_pipeline_with(
+        exporter: Arc<MockExporter>,
+        interval: Duration,
+        capture_exemplars: bool,
+    ) -> (MetricPipeline, tokio_util::sync::CancellationToken) {
         let cancel = tokio_util::sync::CancellationToken::new();
         let pipeline = MetricPipeline::spawn_with_config(
             exporter,
@@ -1059,6 +1074,7 @@ mod tests {
             cancel.clone(),
             interval,
             Duration::from_secs(5),
+            capture_exemplars,
         );
         (pipeline, cancel)
     }
@@ -1385,6 +1401,34 @@ mod tests {
         );
         assert_eq!(hex::encode(&exemplar.span_id), "dddddddddddddddd");
         assert_eq!(exemplar.value, Some(exemplar::Value::AsInt(3)));
+    }
+
+    #[tokio::test]
+    async fn exemplars_disabled_do_not_attach_samples() {
+        let mock = mock_exporter();
+        let (pipeline, cancel) =
+            spawn_pipeline_with(mock.clone(), Duration::from_secs(3600), false);
+
+        let mut event = event("hits", MetricType::Counter, MetricValue::U64(2));
+        event.trace_context = Some(::ferron_observability::EventTraceContext {
+            trace_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .as_bytes()
+                .try_into()
+                .unwrap(),
+            span_id: "bbbbbbbbbbbbbbbb".as_bytes().try_into().unwrap(),
+            baggage: None,
+            sampled: None,
+        });
+        let mut tracker = DistinctValueTracker::new();
+        pipeline.store.record(&event, &[], &mut tracker);
+
+        cancel.cancel();
+        pipeline.wait_done().await;
+
+        let requests = mock.requests.lock().await;
+        let metrics = &requests[0].resource_metrics[0].scope_metrics[0].metrics;
+        let sum_point = first_sum_point(metrics, "hits");
+        assert!(sum_point.exemplars.is_empty());
     }
 
     #[tokio::test]

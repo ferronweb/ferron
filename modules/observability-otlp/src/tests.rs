@@ -1128,3 +1128,52 @@ fn signal_config_parses_gzip_flag_with_explicit_false() {
     let config = OtlpBackendConfig::parse_config(&block);
     assert!(!config.traces.unwrap().gzip);
 }
+
+#[test]
+fn signal_config_parses_exemplars_flag_with_default_true() {
+    use crate::config::OtlpBackendConfig;
+    use ferron_core::config::ServerConfigurationValue;
+
+    let block = signal_block(vec![(
+        "metrics",
+        vec![ServerConfigurationValue::String(
+            "http://localhost:4318".to_string(),
+            None,
+        )],
+        Some(vec![
+            ("exemplars".to_string(), vec![]),
+            ("gzip".to_string(), vec![]),
+        ]),
+    )]);
+
+    let config = OtlpBackendConfig::parse_config(&block);
+    let metrics = config.metrics.unwrap();
+    assert_eq!(metrics.exemplars, Some(true));
+
+    let block = signal_block(vec![(
+        "metrics",
+        vec![ServerConfigurationValue::String(
+            "http://localhost:4318".to_string(),
+            None,
+        )],
+        Some(vec![(
+            "exemplars".to_string(),
+            vec![ServerConfigurationValue::Boolean(false, None)],
+        )]),
+    )]);
+
+    let config = OtlpBackendConfig::parse_config(&block);
+    assert_eq!(config.metrics.unwrap().exemplars, Some(false));
+
+    let block = signal_block(vec![(
+        "metrics",
+        vec![ServerConfigurationValue::String(
+            "http://localhost:4318".to_string(),
+            None,
+        )],
+        None,
+    )]);
+
+    let config = OtlpBackendConfig::parse_config(&block);
+    assert_eq!(config.metrics.unwrap().exemplars, None);
+}

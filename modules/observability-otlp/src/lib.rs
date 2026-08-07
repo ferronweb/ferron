@@ -283,6 +283,7 @@ impl MetricPipelineEntry {
                         cancel_token,
                         signal.read_interval.unwrap_or(DEFAULT_READ_INTERVAL),
                         DEFAULT_EXPORT_TIMEOUT,
+                        signal.exemplars.unwrap_or(true),
                     ))
                 }
                 Err(err) => {
@@ -505,12 +506,13 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}|{:?}|{}",
+                "{}|{}|{}|{:?}|{}|{:?}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
                 s.read_interval,
-                s.gzip
+                s.gzip,
+                s.exemplars
             )
         })
         .unwrap_or_default();
