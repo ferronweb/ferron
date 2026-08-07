@@ -1,8 +1,8 @@
+use cidr::IpCidr;
 use ferron_core::config::validator::{
     entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
-use ipnet::IpNet;
 
 #[inline]
 fn validate_ip_directive(
@@ -20,7 +20,7 @@ fn validate_ip_directive(
             }
             for arg in &entry.args {
                 if let Some(s) = arg.as_str() {
-                    if s.parse::<IpNet>().is_err() {
+                    if s.parse::<IpCidr>().is_err() {
                         return Err(ConfigurationValidationError::from(format!(
                             "Invalid `{directive}` — invalid IP or CIDR: {s}"
                         ))

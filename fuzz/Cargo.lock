@@ -295,6 +295,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cidr"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "579504560394e388085d0c080ea587dfa5c15f7e251b4d5247d1e1a61d1d6928"
+
+[[package]]
 name = "clang-sys"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -559,6 +565,7 @@ dependencies = [
  "ahash",
  "arbitrary",
  "bytes",
+ "cidr",
  "dashmap",
  "ferron-core",
  "ferron-http",
@@ -582,12 +589,12 @@ name = "ferron-http"
 version = "3.0.0-beta.8"
 dependencies = [
  "bytes",
+ "cidr",
  "ferron-core",
  "ferron-observability",
  "hex",
  "http",
  "http-body-util",
- "ipnet",
  "rand",
  "rustc-hash",
  "rustls-pki-types",
@@ -604,6 +611,7 @@ dependencies = [
  "ahash",
  "async-trait",
  "bytes",
+ "cidr",
  "dashmap",
  "ferron-core",
  "ferron-http",
@@ -615,7 +623,6 @@ dependencies = [
  "httpdate",
  "hyper-rustls",
  "hyper-util",
- "ipnet",
  "quick_cache",
  "rustc-hash",
  "rustls",
@@ -691,6 +698,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "cidr",
  "fancy-regex",
  "ferron-core",
  "ferron-http",
@@ -699,7 +707,6 @@ dependencies = [
  "h3-quinn",
  "http",
  "http-body-util",
- "ipnet",
  "oneshot",
  "parking_lot",
  "ppp",

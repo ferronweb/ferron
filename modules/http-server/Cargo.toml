@@ -30,7 +30,7 @@ typemap_rev = "0.4"
 chrono = "0.4"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2"
-ipnet = "2"
+cidr = "0.3"
 h3-quinn = "0.0.10"
 quinn = { version = "0.11.8", default-features = false, features = [
     "aws-lc-rs",

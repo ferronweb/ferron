@@ -1,8 +1,8 @@
 //! Configuration for abuse protection.
 
+use cidr::IpCidr;
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_http::abuse::AbuseEventType;
-use ipnet::IpNet;
 
 use crate::registry::{AbuseRegistryConfig, ErrorRateThresholdConfig, EventThreshold};
 
@@ -125,7 +125,7 @@ fn parse_abuse_protection_block(
         for entry in entries {
             for arg in &entry.args {
                 if let Some(s) = arg.as_str() {
-                    if let Ok(cidr) = s.parse::<IpNet>() {
+                    if let Ok(cidr) = s.parse::<IpCidr>() {
                         allowlist.push(cidr);
                     }
                 }

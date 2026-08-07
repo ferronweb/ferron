@@ -1,8 +1,8 @@
 //! Central abuse registry: tracks bans, records events, and enforces thresholds.
 
+use cidr::IpCidr;
 use dashmap::DashMap;
 use ferron_http::HttpContext;
-use ipnet::IpNet;
 use rustc_hash::FxBuildHasher;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -65,7 +65,7 @@ pub struct AbuseRegistryConfig {
     /// Error rate thresholds (track response status codes).
     pub error_rate_thresholds: Vec<ErrorRateThresholdConfig>,
     /// IPs or CIDR ranges that are exempt from bans.
-    pub allowlist: Vec<IpNet>,
+    pub allowlist: Vec<IpCidr>,
 }
 
 impl AbuseRegistryConfig {

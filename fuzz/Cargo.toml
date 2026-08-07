@@ -18,6 +18,7 @@ ppp = "2.3.0"
 dashmap = "6.2.1"
 rustc-hash = "2"
 ahash = "0.8"
+cidr = "0.3"
 
 ferron-http = { path = "../types/http" }
 ferron-http-server = { path = "../modules/http-server", features = ["fuzz"] }

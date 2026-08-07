@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use cidr::IpCidr;
 use fancy_regex::Regex;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_http::HttpContext;
-use ipnet::IpNet;
 
 use crate::ResponseEngine;
 
@@ -36,9 +36,9 @@ pub struct AbortConfig {
 /// Configuration for IP-based access control (`block` and `allow`).
 pub struct IpAccessConfig {
     /// IPs/CIDRs that are always denied.
-    pub block_list: Vec<IpNet>,
+    pub block_list: Vec<IpCidr>,
     /// IPs/CIDRs that are always allowed (bypasses block list).
-    pub allow_list: Vec<IpNet>,
+    pub allow_list: Vec<IpCidr>,
 }
 
 impl Default for IpAccessConfig {
@@ -153,9 +153,9 @@ fn parse_abort_config(config: &LayeredConfiguration) -> AbortConfig {
     AbortConfig::default()
 }
 
-fn parse_ip_from_value(value: &ServerConfigurationValue) -> Option<IpNet> {
+fn parse_ip_from_value(value: &ServerConfigurationValue) -> Option<IpCidr> {
     if let Some(s) = value.as_str() {
-        if let Ok(cidr) = s.parse::<IpNet>() {
+        if let Ok(cidr) = s.parse::<IpCidr>() {
             return Some(cidr);
         }
     }
