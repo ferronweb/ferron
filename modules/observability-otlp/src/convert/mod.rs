@@ -12,14 +12,12 @@ use crate::proto::opentelemetry::proto::common::v1::{any_value, AnyValue, KeyVal
 #[cfg(test)]
 pub(crate) use access_log::{build_access_log_record, OtelAccessAttributeVisitor};
 #[cfg(test)]
-pub(crate) use context::CorrelationContext;
-#[cfg(test)]
 pub(crate) use logs::build_log_record;
 #[cfg(test)]
 pub(crate) use metrics::{metric_key_values, sanitize_label_value};
-#[cfg(test)]
-pub(crate) use resource::build_resource;
-#[cfg(test)]
+
+pub(crate) use context::CorrelationContext;
+pub(crate) use resource::{build_resource, build_scope};
 pub(crate) use traces::{end_span, start_span};
 
 /// Convert a [`SystemTime`] into UNIX epoch nanoseconds.

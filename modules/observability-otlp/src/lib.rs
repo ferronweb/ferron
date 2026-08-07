@@ -2,13 +2,16 @@ mod config;
 mod validator;
 
 // New OTLP exporter logic
+mod pipeline;
 pub mod proto;
 
-// TODO: wire the transports into the module event loop (pipeline steps)
+// TODO: wire the remaining transports into the module event loop
+// (logs/metrics signals in pipeline steps 4-6)
 #[allow(dead_code)]
 mod transport;
 
-// TODO: wire the conversion layer into the module event loop (pipeline steps)
+// TODO: logs/metrics/access-log conversion is only used by tests so far;
+// wire it in pipeline steps 4-6
 #[allow(dead_code)]
 mod convert;
 
@@ -20,18 +23,24 @@ use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
+use std::time::SystemTime;
 
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_observability::baggage::BaggageKeyPromotion;
 use ferron_observability::{
-    build_composite_sink, CompositeEventSink, Event, EventSink, ObservabilityContext,
+    build_composite_sink, CompositeEventSink, Event, EventSink, LogAttributeValue, LogEvent,
+    LogLevel, ObservabilityContext, TraceEvent,
 };
 
 use crate::config::OtlpBackendConfig;
-use crate::providers::{emit_access_log, emit_log, emit_metric, emit_trace, OtlpProviderCache};
+use crate::convert::{end_span, start_span, CorrelationContext};
+use crate::pipeline::traces::{TraceExporter, TracePipeline};
+use crate::providers::{emit_access_log, emit_log, emit_metric, OtlpProviderCache};
+use crate::transport::client::OtlpTransport;
 
 static DROPPED_EVENT: Once = Once::new();
 
@@ -139,6 +148,62 @@ struct OtlpObservabilityModule {
     event_sink: Option<Arc<CompositeEventSink>>,
 }
 
+/// Per-config state for the trace pipeline: the exporter handle, the
+/// correlation context for parent resolution, and the config-derived
+/// attributes the conversion needs.
+struct TracePipelineEntry {
+    pipeline: Option<TracePipeline>,
+    correlation: CorrelationContext,
+    baggage_promotions: Vec<BaggageKeyPromotion>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+}
+
+impl TracePipelineEntry {
+    fn init(
+        config: &OtlpBackendConfig,
+        control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+        cancel_token: tokio_util::sync::CancellationToken,
+        event_sink: Option<&CompositeEventSink>,
+    ) -> Self {
+        let pipeline = if config.traces.is_some() {
+            match OtlpTransport::from_config(config) {
+                Ok(transport) => {
+                    let exporter: Arc<dyn TraceExporter> = Arc::new(transport);
+                    Some(TracePipeline::spawn(
+                        exporter,
+                        config.service_name.clone(),
+                        cancel_token,
+                    ))
+                }
+                Err(err) => {
+                    if let Some(sink) = event_sink {
+                        sink.emit(Event::Log(LogEvent {
+                            level: LogLevel::Warn,
+                            message: format!("Error with traces pipeline: {err}"),
+                            summary: "Error with traces pipeline".into(),
+                            target: "ferron-observability-otlp",
+                            attributes: vec![(
+                                "error.message",
+                                LogAttributeValue::String(err.to_string()),
+                            )],
+                            trace_context: None,
+                        }));
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        Self {
+            pipeline,
+            correlation: CorrelationContext::new(),
+            baggage_promotions: config.baggage_promotions.clone(),
+            control_plane_metadata,
+        }
+    }
+}
+
 impl Module for OtlpObservabilityModule {
     fn name(&self) -> &str {
         "observability-otlp"
@@ -160,6 +225,8 @@ impl Module for OtlpObservabilityModule {
         runtime.spawn_secondary_task(async move {
             // Per-config exporter cache
             let mut providers: HashMap<String, OtlpProviderCache> = HashMap::new();
+            // Per-config trace pipelines
+            let mut trace_pipelines: HashMap<String, TracePipelineEntry> = HashMap::new();
 
             while let Some(msg) = tokio::select! {
                 result = rx.recv() => result.ok(),
@@ -172,11 +239,19 @@ impl Module for OtlpObservabilityModule {
                 let config = OtlpBackendConfig::parse_config(&msg.log_config);
 
                 let cache_key = config_cache_key(&config);
-                let entry = providers.entry(cache_key).or_insert_with(|| {
+                let entry = providers.entry(cache_key.clone()).or_insert_with(|| {
                     OtlpProviderCache::init(
                         &config,
                         event_sink.as_deref(),
                         msg.control_plane_metadata.clone(),
+                    )
+                });
+                let trace = trace_pipelines.entry(cache_key.clone()).or_insert_with(|| {
+                    TracePipelineEntry::init(
+                        &config,
+                        msg.control_plane_metadata.clone(),
+                        cancel_token.clone(),
+                        event_sink.as_deref(),
                     )
                 });
 
@@ -203,14 +278,23 @@ impl Module for OtlpObservabilityModule {
                         }
                     }
                     Event::Trace(trace_event) => {
-                        if let Some(ref provider) = entry.traces_provider {
-                            emit_trace(
-                                provider,
+                        let now = SystemTime::now();
+                        let finished = match trace_event {
+                            TraceEvent::StartSpan { .. } => start_span(
                                 trace_event,
-                                &mut entry.correlation,
-                                &entry.baggage_promotions,
-                                &entry.control_plane_metadata,
-                            );
+                                &mut trace.correlation,
+                                &trace.baggage_promotions,
+                                &trace.control_plane_metadata,
+                                now,
+                            ),
+                            TraceEvent::EndSpan { .. } => {
+                                end_span(trace_event, &mut trace.correlation, now)
+                            }
+                        };
+                        if let Some(span) = finished {
+                            if let Some(pipeline) = &trace.pipeline {
+                                pipeline.buffer.push(span).await;
+                            }
                         }
                     }
                     Event::Access(access_event) => {
@@ -229,6 +313,16 @@ impl Module for OtlpObservabilityModule {
                 }
             }
 
+            // Shutdown trace pipelines: flush remaining spans.
+            cancel_token.cancel();
+            let trace_pipelines: Vec<TracePipeline> = trace_pipelines
+                .into_values()
+                .filter_map(|entry| entry.pipeline)
+                .collect();
+            for pipeline in trace_pipelines {
+                pipeline.wait_done().await;
+            }
+
             // Shutdown providers
             // `tokio::task::spawn_blocking` is needed, because without it, there can be a deadlock.
             // See https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/struct.BatchSpanProcessor.html
@@ -238,9 +332,6 @@ impl Module for OtlpObservabilityModule {
                         let _ = p.shutdown();
                     }
                     if let Some(p) = cache.metrics_provider {
-                        let _ = p.shutdown();
-                    }
-                    if let Some(p) = cache.traces_provider {
                         let _ = p.shutdown();
                     }
                 }

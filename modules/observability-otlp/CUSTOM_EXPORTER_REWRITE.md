@@ -277,18 +277,18 @@ proto-level assertions (e.g. `span.attributes[0].key == "http.request.method"`,
 
 ### Step 3 — Batch trace exporter (`src/pipeline/traces.rs`)
 
-- [ ] `TraceBuffer`: bounded queue of finished `Span`s (from
+- [x] `TraceBuffer`: bounded queue of finished `Span`s (from
       `EndSpan`; evict-and-drop with LRU or drop-newest when full), sharing
       the existing `CorrelationContext` so spans stay correlated.
-- [ ] `BatchTraceExporter`: background task (tokio, spawned from the module
+- [x] `BatchTraceExporter`: background task (tokio, spawned from the module
       event loop with the module's `CancellationToken`) that flushes when
       batch size (512) or interval (5 s) is hit, wraps items in
       `ExportTraceServiceRequest` (resource + scope), calls the transport,
       applies retry (D9), drains on shutdown with export timeout (30 s).
-- [ ] Wire into `lib.rs`: replace `traces_provider` with
+- [x] Wire into `lib.rs`: replace `traces_provider` with
       `pipeline.traces`; delete `providers/traces.rs` and
       `providers/context.rs` request-ID handling (moved in Step 2).
-- [ ] Unit tests: batching thresholds (flush at N items, flush at interval),
+- [x] Unit tests: batching thresholds (flush at N items, flush at interval),
       queue-full drop behavior, shutdown flush (all buffered spans exported
       before return), retry then drop on persistent failure.
 

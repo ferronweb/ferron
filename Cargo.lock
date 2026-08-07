@@ -1888,7 +1888,6 @@ dependencies = [
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
- "urlencoding",
  "webpki-roots",
 ]
 
