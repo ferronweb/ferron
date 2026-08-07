@@ -27,6 +27,7 @@
 
 - **PGO for GNU/Linux and some Linux with musl** — PGO (profiled-guided optimization) is now enabled for GNU/Linux targets and some Linux targets with musl libc (64-bit x86, ARM64), for pre-built Ferron binaries. This mainly improves tail (p90/p99/max) latency for web requests.
 - **`.ferron` file extension** — `.ferron` files are now supported as an alternative to `.conf` (which is a generic file extension) files for configuration ([GitHub issue](https://github.com/ferronweb/ferron/issues/838)).
+- **Panic hook improvements** — panic hook has been simplified (removing backtraces that are likely unhelpful), and it now logs the Ferron version and build target.
 
 #### Configuration validation
 

@@ -1,36 +1,4 @@
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
-    // Technically, it's "Ferris throwing up their hands", but oh well...
-    eprintln!(
-        r#"
-
-                             +=  +==+  =+
-                        +==+============== +=+
-                    +++ ====================== +++
-                    ==============================
- ===+  +        ===+==============================+===        +  +===
-=====+ ==+      +====================================+      +== +=====
-=========+   ============================================  +===+======
-+========+   +==========================================+  +=========+
- =========  ++===========================================+  =========
-  ++====== =================....-======-..:================ ======++
-      +===++===============:@@+..-====.*@#..-=============++===+
-       +==================-.=%-..-====.-#-..-=================+
-         ==================:.....-====-....:==================
-        +======--=================:...:==============--======+
-         +======-------==========:.....:========-------=====+
-          +======---  -------------------------=   ---=====+
-            ===== ---                              -- =====
-             +===+                                   +===+
-               ===                                   ===
-
-
-                      S A D   F E R R I S   : (
-
-
-Oh no... Your Ferron web server just crashed...
-"#
-    );
-
     let payload_any = panic_info.payload();
     let payload: Option<&str> = if let Some(s) = payload_any.downcast_ref::<&str>() {
         Some(s)
@@ -39,44 +7,36 @@ Oh no... Your Ferron web server just crashed...
     } else {
         None
     };
-    eprintln!(
-        "{} (at {})",
+
+    if !ferron_core::logging::is_init() {
+        if ferron_core::logging::init_stdio_logger(ferron_core::logging::LogLevel::Error).is_err() {
+            eprintln!(
+                "Ferron web server just crashed (failed to init the logger): {} (at {})",
+                payload.unwrap_or("<unknown crash>"),
+                panic_info
+                    .location()
+                    .unwrap_or(std::panic::Location::caller())
+            );
+            return;
+        }
+    }
+
+    ferron_core::log_error!(
+        "Ferron web server just crashed (!): {} (at {})",
         payload.unwrap_or("<unknown crash>"),
         panic_info
             .location()
             .unwrap_or(std::panic::Location::caller())
     );
 
-    eprintln!();
-    eprintln!("Backtrace:");
+    ferron_core::log_error!("Ferron version: {}", crate::build::PKG_VERSION);
+    ferron_core::log_error!("Build target: {}", crate::build::BUILD_TARGET);
 
-    let backtrace = backtrace::Backtrace::new();
-    for frame in backtrace.frames() {
-        let symbols = frame.symbols();
-        if symbols.is_empty() {
-            eprintln!("  at ({:?})", frame.ip());
-        } else {
-            for symbol in symbols {
-                let src_line = symbol
-                    .filename()
-                    .and_then(|f| symbol.lineno().map(|l| format!("{}:{}", f.display(), l)));
-                eprintln!(
-                    "  at {}{}",
-                    symbol
-                        .name()
-                        .map(|n| n.to_string())
-                        .unwrap_or("<unknown>".to_string()),
-                    src_line.map(|l| format!(" ({})", l)).unwrap_or_default()
-                );
-            }
-        }
-    }
-
-    eprintln!();
-    eprintln!("If you believe it's a bug, please report it at https://github.com/ferronweb/ferron/issues/new");
-    eprintln!(
-    "Also, consider sharing the backtrace above, and the version information (you can get it by running `ferron version`)."
-  )
+    ferron_core::log_error!(
+        "If you believe it's a bug, please report it at \
+        https://github.com/ferronweb/ferron/issues/new. Consider sharing the build \
+        information (as shown above)."
+    );
 }
 
 /// Installs a panic hook
