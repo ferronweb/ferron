@@ -39,6 +39,8 @@ pub struct SignalConfig {
     pub export_batch_size: Option<usize>,
     /// Metrics collection interval override (`read_interval`).
     pub read_interval: Option<Duration>,
+    /// Compress export requests with gzip (`gzip`).
+    pub gzip: bool,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -113,6 +115,7 @@ impl SignalConfig {
                 export_interval: None,
                 export_batch_size: None,
                 read_interval: None,
+                gzip: false,
             });
         };
 
@@ -140,6 +143,8 @@ impl SignalConfig {
             .get_value("read_interval")
             .and_then(|v| v.as_duration());
 
+        let gzip = children.get_flag("gzip");
+
         Some(Self {
             endpoint,
             protocol,
@@ -147,6 +152,7 @@ impl SignalConfig {
             export_interval,
             export_batch_size,
             read_interval,
+            gzip,
         })
     }
 }

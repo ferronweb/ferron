@@ -2,6 +2,7 @@ use std::error::Error;
 use std::time::Duration;
 
 use prost::Message;
+use tonic::codec::CompressionEncoding;
 use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 
@@ -38,6 +39,43 @@ enum GrpcSignalClient {
     Traces(TraceServiceClient<tonic::codegen::InterceptedService<Channel, AuthInterceptor>>),
 }
 
+impl GrpcSignalClient {
+    /// Raise the per-message size limits to the OTLP caps.
+    fn max_message_sizes(self) -> Self {
+        match self {
+            Self::Logs(client) => Self::Logs(
+                client
+                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
+                    .max_encoding_message_size(MAX_REQUEST_SIZE),
+            ),
+            Self::Metrics(client) => Self::Metrics(
+                client
+                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
+                    .max_encoding_message_size(MAX_REQUEST_SIZE),
+            ),
+            Self::Traces(client) => Self::Traces(
+                client
+                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
+                    .max_encoding_message_size(MAX_REQUEST_SIZE),
+            ),
+        }
+    }
+
+    /// Enable gzip request compression when configured.
+    fn maybe_gzip(self, gzip: bool) -> Self {
+        if !gzip {
+            return self;
+        }
+        match self {
+            Self::Logs(client) => Self::Logs(client.send_compressed(CompressionEncoding::Gzip)),
+            Self::Metrics(client) => {
+                Self::Metrics(client.send_compressed(CompressionEncoding::Gzip))
+            }
+            Self::Traces(client) => Self::Traces(client.send_compressed(CompressionEncoding::Gzip)),
+        }
+    }
+}
+
 /// Adds the configured `authorization` metadata value to every gRPC request.
 #[derive(Debug, Clone)]
 pub struct AuthInterceptor(pub Option<MetadataValue<tonic::metadata::Ascii>>);
@@ -63,6 +101,7 @@ impl GrpcSignal {
         endpoint: &str,
         no_verify: bool,
         authorization: Option<&str>,
+        gzip: bool,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let channel = build_tonic_channel(endpoint, no_verify)?;
         let authorization = authorization
@@ -70,22 +109,19 @@ impl GrpcSignal {
             .transpose()?;
         let interceptor = AuthInterceptor(authorization);
         let client = match kind {
-            SignalKind::Logs => GrpcSignalClient::Logs(
-                LogsServiceClient::with_interceptor(channel.clone(), interceptor)
-                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
-                    .max_encoding_message_size(MAX_REQUEST_SIZE),
-            ),
+            SignalKind::Logs => GrpcSignalClient::Logs(LogsServiceClient::with_interceptor(
+                channel.clone(),
+                interceptor,
+            )),
             SignalKind::Metrics => GrpcSignalClient::Metrics(
-                MetricsServiceClient::with_interceptor(channel.clone(), interceptor)
-                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
-                    .max_encoding_message_size(MAX_REQUEST_SIZE),
+                MetricsServiceClient::with_interceptor(channel.clone(), interceptor),
             ),
-            SignalKind::Traces => GrpcSignalClient::Traces(
-                TraceServiceClient::with_interceptor(channel.clone(), interceptor)
-                    .max_decoding_message_size(MAX_RESPONSE_SIZE)
-                    .max_encoding_message_size(MAX_REQUEST_SIZE),
-            ),
+            SignalKind::Traces => GrpcSignalClient::Traces(TraceServiceClient::with_interceptor(
+                channel.clone(),
+                interceptor,
+            )),
         };
+        let client = client.max_message_sizes().maybe_gzip(gzip);
         Ok(Self {
             client: tokio::sync::Mutex::new(client),
         })
@@ -455,6 +491,7 @@ mod tests {
             &format!("http://{addr}"),
             false,
             Some("Bearer token"),
+            false,
         )
         .unwrap();
         (signal, addr)

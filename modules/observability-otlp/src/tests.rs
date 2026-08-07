@@ -1065,6 +1065,7 @@ fn signal_config_parses_batch_tuning_directives() {
                     "export_batch_size".to_string(),
                     vec![ServerConfigurationValue::Number(256, None)],
                 ),
+                ("gzip".to_string(), vec![]),
             ]),
         ),
         (
@@ -1096,10 +1097,34 @@ fn signal_config_parses_batch_tuning_directives() {
     let logs = config.logs.unwrap();
     assert_eq!(logs.export_interval, Some(Duration::from_secs(10)));
     assert_eq!(logs.export_batch_size, Some(256));
+    assert!(logs.gzip);
 
     let traces = config.traces.unwrap();
     assert_eq!(traces.export_interval, Some(Duration::from_secs(5)));
+    assert!(!traces.gzip);
 
     let metrics = config.metrics.unwrap();
     assert_eq!(metrics.read_interval, Some(Duration::from_secs(60)));
+    assert!(!metrics.gzip);
+}
+
+#[test]
+fn signal_config_parses_gzip_flag_with_explicit_false() {
+    use crate::config::OtlpBackendConfig;
+    use ferron_core::config::ServerConfigurationValue;
+
+    let block = signal_block(vec![(
+        "traces",
+        vec![ServerConfigurationValue::String(
+            "http://collector:4318/v1/traces".to_string(),
+            None,
+        )],
+        Some(vec![(
+            "gzip".to_string(),
+            vec![ServerConfigurationValue::Boolean(false, None)],
+        )]),
+    )]);
+
+    let config = OtlpBackendConfig::parse_config(&block);
+    assert!(!config.traces.unwrap().gzip);
 }

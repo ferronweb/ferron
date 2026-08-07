@@ -39,6 +39,7 @@ Each signal sub-block supports these nested directives:
 | --------------- | ---------- | ---------------------------------------------------------------- | -------------------------------------------- |
 | `protocol`      | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC).      | none                                         |
+| `gzip`          | `[bool]`   | Compress export requests with gzip (HTTP and gRPC).              | `false`                                      |
 
 The `logs` and `traces` sub-blocks also support batching tuning:
 

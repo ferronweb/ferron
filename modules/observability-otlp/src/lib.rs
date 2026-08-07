@@ -490,12 +490,13 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}|{:?}|{:?}",
+                "{}|{}|{}|{:?}|{:?}|{}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
                 s.export_interval,
-                s.export_batch_size
+                s.export_batch_size,
+                s.gzip
             )
         })
         .unwrap_or_default();
@@ -504,11 +505,12 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}|{:?}",
+                "{}|{}|{}|{:?}|{}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
-                s.read_interval
+                s.read_interval,
+                s.gzip
             )
         })
         .unwrap_or_default();
@@ -517,12 +519,13 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         .as_ref()
         .map(|s| {
             format!(
-                "{}|{}|{}|{:?}|{:?}",
+                "{}|{}|{}|{:?}|{:?}|{}",
                 s.endpoint,
                 s.protocol,
                 s.authorization.as_deref().unwrap_or(""),
                 s.export_interval,
-                s.export_batch_size
+                s.export_batch_size,
+                s.gzip
             )
         })
         .unwrap_or_default();

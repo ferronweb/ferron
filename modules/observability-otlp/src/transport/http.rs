@@ -21,6 +21,23 @@ const CONTENT_TYPE_PROTOBUF: &str = "application/x-protobuf";
 const CONTENT_TYPE_JSON: &str = "application/json";
 const USER_AGENT: &str = concat!("Ferron/", env!("CARGO_PKG_VERSION"));
 
+/// Gzip-compress a fully buffered request body.
+fn gzip_compress(body: &[u8]) -> Bytes {
+    use std::io::Write;
+
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+
+    let mut encoder = GzEncoder::new(Vec::with_capacity(body.len() / 2), Compression::default());
+    encoder
+        .write_all(body)
+        .expect("writing into a Vec must not fail");
+    encoder
+        .finish()
+        .expect("gzip compression must not fail")
+        .into()
+}
+
 /// HTTP statuses that are retryable per the OTLP specification.
 const RETRYABLE_STATUSES: [StatusCode; 4] = [
     StatusCode::TOO_MANY_REQUESTS,
@@ -36,6 +53,7 @@ pub struct HttpSignal {
     client: HyperOtelClient,
     endpoint: String,
     json: bool,
+    gzip: bool,
     authorization: Option<HeaderValue>,
 }
 
@@ -47,11 +65,13 @@ impl HttpSignal {
         json: bool,
         no_verify: bool,
         authorization: Option<&str>,
+        gzip: bool,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         Ok(Self {
             client: HyperOtelClient::new(no_verify)?,
             endpoint,
             json,
+            gzip,
             authorization: authorization.map(HeaderValue::from_str).transpose()?,
         })
     }
@@ -128,17 +148,21 @@ impl HttpSignal {
     }
 
     /// Encode the request body: OTLP JSON (pbjson + hex-ID handling) or
-    /// binary protobuf.
+    /// binary protobuf, optionally gzip-compressed.
     fn encode<T>(&self, request: &T) -> Bytes
     where
         T: serde::Serialize + Message + Default,
     {
-        if self.json {
+        let body = if self.json {
             serde_json::to_vec(&request_to_json(request))
                 .expect("OTLP request JSON serialization must not fail")
-                .into()
         } else {
-            request.encode_to_vec().into()
+            request.encode_to_vec()
+        };
+        if self.gzip {
+            gzip_compress(&body)
+        } else {
+            body.into()
         }
     }
 
@@ -174,6 +198,12 @@ impl HttpSignal {
                 }
             }
         };
+        if self.gzip {
+            request.headers_mut().insert(
+                http::header::CONTENT_ENCODING,
+                HeaderValue::from_static("gzip"),
+            );
+        }
         if let Some(authorization) = &self.authorization {
             request
                 .headers_mut()
@@ -443,6 +473,7 @@ mod tests {
             false,
             false,
             Some("Bearer token"),
+            false,
         )
         .unwrap();
 
@@ -457,6 +488,56 @@ mod tests {
         );
         assert_eq!(captured.authorization.as_deref(), Some("Bearer token"));
         let decoded = ExportTraceServiceRequest::decode(captured.body.as_ref()).unwrap();
+        assert_eq!(decoded, request);
+    }
+
+    #[tokio::test]
+    async fn http_gzip_compresses_body_and_sets_content_encoding() {
+        use std::io::Read;
+
+        let captured = Arc::new(Mutex::new(None::<CapturedRequest>));
+        let handler = {
+            let captured = captured.clone();
+            move |req: http::Request<Bytes>| {
+                *captured.lock().unwrap() = Some(CapturedRequest {
+                    content_type: req
+                        .headers()
+                        .get(http::header::CONTENT_TYPE)
+                        .map(|v| v.to_str().unwrap().to_string()),
+                    authorization: req
+                        .headers()
+                        .get(http::header::CONTENT_ENCODING)
+                        .map(|v| v.to_str().unwrap().to_string()),
+                    body: req.into_body(),
+                });
+                http::Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Full::new(Bytes::new()))
+                    .unwrap()
+            }
+        };
+        let addr = spawn_http_server(Arc::new(handler)).await;
+        let signal = HttpSignal::new(
+            SignalKind::Traces,
+            format!("http://{addr}/v1/traces"),
+            false,
+            false,
+            None,
+            true,
+        )
+        .unwrap();
+
+        let request = sample_trace_request();
+        let result = signal.export_traces(&request, &test_retry()).await;
+
+        assert_eq!(result, ExportResult::Success);
+        let captured = captured.lock().unwrap().take().unwrap();
+        assert_eq!(captured.authorization.as_deref(), Some("gzip"));
+        assert_eq!(&captured.body[..2], &[0x1F, 0x8B], "gzip magic bytes");
+        let mut decoder = flate2::read::GzDecoder::new(captured.body.as_ref());
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).unwrap();
+        let decoded = ExportTraceServiceRequest::decode(decoded.as_ref()).unwrap();
         assert_eq!(decoded, request);
     }
 
@@ -489,6 +570,7 @@ mod tests {
             true,
             false,
             None,
+            false,
         )
         .unwrap();
 
@@ -546,6 +628,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         )
         .unwrap();
 
@@ -585,6 +668,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         )
         .unwrap();
 
@@ -640,6 +724,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         )
         .unwrap();
 
@@ -678,6 +763,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         )
         .unwrap();
 
@@ -724,6 +810,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         )
         .unwrap();
 

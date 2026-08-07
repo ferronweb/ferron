@@ -12,10 +12,11 @@ tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
-tonic = "0.14"
+tonic = { version = "0.14", features = ["gzip"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
+flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 bytes = "1"
 http = "1"
 http-body-util = "0.1"

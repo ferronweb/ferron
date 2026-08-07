@@ -215,6 +215,7 @@ fn build_signal(
             &sig.endpoint,
             no_verify,
             authorization,
+            sig.gzip,
         )?),
         "http/protobuf" => SignalTransport::Http(HttpSignal::new(
             kind,
@@ -222,6 +223,7 @@ fn build_signal(
             false,
             no_verify,
             authorization,
+            sig.gzip,
         )?),
         "http/json" => SignalTransport::Http(HttpSignal::new(
             kind,
@@ -229,6 +231,7 @@ fn build_signal(
             true,
             no_verify,
             authorization,
+            sig.gzip,
         )?),
         other => return Err(format!("unsupported OTLP protocol: {other}").into()),
     };
