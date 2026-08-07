@@ -25,6 +25,7 @@ lru = "0.18.0"
 
 # New libraries for custom OTLP exporter logic
 prost = "0.14.4"
+tonic-prost = "0.14.4"
 
 # TODO: remove the libraries below after migration
 opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [

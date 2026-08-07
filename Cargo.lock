@@ -1878,6 +1878,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic",
+ "tonic-prost",
  "tonic-prost-build",
  "urlencoding",
  "webpki-roots",
