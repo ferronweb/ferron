@@ -1,7 +1,9 @@
-mod client;
 mod config;
-mod providers;
 mod validator;
+
+// TODO: remove them (they would be replaced with custom OTLP exporter logic)
+mod client;
+mod providers;
 
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
