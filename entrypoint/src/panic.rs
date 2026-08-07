@@ -9,16 +9,17 @@ fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     };
 
     if !ferron_core::logging::is_init()
-        && ferron_core::logging::init_stdio_logger(ferron_core::logging::LogLevel::Error).is_err() {
-            eprintln!(
-                "Ferron web server just crashed (failed to init the logger): {} (at {})",
-                payload.unwrap_or("<unknown crash>"),
-                panic_info
-                    .location()
-                    .unwrap_or(std::panic::Location::caller())
-            );
-            return;
-        }
+        && ferron_core::logging::init_stdio_logger(ferron_core::logging::LogLevel::Error).is_err()
+    {
+        eprintln!(
+            "Ferron web server just crashed (failed to init the logger): {} (at {})",
+            payload.unwrap_or("<unknown crash>"),
+            panic_info
+                .location()
+                .unwrap_or(std::panic::Location::caller())
+        );
+        return;
+    }
 
     ferron_core::log_error!(
         "Ferron web server just crashed (!): {} (at {})",
