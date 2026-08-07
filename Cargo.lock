@@ -1302,6 +1302,7 @@ name = "ferron-http-basicauth"
 version = "3.0.0-beta.8"
 dependencies = [
  "argon2-rs",
+ "argon2-sys",
  "async-trait",
  "aws-lc-rs",
  "aws-lc-sys",

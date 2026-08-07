@@ -21,6 +21,9 @@ ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["abuse"] }
 ferron-observability = { path = "../../types/observability" }
 
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+argon2-sys = { version = "0.1", features = ["simd"] } # Use SIMD in Argon2 C reference impl, which seems to be tied to x86
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
