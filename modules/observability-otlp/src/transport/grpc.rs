@@ -5,16 +5,15 @@ use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 
-use crate::client::build_tonic_channel;
+use super::client::{
+    retry_with_backoff, ExportResult, RetryConfig, MAX_REQUEST_SIZE, MAX_RESPONSE_SIZE,
+};
+use super::http_client::build_tonic_channel;
 use crate::proto::opentelemetry::proto::collector::{
     logs::v1::logs_service_client::LogsServiceClient, logs::v1::ExportLogsServiceRequest,
     metrics::v1::metrics_service_client::MetricsServiceClient,
     metrics::v1::ExportMetricsServiceRequest, trace::v1::trace_service_client::TraceServiceClient,
     trace::v1::ExportTraceServiceRequest,
-};
-
-use super::client::{
-    retry_with_backoff, ExportResult, RetryConfig, MAX_REQUEST_SIZE, MAX_RESPONSE_SIZE,
 };
 
 /// Which OTLP signal a transport instance carries.

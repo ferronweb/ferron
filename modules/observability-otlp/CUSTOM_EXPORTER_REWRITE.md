@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Steps 0-5 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, and the metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader) all implemented and committed; Step 6 (integration, teardown, cleanup) pending
+**Status:** Steps 0-6 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed; Step 7 (E2E tests + docs) pending
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -354,15 +354,15 @@ proto-level assertions on sums, histograms, and exemplars; a manual
 
 ### Step 6 — Integration, teardown, and cleanup
 
-- [ ] `lib.rs`: replace `OtlpProviderCache` (SDK providers) with the three
+- [x] `lib.rs`: replace `OtlpProviderCache` (SDK providers) with the three
       pipeline components; keep the event loop + `config_cache_key` +
       sink. Ensure shutdown: cancel token → flush batch exporters and
       reader (reuse the `spawn_blocking` pattern if the drop path deadlocks;
       with a custom implementation this can be a plain async flush + timeout).
-- [ ] Delete `src/providers/` (all files) and `src/client.rs`'s
+- [x] Delete `src/providers/` (all files) and `src/client.rs`'s
       `opentelemetry_http` impl; keep `HyperOtelClient`/`build_tonic_channel`
       logic (moved to `transport/`).
-- [ ] Remove SDK crates from `Cargo.toml`; run `cargo shear`, `cargo clippy
+- [x] Remove SDK crates from `Cargo.toml`; run `cargo shear`, `cargo clippy
       --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
       `cargo fmt --all --check`.
 - [ ] Optional config additions (only if you want user-facing control; each

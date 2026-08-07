@@ -12,10 +12,6 @@ mod transport;
 
 mod convert;
 
-// Keep the HTTP client and channel constructors: the OTLP transports build on
-// them. Remaining SDK crates are removed in a later step.
-mod client;
-
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::sync::atomic::Ordering;

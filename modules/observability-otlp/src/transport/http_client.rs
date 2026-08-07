@@ -70,7 +70,10 @@ impl std::fmt::Display for ClientError {
 
 impl std::error::Error for ClientError {}
 
-/// Wrapper adapting hyper-util + hyper-rustls to opentelemetry-http's HttpClient trait.
+/// Hyper-based HTTP client shared by all OTLP HTTP signal transports.
+///
+/// Uses hyper-util + hyper-rustls with the appropriate TLS config for OTLP
+/// HTTP exporters: native certificate store with webpki-roots fallback.
 #[derive(Clone, Debug)]
 pub struct HyperOtelClient {
     inner: Client<
@@ -81,8 +84,8 @@ pub struct HyperOtelClient {
 }
 
 impl HyperOtelClient {
-    /// Build an HTTP client using hyper-util + hyper-rustls with the appropriate TLS config
-    /// for OTLP HTTP exporters. Uses native certificate store with webpki-roots fallback.
+    /// Build an HTTP client using hyper-util + hyper-rustls with the
+    /// appropriate TLS config for OTLP HTTP exporters.
     pub fn new(no_verify: bool) -> Result<Self, Box<dyn Error + Send + Sync>> {
         use hyper_rustls::HttpsConnectorBuilder;
         use rustls::client::danger::ServerCertVerifier;
@@ -174,8 +177,7 @@ impl HyperOtelClient {
     }
 
     /// Send a request and collect the full response body, capping the body
-    /// size at `max_response_size` bytes. This is the plain hyper interface
-    /// used by the custom OTLP exporter (no `opentelemetry-http` types).
+    /// size at `max_response_size` bytes.
     pub async fn send(
         &self,
         request: hyper::Request<Full<Bytes>>,
@@ -218,22 +220,8 @@ impl HyperOtelClient {
     }
 }
 
-#[async_trait::async_trait]
-impl opentelemetry_http::HttpClient for HyperOtelClient {
-    async fn send_bytes(
-        &self,
-        request: opentelemetry_http::Request<Bytes>,
-    ) -> Result<Response<Bytes>, opentelemetry_http::HttpError> {
-        let (parts, body) = request.into_parts();
-        let request = hyper::Request::from_parts(parts, Full::new(body));
-        self.send(request, usize::MAX)
-            .await
-            .map_err(|err| err.to_string().into())
-    }
-}
-
-/// Build a tonic Channel with matching TLS config for use with OTLP gRPC exporters.
-/// Uses native certificate store with webpki-roots fallback.
+/// Build a tonic Channel with matching TLS config for use with OTLP gRPC
+/// exporters. Uses native certificate store with webpki-roots fallback.
 pub fn build_tonic_channel(
     endpoint: &str,
     no_verify: bool,

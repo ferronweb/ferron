@@ -1844,7 +1844,6 @@ name = "ferron-observability-otlp"
 version = "3.0.0-beta.8"
 dependencies = [
  "async-channel",
- "async-trait",
  "base64 0.23.1",
  "bytes",
  "crossbeam-queue",
@@ -1858,7 +1857,6 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "lru",
- "opentelemetry-http",
  "pbjson",
  "pbjson-build",
  "prost",
@@ -3489,35 +3487,6 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
-
-[[package]]
-name = "opentelemetry"
-version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682"
-dependencies = [
- "futures-core",
- "futures-sink",
- "js-sys",
- "pin-project-lite",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "opentelemetry-http"
-version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5683015d09e2df236ef005b17f6f196f0d5f6313c4fa43a7b6a53b52776e4331"
-dependencies = [
- "async-trait",
- "bytes",
- "http",
- "http-body-util",
- "hyper",
- "hyper-util",
- "opentelemetry",
- "tokio",
-]
 
 [[package]]
 name = "option-ext"

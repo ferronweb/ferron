@@ -6,7 +6,6 @@ use http::{HeaderValue, StatusCode};
 use http_body_util::Full;
 use prost::Message;
 
-use crate::client::HyperOtelClient;
 use crate::proto::opentelemetry::proto::collector::{
     logs::v1::{ExportLogsServiceRequest, ExportLogsServiceResponse},
     metrics::v1::{ExportMetricsServiceRequest, ExportMetricsServiceResponse},
@@ -15,6 +14,7 @@ use crate::proto::opentelemetry::proto::collector::{
 
 use super::client::{retry_with_backoff, ExportResult, RetryConfig, MAX_RESPONSE_SIZE};
 use super::grpc::SignalKind;
+use super::http_client::HyperOtelClient;
 use super::json::request_to_json;
 
 const CONTENT_TYPE_PROTOBUF: &str = "application/x-protobuf";
@@ -184,7 +184,7 @@ impl HttpSignal {
             Ok(response) => response,
             Err(err) => {
                 return ExportResult::Failure {
-                    retryable: !matches!(err, crate::client::ClientError::TooLargeResponse),
+                    retryable: !matches!(err, super::http_client::ClientError::TooLargeResponse),
                     retry_after: None,
                     message: err.to_string(),
                 }
