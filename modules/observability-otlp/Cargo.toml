@@ -72,4 +72,4 @@ hyper = { version = "1", features = ["server", "http1"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 
 [package.metadata.cargo-shear]
-ignored = ["prost", "tonic-prost"]
+ignored = ["pbjson", "tonic-prost"]
