@@ -26,6 +26,7 @@ const SCRYPT_MAX_MEM: usize = 0;
 ///
 /// Returns `false` for unrecognized hash formats and malformed hashes.
 /// This function never panics.
+#[inline]
 pub(crate) fn verify_password(plain: &str, hash: &str) -> bool {
     if hash.starts_with("$argon2") {
         verify_argon2(plain, hash)
@@ -39,6 +40,7 @@ pub(crate) fn verify_password(plain: &str, hash: &str) -> bool {
 }
 
 /// Verify a password against an Argon2 hash string.
+#[inline]
 fn verify_argon2(plain: &str, hash: &str) -> bool {
     // `argon2-kdf` decodes base64 without padding, so strip trailing `=`
     // padding from the salt and hash segments to accept both encodings.
@@ -55,6 +57,7 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
 /// Strip trailing `=` padding from the salt and hash segments of an Argon2
 /// hash string. Returns `None` if the string does not have the expected
 /// structure.
+#[inline]
 fn strip_base64_padding(hash: &str) -> Option<String> {
     let segments: Vec<&str> = hash.split('$').collect();
     if segments.len() != 6 {
@@ -75,6 +78,7 @@ fn strip_base64_padding(hash: &str) -> Option<String> {
 }
 
 /// Verify a password against a PBKDF2 hash string.
+#[inline]
 fn verify_pbkdf2(plain: &str, hash: &str) -> bool {
     let segments: Vec<&str> = hash.split('$').collect();
     if segments.len() != 5 || !segments[0].is_empty() {
@@ -110,6 +114,7 @@ fn verify_pbkdf2(plain: &str, hash: &str) -> bool {
 }
 
 /// Map a PBKDF2 hash identifier to an AWS-LC algorithm.
+#[inline]
 fn pbkdf2_algorithm(ident: &str) -> Option<aws_lc_rs::pbkdf2::Algorithm> {
     match ident {
         "pbkdf2" => Some(aws_lc_rs::pbkdf2::PBKDF2_HMAC_SHA1),
@@ -125,6 +130,7 @@ fn pbkdf2_algorithm(ident: &str) -> Option<aws_lc_rs::pbkdf2::Algorithm> {
 /// Accepts a bare iteration count (`600000`) or the legacy PHC parameter
 /// form (`i=600000[,l=32]`). Returns the iteration count and, when the `l`
 /// parameter is present, the expected derived key length in bytes.
+#[inline]
 fn parse_pbkdf2_params(params: &str) -> Option<(NonZeroU32, Option<u32>)> {
     if let Ok(iterations) = params.parse::<u32>() {
         return NonZeroU32::new(iterations).map(|iterations| (iterations, None));
@@ -145,6 +151,7 @@ fn parse_pbkdf2_params(params: &str) -> Option<(NonZeroU32, Option<u32>)> {
 }
 
 /// Verify a password against a scrypt hash string.
+#[inline]
 fn verify_scrypt(plain: &str, hash: &str) -> bool {
     let segments: Vec<&str> = hash.split('$').collect();
     if segments.len() != 5 || !segments[0].is_empty() || segments[1] != "scrypt" {
@@ -171,6 +178,11 @@ fn verify_scrypt(plain: &str, hash: &str) -> bool {
     };
 
     let mut derived = vec![0u8; expected.len()];
+    // Had to use `aws-lc-sys` directly here, because `aws-lc-rs` doesn't expose
+    // scrypt hashing functions
+    //
+    // SAFETY: `plain`, `salt`, and `derived` are all valid UTF-8 strings,
+    // and `derived` is large enough to hold the output hash.
     let ret = unsafe {
         aws_lc_sys::EVP_PBE_scrypt(
             plain.as_ptr().cast(),
@@ -193,6 +205,7 @@ fn verify_scrypt(plain: &str, hash: &str) -> bool {
 }
 
 /// Parse a scrypt params segment of the form `ln=<N_log>,r=<r>,p=<p>`.
+#[inline]
 fn parse_scrypt_params(params: &str) -> Option<(u64, u64, u64)> {
     let mut n_log = None;
     let mut r = None;
@@ -210,6 +223,7 @@ fn parse_scrypt_params(params: &str) -> Option<(u64, u64, u64)> {
 }
 
 /// Decode a base64 value accepting both padded and unpadded encodings.
+#[inline]
 fn decode_b64_ignore_padding(input: &str) -> Option<Vec<u8>> {
     STANDARD_NO_PAD.decode(input.trim_end_matches('=')).ok()
 }
@@ -223,7 +237,8 @@ mod tests {
     const PASSWORD: &str = "test";
 
     const ARGON2ID_HASH_1: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
-        p4ZwOkPffNeVtgmOBgr/ZA$bPiMPdlq3NoWLe0ogU4XBTc/PjXAHAEDuYXSka2xKtU";
+        p4ZwOkPf#[inline]
+fNeVtgmOBgr/ZA$bPiMPdlq3NoWLe0ogU4XBTc/PjXAHAEDuYXSka2xKtU";
     const ARGON2ID_HASH_2: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
         ZiPoEVmYo3b2r6Y2oZ8+JA$23gV15+t9eGAkldj1mkCEJXmwkxR9uoq65B4bG29I34";
     const SCRYPT_HASH: &str = "$scrypt$ln=14,r=8,p=1$\
@@ -233,6 +248,7 @@ mod tests {
 
     /// Re-encode the salt and hash segments (indices 4 and 5) with base64
     /// padding.
+    #[inline]
     fn with_padded_segments(hash: &str) -> String {
         let segments: Vec<&str> = hash.split('$').collect();
         let mut normalized = String::with_capacity(hash.len() + 4);
@@ -250,6 +266,7 @@ mod tests {
     }
 
     /// Strip base64 padding from the salt and hash segments (indices 4 and 5).
+    #[inline]
     fn with_unpadded_segments(hash: &str) -> String {
         let segments: Vec<&str> = hash.split('$').collect();
         let mut normalized = String::with_capacity(hash.len());
@@ -266,11 +283,13 @@ mod tests {
         normalized
     }
 
+    #[inline]
     fn verify(plain: &str, hash: &str) -> bool {
         verify_password(plain, hash)
     }
 
     #[test]
+    #[inline]
     fn verifies_argon2id() {
         assert!(verify(PASSWORD, ARGON2ID_HASH_1));
         assert!(verify(PASSWORD, ARGON2ID_HASH_2));
@@ -278,6 +297,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_argon2id_with_padded_base64() {
         let padded = with_padded_segments(ARGON2ID_HASH_1);
         assert!(padded.split('$').nth(4).unwrap().ends_with("=="));
@@ -285,12 +305,14 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_scrypt() {
         assert!(verify(PASSWORD, SCRYPT_HASH));
         assert!(!verify("wrong", SCRYPT_HASH));
     }
 
     #[test]
+    #[inline]
     fn verifies_scrypt_with_unpadded_base64() {
         let unpadded = with_unpadded_segments(SCRYPT_HASH);
         assert!(!unpadded.split('$').nth(4).unwrap().contains('='));
@@ -298,12 +320,14 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_pbkdf2_sha256() {
         assert!(verify(PASSWORD, PBKDF2_SHA256_HASH));
         assert!(!verify("wrong", PBKDF2_SHA256_HASH));
     }
 
     #[test]
+    #[inline]
     fn verifies_pbkdf2_sha256_with_unpadded_base64() {
         let unpadded = with_unpadded_segments(PBKDF2_SHA256_HASH);
         assert!(!unpadded.split('$').nth(4).unwrap().contains('='));
@@ -311,6 +335,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_pbkdf2_legacy_phc_params() {
         let legacy = "$pbkdf2-sha256$i=600000,l=32$\
             q/OlsSBToMqk35bOAlik5w==$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=";
@@ -322,6 +347,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_roundtripped_pbkdf2_variants() {
         let salt = b"salt for pbkdf2 roundtrip";
         for (ident, algorithm) in [
@@ -345,6 +371,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn verifies_roundtripped_argon2_variants() {
         for algorithm in [
             argon2_kdf::Algorithm::Argon2id,
@@ -364,6 +391,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn rejects_malformed_hashes() {
         let cases = [
             "plaintext",
@@ -394,6 +422,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn rejects_unknown_prefixes() {
         assert!(!verify(PASSWORD, ""));
         assert!(!verify(PASSWORD, "$unknown$v=1$m=1$c2FsdA$aGFzaA=="));
@@ -401,6 +430,7 @@ mod tests {
     }
 
     #[test]
+    #[inline]
     fn fake_hash_is_verifiable() {
         let fake = crate::stage::FAKE_HASH;
         // The stage relies on this hash to always fail for the probe
