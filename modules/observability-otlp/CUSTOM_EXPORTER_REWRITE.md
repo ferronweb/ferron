@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** plan (not yet started)
+**Status:** Step 0 (groundwork) done — pbjson JSON (de)serialization integrated and golden tests passing; Steps 1-9 pending
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -189,19 +189,19 @@ cargo fmt --all --check
 
 ### Step 0 — Groundwork: proto module and pbjson build integration
 
-- [ ] Rename/extend `src/proto.rs`: make the module `pub` (`pub mod proto;` in
+- [x] Rename/extend `src/proto.rs`: make the module `pub` (`pub mod proto;` in
       `lib.rs`), keep the existing `tonic::include_proto!` structure.
-- [ ] Extend `build.rs`:
-  - keep `protox::compile` (existing 3 collector service protos);
-  - serialize the returned `FileDescriptorSet` and feed it to
+- [x] Extend `build.rs`:
+  - [x] keep `protox::compile` (existing 3 collector service protos);
+  - [x] serialize the returned `FileDescriptorSet` and feed it to
     `pbjson_build::Builder::new().register_descriptors(&fds)?.build(&[".opentelemetry"])`;
-  - add `cargo:rerun-if-changed` for the proto files if not already present.
-- [ ] Include the generated serde code inside each module in `src/proto.rs`
+  - [x] add `cargo:rerun-if-changed` for the proto files if not already present.
+- [x] Include the generated serde code inside each module in `src/proto.rs`
       (`include!(concat!(env!("OUT_DIR"), "/opentelemetry.proto.common.v1.serde.rs"))`
       etc., mirroring the pbjson-build usage example).
-- [ ] Add `pbjson`, `pbjson-build` (build), `serde`, `serde_json` to
+- [x] Add `pbjson`, `pbjson-build` (build), `serde`, `serde_json` to
       `Cargo.toml`.
-- [ ] Verify JSON output for `Span`, `LogRecord`, `Exemplar`, metric data
+- [x] Verify JSON output for `Span`, `LogRecord`, `Exemplar`, metric data
       points against the official examples in the submodule
       `opentelemetry-proto/examples/{trace,metrics,logs}.json` (golden
       fixture tests; see §7).

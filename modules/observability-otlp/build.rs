@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use protox::prost::Message;
+
 fn main() {
     let crate_root_dir: PathBuf = std::env::var("CARGO_MANIFEST_DIR").unwrap().into();
     let opentelemetry_proto_dir = crate_root_dir.join("opentelemetry-proto");
@@ -20,6 +22,11 @@ fn main() {
             "failed to obtain the opentelemetry-proto Git repository, perhaps you need \
             to run `git submodule update --init --recursive`?"
         );
+    }
+
+    // Re-run the build script when any protobuf definition changes.
+    for entry in walkdir_proto_files(&opentelemetry_proto_dir) {
+        println!("cargo:rerun-if-changed={}", entry.display());
     }
 
     // Use `protox`, which doesn't require installing `protoc` on the host machine,
@@ -44,6 +51,33 @@ fn main() {
     tonic_prost_build::configure()
         .build_server(false)
         .build_client(true)
-        .compile_fds(file_descriptors)
+        .compile_fds(file_descriptors.clone())
         .expect("failed to compile opentelemetry protobufs");
+
+    // Generate `serde::Serialize`/`serde::Deserialize` implementations (JSON
+    // Protobuf encoding) for all `opentelemetry` packages. Enums are serialized
+    // as integers, as required by the OTLP/HTTP JSON encoding.
+    pbjson_build::Builder::new()
+        .register_descriptors(&file_descriptors.encode_to_vec())
+        .expect("failed to register opentelemetry protobufs for pbjson")
+        .use_integers_for_enums()
+        .ignore_unknown_fields()
+        .build(&[".opentelemetry"])
+        .expect("failed to generate opentelemetry protobuf JSON (de)serialization code");
+}
+
+/// List all `.proto` files under the `opentelemetry-proto` directory.
+fn walkdir_proto_files(dir: &PathBuf) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(walkdir_proto_files(&path));
+            } else if path.extension().is_some_and(|ext| ext == "proto") {
+                files.push(path);
+            }
+        }
+    }
+    files
 }

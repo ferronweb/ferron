@@ -13,7 +13,7 @@ hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
 tonic = "0.14"
-rustls = { version = "0.23", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 async-trait = "0.1"
@@ -26,6 +26,11 @@ lru = "0.18.0"
 # New libraries for custom OTLP exporter logic
 prost = "0.14.4"
 tonic-prost = "0.14.4"
+pbjson = "0.9"
+serde = "1"
+serde_json = "1"
+base64 = "0.22"
+hex = "0.4"
 
 # TODO: remove the libraries below after migration
 opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [
@@ -60,6 +65,7 @@ opentelemetry = { version = "0.32.0", default-features = false, features = [
 git2 = "0.21"
 protox = "0.9.1"
 tonic-prost-build = "0.14.6"
+pbjson-build = "0.9"
 
 [package.metadata.cargo-shear]
 ignored = ["prost", "tonic-prost"]
