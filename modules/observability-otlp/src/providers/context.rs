@@ -1,5 +1,4 @@
 use opentelemetry::KeyValue;
-use opentelemetry::TraceFlags;
 use opentelemetry_sdk::Resource;
 
 /// Build an OTLP resource from the service name, including process identity
@@ -16,14 +15,4 @@ pub(crate) fn build_resource(service_name: String) -> Resource {
         .with_attribute(KeyValue::new("process.pid", pid as i64))
         .with_attribute(KeyValue::new("process.start_time", start_time as i64))
         .build()
-}
-
-pub(crate) fn trace_flags(sampled: Option<bool>) -> Option<TraceFlags> {
-    sampled.map(|sampled| {
-        if sampled {
-            TraceFlags::SAMPLED
-        } else {
-            TraceFlags::default()
-        }
-    })
 }

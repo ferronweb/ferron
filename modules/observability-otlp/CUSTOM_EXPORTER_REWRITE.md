@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Step 0 (groundwork) done — pbjson JSON (de)serialization integrated and golden tests passing; Steps 1-9 pending
+**Status:** Steps 0-4 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace exporter, and batch log exporter all implemented and committed; Step 5 (metrics pipeline) pending
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -298,13 +298,13 @@ retry ≤3 times then drop and increment the dropped counter.
 
 ### Step 4 — Batch log exporter (`src/pipeline/logs.rs`)
 
-- [ ] `LogBuffer` + `BatchLogExporter`, mirroring Step 3 (same defaults,
+- [x] `LogBuffer` + `BatchLogExporter`, mirroring Step 3 (same defaults,
       same retry wrapper). Logs and traces may share the generic batcher
       implementation (`pipeline/mod.rs` generic over `ResourceSpans` /
       `ResourceLogs` if convenient — keep it simple; two small structs are
       fine).
-- [ ] Wire into `lib.rs`; delete `providers/logs.rs`, `providers/access_log.rs`.
-- [ ] Unit tests: same suite as Step 3 plus `log_style` body/attribute
+- [x] Wire into `lib.rs`; delete `providers/logs.rs`, `providers/access_log.rs`.
+- [x] Unit tests: same suite as Step 3 plus `log_style` body/attribute
       assertions at the wire level.
 
 **Definition of done:** identical to Step 3 for the logs signal.

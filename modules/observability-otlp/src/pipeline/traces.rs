@@ -16,7 +16,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
-use std::time::Duration;
 
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
@@ -28,39 +27,7 @@ use crate::proto::opentelemetry::proto::resource::v1::Resource;
 use crate::proto::opentelemetry::proto::trace::v1::{ResourceSpans, ScopeSpans, Span};
 use crate::transport::client::{ExportResult, OtlpTransport};
 
-/// Default number of finished spans that trigger an export.
-pub const DEFAULT_BATCH_SIZE: usize = 512;
-/// Default upper bound on buffered finished spans. New spans are dropped
-/// when the buffer is full (mirrors the SDK batch processor default queue).
-pub const DEFAULT_QUEUE_CAPACITY: usize = 2048;
-/// Default interval at which a partially full buffer is flushed.
-pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
-/// Default upper bound on one export round (including transport retries).
-pub const DEFAULT_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Batching parameters for the trace exporter.
-#[derive(Debug, Clone, Copy)]
-pub struct BatchConfig {
-    /// Number of finished spans that trigger a flush.
-    pub batch_size: usize,
-    /// Upper bound on buffered finished spans.
-    pub queue_capacity: usize,
-    /// Interval at which a partially full buffer is flushed.
-    pub interval: Duration,
-    /// Upper bound on one export round (including transport retries).
-    pub export_timeout: Duration,
-}
-
-impl Default for BatchConfig {
-    fn default() -> Self {
-        Self {
-            batch_size: DEFAULT_BATCH_SIZE,
-            queue_capacity: DEFAULT_QUEUE_CAPACITY,
-            interval: DEFAULT_FLUSH_INTERVAL,
-            export_timeout: DEFAULT_EXPORT_TIMEOUT,
-        }
-    }
-}
+use super::BatchConfig;
 
 /// Bounded queue of finished spans, shared between the event loop (pusher)
 /// and the exporter task (drainer). The queue is unbounded in growth only up
@@ -291,6 +258,7 @@ impl TracePipeline {
 mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use super::*;
     use tokio::sync::Mutex;

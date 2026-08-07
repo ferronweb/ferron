@@ -6,13 +6,10 @@ mod pipeline;
 pub mod proto;
 
 // TODO: wire the remaining transports into the module event loop
-// (logs/metrics signals in pipeline steps 4-6)
+// (metrics signal in pipeline step 5)
 #[allow(dead_code)]
 mod transport;
 
-// TODO: logs/metrics/access-log conversion is only used by tests so far;
-// wire it in pipeline steps 4-6
-#[allow(dead_code)]
 mod convert;
 
 // TODO: remove them (they would be replaced with custom OTLP exporter logic)
@@ -37,9 +34,12 @@ use ferron_observability::{
 };
 
 use crate::config::OtlpBackendConfig;
-use crate::convert::{end_span, start_span, CorrelationContext};
+use crate::convert::{
+    build_access_log_record, build_log_record, end_span, start_span, CorrelationContext,
+};
+use crate::pipeline::logs::{LogExporter, LogPipeline};
 use crate::pipeline::traces::{TraceExporter, TracePipeline};
-use crate::providers::{emit_access_log, emit_log, emit_metric, OtlpProviderCache};
+use crate::providers::{emit_metric, OtlpProviderCache};
 use crate::transport::client::OtlpTransport;
 
 static DROPPED_EVENT: Once = Once::new();
@@ -204,6 +204,59 @@ impl TracePipelineEntry {
     }
 }
 
+/// Per-config state for the log pipeline: the exporter handle and the
+/// config-derived values the conversion needs.
+struct LogPipelineEntry {
+    pipeline: Option<LogPipeline>,
+    baggage_promotions: Vec<BaggageKeyPromotion>,
+    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+}
+
+impl LogPipelineEntry {
+    fn init(
+        config: &OtlpBackendConfig,
+        control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+        cancel_token: tokio_util::sync::CancellationToken,
+        event_sink: Option<&CompositeEventSink>,
+    ) -> Self {
+        let pipeline = if config.logs.is_some() {
+            match OtlpTransport::from_config(config) {
+                Ok(transport) => {
+                    let exporter: Arc<dyn LogExporter> = Arc::new(transport);
+                    Some(LogPipeline::spawn(
+                        exporter,
+                        config.service_name.clone(),
+                        cancel_token,
+                    ))
+                }
+                Err(err) => {
+                    if let Some(sink) = event_sink {
+                        sink.emit(Event::Log(LogEvent {
+                            level: LogLevel::Warn,
+                            message: format!("Error with logs pipeline: {err}"),
+                            summary: "Error with logs pipeline".into(),
+                            target: "ferron-observability-otlp",
+                            attributes: vec![(
+                                "error.message",
+                                LogAttributeValue::String(err.to_string()),
+                            )],
+                            trace_context: None,
+                        }));
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        Self {
+            pipeline,
+            baggage_promotions: config.baggage_promotions.clone(),
+            control_plane_metadata,
+        }
+    }
+}
+
 impl Module for OtlpObservabilityModule {
     fn name(&self) -> &str {
         "observability-otlp"
@@ -227,6 +280,8 @@ impl Module for OtlpObservabilityModule {
             let mut providers: HashMap<String, OtlpProviderCache> = HashMap::new();
             // Per-config trace pipelines
             let mut trace_pipelines: HashMap<String, TracePipelineEntry> = HashMap::new();
+            // Per-config log pipelines
+            let mut log_pipelines: HashMap<String, LogPipelineEntry> = HashMap::new();
 
             while let Some(msg) = tokio::select! {
                 result = rx.recv() => result.ok(),
@@ -239,15 +294,19 @@ impl Module for OtlpObservabilityModule {
                 let config = OtlpBackendConfig::parse_config(&msg.log_config);
 
                 let cache_key = config_cache_key(&config);
-                let entry = providers.entry(cache_key.clone()).or_insert_with(|| {
-                    OtlpProviderCache::init(
-                        &config,
-                        event_sink.as_deref(),
-                        msg.control_plane_metadata.clone(),
-                    )
-                });
+                let entry = providers
+                    .entry(cache_key.clone())
+                    .or_insert_with(|| OtlpProviderCache::init(&config, event_sink.as_deref()));
                 let trace = trace_pipelines.entry(cache_key.clone()).or_insert_with(|| {
                     TracePipelineEntry::init(
+                        &config,
+                        msg.control_plane_metadata.clone(),
+                        cancel_token.clone(),
+                        event_sink.as_deref(),
+                    )
+                });
+                let log = log_pipelines.entry(cache_key.clone()).or_insert_with(|| {
+                    LogPipelineEntry::init(
                         &config,
                         msg.control_plane_metadata.clone(),
                         cancel_token.clone(),
@@ -257,13 +316,14 @@ impl Module for OtlpObservabilityModule {
 
                 match &*msg.event {
                     Event::Log(log_event) => {
-                        if let Some(ref provider) = entry.logs_provider {
-                            emit_log(
-                                provider,
+                        if let Some(pipeline) = &log.pipeline {
+                            let record = build_log_record(
                                 log_event,
-                                &entry.baggage_promotions,
+                                &log.baggage_promotions,
                                 config.log_style,
+                                SystemTime::now(),
                             );
+                            pipeline.buffer.push("ferron", record);
                         }
                     }
                     Event::Metric(metric_event) => {
@@ -298,16 +358,17 @@ impl Module for OtlpObservabilityModule {
                         }
                     }
                     Event::Access(access_event) => {
-                        if let Some(ref provider) = entry.logs_provider {
-                            emit_access_log(
-                                provider,
+                        if let Some(pipeline) = &log.pipeline {
+                            let record = build_access_log_record(
                                 access_event,
                                 &msg.log_config,
                                 &registry,
-                                &entry.baggage_promotions,
+                                &log.baggage_promotions,
                                 config.log_style,
-                                &entry.control_plane_metadata,
+                                &log.control_plane_metadata,
+                                SystemTime::now(),
                             );
+                            pipeline.buffer.push("ferron.access", record);
                         }
                     }
                 }
@@ -323,14 +384,20 @@ impl Module for OtlpObservabilityModule {
                 pipeline.wait_done().await;
             }
 
+            // Shutdown log pipelines: flush remaining records.
+            let log_pipelines: Vec<LogPipeline> = log_pipelines
+                .into_values()
+                .filter_map(|entry| entry.pipeline)
+                .collect();
+            for pipeline in log_pipelines {
+                pipeline.wait_done().await;
+            }
+
             // Shutdown providers
             // `tokio::task::spawn_blocking` is needed, because without it, there can be a deadlock.
             // See https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/struct.BatchSpanProcessor.html
             tokio::task::spawn_blocking(move || {
                 for (_, cache) in providers {
-                    if let Some(p) = cache.logs_provider {
-                        let _ = p.shutdown();
-                    }
                     if let Some(p) = cache.metrics_provider {
                         let _ = p.shutdown();
                     }

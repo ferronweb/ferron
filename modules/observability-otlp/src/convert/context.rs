@@ -113,6 +113,7 @@ impl CorrelationContext {
     }
 
     /// Peek at the span stored under `key`, without removing it.
+    #[cfg(test)]
     pub fn get_span(&mut self, key: &str) -> Option<&Span> {
         self.active_spans.get(key).map(|stored| &stored.span)
     }
