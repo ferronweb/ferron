@@ -11,7 +11,9 @@ http = "1"
 http-body-util = "0.1"
 bytes = "1"
 base64 = "0.22"
-password-auth = { version = "1.0", features = ["pbkdf2", "scrypt"] }
+aws-lc-rs = { version = "1", features = ["bindgen"] }
+aws-lc-sys = "0"
+argon2-kdf = "1.7"
 tokio = { version = "1", features = ["sync"] }
 rustc-hash = "2"
 

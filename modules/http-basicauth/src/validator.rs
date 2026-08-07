@@ -166,13 +166,16 @@ impl BasicAuthValidator {
             || hash.starts_with("$argon2d$")
             || hash.starts_with("$pbkdf2$")
             || hash.starts_with("$pbkdf2-sha256$")
+            || hash.starts_with("$pbkdf2-sha384$")
+            || hash.starts_with("$pbkdf2-sha512$")
             || hash.starts_with("$scrypt$");
 
         if !is_valid {
             return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
                  Supported formats: Argon2 ($argon2id$, $argon2i$, $argon2d$), \
-                 PBKDF2 ($pbkdf2$, $pbkdf2-sha256$), or scrypt ($scrypt$). \
+                 PBKDF2 ($pbkdf2$, $pbkdf2-sha256$, $pbkdf2-sha384$, $pbkdf2-sha512$), \
+                 or scrypt ($scrypt$). \
                  Plaintext passwords are not allowed for security reasons."
             )));
         }

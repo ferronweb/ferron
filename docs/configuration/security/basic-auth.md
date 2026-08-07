@@ -100,8 +100,10 @@ users {
 | `$argon2id$`      | Argon2id (recommended) |
 | `$argon2i$`       | Argon2i                |
 | `$argon2d$`       | Argon2d                |
-| `$pbkdf2$`        | PBKDF2                 |
+| `$pbkdf2$`        | PBKDF2 (HMAC-SHA1)     |
 | `$pbkdf2-sha256$` | PBKDF2-SHA256          |
+| `$pbkdf2-sha384$` | PBKDF2-SHA384          |
+| `$pbkdf2-sha512$` | PBKDF2-SHA512          |
 | `$scrypt$`        | scrypt                 |
 
 > [!note]
@@ -109,6 +111,8 @@ users {
 > - Use the `ferron-passwd` utility, which ships with Ferron, to create password hashes.
 > - Ferron shows the `realm` value in the browser authentication dialog.
 > - Configuration validation fails if any password value is not a recognized hash format.
+> - Base64 salt and hash fields accept both padded and unpadded encodings.
+> - PBKDF2 hashes accept a bare iteration count (`$pbkdf2-sha256$600000$...`) or the PHC parameter form (`$pbkdf2-sha256$i=600000,l=32$...`).
 
 ### `brute_force_protection` block
 

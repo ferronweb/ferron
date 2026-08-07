@@ -7,6 +7,7 @@
 mod brute_force;
 mod config;
 mod loader;
+mod password_hash;
 mod stage;
 mod validator;
 

@@ -39,6 +39,7 @@
 #### Access control
 
 - **Interpolated strings as password hashes (HTTP basic auth)** — interpolated strings can now be used as password hashes for HTTP basic authentication (for example when moving from a static password to an environment variable).
+- **Password hashing backends for HTTP basic auth** — password verification no longer depends on the `password-auth` crate. PBKDF2 verification now uses aws-lc-rs, scrypt uses AWS-LC (`EVP_PBE_scrypt`), and Argon2 uses argon2-kdf. Newly supported hash formats: `$pbkdf2-sha384$` and `$pbkdf2-sha512$`. Base64 salt and hash fields now accept both padded and unpadded encodings. PBKDF2 hashes accept a bare iteration count (`$pbkdf2-sha256$600000$...`) or the PHC parameter form (`$pbkdf2-sha256$i=600000,l=32$...`).
 
 ### Fixed
 

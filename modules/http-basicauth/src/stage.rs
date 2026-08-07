@@ -23,7 +23,7 @@ use crate::config::parse_basicauth_config;
 
 /// A fake hash used to thwart user enumeration attacks.
 /// This hash is a valid, hard-coded Argon2 hash for an empty password.
-const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
+pub(crate) const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
 p=1$xvAbcK77AZqOdJtrS1LqWA$bd5QzFMwzDFGZ5I7FAX3roi9Gw2m/nFo3Ivw/W25f50";
 
 pub(crate) static GLOBAL_CONCURRENCY_SEMAPHORE: LazyLock<
@@ -76,7 +76,7 @@ impl BasicAuthStage {
             None
         };
         let result =
-            vibeio::spawn_blocking(move || password_auth::verify_password(&plain, &hash).is_ok())
+            vibeio::spawn_blocking(move || crate::password_hash::verify_password(&plain, &hash))
                 .await
                 .unwrap_or(false);
         drop(_permit);
