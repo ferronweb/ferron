@@ -60,3 +60,6 @@ opentelemetry = { version = "0.32.0", default-features = false, features = [
 git2 = "0.21"
 protox = "0.9.1"
 tonic-prost-build = "0.14.6"
+
+[package.metadata.cargo-shear]
+ignored = ["prost", "tonic-prost"]
