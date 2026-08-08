@@ -842,6 +842,7 @@ dependencies = [
  "ferron-observability",
  "find_git",
  "flate2",
+ "foldhash 0.2.0",
  "hex",
  "http",
  "http-body-util",

@@ -344,11 +344,20 @@ impl Module for OtlpObservabilityModule {
 
         runtime.spawn_secondary_task(async move {
             // Per-config trace pipelines
-            let mut trace_pipelines: HashMap<String, TracePipelineEntry> = HashMap::new();
+            let mut trace_pipelines: HashMap<
+                String,
+                TracePipelineEntry,
+                foldhash::fast::RandomState,
+            > = Default::default();
             // Per-config log pipelines
-            let mut log_pipelines: HashMap<String, LogPipelineEntry> = HashMap::new();
+            let mut log_pipelines: HashMap<String, LogPipelineEntry, foldhash::fast::RandomState> =
+                Default::default();
             // Per-config metric pipelines
-            let mut metric_pipelines: HashMap<String, MetricPipelineEntry> = HashMap::new();
+            let mut metric_pipelines: HashMap<
+                String,
+                MetricPipelineEntry,
+                foldhash::fast::RandomState,
+            > = Default::default();
 
             while let Some(msg) = tokio::select! {
                 result = rx.recv() => result.ok(),

@@ -34,6 +34,7 @@ hex = "0.4"
 rand = "0.10"
 crossbeam-queue = "0.3.13"
 dashmap = "6.2.1"
+foldhash = "0.2.0"
 
 [build-dependencies]
 find_git = "1.2.1"

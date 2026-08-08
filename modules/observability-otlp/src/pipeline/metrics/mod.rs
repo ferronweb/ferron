@@ -485,7 +485,7 @@ pub(crate) struct MetricStore {
 }
 
 struct MetricStoreInner {
-    series: DashMap<String, Series>,
+    series: DashMap<String, Series, foldhash::fast::RandomState>,
     dropped: AtomicU64,
     /// Whether exemplar samples are captured (`exemplars` config directive).
     capture_exemplars: bool,
@@ -499,7 +499,7 @@ impl MetricStore {
     fn new(capture_exemplars: bool, native_histograms: bool) -> Self {
         Self {
             inner: Arc::new(MetricStoreInner {
-                series: DashMap::new(),
+                series: Default::default(),
                 dropped: AtomicU64::new(0),
                 capture_exemplars,
                 native_histograms,
@@ -541,7 +541,8 @@ impl MetricStore {
     /// envelopes. `points` counts the metric data points collected.
     #[inline]
     fn collect(&self) -> Option<(Vec<Metric>, usize)> {
-        let mut group_index: HashMap<(String, MetricKind), usize> = HashMap::new();
+        let mut group_index: HashMap<(String, MetricKind), usize, foldhash::fast::RandomState> =
+            Default::default();
         let mut groups: Vec<MetricGroup> = Vec::new();
         let mut points = 0;
 
