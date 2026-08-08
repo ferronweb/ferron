@@ -70,7 +70,6 @@ impl LogBuffer {
     pub(crate) fn push(&self, scope: &str, record: LogRecord) -> bool {
         let records = &self.inner.records;
         if records.push((scope.to_string(), record)).is_err() {
-            // Queue is full
             self.record_dropped(1);
             return false;
         };

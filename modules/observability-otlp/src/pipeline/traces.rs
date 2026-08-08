@@ -62,7 +62,6 @@ impl TraceBuffer {
     pub(crate) fn push(&self, span: Span) -> bool {
         let spans = &self.inner.spans;
         if spans.push(span).is_err() {
-            // Queue is full
             self.record_dropped(1);
             return false;
         }
