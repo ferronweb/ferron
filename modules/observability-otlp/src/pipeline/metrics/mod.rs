@@ -622,6 +622,7 @@ fn attributes_for(
             attributes.push(kv(attribute.attribute_name, any_string(value)));
         }
     }
+    attributes.sort_unstable_by(|kv1, kv2| kv1.key.cmp(&kv2.key));
     attributes
 }
 
