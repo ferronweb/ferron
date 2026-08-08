@@ -56,7 +56,7 @@ The `metrics` sub-block supports collection tuning:
 | `exemplars`     | `[bool]`     | Attach the last sampled measurement per series as an exemplar.       | `true`  |
 | `native_histograms` | `[bool]` | Aggregate histograms with the exponential layout. Set to `false` for explicit bucket boundaries. | `true` |
 
-Durations accept a number (seconds), a float (seconds), or a string such as `10s`, `5m`, or `1h`.
+Durations accept a number (seconds), a float (seconds), or a quoted string such as `"10s"`, `"5m"`, or `"1h"`.
 
 Example with per-signal tuning:
 
@@ -66,14 +66,14 @@ example.com {
         provider otlp
 
         logs https://collector:4318/v1/logs {
-            export_interval 10s
+            export_interval "10s"
             export_batch_size 256
         }
         metrics https://collector:4318/v1/metrics {
-            read_interval 60s
+            read_interval "60s"
         }
         traces https://collector:4317/v1/traces {
-            export_interval 5s
+            export_interval "5s"
         }
     }
 }

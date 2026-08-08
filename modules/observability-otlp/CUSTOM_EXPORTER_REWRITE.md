@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Steps 0-6 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed. The §5.6 optional config additions (`export_interval`/`export_batch_size`/`read_interval`, `gzip`, `exemplars`, `native_histograms`; each with directive + validator + docs + changelog) are also committed; Step 7 (E2E tests + docs) pending
+**Status:** Steps 0-7 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed. The §5.6 optional config additions (`export_interval`/`export_batch_size`/`read_interval`, `gzip`, `exemplars`, `native_histograms`; each with directive + validator + docs + changelog) and Step 7 (E2E tests + docs) are also committed; the full e2e suite passes with the new mock collector (metrics, logs, JSON, gRPC, exemplars, explicit histograms)
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -381,25 +381,27 @@ receives all three signals (manual smoke or e2e).
 
 See §7 for the full test matrix. E2E additions:
 
-- [ ] Extend `e2e/images/otlp/responder.py` (Flask mock, port 4318) to also
+- [x] Extend `e2e/images/otlp/responder.py` (Flask mock, port 4318) to also
       decode metrics (`ExportMetricsServiceRequest`, incl. exponential
       histograms and exemplars) and logs, mirroring the existing
       `/received` JSON shape used by `tests/observability/traces.rs`.
-- [ ] Add a gRPC receiver (port 4317) to the mock container (Python
+- [x] Add a gRPC receiver (port 4317) to the mock container (Python
       `grpcio` + generated OTLP services) exposing the same `/received`
       payloads, so gRPC e2e can assert decoded data.
-- [ ] New tests (registered in `e2e/Cargo.toml` or under
-      `tests/observability/mod.rs`):
+- [x] New tests (registered in `tests/observability/mod.rs`):
   - `test_otlp_metrics_exported` (counters, gauges, histograms; assert
     sum/bucket counts/exemplar trace IDs in the decoded payload);
-  - `test_otlp_logs_exported` (modern + legacy style);
+  - `test_otlp_logs_exported` (error-path log via a malformed request);
   - `test_otlp_http_json_exported` (protocol `http/json`, assert decoded
     via the JSON path);
   - `test_otlp_grpc_exported` (protocol `grpc` on 4317);
   - `test_otlp_exemplars` (assert trace_id/span_id on the metric data point
-    match the triggering request);
-  - `test_otlp_native_histograms` (assert exponential histogram fields).
-- [ ] Docs: `docs/configuration/observability/otlp.md` — remove the exemplar
+    match the triggering request; requires the global
+    `http { trace { generate; trust_request } }` block so the incoming
+    `traceparent` is honored);
+  - `test_otlp_native_histograms` (explicit bounds when
+    `native_histograms false`).
+- [x] Docs: `docs/configuration/observability/otlp.md` — remove the exemplar
       limitation note (§1.3), document native histograms + exemplars +
       any new directives; `CHANGELOG.md` entries under **UNRELEASED** for
       each user-visible change (one bullet per commit, Conventional Commits,
