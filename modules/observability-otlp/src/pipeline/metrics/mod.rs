@@ -32,7 +32,6 @@ mod tests;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
 use std::time::{Duration, SystemTime};
 
@@ -489,7 +488,6 @@ pub(crate) struct MetricStore {
 
 struct MetricStoreInner {
     series: DashMap<String, Series, foldhash::fast::RandomState>,
-    dropped: AtomicU64,
     /// Whether exemplar samples are captured (`exemplars` config directive).
     capture_exemplars: bool,
     /// Whether histogram series use the exponential (native) layout
@@ -503,7 +501,6 @@ impl MetricStore {
         Self {
             inner: Arc::new(MetricStoreInner {
                 series: Default::default(),
-                dropped: AtomicU64::new(0),
                 capture_exemplars,
                 native_histograms,
             }),
@@ -595,31 +592,20 @@ impl MetricStore {
             points,
         ))
     }
-
-    /// Total number of data points dropped because an export failed.
-    #[cfg(test)]
-    #[inline]
-    fn dropped(&self) -> u64 {
-        self.inner.dropped.load(Ordering::Relaxed)
-    }
-
-    #[inline]
-    fn record_dropped(&self, n: u64) {
-        self.inner.dropped.fetch_add(n, Ordering::Relaxed);
-        ferron_core::admin::ADMIN_METRICS
-            .observability_events_dropped
-            .fetch_add(n, Ordering::Relaxed);
-        warn_once();
-    }
 }
 
+/// Warn once that an OTLP export failed. The metric store is cumulative, so
+/// the collected points are retained and re-exported on the next read
+/// interval; the warning exists so a failing receiver is noticed without
+/// claiming the points were dropped.
 static DROPPED_METRICS: Once = Once::new();
 
 #[inline]
-fn warn_once() {
+fn warn_failed_export() {
     DROPPED_METRICS.call_once(|| {
         ferron_core::log_warn!(
-            "OTLP metric data points dropped (`otlp` observability backend). \
+            "OTLP metric export failed (`otlp` observability backend). \
+        The data is retained and retried on the next read interval. \
         This may be caused by a failing OTLP receiver."
         );
     });
@@ -741,7 +727,7 @@ impl MetricReader {
     /// Collect and export all series. Exports nothing when no series exist.
     #[inline]
     async fn flush(&self) {
-        let Some((metrics, points)) = self.store.collect() else {
+        let Some((metrics, _)) = self.store.collect() else {
             return;
         };
         let request = ExportMetricsServiceRequest {
@@ -760,7 +746,10 @@ impl MetricReader {
         match result {
             Ok(ExportResult::Success | ExportResult::PartialSuccess { .. }) => {}
             Ok(ExportResult::Failure { .. }) | Err(_) => {
-                self.store.record_dropped(points as u64);
+                // The store is cumulative: the collected points are retained
+                // and re-exported on the next read interval, so nothing is
+                // dropped here.
+                warn_failed_export();
             }
         }
     }

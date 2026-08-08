@@ -58,6 +58,7 @@
 
 #### Observability
 
+- **OTLP metric export failures no longer counted as dropped** — previously, a failed OTLP metric export counted every collected data point as dropped (`ferron.admin.observability_events_dropped`), even though the cumulative data is retained and re-exported on the next read interval. This has been fixed to not count them, keeping the counter for events actually discarded.
 - **OTLP pipeline cache key includes `no_verification`** — previously, two observability blocks that differed only in TLS certificate verification shared one OTLP pipeline and transport, so the first block to feed the pipeline dictated the certificate verifier for the other. This has been fixed to include `no_verification` in the pipeline cache key.
 - **OTLP explicit histogram non-finite values** — previously, NaN and infinite measurements were accepted by explicit-bucket histograms (when `native_histograms false` is set), corrupting the exported count, sum, and min/max. This has been fixed to drop them, matching the exponential histogram layout.
 - **OTLP phantom metric series on rejected samples** — previously, when the first sample of a metric series was rejected (for example a negative delta on a monotonic counter), the series was still created and exported a zero-valued data point with no start time on every read interval. This has been fixed to only create the series when a sample actually applies.

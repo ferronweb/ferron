@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -599,7 +599,7 @@ async fn reader_flushes_on_interval_and_drains_on_shutdown() {
 }
 
 #[tokio::test]
-async fn persistent_failure_counts_dropped_points() {
+async fn failed_export_retains_points_and_reexports_them() {
     let mock = mock_exporter();
     mock.fail.store(true, Ordering::Relaxed);
     let (pipeline, cancel) = spawn_pipeline(mock.clone(), Duration::from_millis(20));
@@ -615,9 +615,34 @@ async fn persistent_failure_counts_dropped_points() {
         &mut DistinctValueTracker::new(),
     );
 
-    wait_until(|| async { pipeline.store.dropped() == 2 }).await;
+    // Wait for the first (failed) flush: the mock records every request, even
+    // the failed ones.
+    wait_until(|| async { mock.request_count().await == 1 }).await;
+
+    // The store is cumulative, so a failed export drops nothing: the next
+    // successful flush re-exports the same series with their full values.
+    mock.fail.store(false, Ordering::Relaxed);
+    wait_until(|| async { mock.request_count().await == 2 }).await;
+
     cancel.cancel();
     pipeline.wait_done().await;
+
+    let requests = mock.requests.lock().await;
+    let metrics = &requests[1].resource_metrics[0].scope_metrics[0].metrics;
+    assert_eq!(metrics.len(), 2);
+    let count = metrics
+        .iter()
+        .find(|metric| metric.name == "a")
+        .unwrap();
+    let crate::proto::opentelemetry::proto::metrics::v1::metric::Data::Sum(sum) =
+        count.data.as_ref().unwrap()
+    else {
+        panic!("a is not a sum");
+    };
+    assert_eq!(
+        sum.data_points[0].value,
+        Some(number_data_point::Value::AsInt(1))
+    );
 }
 
 /// Extract the (only) data point of a sum metric.
