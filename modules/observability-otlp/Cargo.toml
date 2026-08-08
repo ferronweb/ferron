@@ -34,6 +34,7 @@ hex = "0.4"
 rand = "0.10"
 crossbeam-queue = "0.3.13"
 parking_lot = "0.12.5"
+dashmap = "6.2.1"
 
 [build-dependencies]
 find_git = "1.2.1"

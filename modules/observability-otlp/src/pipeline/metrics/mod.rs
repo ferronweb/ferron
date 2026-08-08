@@ -35,11 +35,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
 use std::time::{Duration, SystemTime};
 
+use dashmap::DashMap;
 use ferron_observability::baggage::{
     extract_promoted_keys, BaggageKeyPromotion, DistinctValueTracker, SignalSet,
 };
 use ferron_observability::{MetricEvent, MetricType, MetricValue};
-use parking_lot::Mutex;
 
 use self::expo_histogram::*;
 
@@ -476,7 +476,7 @@ pub(crate) struct MetricStore {
 }
 
 struct MetricStoreInner {
-    series: Mutex<HashMap<String, Series>>,
+    series: DashMap<String, Series>,
     dropped: AtomicU64,
     /// Whether exemplar samples are captured (`exemplars` config directive).
     capture_exemplars: bool,
@@ -489,7 +489,7 @@ impl MetricStore {
     fn new(capture_exemplars: bool, native_histograms: bool) -> Self {
         Self {
             inner: Arc::new(MetricStoreInner {
-                series: Mutex::new(HashMap::new()),
+                series: DashMap::new(),
                 dropped: AtomicU64::new(0),
                 capture_exemplars,
                 native_histograms,
@@ -513,8 +513,7 @@ impl MetricStore {
         let attributes = attributes_for(event, promotions, tracker);
         let key = series_key(event.name, &attributes);
         let now = nanos(SystemTime::now());
-        let mut series = self.inner.series.lock();
-        let entry = series.entry(key).or_insert_with(|| Series {
+        let mut entry = self.inner.series.entry(key).or_insert_with(|| Series {
             name: event.name.to_string(),
             description: event.description.unwrap_or_default().to_string(),
             unit: event.unit.unwrap_or_default().to_string(),
@@ -535,11 +534,10 @@ impl MetricStore {
         let mut groups: Vec<MetricGroup> = Vec::new();
         let mut points = 0;
 
-        let series = self.inner.series.lock();
-        if series.is_empty() {
-            return None;
-        }
-        for metric in series.values() {
+        let mut is_empty = true;
+
+        for metric in self.inner.series.iter() {
+            is_empty = false;
             let (name, description, unit, kind, point) = metric.export();
             let key = (name.clone(), kind);
             let index = match group_index.get(&key) {
@@ -558,6 +556,10 @@ impl MetricStore {
             };
             groups[index].points.push(point);
             points += 1;
+        }
+
+        if is_empty {
+            return None;
         }
 
         Some((

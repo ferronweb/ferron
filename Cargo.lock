@@ -1847,6 +1847,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "crossbeam-queue",
+ "dashmap",
  "ferron-core",
  "ferron-observability",
  "find_git",
