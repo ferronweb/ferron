@@ -23,7 +23,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             validate_nested!(logs, used(sub), export_batch_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
             if let Some(entries) = logs.directives.get("export_batch_size") {
                 for entry in entries {
-                    if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n <= 1) {
+                    if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n < 1) {
                         return Err(ConfigurationValidationError::from(format!(
                             "Export batch size for OTLP logs cannot be smaller than 1"
                         ))
