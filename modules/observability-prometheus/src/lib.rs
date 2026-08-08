@@ -436,6 +436,7 @@ async fn emit_metric(
     native_histograms: bool,
 ) {
     fn sanitize_label_value(s: &str) -> String {
+        let s = s.trim();
         if s.len() <= 128 {
             s.chars()
                 .map(|c| if c.is_control() { '?' } else { c })
