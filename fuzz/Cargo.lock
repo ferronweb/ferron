@@ -849,7 +849,6 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "lru",
- "parking_lot",
  "pbjson",
  "pbjson-build",
  "prost",
