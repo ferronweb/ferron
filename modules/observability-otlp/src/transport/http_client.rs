@@ -114,8 +114,8 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::ServerCertVerified::assertion())
                 }
-                #[inline]
 
+                #[inline]
                 fn verify_tls12_signature(
                     &self,
                     _message: &[u8],
@@ -125,8 +125,8 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
-                #[inline]
 
+                #[inline]
                 fn verify_tls13_signature(
                     &self,
                     _message: &[u8],
@@ -136,8 +136,8 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
-                #[inline]
 
+                #[inline]
                 fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
                     use rustls::SignatureScheme::*;
                     vec![

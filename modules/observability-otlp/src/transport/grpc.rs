@@ -440,8 +440,8 @@ mod tests {
         }
         .encode_to_vec()
     }
-    #[inline]
 
+    #[inline]
     async fn spawn_grpc_server(service: FakeTraceService) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -454,8 +454,8 @@ mod tests {
         });
         addr
     }
-    #[inline]
 
+    #[inline]
     fn sample_trace_request() -> ExportTraceServiceRequest {
         ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {
@@ -484,8 +484,8 @@ mod tests {
             }],
         }
     }
-    #[inline]
 
+    #[inline]
     fn test_retry() -> RetryConfig {
         RetryConfig {
             max_attempts: 3,
@@ -493,8 +493,8 @@ mod tests {
             max_backoff: Duration::from_millis(200),
         }
     }
-    #[inline]
 
+    #[inline]
     async fn new_test_signal(state: &Arc<FakeState>, mode: FakeMode) -> (GrpcSignal, SocketAddr) {
         *state.mode.lock().await = mode;
         let service = FakeTraceService {

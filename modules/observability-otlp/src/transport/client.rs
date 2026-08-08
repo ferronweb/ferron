@@ -196,8 +196,8 @@ impl OtlpTransport {
             None => self.signal_not_configured("traces"),
         }
     }
-    #[inline]
 
+    #[inline]
     fn signal_not_configured(&self, signal: &str) -> ExportResult {
         ExportResult::Failure {
             retryable: false,
@@ -206,8 +206,8 @@ impl OtlpTransport {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn build_signal(
     kind: SignalKind,
     sig: Option<&SignalConfig>,

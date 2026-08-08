@@ -100,8 +100,8 @@ impl TraceBuffer {
     pub(crate) fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
-    #[inline]
 
+    #[inline]
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
         ferron_core::admin::ADMIN_METRICS
@@ -112,8 +112,8 @@ impl TraceBuffer {
 }
 
 static DROPPED_SPANS: Once = Once::new();
-#[inline]
 
+#[inline]
 fn warn_once() {
     DROPPED_SPANS.call_once(|| {
         ferron_core::log_warn!(
@@ -264,7 +264,6 @@ mod tests {
     use super::*;
     use tokio::sync::Mutex;
     #[inline]
-
     fn test_config() -> BatchConfig {
         BatchConfig {
             batch_size: 16,
@@ -273,8 +272,8 @@ mod tests {
             export_timeout: Duration::from_secs(5),
         }
     }
-    #[inline]
 
+    #[inline]
     fn span(name: &str) -> Span {
         Span {
             name: name.to_string(),
@@ -298,8 +297,8 @@ mod tests {
         async fn request_count(&self) -> usize {
             self.requests.lock().await.len()
         }
-        #[inline]
 
+        #[inline]
         async fn span_count(&self) -> usize {
             self.requests
                 .lock()
@@ -333,8 +332,8 @@ mod tests {
             })
         }
     }
-    #[inline]
 
+    #[inline]
     fn spawn_test(
         exporter: Arc<MockExporter>,
         config: BatchConfig,
@@ -348,8 +347,8 @@ mod tests {
         );
         (pipeline, cancel)
     }
-    #[inline]
 
+    #[inline]
     async fn wait_until<F, Fut>(mut condition: F)
     where
         F: FnMut() -> Fut,

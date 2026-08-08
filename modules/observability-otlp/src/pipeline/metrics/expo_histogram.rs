@@ -38,8 +38,8 @@ impl ExplicitHistogram {
     pub fn new() -> Self {
         Self::with_buckets(DEFAULT_EXPLICIT_BOUNDS.into())
     }
-    #[inline]
 
+    #[inline]
     pub fn with_buckets(buckets: Cow<'static, [f64]>) -> Self {
         Self {
             count: 0,
@@ -371,8 +371,8 @@ impl ExpoBuckets {
         self.counts = self.counts[..last_index as usize + 1].to_vec();
         self.offset >>= delta;
     }
-    #[inline]
 
+    #[inline]
     pub(super) fn to_proto(&self) -> Buckets {
         Buckets {
             offset: self.offset,

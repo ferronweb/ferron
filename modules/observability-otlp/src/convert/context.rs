@@ -13,8 +13,8 @@ pub(crate) fn decode_trace_id(hex_ascii: &[u8]) -> Option<Vec<u8>> {
 pub(crate) fn decode_span_id(hex_ascii: &[u8]) -> Option<Vec<u8>> {
     decode_hex_id(hex_ascii, 8)
 }
-#[inline]
 
+#[inline]
 fn decode_hex_id(hex_ascii: &[u8], expected_len: usize) -> Option<Vec<u8>> {
     let s = std::str::from_utf8(hex_ascii).ok()?;
     if s.len() != expected_len * 2 {

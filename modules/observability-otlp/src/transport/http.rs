@@ -175,8 +175,8 @@ impl HttpSignal {
             body.into()
         }
     }
-    #[inline]
 
+    #[inline]
     fn content_type(&self) -> &'static str {
         if self.json {
             CONTENT_TYPE_JSON
@@ -291,8 +291,8 @@ impl HttpSignal {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn partial_success_count<T>(partial: Option<&T>) -> (u64, String)
 where
     T: PartialSuccess,
@@ -390,8 +390,8 @@ mod tests {
         content_type: Option<String>,
         authorization: Option<String>,
     }
-    #[inline]
 
+    #[inline]
     async fn spawn_http_server(handler: Handler) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

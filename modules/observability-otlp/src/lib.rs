@@ -326,13 +326,13 @@ impl Module for OtlpObservabilityModule {
     fn name(&self) -> &str {
         "observability-otlp"
     }
-    #[inline]
 
+    #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    #[inline]
 
+    #[inline]
     fn start(
         &self,
         runtime: &mut ferron_core::runtime::Runtime,
@@ -567,8 +567,8 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
     fn name(&self) -> &str {
         "otlp"
     }
-    #[inline]
 
+    #[inline]
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
         // Heuristics based on configuration directives
         let has_logs = ctx.log_config.has_directive("logs");
@@ -616,8 +616,8 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
             })
         })
     }
-    #[inline]
 
+    #[inline]
     fn register_modules(
         &mut self,
         registry: Arc<Registry>,
@@ -640,8 +640,8 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
 
         Ok(())
     }
-    #[inline]
 
+    #[inline]
     fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
         use ferron_core::directives::{Directive, DirectiveSubblock};
         registry
@@ -734,8 +734,8 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
                 DirectiveSubblock::custom("observability"),
             );
     }
-    #[inline]
 
+    #[inline]
     fn register_scoped_configuration_validators(
         &mut self,
         registry: &mut std::collections::HashMap<

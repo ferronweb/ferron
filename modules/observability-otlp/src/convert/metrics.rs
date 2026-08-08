@@ -40,8 +40,8 @@ pub(crate) fn metric_key_values(
         .map(|(key, value)| metric_kv(key, value))
         .collect()
 }
-#[inline]
 
+#[inline]
 fn metric_kv(key: &'static str, value: &MetricAttributeValue) -> KeyValue {
     match value {
         MetricAttributeValue::String(s) => kv(key, any_string(sanitize_label_value(s))),

@@ -108,8 +108,8 @@ impl LogBuffer {
     pub(crate) fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
-    #[inline]
 
+    #[inline]
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
         ferron_core::admin::ADMIN_METRICS
@@ -120,8 +120,8 @@ impl LogBuffer {
 }
 
 static DROPPED_RECORDS: Once = Once::new();
-#[inline]
 
+#[inline]
 fn warn_once() {
     DROPPED_RECORDS.call_once(|| {
         ferron_core::log_warn!(
@@ -284,7 +284,6 @@ mod tests {
     use crate::convert::{any_string, build_log_record};
     use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
     #[inline]
-
     fn test_config() -> BatchConfig {
         BatchConfig {
             batch_size: 16,
@@ -293,8 +292,8 @@ mod tests {
             export_timeout: Duration::from_secs(5),
         }
     }
-    #[inline]
 
+    #[inline]
     fn record(message: &str) -> LogRecord {
         LogRecord {
             body: Some(any_string(message)),
@@ -316,8 +315,8 @@ mod tests {
         async fn request_count(&self) -> usize {
             self.requests.lock().await.len()
         }
-        #[inline]
 
+        #[inline]
         async fn record_count(&self) -> usize {
             self.requests
                 .lock()
@@ -354,8 +353,8 @@ mod tests {
             })
         }
     }
-    #[inline]
 
+    #[inline]
     fn spawn_test(
         exporter: Arc<MockExporter>,
         config: BatchConfig,
@@ -365,8 +364,8 @@ mod tests {
             LogPipeline::spawn_with_config(exporter, "test-service".into(), cancel.clone(), config);
         (pipeline, cancel)
     }
-    #[inline]
 
+    #[inline]
     async fn wait_until<F, Fut>(mut condition: F)
     where
         F: FnMut() -> Fut,
@@ -599,7 +598,6 @@ mod tests {
         let records = &requests[0].resource_logs[0].scope_logs[0].log_records;
         assert_eq!(records.len(), 2);
         #[inline]
-
         fn body(record: &LogRecord) -> &crate::proto::opentelemetry::proto::common::v1::AnyValue {
             record.body.as_ref().unwrap()
         }

@@ -350,8 +350,8 @@ impl Series {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn number_value(
     value: Scalar,
 ) -> crate::proto::opentelemetry::proto::metrics::v1::number_data_point::Value {
@@ -360,8 +360,8 @@ fn number_value(
         Scalar::Int(v) => number_data_point::Value::AsInt(v),
     }
 }
-#[inline]
 
+#[inline]
 fn exemplar_proto(
     exemplar: StoredExemplar,
 ) -> crate::proto::opentelemetry::proto::metrics::v1::Exemplar {
@@ -445,8 +445,8 @@ impl MetricGroup {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn point_number(point: Point) -> NumberDataPoint {
     match point {
         Point::Number(point) => point,
@@ -455,8 +455,8 @@ fn point_number(point: Point) -> NumberDataPoint {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn point_exponential(point: Point) -> ExponentialHistogramDataPoint {
     match point {
         Point::Exponential(point) => point,
@@ -465,8 +465,8 @@ fn point_exponential(point: Point) -> ExponentialHistogramDataPoint {
         }
     }
 }
-#[inline]
 
+#[inline]
 fn point_explicit(point: Point) -> HistogramDataPoint {
     match point {
         Point::Explicit(point) => point,
@@ -585,8 +585,8 @@ impl MetricStore {
     fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
-    #[inline]
 
+    #[inline]
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
         ferron_core::admin::ADMIN_METRICS
@@ -597,8 +597,8 @@ impl MetricStore {
 }
 
 static DROPPED_METRICS: Once = Once::new();
-#[inline]
 
+#[inline]
 fn warn_once() {
     DROPPED_METRICS.call_once(|| {
         ferron_core::log_warn!(

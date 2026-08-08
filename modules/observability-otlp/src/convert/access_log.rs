@@ -13,8 +13,8 @@ use crate::proto::opentelemetry::proto::logs::v1::LogRecord;
 
 use super::context::{decode_span_id, decode_trace_id};
 use super::{any_bool, any_double, any_int, any_string, kv, nanos};
-#[inline]
 
+#[inline]
 fn format_access_event(
     access_event: &Arc<dyn AccessEvent>,
     log_config: &Arc<ServerConfigurationBlock>,
@@ -183,8 +183,8 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             }
         }
     }
-    #[inline]
 
+    #[inline]
     fn field_u64(&mut self, name: &str, value: u64) {
         let int = i64::try_from(value).unwrap_or(i64::MAX);
         match name {
@@ -198,8 +198,8 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             s => self.push(format!("ferron.custom.{s}"), any_int(int)),
         }
     }
-    #[inline]
 
+    #[inline]
     fn field_f64(&mut self, name: &str, value: f64) {
         if name == "duration_secs" {
             self.push("http.server.request.duration", any_double(value));
@@ -209,8 +209,8 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             self.push(format!("ferron.custom.{name}"), any_double(value));
         }
     }
-    #[inline]
 
+    #[inline]
     fn field_bool(&mut self, name: &str, value: bool) {
         if name.contains('.') {
             self.push(name, any_bool(value));
