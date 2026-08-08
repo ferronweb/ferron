@@ -81,7 +81,7 @@ pub(crate) fn emit_trace(
                         let attrs: Vec<KeyValue> = link
                             .attributes
                             .iter()
-                            .map(|(k, v)| trace_kv((*k).into(), v))
+                            .map(|(k, v)| trace_kv(k.clone().into(), v))
                             .collect();
                         Some(Link::new(cx, attrs, 0))
                     })

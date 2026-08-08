@@ -172,7 +172,7 @@ pub struct SpanLink {
     /// Whether the linked span was sampled.
     pub sampled: Option<bool>,
     /// Attributes describing the relationship.
-    pub attributes: Vec<(&'static str, TraceAttributeValue)>,
+    pub attributes: Vec<(String, TraceAttributeValue)>,
 }
 
 /// Represents a trace event with its name, attributes, and optional span ID.
