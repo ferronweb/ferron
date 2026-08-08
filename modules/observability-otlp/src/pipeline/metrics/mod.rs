@@ -631,21 +631,37 @@ fn series_key(name: &str, attributes: &[KeyValue]) -> String {
     let mut key = String::with_capacity(64 + attributes.len() * 16);
     key.push_str(name);
     for attribute in attributes {
-        key.push('|');
+        key.push('\x00');
         key.push_str(&attribute.key);
-        key.push('=');
+        key.push('\x00');
         if let Some(value) = &attribute.value {
             if let Some(value) = &value.value {
                 match value {
-                    any_value::Value::StringValue(v) => key.push_str(v),
-                    any_value::Value::IntValue(v) => key.push_str(&v.to_string()),
-                    any_value::Value::DoubleValue(v) => key.push_str(&v.to_string()),
-                    any_value::Value::BoolValue(v) => {
-                        key.push_str(if *v { "true" } else { "false" })
+                    any_value::Value::StringValue(v) => {
+                        key.push('s');
+                        key.push_str(v);
                     }
-                    any_value::Value::ArrayValue(v) => key.push_str(&v.values.len().to_string()),
+                    any_value::Value::IntValue(v) => {
+                        key.push('i');
+                        key.push_str(&v.to_string());
+                    }
+                    any_value::Value::DoubleValue(v) => {
+                        key.push('d');
+                        key.push_str(&v.to_string());
+                    }
+                    any_value::Value::BoolValue(v) => {
+                        key.push('b');
+                        key.push_str(if *v { "true" } else { "false" });
+                    }
+                    any_value::Value::ArrayValue(v) => {
+                        key.push('a');
+                        key.push_str(&v.values.len().to_string());
+                    }
                     any_value::Value::KvlistValue(_) => {}
-                    any_value::Value::BytesValue(v) => key.push_str(&v.len().to_string()),
+                    any_value::Value::BytesValue(v) => {
+                        key.push('B');
+                        key.push_str(&v.len().to_string());
+                    }
                     _ => {}
                 }
             }
