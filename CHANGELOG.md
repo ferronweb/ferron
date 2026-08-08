@@ -58,6 +58,7 @@
 
 #### Observability
 
+- **OTLP phantom metric series on rejected samples** — previously, when the first sample of a metric series was rejected (for example a negative delta on a monotonic counter), the series was still created and exported a zero-valued data point with no start time on every read interval. This has been fixed to only create the series when a sample actually applies.
 - **OTLP gRPC `no_verification` TLS handshake** — previously, when an OTLP gRPC endpoint was configured with `no_verification true` and used HTTPS, TLS handshakes failed because the custom certificate verifier rejected TLS 1.2/1.3 handshake signatures. This has been fixed to return assertion-based verification results (matching the HTTP exporter behavior).
 - **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
 - **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.

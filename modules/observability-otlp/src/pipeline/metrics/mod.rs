@@ -264,12 +264,14 @@ struct Series {
 
 impl Series {
     /// Record one measurement, updating time bounds and, when `capture` is
-    /// set, the exemplar ring.
+    /// set, the exemplar ring. Returns `false` when the measurement does not
+    /// apply to the series aggregate (a type mismatch, or a negative delta on
+    /// a monotonic counter); the series is left untouched.
     #[inline]
-    fn record(&mut self, event: &MetricEvent, now: u64, capture: bool) {
+    fn record(&mut self, event: &MetricEvent, now: u64, capture: bool) -> bool {
         let op = op_for(&self.aggregate, &event.ty, event.value);
         if !apply(&mut self.aggregate, op) {
-            return;
+            return false;
         }
         if self.start_time == 0 {
             self.start_time = now;
@@ -288,6 +290,7 @@ impl Series {
                 }
             }
         }
+        true
     }
 
     /// Export this series as one data point for the OTLP `Metric` grouping.
@@ -508,7 +511,10 @@ impl MetricStore {
     }
 
     /// Record one metric event into its series, creating the series on first
-    /// observation.
+    /// observation. A first observation that does not apply to the aggregate
+    /// (for example a negative delta on a monotonic counter) does not create
+    /// the series; a phantom zero-valued series would otherwise be exported on
+    /// every read interval forever.
     #[inline]
     pub(crate) fn record(
         &self,
@@ -524,16 +530,25 @@ impl MetricStore {
         let attributes = attributes_for(event, promotions, tracker);
         let key = series_key(event.name, &attributes);
         let now = nanos(SystemTime::now());
-        let mut entry = self.inner.series.entry(key).or_insert_with(|| Series {
-            name: event.name.to_string(),
-            description: event.description.unwrap_or_default().to_string(),
-            unit: event.unit.unwrap_or_default().to_string(),
-            attributes,
-            aggregate,
-            start_time: 0,
-            exemplar: None,
-        });
-        entry.record(event, now, self.inner.capture_exemplars);
+        match self.inner.series.entry(key) {
+            dashmap::Entry::Occupied(mut occupied) => {
+                occupied.get_mut().record(event, now, self.inner.capture_exemplars);
+            }
+            dashmap::Entry::Vacant(vacant) => {
+                let mut series = Series {
+                    name: event.name.to_string(),
+                    description: event.description.unwrap_or_default().to_string(),
+                    unit: event.unit.unwrap_or_default().to_string(),
+                    attributes,
+                    aggregate,
+                    start_time: 0,
+                    exemplar: None,
+                };
+                if series.record(event, now, self.inner.capture_exemplars) {
+                    vacant.insert(series);
+                }
+            }
+        }
     }
 
     /// Collect all series into per-name metric groups. Returns `None` when

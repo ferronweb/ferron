@@ -196,6 +196,33 @@ async fn monotonic_counter_drops_negative_deltas() {
 }
 
 #[tokio::test]
+async fn rejected_first_sample_does_not_create_phantom_series() {
+    let mock = mock_exporter();
+    let (pipeline, cancel) = spawn_pipeline(mock.clone(), Duration::from_secs(3600));
+
+    let mut tracker = DistinctValueTracker::new();
+    // Every sample is rejected: negative deltas on a monotonic counter. A
+    // rejected first observation must not create the series, or a zero-valued
+    // point with no start time would be exported on every interval forever.
+    for delta in [-1.0, -2.0, -3.0] {
+        pipeline.store.record(
+            &event("calls", MetricType::Counter, MetricValue::F64(delta)),
+            &[],
+            &mut tracker,
+        );
+    }
+
+    cancel.cancel();
+    pipeline.wait_done().await;
+
+    let requests = mock.requests.lock().await;
+    assert!(
+        requests.is_empty(),
+        "a series whose samples were all rejected must not be exported"
+    );
+}
+
+#[tokio::test]
 async fn start_time_is_first_observation_and_stamps_advance() {
     let mock = mock_exporter();
     let (pipeline, cancel) = spawn_pipeline(mock.clone(), Duration::from_secs(3600));
