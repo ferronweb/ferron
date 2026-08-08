@@ -29,7 +29,7 @@ pub enum SignalKind {
 /// channel built with the shared TLS configuration, with optional
 /// `authorization` metadata on every request.
 pub struct GrpcSignal {
-    client: tokio::sync::Mutex<GrpcSignalClient>,
+    client: GrpcSignalClient,
 }
 
 /// The three generated service clients, specialized to the signal.
@@ -126,9 +126,7 @@ impl GrpcSignal {
             )),
         };
         let client = client.max_message_sizes().maybe_gzip(gzip);
-        Ok(Self {
-            client: tokio::sync::Mutex::new(client),
-        })
+        Ok(Self { client })
     }
 
     /// Export a batch of log records over gRPC, with retry/backoff.
@@ -139,14 +137,16 @@ impl GrpcSignal {
         retry: &RetryConfig,
     ) -> ExportResult {
         retry_with_backoff(retry, || async {
-            let mut guard = self.client.lock().await;
-            let GrpcSignalClient::Logs(client) = &mut *guard else {
+            let GrpcSignalClient::Logs(client) = &self.client else {
                 return ExportResult::Failure {
                     retryable: false,
                     retry_after: None,
                     message: "logs signal is not configured for the gRPC transport".to_string(),
                 };
             };
+            // In Tonic, although the methods take `&mut self`, the clients are cheap to clone,
+            // so clone them instead of using `Mutex`
+            let mut client = client.clone();
             match client.export(request.clone()).await {
                 Ok(response) => match response.into_inner().partial_success {
                     Some(partial) if partial.rejected_log_records > 0 => {
@@ -171,14 +171,14 @@ impl GrpcSignal {
         retry: &RetryConfig,
     ) -> ExportResult {
         retry_with_backoff(retry, || async {
-            let mut guard = self.client.lock().await;
-            let GrpcSignalClient::Metrics(client) = &mut *guard else {
+            let GrpcSignalClient::Metrics(client) = &self.client else {
                 return ExportResult::Failure {
                     retryable: false,
                     retry_after: None,
                     message: "metrics signal is not configured for the gRPC transport".to_string(),
                 };
             };
+            let mut client = client.clone();
             match client.export(request.clone()).await {
                 Ok(response) => match response.into_inner().partial_success {
                     Some(partial) if partial.rejected_data_points > 0 => {
@@ -203,14 +203,14 @@ impl GrpcSignal {
         retry: &RetryConfig,
     ) -> ExportResult {
         retry_with_backoff(retry, || async {
-            let mut guard = self.client.lock().await;
-            let GrpcSignalClient::Traces(client) = &mut *guard else {
+            let GrpcSignalClient::Traces(client) = &self.client else {
                 return ExportResult::Failure {
                     retryable: false,
                     retry_after: None,
                     message: "traces signal is not configured for the gRPC transport".to_string(),
                 };
             };
+            let mut client = client.clone();
             match client.export(request.clone()).await {
                 Ok(response) => match response.into_inner().partial_success {
                     Some(partial) if partial.rejected_spans > 0 => ExportResult::PartialSuccess {
