@@ -28,6 +28,9 @@ fn gzip_compress(body: &[u8]) -> Bytes {
     use flate2::write::GzEncoder;
     use flate2::Compression;
 
+    // There could be `async-compression`, but the body is fully buffered,
+    // and `async-compression` would be useful for streams, but redundant for buffered data,
+    // so use `flate2` directly.
     let mut encoder = GzEncoder::new(Vec::with_capacity(body.len() / 2), Compression::default());
     encoder
         .write_all(body)
