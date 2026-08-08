@@ -630,10 +630,7 @@ async fn failed_export_retains_points_and_reexports_them() {
     let requests = mock.requests.lock().await;
     let metrics = &requests[1].resource_metrics[0].scope_metrics[0].metrics;
     assert_eq!(metrics.len(), 2);
-    let count = metrics
-        .iter()
-        .find(|metric| metric.name == "a")
-        .unwrap();
+    let count = metrics.iter().find(|metric| metric.name == "a").unwrap();
     let crate::proto::opentelemetry::proto::metrics::v1::metric::Data::Sum(sum) =
         count.data.as_ref().unwrap()
     else {

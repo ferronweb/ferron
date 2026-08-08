@@ -529,7 +529,9 @@ impl MetricStore {
         let now = nanos(SystemTime::now());
         match self.inner.series.entry(key) {
             dashmap::Entry::Occupied(mut occupied) => {
-                occupied.get_mut().record(event, now, self.inner.capture_exemplars);
+                occupied
+                    .get_mut()
+                    .record(event, now, self.inner.capture_exemplars);
             }
             dashmap::Entry::Vacant(vacant) => {
                 let mut series = Series {
