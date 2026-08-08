@@ -76,7 +76,7 @@ fn would_parse_as_number(s: &str) -> bool {
     //  ^
     //
     // ...is not a valid number literal
-    index > 1
+    index > 1 || first != '.'
 }
 
 /// Determines whether a value should be quoted based on the quote style.
@@ -219,6 +219,11 @@ mod tests {
         // Interpolation should be quoted
         assert!(should_quote("{{var}}", QuoteStyle::Auto));
         assert!(should_quote("prefix {{var}} suffix", QuoteStyle::Auto));
+
+        // Jammed numbers should be quoted
+        assert!(should_quote("12ab", QuoteStyle::Auto));
+        assert!(should_quote("10s", QuoteStyle::Auto));
+        assert!(should_quote("1s", QuoteStyle::Auto));
     }
 
     #[test]

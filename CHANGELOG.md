@@ -77,6 +77,10 @@
 - **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
 - **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 
+#### CLI utilities
+
+- **`ferron-fmt` duration string formatting fix** — previously, `ferron-fmt` formatted short duration strings (like `1s`) without quotes, which caused subsequent parse errors. This has been fixed to always quote this kind of strings.
+
 ## Ferron 3.0.0-beta.8
 
 **Released in July 15, 2026**
