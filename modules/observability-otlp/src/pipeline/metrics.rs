@@ -26,13 +26,14 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Once, OnceLock};
+use std::sync::{Arc, Once, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use ferron_observability::baggage::{
     extract_promoted_keys, BaggageKeyPromotion, DistinctValueTracker, SignalSet,
 };
 use ferron_observability::{MetricEvent, MetricType, MetricValue};
+use parking_lot::Mutex;
 
 use crate::convert::{
     any_string, build_resource, build_scope, decode_span_id, decode_trace_id, kv,
@@ -509,7 +510,7 @@ impl MetricStore {
         let attributes = attributes_for(event, promotions, tracker);
         let key = series_key(event.name, &attributes);
         let now = nanos(SystemTime::now());
-        let mut series = self.inner.series.lock().unwrap();
+        let mut series = self.inner.series.lock();
         let entry = series.entry(key).or_insert_with(|| Series {
             name: event.name.to_string(),
             description: event.description.unwrap_or_default().to_string(),
@@ -531,7 +532,7 @@ impl MetricStore {
         let mut groups: Vec<MetricGroup> = Vec::new();
         let mut points = 0;
 
-        let series = self.inner.series.lock().unwrap();
+        let series = self.inner.series.lock();
         if series.is_empty() {
             return None;
         }
