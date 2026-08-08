@@ -45,6 +45,7 @@ cargo run -p ferron -- doctor -c ferron.conf                      # best-practic
 cargo run -p ferron -- adapt -c ferron.conf                       # dump config as JSON
 cargo run -p ferron -- daemon -c ferron.conf --pid-file /path     # Unix daemon
 cargo run -p ferron -- winservice install -c ferron.conf          # Windows service install
+cargo run -p ferron -- directives -c ferron.conf                  # print registered config directives as JSON
 cargo run -p ferron -- version                                    # version + build info
 ```
 
@@ -61,24 +62,21 @@ just package-deb [target]        # Debian package (uses Docker)
 just package-rpm [target]        # RPM package (uses Docker)
 just package-windows [target]    # Windows installer (Windows host only)
 just installer                   # Linux installer (runs `make` in installer/)
+just cross-build target [pgo]    # cross-compile via cross-build/build.sh (pgo=true/false, Linux only)
 ```
 
 ### Fuzzing (requires nightly)
 
-All HTTP fuzz targets live under `fuzz/` (excluded from the main workspace). Run from inside the `fuzz/` directory:
+All HTTP fuzz targets live under `fuzz/fuzz_targets/` (excluded from the main workspace). Run from inside the `fuzz/` directory:
 
 ```
-cargo +nightly fuzz run fuzz_http_pipeline               # full HTTP pipeline integration (nginx-style)
-cargo +nightly fuzz run fuzz_canonicalize_path           # URL path canonicalization with security invariants
-cargo +nightly fuzz run fuzz_canonicalize_path_routing   # routing-only canonicalization
-cargo +nightly fuzz run fuzz_proxy_protocol              # PROXY protocol v1/v2 parsing
-cargo +nightly fuzz run fuzz_load_balancers              # LB algorithms (consistent hash, WRR, P2C, selector)
-cargo +nightly fuzz run fuzz_cache                       # LSCache parsers, policy evaluation, cache key roundtrip
-cargo +nightly fuzz run fuzz_ratelimit                   # rate limiter under concurrent access
-cargo +nightly fuzz run fuzz_traceparent                 # W3C traceparent header parsing
-cargo +nightly fuzz run fuzz_qvalue                      # Accept/q-value header parsing
-cargo +nightly fuzz run fuzz_forwarded                   # RFC 7239 Forwarded header parsing
-cargo +nightly fuzz run fuzz_error_pages                 # error page generation
+cargo +nightly fuzz run fuzz_http_pipeline        # full HTTP pipeline integration (nginx-style)
+cargo +nightly fuzz run fuzz_canonicalize_path    # URL path canonicalization with security invariants
+cargo +nightly fuzz run fuzz_load_balancers       # LB algorithms (consistent hash, WRR, P2C, selector)
+cargo +nightly fuzz run fuzz_cache                # LSCache parsers, policy evaluation, cache key roundtrip
+cargo +nightly fuzz run fuzz_ratelimit            # rate limiter under concurrent access
+cargo +nightly fuzz run fuzz_traceparent          # W3C traceparent header parsing
+cargo +nightly fuzz run fuzz_qvalue               # Accept/q-value header parsing
 ```
 
 Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.
@@ -98,13 +96,13 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Branch**: all work targets `develop-3.x` (CI workflows filter on it; the 3.x docs site syncs from it).
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes and implementation details, bug fixes and new features are accepted; this is a user-facing changelog). Commit messages should have `Assisted-by: AgentName:ModelVersion` in the footer (for example if you're Claude Opus 4.8 on Claude Code, use `Assisted-by: Claude:Opus-4.8`).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (see `CHANGELOG.md`). Use bold inline headers for each bullet.
-- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links.
+- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links. Config files can use either `.conf` or `.ferron` extensions.
 - **Stub implementation/known issue comments**: When leaving stubs in the codebase and comments explaining the stubs, include `TODO` markers. For known-issue comments, leave `FIXME` markers.
 - **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`, if user-facing as subtle implementation details don't count), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception — it may update documentation alone without adding tests or code.
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
 - **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
-- **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. `bindgen-cli` required for non-`cross` builds.
-- **Docker**: three variants — `Dockerfile` (distroless + musl), `Dockerfile.alpine` (musl), `Dockerfile.debian` (glibc).
+- **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. Release binaries are produced by `cross-build/build.sh` (PGO by default; `.cargo/config.toml` pins an i686-musl linker). `bindgen-cli` required for non-`cross` builds.
+- **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim) plus matching `-nopgo` variants.
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
 - **Idiomatic Ferron 3 configuration style**: When writing `.conf` examples in documentation, follow the new ferronconf spec conventions:
   - **No semicolons** — directives are terminated by newlines, not semicolons.
