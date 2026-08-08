@@ -230,13 +230,21 @@ fn apply(aggregate: &mut Aggregate, op: Op) -> bool {
             if monotonic && v < 0 {
                 return false;
             }
-            *i = i.wrapping_add(v);
+            *i = if let Some(i) = i.checked_add(v) {
+                i
+            } else {
+                return false;
+            };
         }
         (Aggregate::Sum { value, .. }, Op::AddUint(v)) => {
             let Scalar::Int(i) = value else {
                 return false;
             };
-            *i = i.wrapping_add(v as i64);
+            *i = if let Some(i) = i.checked_add(v as i64) {
+                i
+            } else {
+                return false;
+            };
         }
         (Aggregate::Gauge { value }, Op::SetDouble(v)) => *value = Scalar::Double(v),
         (Aggregate::Gauge { value }, Op::SetInt(v)) => *value = Scalar::Int(v),
