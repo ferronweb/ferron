@@ -252,8 +252,6 @@ struct Series {
     /// UNIX epoch nanoseconds of the first recorded observation (cumulative
     /// temporality: this stays fixed for the life of the series).
     start_time: u64,
-    /// UNIX epoch nanoseconds of the most recent observation.
-    last_time: u64,
     /// The last exemplar sample (ring capacity 1).
     exemplar: Option<StoredExemplar>,
 }
@@ -269,7 +267,6 @@ impl Series {
         if self.start_time == 0 {
             self.start_time = now;
         }
-        self.last_time = now;
         if capture {
             if let Some(ctx) = &event.trace_context {
                 if let (Some(trace_id), Some(span_id)) =
@@ -287,7 +284,7 @@ impl Series {
     }
 
     /// Export this series as one data point for the OTLP `Metric` grouping.
-    fn export(&self) -> (String, String, String, MetricKind, Point) {
+    fn export(&self, now: u64) -> (String, String, String, MetricKind, Point) {
         let attributes = self.attributes.clone();
         let exemplars = self.exemplar.iter().cloned().map(exemplar_proto).collect();
         match &self.aggregate {
@@ -301,7 +298,7 @@ impl Series {
                 Point::Number(NumberDataPoint {
                     attributes,
                     start_time_unix_nano: self.start_time,
-                    time_unix_nano: self.last_time,
+                    time_unix_nano: now,
                     exemplars,
                     flags: 0,
                     value: Some(number_value(*value)),
@@ -315,7 +312,7 @@ impl Series {
                 Point::Number(NumberDataPoint {
                     attributes,
                     start_time_unix_nano: self.start_time,
-                    time_unix_nano: self.last_time,
+                    time_unix_nano: now,
                     exemplars: Vec::new(),
                     flags: 0,
                     value: Some(number_value(*value)),
@@ -323,8 +320,7 @@ impl Series {
             ),
             Aggregate::Histogram(histogram) => match histogram {
                 HistogramAgg::Expo(histogram) => {
-                    let point =
-                        histogram.to_proto(attributes, self.start_time, self.last_time, exemplars);
+                    let point = histogram.to_proto(attributes, self.start_time, now, exemplars);
                     (
                         self.name.clone(),
                         self.description.clone(),
@@ -334,8 +330,7 @@ impl Series {
                     )
                 }
                 HistogramAgg::Explicit(histogram) => {
-                    let point =
-                        histogram.to_proto(attributes, self.start_time, self.last_time, exemplars);
+                    let point = histogram.to_proto(attributes, self.start_time, now, exemplars);
                     (
                         self.name.clone(),
                         self.description.clone(),
@@ -520,7 +515,6 @@ impl MetricStore {
             attributes,
             aggregate,
             start_time: 0,
-            last_time: 0,
             exemplar: None,
         });
         entry.record(event, now, self.inner.capture_exemplars);
@@ -534,11 +528,12 @@ impl MetricStore {
         let mut groups: Vec<MetricGroup> = Vec::new();
         let mut points = 0;
 
+        let now = nanos(SystemTime::now());
         let mut is_empty = true;
 
         for metric in self.inner.series.iter() {
             is_empty = false;
-            let (name, description, unit, kind, point) = metric.export();
+            let (name, description, unit, kind, point) = metric.export(now);
             let key = (name.clone(), kind);
             let index = match group_index.get(&key) {
                 Some(&index) => index,
