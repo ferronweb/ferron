@@ -4,7 +4,7 @@ use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpErrorContext, HttpRequest};
 use ferron_observability::{
     CompositeEventSink, Event, EventTraceContext, LogAttributeValue, LogEvent, LogLevel, Parent,
-    TraceAttributeValue, TraceEvent,
+    SpanLink, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
@@ -374,4 +374,28 @@ mod tests {
         // No Host header should be added from authority when authority is absent
         assert!(!request.headers().contains_key(http::header::HOST));
     }
+}
+
+/// Convert control plane span link configs into `SpanLink` instances for trace events.
+pub(super) fn convert_control_plane_span_links(
+    span_links: &Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
+) -> Vec<SpanLink> {
+    let Some(links) = span_links else {
+        return Vec::new();
+    };
+    links
+        .iter()
+        .map(|link| SpanLink {
+            trace_id: link.trace_id.clone(),
+            span_id: link.span_id.clone(),
+            sampled: Some(link.sampled),
+            attributes: link
+                .attributes
+                .iter()
+                .map(|(k, v)| -> (String, TraceAttributeValue) {
+                    (k.clone(), TraceAttributeValue::String(v.clone()))
+                })
+                .collect(),
+        })
+        .collect()
 }

@@ -214,7 +214,7 @@ fn build_link(link: &SpanLink) -> Option<span::Link> {
     let attributes: Vec<KeyValue> = link
         .attributes
         .iter()
-        .map(|(key, value)| trace_kv(Cow::Borrowed(*key), value))
+        .map(|(key, value)| trace_kv(Cow::Owned(key.clone()), value))
         .collect();
     Some(span::Link {
         trace_id,

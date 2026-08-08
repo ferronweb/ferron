@@ -353,7 +353,7 @@ fn start_span_includes_links_and_drops_malformed_ones() {
                 span_id: SPAN_ID_HEX.to_string(),
                 sampled: Some(true),
                 attributes: vec![(
-                    "link.key",
+                    "link.key".into(),
                     TraceAttributeValue::String("link-value".to_string()),
                 )],
             },

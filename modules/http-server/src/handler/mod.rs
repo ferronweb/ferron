@@ -24,7 +24,7 @@ use ferron_http::{
 };
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue, SpanLink, TraceAttributeValue, TraceEvent,
+    MetricValue, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -1111,31 +1111,4 @@ async fn request_handler_inner(
         custom_fields,
         resolved_control_plane_metadata,
     )
-}
-
-/// Convert control plane span link configs into `SpanLink` instances for trace events.
-fn convert_control_plane_span_links(
-    span_links: &Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
-) -> Vec<SpanLink> {
-    let Some(links) = span_links else {
-        return Vec::new();
-    };
-    links
-        .iter()
-        .map(|link| SpanLink {
-            trace_id: link.trace_id.clone(),
-            span_id: link.span_id.clone(),
-            sampled: Some(link.sampled),
-            attributes: link
-                .attributes
-                .iter()
-                .map(|(k, v)| -> (&'static str, TraceAttributeValue) {
-                    (
-                        Box::leak(k.clone().into_boxed_str()),
-                        TraceAttributeValue::String(v.clone()),
-                    )
-                })
-                .collect(),
-        })
-        .collect()
 }
