@@ -46,9 +46,15 @@ impl ExplicitHistogram {
         }
     }
 
-    /// Record one measurement into the bucket that holds it.
+    /// Record one measurement into the bucket that holds it. NaN and infinite
+    /// measurements are dropped: they cannot be assigned to a bucket, and they
+    /// would corrupt the count, sum, and min/max (mirroring
+    /// [`ExpoHistogram::record`]).
     #[inline]
     pub fn record(&mut self, value: f64) {
+        if !value.is_finite() {
+            return;
+        }
         self.count += 1;
         if value < self.min {
             self.min = value;
@@ -401,6 +407,31 @@ mod tests {
         assert_eq!(point.sum, Some(1.0));
         assert_eq!(point.min, Some(1.0));
         assert_eq!(point.max, Some(1.0));
+    }
+
+    #[test]
+    fn explicit_histogram_drops_non_finite_values() {
+        let mut histogram = ExplicitHistogram::new();
+        histogram.record(f64::NAN);
+        histogram.record(f64::INFINITY);
+        histogram.record(f64::NEG_INFINITY);
+        assert_eq!(histogram.count, 0, "dropped values must not count");
+        assert_eq!(histogram.sum, 0.0);
+        assert_eq!(histogram.min, f64::MAX, "min must stay untouched");
+        assert_eq!(histogram.max, f64::MIN, "max must stay untouched");
+        let point = histogram.to_proto(vec![], 0, 0, vec![]);
+        assert_eq!(point.count, 0);
+        assert_eq!(point.bucket_counts.iter().sum::<u64>(), 0);
+
+        // Finite measurements still record normally afterwards.
+        histogram.record(5.0);
+        histogram.record(f64::NAN);
+        let point = histogram.to_proto(vec![], 0, 0, vec![]);
+        assert_eq!(point.count, 1);
+        assert_eq!(point.sum, Some(5.0));
+        assert_eq!(point.min, Some(5.0));
+        assert_eq!(point.max, Some(5.0));
+        assert_eq!(point.bucket_counts.iter().sum::<u64>(), 1);
     }
 
     #[test]
