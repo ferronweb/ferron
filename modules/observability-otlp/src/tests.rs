@@ -989,10 +989,6 @@ fn build_resource_includes_service_and_process_identity() {
     assert!(start_time > 0);
 }
 
-// ---------------------------------------------------------------------------
-// Configuration parsing
-// ---------------------------------------------------------------------------
-
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };

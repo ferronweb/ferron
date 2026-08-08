@@ -763,12 +763,6 @@ impl MetricPipeline {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Explicit-boundary histogram. Used when the `native_histograms` config
-// directive is `false`; the bucket boundaries mirror the OTel SDK default
-// (`f64::MAX` sentinel replaced by the implicit +Inf bucket).
-// ---------------------------------------------------------------------------
-
 /// The upper bounds of the buckets; the final bucket has no upper bound.
 const EXPLICIT_BOUNDS: &[f64] = &[
     0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0, 5000.0, 7500.0,
@@ -833,12 +827,6 @@ impl ExplicitHistogram {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Base2 exponential histogram (ported from the OTel SDK's aggregator, which
-// this pipeline replaces). Scale adapts to keep the bucket span within
-// `EXPO_MAX_SIZE` buckets, down to `EXPO_MIN_SCALE`.
-// ---------------------------------------------------------------------------
 
 /// A measurement that cannot fit even at the minimum scale is silently
 /// dropped (parity with the SDK, which logs a debug message instead).
