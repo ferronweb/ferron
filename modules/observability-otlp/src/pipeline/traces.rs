@@ -39,9 +39,8 @@ pub(crate) struct TraceBuffer {
 }
 
 struct TraceBufferInner {
-    spans: crossbeam_queue::SegQueue<Span>,
+    spans: crossbeam_queue::ArrayQueue<Span>,
     notify: Notify,
-    capacity: usize,
     dropped: AtomicU64,
 }
 
@@ -50,9 +49,8 @@ impl TraceBuffer {
     fn new(capacity: usize) -> Self {
         Self {
             inner: Arc::new(TraceBufferInner {
-                spans: crossbeam_queue::SegQueue::new(),
+                spans: crossbeam_queue::ArrayQueue::new(capacity),
                 notify: Notify::new(),
-                capacity,
                 dropped: AtomicU64::new(0),
             }),
         }
@@ -63,11 +61,11 @@ impl TraceBuffer {
     #[inline]
     pub(crate) fn push(&self, span: Span) -> bool {
         let spans = &self.inner.spans;
-        if spans.len() >= self.inner.capacity {
+        if spans.push(span).is_err() {
+            // Queue is full
             self.record_dropped(1);
             return false;
         }
-        spans.push(span);
         self.inner.notify.notify_one();
         true
     }

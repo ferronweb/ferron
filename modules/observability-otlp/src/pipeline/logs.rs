@@ -47,9 +47,8 @@ pub(crate) struct LogBuffer {
 }
 
 struct LogBufferInner {
-    records: crossbeam_queue::SegQueue<TaggedRecord>,
+    records: crossbeam_queue::ArrayQueue<TaggedRecord>,
     notify: Notify,
-    capacity: usize,
     dropped: AtomicU64,
 }
 
@@ -58,9 +57,8 @@ impl LogBuffer {
     fn new(capacity: usize) -> Self {
         Self {
             inner: Arc::new(LogBufferInner {
-                records: crossbeam_queue::SegQueue::new(),
+                records: crossbeam_queue::ArrayQueue::new(capacity),
                 notify: Notify::new(),
-                capacity,
                 dropped: AtomicU64::new(0),
             }),
         }
@@ -71,11 +69,11 @@ impl LogBuffer {
     #[inline]
     pub(crate) fn push(&self, scope: &str, record: LogRecord) -> bool {
         let records = &self.inner.records;
-        if records.len() >= self.inner.capacity {
+        if records.push((scope.to_string(), record)).is_err() {
+            // Queue is full
             self.record_dropped(1);
             return false;
-        }
-        records.push((scope.to_string(), record));
+        };
         self.inner.notify.notify_one();
         true
     }
