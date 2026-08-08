@@ -162,6 +162,7 @@ struct TracePipelineEntry {
 }
 
 impl TracePipelineEntry {
+    #[inline]
     fn init(
         config: &OtlpBackendConfig,
         control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
@@ -217,6 +218,7 @@ struct LogPipelineEntry {
 }
 
 impl LogPipelineEntry {
+    #[inline]
     fn init(
         config: &OtlpBackendConfig,
         control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
@@ -271,6 +273,7 @@ struct MetricPipelineEntry {
 }
 
 impl MetricPipelineEntry {
+    #[inline]
     fn init(
         config: &OtlpBackendConfig,
         cancel_token: tokio_util::sync::CancellationToken,
@@ -319,13 +322,16 @@ impl MetricPipelineEntry {
 }
 
 impl Module for OtlpObservabilityModule {
+    #[inline]
     fn name(&self) -> &str {
         "observability-otlp"
     }
+    #[inline]
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    #[inline]
 
     fn start(
         &self,
@@ -473,6 +479,7 @@ impl Module for OtlpObservabilityModule {
 }
 
 impl Drop for OtlpObservabilityModule {
+    #[inline]
     fn drop(&mut self) {
         self.cancel_token.cancel();
     }
@@ -480,6 +487,7 @@ impl Drop for OtlpObservabilityModule {
 
 /// Batch tuning for a logs/traces signal, falling back to the SDK-default
 /// values for anything the configuration does not override.
+#[inline]
 fn batch_config(signal: &SignalConfig) -> BatchConfig {
     BatchConfig {
         batch_size: signal.export_batch_size.unwrap_or(DEFAULT_BATCH_SIZE),
@@ -489,6 +497,7 @@ fn batch_config(signal: &SignalConfig) -> BatchConfig {
 }
 
 /// Create a cache key from the signal configs
+#[inline]
 fn config_cache_key(config: &OtlpBackendConfig) -> String {
     let logs_key = config
         .logs
@@ -554,9 +563,11 @@ struct OtlpObservabilityProvider {
 }
 
 impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
+    #[inline]
     fn name(&self) -> &str {
         "otlp"
     }
+    #[inline]
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
         // Heuristics based on configuration directives
@@ -585,6 +596,7 @@ pub struct OtlpObservabilityModuleLoader {
 }
 
 impl Default for OtlpObservabilityModuleLoader {
+    #[inline]
     fn default() -> Self {
         Self {
             cache: None,
@@ -594,6 +606,7 @@ impl Default for OtlpObservabilityModuleLoader {
 }
 
 impl ModuleLoader for OtlpObservabilityModuleLoader {
+    #[inline]
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let channel = self.channel.0.clone();
 
@@ -603,6 +616,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
             })
         })
     }
+    #[inline]
 
     fn register_modules(
         &mut self,
@@ -626,6 +640,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
 
         Ok(())
     }
+    #[inline]
 
     fn register_directives(&mut self, registry: &mut ferron_core::directives::DirectiveRegistry) {
         use ferron_core::directives::{Directive, DirectiveSubblock};
@@ -719,6 +734,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
                 DirectiveSubblock::custom("observability"),
             );
     }
+    #[inline]
 
     fn register_scoped_configuration_validators(
         &mut self,

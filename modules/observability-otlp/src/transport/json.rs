@@ -8,7 +8,7 @@ use serde_json::Value;
 /// `traceId`, `spanId`, and `parentSpanId` byte fields must be hex-encoded
 /// strings instead of base64 (see the OTLP specification, "JSON Protobuf
 /// Encoding"). [`hexify_id_fields`] rewrites those fields after serialization.
-#[allow(dead_code)] // wired into the HTTP JSON exporter in a later step
+#[inline]
 pub fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
     let mut value =
         serde_json::to_value(message).expect("OTLP request JSON serialization must not fail");
@@ -23,6 +23,7 @@ pub fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
 /// These are the only `bytes` fields in the OTLP telemetry messages Ferron
 /// emits, so any string value under one of these keys was base64-encoded by
 /// `pbjson`. Strings that cannot be base64-decoded are left untouched.
+#[inline]
 pub fn hexify_id_fields(value: &mut Value) {
     match value {
         Value::Object(map) => {

@@ -41,6 +41,7 @@ enum GrpcSignalClient {
 
 impl GrpcSignalClient {
     /// Raise the per-message size limits to the OTLP caps.
+    #[inline]
     fn max_message_sizes(self) -> Self {
         match self {
             Self::Logs(client) => Self::Logs(
@@ -62,6 +63,7 @@ impl GrpcSignalClient {
     }
 
     /// Enable gzip request compression when configured.
+    #[inline]
     fn maybe_gzip(self, gzip: bool) -> Self {
         if !gzip {
             return self;
@@ -81,6 +83,7 @@ impl GrpcSignalClient {
 pub struct AuthInterceptor(pub Option<MetadataValue<tonic::metadata::Ascii>>);
 
 impl tonic::service::Interceptor for AuthInterceptor {
+    #[inline]
     fn call(
         &mut self,
         mut request: tonic::Request<()>,
@@ -96,6 +99,7 @@ impl tonic::service::Interceptor for AuthInterceptor {
 
 impl GrpcSignal {
     /// Connect to the OTLP receiver over gRPC for one signal.
+    #[inline]
     pub fn new(
         kind: SignalKind,
         endpoint: &str,
@@ -128,6 +132,7 @@ impl GrpcSignal {
     }
 
     /// Export a batch of log records over gRPC, with retry/backoff.
+    #[inline]
     pub async fn export_logs(
         &self,
         request: &ExportLogsServiceRequest,
@@ -159,6 +164,7 @@ impl GrpcSignal {
     }
 
     /// Export a batch of metric data points over gRPC, with retry/backoff.
+    #[inline]
     pub async fn export_metrics(
         &self,
         request: &ExportMetricsServiceRequest,
@@ -190,6 +196,7 @@ impl GrpcSignal {
     }
 
     /// Export a batch of spans over gRPC, with retry/backoff.
+    #[inline]
     pub async fn export_traces(
         &self,
         request: &ExportTraceServiceRequest,
@@ -223,6 +230,7 @@ impl GrpcSignal {
 /// to retryable per the OTLP specification. `RESOURCE_EXHAUSTED` is retryable
 /// only when the status carries a `google.rpc.RetryInfo` detail; its
 /// `retry_delay` is surfaced as the retry hint.
+#[inline]
 fn failure_from_status(status: tonic::Status) -> ExportResult {
     let (retryable, retry_after) = match status.code() {
         tonic::Code::Cancelled
@@ -248,6 +256,7 @@ fn failure_from_status(status: tonic::Status) -> ExportResult {
 /// (a serialized `google.rpc.Status`). Returns `Some(retry_delay)` when a
 /// `RetryInfo` detail is present (the delay is `None` if the server did not
 /// specify one), or `None` when no `RetryInfo` is present.
+#[inline]
 fn decode_retry_info(details: &[u8]) -> Option<Option<Duration>> {
     let status = rpc::Status::decode(details).ok()?;
     for detail in status.details {
@@ -356,6 +365,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl TraceService for FakeTraceService {
+        #[inline]
         async fn export(
             &self,
             request: tonic::Request<ExportTraceServiceRequest>,
@@ -413,6 +423,7 @@ mod tests {
     /// Serialize a `google.rpc.Status` containing a `google.rpc.RetryInfo`
     /// detail with the given delay (the wire format of
     /// `grpc-status-details-bin`).
+    #[inline]
     fn status_with_retry_info(retry_delay: Option<Duration>) -> Vec<u8> {
         let retry_delay = retry_delay.map(|delay| rpc::Duration {
             seconds: delay.as_secs() as i64,
@@ -429,6 +440,7 @@ mod tests {
         }
         .encode_to_vec()
     }
+    #[inline]
 
     async fn spawn_grpc_server(service: FakeTraceService) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -442,6 +454,7 @@ mod tests {
         });
         addr
     }
+    #[inline]
 
     fn sample_trace_request() -> ExportTraceServiceRequest {
         ExportTraceServiceRequest {
@@ -471,6 +484,7 @@ mod tests {
             }],
         }
     }
+    #[inline]
 
     fn test_retry() -> RetryConfig {
         RetryConfig {
@@ -479,6 +493,7 @@ mod tests {
             max_backoff: Duration::from_millis(200),
         }
     }
+    #[inline]
 
     async fn new_test_signal(state: &Arc<FakeState>, mode: FakeMode) -> (GrpcSignal, SocketAddr) {
         *state.mode.lock().await = mode;

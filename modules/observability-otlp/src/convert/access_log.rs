@@ -13,6 +13,7 @@ use crate::proto::opentelemetry::proto::logs::v1::LogRecord;
 
 use super::context::{decode_span_id, decode_trace_id};
 use super::{any_bool, any_double, any_int, any_string, kv, nanos};
+#[inline]
 
 fn format_access_event(
     access_event: &Arc<dyn AccessEvent>,
@@ -49,6 +50,7 @@ fn format_access_event(
 /// configured formatter, falling back to `<unknown access log>`). In modern
 /// mode the body is a short summary and the traditional fields are mapped
 /// onto OTEL semantic-convention attributes.
+#[inline]
 pub(crate) fn build_access_log_record(
     event: &Arc<dyn AccessEvent>,
     log_config: &Arc<ServerConfigurationBlock>,
@@ -142,12 +144,14 @@ pub struct OtelAccessAttributeVisitor {
 }
 
 impl OtelAccessAttributeVisitor {
+    #[inline]
     fn push(&mut self, key: impl Into<String>, value: AnyValue) {
         self.attributes.push((key.into(), value));
     }
 }
 
 impl AccessVisitor for OtelAccessAttributeVisitor {
+    #[inline]
     fn field_string(&mut self, name: &str, value: &str) {
         match name {
             "path" => self.push("url.path", any_string(value)),
@@ -179,6 +183,7 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             }
         }
     }
+    #[inline]
 
     fn field_u64(&mut self, name: &str, value: u64) {
         let int = i64::try_from(value).unwrap_or(i64::MAX);
@@ -193,6 +198,7 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             s => self.push(format!("ferron.custom.{s}"), any_int(int)),
         }
     }
+    #[inline]
 
     fn field_f64(&mut self, name: &str, value: f64) {
         if name == "duration_secs" {
@@ -203,6 +209,7 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             self.push(format!("ferron.custom.{name}"), any_double(value));
         }
     }
+    #[inline]
 
     fn field_bool(&mut self, name: &str, value: bool) {
         if name.contains('.') {

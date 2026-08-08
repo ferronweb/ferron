@@ -21,6 +21,7 @@ pub(crate) use resource::{build_resource, build_scope};
 pub(crate) use traces::{end_span, start_span};
 
 /// Convert a [`SystemTime`] into UNIX epoch nanoseconds.
+#[inline]
 pub(crate) fn nanos(t: SystemTime) -> u64 {
     t.duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos() as u64)
@@ -28,6 +29,7 @@ pub(crate) fn nanos(t: SystemTime) -> u64 {
 }
 
 /// Build a typed OTLP key-value pair.
+#[inline]
 pub(crate) fn kv(key: impl Into<String>, value: AnyValue) -> KeyValue {
     KeyValue {
         key: key.into(),
@@ -37,6 +39,7 @@ pub(crate) fn kv(key: impl Into<String>, value: AnyValue) -> KeyValue {
 }
 
 /// Wrap a string into an OTLP `AnyValue`.
+#[inline]
 pub(crate) fn any_string(value: impl Into<String>) -> AnyValue {
     AnyValue {
         value: Some(any_value::Value::StringValue(value.into())),
@@ -44,6 +47,7 @@ pub(crate) fn any_string(value: impl Into<String>) -> AnyValue {
 }
 
 /// Wrap a boolean into an OTLP `AnyValue`.
+#[inline]
 pub(crate) fn any_bool(value: bool) -> AnyValue {
     AnyValue {
         value: Some(any_value::Value::BoolValue(value)),
@@ -51,6 +55,7 @@ pub(crate) fn any_bool(value: bool) -> AnyValue {
 }
 
 /// Wrap an integer into an OTLP `AnyValue`.
+#[inline]
 pub(crate) fn any_int(value: i64) -> AnyValue {
     AnyValue {
         value: Some(any_value::Value::IntValue(value)),
@@ -58,6 +63,7 @@ pub(crate) fn any_int(value: i64) -> AnyValue {
 }
 
 /// Wrap a float into an OTLP `AnyValue`.
+#[inline]
 pub(crate) fn any_double(value: f64) -> AnyValue {
     AnyValue {
         value: Some(any_value::Value::DoubleValue(value)),

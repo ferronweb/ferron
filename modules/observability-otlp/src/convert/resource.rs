@@ -8,6 +8,7 @@ use super::{any_int, any_string, kv};
 /// Build the OTLP resource from the service name, including process identity
 /// attributes to distinguish between concurrent and sequential process
 /// lifetimes.
+#[inline]
 pub(crate) fn build_resource(service_name: String) -> Resource {
     let pid = std::process::id();
     let start_time = SystemTime::now()
@@ -28,6 +29,7 @@ pub(crate) fn build_resource(service_name: String) -> Resource {
 
 /// Build the instrumentation scope for a signal (matches the SDK's `"ferron"`
 /// and `"ferron.access"` logger and tracer names).
+#[inline]
 pub(crate) fn build_scope(name: &str) -> InstrumentationScope {
     InstrumentationScope {
         name: name.to_string(),

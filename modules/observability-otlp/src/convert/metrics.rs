@@ -13,6 +13,7 @@ const MAX_LABEL_VALUE_LEN: usize = 128;
 ///
 /// Values longer than 128 characters are replaced with their hash.
 /// Control characters are replaced with `?` to avoid log injection.
+#[inline]
 pub(crate) fn sanitize_label_value(s: &str) -> String {
     let s = s.trim();
     if s.len() <= MAX_LABEL_VALUE_LEN {
@@ -30,6 +31,7 @@ pub(crate) fn sanitize_label_value(s: &str) -> String {
 
 /// Convert metric event attributes into typed OTLP key-values, sanitizing
 /// string label values to prevent telemetry poisoning.
+#[inline]
 pub(crate) fn metric_key_values(
     attributes: &[(&'static str, MetricAttributeValue)],
 ) -> Vec<KeyValue> {
@@ -38,6 +40,7 @@ pub(crate) fn metric_key_values(
         .map(|(key, value)| metric_kv(key, value))
         .collect()
 }
+#[inline]
 
 fn metric_kv(key: &'static str, value: &MetricAttributeValue) -> KeyValue {
     match value {

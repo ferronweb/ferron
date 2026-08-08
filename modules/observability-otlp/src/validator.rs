@@ -7,6 +7,7 @@ use ferron_core::{validate_directive, validate_nested};
 pub struct OtlpObservabilityConfigurationValidator;
 
 impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
+    #[inline]
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
@@ -127,6 +128,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
 }
 
 /// Validate the contents of a `baggage { ... }` block.
+#[inline]
 fn validate_baggage_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,

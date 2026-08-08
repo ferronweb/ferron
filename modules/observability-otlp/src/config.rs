@@ -20,6 +20,7 @@ pub enum LogStyle {
 
 /// Parse a `log_style` directive value into a [`LogStyle`]. Returns `None` if
 /// the value is not a recognized log style.
+#[inline]
 pub fn parse_log_style(value: &str) -> Option<LogStyle> {
     match value.to_ascii_lowercase().as_str() {
         "legacy" => Some(LogStyle::Legacy),
@@ -64,6 +65,7 @@ pub struct OtlpBackendConfig {
 
 impl OtlpBackendConfig {
     /// Parse the OTLP backend configuration from a ServerConfigurationBlock
+    #[inline]
     pub fn parse_config(config: &ServerConfigurationBlock) -> Self {
         let service_name = config
             .get_value("service_name")
@@ -102,6 +104,7 @@ impl OtlpBackendConfig {
 
 impl SignalConfig {
     /// Parse a single signal sub-block (logs, metrics, or traces)
+    #[inline]
     fn parse_config(parent: &ServerConfigurationBlock, name: &str) -> Option<SignalConfig> {
         let entries = parent.directives.get(name)?;
         let entry = entries.first()?;
@@ -192,6 +195,7 @@ impl SignalConfig {
 ///     }
 /// }
 /// ```
+#[inline]
 fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKeyPromotion> {
     let Some(baggage_entries) = config.directives.get("baggage") else {
         return Vec::new();
@@ -243,6 +247,7 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
 
 /// Parse a `signals` directive value into a SignalSet.
 /// The value can be a single signal name or multiple args.
+#[inline]
 fn parse_signal_set(children: &ServerConfigurationBlock) -> Option<SignalSet> {
     let entries = children.directives.get("signals")?;
     let entry = entries.first()?;

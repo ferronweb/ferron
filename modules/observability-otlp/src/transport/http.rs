@@ -22,6 +22,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 const USER_AGENT: &str = concat!("Ferron/", env!("CARGO_PKG_VERSION"));
 
 /// Gzip-compress a fully buffered request body.
+#[inline]
 fn gzip_compress(body: &[u8]) -> Bytes {
     use std::io::Write;
 
@@ -62,6 +63,7 @@ pub struct HttpSignal {
 
 impl HttpSignal {
     /// Build an HTTP transport for one signal.
+    #[inline]
     pub fn new(
         _kind: SignalKind,
         endpoint: String,
@@ -80,6 +82,7 @@ impl HttpSignal {
     }
 
     /// Export a batch of log records over HTTP, with retry/backoff.
+    #[inline]
     pub async fn export_logs(
         &self,
         request: &ExportLogsServiceRequest,
@@ -97,6 +100,7 @@ impl HttpSignal {
     }
 
     /// Export a batch of metric data points over HTTP, with retry/backoff.
+    #[inline]
     pub async fn export_metrics(
         &self,
         request: &ExportMetricsServiceRequest,
@@ -114,6 +118,7 @@ impl HttpSignal {
     }
 
     /// Export a batch of spans over HTTP, with retry/backoff.
+    #[inline]
     pub async fn export_traces(
         &self,
         request: &ExportTraceServiceRequest,
@@ -132,6 +137,7 @@ impl HttpSignal {
 
     /// Encode and export a request with retry/backoff, decoding the response
     /// and surfacing `partial_success` per signal.
+    #[inline]
     async fn export_with<Req, Resp, F>(
         &self,
         request: &Req,
@@ -152,6 +158,7 @@ impl HttpSignal {
 
     /// Encode the request body: OTLP JSON (pbjson + hex-ID handling) or
     /// binary protobuf, optionally gzip-compressed.
+    #[inline]
     fn encode<T>(&self, request: &T) -> Bytes
     where
         T: serde::Serialize + Message + Default,
@@ -168,6 +175,7 @@ impl HttpSignal {
             body.into()
         }
     }
+    #[inline]
 
     fn content_type(&self) -> &'static str {
         if self.json {
@@ -179,6 +187,7 @@ impl HttpSignal {
 
     /// One POST attempt: encode-free, sends the pre-built body, classifies
     /// the response, and decodes the response body on HTTP 200.
+    #[inline]
     async fn single_attempt<Resp, F>(&self, body: &Bytes, extract_rejected: &F) -> ExportResult
     where
         Resp: Message + Default + serde::de::DeserializeOwned,
@@ -250,6 +259,7 @@ impl HttpSignal {
     }
 
     /// Decode the response body (protobuf or JSON) and report partial success.
+    #[inline]
     fn parse_success_response<Resp, F>(
         &self,
         response: &http::Response<Bytes>,
@@ -281,6 +291,7 @@ impl HttpSignal {
         }
     }
 }
+#[inline]
 
 fn partial_success_count<T>(partial: Option<&T>) -> (u64, String)
 where
@@ -301,9 +312,11 @@ trait PartialSuccess {
 impl PartialSuccess
     for crate::proto::opentelemetry::proto::collector::logs::v1::ExportLogsPartialSuccess
 {
+    #[inline]
     fn rejected(&self) -> i64 {
         self.rejected_log_records
     }
+    #[inline]
     fn message(&self) -> &str {
         &self.error_message
     }
@@ -312,9 +325,11 @@ impl PartialSuccess
 impl PartialSuccess
     for crate::proto::opentelemetry::proto::collector::metrics::v1::ExportMetricsPartialSuccess
 {
+    #[inline]
     fn rejected(&self) -> i64 {
         self.rejected_data_points
     }
+    #[inline]
     fn message(&self) -> &str {
         &self.error_message
     }
@@ -323,9 +338,11 @@ impl PartialSuccess
 impl PartialSuccess
     for crate::proto::opentelemetry::proto::collector::trace::v1::ExportTracePartialSuccess
 {
+    #[inline]
     fn rejected(&self) -> i64 {
         self.rejected_spans
     }
+    #[inline]
     fn message(&self) -> &str {
         &self.error_message
     }
@@ -333,6 +350,7 @@ impl PartialSuccess
 
 /// Parse the `Retry-After` header as delta-seconds (the form used by OTLP
 /// receivers).
+#[inline]
 fn parse_retry_after(headers: &http::HeaderMap) -> Option<Duration> {
     headers
         .get(http::header::RETRY_AFTER)?
@@ -372,6 +390,7 @@ mod tests {
         content_type: Option<String>,
         authorization: Option<String>,
     }
+    #[inline]
 
     async fn spawn_http_server(handler: Handler) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -408,6 +427,7 @@ mod tests {
     }
 
     /// A small but realistic trace request.
+    #[inline]
     fn sample_trace_request() -> ExportTraceServiceRequest {
         ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {
@@ -438,6 +458,7 @@ mod tests {
     }
 
     /// Small backoffs so the retry tests run fast.
+    #[inline]
     fn test_retry() -> RetryConfig {
         RetryConfig {
             max_attempts: 3,

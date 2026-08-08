@@ -46,6 +46,7 @@ struct TraceBufferInner {
 }
 
 impl TraceBuffer {
+    #[inline]
     fn new(capacity: usize) -> Self {
         Self {
             inner: Arc::new(TraceBufferInner {
@@ -59,6 +60,7 @@ impl TraceBuffer {
 
     /// Store a finished span, waking the exporter. Returns `false` (and
     /// increments the dropped counter) when the buffer is full.
+    #[inline]
     pub(crate) fn push(&self, span: Span) -> bool {
         let spans = &self.inner.spans;
         if spans.len() >= self.inner.capacity {
@@ -71,6 +73,7 @@ impl TraceBuffer {
     }
 
     /// Remove up to `max` spans from the front of the queue.
+    #[inline]
     pub(crate) fn drain_batch(&self, max: usize) -> Vec<Span> {
         let spans = &self.inner.spans;
         let n = spans.len().min(max);
@@ -86,15 +89,18 @@ impl TraceBuffer {
     }
 
     /// Current number of buffered spans.
+    #[inline]
     pub(crate) fn len(&self) -> usize {
         self.inner.spans.len()
     }
 
     /// Total number of spans dropped (queue full or export failure).
     #[cfg(test)]
+    #[inline]
     pub(crate) fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
+    #[inline]
 
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
@@ -106,6 +112,7 @@ impl TraceBuffer {
 }
 
 static DROPPED_SPANS: Once = Once::new();
+#[inline]
 
 fn warn_once() {
     DROPPED_SPANS.call_once(|| {
@@ -127,6 +134,7 @@ pub(crate) trait TraceExporter: Send + Sync {
 pub(crate) type ExportFuture<'a> = Pin<Box<dyn Future<Output = ExportResult> + Send + 'a>>;
 
 impl TraceExporter for OtlpTransport {
+    #[inline]
     fn export_traces<'a>(&'a self, request: &'a ExportTraceServiceRequest) -> ExportFuture<'a> {
         Box::pin(OtlpTransport::export_traces(self, request))
     }
@@ -146,6 +154,7 @@ impl BatchTraceExporter {
     /// Flush buffered spans in batches of `batch_size` until the buffer is
     /// empty. Used on interval ticks, on batch-size triggers, and on
     /// shutdown drain.
+    #[inline]
     async fn flush(&self) {
         loop {
             let spans = self.buffer.drain_batch(self.config.batch_size);
@@ -158,6 +167,7 @@ impl BatchTraceExporter {
 
     /// Export one batch, dropping and counting it on persistent failure or
     /// when the export timeout elapses.
+    #[inline]
     async fn export(&self, spans: Vec<Span>) {
         let request = ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {
@@ -185,6 +195,7 @@ impl BatchTraceExporter {
     }
 
     /// Run until cancellation, then drain the buffer before returning.
+    #[inline]
     async fn run(self, cancel: CancellationToken) {
         let mut interval = tokio::time::interval(self.config.interval);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -211,6 +222,7 @@ pub(crate) struct TracePipeline {
 }
 
 impl TracePipeline {
+    #[inline]
     pub(crate) fn spawn_with_config(
         exporter: Arc<dyn TraceExporter>,
         service_name: String,
@@ -237,6 +249,7 @@ impl TracePipeline {
     }
 
     /// Wait for the exporter task to finish its shutdown drain.
+    #[inline]
     pub(crate) async fn wait_done(self) {
         let _ = self.done.await;
     }
@@ -250,6 +263,7 @@ mod tests {
 
     use super::*;
     use tokio::sync::Mutex;
+    #[inline]
 
     fn test_config() -> BatchConfig {
         BatchConfig {
@@ -259,6 +273,7 @@ mod tests {
             export_timeout: Duration::from_secs(5),
         }
     }
+    #[inline]
 
     fn span(name: &str) -> Span {
         Span {
@@ -279,9 +294,11 @@ mod tests {
     }
 
     impl MockExporter {
+        #[inline]
         async fn request_count(&self) -> usize {
             self.requests.lock().await.len()
         }
+        #[inline]
 
         async fn span_count(&self) -> usize {
             self.requests
@@ -296,6 +313,7 @@ mod tests {
     }
 
     impl TraceExporter for MockExporter {
+        #[inline]
         fn export_traces<'a>(&'a self, request: &'a ExportTraceServiceRequest) -> ExportFuture<'a> {
             Box::pin(async move {
                 self.requests.lock().await.push(request.clone());
@@ -315,6 +333,7 @@ mod tests {
             })
         }
     }
+    #[inline]
 
     fn spawn_test(
         exporter: Arc<MockExporter>,
@@ -329,6 +348,7 @@ mod tests {
         );
         (pipeline, cancel)
     }
+    #[inline]
 
     async fn wait_until<F, Fut>(mut condition: F)
     where

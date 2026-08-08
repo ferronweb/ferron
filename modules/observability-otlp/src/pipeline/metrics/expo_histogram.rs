@@ -38,6 +38,7 @@ impl ExplicitHistogram {
     pub fn new() -> Self {
         Self::with_buckets(DEFAULT_EXPLICIT_BOUNDS.into())
     }
+    #[inline]
 
     pub fn with_buckets(buckets: Cow<'static, [f64]>) -> Self {
         Self {
@@ -51,6 +52,7 @@ impl ExplicitHistogram {
     }
 
     /// Record one measurement into the bucket that holds it.
+    #[inline]
     pub fn record(&mut self, value: f64) {
         self.count += 1;
         if value < self.min {
@@ -65,6 +67,7 @@ impl ExplicitHistogram {
     }
 
     /// Export the histogram as an OTLP data point.
+    #[inline]
     pub fn to_proto(
         &self,
         attributes: Vec<KeyValue>,
@@ -104,6 +107,7 @@ pub struct ExpoHistogram {
 }
 
 impl ExpoHistogram {
+    #[inline]
     pub fn new() -> Self {
         Self {
             max_size: EXPO_MAX_SIZE,
@@ -121,6 +125,7 @@ impl ExpoHistogram {
     /// Rescale to a smaller scale (fewer buckets; `delta` bucket rows are
     /// merged). Used when a range of bins no longer fits and to honor the
     /// "downscale" semantic of cumulative histograms.
+    #[inline]
     pub fn downscale(&mut self, delta: u32) {
         if delta == 0 {
             return;
@@ -135,6 +140,7 @@ impl ExpoHistogram {
     ///
     /// A measurement that cannot fit even at the minimum scale is silently
     /// dropped and does not affect the count, sum, or min/max.
+    #[inline]
     pub fn record(&mut self, value: f64) {
         let abs = value.abs();
         if abs == 0.0 {
@@ -182,11 +188,13 @@ impl ExpoHistogram {
     }
 
     /// The index of the bucket `value` belongs to at a given scale.
+    #[inline]
     pub fn get_bin(&self, value: f64) -> i32 {
         get_bin(value, self.scale)
     }
 
     /// Export the histogram as an OTLP data point.
+    #[inline]
     pub fn to_proto(
         &self,
         attributes: Vec<KeyValue>,
@@ -215,6 +223,7 @@ impl ExpoHistogram {
 
 /// The bucket index that holds `value` at `scale`, following the OTel
 /// exponential histogram mapping formula.
+#[inline]
 fn get_bin(value: f64, scale: i8) -> i32 {
     debug_assert!(value >= 0.0 && value.is_finite(), "invalid histogram value");
     let (frac, exp) = frexp(value);
@@ -230,6 +239,7 @@ fn get_bin(value: f64, scale: i8) -> i32 {
 /// The number of scale reductions needed to fit `bin` within `[start_bin,
 /// start_bin + length)` buckets of size `max_size`. Returns 0 when no
 /// reduction is needed.
+#[inline]
 fn scale_delta(max_size: i32, bin: i32, start_bin: i32, length: i32) -> u32 {
     if length == 0 {
         return 0;
@@ -255,6 +265,7 @@ fn scale_delta(max_size: i32, bin: i32, start_bin: i32, length: i32) -> u32 {
 static SCALE_FACTORS: OnceLock<[f64; 21]> = OnceLock::new();
 
 /// Precomputed `LOG2_E * 2^scale` factors used by the bin formula.
+#[inline]
 fn scale_factors() -> &'static [f64; 21] {
     SCALE_FACTORS
         .get_or_init(|| std::array::from_fn(|i| std::f64::consts::LOG2_E * 2f64.powi(i as i32)))
@@ -262,6 +273,7 @@ fn scale_factors() -> &'static [f64; 21] {
 
 /// Break a positive float into a normalized fraction and base-2 exponent
 /// (libc `frexp`, reimplemented because Rust removed it from std).
+#[inline]
 fn frexp(value: f64) -> (f64, i32) {
     let mut bits = value.to_bits();
     let exponent = ((bits >> 52) & 0x7ff) as i32;
@@ -297,6 +309,7 @@ pub(super) struct ExpoBuckets {
 
 impl ExpoBuckets {
     /// Increment the count for the given bin, expanding the counts if needed.
+    #[inline]
     pub(super) fn record(&mut self, bin: i32) {
         if self.counts.is_empty() {
             self.counts = vec![1];
@@ -337,6 +350,7 @@ impl ExpoBuckets {
 
     /// Shrink the buckets by a factor of `2^delta`, summing the merged
     /// counts.
+    #[inline]
     pub(super) fn downscale(&mut self, delta: u32) {
         if self.counts.len() <= 1 || delta < 1 {
             self.offset >>= delta;
@@ -357,6 +371,7 @@ impl ExpoBuckets {
         self.counts = self.counts[..last_index as usize + 1].to_vec();
         self.offset >>= delta;
     }
+    #[inline]
 
     pub(super) fn to_proto(&self) -> Buckets {
         Buckets {

@@ -54,6 +54,7 @@ struct LogBufferInner {
 }
 
 impl LogBuffer {
+    #[inline]
     fn new(capacity: usize) -> Self {
         Self {
             inner: Arc::new(LogBufferInner {
@@ -67,6 +68,7 @@ impl LogBuffer {
 
     /// Store a finished log record, waking the exporter. Returns `false`
     /// (and increments the dropped counter) when the buffer is full.
+    #[inline]
     pub(crate) fn push(&self, scope: &str, record: LogRecord) -> bool {
         let records = &self.inner.records;
         if records.len() >= self.inner.capacity {
@@ -79,6 +81,7 @@ impl LogBuffer {
     }
 
     /// Remove up to `max` records from the front of the queue.
+    #[inline]
     pub(crate) fn drain_batch(&self, max: usize) -> Vec<TaggedRecord> {
         let records = &self.inner.records;
         let n = records.len().min(max);
@@ -94,15 +97,18 @@ impl LogBuffer {
     }
 
     /// Current number of buffered records.
+    #[inline]
     pub(crate) fn len(&self) -> usize {
         self.inner.records.len()
     }
 
     /// Total number of records dropped (queue full or export failure).
     #[cfg(test)]
+    #[inline]
     pub(crate) fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
+    #[inline]
 
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
@@ -114,6 +120,7 @@ impl LogBuffer {
 }
 
 static DROPPED_RECORDS: Once = Once::new();
+#[inline]
 
 fn warn_once() {
     DROPPED_RECORDS.call_once(|| {
@@ -135,6 +142,7 @@ pub(crate) trait LogExporter: Send + Sync {
 pub(crate) type ExportLogsFuture<'a> = Pin<Box<dyn Future<Output = ExportResult> + Send + 'a>>;
 
 impl LogExporter for OtlpTransport {
+    #[inline]
     fn export_logs<'a>(&'a self, request: &'a ExportLogsServiceRequest) -> ExportLogsFuture<'a> {
         Box::pin(OtlpTransport::export_logs(self, request))
     }
@@ -153,6 +161,7 @@ impl BatchLogExporter {
     /// Flush buffered records in batches of `batch_size` until the buffer
     /// is empty. Used on interval ticks, on batch-size triggers, and on
     /// shutdown drain.
+    #[inline]
     async fn flush(&self) {
         loop {
             let records = self.buffer.drain_batch(self.config.batch_size);
@@ -166,6 +175,7 @@ impl BatchLogExporter {
     /// Export one batch, grouped by instrumentation scope, dropping and
     /// counting it on persistent failure or when the export timeout
     /// elapses.
+    #[inline]
     async fn export(&self, records: Vec<TaggedRecord>) {
         let mut grouped: BTreeMap<String, Vec<LogRecord>> = BTreeMap::new();
         let mut count = 0;
@@ -202,6 +212,7 @@ impl BatchLogExporter {
     }
 
     /// Run until cancellation, then drain the buffer before returning.
+    #[inline]
     async fn run(self, cancel: CancellationToken) {
         let mut interval = tokio::time::interval(self.config.interval);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -228,6 +239,7 @@ pub(crate) struct LogPipeline {
 }
 
 impl LogPipeline {
+    #[inline]
     pub(crate) fn spawn_with_config(
         exporter: Arc<dyn LogExporter>,
         service_name: String,
@@ -253,6 +265,7 @@ impl LogPipeline {
     }
 
     /// Wait for the exporter task to finish its shutdown drain.
+    #[inline]
     pub(crate) async fn wait_done(self) {
         let _ = self.done.await;
     }
@@ -270,6 +283,7 @@ mod tests {
     use crate::config::LogStyle;
     use crate::convert::{any_string, build_log_record};
     use ferron_observability::{LogAttributeValue, LogEvent, LogLevel};
+    #[inline]
 
     fn test_config() -> BatchConfig {
         BatchConfig {
@@ -279,6 +293,7 @@ mod tests {
             export_timeout: Duration::from_secs(5),
         }
     }
+    #[inline]
 
     fn record(message: &str) -> LogRecord {
         LogRecord {
@@ -297,9 +312,11 @@ mod tests {
     }
 
     impl MockExporter {
+        #[inline]
         async fn request_count(&self) -> usize {
             self.requests.lock().await.len()
         }
+        #[inline]
 
         async fn record_count(&self) -> usize {
             self.requests
@@ -314,6 +331,7 @@ mod tests {
     }
 
     impl LogExporter for MockExporter {
+        #[inline]
         fn export_logs<'a>(
             &'a self,
             request: &'a ExportLogsServiceRequest,
@@ -336,6 +354,7 @@ mod tests {
             })
         }
     }
+    #[inline]
 
     fn spawn_test(
         exporter: Arc<MockExporter>,
@@ -346,6 +365,7 @@ mod tests {
             LogPipeline::spawn_with_config(exporter, "test-service".into(), cancel.clone(), config);
         (pipeline, cancel)
     }
+    #[inline]
 
     async fn wait_until<F, Fut>(mut condition: F)
     where
@@ -578,6 +598,7 @@ mod tests {
         let requests = mock.requests.lock().await;
         let records = &requests[0].resource_logs[0].scope_logs[0].log_records;
         assert_eq!(records.len(), 2);
+        #[inline]
 
         fn body(record: &LogRecord) -> &crate::proto::opentelemetry::proto::common::v1::AnyValue {
             record.body.as_ref().unwrap()

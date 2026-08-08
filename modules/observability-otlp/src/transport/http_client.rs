@@ -10,6 +10,7 @@ use hyper_util::client::legacy::Client;
 
 /// Build a `RootCertStore` with native system certificates, falling back to
 /// embedded `webpki-roots` if native certs cannot be loaded.
+#[inline]
 fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error + Send + Sync>> {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
@@ -60,6 +61,7 @@ pub enum ClientError {
 }
 
 impl std::fmt::Display for ClientError {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooLargeResponse => write!(f, "OTLP response body exceeds the size cap"),
@@ -86,6 +88,7 @@ pub struct HyperOtelClient {
 impl HyperOtelClient {
     /// Build an HTTP client using hyper-util + hyper-rustls with the
     /// appropriate TLS config for OTLP HTTP exporters.
+    #[inline]
     pub fn new(no_verify: bool) -> Result<Self, Box<dyn Error + Send + Sync>> {
         use hyper_rustls::HttpsConnectorBuilder;
         use rustls::client::danger::ServerCertVerifier;
@@ -99,6 +102,7 @@ impl HyperOtelClient {
             #[derive(Debug)]
             struct NoServerVerifier;
             impl ServerCertVerifier for NoServerVerifier {
+                #[inline]
                 fn verify_server_cert(
                     &self,
                     _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -110,6 +114,7 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::ServerCertVerified::assertion())
                 }
+                #[inline]
 
                 fn verify_tls12_signature(
                     &self,
@@ -120,6 +125,7 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
+                #[inline]
 
                 fn verify_tls13_signature(
                     &self,
@@ -130,6 +136,7 @@ impl HyperOtelClient {
                 {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
+                #[inline]
 
                 fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
                     use rustls::SignatureScheme::*;
@@ -178,6 +185,7 @@ impl HyperOtelClient {
 
     /// Send a request and collect the full response body, capping the body
     /// size at `max_response_size` bytes.
+    #[inline]
     pub async fn send(
         &self,
         request: hyper::Request<Full<Bytes>>,
@@ -222,6 +230,7 @@ impl HyperOtelClient {
 
 /// Build a tonic Channel with matching TLS config for use with OTLP gRPC
 /// exporters. Uses native certificate store with webpki-roots fallback.
+#[inline]
 pub fn build_tonic_channel(
     endpoint: &str,
     no_verify: bool,
@@ -241,6 +250,7 @@ pub fn build_tonic_channel(
         #[derive(Debug)]
         struct NoServerVerifier;
         impl ServerCertVerifier for NoServerVerifier {
+            #[inline]
             fn verify_server_cert(
                 &self,
                 _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -251,6 +261,7 @@ pub fn build_tonic_channel(
             ) -> Result<ServerCertVerified, rustls::Error> {
                 Ok(ServerCertVerified::assertion())
             }
+            #[inline]
             fn verify_tls12_signature(
                 &self,
                 _message: &[u8],
@@ -259,6 +270,7 @@ pub fn build_tonic_channel(
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
                 Err(rustls::Error::General("not supported".into()))
             }
+            #[inline]
             fn verify_tls13_signature(
                 &self,
                 _message: &[u8],
@@ -267,6 +279,7 @@ pub fn build_tonic_channel(
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
                 Err(rustls::Error::General("not supported".into()))
             }
+            #[inline]
             fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
                 vec![]
             }

@@ -38,6 +38,7 @@ pub struct BatchConfig {
 }
 
 impl Default for BatchConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             batch_size: DEFAULT_BATCH_SIZE,

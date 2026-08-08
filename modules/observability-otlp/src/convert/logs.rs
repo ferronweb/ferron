@@ -16,6 +16,7 @@ use super::{any_bool, any_double, any_int, any_string, kv, nanos};
 /// attributes are published as typed values. In legacy mode the body is the
 /// human-readable message and the attributes are not exposed (only the
 /// `log.target` attribute is kept).
+#[inline]
 pub(crate) fn build_log_record(
     event: &LogEvent,
     promotions: &[BaggageKeyPromotion],
@@ -85,6 +86,7 @@ pub(crate) fn build_log_record(
 
 /// Convert a [`LogAttributeValue`] into an OTLP key-value preserving its
 /// underlying type (string, bool, integer, float).
+#[inline]
 fn log_kv(key: &'static str, value: &LogAttributeValue) -> KeyValue {
     match value {
         LogAttributeValue::String(s) => kv(key, any_string(s)),

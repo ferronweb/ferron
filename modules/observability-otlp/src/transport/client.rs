@@ -53,6 +53,7 @@ pub struct RetryConfig {
 }
 
 impl Default for RetryConfig {
+    #[inline]
     fn default() -> Self {
         Self {
             max_attempts: 3,
@@ -67,6 +68,7 @@ impl Default for RetryConfig {
 /// one try; a server-provided retry hint (`Retry-After` for HTTP,
 /// `RetryInfo.retry_delay` for gRPC) overrides the exponential backoff for
 /// that attempt.
+#[inline]
 pub(crate) async fn retry_with_backoff<F, Fut>(config: &RetryConfig, mut attempt: F) -> ExportResult
 where
     F: FnMut() -> Fut,
@@ -102,6 +104,7 @@ where
 
 /// Add a pseudo-random factor in the [0.5, 1.5) range to the base delay, to
 /// avoid thundering-herd retries from many clients at once.
+#[inline]
 fn jittered(base: Duration) -> Duration {
     let nanos = base.as_nanos() as u64;
     if nanos == 0 {
@@ -138,6 +141,7 @@ enum SignalTransport {
 impl OtlpTransport {
     /// Build transports for every configured signal from the OTLP backend
     /// configuration.
+    #[inline]
     pub fn from_config(config: &OtlpBackendConfig) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let retry = RetryConfig::default();
         Ok(Self {
@@ -164,6 +168,7 @@ impl OtlpTransport {
     }
 
     /// Export a batch of log records.
+    #[inline]
     pub async fn export_logs(&self, request: &ExportLogsServiceRequest) -> ExportResult {
         match &self.logs {
             Some(SignalTransport::Grpc(t)) => t.export_logs(request, &self.retry).await,
@@ -173,6 +178,7 @@ impl OtlpTransport {
     }
 
     /// Export a batch of metric data points.
+    #[inline]
     pub async fn export_metrics(&self, request: &ExportMetricsServiceRequest) -> ExportResult {
         match &self.metrics {
             Some(SignalTransport::Grpc(t)) => t.export_metrics(request, &self.retry).await,
@@ -182,6 +188,7 @@ impl OtlpTransport {
     }
 
     /// Export a batch of spans.
+    #[inline]
     pub async fn export_traces(&self, request: &ExportTraceServiceRequest) -> ExportResult {
         match &self.traces {
             Some(SignalTransport::Grpc(t)) => t.export_traces(request, &self.retry).await,
@@ -189,6 +196,7 @@ impl OtlpTransport {
             None => self.signal_not_configured("traces"),
         }
     }
+    #[inline]
 
     fn signal_not_configured(&self, signal: &str) -> ExportResult {
         ExportResult::Failure {
@@ -198,6 +206,7 @@ impl OtlpTransport {
         }
     }
 }
+#[inline]
 
 fn build_signal(
     kind: SignalKind,

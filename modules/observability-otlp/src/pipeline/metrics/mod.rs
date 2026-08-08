@@ -79,6 +79,7 @@ enum Scalar {
 }
 
 impl Scalar {
+    #[inline]
     fn of(value: MetricValue) -> Self {
         match value {
             MetricValue::F64(v) => Scalar::Double(v),
@@ -118,6 +119,7 @@ enum HistogramAgg {
 }
 
 impl HistogramAgg {
+    #[inline]
     fn record(&mut self, value: f64) {
         match self {
             HistogramAgg::Expo(histogram) => histogram.record(value),
@@ -130,6 +132,7 @@ impl Aggregate {
     /// Resolve the aggregate variant for a metric's instrument type and first
     /// value. Combinations the SDK never supported return `None` (the event
     /// is dropped, matching the old `emit_metric` fall-through).
+    #[inline]
     fn for_event(ty: &MetricType, value: MetricValue, native_histograms: bool) -> Option<Self> {
         match (ty, value) {
             (MetricType::Counter, MetricValue::F64(_)) => Some(Aggregate::Sum {
@@ -177,6 +180,7 @@ impl Aggregate {
 
 /// The operation for one recorded value, mirroring the old `emit_metric`
 /// match arms exactly (including the instrument/value arms it never had).
+#[inline]
 fn op_for(aggregate: &Aggregate, ty: &MetricType, value: MetricValue) -> Op {
     match (ty, aggregate, value) {
         (MetricType::Counter, Aggregate::Sum { .. }, MetricValue::F64(v)) => {
@@ -207,6 +211,7 @@ fn op_for(aggregate: &Aggregate, ty: &MetricType, value: MetricValue) -> Op {
 /// Apply an operation to a series aggregate. Returns `false` (no-op) when the
 /// measured value type does not match the aggregate's numeric kind, or when a
 /// monotonic counter receives a negative delta.
+#[inline]
 fn apply(aggregate: &mut Aggregate, op: Op) -> bool {
     match (aggregate, op) {
         (Aggregate::Sum { value, .. }, Op::AddDouble { v, monotonic }) => {
@@ -259,6 +264,7 @@ struct Series {
 impl Series {
     /// Record one measurement, updating time bounds and, when `capture` is
     /// set, the exemplar ring.
+    #[inline]
     fn record(&mut self, event: &MetricEvent, now: u64, capture: bool) {
         let op = op_for(&self.aggregate, &event.ty, event.value);
         if !apply(&mut self.aggregate, op) {
@@ -284,6 +290,7 @@ impl Series {
     }
 
     /// Export this series as one data point for the OTLP `Metric` grouping.
+    #[inline]
     fn export(&self, now: u64) -> (String, String, String, MetricKind, Point) {
         let attributes = self.attributes.clone();
         let exemplars = self.exemplar.iter().cloned().map(exemplar_proto).collect();
@@ -343,6 +350,7 @@ impl Series {
         }
     }
 }
+#[inline]
 
 fn number_value(
     value: Scalar,
@@ -352,6 +360,7 @@ fn number_value(
         Scalar::Int(v) => number_data_point::Value::AsInt(v),
     }
 }
+#[inline]
 
 fn exemplar_proto(
     exemplar: StoredExemplar,
@@ -395,6 +404,7 @@ struct MetricGroup {
 }
 
 impl MetricGroup {
+    #[inline]
     fn finish(self) -> Metric {
         let data = match self.kind {
             MetricKind::Gauge => {
@@ -435,6 +445,7 @@ impl MetricGroup {
         }
     }
 }
+#[inline]
 
 fn point_number(point: Point) -> NumberDataPoint {
     match point {
@@ -444,6 +455,7 @@ fn point_number(point: Point) -> NumberDataPoint {
         }
     }
 }
+#[inline]
 
 fn point_exponential(point: Point) -> ExponentialHistogramDataPoint {
     match point {
@@ -453,6 +465,7 @@ fn point_exponential(point: Point) -> ExponentialHistogramDataPoint {
         }
     }
 }
+#[inline]
 
 fn point_explicit(point: Point) -> HistogramDataPoint {
     match point {
@@ -481,6 +494,7 @@ struct MetricStoreInner {
 }
 
 impl MetricStore {
+    #[inline]
     fn new(capture_exemplars: bool, native_histograms: bool) -> Self {
         Self {
             inner: Arc::new(MetricStoreInner {
@@ -494,6 +508,7 @@ impl MetricStore {
 
     /// Record one metric event into its series, creating the series on first
     /// observation.
+    #[inline]
     pub(crate) fn record(
         &self,
         event: &MetricEvent,
@@ -523,6 +538,7 @@ impl MetricStore {
     /// Collect all series into per-name metric groups. Returns `None` when
     /// there is nothing to export yet, so the reader does not emit empty
     /// envelopes. `points` counts the metric data points collected.
+    #[inline]
     fn collect(&self) -> Option<(Vec<Metric>, usize)> {
         let mut group_index: HashMap<(String, MetricKind), usize> = HashMap::new();
         let mut groups: Vec<MetricGroup> = Vec::new();
@@ -565,9 +581,11 @@ impl MetricStore {
 
     /// Total number of data points dropped because an export failed.
     #[cfg(test)]
+    #[inline]
     fn dropped(&self) -> u64 {
         self.inner.dropped.load(Ordering::Relaxed)
     }
+    #[inline]
 
     fn record_dropped(&self, n: u64) {
         self.inner.dropped.fetch_add(n, Ordering::Relaxed);
@@ -579,6 +597,7 @@ impl MetricStore {
 }
 
 static DROPPED_METRICS: Once = Once::new();
+#[inline]
 
 fn warn_once() {
     DROPPED_METRICS.call_once(|| {
@@ -591,6 +610,7 @@ fn warn_once() {
 
 /// Build the attribute set for a metric event: typed event attributes plus
 /// promoted baggage keys, deduplicated by the series key this feeds into.
+#[inline]
 fn attributes_for(
     event: &MetricEvent,
     promotions: &[BaggageKeyPromotion],
@@ -623,6 +643,7 @@ fn attributes_for(
 
 /// Deterministic string key identifying one series: metric name plus a
 /// canonical rendering of its attributes.
+#[inline]
 fn series_key(name: &str, attributes: &[KeyValue]) -> String {
     let mut key = String::with_capacity(64 + attributes.len() * 16);
     key.push_str(name);
@@ -680,6 +701,7 @@ pub(crate) trait MetricExporter: Send + Sync {
 pub(crate) type ExportMetricsFuture<'a> = Pin<Box<dyn Future<Output = ExportResult> + Send + 'a>>;
 
 impl MetricExporter for OtlpTransport {
+    #[inline]
     fn export_metrics<'a>(
         &'a self,
         request: &'a ExportMetricsServiceRequest,
@@ -700,6 +722,7 @@ struct MetricReader {
 
 impl MetricReader {
     /// Collect and export all series. Exports nothing when no series exist.
+    #[inline]
     async fn flush(&self) {
         let Some((metrics, points)) = self.store.collect() else {
             return;
@@ -726,6 +749,7 @@ impl MetricReader {
     }
 
     /// Run until cancellation, then perform a final flush before returning.
+    #[inline]
     async fn run(self, cancel: tokio_util::sync::CancellationToken) {
         let mut interval = tokio::time::interval(self.interval);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -747,6 +771,7 @@ pub(crate) struct MetricPipeline {
 }
 
 impl MetricPipeline {
+    #[inline]
     pub(crate) fn spawn_with_config(
         exporter: Arc<dyn MetricExporter>,
         service_name: String,
@@ -776,6 +801,7 @@ impl MetricPipeline {
     }
 
     /// Wait for the reader task to finish its final collection.
+    #[inline]
     pub(crate) async fn wait_done(self) {
         let _ = self.done.await;
     }

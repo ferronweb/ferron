@@ -24,6 +24,7 @@ const SPAN_FLAGS_SAMPLED: u32 = 1;
 ///
 /// Returns the span evicted from the correlation context when the LRU cache
 /// overflows (finished with an error status so it is not silently lost).
+#[inline]
 pub(crate) fn start_span(
     event: &TraceEvent,
     correlation: &mut CorrelationContext,
@@ -134,6 +135,7 @@ pub(crate) fn start_span(
 ///
 /// The span start time is the `StartSpan` ingestion time, the end time is
 /// the `EndSpan` ingestion time (never before the start time).
+#[inline]
 pub(crate) fn end_span(
     event: &TraceEvent,
     correlation: &mut CorrelationContext,
@@ -167,6 +169,7 @@ pub(crate) fn end_span(
 }
 
 /// Convert a [`TraceAttributeValue`] into an OTLP key-value.
+#[inline]
 fn trace_kv(key: Cow<'static, str>, value: &TraceAttributeValue) -> KeyValue {
     match value {
         TraceAttributeValue::String(s) => kv(key, any_string(s)),
@@ -182,6 +185,7 @@ fn trace_kv(key: Cow<'static, str>, value: &TraceAttributeValue) -> KeyValue {
 /// `Parent::ByKey` looks the active span up in the correlation context;
 /// `Parent::ById` uses the IDs carried by the event. Malformed IDs resolve
 /// to no parent (the span becomes a root span).
+#[inline]
 fn resolve_parent(
     correlation: &mut CorrelationContext,
     parent: Option<&Parent>,
@@ -208,6 +212,7 @@ struct ParentRef {
 
 /// Convert a [`SpanLink`] into an OTLP link. Links with malformed IDs are
 /// dropped.
+#[inline]
 fn build_link(link: &SpanLink) -> Option<span::Link> {
     let trace_id = decode_trace_id(link.trace_id.as_bytes())?;
     let span_id = decode_span_id(link.span_id.as_bytes())?;
