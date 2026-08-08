@@ -7,13 +7,13 @@ use crate::proto::opentelemetry::proto::metrics::v1::{
 
 /// Maximum scale of the Base2 exponential histogram (parity with the SDK
 /// view: `max_scale 20`).
-pub(super) const EXPO_MAX_SCALE: i8 = 20;
+pub const EXPO_MAX_SCALE: i8 = 20;
 /// Minimum scale before a measurement is dropped (parity with the SDK's
 /// `EXPO_MIN_SCALE`).
-pub(super) const EXPO_MIN_SCALE: i8 = -10;
+pub const EXPO_MIN_SCALE: i8 = -10;
 /// Maximum number of buckets in the exponential histogram (parity with the
 /// SDK view: `max_size 160`).
-pub(super) const EXPO_MAX_SIZE: i32 = 160;
+pub const EXPO_MAX_SIZE: i32 = 160;
 
 /// The upper bounds of the buckets; the final bucket has no upper bound.
 pub(super) const EXPLICIT_BOUNDS: &[f64] = &[
@@ -23,7 +23,7 @@ pub(super) const EXPLICIT_BOUNDS: &[f64] = &[
 
 /// A histogram aggregated into fixed, explicit buckets.
 #[derive(Debug)]
-pub(crate) struct ExplicitHistogram {
+pub struct ExplicitHistogram {
     count: u64,
     min: f64,
     max: f64,
@@ -32,7 +32,7 @@ pub(crate) struct ExplicitHistogram {
 }
 
 impl ExplicitHistogram {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             count: 0,
             min: f64::MAX,
@@ -43,7 +43,7 @@ impl ExplicitHistogram {
     }
 
     /// Record one measurement into the bucket that holds it.
-    pub(super) fn record(&mut self, value: f64) {
+    pub fn record(&mut self, value: f64) {
         self.count += 1;
         if value < self.min {
             self.min = value;
@@ -57,7 +57,7 @@ impl ExplicitHistogram {
     }
 
     /// Export the histogram as an OTLP data point.
-    pub(super) fn to_proto(
+    pub fn to_proto(
         &self,
         attributes: Vec<KeyValue>,
         start_time_unix_nano: u64,
@@ -83,7 +83,7 @@ impl ExplicitHistogram {
 /// A measurement that cannot fit even at the minimum scale is silently
 /// dropped (parity with the SDK, which logs a debug message instead).
 #[derive(Debug)]
-pub(crate) struct ExpoHistogram {
+pub struct ExpoHistogram {
     max_size: i32,
     count: u64,
     min: f64,
@@ -96,7 +96,7 @@ pub(crate) struct ExpoHistogram {
 }
 
 impl ExpoHistogram {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             max_size: EXPO_MAX_SIZE,
             count: 0,
@@ -113,7 +113,7 @@ impl ExpoHistogram {
     /// Rescale to a smaller scale (fewer buckets; `delta` bucket rows are
     /// merged). Used when a range of bins no longer fits and to honor the
     /// "downscale" semantic of cumulative histograms.
-    pub(super) fn downscale(&mut self, delta: u32) {
+    pub fn downscale(&mut self, delta: u32) {
         if delta == 0 {
             return;
         }
@@ -124,7 +124,45 @@ impl ExpoHistogram {
 
     /// Record one measurement into the histogram, resizing the buckets if
     /// needed.
-    pub(super) fn record(&mut self, value: f64) {
+    ///
+    /// A measurement that cannot fit even at the minimum scale is silently
+    /// dropped and does not affect the count, sum, or min/max.
+    pub fn record(&mut self, value: f64) {
+        let abs = value.abs();
+        if abs == 0.0 {
+            self.zero_count += 1;
+        } else {
+            let value_negative = value < 0.0;
+            let mut bin = self.get_bin(abs);
+
+            let bucket = if value_negative {
+                &self.negative
+            } else {
+                &self.positive
+            };
+            let delta = scale_delta(
+                self.max_size,
+                bin,
+                bucket.offset,
+                bucket.counts.len() as i32,
+            );
+            if delta > 0 {
+                if (self.scale - delta as i8) < EXPO_MIN_SCALE {
+                    // The measurement cannot fit even at the minimum scale;
+                    // drop it.
+                    return;
+                }
+                self.downscale(delta);
+                bin = get_bin(abs, self.scale);
+            }
+
+            if value_negative {
+                self.negative.record(bin);
+            } else {
+                self.positive.record(bin);
+            }
+        }
+
         self.count += 1;
         if value < self.min {
             self.min = value;
@@ -133,51 +171,15 @@ impl ExpoHistogram {
             self.max = value;
         }
         self.sum += value;
-
-        let abs = value.abs();
-        if abs == 0.0 {
-            self.zero_count += 1;
-            return;
-        }
-
-        let value_negative = value < 0.0;
-        let mut bin = self.get_bin(abs);
-
-        let bucket = if value_negative {
-            &self.negative
-        } else {
-            &self.positive
-        };
-        let delta = scale_delta(
-            self.max_size,
-            bin,
-            bucket.offset,
-            bucket.counts.len() as i32,
-        );
-        if delta > 0 {
-            if (self.scale - delta as i8) < EXPO_MIN_SCALE {
-                // The measurement cannot fit even at the minimum scale; drop it.
-                self.count -= 1;
-                return;
-            }
-            self.downscale(delta);
-            bin = get_bin(abs, self.scale);
-        }
-
-        if value_negative {
-            self.negative.record(bin);
-        } else {
-            self.positive.record(bin);
-        }
     }
 
     /// The index of the bucket `value` belongs to at a given scale.
-    pub(super) fn get_bin(&self, value: f64) -> i32 {
+    pub fn get_bin(&self, value: f64) -> i32 {
         get_bin(value, self.scale)
     }
 
     /// Export the histogram as an OTLP data point.
-    pub(super) fn to_proto(
+    pub fn to_proto(
         &self,
         attributes: Vec<KeyValue>,
         start_time_unix_nano: u64,
@@ -397,5 +399,35 @@ mod tests {
         buckets.downscale(1);
         assert_eq!(buckets.offset, 0);
         assert_eq!(buckets.counts, vec![2, 2]);
+    }
+
+    #[test]
+    fn recorded_values_are_accounted_for_exactly() {
+        // A spread of extreme magnitudes forces several downscales; every
+        // recorded value must still be accounted for exactly once.
+        let mut hist = ExpoHistogram::new();
+        for value in [
+            1.0,
+            2.0,
+            0.5,
+            -1.0,
+            f64::MAX,
+            -f64::MAX,
+            f64::MIN_POSITIVE,
+            0.0,
+            -0.0,
+        ] {
+            hist.record(value);
+        }
+        let point = hist.to_proto(vec![], 0, 0, vec![]);
+        let positive: u64 = point.positive.as_ref().unwrap().bucket_counts.iter().sum();
+        let negative: u64 = point.negative.as_ref().unwrap().bucket_counts.iter().sum();
+        assert_eq!(point.count, 9, "count must cover every recorded value");
+        assert_eq!(point.zero_count, 2, "both zero representations count");
+        assert_eq!(positive, 5);
+        assert_eq!(negative, 2);
+        assert_eq!(point.sum, Some(f64::MIN_POSITIVE), "sum drifts");
+        assert_eq!(point.min, Some(-f64::MAX));
+        assert_eq!(point.max, Some(f64::MAX));
     }
 }

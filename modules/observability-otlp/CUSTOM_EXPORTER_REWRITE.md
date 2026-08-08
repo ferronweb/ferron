@@ -1,6 +1,6 @@
 # Custom OTLP exporter rewrite — implementation plan
 
-**Status:** Steps 0-7 done — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed. The §5.6 optional config additions (`export_interval`/`export_batch_size`/`read_interval`, `gzip`, `exemplars`, `native_histograms`; each with directive + validator + docs + changelog) and Step 7 (E2E tests + docs) are also committed; the full e2e suite passes with the new mock collector (metrics, logs, JSON, gRPC, exemplars, explicit histograms)
+**Status:** Steps 0-7 done plus §7.3 fuzzing — pbjson JSON integration, transport layer, Event→proto conversion, batch trace + log exporters, metrics pipeline (per-series accumulation, Base2 exponential histograms, exemplars, 30 s periodic reader), and the integration/teardown/cleanup (all SDK crates removed; `HyperOtelClient`/`build_tonic_channel` moved into `transport/http_client.rs`; `src/client.rs` deleted) implemented and committed. The §5.6 optional config additions (`export_interval`/`export_batch_size`/`read_interval`, `gzip`, `exemplars`, `native_histograms`; each with directive + validator + docs + changelog) and Step 7 (E2E tests + docs) are also committed; the full e2e suite passes with the new mock collector (metrics, logs, JSON, gRPC, exemplars, explicit histograms). §7.3 added `fuzz_otlp_http_request` + `fuzz_otlp_histogram` under `fuzz/` (both verified crash-free)
 **Branch:** `feat/custom-otlp-exporter`
 **Module:** `modules/observability-otlp` (`ferron-observability-otlp`)
 
@@ -490,7 +490,7 @@ in one commit.
 | --- | --- | --- |
 | R1 | pbjson base64-encodes `bytes`; OTLP JSON needs hex trace/span IDs (D6) | Golden-fixture test in Step 0 using `opentelemetry-proto/examples/*.json`; if post-replacement is too fragile, hand-write `Serialize` for the ~4 ID-bearing messages (`Span`, `Link`, `LogRecord`, `Exemplar`), keep pbjson for everything else. |
 | R2 | Building gRPC **server** for tests requires `build_server(true)` | Add a separate test-only build (e.g. second `tonic_prost_build::configure()` invocation gated by `cargo:rerun-if-env-changed` / cfg, or generate server code behind a `ferron-observability-otlp/test-utils` dev feature) — do not ship server code in release. |
-| R3 | Exponential histogram scale adaptation complexity | Reuse the math from the Prometheus module's `NativeHistogramConfig(1.1)` and the OTel spec formulas; fuzz with `cargo +nightly fuzz run fuzz_otlp_histogram` if added (see §7). |
+| R3 | Exponential histogram scale adaptation complexity | Reuse the math from the Prometheus module's `NativeHistogramConfig(1.1)` and the OTel spec formulas; fuzz with `cargo +nightly fuzz run fuzz_otlp_histogram` (added in §7.3). |
 | R4 | Backpressure: bounded buffers + drop policy choices | Mirror SDK defaults (drop-newest when queue full, count drops); document the choice in the code (`TODO`/`FIXME` markers per AGENTS.md if partial). |
 | R5 | gRPC `authorization` metadata vs. HTTP header | Both already exist today (`providers/cache.rs`); preserve exact behavior (metadata key `authorization`). |
 | R6 | The mock collector (`responder.py`) currently decodes traces only | Extend for metrics/logs + gRPC (Step 7); keeps e2e assertions at the decoded-payload level. |
@@ -532,11 +532,20 @@ TODO-marked ones.
 - Follow the existing pattern in `tests/observability/traces.rs`
   (container startup retry loop, polling `/received`).
 
-### 7.3 Fuzzing (optional follow-up, `fuzz/`)
+### 7.3 Fuzzing (optional follow-up, `fuzz/`) — DONE
 
-- `fuzz_otlp_http_request` (JSON + protobuf encode fuzz — assert no panic,
-  output decodes), `fuzz_otlp_histogram` (exponential bucket math
-  invariants). Run from `fuzz/` with `cargo +nightly fuzz run <target>`.
+- [x] `fuzz_otlp_http_request`: protobuf decode → encode → decode round-trip
+  of `ExportTraceServiceRequest`, OTLP/HTTP JSON encoding
+  (`request_to_json` + hex-ID rewrite; must be deterministic and
+  re-serializable), `hexify_id_fields` idempotence over arbitrary JSON.
+  Verified: 6.4M runs, no crash.
+- [x] `fuzz_otlp_histogram`: exponential bucket accounting invariants
+  (count == zero_count + bucket counts, mean within [min, max], scale
+  bounds; NaN inputs skipped). Verified: 2.3M runs, no crash. Also
+  hardened `ExpoHistogram::record` so a measurement dropped below the
+  minimum scale is not counted into sum/min/max (accounting now matches the
+  documented drop semantics; unit test added).
+- Run from `fuzz/` with `cargo +nightly fuzz run <target>`.
 
 ### 7.4 Full verification commands (after each step)
 

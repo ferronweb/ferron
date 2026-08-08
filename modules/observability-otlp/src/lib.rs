@@ -1,6 +1,15 @@
 mod config;
+#[cfg(feature = "fuzz")]
+pub mod pipeline;
+#[cfg(not(feature = "fuzz"))]
 mod pipeline;
+#[cfg(feature = "fuzz")]
+pub mod proto;
+#[cfg(not(feature = "fuzz"))]
 pub(crate) mod proto;
+#[cfg(feature = "fuzz")]
+pub mod transport;
+#[cfg(not(feature = "fuzz"))]
 mod transport;
 mod validator;
 

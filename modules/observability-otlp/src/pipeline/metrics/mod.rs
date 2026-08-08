@@ -22,6 +22,9 @@
 //! decoded from hex-ASCII to raw bytes and attached to the exported data
 //! point.
 
+#[cfg(any(test, feature = "fuzz"))]
+pub mod expo_histogram;
+#[cfg(not(any(test, feature = "fuzz")))]
 mod expo_histogram;
 mod tests;
 

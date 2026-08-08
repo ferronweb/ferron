@@ -60,6 +60,8 @@
 
 - **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
 - **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
+- **Exponential histogram drop accounting** — `ExpoHistogram` keeps sum, min, max, and bucket counts consistent: a measurement that cannot fit even at the minimum scale is dropped from every aggregate (previously it could influence sum/min/max while not being counted).
+- **OTLP fuzz targets** — `fuzz/` gains `fuzz_otlp_http_request` (protobuf and OTLP/HTTP JSON encode round-trips, hex-ID rewrite idempotence) and `fuzz_otlp_histogram` (exponential bucket accounting invariants), run with `cargo +nightly fuzz run <target>` from `fuzz/`.
 - **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
 
 #### Configuration validation

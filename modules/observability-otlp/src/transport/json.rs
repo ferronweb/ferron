@@ -9,7 +9,7 @@ use serde_json::Value;
 /// strings instead of base64 (see the OTLP specification, "JSON Protobuf
 /// Encoding"). [`hexify_id_fields`] rewrites those fields after serialization.
 #[allow(dead_code)] // wired into the HTTP JSON exporter in a later step
-pub(crate) fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
+pub fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
     let mut value =
         serde_json::to_value(message).expect("OTLP request JSON serialization must not fail");
     hexify_id_fields(&mut value);
@@ -23,7 +23,7 @@ pub(crate) fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
 /// These are the only `bytes` fields in the OTLP telemetry messages Ferron
 /// emits, so any string value under one of these keys was base64-encoded by
 /// `pbjson`. Strings that cannot be base64-decoded are left untouched.
-fn hexify_id_fields(value: &mut Value) {
+pub fn hexify_id_fields(value: &mut Value) {
     match value {
         Value::Object(map) => {
             for (key, field) in map.iter_mut() {
