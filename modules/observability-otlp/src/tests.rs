@@ -988,3 +988,41 @@ fn build_resource_includes_service_and_process_identity() {
         int_value(find_attr(&resource.attributes, "process.start_time").unwrap()).unwrap();
     assert!(start_time > 0);
 }
+
+#[test]
+fn cache_key_distinguishes_tls_verification() {
+    use crate::config::{OtlpBackendConfig, SignalConfig};
+
+    let signal = || SignalConfig {
+        endpoint: "https://collector:4318".to_string(),
+        protocol: "http/protobuf".to_string(),
+        authorization: None,
+        export_interval: None,
+        export_batch_size: None,
+        read_interval: None,
+        gzip: false,
+        exemplars: None,
+        native_histograms: None,
+    };
+    let config = |no_verify: bool| OtlpBackendConfig {
+        service_name: "ferron".to_string(),
+        no_verify,
+        logs: Some(signal()),
+        metrics: Some(signal()),
+        traces: Some(signal()),
+        baggage_promotions: Vec::new(),
+        log_style: LogStyle::Modern,
+        authorization: None,
+    };
+    // Two backends that differ only in TLS certificate verification must not
+    // share a pipeline: the transport's certificate verifier is chosen once
+    // per cache key.
+    assert_ne!(
+        crate::config_cache_key(&config(false)),
+        crate::config_cache_key(&config(true))
+    );
+    assert_eq!(
+        crate::config_cache_key(&config(false)),
+        crate::config_cache_key(&config(false))
+    );
+}

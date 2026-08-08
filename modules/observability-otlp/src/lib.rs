@@ -555,7 +555,7 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         })
         .unwrap_or_default();
     format!(
-        "{}|{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}|{}",
         config.service_name,
         logs_key,
         metrics_key,
@@ -563,7 +563,8 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
         match config.log_style {
             crate::config::LogStyle::Legacy => "legacy",
             crate::config::LogStyle::Modern => "modern",
-        }
+        },
+        config.no_verify
     )
 }
 
