@@ -76,6 +76,7 @@ struct StoredExemplar {
 enum Scalar {
     Double(f64),
     Int(i64),
+    Uint(u64),
 }
 
 impl Scalar {
@@ -84,7 +85,7 @@ impl Scalar {
         match value {
             MetricValue::F64(v) => Scalar::Double(v),
             MetricValue::I64(v) => Scalar::Int(v),
-            MetricValue::U64(v) => Scalar::Int(v as i64),
+            MetricValue::U64(v) => Scalar::Uint(v),
             _ => Scalar::Int(0),
         }
     }
@@ -140,7 +141,7 @@ impl Aggregate {
                 monotonic: true,
             }),
             (MetricType::Counter, MetricValue::U64(_)) => Some(Aggregate::Sum {
-                value: Scalar::Int(0),
+                value: Scalar::Uint(0),
                 monotonic: true,
             }),
             (MetricType::UpDownCounter, MetricValue::F64(_)) => Some(Aggregate::Sum {
@@ -154,11 +155,12 @@ impl Aggregate {
             (MetricType::Gauge, MetricValue::F64(_)) => Some(Aggregate::Gauge {
                 value: Scalar::Double(0.0),
             }),
-            (MetricType::Gauge, MetricValue::I64(_)) | (MetricType::Gauge, MetricValue::U64(_)) => {
-                Some(Aggregate::Gauge {
-                    value: Scalar::Int(0),
-                })
-            }
+            (MetricType::Gauge, MetricValue::I64(_)) => Some(Aggregate::Gauge {
+                value: Scalar::Int(0),
+            }),
+            (MetricType::Gauge, MetricValue::U64(_)) => Some(Aggregate::Gauge {
+                value: Scalar::Uint(0),
+            }),
             (MetricType::Histogram(buckets), MetricValue::F64(_))
             | (MetricType::Histogram(buckets), MetricValue::U64(_)) => {
                 let aggregate = if native_histograms {
@@ -237,10 +239,10 @@ fn apply(aggregate: &mut Aggregate, op: Op) -> bool {
             };
         }
         (Aggregate::Sum { value, .. }, Op::AddUint(v)) => {
-            let Scalar::Int(i) = value else {
+            let Scalar::Uint(i) = value else {
                 return false;
             };
-            *i = if let Some(i) = i.checked_add(v as i64) {
+            *i = if let Some(i) = i.checked_add(v) {
                 i
             } else {
                 return false;
@@ -248,7 +250,7 @@ fn apply(aggregate: &mut Aggregate, op: Op) -> bool {
         }
         (Aggregate::Gauge { value }, Op::SetDouble(v)) => *value = Scalar::Double(v),
         (Aggregate::Gauge { value }, Op::SetInt(v)) => *value = Scalar::Int(v),
-        (Aggregate::Gauge { value }, Op::SetUint(v)) => *value = Scalar::Int(v as i64),
+        (Aggregate::Gauge { value }, Op::SetUint(v)) => *value = Scalar::Uint(v),
         (Aggregate::Histogram(histogram), Op::RecordHistogram(v)) => histogram.record(v),
         _ => return false,
     }
@@ -369,6 +371,7 @@ fn number_value(
     match value {
         Scalar::Double(v) => number_data_point::Value::AsDouble(v),
         Scalar::Int(v) => number_data_point::Value::AsInt(v),
+        Scalar::Uint(v) => number_data_point::Value::AsInt(v as i64),
     }
 }
 
@@ -384,6 +387,7 @@ fn exemplar_proto(
         value: Some(match exemplar.value {
             Scalar::Double(v) => exemplar::Value::AsDouble(v),
             Scalar::Int(v) => exemplar::Value::AsInt(v),
+            Scalar::Uint(v) => exemplar::Value::AsInt(v as i64),
         }),
     }
 }
