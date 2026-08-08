@@ -156,12 +156,17 @@ impl Aggregate {
                     value: Scalar::Int(0),
                 })
             }
-            (MetricType::Histogram(_), MetricValue::F64(_))
-            | (MetricType::Histogram(_), MetricValue::U64(_)) => {
+            (MetricType::Histogram(buckets), MetricValue::F64(_))
+            | (MetricType::Histogram(buckets), MetricValue::U64(_)) => {
                 let aggregate = if native_histograms {
                     HistogramAgg::Expo(ExpoHistogram::new())
                 } else {
-                    HistogramAgg::Explicit(ExplicitHistogram::new())
+                    if let Some(buckets) = buckets.to_owned() {
+                        HistogramAgg::Explicit(ExplicitHistogram::with_buckets(buckets))
+                    } else {
+                        // Use implicit default buckets
+                        HistogramAgg::Explicit(ExplicitHistogram::new())
+                    }
                 };
                 Some(Aggregate::Histogram(aggregate))
             }

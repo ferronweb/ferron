@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use crate::proto::opentelemetry::proto::common::v1::KeyValue;
@@ -15,8 +16,8 @@ pub const EXPO_MIN_SCALE: i8 = -10;
 /// SDK view: `max_size 160`).
 pub const EXPO_MAX_SIZE: i32 = 160;
 
-/// The upper bounds of the buckets; the final bucket has no upper bound.
-pub(super) const EXPLICIT_BOUNDS: &[f64] = &[
+/// The default upper bounds of the buckets; the final bucket has no upper bound.
+pub(super) const DEFAULT_EXPLICIT_BOUNDS: &[f64] = &[
     0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0, 5000.0, 7500.0,
     10000.0,
 ];
@@ -29,16 +30,23 @@ pub struct ExplicitHistogram {
     max: f64,
     sum: f64,
     bucket_counts: Vec<u64>,
+    buckets: Cow<'static, [f64]>,
 }
 
 impl ExplicitHistogram {
+    #[inline]
     pub fn new() -> Self {
+        Self::with_buckets(DEFAULT_EXPLICIT_BOUNDS.into())
+    }
+
+    pub fn with_buckets(buckets: Cow<'static, [f64]>) -> Self {
         Self {
             count: 0,
             min: f64::MAX,
             max: f64::MIN,
             sum: 0.0,
-            bucket_counts: vec![0; EXPLICIT_BOUNDS.len() + 1],
+            bucket_counts: vec![0; buckets.len() + 1],
+            buckets,
         }
     }
 
@@ -52,7 +60,7 @@ impl ExplicitHistogram {
             self.max = value;
         }
         self.sum += value;
-        let index = EXPLICIT_BOUNDS.partition_point(|bound| value > *bound);
+        let index = self.buckets.partition_point(|bound| value > *bound);
         self.bucket_counts[index] += 1;
     }
 
@@ -72,7 +80,7 @@ impl ExplicitHistogram {
             sum: Some(self.sum),
             min: Some(self.min),
             max: Some(self.max),
-            explicit_bounds: EXPLICIT_BOUNDS.to_vec(),
+            explicit_bounds: self.buckets.to_vec(),
             bucket_counts: self.bucket_counts.clone(),
             flags: 0,
             exemplars,
