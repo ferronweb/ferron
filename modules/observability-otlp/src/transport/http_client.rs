@@ -268,7 +268,7 @@ pub fn build_tonic_channel(
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+                Ok(HandshakeSignatureValid::assertion())
             }
             #[inline]
             fn verify_tls13_signature(
@@ -277,11 +277,22 @@ pub fn build_tonic_channel(
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+                Ok(HandshakeSignatureValid::assertion())
             }
             #[inline]
             fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-                vec![]
+                use rustls::SignatureScheme::*;
+                vec![
+                    ECDSA_NISTP384_SHA384,
+                    ECDSA_NISTP256_SHA256,
+                    ED25519,
+                    RSA_PSS_SHA512,
+                    RSA_PSS_SHA384,
+                    RSA_PSS_SHA256,
+                    RSA_PKCS1_SHA512,
+                    RSA_PKCS1_SHA384,
+                    RSA_PKCS1_SHA256,
+                ]
             }
         }
         rustls::ClientConfig::builder_with_provider(crypto)

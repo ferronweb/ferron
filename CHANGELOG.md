@@ -58,6 +58,7 @@
 
 #### Observability
 
+- **OTLP gRPC `no_verification` TLS handshake** — previously, when an OTLP gRPC endpoint was configured with `no_verification true` and used HTTPS, TLS handshakes failed because the custom certificate verifier rejected TLS 1.2/1.3 handshake signatures. This has been fixed to return assertion-based verification results (matching the HTTP exporter behavior).
 - **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
 - **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
 - **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
