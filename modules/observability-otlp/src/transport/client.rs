@@ -115,6 +115,7 @@ fn jittered(base: Duration) -> Duration {
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(nanos);
     let mut x = seed ^ nanos.rotate_left(17);
+    // xorshift64 pass
     x ^= x << 13;
     x ^= x >> 7;
     x ^= x << 17;
