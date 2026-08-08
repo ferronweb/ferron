@@ -1,9 +1,10 @@
 #![allow(rustdoc::invalid_html_tags)]
+#![allow(clippy::all)]
+#![allow(dead_code)]
 
 pub mod opentelemetry {
     pub mod proto {
         pub mod common {
-            #[allow(clippy::all)]
             pub mod v1 {
                 #[cfg(test)]
                 include!(concat!(
@@ -22,7 +23,6 @@ pub mod opentelemetry {
             }
         }
         pub mod resource {
-            #[allow(clippy::all)]
             pub mod v1 {
                 #[cfg(test)]
                 include!(concat!(
@@ -41,7 +41,6 @@ pub mod opentelemetry {
             }
         }
         pub mod logs {
-            #[allow(clippy::all)]
             pub mod v1 {
                 #[cfg(test)]
                 include!(concat!(
@@ -57,7 +56,6 @@ pub mod opentelemetry {
             }
         }
         pub mod metrics {
-            #[allow(clippy::all)]
             pub mod v1 {
                 #[cfg(test)]
                 include!(concat!(
@@ -76,7 +74,6 @@ pub mod opentelemetry {
             }
         }
         pub mod trace {
-            #[allow(clippy::all)]
             pub mod v1 {
                 #[cfg(test)]
                 include!(concat!(
@@ -93,7 +90,6 @@ pub mod opentelemetry {
         }
         pub mod collector {
             pub mod logs {
-                #[allow(clippy::all)]
                 pub mod v1 {
                     #[cfg(test)]
                     include!(concat!(
@@ -112,7 +108,6 @@ pub mod opentelemetry {
                 }
             }
             pub mod metrics {
-                #[allow(clippy::all)]
                 pub mod v1 {
                     #[cfg(test)]
                     include!(concat!(
@@ -131,7 +126,6 @@ pub mod opentelemetry {
                 }
             }
             pub mod trace {
-                #[allow(clippy::all)]
                 pub mod v1 {
                     #[cfg(test)]
                     include!(concat!(
