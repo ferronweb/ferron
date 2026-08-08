@@ -23,9 +23,9 @@
 //! point.
 
 #[cfg(any(test, feature = "fuzz"))]
-pub mod expo_histogram;
+pub mod histogram;
 #[cfg(not(any(test, feature = "fuzz")))]
-mod expo_histogram;
+mod histogram;
 mod tests;
 
 use std::collections::HashMap;
@@ -41,7 +41,7 @@ use ferron_observability::baggage::{
 };
 use ferron_observability::{MetricEvent, MetricType, MetricValue};
 
-use self::expo_histogram::*;
+use self::histogram::*;
 
 use crate::convert::{
     any_string, build_resource, build_scope, decode_span_id, decode_trace_id, kv,

@@ -14,7 +14,7 @@
 
 #![no_main]
 
-use ferron_observability_otlp::pipeline::metrics::expo_histogram::{
+use ferron_observability_otlp::pipeline::metrics::histogram::{
     ExpoHistogram, EXPO_MAX_SCALE, EXPO_MIN_SCALE,
 };
 use libfuzzer_sys::fuzz_target;
