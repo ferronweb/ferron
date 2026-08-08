@@ -15,7 +15,7 @@ tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
-tonic = { version = "0.14", features = ["gzip"] }
+tonic = { version = "0.14", default-features = false, features = ["codegen", "channel", "gzip"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
@@ -45,6 +45,7 @@ pbjson-build = "0.9"
 [dev-dependencies]
 hyper = { version = "1", features = ["server", "http1"] }
 tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14", features = ["gzip"] }
 
 [package.metadata.cargo-shear]
 ignored = ["pbjson", "tonic-prost"]
