@@ -32,11 +32,14 @@ Ferron uses OpenTelemetry metric types. Understanding the type helps you write c
 
 ## Exponential histograms
 
-When using the OTLP observability backend, all histogram metrics use **Base2 Exponential Histograms** instead of fixed linear buckets. This provides multiple advantages for latency-sensitive workloads:
+When using the OTLP observability backend, all histogram metrics use **Base2 Exponential Histograms** instead of fixed linear buckets by default. This provides multiple advantages for latency-sensitive workloads:
 
 - **Automatic bucket allocation**. The SDK computes bucket boundaries using a base-2 exponential formula. You do not need to tune bucket boundaries.
 - **High resolution across orders of magnitude**. The default configuration uses 160 buckets from sub-millisecond to 100 seconds with less than 5% relative error. This preserves tail-latency outliers (p99, p99.9) that coarse fixed buckets would mask.
 - **No configuration required**. The SDK applies the exponential histogram aggregation at the SDK layer via an OTel View. You do not need to change any configuration.
+
+> [!tip]
+> If you do not see histogram metrics in your observability backend, try disabling native exponential histograms using `native_histograms false` in `metrics` subblock (see [Configuration: OTLP observability](/docs/v3/configuration/observability/otlp)).
 
 The Prometheus observability backend also supports native exponential histograms when you configure `endpoint_native_histograms` and set the output format to `"protobuf"`. In text format, it uses explicit bucket histograms with predefined boundaries.
 
