@@ -1,14 +1,8 @@
 mod config;
-mod validator;
-
-// New OTLP exporter logic
 mod pipeline;
-pub mod proto;
-
-// TODO: wire the remaining transports into the module event loop
-// (traces and logs pipelines are wired; metrics is wired in pipeline step 5)
-#[allow(dead_code)]
+pub(crate) mod proto;
 mod transport;
+mod validator;
 
 mod convert;
 
