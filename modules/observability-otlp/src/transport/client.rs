@@ -75,7 +75,9 @@ where
     Fut: std::future::Future<Output = ExportResult>,
 {
     let mut backoff = config.initial_backoff;
-    for attempt_number in 1..=config.max_attempts {
+    let mut attempt_number = 0;
+    loop {
+        attempt_number += 1;
         let result = attempt().await;
         match &result {
             ExportResult::Success | ExportResult::PartialSuccess { .. } => return result,
@@ -87,7 +89,7 @@ where
                 retry_after,
                 ..
             } => {
-                if attempt_number == config.max_attempts {
+                if attempt_number >= config.max_attempts {
                     return result;
                 }
                 let delay = match retry_after {
@@ -99,7 +101,6 @@ where
             }
         }
     }
-    unreachable!("the retry loop returns from every iteration")
 }
 
 /// Add a pseudo-random factor in the [0.5, 1.5) range to the base delay, to
