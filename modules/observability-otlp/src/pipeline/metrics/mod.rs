@@ -14,14 +14,15 @@
 //! - gauges: the last recorded value.
 //! - histograms: Base2 exponential buckets (`max_scale 20`, `max_size 160`),
 //!   because the SDK view always forced that aggregation. Explicit-boundary
-//!   histograms are a follow-up behind a `native_histograms false` directive
-//!   (see `CUSTOM_EXPORTER_REWRITE.md` §5.6).
+//!   histograms follow the `native_histograms false` directive; the binning
+//!   math lives in the [`bin`] module, proven by property tests.
 //!
 //! Exemplars: a ring buffer of capacity 1 per series keeps the last
 //! measurement that carried a trace context; its invalid-recorded IDs are
 //! decoded from hex-ASCII to raw bytes and attached to the exported data
 //! point.
 
+pub(crate) mod bin;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod histogram;
 #[cfg(not(any(test, feature = "fuzz")))]

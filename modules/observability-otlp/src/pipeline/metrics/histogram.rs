@@ -1,20 +1,15 @@
 use std::borrow::Cow;
-use std::sync::OnceLock;
 
 use crate::proto::opentelemetry::proto::common::v1::KeyValue;
 use crate::proto::opentelemetry::proto::metrics::v1::{
     exponential_histogram_data_point::Buckets, ExponentialHistogramDataPoint, HistogramDataPoint,
 };
 
-/// Maximum scale of the Base2 exponential histogram (parity with the SDK
-/// view: `max_scale 20`).
-pub const EXPO_MAX_SCALE: i8 = 20;
-/// Minimum scale before a measurement is dropped (parity with the SDK's
-/// `EXPO_MIN_SCALE`).
-pub const EXPO_MIN_SCALE: i8 = -10;
-/// Maximum number of buckets in the exponential histogram (parity with the
-/// SDK view: `max_size 160`).
-pub const EXPO_MAX_SIZE: i32 = 160;
+use super::bin;
+
+/// Scale limits, bucket limit, and the binning formulas live in
+/// [`super::bin`]; this module re-exports the bounds it is configured with.
+pub use super::bin::{EXPO_MAX_SCALE, EXPO_MAX_SIZE, EXPO_MIN_SCALE};
 
 /// The default upper bounds of the buckets; the final bucket has no upper bound.
 pub(super) const DEFAULT_EXPLICIT_BOUNDS: &[f64] = &[
@@ -138,10 +133,16 @@ impl ExpoHistogram {
     /// Record one measurement into the histogram, resizing the buckets if
     /// needed.
     ///
-    /// A measurement that cannot fit even at the minimum scale is silently
-    /// dropped and does not affect the count, sum, or min/max.
+    /// NaN and infinite measurements are dropped: they cannot be assigned to
+    /// a bucket, and they would corrupt the count, sum, and min/max. A
+    /// finite measurement that cannot fit even at the minimum scale is
+    /// silently dropped too. Neither kind affects the count, sum, or
+    /// min/max.
     #[inline]
     pub fn record(&mut self, value: f64) {
+        if !value.is_finite() {
+            return;
+        }
         let abs = value.abs();
         if abs == 0.0 {
             self.zero_count += 1;
@@ -154,7 +155,7 @@ impl ExpoHistogram {
             } else {
                 &self.positive
             };
-            let delta = scale_delta(
+            let delta = bin::scale_delta(
                 self.max_size,
                 bin,
                 bucket.offset,
@@ -167,7 +168,7 @@ impl ExpoHistogram {
                     return;
                 }
                 self.downscale(delta);
-                bin = get_bin(abs, self.scale);
+                bin = bin::get_bin(abs, self.scale);
             }
 
             if value_negative {
@@ -190,7 +191,7 @@ impl ExpoHistogram {
     /// The index of the bucket `value` belongs to at a given scale.
     #[inline]
     pub fn get_bin(&self, value: f64) -> i32 {
-        get_bin(value, self.scale)
+        bin::get_bin(value, self.scale)
     }
 
     /// Export the histogram as an OTLP data point.
@@ -219,83 +220,6 @@ impl ExpoHistogram {
             zero_threshold: 0.0,
         }
     }
-}
-
-/// The bucket index that holds `value` at `scale`, following the OTel
-/// exponential histogram mapping formula.
-#[inline]
-fn get_bin(value: f64, scale: i8) -> i32 {
-    debug_assert!(value >= 0.0 && value.is_finite(), "invalid histogram value");
-    let (frac, exp) = frexp(value);
-    if scale <= 0 {
-        // With a negative scale, `frac` is always one power of two higher
-        // than desired.
-        let correction = if frac == 0.5 { 2 } else { 1 };
-        return (exp - correction) >> -scale;
-    }
-    (exp << scale) + (frac.ln() * scale_factors()[scale as usize]) as i32 - 1
-}
-
-/// The number of scale reductions needed to fit `bin` within `[start_bin,
-/// start_bin + length)` buckets of size `max_size`. Returns 0 when no
-/// reduction is needed.
-#[inline]
-fn scale_delta(max_size: i32, bin: i32, start_bin: i32, length: i32) -> u32 {
-    if length == 0 {
-        return 0;
-    }
-    let mut low = start_bin;
-    let mut high = bin;
-    if start_bin >= bin {
-        low = bin;
-        high = start_bin + length - 1;
-    }
-    let mut count = 0u32;
-    while high - low >= max_size {
-        low >>= 1;
-        high >>= 1;
-        count += 1;
-        if count > (EXPO_MAX_SCALE - EXPO_MIN_SCALE) as u32 {
-            return count;
-        }
-    }
-    count
-}
-
-static SCALE_FACTORS: OnceLock<[f64; 21]> = OnceLock::new();
-
-/// Precomputed `LOG2_E * 2^scale` factors used by the bin formula.
-#[inline]
-fn scale_factors() -> &'static [f64; 21] {
-    SCALE_FACTORS
-        .get_or_init(|| std::array::from_fn(|i| std::f64::consts::LOG2_E * 2f64.powi(i as i32)))
-}
-
-/// Break a positive float into a normalized fraction and base-2 exponent
-/// (libc `frexp`, reimplemented because Rust removed it from std).
-#[inline]
-fn frexp(value: f64) -> (f64, i32) {
-    let mut bits = value.to_bits();
-    let exponent = ((bits >> 52) & 0x7ff) as i32;
-
-    if exponent == 0 {
-        if value != 0.0 {
-            let two_pow_64 = f64::from_bits(0x43f0_0000_0000_0000);
-            let (frac, exp) = frexp(value * two_pow_64);
-            return (frac, exp - 64);
-        }
-        // value is ±0.0; return the zero representation as-is.
-        return (value, 0);
-    }
-    if exponent == 0x7ff {
-        // NaN / infinity; clamp the fraction to 1.0 (cannot hold any bucket).
-        return (1.0, 0);
-    }
-
-    let exponent = exponent - 0x3fe;
-    bits &= 0x800f_ffff_ffff_ffff;
-    bits |= 0x3fe0_0000_0000_0000;
-    (f64::from_bits(bits), exponent)
 }
 
 /// A set of buckets of an exponential histogram.
@@ -390,15 +314,15 @@ mod tests {
         // At scale 0 the buckets are unit-width powers of two: bucket -2 =
         // (0.25, 0.5], bucket -1 = (0.5, 1], bucket 0 = (1, 2], bucket 1 =
         // (2, 4].
-        assert_eq!(get_bin(1.0, 0), -1);
-        assert_eq!(get_bin(2.0, 0), 0);
-        assert_eq!(get_bin(0.5, 0), -2);
-        assert_eq!(get_bin(3.0, 0), 1);
-        assert_eq!(get_bin(1.5, 0), 0);
+        assert_eq!(bin::get_bin(1.0, 0), -1);
+        assert_eq!(bin::get_bin(2.0, 0), 0);
+        assert_eq!(bin::get_bin(0.5, 0), -2);
+        assert_eq!(bin::get_bin(3.0, 0), 1);
+        assert_eq!(bin::get_bin(1.5, 0), 0);
         // At the maximum scale, 1 maps to bucket -1 and 2 to bucket 2^20 - 1.
-        assert_eq!(get_bin(1.0, EXPO_MAX_SCALE), -1);
-        assert_eq!(get_bin(2.0, EXPO_MAX_SCALE), (1 << 20) - 1);
-        assert_eq!(get_bin(0.5, EXPO_MAX_SCALE), -1_048_577);
+        assert_eq!(bin::get_bin(1.0, EXPO_MAX_SCALE), -1);
+        assert_eq!(bin::get_bin(2.0, EXPO_MAX_SCALE), (1 << 20) - 1);
+        assert_eq!(bin::get_bin(0.5, EXPO_MAX_SCALE), -1_048_577);
     }
 
     #[test]
@@ -452,5 +376,57 @@ mod tests {
         assert_eq!(point.sum, Some(f64::MIN_POSITIVE), "sum drifts");
         assert_eq!(point.min, Some(-f64::MAX));
         assert_eq!(point.max, Some(f64::MAX));
+    }
+
+    #[test]
+    fn non_finite_values_are_dropped() {
+        let mut histogram = ExpoHistogram::new();
+        histogram.record(f64::NAN);
+        histogram.record(f64::INFINITY);
+        histogram.record(f64::NEG_INFINITY);
+        assert_eq!(histogram.count, 0, "dropped values must not count");
+        assert_eq!(histogram.sum, 0.0);
+        assert_eq!(histogram.min, f64::MAX, "min must stay untouched");
+        assert_eq!(histogram.max, f64::MIN, "max must stay untouched");
+        let point = histogram.to_proto(vec![], 0, 0, vec![]);
+        assert_eq!(point.count, 0);
+        assert_eq!(point.zero_count, 0);
+        let positive: u64 = point.positive.unwrap().bucket_counts.iter().sum();
+        assert_eq!(positive, 0);
+
+        // Finite measurements still record normally afterwards.
+        histogram.record(1.0);
+        let point = histogram.to_proto(vec![], 0, 0, vec![]);
+        assert_eq!(point.count, 1);
+        assert_eq!(point.sum, Some(1.0));
+        assert_eq!(point.min, Some(1.0));
+        assert_eq!(point.max, Some(1.0));
+    }
+
+    #[test]
+    fn subnormal_and_min_normal_values_map_and_record() {
+        // The smallest subnormal is 2^-1074 (bits 0x1): it must reach the
+        // right bucket and be accounted for exactly once per record.
+        let smallest_subnormal = f64::from_bits(1);
+        assert_eq!(bin::get_bin(smallest_subnormal, 0), -1075);
+        assert_eq!(
+            bin::get_bin(smallest_subnormal, EXPO_MAX_SCALE),
+            -((1074 << 20) + 1),
+            "scale 20 bin for 2^-1074"
+        );
+        // The smallest normal (2^-1022) is the upper edge of bucket -1023.
+        assert_eq!(bin::get_bin(f64::MIN_POSITIVE, 0), -1023);
+
+        let mut histogram = ExpoHistogram::new();
+        for _ in 0..4 {
+            histogram.record(smallest_subnormal);
+        }
+        let point = histogram.to_proto(vec![], 0, 0, vec![]);
+        let positive: u64 = point.positive.unwrap().bucket_counts.iter().sum();
+        assert_eq!(point.count, 4);
+        assert_eq!(positive, 4);
+        assert_eq!(point.sum, Some(4.0 * smallest_subnormal));
+        assert_eq!(point.min, Some(smallest_subnormal));
+        assert_eq!(point.max, Some(smallest_subnormal));
     }
 }
