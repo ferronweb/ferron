@@ -24,8 +24,6 @@ bytes = "1"
 http = "1"
 http-body-util = "0.1"
 lru = "0.18.0"
-
-# New libraries for custom OTLP exporter logic
 prost = "0.14.4"
 tonic-prost = "0.14.4"
 pbjson = "0.9"
