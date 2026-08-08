@@ -156,7 +156,6 @@ pub fn frexp(value: f64) -> (f64, i32) {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
     use super::*;
 
