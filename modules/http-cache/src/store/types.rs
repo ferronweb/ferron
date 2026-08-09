@@ -41,6 +41,7 @@ pub struct StoredEntry {
     pub private_key: Option<String>,
     pub tags: Vec<ScopedTag>,
     pub purge_url: String,
+    pub purge_host: String,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,
     pub stale_while_revalidate: Option<Duration>,

@@ -122,6 +122,7 @@ fn purge_reports_purged_and_remaining_entry_counts() {
         private_key: None,
         tags: Vec::new(),
         purge_url: "/keep".to_string(),
+        purge_host: "example.com".to_string(),
         etag: None,
         last_modified: None,
         stale_while_revalidate: Some(Duration::from_secs(10)),
@@ -153,6 +154,7 @@ fn purge_reports_purged_and_remaining_entry_counts() {
         &store,
         &operations,
         None,
+        Some("example.com"),
         false,
         &crate::config::PurgePropagationConfig::default(),
     );

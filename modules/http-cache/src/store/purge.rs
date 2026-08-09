@@ -9,9 +9,20 @@ pub(crate) fn entry_matches_purge(
     entry: &StoredEntry,
     operation: &PurgeOperation,
     current_private_key: Option<&str>,
+    requesting_host: Option<&str>,
 ) -> bool {
     if entry.scope != operation.scope {
         return false;
+    }
+
+    // Cross-tenant isolation: when the purge carries a host (the resolved
+    // vhost, or the zone's default host for host-ambiguous requests), it only
+    // touches entries stored for that same host. Without a host (a shared
+    // named/global zone with no Host header) the purge remains zone-wide.
+    if let Some(host) = requesting_host {
+        if entry.purge_host != host {
+            return false;
+        }
     }
 
     if operation.scope == CacheScope::Private

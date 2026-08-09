@@ -578,6 +578,107 @@ async fn test_cache_purge_authorization() {
 }
 
 #[tokio::test]
+async fn test_cache_purge_scoped_to_requesting_host() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    // Two hosts share one named cache zone. A PURGE from one host must not
+    // touch the other host's entries.
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      a.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          zone "shared"
+          purge_method
+          purge_allowed_ips "0.0.0.0/0"
+        }
+      }
+
+      b.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          zone "shared"
+          purge_method
+          purge_allowed_ips "0.0.0.0/0"
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let url = format!("http://localhost:{}/test.txt", port);
+
+    let get = |host: &str| client.get(&url).header("Host", host).send();
+    let purge = |host: &str| {
+        client
+            .request(
+                reqwest::Method::from_bytes(b"PURGE").unwrap(),
+                &url,
+            )
+            .header("Host", host)
+            .send()
+    };
+
+    // Both hosts prime the shared zone.
+    let response = get("a.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let response = get("b.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    drop(response);
+
+    // PURGE from host a removes only host a's entry.
+    let response = purge("a.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    drop(response);
+
+    let response = get("a.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    drop(response);
+
+    let response = get("b.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    drop(response);
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

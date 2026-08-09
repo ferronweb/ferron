@@ -301,15 +301,15 @@ impl CacheStore {
         &self,
         operations: &[PurgeOperation],
         current_private_key: Option<&str>,
+        requesting_host: Option<&str>,
     ) -> (StoreStats, usize) {
         let mut stats = StoreStats::default();
         let mut keys_to_remove = AHashSet::default();
 
         for (key, entry) in self.entries.iter() {
-            if operations
-                .iter()
-                .any(|operation| purge::entry_matches_purge(&entry, operation, current_private_key))
-            {
+            if operations.iter().any(|operation| {
+                purge::entry_matches_purge(&entry, operation, current_private_key, requesting_host)
+            }) {
                 keys_to_remove.insert(key);
             }
         }

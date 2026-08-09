@@ -85,12 +85,14 @@ fn emit_purge_metric(
 /// store purge, the per-scope purge metrics, the purge debug log, and the
 /// optional control-plane webhook fan-out (deriving the propagated paths
 /// from the operations' selectors and deduplicating them).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn purge(
     ctx: &mut HttpContext,
     zone_id: &CacheZoneId,
     store: &CacheStore,
     operations: &[PurgeOperation],
     private_key: Option<&str>,
+    requesting_host: Option<&str>,
     propagate: bool,
     propagation: &PurgePropagationConfig,
 ) -> PurgeStats {
@@ -104,7 +106,7 @@ pub(super) fn purge(
         if scope_operations.is_empty() {
             continue;
         }
-        let (stats, remaining) = store.purge(&scope_operations, private_key);
+        let (stats, remaining) = store.purge(&scope_operations, private_key, requesting_host);
         emit_purge_metric(ctx, zone_id, scope, stats.purged, remaining);
         total_purged += stats.purged;
     }

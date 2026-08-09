@@ -357,6 +357,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     &store,
                     &purge_ops,
                     None,
+                    entry_host(&ctx.hostname, &zone_id).as_deref(),
                     !is_propagated,
                     &config.purge_propagation,
                 );
@@ -926,6 +927,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 &state.store,
                 &purge_ops,
                 state.private_key.as_deref(),
+                entry_host(&ctx.hostname, &state.zone_id).as_deref(),
                 true,
                 &state.config.purge_propagation,
             );
@@ -1045,6 +1047,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         private_key: None,
                         tags,
                         purge_url: state.purge_url,
+                        purge_host: entry_host(&ctx.hostname, &state.zone_id).unwrap_or_default(),
                         etag,
                         last_modified,
                         stale_while_revalidate: decision.stale_while_revalidate,
@@ -1240,6 +1243,19 @@ fn resolve_zone_id(
     } else {
         CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
     }
+}
+
+/// The host associated with a cache entry or purge request.
+///
+/// Prefers the resolved vhost. When the request is host-ambiguous, falls back
+/// to the zone's own host for per-host zones so a host guard still applies;
+/// shared named/global zones without a host resolve to an empty value, which
+/// never matches a populated host.
+fn entry_host(hostname: &Option<String>, zone_id: &CacheZoneId) -> Option<String> {
+    hostname.clone().or_else(|| match zone_id {
+        CacheZoneId::Host(host) => Some(host.clone()),
+        CacheZoneId::Named(_) | CacheZoneId::Global => None,
+    })
 }
 
 /// Whether a `PURGE` request is authorized to invalidate this cache.

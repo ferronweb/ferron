@@ -274,6 +274,8 @@ Zone resolution follows this order:
 
 When you enable the `purge_method` subdirective, Ferron accepts the `PURGE` HTTP method for cache invalidation. A `PURGE` request to a specific URL removes all cached entries (both public and private) matching that URL. This causes later requests to fetch fresh content.
 
+PURGE is scoped to the requesting host. In a shared zone (named or global), a `PURGE` from one host only invalidates entries that were cached for that same host. It does not touch other hosts' entries. When the request carries no host, Ferron falls back to the zone's default host.
+
 **Security:**
 
 PURGE requests must be either:

@@ -46,6 +46,7 @@ fn stored_entry(base_key: &str, scope: CacheScope, body: &str, vary: VaryRule) -
         private_key: None,
         tags: Vec::new(),
         purge_url: base_key.to_string(),
+        purge_host: String::new(),
         etag: None,
         last_modified: None,
         stale_while_revalidate: None,
@@ -387,7 +388,7 @@ fn purge_respects_scope_selectors_and_private_key() {
         },
     ];
 
-    let (stats, len) = store.purge(&operations, Some("user=1"));
+    let (stats, len) = store.purge(&operations, Some("user=1"), None);
     assert_eq!(stats.purged, 2);
     assert_eq!(len, 1);
     assert!(store
@@ -962,6 +963,105 @@ fn update_entry_headers_replaces_not_appends_field_values() {
 }
 
 #[test]
+fn purge_all_scoped_to_requesting_host() {
+    let store = CacheStore::new(8);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    let mut host_a = stored_entry(
+        "https://a.example.com/page",
+        CacheScope::Public,
+        "a",
+        VaryRule::default(),
+    );
+    host_a.purge_host = "a.example.com".to_string();
+    store.insert_with_request(host_a, None, &headers, &cookies);
+
+    let mut host_b = stored_entry(
+        "https://b.example.com/page",
+        CacheScope::Public,
+        "b",
+        VaryRule::default(),
+    );
+    host_b.purge_host = "b.example.com".to_string();
+    store.insert_with_request(host_b, None, &headers, &cookies);
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![PurgeSelector::All],
+        stale: false,
+    }];
+
+    let (stats, len) = store.purge(&operations, None, Some("b.example.com"));
+    assert_eq!(stats.purged, 1);
+    assert_eq!(len, 1);
+    assert!(store
+        .lookup("https://b.example.com/page", &headers, &cookies, None)
+        .entry
+        .is_none());
+    assert!(store
+        .lookup("https://a.example.com/page", &headers, &cookies, None)
+        .entry
+        .is_some());
+
+    // A host-ambiguous purge (no requesting host) is zone-wide.
+    let (stats, len) = store.purge(&operations, None, None);
+    assert_eq!(stats.purged, 1);
+    assert_eq!(len, 0);
+}
+
+#[test]
+fn tag_purge_scoped_to_requesting_host() {
+    let store = CacheStore::new(8);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    let mut host_a = stored_entry(
+        "https://a.example.com/a",
+        CacheScope::Public,
+        "a",
+        VaryRule::default(),
+    );
+    host_a.purge_host = "a.example.com".to_string();
+    host_a.tags = vec![ScopedTag {
+        scope: CacheScope::Public,
+        name: "v1".to_string(),
+    }];
+    store.insert_with_request(host_a, None, &headers, &cookies);
+
+    let mut host_b = stored_entry(
+        "https://b.example.com/b",
+        CacheScope::Public,
+        "b",
+        VaryRule::default(),
+    );
+    host_b.purge_host = "b.example.com".to_string();
+    host_b.tags = vec![ScopedTag {
+        scope: CacheScope::Public,
+        name: "v1".to_string(),
+    }];
+    store.insert_with_request(host_b, None, &headers, &cookies);
+
+    let operations = vec![PurgeOperation {
+        scope: CacheScope::Public,
+        selectors: vec![PurgeSelector::Tag("v1".to_string())],
+        stale: false,
+    }];
+
+    let (stats, len) = store.purge(&operations, None, Some("a.example.com"));
+    assert_eq!(stats.purged, 1);
+    assert_eq!(len, 1);
+    assert!(store
+        .lookup("https://a.example.com/a", &headers, &cookies, None)
+        .entry
+        .is_none());
+    assert!(store
+        .lookup("https://b.example.com/b", &headers, &cookies, None)
+        .entry
+        .is_some());
+}
+
+#[test]
 fn variants_by_base_cleaned_up_after_purge_removes_all_entries() {
     let store = CacheStore::new(8);
     let headers = HeaderMap::new();
@@ -984,7 +1084,7 @@ fn variants_by_base_cleaned_up_after_purge_removes_all_entries() {
         selectors: vec![PurgeSelector::All],
         stale: false,
     }];
-    store.purge(&operations, None);
+    store.purge(&operations, None, None);
 
     assert!(!store
         .variants_by_base
