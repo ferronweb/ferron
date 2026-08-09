@@ -78,6 +78,7 @@ fn build_argon2() {
     let bindings = bindgen::Builder::default()
         .header("phc-winner-argon2/include/argon2.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .opaque_type("max_align_t")
         .generate()
         .expect("unable to generate bindings to argon2");
 
