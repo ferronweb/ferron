@@ -437,7 +437,7 @@ fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
 fn cacheable_by_default(status: StatusCode) -> bool {
     matches!(
         status.as_u16(),
-        200 | 203 | 204 | 300 | 301 | 308 | 404 | 405 | 410 | 414 | 501
+        200 | 203 | 204 | 206 | 300 | 301 | 308 | 404 | 405 | 410 | 414 | 501
     )
 }
 
@@ -1021,6 +1021,21 @@ mod tests {
         assert!(!headers.contains_key(header::SET_COOKIE));
         assert!(!headers.contains_key("x-origin-data"));
         assert!(headers.contains_key(header::ETAG));
+    }
+
+    #[test]
+    fn partial_content_is_cacheable_by_default() {
+        let headers = HeaderMap::new();
+        let decision = evaluate_response_policy(
+            StatusCode::PARTIAL_CONTENT,
+            &headers,
+            false,
+            false,
+            None,
+            false,
+        );
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
     }
 
     #[test]
