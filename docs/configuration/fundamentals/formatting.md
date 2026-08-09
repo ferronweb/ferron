@@ -12,20 +12,20 @@ This page documents the `ferron-fmt` tool, a formatter for Ferron configuration 
 
 `ferron-fmt` parses a Ferron configuration file and rewrites it with consistent formatting. It handles:
 
-- **Indentation** — configurable width and style (spaces or tabs)
-- **Quote style** — auto (bare when possible, quoted when necessary), always double-quoted, or always bare
-- **Blank lines** — normalization with a configurable maximum consecutive blank lines
-- **Trailing newline** — optional trailing newline
-- **Directive sorting** — optional alphabetical sorting of directives within blocks
-- **Comment preservation** — the formatter preserves inline and trailing comments
-- **Quoting normalization** — bare strings when possible, double-quoted when necessary (for example, values that would be ambiguous)
-- **Raw string preservation** — the formatter preserves `r"..."` syntax for strings that were originally raw
-- **Line continuation preservation** — the formatter preserves `\` at end of line at the same position
+- **Indentation**: configurable width and style (spaces or tabs)
+- **Quote style**: auto (bare when possible, quoted when necessary), always double-quoted, or always bare
+- **Blank lines**: normalization with a configurable maximum consecutive blank lines
+- **Trailing newline**: optional trailing newline
+- **Directive sorting**: optional alphabetical sorting of directives within blocks
+- **Comment preservation**: the formatter preserves inline and trailing comments
+- **Quoting normalization**: bare strings when possible, double-quoted when necessary (for example, values that would be ambiguous)
+- **Raw string preservation**: the formatter preserves `r"..."` syntax for strings that were originally raw
+- **Line continuation preservation**: the formatter preserves `\` at end of line at the same position
 
 Use this tool to make sure formatting is consistent across multiple Ferron configuration files.
 
 > [!tip]
-> The formatter is idempotent — running it multiple times on the same file produces identical output.
+> The formatter is idempotent (meaning running it multiple times on the same file produces identical output).
 
 ## Installation
 
@@ -124,7 +124,7 @@ example.com {
 
 ### Auto (default)
 
-Bare strings when possible, double-quoted when necessary — this produces idiomatic Ferron 3 configuration style:
+Bare strings when possible, double-quoted when necessary (this produces idiomatic Ferron 3 configuration style):
 
 ```bash
 ferron-fmt --quote-style auto ferron.conf

@@ -23,12 +23,12 @@ The `control_plane` block accepts two sub-blocks:
 
 Metadata values are automatically included as:
 
-- **OTLP traces** — `ferron.control_plane.<key>` attributes on the `ferron.request` span
-- **OTLP logs** — `ferron.control_plane.<key>` attributes on log records
-- **OTLP metrics** — `ferron.control_plane.<key>` attributes on metric data points
-- **Access logs** — `ferron.control_plane.<key>` attributes on access log records
-- **Console/file logs** — `[key=value]` prefix prepended to log lines
-- **Prometheus metrics** — `ferron_control_plane_<key>` constant labels
+- **OTLP traces**: `ferron.control_plane.<key>` attributes on the `ferron.request` span
+- **OTLP logs**: `ferron.control_plane.<key>` attributes on log records
+- **OTLP metrics**: `ferron.control_plane.<key>` attributes on metric data points
+- **Access logs**: `ferron.control_plane.<key>` attributes on access log records
+- **Console/file logs**: `[key=value]` prefix prepended to log lines
+- **Prometheus metrics**: `ferron_control_plane_<key>` constant labels
 
 ### Span links
 
@@ -45,11 +45,11 @@ Each `span_links` block defines one link with:
 
 The `control_plane` directive can appear at three levels. When present at multiple levels, the most specific one wins:
 
-1. **Location** (most specific) — inside a `location` block within a host
-2. **Host** — inside a host block (for example, `example.com { ... }`)
-3. **Global** (least specific) — at the top level of the configuration
+1. **Location** (most specific): inside a `location` block within a host
+2. **Host**: inside a host block (for example, `example.com { ... }`)
+3. **Global** (least specific): at the top level of the configuration
 
-Metadata and span links from more specific levels **fully replace** those from less specific levels — they are not merged.
+Metadata and span links from more specific levels fully replace those from less specific levels (they are not merged).
 
 > [!tip]
 > Unlike most Ferron directives, metadata and span links are not merged across levels. A more specific `control_plane` block replaces the one from a less specific level.
@@ -169,6 +169,6 @@ When you configure metadata `{ org_id acme team platform }`:
 
 ## See also
 
-- [OTLP observability](/docs/v3/configuration/observability/otlp) — OTLP export configuration
-- [Tracing](/docs/v3/configuration/observability/tracing) — W3C Trace Context and sampling
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus) — native Prometheus metrics export
+- [OTLP observability](/docs/v3/configuration/observability/otlp): OTLP export configuration
+- [Tracing](/docs/v3/configuration/observability/tracing): W3C Trace Context and sampling
+- [Prometheus metrics](/docs/v3/configuration/observability/prometheus): native Prometheus metrics export

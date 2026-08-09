@@ -84,13 +84,13 @@ This shorthand can be useful for simple on/off toggles where the intent is clear
 
 Some directives accept duration values. Ferron supports these formats:
 
-| Suffix     | Unit              | Example      | Result        |
-| ---------- | ----------------- | ------------ | ------------- |
-| `h` or `H` | Hours             | `12h`, `1H`  | 12 hours      |
-| `m` or `M` | Minutes           | `30m`, `30M` | 30 minutes   |
-| `s` or `S` | Seconds           | `90s`, `90S` | 90 seconds   |
-| `d` or `D` | Days              | `1d`, `1D`   | 1 day        |
-| (none)     | Seconds (default) | `12`          | 12 seconds   |
+| Suffix     | Unit              | Example      | Result     |
+| ---------- | ----------------- | ------------ | ---------- |
+| `h` or `H` | Hours             | `12h`, `1H`  | 12 hours   |
+| `m` or `M` | Minutes           | `30m`, `30M` | 30 minutes |
+| `s` or `S` | Seconds           | `90s`, `90S` | 90 seconds |
+| `d` or `D` | Days              | `1d`, `1D`   | 1 day      |
+| (none)     | Seconds (default) | `12`         | 12 seconds |
 
 Plain numbers without a suffix count as seconds.
 
@@ -150,13 +150,13 @@ Host blocks appear only at the top level. Supported selectors include:
 
 Selectors:
 
-- `example.org` — hostname tree
-- `*.example.org` — wildcard hostname
-- `127.0.1` — IP-based host
-- `[2001:db8::1]` — IPv6 address
-- `http example.org` — explicit protocol
-- `http example.org:8080` — explicit protocol and port
-- `tcp *:5432` — TCP listener
+- `example.org`: hostname tree
+- `*.example.org`: wildcard hostname
+- `127.0.1`: IP-based host
+- `[2001:db8::1]`: IPv6 address
+- `http example.org`: explicit protocol
+- `http example.org:8080`: explicit protocol and port
+- `tcp *:5432`: TCP listener
 
 Defaults:
 
@@ -235,6 +235,6 @@ The `GET /status` endpoint of the admin API also reports this state in the `conf
 ## See also
 
 - [Conditional and variables](/docs/v3/configuration/fundamentals/conditionals)
-- [Formatting a configuration](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting
+- [Formatting a configuration](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting
 - [Routing and URL processing](/docs/v3/configuration/routing/url-processing) (`location`, `if`, `if_not`)
 - [Directives](/docs/v3/configuration/server/core-directives)

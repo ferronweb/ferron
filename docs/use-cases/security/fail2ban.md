@@ -273,7 +273,7 @@ This produces standard CLF output that all default Fail2ban NGINX/Apache filters
 
 ## See also
 
-- [Abuse protection](/docs/v3/use-cases/security/abuse-protection) — built-in in-memory IP banning
-- [Rate limiting](/docs/v3/use-cases/security/rate-limiting) — token bucket rate limiting
-- [Logging & observability](/docs/v3/use-cases/operations/logging-observability) — log configuration and formats
-- [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban) — directive reference
+- [Abuse protection](/docs/v3/use-cases/security/abuse-protection): built-in in-memory IP banning
+- [Rate limiting](/docs/v3/use-cases/security/rate-limiting): token bucket rate limiting
+- [Logging & observability](/docs/v3/use-cases/operations/logging-observability): log configuration and formats
+- [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban): directive reference

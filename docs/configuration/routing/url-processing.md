@@ -24,7 +24,7 @@ example.com {
 
 > [!note]
 >
-> - Matching is prefix-based — `/api` matches `/api` and `/api/users`. More specific locations win over less specific ones.
+> - Matching is prefix-based (`/api` matches `/api` and `/api/users`). More specific locations win over less specific ones.
 > - If this block matches, Ferron automatically rewrites the URL to remove the base URL.
 
 ### Conditional matching

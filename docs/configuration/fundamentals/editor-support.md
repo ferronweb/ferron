@@ -10,7 +10,7 @@ A range of editor integrations support Ferron configuration files (`.conf` / `.f
 | Feature                   | Description                                                                          |
 | ------------------------- | ------------------------------------------------------------------------------------ |
 | **Syntax highlighting**   | TextMate grammar and tree-sitter grammar for `.conf` / `.ferron` files               |
-| **Language server (LSP)** | `ferron-language-server` — offers formatting, directive completions, and diagnostics |
+| **Language server (LSP)** | `ferron-language-server` (offers formatting, directive completions, and diagnostics) |
 | **VS Code extension**     | Official extension bundling syntax highlighting and LSP                              |
 | **Zed extension**         | Official extension for Zed (submission under review)                                 |
 | **Neovim**                | Manual configuration using tree-sitter and LSP                                       |

@@ -43,18 +43,18 @@ Each signal sub-block supports these nested directives:
 
 The `logs` and `traces` sub-blocks also support batching tuning:
 
-| Directive         | Arguments     | Description                                       | Default |
-| ----------------- | ------------- | ------------------------------------------------- | ------- |
-| `export_interval` | `<duration>`  | Flush interval for a partially full export batch. | `5s`    |
-| `export_batch_size` | `<number>`  | Number of finished items that trigger an export.  | `512`   |
+| Directive           | Arguments    | Description                                       | Default |
+| ------------------- | ------------ | ------------------------------------------------- | ------- |
+| `export_interval`   | `<duration>` | Flush interval for a partially full export batch. | `5s`    |
+| `export_batch_size` | `<number>`   | Number of finished items that trigger an export.  | `512`   |
 
 The `metrics` sub-block supports collection tuning:
 
-| Directive       | Arguments    | Description                                                          | Default |
-| --------------- | ------------ | -------------------------------------------------------------------- | ------- |
-| `read_interval` | `<duration>` | Interval at which the metric reader collects and exports all series. | `30s`   |
-| `exemplars`     | `[bool]`     | Attach the last sampled measurement per series as an exemplar.       | `true`  |
-| `native_histograms` | `[bool]` | Aggregate histograms with the exponential layout. Set to `false` for explicit bucket boundaries. | `true` |
+| Directive           | Arguments    | Description                                                                                      | Default |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------------ | ------- |
+| `read_interval`     | `<duration>` | Interval at which the metric reader collects and exports all series.                             | `30s`   |
+| `exemplars`         | `[bool]`     | Attach the last sampled measurement per series as an exemplar.                                   | `true`  |
+| `native_histograms` | `[bool]`     | Aggregate histograms with the exponential layout. Set to `false` for explicit bucket boundaries. | `true`  |
 
 Durations accept a number (seconds), a float (seconds), or a quoted string such as `"10s"`, `"5m"`, or `"1h"`.
 
@@ -373,11 +373,11 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 ### Structured logs
 
-| Description (summary)       | Level | Attributes                               |
-| --------------------------- | ----- | ---------------------------------------- |
-| Error with logs provider    | WARN  | `error.message` (string) — error details |
-| Error with metrics provider | WARN  | `error.message` (string) — error details |
-| Error with traces provider  | WARN  | `error.message` (string) — error details |
+| Description (summary)       | Level | Attributes                              |
+| --------------------------- | ----- | --------------------------------------- |
+| Error with logs provider    | WARN  | `error.message` (string): error details |
+| Error with metrics provider | WARN  | `error.message` (string): error details |
+| Error with traces provider  | WARN  | `error.message` (string): error details |
 
 ## Best practices
 

@@ -8,94 +8,94 @@
 
 #### CLI
 
-- **`ferron directives` subcommand** — new CLI subcommand that prints every registered configuration directive as structured JSON, grouped by section. Useful for tooling, editor integrations, and inspecting the directive schema of the running binary.
+- **`ferron directives` subcommand**: new CLI subcommand that prints every registered configuration directive as structured JSON, grouped by section. Useful for tooling, editor integrations, and inspecting the directive schema of the running binary.
 
 #### Observability & tracing
 
-- **Configuration drift hints** — new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
-- **OTLP metric exemplars** — the OTLP observability sink now supports exemplar attachments on metric data points, allowing the last sampled value to be attached as an exemplar. This allows for better trace correlation and debugging by attaching relevant historical context. Previously, this wasn't supported due to OpenTelemetry SDK limitations, but the limitation was removed by replacing OpenTelemetry SDK with a custom OTLP exporter implementation.
-- **OTLP export batching tuning** — the `logs` and `traces` OTLP signal sub-blocks now accept `export_interval <duration>` and `export_batch_size <number>`, and the `metrics` sub-block accepts `read_interval <duration>`. This controls how often partially full batches flush and how many finished items trigger an export.
-- **OTLP gzip compression** — the `logs`, `metrics`, and `traces` OTLP signal sub-blocks now accept `gzip [bool]` (default `false`). When enabled, export requests are compressed with gzip (HTTP `Content-Encoding: gzip`, gRPC gzip compression).
-- **OTLP exemplar toggle** — the `metrics` sub-block now accepts `exemplars [bool]` (default `true`). Set it to `false` to stop attaching the last sampled measurement per series as an exemplar.
-- **OTLP native histogram toggle** — the `metrics` sub-block now accepts `native_histograms [bool]` (default `true`). Set it to `false` to aggregate histograms with explicit bucket boundaries instead of the exponential layout.
+- **Configuration drift hints**: new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
+- **OTLP metric exemplars**: the OTLP observability sink now supports exemplar attachments on metric data points, allowing the last sampled value to be attached as an exemplar. This allows for better trace correlation and debugging by attaching relevant historical context. Previously, this wasn't supported due to OpenTelemetry SDK limitations, but the limitation was removed by replacing OpenTelemetry SDK with a custom OTLP exporter implementation.
+- **OTLP export batching tuning**: the `logs` and `traces` OTLP signal sub-blocks now accept `export_interval <duration>` and `export_batch_size <number>`, and the `metrics` sub-block accepts `read_interval <duration>`. This controls how often partially full batches flush and how many finished items trigger an export.
+- **OTLP gzip compression**: the `logs`, `metrics`, and `traces` OTLP signal sub-blocks now accept `gzip [bool]` (default `false`). When enabled, export requests are compressed with gzip (HTTP `Content-Encoding: gzip`, gRPC gzip compression).
+- **OTLP exemplar toggle**: the `metrics` sub-block now accepts `exemplars [bool]` (default `true`). Set it to `false` to stop attaching the last sampled measurement per series as an exemplar.
+- **OTLP native histogram toggle**: the `metrics` sub-block now accepts `native_histograms [bool]` (default `true`). Set it to `false` to aggregate histograms with explicit bucket boundaries instead of the exponential layout.
 
 #### HTTP server core
 
-- **Variable interpolation in map results** — variable interpolations (`{{name}}`) in map result values are now resolved at runtime.
-- **`request.uri.query.<param>` variables** — the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
-- **`request.cookie.<name>` variables** — the `request.cookie.<name>` variables are now available for string interpolations, so to not manually extract cookie values from the request.
-- **CORS origin interpolations** — CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
-- **Request `Cache-Control` directives** — Ferron now honors the RFC 9111 §5.2.1 request directives on cache lookups. `max-age=<n>` and `min-fresh=<n>` revalidate a stored response that does not satisfy the requested freshness window, and `only-if-cached` returns `504 Gateway Timeout` on a miss instead of contacting the origin. `no-transform` is accepted and has no effect. `no-cache` (and `Pragma: no-cache`) already forced revalidation; `no-store` already bypassed the cache.
+- **Variable interpolation in map results**: variable interpolations (`{{name}}`) in map result values are now resolved at runtime.
+- **`request.uri.query.<param>` variables**: the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
+- **`request.cookie.<name>` variables**: the `request.cookie.<name>` variables are now available for string interpolations, so to not manually extract cookie values from the request.
+- **CORS origin interpolations**: CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
+- **Request `Cache-Control` directives**: Ferron now honors the RFC 9111 §5.2.1 request directives on cache lookups. `max-age=<n>` and `min-fresh=<n>` revalidate a stored response that does not satisfy the requested freshness window, and `only-if-cached` returns `504 Gateway Timeout` on a miss instead of contacting the origin. `no-transform` is accepted and has no effect. `no-cache` (and `Pragma: no-cache`) already forced revalidation; `no-store` already bypassed the cache.
 
 ### Changed
 
 #### HTTP server core
 
-- **PGO for GNU/Linux and some Linux with musl** — PGO (profiled-guided optimization) is now enabled for GNU/Linux targets and some Linux targets with musl libc (64-bit x86, ARM64), for pre-built Ferron binaries. This mainly improves tail (p90/p99/max) latency for web requests.
-- **`.ferron` file extension** — `.ferron` files are now supported as an alternative to `.conf` (which is a generic file extension) files for configuration ([GitHub issue](https://github.com/ferronweb/ferron/issues/838)).
-- **Panic hook improvements** — panic hook has been simplified (removing backtraces that are likely unhelpful), and it now logs the Ferron version and build target.
+- **PGO for GNU/Linux and some Linux with musl**: PGO (profiled-guided optimization) is now enabled for GNU/Linux targets and some Linux targets with musl libc (64-bit x86, ARM64), for pre-built Ferron binaries. This mainly improves tail (p90/p99/max) latency for web requests.
+- **`.ferron` file extension**: `.ferron` files are now supported as an alternative to `.conf` (which is a generic file extension) files for configuration ([GitHub issue](https://github.com/ferronweb/ferron/issues/838)).
+- **Panic hook improvements**: panic hook has been simplified (removing backtraces that are likely unhelpful), and it now logs the Ferron version and build target.
 
 #### Configuration validation
 
-- **Diagnostic span location improvements** — diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
+- **Diagnostic span location improvements**: diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
 
 #### Container images
 
-- **"Slim" Debian-based Docker images** — `ferronserver/ferron:3-debian` (and other Debian-base image tags) now are based on a "slim" variant of Debian instead of the full Debian image, making the image smaller and removing unnecessary packages. The slim variant is still compatible with the full Debian image, so it should not break existing deployments.
+- **"Slim" Debian-based Docker images**: `ferronserver/ferron:3-debian` (and other Debian-base image tags) now are based on a "slim" variant of Debian instead of the full Debian image, making the image smaller and removing unnecessary packages. The slim variant is still compatible with the full Debian image, so it should not break existing deployments.
 
 #### Access control
 
-- **Interpolated strings as password hashes (HTTP basic auth)** — interpolated strings can now be used as password hashes for HTTP basic authentication (for example when moving from a static password to an environment variable).
-- **Password hashing backends for HTTP basic auth** — password verification no longer depends on the `password-auth` crate. PBKDF2 verification now uses aws-lc-rs, scrypt uses AWS-LC (`EVP_PBE_scrypt`), and Argon2 uses argon2-rs (the Argon2 C reference implementation) with constant-time comparison. Newly supported hash formats: `$pbkdf2-sha384$` and `$pbkdf2-sha512$`. Base64 salt and hash fields now accept both padded and unpadded encodings. PBKDF2 hashes accept a bare iteration count (`$pbkdf2-sha256$600000$...`) or the PHC parameter form (`$pbkdf2-sha256$i=600000,l=32$...`).
+- **Interpolated strings as password hashes (HTTP basic auth)**: interpolated strings can now be used as password hashes for HTTP basic authentication (for example when moving from a static password to an environment variable).
+- **Password hashing backends for HTTP basic auth**: password verification no longer depends on the `password-auth` crate. PBKDF2 verification now uses aws-lc-rs, scrypt uses AWS-LC (`EVP_PBE_scrypt`), and Argon2 uses argon2-rs (the Argon2 C reference implementation) with constant-time comparison. Newly supported hash formats: `$pbkdf2-sha384$` and `$pbkdf2-sha512$`. Base64 salt and hash fields now accept both padded and unpadded encodings. PBKDF2 hashes accept a bare iteration count (`$pbkdf2-sha256$600000$...`) or the PHC parameter form (`$pbkdf2-sha256$i=600000,l=32$...`).
 
 ### Fixed
 
 #### HTTP server core
 
-- **Trailing slash redirects** — trailing slash redirection logic now correctly handle index files (e.g., `index.html`) and redirects to the correct URL (with trailing slash) rather than serving two URLs (both with and without trailing slash)
-- **Connection accept fix for `poll`** — previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
-- **HTTP/2 host header handling correctness** — previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
-- **Symlink ownership check** — previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
+- **Trailing slash redirects**: trailing slash redirection logic now correctly handle index files (e.g., `index.html`) and redirects to the correct URL (with trailing slash) rather than serving two URLs (both with and without trailing slash)
+- **Connection accept fix for `poll`**: previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
+- **HTTP/2 host header handling correctness**: previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
+- **Symlink ownership check**: previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
 
 #### HTTP caching
 
-- **RFC 9111 compliance** — updated freshness lifetime precedence, 304 revalidation header merging, `must-revalidate` handling, `no-cache="field-names"` support, and `206 Partial Content` cacheability to align with RFC 9111.
-- **Cache key & scope** — cache keys now use resolved vhosts, normalize whitespace/sorting in `Vary` values, and exclude client IPs for private responses. Added cardinality bounds for private keys and query string stripping from fingerprints to prevent cache fragmentation and information leakage.
-- **Purge & security** — scoped `PURGE` requests to requesting hosts, added constant-time `X-Purge-Secret` authentication for propagated purges, and ensured `Set-Cookie` headers are never stored verbatim.
-- **SWR & performance** — improved `stale-while-revalidate` with SWR leader fresh response delivery, singleflight coalescing with timeouts, and throttled expired-entry sweeps.
-- **Request handling** — `no-store` requests now serve fresh entries (but don't store), hop-by-hop headers are stripped, and fresh hits now answer client conditionals (e.g., `If-None-Match`) with local 304s.
-- **Metrics & diagnostics** — corrected `Cache-Status` labels for `stale-if-error` and fixed double-counting in cache request metrics.
+- **RFC 9111 compliance**: updated freshness lifetime precedence, 304 revalidation header merging, `must-revalidate` handling, `no-cache="field-names"` support, and `206 Partial Content` cacheability to align with RFC 9111.
+- **Cache key & scope**: cache keys now use resolved vhosts, normalize whitespace/sorting in `Vary` values, and exclude client IPs for private responses. Added cardinality bounds for private keys and query string stripping from fingerprints to prevent cache fragmentation and information leakage.
+- **Purge & security**: scoped `PURGE` requests to requesting hosts, added constant-time `X-Purge-Secret` authentication for propagated purges, and ensured `Set-Cookie` headers are never stored verbatim.
+- **SWR & performance**: improved `stale-while-revalidate` with SWR leader fresh response delivery, singleflight coalescing with timeouts, and throttled expired-entry sweeps.
+- **Request handling**: `no-store` requests now serve fresh entries (but don't store), hop-by-hop headers are stripped, and fresh hits now answer client conditionals (e.g., `If-None-Match`) with local 304s.
+- **Metrics & diagnostics**: corrected `Cache-Status` labels for `stale-if-error` and fixed double-counting in cache request metrics.
 
 #### Observability
 
-- **OTLP gRPC `no_verification` TLS handshake** — previously, when an OTLP gRPC endpoint was configured with `no_verification true` and used HTTPS, TLS handshakes failed because the custom certificate verifier rejected TLS 1.2/1.3 handshake signatures. This has been fixed to return assertion-based verification results (matching the HTTP exporter behavior).
-- **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
-- **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
-- **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
+- **OTLP gRPC `no_verification` TLS handshake**: previously, when an OTLP gRPC endpoint was configured with `no_verification true` and used HTTPS, TLS handshakes failed because the custom certificate verifier rejected TLS 1.2/1.3 handshake signatures. This has been fixed to return assertion-based verification results (matching the HTTP exporter behavior).
+- **`ferron.ocsp.stapling.hit_total` metric emission fix**: previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
+- **ACME TLS resolution errors**: previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
+- **Spurious abrupt connection termination error logs**: earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).
 
 #### Configuration validation
 
-- **JSON configuration parse error reporting** — previously, configuration parse errors were reported using human-readable error messages (even if the `--json` flag was used). This has been fixed to report parse errors in JSON when configured to do so.
+- **JSON configuration parse error reporting**: previously, configuration parse errors were reported using human-readable error messages (even if the `--json` flag was used). This has been fixed to report parse errors in JSON when configured to do so.
 
 #### Reverse proxy
 
-- **Config reload cleanup** — on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
+- **Config reload cleanup**: on configuration reload, old reverse proxy health check probe tasks are now aborted and per-config caches (resolved upstreams, retry budgets, unhealthy backend counters) are invalidated. Previously these accumulated on every reload, leaking background tasks and memory.
 - **Upstream resolution cache fix** - in earlier versions of Ferron 3 beta, stale upstream resolution cache (with infinite TTL) could have caused upstream connection errors, due to drift between cached state and actual DNS state. This has been fixed by removing the infinite-TTL internal upstream resolution cache.
-- **`X-Forwarded-For` and `Forwarded` header value fix** — previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
+- **`X-Forwarded-For` and `Forwarded` header value fix**: previously, `X-Forwarded-For` and `Forwarded` header values were truncated to 256 bytes maximum, which could lead to incorrect (or even malformed) client IP values in the proxy request. This has been fixed to set the header values correctly without truncation.
 
 #### Static file serving
 
-- **`Range` request correctness** — previously, weak ETags were included with `206 Partial Content` responses (and some other responses with `Range` request header), which is a violation of HTTP spec (RFC 7232, RFC 7233). This has been fixed to remove ETags from responses to range requests.
+- **`Range` request correctness**: previously, weak ETags were included with `206 Partial Content` responses (and some other responses with `Range` request header), which is a violation of HTTP spec (RFC 7232, RFC 7233). This has been fixed to remove ETags from responses to range requests.
 
 #### CORS
 
 - **CORS `Vary` header correctness** - previously, if response `Vary` header was set upstream, it would be overwritten by `Vary: origin` header, which might lead to incorrect caching. This has been fixed to append `origin` to the list of header names in `Vary` header value instead.
-- **CORS `Vary: Origin` header** — the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
-- **CORS `Origin` request header fix** — previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
+- **CORS `Vary: Origin` header**: the `Vary: Origin` header is now always added to CORS responses (instead of selectively).
+- **CORS `Origin` request header fix**: previously, if `cors` directive contained non-`*` origin, Ferron didn't add CORS headers at all. This has been fixed to add CORS headers for non-`*` origins as well.
 
 #### CLI utilities
 
-- **`ferron-fmt` duration string formatting fix** — previously, `ferron-fmt` formatted short duration strings (like `1s`) without quotes, which caused subsequent parse errors. This has been fixed to always quote this kind of strings.
+- **`ferron-fmt` duration string formatting fix**: previously, `ferron-fmt` formatted short duration strings (like `1s`) without quotes, which caused subsequent parse errors. This has been fixed to always quote this kind of strings.
 
 ## Ferron 3.0.0-beta.8
 

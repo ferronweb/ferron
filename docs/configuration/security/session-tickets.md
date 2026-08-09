@@ -145,11 +145,11 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
 ### Don'ts
 
-- **Never log key content** — Ferron never logs key bytes
-- **Do not use predictable values** — no hardcoded or weak keys
-- **Do not expose files** — avoid world-readable permissions
-- **Do not rotate all keys at once** — keep old keys for overlap during rotation
-- **Do not commit keys to version control** — add to `.gitignore`
+- **Never log key content**: Ferron never logs key bytes
+- **Do not use predictable values**: no hardcoded or weak keys
+- **Do not expose files**: avoid world-readable permissions
+- **Do not rotate all keys at once**: keep old keys for overlap during rotation
+- **Do not commit keys to version control**: add to `.gitignore`
 
 ## Debugging
 
@@ -169,6 +169,6 @@ TLS session ticket keys rotated successfully
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls) — cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme) — session tickets with ACME-obtained certificates
+- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/v3/configuration/security/acme): session tickets with ACME-obtained certificates
 - [OCSP stapling](/docs/v3/configuration/security/ocsp)

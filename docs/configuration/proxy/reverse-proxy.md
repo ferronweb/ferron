@@ -717,20 +717,20 @@ This prevents retry storms. When multiple backends fail simultaneously, the retr
 
 ### Structured logs
 
-| Description (summary)                                   | Level | Attributes                                                                                                                                                              |
-| ------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reverse proxy config error                              | ERROR | `error.message` (string) — setup error details                                                                                                                          |
-| Reverse proxy: `<error type>`                           | ERROR | `error.type` (string) — error type classification, `error.message` (string) — error details                                                                             |
-| Upstream marked unhealthy                               | WARN  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream recovered                                      | INFO  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Initializing health check                               | DEBUG | `ferron.proxy.health.address` (string) — backend identifier, `ferron.proxy.health.method` (string) — HTTP method, `ferron.proxy.health.uri` (string) — health check URI |
-| Upstream circuit opened                                 | WARN  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream circuit closed                                 | INFO  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream circuit reopened after half-open trial failure | WARN  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream flapping                                       | WARN  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream flapping resolved                              | INFO  | `upstream.address` (string) — backend server URL                                                                                                                        |
-| Upstream circuit transitioned to half-open              | INFO  | `upstream.address` (string) — backend server URL, `ferron.proxy.circuit.open_duration_ms` — open duration in milliseconds                                               |
-| Upstream response truncated                             | WARN  | `ferron.proxy.backend_url` (string) — backend server URL, `upstream.bytes_received` (int) — bytes received, `upstream.content_length` (int) — expected Content-Length   |
+| Description (summary)                                   | Level | Attributes                                                                                                                                                           |
+| ------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reverse proxy config error                              | ERROR | `error.message` (string): setup error details                                                                                                                        |
+| Reverse proxy: `<error type>`                           | ERROR | `error.type` (string): error type classification, `error.message` (string): error details                                                                            |
+| Upstream marked unhealthy                               | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream recovered                                      | INFO  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Initializing health check                               | DEBUG | `ferron.proxy.health.address` (string): backend identifier, `ferron.proxy.health.method` (string): HTTP method, `ferron.proxy.health.uri` (string): health check URI |
+| Upstream circuit opened                                 | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream circuit closed                                 | INFO  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream circuit reopened after half-open trial failure | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream flapping                                       | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream flapping resolved                              | INFO  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream circuit transitioned to half-open              | INFO  | `upstream.address` (string): backend server URL, `ferron.proxy.circuit.open_duration_ms`: open duration in milliseconds                                              |
+| Upstream response truncated                             | WARN  | `ferron.proxy.backend_url` (string): backend server URL, `upstream.bytes_received` (int): bytes received, `upstream.content_length` (int): expected Content-Length   |
 
 #### Access log fields
 

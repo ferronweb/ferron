@@ -118,7 +118,7 @@ The CA (or an intermediate CA) signs the OCSP response. The server verifies this
 | RSA-PKCS1-SHA256 | `1.2.840.113549.1.1.11` | Default for most CA-issued certificates |
 | RSA-PKCS1-SHA384 | `1.2.840.113549.1.1.12` | Stronger hash                           |
 | RSA-PKCS1-SHA512 | `1.2.840.113549.1.1.13` | Strongest hash                          |
-| RSA-PKCS1-SHA1   | `1.2.840.113549.1.1.5`  | Legacy — deprecated                     |
+| RSA-PKCS1-SHA1   | `1.2.840.113549.1.1.5`  | Legacy (deprecated)                     |
 
 If the issuer certificate is not directly available, the OCSP response may include intermediate certificates in its `certs` field. The server tries these as fallbacks for signature verification.
 
@@ -192,15 +192,15 @@ The OCSP background task emits log events and metrics through the configured obs
 
 In OTLP `log_style modern`, the `summary` field is the log body. The system types `attributes` as OpenTelemetry log record attributes.
 
-| Summary                            | Level | Attributes                                                                                                                                                |
-| ---------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OCSP HTTPS initialization failed   | INFO  | none                                                                                                                                                      |
-| OCSP background task started       | DEBUG | none                                                                                                                                                      |
-| OCSP background task shutting down | INFO  | none                                                                                                                                                      |
-| OCSP response cached               | INFO  | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int) — Unix timestamp of next update, `ferron.ocsp.cert.primary_san` (string) — first SAN |
-| OCSP fetch triggered               | DEBUG | `ferron.ocsp.cert.subject` (string) — certificate subject                                                                                                 |
-| OCSP stapling skipped              | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string) — reason for skipping                                                                  |
-| OCSP fetch failed                  | WARN  | `ferron.ocsp.cert.subject` (string), `error.message` (string)                                                                                             |
+| Summary                            | Level | Attributes                                                                                                                                              |
+| ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OCSP HTTPS initialization failed   | INFO  | none                                                                                                                                                    |
+| OCSP background task started       | DEBUG | none                                                                                                                                                    |
+| OCSP background task shutting down | INFO  | none                                                                                                                                                    |
+| OCSP response cached               | INFO  | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int): Unix timestamp of next update, `ferron.ocsp.cert.primary_san` (string): first SAN |
+| OCSP fetch triggered               | DEBUG | `ferron.ocsp.cert.subject` (string): certificate subject                                                                                                |
+| OCSP stapling skipped              | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string): reason for skipping                                                                 |
+| OCSP fetch failed                  | WARN  | `ferron.ocsp.cert.subject` (string), `error.message` (string)                                                                                           |
 
 ### Metrics
 

@@ -62,14 +62,14 @@ gpg --verify ferron-*.tar.gz.asc
 
 After extraction, you see these files and directories:
 
-- `ferron` or `ferron.exe` — the main Ferron web server executable.
-- `ferron-fmt` or `ferron-fmt.exe` — a tool for formatting Ferron configuration files.
-- `ferron-kdl2ferron` or `ferron-kdl2ferron.exe` — a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
-- `ferron-passwd` or `ferron-passwd.exe` — a tool for generating hashed passwords for the server configuration.
-- `ferron-precompress` or `ferron-precompress.exe` — a tool for precompressing static files.
-- `ferron-serve` or `ferron-serve.exe` — a command for serving static files with Ferron with zero configuration.
-- `ferron.conf` — an example configuration file for Ferron.
-- `wwwroot/` — the webroot directory containing the default `index.html` file.
+- `ferron` or `ferron.exe`: the main Ferron web server executable.
+- `ferron-fmt` or `ferron-fmt.exe`: a tool for formatting Ferron configuration files.
+- `ferron-kdl2ferron` or `ferron-kdl2ferron.exe`: a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
+- `ferron-passwd` or `ferron-passwd.exe`: a tool for generating hashed passwords for the server configuration.
+- `ferron-precompress` or `ferron-precompress.exe`: a tool for precompressing static files.
+- `ferron-serve` or `ferron-serve.exe`: a command for serving static files with Ferron with zero configuration.
+- `ferron.conf`: an example configuration file for Ferron.
+- `wwwroot/`: the webroot directory containing the default `index.html` file.
 
 ### 4. Configure Ferron
 

@@ -4,17 +4,17 @@
 
 Rust workspace (resolver "2"). Key directories:
 
-- `core/` — runtime foundation: `Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime` (vibeio primary + tokio secondary)
-- `bin/` — thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
-- `entrypoint/` — wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
-- `modules/*` — feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, etc.
-- `types/*` — shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
-- `e2e/` — end-to-end tests via testcontainers (requires Docker + protoc in PATH)
-- `docs/` — user-facing docs; sidebar in `docs/links.json`; synced to separate website repo on push to `3.x`
-- `doctest/` — standalone harness that runs doc examples against the built binary
-- `utils/` — CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
+- `core/`: runtime foundation: `Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime` (vibeio primary + tokio secondary)
+- `bin/`: thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
+- `entrypoint/`: wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
+- `modules/*`: feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, etc.
+- `types/*`: shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
+- `e2e/`: end-to-end tests via testcontainers (requires Docker + protoc in PATH)
+- `docs/`: user-facing docs; sidebar in `docs/links.json`; synced to separate website repo on push to `3.x`
+- `doctest/`: standalone harness that runs doc examples against the built binary
+- `utils/`: CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not in the main server
 
-**Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `fuzz/` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. The `fuzz/` crate has its own `Cargo.toml` and a dedicated run command — see tables below.
+**Workspace excludes** (in root `Cargo.toml`): `doctest/`, `e2e/`, and `fuzz/` are **not** members of the main workspace, so `cargo build/test --workspace` skips them. The `fuzz/` crate has its own `Cargo.toml` and a dedicated run command: see tables below.
 
 ## Essential commands
 
@@ -88,8 +88,8 @@ Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.
 Three tiers:
 
 1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files.
-2. **E2E tests**: `e2e/tests/` — each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH. Build the test image first: `docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .`
-3. **Fuzz**: `fuzz/` — nightly `cargo-fuzz`. Excluded from main workspace.
+2. **E2E tests**: `e2e/tests/`, each file declared as `[[test]]` in `e2e/Cargo.toml`. Uses `testcontainers` + `reqwest`. Requires Docker daemon + protoc in PATH. Build the test image first: `docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .`
+3. **Fuzz**: `fuzz/`, nightly `cargo-fuzz`. Excluded from main workspace.
 
 Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]` on the `ferron-http-server` crate).
 
@@ -100,19 +100,19 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (see `CHANGELOG.md`). Use bold inline headers for each bullet.
 - **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links. Config files can use either `.conf` or `.ferron` extensions.
 - **Stub implementation/known issue comments**: When leaving stubs in the codebase and comments explaining the stubs, include `TODO` markers. For known-issue comments, leave `FIXME` markers.
-- **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`, if user-facing as subtle implementation details don't count), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception — it may update documentation alone without adding tests or code.
+- **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`, if user-facing as subtle implementation details don't count), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception (it may update documentation alone without adding tests or code).
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
-- **Runtime**: dual model — primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
+- **Runtime**: dual model, primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. Release binaries are produced by `cross-build/build.sh` (PGO by default; `.cargo/config.toml` pins an i686-musl linker). `bindgen-cli` required for non-`cross` builds.
 - **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim) plus matching `-nopgo` variants.
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
 - **Idiomatic Ferron 3 configuration style**: When writing `.conf` examples in documentation, follow the new ferronconf spec conventions:
-  - **No semicolons** — directives are terminated by newlines, not semicolons.
-  - **4-space indentation** — consistent across all examples.
-  - **Bare strings preferred** — omit quotes unless the value contains spaces, special characters, or would be ambiguous.
-  - **Boolean flags** — write `directive` (bare, no value) when the intent is `true`; write `directive false` only when disabling.
-  - **Raw string literals** — use `r"..."` for regex patterns to avoid double-backslash escaping.
-  - **Quoted strings** — single and double quotes are interchangeable; use whichever is clearer in context.
+  - **No semicolons**: directives are terminated by newlines, not semicolons.
+  - **4-space indentation**: consistent across all examples.
+  - **Bare strings preferred**: omit quotes unless the value contains spaces, special characters, or would be ambiguous.
+  - **Boolean flags**: write `directive` (bare, no value) when the intent is `true`; write `directive false` only when disabling.
+  - **Raw string literals**: use `r"..."` for regex patterns to avoid double-backslash escaping.
+  - **Quoted strings**: single and double quotes are interchangeable; use whichever is clearer in context.
 
 ## Documentation principles
 

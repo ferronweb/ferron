@@ -23,10 +23,10 @@ Both directives accept an integer value (buffer size in bytes). You can configur
 
 ### Global buffering directives
 
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `buffer_request` | `<int>` | This directive specifies the buffer size in bytes for incoming HTTP request bodies. Buffering request bodies can protect backend servers from Slowloris-style attacks by collecting the body before processing. | disabled |
-| `buffer_response` | `<int>` | This directive specifies the buffer size in bytes for outgoing HTTP response bodies. Buffering responses can help control memory usage and make sure delivery to clients is consistent. | disabled |
+| Directive         | Arguments | Description                                                                                                                                                                                                     | Default  |
+| ----------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `buffer_request`  | `<int>`   | This directive specifies the buffer size in bytes for incoming HTTP request bodies. Buffering request bodies can protect backend servers from Slowloris-style attacks by collecting the body before processing. | disabled |
+| `buffer_response` | `<int>`   | This directive specifies the buffer size in bytes for outgoing HTTP response bodies. Buffering responses can help control memory usage and make sure delivery to clients is consistent.                         | disabled |
 
 **Configuration example:**
 
@@ -48,7 +48,7 @@ example.com {
 
 > [!tip]
 >
-> - Each active connection uses memory proportional to the buffer size when you enable buffering. Under high concurrency, large buffer sizes can increase memory pressure — monitor memory usage and adjust accordingly.
+> - Each active connection uses memory proportional to the buffer size when you enable buffering. Under high concurrency, large buffer sizes can increase memory pressure. Monitor memory usage and adjust accordingly.
 > - To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes). Remove the directive entirely if no parent scope configures it.
 
 ### Request buffering
@@ -82,7 +82,7 @@ The buffer stage runs early in the HTTP pipeline. It runs after URL rewriting bu
 
 The request buffer stage sets the following attributes on its `ferron.stage.http_buffer` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.buffer.capacity` | int | Configured buffer capacity in bytes. |
-| `ferron.buffer.size` | int | Actual buffered request body size in bytes. |
+| Attribute                | Type | Description                                 |
+| ------------------------ | ---- | ------------------------------------------- |
+| `ferron.buffer.capacity` | int  | Configured buffer capacity in bytes.        |
+| `ferron.buffer.size`     | int  | Actual buffered request body size in bytes. |

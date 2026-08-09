@@ -132,9 +132,9 @@ This enables end-to-end distributed tracing with SCGI backend applications.
 
 ### Structured logs
 
-| Description (summary)    | Level | Attributes                                       |
-| ------------------------ | ----- | ------------------------------------------------ |
-| SCGI service unavailable | ERROR | `upstream.address` (string) — backend server URL |
+| Description (summary)    | Level | Attributes                                      |
+| ------------------------ | ----- | ----------------------------------------------- |
+| SCGI service unavailable | ERROR | `upstream.address` (string): backend server URL |
 
 ### Metrics
 

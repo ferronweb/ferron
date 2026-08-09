@@ -35,7 +35,7 @@ On the HTTPS listener, Ferron **automatically enables TLS via the ACME provider*
 
 Hostnames that have **special automatic TLS behavior**:
 
-- `localhost`, `127.0.0.1`, `::1` — these loopback addresses use the **local TLS provider** instead of ACME. This gives HTTPS for development without public certificates.
+- `localhost`, `127.0.0.1`, `::1`: these loopback addresses use the **local TLS provider** instead of ACME. This gives HTTPS for development without public certificates.
 
 To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
 
@@ -68,7 +68,7 @@ example.com {
 }
 ```
 
-When you specify an **explicit port** (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS — you must configure TLS explicitly.
+When you specify an **explicit port** (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS (you must configure TLS explicitly).
 
 > [!info]
 > See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
@@ -88,7 +88,7 @@ example.com {
 
 > [!note]
 >
-> - Ferron never redirects `localhost` hostnames — no HTTPS listener exists for them.
+> - Ferron never redirects `localhost` hostnames (no HTTPS listener exists for them).
 > - When you specify an explicit port (for example, `example.com:8080`), no redirect happens since no separate HTTPS listener exists.
 > - The target port is `default_https_port` (default: `443`). When the port is `443`, Ferron omits it from the URL.
 
@@ -97,9 +97,9 @@ example.com {
 - `client_ip_from_header <header: string> { ... }` (global scope)
   - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Default: disabled
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `trusted_proxy` | `<ip-or-cidr: string>...` | Reverse-proxy IPs or CIDR ranges that you trust to supply forwarded client IP headers. | none |
+| Nested directive | Arguments                 | Description                                                                            | Default |
+| ---------------- | ------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| `trusted_proxy`  | `<ip-or-cidr: string>...` | Reverse-proxy IPs or CIDR ranges that you trust to supply forwarded client IP headers. | none    |
 
 **Configuration example:**
 
@@ -228,11 +228,11 @@ example.com {
 
 The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `http.server.active_requests` | UpDownCounter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version` | Number of active HTTP requests |
-| `http.server.request.duration` | Histogram | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | How long HTTP requests take, in seconds |
-| `ferron.http.server.request_count` | Counter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Total number of HTTP requests completed |
+| Metric                             | Type          | Attributes                                                                                                                          | Description                             |
+| ---------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `http.server.active_requests`      | UpDownCounter | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`                                            | Number of active HTTP requests          |
+| `http.server.request.duration`     | Histogram     | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | How long HTTP requests take, in seconds |
+| `ferron.http.server.request_count` | Counter       | `http.request.method`, `url.scheme`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `error.type` | Total number of HTTP requests completed |
 
 All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
 
@@ -242,29 +242,29 @@ All metrics include attributes for `http.request.method`, `url.scheme`, `network
 
 ### Client IP resolution
 
-- **`trusted_proxy 0.0.0.0/0` or `::/0`** — Trusting every source address for forwarded client IP headers allows spoofing. Restrict `trusted_proxy` to specific reverse proxy addresses.
-- **`client_ip_from_header` without `trusted_proxy`** — If you configure `client_ip_from_header` without trusted proxy ranges, Ferron either ignores or does not trust forwarded headers. Add explicit `trusted_proxy` entries for your reverse proxies.
+- **`trusted_proxy 0.0.0.0/0` or `::/0`**: Trusting every source address for forwarded client IP headers allows spoofing. Restrict `trusted_proxy` to specific reverse proxy addresses.
+- **`client_ip_from_header` without `trusted_proxy`**: If you configure `client_ip_from_header` without trusted proxy ranges, Ferron either ignores or does not trust forwarded headers. Add explicit `trusted_proxy` entries for your reverse proxies.
 
 ### URL processing
 
-- **`url_sanitize false`** — Disabling path traversal normalization can expose backend path interpretation issues. Keep sanitization enabled unless a specific backend requires raw paths.
-- **`url_reject_backslash false`** — Permitting backslashes in request paths can cause backend routing confusion. Keep rejection enabled unless required.
+- **`url_sanitize false`**: Disabling path traversal normalization can expose backend path interpretation issues. Keep sanitization enabled unless a specific backend requires raw paths.
+- **`url_reject_backslash false`**: Permitting backslashes in request paths can cause backend routing confusion. Keep rejection enabled unless required.
 
 ### Timeouts
 
-- **`timeout false`** — Disabling request pipeline timeouts lets slow requests exhaust server resources. Set a bounded timeout value.
+- **`timeout false`**: Disabling request pipeline timeouts lets slow requests exhaust server resources. Set a bounded timeout value.
 
 ### HTTP methods
 
-- **`options_allowed_methods` with TRACE or CONNECT** — Advertising TRACE or CONNECT in OPTIONS responses may expose unintended attack surface. Remove these methods unless intentionally supported.
+- **`options_allowed_methods` with TRACE or CONNECT**: Advertising TRACE or CONNECT in OPTIONS responses may expose unintended attack surface. Remove these methods unless intentionally supported.
 
 ### HTTP/3
 
-- **`protocols` includes `h3`** — HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
+- **`protocols` includes `h3`**: HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
 
 ### TLS deployment
 
-- **HTTP-only host without TLS** — When a non-localhost host block has no `tls` configuration, `ferron doctor` emits a reminder. The reminder states that an upstream proxy or load balancer should terminate TLS. This is informational, not prescriptive. Legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
+- **HTTP-only host without TLS**: When a non-localhost host block has no `tls` configuration, `ferron doctor` emits a reminder. The reminder states that an upstream proxy or load balancer should terminate TLS. This is informational, not prescriptive. Legitimate HTTP-only setups include deployments behind CDNs, load balancers, or Kubernetes ingress controllers that handle TLS termination.
 
 ## Observability
 
@@ -272,7 +272,7 @@ All metrics include attributes for `http.request.method`, `url.scheme`, `network
 
 The HTTP server sets the following attributes on per-stage spans:
 
-| Span name | Attributes | Description |
-| --- | --- | --- |
-| `ferron.stage.client_ip_from_header` | `ferron.client_ip.source`, `ferron.client_ip.original` | Client IP resolution stage |
-| `ferron.stage.https_redirect` | `ferron.redirect.target` | HTTP to HTTPS redirect stage |
+| Span name                            | Attributes                                             | Description                  |
+| ------------------------------------ | ------------------------------------------------------ | ---------------------------- |
+| `ferron.stage.client_ip_from_header` | `ferron.client_ip.source`, `ferron.client_ip.original` | Client IP resolution stage   |
+| `ferron.stage.https_redirect`        | `ferron.redirect.target`                               | HTTP to HTTPS redirect stage |

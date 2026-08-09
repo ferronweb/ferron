@@ -262,10 +262,10 @@ These events carry the `ferron-metrics-reload` target, and the observability eve
 
 ### Structured logs
 
-| Description (summary)      | Level  | Attributes                                          |
-| -------------------------- | ------ | --------------------------------------------------- |
-| Configuration reload       | `INFO` | none                                                |
-| Configuration reload error | `WARN` | `error.message` (string) — the reload error message |
+| Description (summary)      | Level  | Attributes                                         |
+| -------------------------- | ------ | -------------------------------------------------- |
+| Configuration reload       | `INFO` | none                                               |
+| Configuration reload error | `WARN` | `error.message` (string): the reload error message |
 
 ### Error log attributes
 

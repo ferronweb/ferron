@@ -84,4 +84,4 @@ With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/lang
 
 ## See also
 
-- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache) — Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.
+- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache): Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.

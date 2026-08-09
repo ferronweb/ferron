@@ -36,8 +36,8 @@ docs/
 
 Two tiers of documentation:
 
-- **Use-case guides** (`use-cases/`) — task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
-- **Configuration reference** (`configuration/`) — exhaustive directive-level pages organized by functional area. Expects the reader to already know what they need.
+- **Use-case guides** (`use-cases/`): task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
+- **Configuration reference** (`configuration/`): exhaustive directive-level pages organized by functional area. Expects the reader to already know what they need.
 
 The `getting-started.md` and `index.md` pages bridge the two tiers with recommended reading paths.
 
@@ -56,7 +56,7 @@ description: "One- or two-sentence summary of what this page covers."
 
 ### Headings
 
-Sentence case. Use `##` for top-level section headings, `###` for subsections. No trailing `## Notes and troubleshooting` section — use inline callouts instead.
+Sentence case. Use `##` for top-level section headings, `###` for subsections. No trailing `## Notes and troubleshooting` section, use inline callouts instead.
 
 ### Code blocks
 
@@ -97,12 +97,12 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
 
 ### Writing principles
 
-- **Describe behavior, not labels** — explain what the system actually does, not just what the feature is called.
-- **Functional precision first** — prefer clear, explicit descriptions over clever phrasing.
-- **Consistency over novelty** — if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
-- **Inline callouts** — no separate notes section at the end of a page.
+- **Describe behavior, not labels**: explain what the system actually does, not just what the feature is called.
+- **Functional precision first**: prefer clear, explicit descriptions over clever phrasing.
+- **Consistency over novelty**: if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
+- **Inline callouts**: no separate notes section at the end of a page.
 - **No emojis** unless the content explicitly calls for them.
-- **Linters are guidance** — do not let `woke` or other terminology linters override clarity or consistency.
+- **Linters are guidance**: do not let `woke` or other terminology linters override clarity or consistency.
 - **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text — not code blocks, inline code, directive names, or URLs):
   - **Active voice**: "Ferron reads the file", not "the file is read by the parser". Use "Ferron" or "the server" as the subject when the actor is the software.
   - **No contractions**: Write "do not", "cannot", "will not", "it is".

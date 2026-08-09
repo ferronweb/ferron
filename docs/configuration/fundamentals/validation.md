@@ -16,7 +16,7 @@ ferron validate -c ferron.conf
 If the configuration is valid, the command exits with code 0. If there are errors, it exits with code 1.
 
 > [!note]
-> Validation is module-aware: a directive recognized by a loaded module is valid. The server flags an unrecognized directive as unknown. Validation does not guarantee runtime correctness — some issues can only surface at runtime.
+> Validation is module-aware: a directive recognized by a loaded module is valid. The server flags an unrecognized directive as unknown. Validation does not guarantee runtime correctness (some issues can only surface at runtime).
 
 ### Log output
 
@@ -33,7 +33,7 @@ $ ferron validate -c ferron.conf
 [2026-05-30 07:18:34.372 WARN] Unknown directive (block 'http port 443' in file '/home/.../ferron.conf' at line 1, column 7): `tlss` is unused in the block
 ```
 
-The configuration above is still structurally valid — `tlss` is an unrecognized directive, but it does not prevent the server from starting. Validation exits with code 0 in this case.
+The configuration above is still structurally valid (`tlss` is an unrecognized directive, but it does not prevent the server from starting). Validation exits with code 0 in this case.
 
 ### JSON output
 
@@ -65,27 +65,27 @@ ferron validate -c ferron.conf --json
 
 The JSON response contains two top-level fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `valid` | `bool` | Whether the configuration is valid. `false` only when the server finds invalid directives. |
-| `diagnostics` | `Vec<Diagnostic>` | List of diagnostic messages, warnings, and errors. |
+| Field         | Type              | Description                                                                                |
+| ------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| `valid`       | `bool`            | Whether the configuration is valid. `false` only when the server finds invalid directives. |
+| `diagnostics` | `Vec<Diagnostic>` | List of diagnostic messages, warnings, and errors.                                         |
 
 ### Diagnostic fields
 
 Each diagnostic entry contains:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `kind` | `string` | The diagnostic category — `"Unknown directive"`, `"Invalid configuration"`, or `"Best practice violation"`. |
-| `message` | `string` | A human-readable description of the issue. |
-| `span` | `Span \| null` | Source location (line, column, file) where the issue occurred. |
-| `scope` | `string \| null` | The configuration block scope (e.g., `"http port 443"`, `"global"`). |
+| Field     | Type             | Description                                                                                                 |
+| --------- | ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `kind`    | `string`         | The diagnostic category (`"Unknown directive"`, `"Invalid configuration"`, or `"Best practice violation"`). |
+| `message` | `string`         | A human-readable description of the issue.                                                                  |
+| `span`    | `Span \| null`   | Source location (line, column, file) where the issue occurred.                                              |
+| `scope`   | `string \| null` | The configuration block scope (e.g., `"http port 443"`, `"global"`).                                        |
 
 ## Diagnostic kinds
 
 ### Unknown directive
 
-A directive in the configuration is not recognized by any loaded module. The server reports this as a **warning** — the server can still start.
+A directive in the configuration is not recognized by any loaded module. The server reports this as a **warning**: the server can still start.
 
 ```ferron
 example.com {
@@ -109,7 +109,7 @@ example.com {
 
 ### Invalid configuration
 
-A recognized directive has invalid arguments or a misconfigured value. This is an **error** — validation fails and the server cannot start with this configuration.
+A recognized directive has invalid arguments or a misconfigured value. This is an **error**: validation fails and the server cannot start with this configuration.
 
 ```ferron
 # INVALID: bogus TLS provider
@@ -138,7 +138,7 @@ When `valid` is `false`, the command exits with code 1.
 
 ### Best practice violation
 
-A configuration pattern is technically valid but deviates from recommended practices. This is an **advisory** diagnostic — `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
+A configuration pattern is technically valid but deviates from recommended practices. This is an **advisory** diagnostic, meaning that `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
 
 ```ferron
 example.com {
@@ -164,18 +164,18 @@ example.com {
 
 The `span` field pinpoints the exact location of the diagnostic in the configuration file:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `line` | `usize` | Line number, 1-indexed. |
-| `column` | `usize` | Column number, 1-indexed. |
-| `file` | `string \| null` | Absolute path to the configuration file, or `null` if constructed programmatically. |
+| Field    | Type             | Description                                                                         |
+| -------- | ---------------- | ----------------------------------------------------------------------------------- |
+| `line`   | `usize`          | Line number, 1-indexed.                                                             |
+| `column` | `usize`          | Column number, 1-indexed.                                                           |
+| `file`   | `string \| null` | Absolute path to the configuration file, or `null` if constructed programmatically. |
 
 ## Validation scope
 
 Validation runs against two levels:
 
-- **Global configuration** — directives inside the top-level `{ ... }` block
-- **Per-protocol blocks** — host blocks such as `example.com`, `*:443`, `http *:8080`
+- **Global configuration**: directives inside the top-level `{ ... }` block
+- **Per-protocol blocks**: host blocks such as `example.com`, `*:443`, `http *:8080`
 
 Each protocol registers its own validators via the module system. If a module is not loaded, its directives appear as unknown. A custom build with a reduced feature set may trigger this.
 
@@ -228,11 +228,11 @@ ferron adapt -c ferron.conf
 The `run` command runs the same validation during startup. If validation fails, the server exits with an error.
 
 > [!note]
-> Unknown directives produce warnings, not errors — the server can start, but the directive is silently ignored. Invalid configurations produce errors — the server does not start.
+> Unknown directives produce warnings, not errors (the server can start, but the directive is silently ignored). Invalid configurations produce errors (the server does not start).
 
 ## See also
 
 - [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) — `ferron-fmt` for formatting `.conf` files
+- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
 - [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
 - [Core directives](/docs/v3/configuration/server/core-directives)

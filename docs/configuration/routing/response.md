@@ -52,7 +52,7 @@ example.com {
 }
 ```
 
-You can define multiple `status` directives. Ferron evaluates them in order — the first matching rule wins.
+You can define multiple `status` directives. Ferron evaluates them in order (the first matching rule wins).
 
 ### Connection abort
 
@@ -151,17 +151,17 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 
 You can place the `early_hints` directive at different configuration levels:
 
-- **Host level** — applies to all requests for that host
-- **`location` block** — applies only to requests matching that path prefix
-- **`if` / `if_not` blocks** — applies conditionally based on a matcher
+- **Host level**: applies to all requests for that host
+- **`location` block**: applies only to requests matching that path prefix
+- **`if` / `if_not` blocks**: applies conditionally based on a matcher
 
 ## Scoping
 
 You can place all directives (`status`, `abort`, `block`, `allow`, `early_hints`) at different configuration levels:
 
-- **Host level** — applies to all requests for that host
-- **`location` block** — applies only to requests matching that path prefix
-- **`if` / `if_not` blocks** — applies conditionally based on a matcher
+- **Host level**: applies to all requests for that host
+- **`location` block**: applies only to requests matching that path prefix
+- **`if` / `if_not` blocks**: applies conditionally based on a matcher
 
 ## Observability
 

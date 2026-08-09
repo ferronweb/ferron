@@ -31,7 +31,7 @@ example.com {
 This configuration:
 
 - Proxies every request to Apache, which handles PHP execution via PHP-FPM or `mod_php`.
-- Enables LSCache semantics — `X-LiteSpeed-Cache-Control` from the PHP app controls cache TTL and scope.
+- Enables LSCache semantics (`X-LiteSpeed-Cache-Control` from the PHP app controls cache TTL and scope).
 - Emits `X-LiteSpeed-Cache` response headers (hit/miss/bypass) for debugging and plugin visibility.
 - Caches responses separately by `Accept-Encoding` so the server stores compressed and uncompressed variants independently.
 

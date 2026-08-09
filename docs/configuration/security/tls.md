@@ -147,10 +147,10 @@ api.example.com {
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`max_version TLSv1.2`** — Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
-- **`client_auth` with public trust store** — Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
-- **`ocsp` disabled** — OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
-- **Experimental ECDH curves** — Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only when all clients support them.
-- **`ticket_keys` without `auto_rotate`** — Session ticket keys should rotate automatically in production to limit the impact of key compromise.
-- **`ticket_keys.max_keys` outside 2–5** — The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
-- **`ticket_keys.rotation_interval` > 24h** — Rotate session ticket keys every 12–24 hours in production.
+- **`max_version TLSv1.2`**: Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
+- **`client_auth` with public trust store**: Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
+- **`ocsp` disabled**: OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
+- **Experimental ECDH curves**: Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only when all clients support them.
+- **`ticket_keys` without `auto_rotate`**: Session ticket keys should rotate automatically in production to limit the impact of key compromise.
+- **`ticket_keys.max_keys` outside 2–5**: The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
+- **`ticket_keys.rotation_interval` > 24h**: Rotate session ticket keys every 12–24 hours in production.
