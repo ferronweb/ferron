@@ -13,6 +13,11 @@
 #### Observability & tracing
 
 - **Configuration drift hints** — new `ferron.admin.config_drift` Gauge metric and `config_drift` / `config_drift_hints_enabled` fields on the `/status` Admin API endpoint detect when configuration source files have changed on disk but have not been reloaded. Drift is detected via periodic lightweight mtime comparison (no re-parsing). Enabled by default; disable with `drift_hints false` in config adapter params (e.g., `--config-params "drift_hints=false"`). A warn-level log is emitted when drift is detected, and an info-level log when drift resolves after reload.
+- **OTLP metric exemplars** — the OTLP observability sink now supports exemplar attachments on metric data points, allowing the last sampled value to be attached as an exemplar. This allows for better trace correlation and debugging by attaching relevant historical context. Previously, this wasn't supported due to OpenTelemetry SDK limitations, but the limitation was removed by replacing OpenTelemetry SDK with a custom OTLP exporter implementation.
+- **OTLP export batching tuning** — the `logs` and `traces` OTLP signal sub-blocks now accept `export_interval <duration>` and `export_batch_size <number>`, and the `metrics` sub-block accepts `read_interval <duration>`. This controls how often partially full batches flush and how many finished items trigger an export.
+- **OTLP gzip compression** — the `logs`, `metrics`, and `traces` OTLP signal sub-blocks now accept `gzip [bool]` (default `false`). When enabled, export requests are compressed with gzip (HTTP `Content-Encoding: gzip`, gRPC gzip compression).
+- **OTLP exemplar toggle** — the `metrics` sub-block now accepts `exemplars [bool]` (default `true`). Set it to `false` to stop attaching the last sampled measurement per series as an exemplar.
+- **OTLP native histogram toggle** — the `metrics` sub-block now accepts `native_histograms [bool]` (default `true`). Set it to `false` to aggregate histograms with explicit bucket boundaries instead of the exponential layout.
 
 #### HTTP server core
 
@@ -53,6 +58,7 @@
 
 #### Observability
 
+- **OTLP gRPC `no_verification` TLS handshake** — previously, when an OTLP gRPC endpoint was configured with `no_verification true` and used HTTPS, TLS handshakes failed because the custom certificate verifier rejected TLS 1.2/1.3 handshake signatures. This has been fixed to return assertion-based verification results (matching the HTTP exporter behavior).
 - **`ferron.ocsp.stapling.hit_total` metric emission fix** — previously, the `ferron.ocsp.stapling.hit_total` metric emission didn't function at all. It has been fixed to emit the metric to global observability sinks correctly.
 - **ACME TLS resolution errors** — previously, TLS resolution errors were always logged into the console when using automatic TLS via ACME. This has been changed to log them into configured observability sinks.
 - **Spurious abrupt connection termination error logs** — earlier, some abrupt connections termination log were logged (`Reverse proxy: HTTP upgrade tunneling failed: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof`), even if the connection was idle. This has been fixed along with an update to the HTTP server library used by Ferron (see [`vibeio-http` changelog](https://github.com/ferronweb/vibeio-http/blob/main/CHANGELOG.md#vibeio-http-035)).

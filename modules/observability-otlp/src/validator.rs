@@ -1,5 +1,5 @@
 use ferron_core::config::validator::{
-    entry_span, validate_scoped_block_flat, ConfigurationValidator,
+    entry_span, validate_scoped_block_flat, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::{validate_directive, validate_nested};
@@ -7,6 +7,7 @@ use ferron_core::{validate_directive, validate_nested};
 pub struct OtlpObservabilityConfigurationValidator;
 
 impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
+    #[inline]
     fn validate_block(
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
@@ -18,6 +19,21 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(logs, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(logs, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(logs, used(sub), export_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(logs, used(sub), export_batch_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            if let Some(entries) = logs.directives.get("export_batch_size") {
+                for entry in entries {
+                    if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n < 1) {
+                        return Err(ConfigurationValidationError::from(format!(
+                            "Export batch size for OTLP logs cannot be smaller than 1"
+                        ))
+                        .with_span(
+                            entry.span.clone()
+                        ));
+                    }
+                }
+            }
+            validate_nested!(logs, used(sub), gzip, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
             ferron_core::check_unused_subdirectives!(logs, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 
@@ -25,6 +41,10 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(metrics, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(metrics, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(metrics, used(sub), read_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(metrics, used(sub), gzip, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(metrics, used(sub), exemplars, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
+            validate_nested!(metrics, used(sub), native_histograms, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
             ferron_core::check_unused_subdirectives!(metrics, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 
@@ -32,6 +52,21 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             let mut sub = std::collections::HashSet::new();
             validate_nested!(traces, used(sub), protocol, optional args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(traces, used(sub), authorization, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(traces, used(sub), export_interval, optional args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Float(_, _) | ServerConfigurationValue::String(_, _)]);
+            validate_nested!(traces, used(sub), export_batch_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            if let Some(entries) = traces.directives.get("export_batch_size") {
+                for entry in entries {
+                    if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n < 1) {
+                        return Err(ConfigurationValidationError::from(format!(
+                            "Export batch size for OTLP logs cannot be smaller than 1"
+                        ))
+                        .with_span(
+                            entry.span.clone()
+                        ));
+                    }
+                }
+            }
+            validate_nested!(traces, used(sub), gzip, optional args(?) => [ServerConfigurationValue::Boolean(_, _)]);
             ferron_core::check_unused_subdirectives!(traces, sub, &mut validator_ctx.diagnostics, validator_ctx.scope.clone());
         });
 
@@ -117,6 +152,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
 }
 
 /// Validate the contents of a `baggage { ... }` block.
+#[inline]
 fn validate_baggage_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,

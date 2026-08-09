@@ -27,6 +27,9 @@ ferron-http-cache = { path = "../modules/http-cache", features = ["fuzz"] }
 ferron-http-ratelimit = { path = "../modules/http-ratelimit", features = ["fuzz"] }
 ferron-core = { path = "../core" }
 ferron-observability = { path = "../types/observability" }
+ferron-observability-otlp = { path = "../modules/observability-otlp", features = ["fuzz"] }
+serde_json = "1"
+prost = "0.14.4"
 http-body-util = "0.1"
 futures-executor = "0.3.32"
 
@@ -69,5 +72,17 @@ doc = false
 [[bin]]
 name = "fuzz_qvalue"
 path = "fuzz_targets/fuzz_qvalue.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_otlp_http_request"
+path = "fuzz_targets/fuzz_otlp_http_request.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_otlp_histogram"
+path = "fuzz_targets/fuzz_otlp_histogram.rs"
 test = false
 doc = false

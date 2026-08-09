@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
@@ -19,6 +20,7 @@ pub enum LogStyle {
 
 /// Parse a `log_style` directive value into a [`LogStyle`]. Returns `None` if
 /// the value is not a recognized log style.
+#[inline]
 pub fn parse_log_style(value: &str) -> Option<LogStyle> {
     match value.to_ascii_lowercase().as_str() {
         "legacy" => Some(LogStyle::Legacy),
@@ -32,6 +34,21 @@ pub struct SignalConfig {
     pub endpoint: String,
     pub protocol: String,
     pub authorization: Option<String>,
+    /// Batch flush interval override for logs/traces (`export_interval`).
+    pub export_interval: Option<Duration>,
+    /// Batch size override for logs/traces (`export_batch_size`).
+    pub export_batch_size: Option<usize>,
+    /// Metrics collection interval override (`read_interval`).
+    pub read_interval: Option<Duration>,
+    /// Compress export requests with gzip (`gzip`).
+    pub gzip: bool,
+    /// Attach the last sampled measurement per series as an exemplar
+    /// (`exemplars`; default `true`).
+    pub exemplars: Option<bool>,
+    /// Aggregate histograms with the exponential (native) layout
+    /// (`native_histograms`; default `true`). When `false`, histograms use
+    /// explicit bucket boundaries.
+    pub native_histograms: Option<bool>,
 }
 
 /// Shared configuration for an OTLP backend instance
@@ -48,6 +65,7 @@ pub struct OtlpBackendConfig {
 
 impl OtlpBackendConfig {
     /// Parse the OTLP backend configuration from a ServerConfigurationBlock
+    #[inline]
     pub fn parse_config(config: &ServerConfigurationBlock) -> Self {
         let service_name = config
             .get_value("service_name")
@@ -86,6 +104,7 @@ impl OtlpBackendConfig {
 
 impl SignalConfig {
     /// Parse a single signal sub-block (logs, metrics, or traces)
+    #[inline]
     fn parse_config(parent: &ServerConfigurationBlock, name: &str) -> Option<SignalConfig> {
         let entries = parent.directives.get(name)?;
         let entry = entries.first()?;
@@ -103,6 +122,12 @@ impl SignalConfig {
                 endpoint,
                 protocol: default_protocol.to_string(),
                 authorization: None,
+                export_interval: None,
+                export_batch_size: None,
+                read_interval: None,
+                gzip: false,
+                exemplars: None,
+                native_histograms: None,
             });
         };
 
@@ -117,10 +142,43 @@ impl SignalConfig {
             .and_then(|v| v.as_str())
             .map(|s: &str| s.to_string());
 
+        let export_interval = children
+            .get_value("export_interval")
+            .and_then(|v| v.as_duration());
+
+        let export_batch_size = children
+            .get_value("export_batch_size")
+            .and_then(|v| v.as_number())
+            .map(|n| n as usize);
+
+        let read_interval = children
+            .get_value("read_interval")
+            .and_then(|v| v.as_duration());
+
+        let gzip = children.get_flag("gzip");
+
+        let exemplars = children
+            .directives
+            .get("exemplars")
+            .and_then(|entries| entries.first())
+            .map(|entry| entry.get_flag());
+
+        let native_histograms = children
+            .directives
+            .get("native_histograms")
+            .and_then(|entries| entries.first())
+            .map(|entry| entry.get_flag());
+
         Some(Self {
             endpoint,
             protocol,
             authorization,
+            export_interval,
+            export_batch_size,
+            read_interval,
+            gzip,
+            exemplars,
+            native_histograms,
         })
     }
 }
@@ -137,6 +195,7 @@ impl SignalConfig {
 ///     }
 /// }
 /// ```
+#[inline]
 fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKeyPromotion> {
     let Some(baggage_entries) = config.directives.get("baggage") else {
         return Vec::new();
@@ -188,6 +247,7 @@ fn parse_baggage_promotions(config: &ServerConfigurationBlock) -> Vec<BaggageKey
 
 /// Parse a `signals` directive value into a SignalSet.
 /// The value can be a single signal name or multiple args.
+#[inline]
 fn parse_signal_set(children: &ServerConfigurationBlock) -> Option<SignalSet> {
     let entries = children.directives.get("signals")?;
     let entry = entries.first()?;

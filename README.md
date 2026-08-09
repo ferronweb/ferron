@@ -69,6 +69,7 @@ See the full instructions in the [Linux installation documentation](https://ferr
 ```sh
 git clone https://github.com/ferronweb/ferron -b develop-3.x
 cd ferron
+git submodule update --init --recursive
 cargo build --workspace
 ```
 

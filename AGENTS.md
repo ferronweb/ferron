@@ -77,6 +77,8 @@ cargo +nightly fuzz run fuzz_cache                # LSCache parsers, policy eval
 cargo +nightly fuzz run fuzz_ratelimit            # rate limiter under concurrent access
 cargo +nightly fuzz run fuzz_traceparent          # W3C traceparent header parsing
 cargo +nightly fuzz run fuzz_qvalue               # Accept/q-value header parsing
+cargo +nightly fuzz run fuzz_otlp_http_request    # OTLP/HTTP encode+JSON roundtrips (no panic, deterministic)
+cargo +nightly fuzz run fuzz_otlp_histogram       # Base2 exponential histogram bucketing invariants
 ```
 
 Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.

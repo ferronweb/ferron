@@ -3,12 +3,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::{HeaderValue, Response};
+use http::Response;
+use http_body_util::Full;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 
 /// Build a `RootCertStore` with native system certificates, falling back to
 /// embedded `webpki-roots` if native certs cannot be loaded.
+#[inline]
 fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error + Send + Sync>> {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
@@ -49,7 +51,31 @@ fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn Error + Send
     Ok(root_store)
 }
 
-/// Wrapper adapting hyper-util + hyper-rustls to opentelemetry-http's HttpClient trait.
+/// Error produced by [`HyperOtelClient::send`].
+#[derive(Debug)]
+pub enum ClientError {
+    /// The response body exceeded the configured size cap.
+    TooLargeResponse,
+    /// Transport-level failure (connect, TLS, timeout, body read).
+    Transport(String),
+}
+
+impl std::fmt::Display for ClientError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooLargeResponse => write!(f, "OTLP response body exceeds the size cap"),
+            Self::Transport(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for ClientError {}
+
+/// Hyper-based HTTP client shared by all OTLP HTTP signal transports.
+///
+/// Uses hyper-util + hyper-rustls with the appropriate TLS config for OTLP
+/// HTTP exporters: native certificate store with webpki-roots fallback.
 #[derive(Clone, Debug)]
 pub struct HyperOtelClient {
     inner: Client<
@@ -60,8 +86,9 @@ pub struct HyperOtelClient {
 }
 
 impl HyperOtelClient {
-    /// Build an HTTP client using hyper-util + hyper-rustls with the appropriate TLS config
-    /// for OTLP HTTP exporters. Uses native certificate store with webpki-roots fallback.
+    /// Build an HTTP client using hyper-util + hyper-rustls with the
+    /// appropriate TLS config for OTLP HTTP exporters.
+    #[inline]
     pub fn new(no_verify: bool) -> Result<Self, Box<dyn Error + Send + Sync>> {
         use hyper_rustls::HttpsConnectorBuilder;
         use rustls::client::danger::ServerCertVerifier;
@@ -75,6 +102,7 @@ impl HyperOtelClient {
             #[derive(Debug)]
             struct NoServerVerifier;
             impl ServerCertVerifier for NoServerVerifier {
+                #[inline]
                 fn verify_server_cert(
                     &self,
                     _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -87,6 +115,7 @@ impl HyperOtelClient {
                     Ok(rustls::client::danger::ServerCertVerified::assertion())
                 }
 
+                #[inline]
                 fn verify_tls12_signature(
                     &self,
                     _message: &[u8],
@@ -97,6 +126,7 @@ impl HyperOtelClient {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
 
+                #[inline]
                 fn verify_tls13_signature(
                     &self,
                     _message: &[u8],
@@ -107,6 +137,7 @@ impl HyperOtelClient {
                     Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
                 }
 
+                #[inline]
                 fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
                     use rustls::SignatureScheme::*;
                     vec![
@@ -151,36 +182,38 @@ impl HyperOtelClient {
             timeout: Duration::from_secs(10),
         })
     }
-}
 
-#[async_trait::async_trait]
-impl opentelemetry_http::HttpClient for HyperOtelClient {
-    async fn send_bytes(
+    /// Send a request and collect the full response body, capping the body
+    /// size at `max_response_size` bytes.
+    #[inline]
+    pub async fn send(
         &self,
-        request: opentelemetry_http::Request<Bytes>,
-    ) -> Result<Response<Bytes>, opentelemetry_http::HttpError> {
+        request: hyper::Request<Full<Bytes>>,
+        max_response_size: usize,
+    ) -> Result<Response<Bytes>, ClientError> {
         use tokio::time::timeout;
 
-        let (parts, body) = request.into_parts();
-
-        let mut req = hyper::Request::builder()
-            .method(parts.method)
-            .uri(parts.uri);
-
-        for (key, value) in &parts.headers {
-            req = req.header(key.as_str(), HeaderValue::from_bytes(value.as_ref())?);
-        }
-
-        let full_body = http_body_util::Full::new(body);
-        let req = req.body(full_body)?;
-
-        let fut = self.inner.request(req);
-        let resp = timeout(self.timeout, fut).await??;
+        let fut = self.inner.request(request);
+        let resp = timeout(self.timeout, fut)
+            .await
+            .map_err(|_| ClientError::Transport("OTLP request timed out".into()))?
+            .map_err(|err| ClientError::Transport(err.to_string()))?;
 
         let status = resp.status();
         let headers = resp.headers().clone();
-        let body_bytes: Bytes = http_body_util::BodyExt::collect(resp.into_body())
-            .await?
+        let limited = http_body_util::Limited::new(resp.into_body(), max_response_size);
+        let body_bytes: Bytes = http_body_util::BodyExt::collect(limited)
+            .await
+            .map_err(|err| {
+                if err
+                    .downcast_ref::<http_body_util::LengthLimitError>()
+                    .is_some()
+                {
+                    ClientError::TooLargeResponse
+                } else {
+                    ClientError::Transport(err.to_string())
+                }
+            })?
             .to_bytes();
 
         let mut response = http::Response::builder().status(status);
@@ -189,12 +222,15 @@ impl opentelemetry_http::HttpClient for HyperOtelClient {
             response = response.header(key.as_str(), value.clone());
         }
 
-        Ok(response.body(body_bytes)?)
+        response
+            .body(body_bytes)
+            .map_err(|err| ClientError::Transport(err.to_string()))
     }
 }
 
-/// Build a tonic Channel with matching TLS config for use with OTLP gRPC exporters.
-/// Uses native certificate store with webpki-roots fallback.
+/// Build a tonic Channel with matching TLS config for use with OTLP gRPC
+/// exporters. Uses native certificate store with webpki-roots fallback.
+#[inline]
 pub fn build_tonic_channel(
     endpoint: &str,
     no_verify: bool,
@@ -214,6 +250,7 @@ pub fn build_tonic_channel(
         #[derive(Debug)]
         struct NoServerVerifier;
         impl ServerCertVerifier for NoServerVerifier {
+            #[inline]
             fn verify_server_cert(
                 &self,
                 _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -224,24 +261,38 @@ pub fn build_tonic_channel(
             ) -> Result<ServerCertVerified, rustls::Error> {
                 Ok(ServerCertVerified::assertion())
             }
+            #[inline]
             fn verify_tls12_signature(
                 &self,
                 _message: &[u8],
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+                Ok(HandshakeSignatureValid::assertion())
             }
+            #[inline]
             fn verify_tls13_signature(
                 &self,
                 _message: &[u8],
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+                Ok(HandshakeSignatureValid::assertion())
             }
+            #[inline]
             fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-                vec![]
+                use rustls::SignatureScheme::*;
+                vec![
+                    ECDSA_NISTP384_SHA384,
+                    ECDSA_NISTP256_SHA256,
+                    ED25519,
+                    RSA_PSS_SHA512,
+                    RSA_PSS_SHA384,
+                    RSA_PSS_SHA256,
+                    RSA_PKCS1_SHA512,
+                    RSA_PKCS1_SHA384,
+                    RSA_PKCS1_SHA256,
+                ]
             }
         }
         rustls::ClientConfig::builder_with_provider(crypto)

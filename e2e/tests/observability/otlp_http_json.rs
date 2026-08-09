@@ -6,8 +6,11 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, poll_received,
 };
 
-#[tokio::test]
-async fn test_otlp_traces_exported() {
+/// With `protocol "http/json"` spans are transported as OTLP JSON
+/// (pbjson + hex ID fields) and the mock collector decodes them from the
+/// JSON body.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_otlp_http_json_exported() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let mut files = create_test_files();
@@ -19,9 +22,9 @@ async fn test_otlp_traces_exported() {
   root "/var/www/ferron"
   observability {
     provider otlp
-    service_name "e2e-otlp"
+    service_name "e2e-otlp-json"
     traces "http://otlp:4318/v1/traces" {
-      protocol "http/protobuf"
+      protocol "http/json"
       export_interval "1s"
       export_batch_size 1
     }
@@ -34,8 +37,7 @@ async fn test_otlp_traces_exported() {
 
     crate::common::write_file(files.webroot.path().join("basic.txt"), b"hello").unwrap();
 
-    let network = "e2e-test-otlp-traces";
-
+    let network = "e2e-test-otlp-json";
     let otlp = create_otlp_container(network).await.unwrap();
     let ferron = create_ferron_container(network, files.webroot.path(), files.config.path())
         .await
@@ -52,45 +54,33 @@ async fn test_otlp_traces_exported() {
 
     let client = reqwest::Client::new();
 
-    // Trigger a request to produce a trace
     let _ = client
         .get(format!("http://localhost:{}/basic.txt", http_port))
         .send()
         .await
         .unwrap();
 
-    // Assert on the decoded span, not just on payload counts: wait for the
-    // request span itself to arrive so stage spans from earlier batches do
-    // not end the poll early.
     let received_url = format!("http://localhost:{}/received", otlp_port);
     let payload = poll_received(&client, &received_url, |json| {
         json.get("spans")
             .and_then(|spans| spans.as_array())
-            .is_some_and(|spans| {
-                spans.iter().any(|span| {
-                    span["name"] == "ferron.request"
-                        && span["attributes"]
-                            .get("url.full")
-                            .and_then(serde_json::Value::as_str)
-                            .is_some_and(|path| path.contains("basic.txt"))
-                })
-            })
+            .is_some_and(|spans| spans.iter().any(|span| span["name"] == "ferron.request"))
     })
     .await
-    .expect("OTLP collector did not receive traces");
+    .expect("OTLP collector did not receive the JSON export");
 
     let spans = payload["spans"].as_array().unwrap();
+    let span = spans
+        .iter()
+        .find(|span| span["name"] == "ferron.request")
+        .expect("expected a JSON-transported ferron.request span");
+    // The OTLP JSON encoding emits IDs as hex strings, not base64.
+    let trace_id = span["trace_id"].as_str().unwrap();
     assert!(
-        spans.iter().any(|span| span["name"] == "ferron.request"),
-        "expected a decoded ferron.request span: {spans:?}"
+        !trace_id.is_empty() && trace_id.chars().all(|c| c.is_ascii_hexdigit()),
+        "trace_id must be a hex string: {trace_id}"
     );
-    // The decoded span carries the path as an attribute.
-    assert!(
-        spans.iter().any(|span| span["attributes"]
-            .get("url.full")
-            .is_some_and(|path| { path.as_str().is_some_and(|path| path.contains("basic.txt")) })),
-        "expected a span with url.full=/basic.txt: {spans:?}"
-    );
+    assert!(span["json"].as_bool().unwrap_or(false));
 
     ferron.stop().await.unwrap();
     otlp.stop().await.unwrap();
