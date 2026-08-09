@@ -729,6 +729,25 @@ async fn vary_variants_have_distinct_inflight_keys() {
 }
 
 #[tokio::test]
+async fn follower_wait_times_out_when_leader_never_completes() {
+    let store = Arc::new(CacheStore::new(4));
+    let key = "https://example.com/hung-leader";
+
+    let (is_leader, _leader_notify) = store.begin_fetch(key);
+    assert!(is_leader);
+    let (is_follower, follower_notify) = store.begin_fetch(key);
+    assert!(!is_follower);
+
+    let timed_out = tokio::time::timeout(Duration::from_millis(50), follower_notify.notified())
+        .await
+        .is_err();
+    assert!(
+        timed_out,
+        "a follower must stop coalescing when the leader never completes its fetch"
+    );
+}
+
+#[tokio::test]
 async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 

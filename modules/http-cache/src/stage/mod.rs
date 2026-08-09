@@ -533,7 +533,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                     let (is_leader, notify) = store.begin_fetch(&coalesce_key);
 
                     if !is_leader {
-                        notify.notified().await;
+                        let coalesced =
+                            tokio::time::timeout(config.coalesce_timeout, notify.notified())
+                                .await
+                                .is_ok();
                         let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;
                         emit_singleflight_metrics(ctx, &store);
 
@@ -542,12 +545,23 @@ impl Stage<HttpContext> for HttpCacheStage {
                             stats: retry_stats,
                             items: retry_items,
                             ..
-                        } = store.lookup(
-                            &base_key,
-                            &request_headers,
-                            &request_cookies,
-                            private_key.as_deref(),
-                        );
+                        } = if coalesced {
+                            store.lookup(
+                                &base_key,
+                                &request_headers,
+                                &request_cookies,
+                                private_key.as_deref(),
+                            )
+                        } else {
+                            // Leader never completed. Stop coalescing and treat
+                            // this as a normal miss that fetches from upstream.
+                            LookupOutcome {
+                                entry: None,
+                                stats,
+                                items: 0,
+                                had_expired: false,
+                            }
+                        };
                         if let Some((entry, _, _)) = retry_lookup {
                             let scope = entry.scope;
                             report(

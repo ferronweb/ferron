@@ -372,6 +372,49 @@ fn get_or_build_retries_failed_builds() {
 }
 
 #[test]
+fn coalesce_timeout_defaults_and_parses() {
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_core::config::{
+        ServerConfigurationBlockBuilder, ServerConfigurationDirectiveEntry,
+        ServerConfigurationValue,
+    };
+
+    fn layered_config(coalesce_timeout: Option<u64>) -> LayeredConfiguration {
+        let mut builder = ServerConfigurationBlockBuilder::new();
+        if let Some(secs) = coalesce_timeout {
+            builder = builder.directive(
+                "coalesce_timeout",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::Number(secs as i64, None)],
+                    children: None,
+                    span: None,
+                },
+            );
+        }
+        let block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block("cache", Vec::<String>::new(), builder.build())
+            .build();
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(block));
+        layered
+    }
+
+    let config = super::parse_cache_config(&layered_config(None));
+    assert_eq!(
+        config.coalesce_timeout,
+        std::time::Duration::from_secs(5),
+        "coalesce_timeout must default to 5 seconds"
+    );
+
+    let config = super::parse_cache_config(&layered_config(Some(2)));
+    assert_eq!(
+        config.coalesce_timeout,
+        std::time::Duration::from_secs(2),
+        "coalesce_timeout must parse integer seconds"
+    );
+}
+
+#[test]
 fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
     use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::ServerConfigurationBlockBuilder;

@@ -232,6 +232,17 @@ fn register_cache_stale_directives(registry: &mut ferron_core::directives::Direc
                 subblock_link: None,
             },
             DirectiveSubblock::custom("http_cache"),
+        )
+        .register(
+            Directive {
+                name: "coalesce_timeout",
+                usage: "coalesce_timeout <seconds>",
+                description: "This directive sets how long a coalesced request waits for the in-flight fetch leader before fetching upstream itself.",
+                applicable_protocols: Some(&["http"]),
+                global_only: false,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("http_cache"),
         );
 }
 

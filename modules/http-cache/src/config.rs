@@ -7,6 +7,7 @@ use ferron_core::config::ServerConfigurationBlock;
 pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;
 pub const DEFAULT_MAX_CACHE_AGE_SECS: u64 = 300;
+pub const DEFAULT_COALESCE_TIMEOUT_SECS: u64 = 5;
 
 /// Identifies which cache store a request belongs to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -57,6 +58,9 @@ pub struct CacheConfig {
     pub emit_litespeed_headers: bool,
     pub enable_stale_while_revalidate: bool,
     pub enable_stale_if_error: bool,
+    /// How long a singleflight follower waits for the leader before it stops
+    /// coalescing and fetches from the upstream itself.
+    pub coalesce_timeout: std::time::Duration,
     pub vary_headers: Vec<HeaderName>,
     pub vary_cookies: Vec<String>,
     pub ignored_store_headers: Vec<HeaderName>,
@@ -80,6 +84,7 @@ impl Default for CacheConfig {
             emit_litespeed_headers: false,
             enable_stale_while_revalidate: true,
             enable_stale_if_error: true,
+            coalesce_timeout: std::time::Duration::from_secs(DEFAULT_COALESCE_TIMEOUT_SECS),
             vary_headers: Vec::new(),
             vary_cookies: Vec::new(),
             ignored_store_headers: Vec::new(),
@@ -107,6 +112,11 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
     let enable_stale_while_revalidate =
         get_nested_bool(configuration, "enable_stale_while_revalidate", true);
     let enable_stale_if_error = get_nested_bool(configuration, "enable_stale_if_error", true);
+    let coalesce_timeout = std::time::Duration::from_secs(get_nested_non_negative_usize(
+        configuration,
+        "coalesce_timeout",
+        DEFAULT_COALESCE_TIMEOUT_SECS as usize,
+    ) as u64);
 
     let vary_headers = collect_header_names(configuration, "vary");
     let vary_cookies = collect_string_values(configuration, "vary_cookies");
@@ -124,6 +134,7 @@ pub fn parse_cache_config(configuration: &LayeredConfiguration) -> CacheConfig {
         emit_litespeed_headers,
         enable_stale_while_revalidate,
         enable_stale_if_error,
+        coalesce_timeout,
         vary_headers,
         vary_cookies,
         ignored_store_headers,

@@ -18,6 +18,9 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "vary",
     "ignore",
     "ignore_request_cache_control",
+    "enable_stale_while_revalidate",
+    "enable_stale_if_error",
+    "coalesce_timeout",
     "zone",
     "max_entries",
 ];
@@ -160,6 +163,12 @@ fn validate_cache_block(
     if let Some(entries) = block.directives.get("max_response_size") {
         for entry in entries {
             validate_single_non_negative_integer(entry, "max_response_size")?;
+        }
+    }
+
+    if let Some(entries) = block.directives.get("coalesce_timeout") {
+        for entry in entries {
+            validate_single_non_negative_integer(entry, "coalesce_timeout")?;
         }
     }
 
