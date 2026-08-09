@@ -1544,10 +1544,19 @@ async fn test_cache_no_cache_triggers_revalidation() {
     );
 }
 
-/// Test stale-while-revalidate behavior
+/// Test stale-while-revalidate behavior.
+///
+/// After the entry expires, a concurrent follower is served the stale body
+/// while the leader revalidates upstream and receives the fresh body (F19).
 #[tokio::test]
 async fn test_cache_stale_while_revalidate() {
     let ctx = CacheRevalidationTestContext::new("swr").await;
+    let backend_port = ctx
+        ._backend
+        .get_host_port_ipv4(ContainerPort::Tcp(3000))
+        .await
+        .unwrap();
+    let backend = reqwest::Client::new();
 
     // First request: cache miss, stores response with max-age=1, stale-while-revalidate=60
     let resp = ctx.get("/cache-swr?id=swr-test").await;
@@ -1565,37 +1574,83 @@ async fn test_cache_stale_while_revalidate() {
     // Wait for the entry to expire (max-age=1s)
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    // Second request: entry is stale but within SWR window
-    // Should serve stale content immediately
-    let resp = ctx.get("/cache-swr?id=swr-test").await;
-    assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    let cache_status = resp
+    // Bump the version to v2 and make the next upstream fetch slow, so the
+    // leader stays in flight while a concurrent follower observes the stale
+    // entry.
+    backend
+        .post(format!(
+            "http://localhost:{}/cache-swr/update?id=swr-test",
+            backend_port
+        ))
+        .send()
+        .await
+        .unwrap();
+    backend
+        .post(format!(
+            "http://localhost:{}/cache-swr/slow?id=swr-test",
+            backend_port
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    // Fire two concurrent requests. One becomes the leader and revalidates
+    // with the backend (v2), the other becomes a follower and is served the
+    // stale entry (v1) while the leader is in flight.
+    let (leader, follower) = tokio::join!(
+        ctx.get("/cache-swr?id=swr-test"),
+        ctx.get("/cache-swr?id=swr-test")
+    );
+    assert_eq!(leader.status(), reqwest::StatusCode::OK);
+    assert_eq!(follower.status(), reqwest::StatusCode::OK);
+
+    let leader_version = leader
         .headers()
-        .get("X-LiteSpeed-Cache")
-        .expect("X-LiteSpeed-Cache header missing")
+        .get("X-Backend-Version")
+        .unwrap()
         .to_str()
         .unwrap()
         .to_string();
-    assert_eq!(cache_status, "hit", "SWR should serve stale as hit");
+    let follower_version = follower
+        .headers()
+        .get("X-Backend-Version")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
-    // Verify Cache-Status header contains stale-while-revalidate detail
-    let cache_status_header = resp
+    let mut versions = vec![leader_version, follower_version];
+    versions.sort();
+    assert_eq!(
+        versions,
+        vec!["1".to_string(), "2".to_string()],
+        "leader must receive the fresh response and the follower the stale one"
+    );
+
+    let leader_status = leader
         .headers()
         .get("Cache-Status")
         .unwrap()
         .to_str()
         .unwrap()
         .to_string();
-    assert!(
-        cache_status_header.contains("stale-while-revalidate"),
-        "Cache-Status should indicate stale-while-revalidate, got: {}",
-        cache_status_header
-    );
+    let follower_status = follower
+        .headers()
+        .get("Cache-Status")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
-    assert_eq!(
-        resp.text().await.unwrap(),
-        "swr-v1",
-        "SWR should return stale content"
+    assert!(
+        leader_status.contains("revalidated"),
+        "leader Cache-Status should be revalidated, got: {}",
+        leader_status
+    );
+    assert!(
+        follower_status.contains("stale-while-revalidate"),
+        "follower Cache-Status should be stale-while-revalidate, got: {}",
+        follower_status
     );
 }
 

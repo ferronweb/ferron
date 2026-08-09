@@ -360,6 +360,8 @@ When Ferron serves a stale response via this mechanism, the `Cache-Status` respo
 Cache-Status: FerronCache; hit; detail=stale-while-revalidate,public; age=120
 ```
 
+The leader does not receive the stale entry. It receives the fresh response it just stored, labeled `detail=revalidated` in `Cache-Status`. Concurrent followers receive the stale entry labeled `detail=stale-while-revalidate`.
+
 #### Interaction with `must-revalidate` and `proxy-revalidate`
 
 Per RFC 9111, responses with `must-revalidate` or `proxy-revalidate` directives (or `s-maxage`, which implies `proxy-revalidate`) never serve stale. This applies even within a `stale-while-revalidate` window. When either directive is present, Ferron treats the entry as strictly fresh-or-miss. It either revalidates or returns a miss rather than serving stale content.

@@ -103,6 +103,7 @@ app.post("/cache-etag/update", express.json(), (req, res) => {
 // Cache stale-while-revalidate test endpoints
 const swrVersions = {};
 const swrFetchCounts = {};
+const swrSlowMode = {};
 
 app.get("/cache-swr", (req, res) => {
   const id = req.query.id || "default";
@@ -110,17 +111,24 @@ app.get("/cache-swr", (req, res) => {
   const fetchCount = (swrFetchCounts[id] || 0) + 1;
   swrFetchCounts[id] = fetchCount;
 
-  // First fetch: set error flag so subsequent requests fail until version bumped
-  if (fetchCount === 1) {
-    swrFetchCounts[id] = 1;
+  const send = () => {
+    res
+      .status(200)
+      .set("Cache-Control", "public, max-age=1, stale-while-revalidate=60")
+      .set("X-Backend-Version", String(version))
+      .set("X-Backend-Fetch-Count", String(fetchCount))
+      .send(`swr-v${version}`);
+  };
+
+  // One-shot delay so a revalidating leader stays in flight long enough for a
+  // concurrent follower to observe the stale entry.
+  if (swrSlowMode[id]) {
+    swrSlowMode[id] = false;
+    setTimeout(send, 1500);
+    return;
   }
 
-  res
-    .status(200)
-    .set("Cache-Control", "public, max-age=1, stale-while-revalidate=60")
-    .set("X-Backend-Version", String(version))
-    .set("X-Backend-Fetch-Count", String(fetchCount))
-    .send(`swr-v${version}`);
+  send();
 });
 
 app.post("/cache-swr/update", express.json(), (req, res) => {
@@ -128,6 +136,12 @@ app.post("/cache-swr/update", express.json(), (req, res) => {
   swrVersions[id] = (swrVersions[id] || 1) + 1;
   swrFetchCounts[id] = 0;
   res.send(`swr updated to v${swrVersions[id]}`);
+});
+
+app.post("/cache-swr/slow", express.json(), (req, res) => {
+  const id = req.query.id || "default";
+  swrSlowMode[id] = true;
+  res.send(`swr slow mode enabled for ${id}`);
 });
 
 // Cache stale-if-error test endpoints

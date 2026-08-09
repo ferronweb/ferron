@@ -1085,29 +1085,36 @@ impl Stage<HttpContext> for HttpCacheStage {
                     );
 
                     if let LookupResult::StaleWhileRevalidate {
-                        entry,
                         scope: stale_scope,
                         items: stale_items,
                         ..
                     } = &state.lookup_result
                     {
-                        ctx.res = Some(if entry.body.is_none() {
-                            HttpResponse::BuiltinError(
-                                entry.status.as_u16(),
-                                Some(entry.headers.clone()),
-                            )
-                        } else {
-                            HttpResponse::Custom(serve(
-                                (**entry).clone(),
-                                ServedState::StaleWhileRevalidate,
-                                state.head_only,
-                                state.config.emit_litespeed_headers,
-                            )?)
-                        });
+                        // This request is the SWR leader: it revalidated the
+                        // entry with the upstream and stored the fresh
+                        // response. Serve the fresh response to the leader
+                        // instead of the stale entry it triggered the
+                        // revalidation for (F19).
+                        annotate_response_headers(
+                            match &mut outgoing_response {
+                                HttpResponse::Custom(r) => r.headers_mut(),
+                                HttpResponse::BuiltinError(_, Some(h)) => h,
+                                _ => unreachable!(),
+                            },
+                            CacheHeaderState::Revalidated,
+                            state.config.emit_litespeed_headers,
+                        );
+                        ctx.res = Some(outgoing_response);
 
                         emit_eviction_metrics(ctx, &state.zone_id, stats);
                         emit_store_metric(ctx, &state.zone_id, scope, status.as_u16());
-                        emit_request_metric(ctx, &state.zone_id, "hit", *stale_scope, *stale_items);
+                        emit_request_metric(
+                            ctx,
+                            &state.zone_id,
+                            "revalidated",
+                            *stale_scope,
+                            *stale_items,
+                        );
                         return Ok(());
                     }
 
