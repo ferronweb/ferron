@@ -657,6 +657,78 @@ fn complete_fetch_notifies_waiters() {
 }
 
 #[tokio::test]
+async fn vary_variants_have_distinct_inflight_keys() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let store = Arc::new(CacheStore::new(4));
+    let base_key = "https://example.com/vary";
+    let cookies = AHashMap::default();
+
+    let ae = HeaderName::from_static("accept-encoding");
+    let vary = VaryRule {
+        header_names: vec![ae.clone()],
+        cookie_names: Vec::new(),
+        value: None,
+    };
+
+    let gzip_headers = request_headers(&[(&ae, "gzip")]);
+    let br_headers = request_headers(&[(&ae, "br")]);
+
+    store.insert_with_request(
+        stored_entry(base_key, CacheScope::Public, "gzip-body", vary.clone()),
+        None,
+        &gzip_headers,
+        &cookies,
+    );
+    store.insert_with_request(
+        stored_entry(base_key, CacheScope::Public, "br-body", vary.clone()),
+        None,
+        &br_headers,
+        &cookies,
+    );
+
+    let gzip_key = store
+        .primary_candidate_key(base_key, &gzip_headers, &cookies, None)
+        .expect("gzip candidate key");
+    let br_key = store
+        .primary_candidate_key(base_key, &br_headers, &cookies, None)
+        .expect("br candidate key");
+    assert_ne!(
+        gzip_key, br_key,
+        "distinct vary variants must map to distinct entry keys"
+    );
+
+    let (is_leader_gzip, _) = store.begin_fetch(&gzip_key);
+    assert!(is_leader_gzip);
+    let (is_leader_br, br_notify) = store.begin_fetch(&br_key);
+    assert!(
+        is_leader_br,
+        "variant B must get its own in-flight slot, not coalesce onto variant A"
+    );
+
+    let fired = Arc::new(AtomicBool::new(false));
+    let fired_clone = fired.clone();
+    let handle = std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            br_notify.notified().await;
+            fired_clone.store(true, Ordering::SeqCst);
+        });
+    });
+
+    std::thread::sleep(Duration::from_millis(50));
+    store.complete_fetch(&gzip_key);
+    assert!(
+        !handle.is_finished(),
+        "variant B follower must not be woken by variant A's completion"
+    );
+    store.complete_fetch(&br_key);
+    handle.join().unwrap();
+
+    assert!(fired.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
 async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 

@@ -27,6 +27,48 @@ pub use self::types::{
 /// arbitrary `Vary` combinations cannot grow it without limit.
 const MAX_VARIANTS_PER_BASE: usize = 64;
 
+/// Build the candidate entry keys for a request under a set of registered
+/// variants, in lookup order: private variants (when a private key is present)
+/// first, then public ones, each in insertion order.
+fn build_candidate_keys(
+    base_key: &str,
+    private_key: Option<&str>,
+    headers: &HeaderMap,
+    cookies: &AHashMap<String, String>,
+    variants: &[StoredVariant],
+) -> Vec<String> {
+    let mut candidate_keys = Vec::with_capacity(variants.len());
+    if let Some(private_key) = private_key {
+        for variant in variants
+            .iter()
+            .filter(|variant| variant.scope == CacheScope::Private)
+        {
+            candidate_keys.push(build_entry_key(
+                base_key,
+                variant.scope,
+                Some(private_key),
+                &variant.vary,
+                headers,
+                cookies,
+            ));
+        }
+    }
+    for variant in variants
+        .iter()
+        .filter(|variant| variant.scope == CacheScope::Public)
+    {
+        candidate_keys.push(build_entry_key(
+            base_key,
+            variant.scope,
+            None,
+            &variant.vary,
+            headers,
+            cookies,
+        ));
+    }
+    candidate_keys
+}
+
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
     variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
@@ -146,35 +188,8 @@ impl CacheStore {
         let variants = variants.value().clone();
         let has_variants = true;
 
-        let mut candidate_keys = Vec::with_capacity(variants.len());
-        if let Some(private_key) = private_key {
-            for variant in variants
-                .iter()
-                .filter(|variant| variant.scope == CacheScope::Private)
-            {
-                candidate_keys.push(build_entry_key(
-                    base_key,
-                    variant.scope,
-                    Some(private_key),
-                    &variant.vary,
-                    headers,
-                    cookies,
-                ));
-            }
-        }
-        for variant in variants
-            .iter()
-            .filter(|variant| variant.scope == CacheScope::Public)
-        {
-            candidate_keys.push(build_entry_key(
-                base_key,
-                variant.scope,
-                None,
-                &variant.vary,
-                headers,
-                cookies,
-            ));
-        }
+        let candidate_keys =
+            build_candidate_keys(base_key, private_key, headers, cookies, &variants);
 
         // First pass: look for fresh entries
         for key in &candidate_keys {
@@ -245,6 +260,25 @@ impl CacheStore {
             items: self.entries.len(),
             had_expired: has_variants,
         }
+    }
+
+    /// Return the first candidate entry key for `base_key` under this
+    /// request's scope/vary/private context, matching `lookup`'s candidate
+    /// ordering (private variants before public ones). Singleflight coalescing
+    /// keys on this so that distinct vary variants of the same URL do not
+    /// share an in-flight upstream fetch.
+    #[inline]
+    pub fn primary_candidate_key(
+        &self,
+        base_key: &str,
+        headers: &HeaderMap,
+        cookies: &AHashMap<String, String>,
+        private_key: Option<&str>,
+    ) -> Option<String> {
+        let variants = self.variants_by_base.get(base_key)?;
+        build_candidate_keys(base_key, private_key, headers, cookies, variants.value())
+            .into_iter()
+            .next()
     }
 
     #[inline]

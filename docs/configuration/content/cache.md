@@ -346,6 +346,8 @@ When a revalidation returns `304 Not Modified`, Ferron updates the stored entry.
 > [!note]
 > Ferron 3 does not have an internal route invocation mechanism, so background revalidation is not supported. `stale-while-revalidate` always involves a synchronous upstream request for the leader, and followers receive the stale response.
 
+Ferron coordinates concurrent upstream fetches with a singleflight mechanism: when several requests need the same entry, only one request (the leader) contacts the upstream, and the others wait for it. The singleflight lock keys on the full entry key, which includes the scope, `Vary` values, and private key, not on the URL alone. This way two requests that map to different variants of the same URL each fetch their own copy instead of sharing one leader's response.
+
 The `stale-while-revalidate` duration comes from the origin `Cache-Control` header. For example:
 
 ```http

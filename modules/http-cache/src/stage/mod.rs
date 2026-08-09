@@ -466,12 +466,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                     }
                 } else if let crate::store::LookupHit::StaleWhileRevalidate = hit_kind {
                     if config.enable_stale_while_revalidate {
-                        let (is_leader, _notify) = store.begin_fetch(&base_key);
+                        let (is_leader, _notify) = store.begin_fetch(&cache_key);
 
                         LookupResult::StaleWhileRevalidate {
                             entry: Box::new(entry),
                             stats,
-                            inflight_key: is_leader.then_some(base_key.clone()),
+                            inflight_key: is_leader.then_some(cache_key.clone()),
                             scope: Some(scope),
                             items,
                         }
@@ -522,7 +522,15 @@ impl Stage<HttpContext> for HttpCacheStage {
             } else {
                 if had_expired {
                     let coalesce_start = std::time::Instant::now();
-                    let (is_leader, notify) = store.begin_fetch(&base_key);
+                    let coalesce_key = store
+                        .primary_candidate_key(
+                            &base_key,
+                            &request_headers,
+                            &request_cookies,
+                            private_key.as_deref(),
+                        )
+                        .unwrap_or_else(|| base_key.clone());
+                    let (is_leader, notify) = store.begin_fetch(&coalesce_key);
 
                     if !is_leader {
                         notify.notified().await;
@@ -584,7 +592,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     } else {
                         LookupResult::Miss {
                             stats,
-                            inflight_key: Some(base_key.clone()),
+                            inflight_key: Some(coalesce_key.clone()),
                         }
                     }
                 } else {
