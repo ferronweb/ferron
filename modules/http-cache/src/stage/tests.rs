@@ -48,6 +48,162 @@ fn parses_private_key_from_cookies() {
 }
 
 #[test]
+fn client_conditionals_if_none_match() {
+    use crate::policy::CacheScope;
+    use crate::store::LookupEntry;
+    use http::{HeaderValue, Method};
+    use std::time::Duration;
+
+    fn entry() -> LookupEntry {
+        LookupEntry {
+            scope: CacheScope::Public,
+            status: http::StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: None,
+            lsc_cookies: Vec::new(),
+            age: Duration::from_secs(0),
+            etag: Some(HeaderValue::from_static("\"v1\"")),
+            last_modified: None,
+            stale_if_error: None,
+            must_revalidate: false,
+            ttl: Duration::from_secs(60),
+        }
+    }
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::IF_NONE_MATCH, HeaderValue::from_static("\"v1\""));
+    assert!(client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::IF_NONE_MATCH,
+        HeaderValue::from_static("\"v2\", \"v1\""),
+    );
+    assert!(client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::IF_NONE_MATCH, HeaderValue::from_static("*"));
+    assert!(client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::IF_NONE_MATCH, HeaderValue::from_static("W/\"v1\""));
+    assert!(client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::IF_NONE_MATCH, HeaderValue::from_static("\"v2\""));
+    assert!(!client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::IF_NONE_MATCH, HeaderValue::from_static("\"v9\""));
+    headers.insert(
+        header::IF_MODIFIED_SINCE,
+        HeaderValue::from_static("Thu, 22 Oct 2015 07:28:00 GMT"),
+    );
+    // If-None-Match takes precedence: no match means no 304, even though
+    // If-Modified-Since alone would have matched.
+    let mut matching = entry();
+    matching.last_modified = Some(HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"));
+    assert!(!client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        matching.etag.as_ref(),
+        matching.last_modified.as_ref(),
+    ));
+}
+
+#[test]
+fn client_conditionals_if_modified_since() {
+    use http::{HeaderValue, Method};
+    use std::time::Duration;
+
+    use crate::policy::CacheScope;
+    use crate::store::LookupEntry;
+
+    fn entry() -> LookupEntry {
+        LookupEntry {
+            scope: CacheScope::Public,
+            status: http::StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: None,
+            lsc_cookies: Vec::new(),
+            age: Duration::from_secs(0),
+            etag: None,
+            last_modified: Some(HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT")),
+            stale_if_error: None,
+            must_revalidate: false,
+            ttl: Duration::from_secs(60),
+        }
+    }
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::IF_MODIFIED_SINCE,
+        HeaderValue::from_static("Thu, 22 Oct 2015 07:28:00 GMT"),
+    );
+    assert!(client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::IF_MODIFIED_SINCE,
+        HeaderValue::from_static("Tue, 20 Oct 2015 07:28:00 GMT"),
+    );
+    assert!(!client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    // If-Modified-Since applies only to GET and HEAD.
+    let headers = HeaderMap::new();
+    assert!(!client_conditionals_indicate_not_modified(
+        &Method::POST,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+
+    // No conditional headers: full representation.
+    let headers = HeaderMap::new();
+    assert!(!client_conditionals_indicate_not_modified(
+        &Method::GET,
+        &headers,
+        entry().etag.as_ref(),
+        entry().last_modified.as_ref(),
+    ));
+}
+
+#[test]
 fn report_emits_exactly_one_request_metric_per_outcome() {
     use std::sync::Mutex;
 
@@ -274,6 +430,32 @@ fn propagation_paths_map_selectors_and_deduplicate() {
         super::purge::collect_propagation_paths(&operations),
         vec!["*", "/a", "tag=v1", "/b?x=1"]
     );
+}
+
+#[test]
+fn vary_rule_ignores_conditional_and_range_headers() {
+    use super::key::build_vary_rule;
+
+    let mut response_headers = http::HeaderMap::new();
+    response_headers.insert(
+        http::header::VARY,
+        http::HeaderValue::from_static(
+            "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range",
+        ),
+    );
+
+    let config = crate::config::CacheConfig::default();
+    let rule = build_vary_rule(
+        &response_headers,
+        &config,
+        &crate::lscache::LiteSpeedVary::default(),
+    )
+    .unwrap()
+    .expect("a vary rule should be built");
+
+    assert_eq!(rule.header_names.len(), 1, "only Accept-Encoding survives");
+    assert_eq!(rule.header_names[0].as_str(), "accept-encoding");
+    assert!(rule.cookie_names.is_empty());
 }
 
 #[test]

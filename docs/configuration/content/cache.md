@@ -155,6 +155,8 @@ example.com {
 - `206 Partial Content` responses are cacheable by default, matching the RFC 9111 §3.2 status list. Requests that carry a `Range` header bypass the cache entirely.
 - Built-in error responses generated after the main HTTP pipeline are not currently stored.
 
+Ferron selects a stored variant by its scope plus the request header and cookie dimensions declared in the origin `Vary` header, the `X-LiteSpeed-Vary` header, and the `vary` / `vary_cookies` directives. The conditional and range request headers (`If-Match`, `If-Modified-Since`, `If-None-Match`, `If-Range`, `If-Unmodified-Since`, `Range`) are never variant dimensions, even when the origin lists them in `Vary`. Ferron evaluates those headers against the stored validators at serve time, so a client conditional request still hits the cache instead of fragmenting it by entity-tag value.
+
 Ferron determines the freshness lifetime from the origin response using the directive order defined in RFC 9111 §4.2.1. For a public response, Ferron uses the first applicable directive in this order:
 
 1. `s-maxage`
@@ -178,6 +180,15 @@ Ferron honors the request `Cache-Control` directives defined in RFC 9111 §5.2.1
 - `no-transform`: Ferron accepts the directive but it has no effect, because Ferron never transforms stored responses.
 
 These directives apply unless `ignore_request_cache_control` is enabled. Response directives such as `max-age=0` described in [Stale-while-revalidate](#stale-while-revalidate) and revalidation behavior remain the same.
+
+### Client conditionals on a fresh hit
+
+When a cached entry is still fresh and the client sends conditional request headers, Ferron evaluates them against the stored validators and answers locally without contacting the origin:
+
+- `If-None-Match`: when the request entity tag matches the stored `ETag` (weak comparison per RFC 9110 §8.8.3.2, and `*` matching any stored entity tag), Ferron responds `304 Not Modified` with the stored validators and no body. `If-None-Match` takes precedence over `If-Modified-Since`.
+- `If-Modified-Since`: for `GET` and `HEAD`, when the stored `Last-Modified` is not newer than the request date, Ferron responds `304 Not Modified`.
+
+A non-matching conditional still gets the full `200` representation from the cache. Requests that carry a `Range` header bypass the cache entirely, so the origin handles byte ranges.
 
 ### Cache zones
 

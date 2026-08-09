@@ -124,6 +124,20 @@ fn truncate_cookie_value(value: &str) -> &str {
     }
 }
 
+/// Request headers that select validators or byte ranges at serve time rather
+/// than content-negotiated representations. Origins may list them in `Vary`
+/// (the static handler does), but a cache must not fragment stored variants on
+/// them: a fresh conditional request must still hit the stored representation
+/// so the cache can evaluate the conditionals locally (RFC 9111 §4.1).
+const NON_VARY_CONDITIONAL_HEADERS: &[HeaderName] = &[
+    http::header::IF_MATCH,
+    http::header::IF_MODIFIED_SINCE,
+    http::header::IF_NONE_MATCH,
+    http::header::IF_RANGE,
+    http::header::IF_UNMODIFIED_SINCE,
+    http::header::RANGE,
+];
+
 pub(super) fn build_vary_rule(
     headers: &HeaderMap,
     config: &CacheConfig,
@@ -144,7 +158,9 @@ pub(super) fn build_vary_rule(
             }
             let name = HeaderName::from_bytes(token.as_bytes())
                 .map_err(|error| PipelineError::custom(error.to_string()))?;
-            header_names.insert(name);
+            if !NON_VARY_CONDITIONAL_HEADERS.contains(&name) {
+                header_names.insert(name);
+            }
         }
     }
     let mut header_names: Vec<_> = header_names.into_iter().collect();

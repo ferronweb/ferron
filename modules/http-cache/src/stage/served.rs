@@ -3,7 +3,7 @@ use std::io;
 use bytes::Bytes;
 use ferron_core::pipeline::PipelineError;
 use http::header::{self, HeaderValue};
-use http::Response;
+use http::{Response, StatusCode};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, Full};
 
@@ -88,6 +88,37 @@ pub(super) fn serve(
         }
     }
 
+    *response.headers_mut() = headers;
+    Ok(response)
+}
+
+/// Assemble a local `304 Not Modified` response for a fresh cached entry when
+/// the client's conditional headers match the stored validators. RFC 9110
+/// §15.4.5: the 304 must carry the same validators (and other metadata) that
+/// a 200 response would, so the response reuses the stored headers without a
+/// body or content length.
+pub(super) fn serve_not_modified(
+    entry: LookupEntry,
+    emit_ls_headers: bool,
+) -> Result<Response<UnsyncBoxBody<Bytes, io::Error>>, PipelineError> {
+    let mut response = Response::new(
+        Empty::<Bytes>::new()
+            .map_err(|error| match error {})
+            .boxed_unsync(),
+    );
+    *response.status_mut() = StatusCode::NOT_MODIFIED;
+    let mut headers = entry.headers.clone();
+    remove_hop_by_hop_headers(&mut headers);
+    headers.remove(&LS_CACHE);
+    headers.remove(header::AGE);
+    headers.remove(CACHE_STATUS_HEADER);
+    headers.remove(header::SET_COOKIE);
+    headers.remove(header::CONTENT_LENGTH);
+    let annotation = CacheHeaderState::Hit {
+        scope: entry.scope,
+        age: entry.age,
+    };
+    annotate_response_headers(&mut headers, annotation, emit_ls_headers);
     *response.headers_mut() = headers;
     Ok(response)
 }

@@ -20,7 +20,7 @@ use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header;
-use http::{HeaderMap, Method, Response, StatusCode};
+use http::{HeaderMap, HeaderValue, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use typemap_rev::TypeMapKey;
 
@@ -50,7 +50,7 @@ use self::response_helpers::{
     response_from_parts, response_from_streaming_parts, strip_internal_headers, CacheHeaderState,
     CollectBodyOutcome,
 };
-use self::served::{serve, ServedState};
+use self::served::{serve, serve_not_modified, ServedState};
 
 const LOG_TARGET: &str = "ferron-http-cache";
 const CACHE_STATUS_HEADER: http::header::HeaderName =
@@ -482,6 +482,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                         }
                     }
                 } else {
+                    let client_conditionals_match = client_conditionals_indicate_not_modified(
+                        request.method(),
+                        &request_headers,
+                        entry.etag.as_ref(),
+                        entry.last_modified.as_ref(),
+                    );
                     report(
                         ctx,
                         CacheOutcome {
@@ -502,7 +508,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                             metric_result: None,
                         },
                     );
-                    ctx.res = Some(if entry.body.is_none() {
+                    ctx.res = Some(if client_conditionals_match {
+                        HttpResponse::Custom(serve_not_modified(
+                            entry,
+                            config.emit_litespeed_headers,
+                        )?)
+                    } else if entry.body.is_none() {
                         HttpResponse::BuiltinError(
                             entry.status.as_u16(),
                             Some(entry.headers.clone()),
@@ -1275,6 +1286,67 @@ fn active_config_generation() -> u64 {
         .reload_metrics
         .read()
         .active_generation
+}
+
+/// Whether a fresh cached representation satisfies the client's conditional
+/// request headers, so the cache can answer `304 Not Modified` locally
+/// without an upstream round trip.
+///
+/// Per RFC 9110 §13.1.1 and §13.1.3: `If-None-Match` takes precedence over
+/// `If-Modified-Since`, and both use weak validator comparison for GET and
+/// HEAD. When `If-None-Match` is present but does not match, the cache serves
+/// the full representation instead of evaluating `If-Modified-Since`.
+fn client_conditionals_indicate_not_modified(
+    method: &Method,
+    request_headers: &HeaderMap,
+    etag: Option<&HeaderValue>,
+    last_modified: Option<&HeaderValue>,
+) -> bool {
+    if let Some(if_none_match) = request_headers.get(header::IF_NONE_MATCH) {
+        let Ok(value) = if_none_match.to_str() else {
+            return false;
+        };
+        let Some(etag) = etag else {
+            return false;
+        };
+        let Ok(etag) = etag.to_str() else {
+            return false;
+        };
+        return if value.trim() == "*" {
+            true
+        } else {
+            value.split(',').any(|candidate| {
+                let candidate = candidate.trim();
+                !candidate.is_empty() && weak_etag_eq(candidate, etag)
+            })
+        };
+    }
+
+    if method == Method::GET || method == Method::HEAD {
+        if let Some(if_modified_since) = request_headers.get(header::IF_MODIFIED_SINCE) {
+            if let Some(last_modified) = last_modified {
+                if let (Ok(if_modified_since), Ok(last_modified)) =
+                    (if_modified_since.to_str(), last_modified.to_str())
+                {
+                    if let (Ok(since), Ok(modified)) = (
+                        httpdate::parse_http_date(if_modified_since),
+                        httpdate::parse_http_date(last_modified),
+                    ) {
+                        return modified <= since;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// RFC 9110 §8.8.3.2 weak entity-tag comparison: the `W/` prefix is ignored,
+/// and the opaque-tags must match character-for-character.
+fn weak_etag_eq(client_etag: &str, stored_etag: &str) -> bool {
+    let client_etag = client_etag.strip_prefix("W/").unwrap_or(client_etag);
+    let stored_etag = stored_etag.strip_prefix("W/").unwrap_or(stored_etag);
+    client_etag == stored_etag
 }
 
 /// Resolve the cache zone ID for a request.
