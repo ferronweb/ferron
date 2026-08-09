@@ -119,6 +119,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Describe behavior, not labels**: When documenting features, limitations, or configurations, explain what the system actually does. Prefer explicit, functional descriptions over terminology.
 - **Inline callouts over separate notes sections**: Use GFM alert syntax (`> [!note]`, `> [!warning]`, `> [!important]`, `> [!tip]`) for brief callouts inline with the relevant content. Do not use a separate `## Notes and troubleshooting` section at the end of a page.
 - **Linters as guidance**: Treat terminology linters (e.g., `woke`) as soft suggestions. Do not let them override clarity, break consistency, or trigger unnecessary diffs.
+- **Documentation scope**: Treat the documentation like a user-facing manual. Do not include internal implementation details or directly re-quote specifications.
 - **"Simple English"**: Write in clear, straightforward language that is easy to understand. Use [ASD-STE100](https://asd-ste100.org/) as a reference for writing simplified English.
 - **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text — not code blocks, inline code, directive names, or URLs):
   - **Active voice**: "Ferron reads the file", not "the file is read by the parser". Use "Ferron" or "the server" as the subject when the actor is the software.
