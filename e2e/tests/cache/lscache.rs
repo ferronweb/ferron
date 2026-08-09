@@ -267,6 +267,54 @@ async fn test_lscache_private_cache() {
 }
 
 #[tokio::test]
+async fn test_lscache_private_hit_rehydrates_lsc_cookie_but_not_origin_set_cookie() {
+    let ctx = LSCacheTestContext::new("private-cookie", BASE_CONFIG_EMIT_LS).await;
+
+    let headers = [
+        ("X-Test-Cache-Control", "private,max-age=60"),
+        ("X-Test-Body", "private-content"),
+        ("Cookie", "phpsessid=abcdef1234567890"),
+        ("X-Test-LSC-Cookie", "lsc_test=xyz"),
+        ("X-Test-Headers", "Set-Cookie: session=origin"),
+    ];
+
+    let resp = ctx.get_with_headers("/private-cookie-test", &headers).await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "miss");
+
+    let resp = ctx.get_with_headers("/private-cookie-test", &headers).await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit,private");
+
+    let set_cookies: Vec<&str> = resp
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect();
+    assert!(
+        set_cookies.iter().any(|cookie| *cookie == "lsc_test=xyz"),
+        "LSC-Cookie must rehydrate into Set-Cookie on a private hit: {set_cookies:?}"
+    );
+    assert!(
+        set_cookies.iter().all(|cookie| *cookie != "session=origin"),
+        "origin Set-Cookie must not be replayed from a private hit: {set_cookies:?}"
+    );
+}
+
+#[tokio::test]
 async fn test_lscache_no_store() {
     let ctx = LSCacheTestContext::new("no-store", BASE_CONFIG_EMIT_LS).await;
 

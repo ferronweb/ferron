@@ -510,7 +510,7 @@ fn strip_store_headers_removes_hop_by_hop_and_age() {
     headers.insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
     headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
 
-    strip_store_headers(&mut headers, CacheScope::Public);
+    strip_store_headers(&mut headers);
 
     assert!(!headers.contains_key(AGE));
     assert!(headers.contains_key(COOKIE));
@@ -526,16 +526,46 @@ fn strip_store_headers_removes_hop_by_hop_and_age() {
 }
 
 #[test]
-fn strip_store_headers_removes_set_cookie_only_for_shared_scope() {
-    let mut shared = HeaderMap::new();
-    shared.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
-    strip_store_headers(&mut shared, CacheScope::Public);
-    assert!(!shared.contains_key(SET_COOKIE));
+fn strip_store_headers_always_removes_set_cookie() {
+    let mut headers = HeaderMap::new();
+    headers.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
+    strip_store_headers(&mut headers);
+    assert!(!headers.contains_key(SET_COOKIE));
+}
 
-    let mut private = HeaderMap::new();
-    private.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
-    strip_store_headers(&mut private, CacheScope::Private);
-    assert!(private.contains_key(SET_COOKIE));
+#[test]
+fn stored_entry_keeps_lsc_cookies_but_drops_origin_set_cookie() {
+    let store = CacheStore::new(4);
+    let base_key = "https://example.com/private";
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    // Origin sends a session cookie plus LSCache cookie metadata.
+    let mut upstream_headers = HeaderMap::new();
+    upstream_headers.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
+    upstream_headers.insert(
+        HeaderName::from_static("lsc-cookie"),
+        HeaderValue::from_static("lsc_session=xyz"),
+    );
+    let lsc_cookies = crate::lscache::collect_lsc_cookies(&upstream_headers);
+    strip_store_headers(&mut upstream_headers);
+
+    let mut entry = stored_entry(
+        base_key,
+        CacheScope::Private,
+        "cached-body",
+        VaryRule::default(),
+    );
+    entry.headers = upstream_headers;
+    entry.lsc_cookies = lsc_cookies;
+    store.insert_with_request(entry, Some("user=1"), &headers, &cookies);
+
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup(base_key, &headers, &cookies, Some("user=1"));
+    let (lookup, _, _) = lookup.expect("expected private cache hit");
+    assert!(!lookup.headers.contains_key(SET_COOKIE));
+    assert_eq!(lookup.lsc_cookies.len(), 1);
+    assert_eq!(lookup.lsc_cookies[0].to_str().unwrap(), "lsc_session=xyz");
 }
 
 #[test]
@@ -1011,9 +1041,6 @@ fn update_entry_headers_replaces_not_appends_field_values() {
     entry
         .headers
         .append(CACHE_CONTROL, HeaderValue::from_static("max-age=999"));
-    entry
-        .headers
-        .append(http::header::SET_COOKIE, HeaderValue::from_static("a=1"));
     store.insert_with_request(entry, None, &headers, &cookies);
 
     let mut new_headers = HeaderMap::new();
@@ -1036,17 +1063,14 @@ fn update_entry_headers_replaces_not_appends_field_values() {
         .filter_map(|value| value.to_str().ok())
         .collect();
     assert_eq!(cache_control, vec!["public, max-age=120"]);
-    let set_cookie: Vec<&str> = updated
-        .get_all(http::header::SET_COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .collect();
-    assert_eq!(set_cookie, vec!["b=2"]);
+    // A 304 `Set-Cookie` must not merge into the stored entry (F10).
+    assert!(!updated.contains_key(http::header::SET_COOKIE));
 
     let LookupOutcome { entry: lookup, .. } =
         store.lookup("https://example.com/page", &headers, &cookies, None);
     let (lookup, _, _) = lookup.expect("expected cache hit");
     assert_eq!(lookup.ttl, Duration::from_secs(120));
+    assert!(!lookup.headers.contains_key(http::header::SET_COOKIE));
 }
 
 #[test]

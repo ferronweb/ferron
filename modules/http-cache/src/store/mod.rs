@@ -377,7 +377,8 @@ impl CacheStore {
     ) -> Option<HeaderMap> {
         let mut entry = self.entries.get(cache_key)?;
         let mut new_headers = new_headers;
-        remove_hop_by_hop_headers(&mut new_headers);
+        strip_store_headers(&mut new_headers);
+        entry.headers.remove(header::SET_COOKIE);
         merge_revalidation_headers(&mut entry.headers, new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();

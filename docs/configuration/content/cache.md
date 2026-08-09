@@ -330,7 +330,7 @@ Host: example.com
 
 Ferron removes hop-by-hop headers from responses before storing them and before serving a cached response. This follows RFC 9110 §7.6.1. The hop-by-hop headers are `Connection`, `Keep-Alive`, `Proxy-Authenticate`, `Proxy-Authorization`, `TE`, `Trailer`, `Transfer-Encoding`, and `Upgrade`. Ferron also removes any header field named in a `Connection` header value. For example, a response with `Connection: X-Custom` loses the `X-Custom` header too.
 
-Ferron also removes `Age` before storing a response, so a stored entry always carries a fresh age. For shared-cache responses, Ferron removes `Set-Cookie` before storing. When Ferron serves a cached response, it never replays a stored `Set-Cookie` verbatim; only `LSC-Cookie` metadata is converted back into `Set-Cookie` on a cache hit.
+Ferron also removes `Age` before storing a response, so a stored entry always carries a fresh age. Ferron removes `Set-Cookie` from every stored response, public or private, before storing it. The live response still delivers its own `Set-Cookie` to the client. When Ferron serves a cached response, it never replays a stored `Set-Cookie` verbatim; only `LSC-Cookie` metadata is converted back into `Set-Cookie` on a cache hit.
 
 ### Stale-while-revalidate
 

@@ -92,13 +92,14 @@ pub fn remove_hop_by_hop_headers(headers: &mut HeaderMap) {
 
 /// Strip headers from an upstream response before storing it.
 ///
-/// Removes hop-by-hop headers, the proxy-added `Age`, and `Set-Cookie` on
-/// shared (public) responses, which a shared cache must not store.
+/// Removes hop-by-hop headers, the proxy-added `Age`, and `Set-Cookie`. The
+/// origin's `Set-Cookie` must never be stored and replayed verbatim from a
+/// cache entry, even for private responses: stale session credentials would
+/// leak to whoever matches the entry later. LSCache cookie metadata (`LSC-Cookie`)
+/// is stored separately and rehydrated on serve.
 #[inline]
-pub fn strip_store_headers(headers: &mut HeaderMap, scope: CacheScope) {
+pub fn strip_store_headers(headers: &mut HeaderMap) {
     remove_hop_by_hop_headers(headers);
     headers.remove(header::AGE);
-    if scope == CacheScope::Public {
-        headers.remove(header::SET_COOKIE);
-    }
+    headers.remove(header::SET_COOKIE);
 }
