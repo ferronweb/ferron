@@ -24,9 +24,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             if let Some(entries) = logs.directives.get("export_batch_size") {
                 for entry in entries {
                     if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n < 1) {
-                        return Err(ConfigurationValidationError::from(format!(
-                            "Export batch size for OTLP logs cannot be smaller than 1"
-                        ))
+                        return Err(ConfigurationValidationError::from("Export batch size for OTLP logs cannot be smaller than 1".to_string())
                         .with_span(
                             entry.span.clone()
                         ));
@@ -57,9 +55,7 @@ impl ConfigurationValidator for OtlpObservabilityConfigurationValidator {
             if let Some(entries) = traces.directives.get("export_batch_size") {
                 for entry in entries {
                     if entry.get_value().and_then(|v| v.as_number()).is_some_and(|n| n < 1) {
-                        return Err(ConfigurationValidationError::from(format!(
-                            "Export batch size for OTLP logs cannot be smaller than 1"
-                        ))
+                        return Err(ConfigurationValidationError::from("Export batch size for OTLP logs cannot be smaller than 1".to_string())
                         .with_span(
                             entry.span.clone()
                         ));
