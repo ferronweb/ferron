@@ -378,7 +378,7 @@ How it works:
 
 1. A request triggers revalidation (for example, the cached entry has expired, or the client sent `Cache-Control: max-age=0`).
 2. Ferron contacts the upstream, which returns a 5xx status code.
-3. If a valid stale entry with `stale-if-error` exists, Ferron serves the stale response with a `Cache-Status` header containing `detail=stale-while-revalidate`.
+3. If a valid stale entry with `stale-if-error` exists, Ferron serves the stale response with a `Cache-Status` header containing `detail=stale-if-error`.
 4. If no stale entry exists or the `stale-if-error` window has elapsed, Ferron returns the 5xx error to the client.
 
 This gives resilience against transient backend failures by falling back to previously cached content.

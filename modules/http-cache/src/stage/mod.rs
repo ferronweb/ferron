@@ -21,7 +21,7 @@ use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
-use http_body_util::{BodyExt, Empty, Full};
+use http_body_util::{BodyExt, Full};
 use typemap_rev::TypeMapKey;
 
 use crate::config::{
@@ -29,7 +29,7 @@ use crate::config::{
 };
 use crate::lscache::{
     collect_lsc_cookies, parse_litespeed_cache_control, parse_litespeed_purge,
-    parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector, LS_CACHE,
+    parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector,
 };
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, satisfies_freshness_constraints, CacheScope,
@@ -872,51 +872,12 @@ impl Stage<HttpContext> for HttpCacheStage {
                     if !stale_entry.must_revalidate
                         && stale_entry.age <= stale_entry.ttl + sie_duration
                     {
-                        let stale_response = if let Some(body) = stale_entry.body {
-                            let mut builder = Response::builder().status(stale_entry.status);
-                            let mut headers = stale_entry.headers.clone();
-                            crate::store::remove_hop_by_hop_headers(&mut headers);
-                            headers.remove(&LS_CACHE);
-                            headers.remove(header::AGE);
-                            headers.remove(CACHE_STATUS_HEADER);
-                            headers.remove(header::SET_COOKIE);
-                            append_lsc_cookies_as_set_cookie(
-                                &mut headers,
-                                &stale_entry.lsc_cookies,
-                            );
-                            annotate_response_headers(
-                                &mut headers,
-                                CacheHeaderState::StaleWhileRevalidate {
-                                    scope: stale_entry.scope,
-                                    age: stale_entry.age,
-                                },
-                                state.config.emit_litespeed_headers,
-                            );
-                            for (name, value) in &headers {
-                                builder = builder.header(name, value);
-                            }
-                            let body = if state.head_only {
-                                Empty::<Bytes>::new()
-                                    .map_err(|error| match error {})
-                                    .boxed_unsync()
-                            } else {
-                                Full::new(body)
-                                    .map_err(|error: std::convert::Infallible| match error {})
-                                    .boxed_unsync()
-                            };
-                            builder
-                                .body(body)
-                                .map_err(|e| PipelineError::custom(e.to_string()))?
-                        } else {
-                            Response::builder()
-                                .status(stale_entry.status)
-                                .body(
-                                    Empty::<Bytes>::new()
-                                        .map_err(|error| match error {})
-                                        .boxed_unsync(),
-                                )
-                                .map_err(|e| PipelineError::custom(e.to_string()))?
-                        };
+                        let stale_response = serve(
+                            stale_entry.clone(),
+                            ServedState::StaleIfError,
+                            state.head_only,
+                            state.config.emit_litespeed_headers,
+                        )?;
 
                         report(
                             ctx,
@@ -1090,7 +1051,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &mut stored_headers,
                         &decision.no_cache_field_names,
                     );
-                    crate::store::strip_store_headers(&mut stored_headers, scope);
+                    crate::store::strip_store_headers(&mut stored_headers);
                     let etag = stored_headers.get(header::ETAG).cloned();
                     let last_modified = stored_headers.get(header::LAST_MODIFIED).cloned();
                     let stored_entry = StoredEntry {
@@ -1138,7 +1099,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         } else {
                             HttpResponse::Custom(serve(
                                 (**entry).clone(),
-                                ServedState::StaleIfError,
+                                ServedState::StaleWhileRevalidate,
                                 state.head_only,
                                 state.config.emit_litespeed_headers,
                             )?)

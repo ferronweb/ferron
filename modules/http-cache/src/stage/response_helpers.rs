@@ -19,6 +19,7 @@ pub(super) const CACHE_STATUS_HEADER: HeaderName = HeaderName::from_static("cach
 pub(super) enum CacheHeaderState<'a> {
     Hit { scope: CacheScope, age: Duration },
     StaleWhileRevalidate { scope: CacheScope, age: Duration },
+    StaleIfError { scope: CacheScope, age: Duration },
     Revalidated,
     Miss { stored: bool, detail: &'a str },
     Bypass { detail: &'a str },
@@ -79,6 +80,27 @@ pub(super) fn annotate_response_headers(
             }
             let mut value = String::with_capacity(70 + scope.as_str().len());
             value.push_str("FerronCache; hit; detail=stale-while-revalidate,");
+            value.push_str(scope.as_str());
+            value.push_str("; age=");
+            value.push_str(&age.as_secs().to_string());
+            if let Ok(value) = HeaderValue::from_str(&value) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+        }
+        CacheHeaderState::StaleIfError { scope, age } => {
+            if emit_ls_cache {
+                let ls_value = if scope == CacheScope::Private {
+                    "hit,private"
+                } else {
+                    "hit"
+                };
+                headers.insert(&LS_CACHE, HeaderValue::from_static(ls_value));
+            }
+            if let Ok(age_value) = HeaderValue::from_str(&age.as_secs().to_string()) {
+                headers.insert(header::AGE, age_value);
+            }
+            let mut value = String::with_capacity(60 + scope.as_str().len());
+            value.push_str("FerronCache; hit; detail=stale-if-error,");
             value.push_str(scope.as_str());
             value.push_str("; age=");
             value.push_str(&age.as_secs().to_string());

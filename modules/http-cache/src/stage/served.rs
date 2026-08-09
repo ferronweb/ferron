@@ -68,12 +68,14 @@ pub(super) fn serve(
             scope: entry.scope,
             age: entry.age,
         },
-        ServedState::StaleWhileRevalidate | ServedState::StaleIfError => {
-            CacheHeaderState::StaleWhileRevalidate {
-                scope: entry.scope,
-                age: entry.age,
-            }
-        }
+        ServedState::StaleWhileRevalidate => CacheHeaderState::StaleWhileRevalidate {
+            scope: entry.scope,
+            age: entry.age,
+        },
+        ServedState::StaleIfError => CacheHeaderState::StaleIfError {
+            scope: entry.scope,
+            age: entry.age,
+        },
         ServedState::Revalidated => CacheHeaderState::Revalidated,
     };
     annotate_response_headers(&mut headers, annotation, emit_ls_headers);
@@ -165,7 +167,8 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
-        assert!(status.contains("stale-while-revalidate"));
+        assert!(status.contains("stale-if-error"));
+        assert!(!status.contains("stale-while-revalidate"));
     }
 
     #[tokio::test]

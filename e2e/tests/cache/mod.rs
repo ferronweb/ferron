@@ -1648,7 +1648,7 @@ async fn test_cache_stale_if_error() {
         .to_string();
     assert_eq!(cache_status, "hit", "SIE should serve stale as hit");
 
-    // Verify Cache-Status header contains stale-while-revalidate detail (SIE reuses this variant)
+    // Verify Cache-Status header labels stale-if-error correctly (F25)
     let cache_status_header = resp
         .headers()
         .get("Cache-Status")
@@ -1657,8 +1657,13 @@ async fn test_cache_stale_if_error() {
         .unwrap()
         .to_string();
     assert!(
-        cache_status_header.contains("stale-while-revalidate"),
-        "Cache-Status should indicate stale-while-revalidate for SIE, got: {}",
+        cache_status_header.contains("stale-if-error"),
+        "Cache-Status should label stale-if-error, got: {}",
+        cache_status_header
+    );
+    assert!(
+        !cache_status_header.contains("stale-while-revalidate"),
+        "Cache-Status must not mislabel SIE as stale-while-revalidate, got: {}",
         cache_status_header
     );
 
