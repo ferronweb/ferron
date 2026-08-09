@@ -41,7 +41,7 @@ pub fn build_entry_key(
         key.push_str(cookie_name);
         key.push('=');
         if let Some(value) = cookies.get(cookie_name) {
-            key.push_str(value);
+            key.push_str(&normalize_key_value(value));
         }
     }
 
@@ -54,12 +54,81 @@ pub fn build_entry_key(
     key
 }
 
+/// Normalize a vary header or cookie value for cache-key embedding: trim the
+/// edges and collapse internal runs of whitespace into a single space, so
+/// equivalent representations that differ only in formatting share a key.
+pub fn normalize_key_value(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn header_values(headers: &HeaderMap, name: &HeaderName) -> String {
-    let mut values = Vec::new();
-    for value in headers.get_all(name) {
-        if let Ok(value) = value.to_str() {
-            values.push(value.to_string());
+    let mut values: Vec<String> = headers
+        .get_all(name)
+        .into_iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(normalize_key_value)
+        .collect();
+    values.sort_unstable();
+    values.join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use http::header::{HeaderName, ACCEPT_LANGUAGE};
+    use http::HeaderMap;
+
+    use crate::policy::CacheScope;
+
+    use super::{build_entry_key, normalize_key_value, VaryRule};
+
+    fn vary_on(headers: &[HeaderName]) -> VaryRule {
+        VaryRule {
+            header_names: headers.to_vec(),
+            cookie_names: Vec::new(),
+            value: None,
         }
     }
-    values.join(", ")
+
+    #[test]
+    fn header_values_collapse_whitespace_and_sort() {
+        let mut headers = HeaderMap::new();
+        headers.append(ACCEPT_LANGUAGE, "en  fr".parse().unwrap());
+        headers.append(ACCEPT_LANGUAGE, " de\tde".parse().unwrap());
+
+        let key = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[ACCEPT_LANGUAGE]),
+            &headers,
+            &Default::default(),
+        );
+
+        assert!(key.contains("h:accept-language=de de, en fr"), "{key}");
+    }
+
+    #[test]
+    fn header_value_trim_and_collapse() {
+        assert_eq!(normalize_key_value("  gzip\tbr  "), "gzip br");
+    }
+
+    #[test]
+    fn cookie_value_is_normalized_in_entry_key() {
+        let mut cookies: ahash::AHashMap<String, String> = Default::default();
+        cookies.insert("session".to_string(), "  abc\tdef  ".to_string());
+
+        let mut rule = vary_on(&[]);
+        rule.cookie_names.push("session".to_string());
+
+        let key = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &HeaderMap::new(),
+            &cookies,
+        );
+
+        assert!(key.contains("c:session=abc def"), "{key}");
+    }
 }

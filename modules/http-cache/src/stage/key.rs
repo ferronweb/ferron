@@ -89,7 +89,8 @@ pub(super) fn build_private_cache_key(
     for (name, value) in cookies {
         if is_private_cookie_name(name) && value.len() >= 16 {
             matched_private_cookie = true;
-            components.push(format!("cookie:{name}={}", truncate_cookie_value(value)));
+            let value = crate::store::normalize_key_value(value);
+            components.push(format!("cookie:{name}={}", truncate_cookie_value(&value)));
         }
     }
 
@@ -102,7 +103,8 @@ pub(super) fn build_private_cache_key(
                 .iter()
                 .any(|candidate| candidate.eq_ignore_ascii_case(name))
             {
-                components.push(format!("cookie:{name}={}", truncate_cookie_value(value)));
+                let value = crate::store::normalize_key_value(value);
+                components.push(format!("cookie:{name}={}", truncate_cookie_value(&value)));
             }
         }
     }

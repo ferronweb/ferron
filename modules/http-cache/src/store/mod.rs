@@ -18,6 +18,7 @@ use crate::lscache::PurgeOperation;
 use crate::policy::{recalculate_freshness, CacheScope};
 
 pub use self::key::build_entry_key;
+pub use self::key::normalize_key_value;
 pub use self::purge::{remove_hop_by_hop_headers, strip_store_headers};
 pub use self::types::{
     LookupEntry, LookupHit, LookupOutcome, StoreStats, StoredEntry, StoredVariant, VaryRule,
