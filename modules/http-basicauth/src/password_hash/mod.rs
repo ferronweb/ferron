@@ -90,11 +90,11 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
     let plain_bytes = plain.as_bytes();
     let mut ctx = self::argon2_sys::Argon2_Context {
         out: derived.as_mut_ptr(),
-        outlen: derived.len() as u32,
+        outlen: derived.len() as _,
         salt: salt.as_mut_ptr(),
-        saltlen: salt.len() as u32,
+        saltlen: salt.len() as _,
         pwd: plain_bytes.as_ptr() as *mut u8,
-        pwdlen: plain_bytes.len() as u32,
+        pwdlen: plain_bytes.len() as _,
         secret: std::ptr::null_mut(),
         secretlen: 0,
         ad: std::ptr::null_mut(),
@@ -103,7 +103,7 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
         m_cost,
         lanes: p_cost,
         threads: p_cost,
-        version,
+        version: version as _,
         allocate_cbk: None,
         free_cbk: None,
         flags: 0, // ARGON2_DEFAULT_FLAGS
@@ -124,8 +124,8 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
 fn parse_argon2_version(segment: &str) -> Option<u32> {
     let value = segment.strip_prefix("v=")?;
     match value.parse::<u32>().ok()? {
-        0x10 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_10),
-        0x13 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_13),
+        0x10 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_10 as _),
+        0x13 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_13 as _),
         _ => None,
     }
 }
