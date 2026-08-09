@@ -46,6 +46,16 @@ package-rpm target="" fips="false":
 package-windows target="" fips="false":
     powershell -ExecutionPolicy Bypass -File {{ if fips == "true" { "packaging/windows/package-fips.ps1" } else { "packaging/windows/package.ps1" } }} {{ target }}
 
+# Generate SBOMs and package them using `cargo cyclonedx`
+[unix]
+package-sbom target="" fips="false":
+    {{ if fips == "true" { "./packaging/sbom/package-fips.sh" } else { "./packaging/sbom/package.sh" } }} {{ target }}
+
+# Generate SBOMs and package them using `cargo cyclonedx`
+[windows]
+package-sbom target="" fips="false":
+    powershell -ExecutionPolicy Bypass -File {{ if fips == "true" { "packaging/sbom/package-fips.ps1" } else { "packaging/sbom/package.ps1" } }} {{ target }}
+
 # Build the installer for Linux
 [unix]
 installer:

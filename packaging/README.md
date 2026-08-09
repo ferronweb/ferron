@@ -36,6 +36,13 @@ RHEL/Fedora packages built with `rpmbuild`:
 - `ferron.service` — the shared systemd unit.
 - `package-docker.sh` — wrapper that runs the build inside a `fedora` container with `rpm-build` and `rpmdevtools`.
 
+## `sbom/`
+
+SBOMs (Software Bill of Materials) using CycloneDX (XML and JSON format), packaged into archives, platform-agnostic:
+
+- `package.sh` — Unix. Produces `dist/ferron-<version>-<triple>-sbom.tar.gz` (or `.zip` for Windows targets).
+- `package.ps1` — PowerShell equivalent, using 7-Zip (with a `Compress-Archive` fallback) for Windows targets.
+
 ## `windows/`
 
 Windows installer built with Inno Setup (Windows host only):

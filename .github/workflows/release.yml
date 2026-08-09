@@ -179,6 +179,12 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm bindgen-cli --force
 
+      - name: Install cargo-cyclonedx
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-cyclonedx --force
+
       - name: Build binaries (cross-build)
         if: matrix.cross-build == true && matrix.cross-rs != true
         shell: bash
@@ -229,6 +235,11 @@ jobs:
         run: |
           just package-windows ${{ matrix.target }}
 
+      - name: Generate SBOMs
+        shell: bash
+        run: |
+          just package-sbom ${{ matrix.target }}
+
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
         with:
@@ -244,9 +255,11 @@ jobs:
         run: |
           ssh ferron-servers "mkdir -p ferron3 || true"
           scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz
+          scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.tar.gz ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.tar.gz
 
           # Call the internal "deploy-ferron3" shell script
           ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.tar.gz"
 
       - name: Release Ferron on Ferron's servers (Windows)
         if: contains(matrix.target, 'windows')
@@ -254,10 +267,12 @@ jobs:
         run: |
           ssh ferron-servers "mkdir -p ferron3 || true"
           scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
+          scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.zip ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.zip
           scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe
 
           # Call the internal "deploy-ferron3" shell script
           ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.zip"
           ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe"
 
       - name: Release Ferron to GitHub (Non-Windows)
@@ -265,7 +280,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz"
+          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz,dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.tar.gz"
           bodyFile: "CHANGES-CURRENT"
           tag: "${{ env.FERRON_VERSION }}"
           commit: "3.x"
@@ -276,7 +291,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe,dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe,dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip,dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-sbom.zip"
           bodyFile: "CHANGES-CURRENT"
           tag: "${{ env.FERRON_VERSION }}"
           commit: "3.x"
