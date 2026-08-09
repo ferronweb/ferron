@@ -30,7 +30,8 @@ use crate::lscache::{
     parse_litespeed_tags, parse_litespeed_vary, PurgeOperation, PurgeSelector, LS_CACHE,
 };
 use crate::policy::{
-    evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
+    evaluate_response_policy, parse_request_policy, satisfies_freshness_constraints, CacheScope,
+    RequestCachePolicy,
 };
 use crate::store::{
     merge_revalidation_headers, CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry,
@@ -268,6 +269,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 allow_lookup: true,
                 allow_store: true,
                 reason: "eligible",
+                ..Default::default()
             }
         } else {
             parse_request_policy(&request_headers)
@@ -409,7 +411,9 @@ impl Stage<HttpContext> for HttpCacheStage {
             if let Some((entry, cache_key, hit_kind)) = lookup {
                 let scope = entry.scope;
 
-                if request_policy.reason == "request-revalidation" {
+                if request_policy.reason == "request-revalidation"
+                    || !satisfies_freshness_constraints(&request_policy, entry.age, entry.ttl)
+                {
                     emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                     LookupResult::Revalidate {
                         entry: Box::new(entry),
@@ -549,6 +553,40 @@ impl Stage<HttpContext> for HttpCacheStage {
         } else {
             LookupResult::Bypass
         };
+
+        if request_policy.only_if_cached && !matches!(lookup_result, LookupResult::Hit) {
+            report(
+                ctx,
+                CacheOutcome {
+                    result: "bypass",
+                    zone_id: &zone_id,
+                    key: &base_key,
+                    scope: None,
+                    items: None,
+                    stored: None,
+                    evictions: None,
+                    detail: Some("only-if-cached"),
+                    key_uri: None,
+                    key_method: None,
+                    bypass_reason: Some("request-only-if-cached"),
+                    evaluated_cookies: None,
+                    coalesced_wait_ms: None,
+                    mark_uncoalesced: true,
+                    metric_result: None,
+                },
+            );
+            let mut headers = HeaderMap::new();
+            if let Ok(value) = http::header::HeaderValue::from_str(
+                "FerronCache; fwd=bypass; detail=request-only-if-cached",
+            ) {
+                headers.insert(CACHE_STATUS_HEADER, value);
+            }
+            ctx.res = Some(HttpResponse::BuiltinError(
+                StatusCode::GATEWAY_TIMEOUT.as_u16(),
+                Some(headers),
+            ));
+            return Ok(false);
+        }
 
         let stop = match &lookup_result {
             LookupResult::Hit => true,

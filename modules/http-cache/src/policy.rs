@@ -25,6 +25,13 @@ impl CacheScope {
 pub struct RequestCachePolicy {
     pub allow_lookup: bool,
     pub allow_store: bool,
+    /// `max-age` request directive: the stored response must be at most this
+    /// old to be served without revalidation.
+    pub max_age: Option<Duration>,
+    /// `min-fresh` request directive: at least this much freshness must remain.
+    pub min_fresh: Option<Duration>,
+    /// `only-if-cached` request directive: do not contact the origin.
+    pub only_if_cached: bool,
     pub reason: &'static str,
 }
 
@@ -67,10 +74,48 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
 
+    let mut max_age = None;
+    let mut min_fresh = None;
+    let mut only_if_cached = false;
+
+    for part in cache_control.split(',') {
+        let directive = part.trim();
+        if directive.is_empty() {
+            continue;
+        }
+        let lower = directive.to_ascii_lowercase();
+        match lower.as_str() {
+            "only-if-cached" => only_if_cached = true,
+            // `no-transform` is accepted and has no effect: Ferron never
+            // transforms stored responses.
+            "no-transform" => {}
+            _ => {
+                if let Some((name, value)) = lower.split_once('=') {
+                    match name.trim() {
+                        "max-age" => {
+                            if let Ok(seconds) = value.trim().parse::<u64>() {
+                                max_age = Some(Duration::from_secs(seconds));
+                            }
+                        }
+                        "min-fresh" => {
+                            if let Ok(seconds) = value.trim().parse::<u64>() {
+                                min_fresh = Some(Duration::from_secs(seconds));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     if contains_token(cache_control, "no-store") {
         return RequestCachePolicy {
             allow_lookup: false,
             allow_store: false,
+            max_age,
+            min_fresh,
+            only_if_cached,
             reason: "request-no-store",
         };
     }
@@ -82,6 +127,9 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
         return RequestCachePolicy {
             allow_lookup: true,
             allow_store: true,
+            max_age,
+            min_fresh,
+            only_if_cached,
             reason: "request-revalidation",
         };
     }
@@ -89,8 +137,36 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
     RequestCachePolicy {
         allow_lookup: true,
         allow_store: true,
+        max_age,
+        min_fresh,
+        only_if_cached,
         reason: "eligible",
     }
+}
+
+/// Whether a stored response with the given age and TTL satisfies the request's
+/// `max-age` and `min-fresh` directives.
+///
+/// RFC 9111 §5.2.1.3 and §5.2.1.7: the cache must not use the stored response
+/// unless its age is at most `max-age` and at least `min-fresh` seconds of
+/// freshness remain.
+pub fn satisfies_freshness_constraints(
+    policy: &RequestCachePolicy,
+    age: Duration,
+    ttl: Duration,
+) -> bool {
+    if let Some(max_age) = policy.max_age {
+        if age > max_age {
+            return false;
+        }
+    }
+    if let Some(min_fresh) = policy.min_fresh {
+        let remaining = ttl.saturating_sub(age);
+        if remaining < min_fresh {
+            return false;
+        }
+    }
+    true
 }
 
 pub fn evaluate_response_policy(
@@ -1036,6 +1112,92 @@ mod tests {
         );
         assert!(decision.store);
         assert_eq!(decision.scope, Some(CacheScope::Public));
+    }
+
+    #[test]
+    fn request_parses_max_age_and_min_fresh() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("max-age=30, min-fresh=10"),
+        );
+        let policy = parse_request_policy(&headers);
+        assert!(policy.allow_lookup);
+        assert_eq!(policy.max_age, Some(Duration::from_secs(30)));
+        assert_eq!(policy.min_fresh, Some(Duration::from_secs(10)));
+        assert!(!policy.only_if_cached);
+        assert_eq!(policy.reason, "eligible");
+    }
+
+    #[test]
+    fn request_parses_only_if_cached() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("only-if-cached"),
+        );
+        let policy = parse_request_policy(&headers);
+        assert!(policy.allow_lookup);
+        assert!(policy.only_if_cached);
+    }
+
+    #[test]
+    fn request_no_transform_is_accepted() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-transform"),
+        );
+        let policy = parse_request_policy(&headers);
+        assert!(policy.allow_lookup);
+        assert!(policy.allow_store);
+    }
+
+    #[test]
+    fn satisfies_freshness_constraints_respects_max_age_and_min_fresh() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("max-age=30, min-fresh=10"),
+        );
+        let policy = parse_request_policy(&headers);
+        // age 20, ttl 60 -> remaining 40 >= 10 and age <= 30
+        assert!(satisfies_freshness_constraints(
+            &policy,
+            Duration::from_secs(20),
+            Duration::from_secs(60),
+        ));
+        // age 40 exceeds max-age=30
+        assert!(!satisfies_freshness_constraints(
+            &policy,
+            Duration::from_secs(40),
+            Duration::from_secs(60),
+        ));
+        // remaining 5 < min-fresh=10
+        assert!(!satisfies_freshness_constraints(
+            &policy,
+            Duration::from_secs(55),
+            Duration::from_secs(60),
+        ));
+    }
+
+    #[test]
+    fn satisfies_freshness_constraints_unconstrained_policy() {
+        let headers = HeaderMap::new();
+        let policy = parse_request_policy(&headers);
+        assert!(satisfies_freshness_constraints(
+            &policy,
+            Duration::from_secs(500),
+            Duration::from_secs(60),
+        ));
+    }
+
+    #[test]
+    fn max_age_zero_triggers_revalidation_reason() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=0"));
+        let policy = parse_request_policy(&headers);
+        assert_eq!(policy.reason, "request-revalidation");
     }
 
     #[test]

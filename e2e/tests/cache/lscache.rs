@@ -655,7 +655,10 @@ async fn test_lsc_cookie_to_set_cookie() {
 
 #[tokio::test]
 async fn test_lscache_s_maxage() {
-    let ctx = LSCacheTestContext::new("s-maxage", BASE_CONFIG_EMIT_LS).await;
+    // First-match freshness precedence (RFC 9111 §4.2.1) ignores the LS
+    // s-maxage when a standard max-age is present, so make the LS directive
+    // authoritative to exercise its expiry.
+    let ctx = LSCacheTestContext::new("s-maxage", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(

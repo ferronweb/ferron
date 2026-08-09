@@ -189,6 +189,165 @@ async fn test_cache_expiry() {
 }
 
 #[tokio::test]
+async fn test_cache_only_if_cached() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache true
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let url = format!(
+        "http://localhost:{}/test.txt",
+        container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap()
+    );
+
+    // Nothing cached yet: only-if-cached must yield 504 without contacting the origin.
+    let response = client
+        .get(&url)
+        .header("Cache-Control", "only-if-cached")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("bypass")
+    );
+
+    // Cache the resource normally.
+    let response = client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // only-if-cached now hits the fresh stored entry.
+    let response = client
+        .get(&url)
+        .header("Cache-Control", "only-if-cached")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_cache_request_max_age_revalidates() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache true
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let url = format!(
+        "http://localhost:{}/test.txt",
+        container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap()
+    );
+
+    let response = client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // max-age=0 forces revalidation while the stored entry is still fresh.
+    // Sleep so the rewritten file gets a new Last-Modified timestamp.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v2".as_bytes()).unwrap();
+    let response = client
+        .get(&url)
+        .header("Cache-Control", "max-age=0")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    // The origin answers 200, so the refreshed entry replaces the stored one.
+    assert_eq!(&*response.bytes().await.unwrap(), b"v2");
+
+    // A plain request within the TTL now serves the refreshed entry from cache.
+    let response = client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v2");
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

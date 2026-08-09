@@ -25,6 +25,7 @@
 - **`request.uri.query.<param>` variables** — the `request.uri.query.<param>` variables are now available for string interpolations, so to not manually create a regular expression for extracting query parameter value from a query string.
 - **`request.cookie.<name>` variables** — the `request.cookie.<name>` variables are now available for string interpolations, so to not manually extract cookie values from the request.
 - **CORS origin interpolations** — CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
+- **Request `Cache-Control` directives** — Ferron now honors the RFC 9111 §5.2.1 request directives on cache lookups. `max-age=<n>` and `min-fresh=<n>` revalidate a stored response that does not satisfy the requested freshness window, and `only-if-cached` returns `504 Gateway Timeout` on a miss instead of contacting the origin. `no-transform` is accepted and has no effect. `no-cache` (and `Pragma: no-cache`) already forced revalidation; `no-store` already bypassed the cache.
 
 ### Changed
 

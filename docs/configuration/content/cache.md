@@ -165,6 +165,19 @@ Ferron determines the freshness lifetime from the origin response using the dire
 
 Per RFC 9111 §4.2.4, Ferron does not generate a heuristic freshness lifetime when the response carries `must-revalidate`, `proxy-revalidate`, or `s-maxage` without an explicit lifetime. Such a response is not stored. An explicit `max-age=0` or `s-maxage=0` is different: Ferron stores it with a zero TTL, so the entry always revalidates.
 
+### Request cache-control directives
+
+Ferron honors the request `Cache-Control` directives defined in RFC 9111 §5.2.1 when they apply to a cache lookup:
+
+- `no-cache`: Ferron revalidates the stored response with the origin before serving it. The `Pragma: no-cache` header has the same effect.
+- `no-store`: Ferron ignores the stored response and does not store the response to this request. It still forwards the request to the origin.
+- `max-age=<n>`: Ferron serves the stored response only when its current age is at most `<n>` seconds. An older entry is revalidated with the origin. A value of `0` forces revalidation.
+- `min-fresh=<n>`: Ferron serves the stored response only when at least `<n>` seconds of freshness remain. An entry with less remaining freshness is revalidated with the origin.
+- `only-if-cached`: Ferron serves the stored response only when a fresh entry exists. On a miss or when the entry is stale, Ferron returns `504 Gateway Timeout` without contacting the origin.
+- `no-transform`: Ferron accepts the directive but it has no effect, because Ferron never transforms stored responses.
+
+These directives apply unless `ignore_request_cache_control` is enabled. Response directives such as `max-age=0` described in [Stale-while-revalidate](#stale-while-revalidate) and revalidation behavior remain the same.
+
 ### Cache zones
 
 Cache zones determine which hosts share a physical cache store. There are three zone types:
