@@ -23,6 +23,7 @@ default = []
 native-certs = ["dep:rustls-native-certs"]
 webpki-roots = ["dep:webpki-roots"]
 observability = ["dep:x509-parser", "dep:ferron-observability"]
+fips = ["rustls/fips"]
 
 [dev-dependencies]
 tempfile = "3"

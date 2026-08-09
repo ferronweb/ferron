@@ -22,9 +22,9 @@ use crate::brute_force::{BruteForceConfig, BruteForceEngine};
 use crate::config::parse_basicauth_config;
 
 /// A fake hash used to thwart user enumeration attacks.
-/// This hash is a valid, hard-coded Argon2 hash for an empty password.
-pub(crate) const FAKE_HASH: &str = "$argon2id$v=19$m=19456,t=2,\
-p=1$xvAbcK77AZqOdJtrS1LqWA$bd5QzFMwzDFGZ5I7FAX3roi9Gw2m/nFo3Ivw/W25f50";
+/// This hash is a valid, hard-coded PBKDF2 hash for a "fake" password.
+pub(crate) const FAKE_HASH: &str = "$pbkdf2-sha256$600000$\
+    qeYaak0VoUEgPTiMip6vZw$n5YRg40xhu3Pl3FQ2lZ1GfhG9YSPVZM0b7iODMzWtM0";
 
 pub(crate) static GLOBAL_CONCURRENCY_SEMAPHORE: LazyLock<
     tokio::sync::RwLock<Option<Arc<Semaphore>>>,

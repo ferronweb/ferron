@@ -1,7 +1,11 @@
 use std::path::PathBuf;
 
 fn main() {
-    build_argon2();
+    let fips = std::env::var_os("CARGO_FEATURE_FIPS").is_some();
+    // Don't build Argon2 C library, as Argon2 isn't FIPS-approved
+    if !fips {
+        build_argon2();
+    }
 }
 
 fn build_argon2() {

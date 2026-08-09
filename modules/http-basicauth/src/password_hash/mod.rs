@@ -11,6 +11,7 @@
 //!
 //! Base64 salt and hash fields accept both padded and unpadded encodings.
 
+#[cfg(not(feature = "fips"))]
 mod argon2_sys;
 
 use std::num::NonZeroU32;
@@ -21,14 +22,20 @@ use base64::Engine;
 /// The scrypt memory limit passed to AWS-LC. A value of `0` selects AWS-LC's
 /// built-in default limit of 32 MiB, which prevents hostile hashes from
 /// exhausting server memory during verification.
+#[cfg(not(feature = "fips"))]
 const SCRYPT_MAX_MEM: usize = 0;
 
 /// Upper bounds for Argon2 cost parameters accepted during verification.
 /// These prevent a hostile hash from exhausting server memory or CPU.
+#[cfg(not(feature = "fips"))]
 const MAX_MEMORY_COST_KIB: u32 = 4 * 1024 * 1024;
+#[cfg(not(feature = "fips"))]
 const MAX_ITERATIONS: u32 = 32_768;
+#[cfg(not(feature = "fips"))]
 const MAX_THREADS: u32 = 512;
+#[cfg(not(feature = "fips"))]
 const MAX_SALT_LEN: usize = 1024;
+#[cfg(not(feature = "fips"))]
 const MAX_HASH_LEN: usize = 4096;
 
 /// Verify a plaintext password against a stored password hash.
@@ -49,6 +56,7 @@ pub(crate) fn verify_password(plain: &str, hash: &str) -> bool {
 }
 
 /// Verify a password against an Argon2 hash string.
+#[cfg(not(feature = "fips"))]
 #[inline]
 fn verify_argon2(plain: &str, hash: &str) -> bool {
     let segments: Vec<&str> = hash.split('$').collect();
@@ -120,6 +128,7 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
 }
 
 /// Parse an Argon2 version segment of the form `v=<version>`.
+#[cfg(not(feature = "fips"))]
 #[inline]
 fn parse_argon2_version(segment: &str) -> Option<u32> {
     let value = segment.strip_prefix("v=")?;
@@ -131,6 +140,7 @@ fn parse_argon2_version(segment: &str) -> Option<u32> {
 }
 
 /// Parse an Argon2 params segment of the form `m=<m>,t=<t>,p=<p>`.
+#[cfg(not(feature = "fips"))]
 #[inline]
 fn parse_argon2_params(params: &str) -> Option<(u32, u32, u32)> {
     let mut m_cost = None;
@@ -146,6 +156,13 @@ fn parse_argon2_params(params: &str) -> Option<(u32, u32, u32)> {
         }
     }
     Some((m_cost?, t_cost?, p_cost?))
+}
+
+/// A stub for Argon2 verification that always denies it (Argon2 isn't FIPS-compliant)
+#[cfg(feature = "fips")]
+#[inline]
+fn verify_argon2(_plain: &str, _hash: &str) -> bool {
+    false
 }
 
 /// Verify a password against a PBKDF2 hash string.
@@ -222,6 +239,7 @@ fn parse_pbkdf2_params(params: &str) -> Option<(NonZeroU32, Option<u32>)> {
 }
 
 /// Verify a password against a scrypt hash string.
+#[cfg(not(feature = "fips"))]
 #[inline]
 fn verify_scrypt(plain: &str, hash: &str) -> bool {
     let segments: Vec<&str> = hash.split('$').collect();
@@ -276,6 +294,7 @@ fn verify_scrypt(plain: &str, hash: &str) -> bool {
 }
 
 /// Parse a scrypt params segment of the form `ln=<N_log>,r=<r>,p=<p>`.
+#[cfg(not(feature = "fips"))]
 #[inline]
 fn parse_scrypt_params(params: &str) -> Option<(u64, u64, u64)> {
     let mut n_log = None;
@@ -293,6 +312,13 @@ fn parse_scrypt_params(params: &str) -> Option<(u64, u64, u64)> {
     Some((n_log?, r?, p?))
 }
 
+/// A stub for scrypt verification that always denies it (scrypt isn't FIPS-compliant)
+#[cfg(feature = "fips")]
+#[inline]
+fn verify_scrypt(_plain: &str, _hash: &str) -> bool {
+    false
+}
+
 /// Decode a base64 value accepting both padded and unpadded encodings.
 #[inline]
 fn decode_b64_ignore_padding(input: &str) -> Option<Vec<u8>> {
@@ -307,10 +333,13 @@ mod tests {
 
     const PASSWORD: &str = "test";
 
+    #[cfg(not(feature = "fips"))]
     const ARGON2ID_HASH_1: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
         p4ZwOkPffNeVtgmOBgr/ZA$bPiMPdlq3NoWLe0ogU4XBTc/PjXAHAEDuYXSka2xKtU";
+    #[cfg(not(feature = "fips"))]
     const ARGON2ID_HASH_2: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
         ZiPoEVmYo3b2r6Y2oZ8+JA$23gV15+t9eGAkldj1mkCEJXmwkxR9uoq65B4bG29I34";
+    #[cfg(not(feature = "fips"))]
     const SCRYPT_HASH: &str = "$scrypt$ln=14,r=8,p=1$\
         M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=";
     const PBKDF2_SHA256_HASH: &str = "$pbkdf2-sha256$600000$\
@@ -318,6 +347,7 @@ mod tests {
 
     /// Re-encode the salt and hash segments (indices 4 and 5) with base64
     /// padding.
+    #[cfg(not(feature = "fips"))]
     #[inline]
     fn with_padded_segments(hash: &str) -> String {
         let segments: Vec<&str> = hash.split('$').collect();
@@ -358,31 +388,31 @@ mod tests {
         verify_password(plain, hash)
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_argon2id() {
         assert!(verify(PASSWORD, ARGON2ID_HASH_1));
         assert!(verify(PASSWORD, ARGON2ID_HASH_2));
         assert!(!verify("wrong", ARGON2ID_HASH_1));
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_argon2id_with_padded_base64() {
         let padded = with_padded_segments(ARGON2ID_HASH_1);
         assert!(padded.split('$').nth(4).unwrap().ends_with("=="));
         assert!(verify(PASSWORD, &padded));
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_scrypt() {
         assert!(verify(PASSWORD, SCRYPT_HASH));
         assert!(!verify("wrong", SCRYPT_HASH));
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_scrypt_with_unpadded_base64() {
         let unpadded = with_unpadded_segments(SCRYPT_HASH);
         assert!(!unpadded.split('$').nth(4).unwrap().contains('='));
@@ -390,14 +420,12 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn verifies_pbkdf2_sha256() {
         assert!(verify(PASSWORD, PBKDF2_SHA256_HASH));
         assert!(!verify("wrong", PBKDF2_SHA256_HASH));
     }
 
     #[test]
-    #[inline]
     fn verifies_pbkdf2_sha256_with_unpadded_base64() {
         let unpadded = with_unpadded_segments(PBKDF2_SHA256_HASH);
         assert!(!unpadded.split('$').nth(4).unwrap().contains('='));
@@ -405,7 +433,6 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn verifies_pbkdf2_legacy_phc_params() {
         let legacy = "$pbkdf2-sha256$i=600000,l=32$\
             q/OlsSBToMqk35bOAlik5w==$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=";
@@ -417,10 +444,10 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn verifies_roundtripped_pbkdf2_variants() {
         let salt = b"salt for pbkdf2 roundtrip";
         for (ident, algorithm) in [
+            #[cfg(not(feature = "fips"))]
             ("pbkdf2", aws_lc_rs::pbkdf2::PBKDF2_HMAC_SHA1),
             ("pbkdf2-sha256", aws_lc_rs::pbkdf2::PBKDF2_HMAC_SHA256),
             ("pbkdf2-sha384", aws_lc_rs::pbkdf2::PBKDF2_HMAC_SHA384),
@@ -441,6 +468,7 @@ mod tests {
     }
 
     /// Encode an Argon2 hash as a PHC string.
+    #[cfg(not(feature = "fips"))]
     #[inline]
     fn argon2_phc_string(
         algorithm: argon2::Algorithm,
@@ -467,8 +495,8 @@ mod tests {
         )
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_roundtripped_argon2_variants() {
         let salt = b"argon2 roundtrip salt";
         let version = argon2::Version::default();
@@ -492,8 +520,8 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "fips"))]
     #[test]
-    #[inline]
     fn verifies_roundtripped_argon2_v16() {
         let salt = b"argon2 v16 roundtrip";
         let algorithm = argon2::Algorithm::Argon2id;
@@ -513,7 +541,6 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn rejects_malformed_hashes() {
         let cases = [
             "plaintext",
@@ -550,7 +577,6 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn rejects_unknown_prefixes() {
         assert!(!verify(PASSWORD, ""));
         assert!(!verify(PASSWORD, "$unknown$v=1$m=1$c2FsdA$aGFzaA=="));
@@ -558,7 +584,6 @@ mod tests {
     }
 
     #[test]
-    #[inline]
     fn fake_hash_is_verifiable() {
         let fake = crate::stage::FAKE_HASH;
         // The stage relies on this hash to always fail for the probe

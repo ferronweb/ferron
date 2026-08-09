@@ -8,3 +8,6 @@ ferron-entrypoint = { path = "../entrypoint", features = ["profile-default"] }
 
 [build-dependencies]
 winresource = "0.1.19"
+
+[features]
+fips = ["ferron-entrypoint/fips"]

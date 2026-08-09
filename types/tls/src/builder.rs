@@ -42,6 +42,14 @@ pub fn build_crypto_provider(
     let mut provider = default_provider();
 
     if !crypto.cipher_suites.is_empty() {
+        #[cfg(feature = "fips")]
+        let cipher_suites = crypto
+            .cipher_suites
+            .iter()
+            .filter_map(cipher_suite_to_rustls)
+            .filter(|cs| cs.fips())
+            .collect::<Vec<_>>();
+        #[cfg(not(feature = "fips"))]
         let cipher_suites = crypto
             .cipher_suites
             .iter()
@@ -54,6 +62,14 @@ pub fn build_crypto_provider(
     }
 
     if !crypto.kx_groups.is_empty() {
+        #[cfg(feature = "fips")]
+        let kx_groups = crypto
+            .kx_groups
+            .iter()
+            .filter_map(|kg| kx_group_to_rustls(kg))
+            .filter(|kg| kg.fips())
+            .collect::<Vec<_>>();
+        #[cfg(not(feature = "fips"))]
         let kx_groups = crypto
             .kx_groups
             .iter()
@@ -320,7 +336,7 @@ mod tests {
     fn test_build_crypto_provider_custom() {
         let crypto = TlsCryptoConfig {
             cipher_suites: vec![TlsCipherSuite::Tls13Aes128GcmSha256],
-            kx_groups: vec![TlsKxGroup::X25519],
+            kx_groups: vec![TlsKxGroup::Secp384r1],
             ..Default::default()
         };
         let provider = build_crypto_provider(&crypto).unwrap();

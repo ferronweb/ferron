@@ -117,3 +117,8 @@ profile-default = [
     "ferron-metrics-admin",
     "ferron-metrics-reload",
 ]
+
+fips = [
+    "ferron-http-basicauth/fips",
+    "ferron-http-server/fips"
+]

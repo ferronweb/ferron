@@ -931,6 +931,9 @@ fn print_version() {
     println!("  Build target: {}", build::BUILD_TARGET);
     println!("  Rust version: {}", build::RUST_VERSION);
     println!("  Build host: {}", build::BUILD_OS);
+    if cfg!(feature = "fips") {
+        println!("This build is configured to use FIPS-certified cryptography.");
+    }
     if shadow_rs::is_debug() {
         println!("WARNING: This is a debug build. It is not recommended for production use.");
     }

@@ -161,6 +161,7 @@ impl BasicAuthValidator {
         hash: &str,
         username: &str,
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        #[cfg(not(feature = "fips"))]
         let is_valid = hash.starts_with("$argon2id$")
             || hash.starts_with("$argon2i$")
             || hash.starts_with("$argon2d$")
@@ -169,13 +170,24 @@ impl BasicAuthValidator {
             || hash.starts_with("$pbkdf2-sha384$")
             || hash.starts_with("$pbkdf2-sha512$")
             || hash.starts_with("$scrypt$");
+        #[cfg(feature = "fips")]
+        let is_valid = hash.starts_with("$pbkdf2-sha256$")
+            || hash.starts_with("$pbkdf2-sha384$")
+            || hash.starts_with("$pbkdf2-sha512$");
 
         if !is_valid {
+            #[cfg(not(feature = "fips"))]
             return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
                  Supported formats: Argon2 ($argon2id$, $argon2i$, $argon2d$), \
                  PBKDF2 ($pbkdf2$, $pbkdf2-sha256$, $pbkdf2-sha384$, $pbkdf2-sha512$), \
                  or scrypt ($scrypt$). \
+                 Plaintext passwords are not allowed for security reasons."
+            )));
+            #[cfg(feature = "fips")]
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
+                 Supported formats: PBKDF2 ($pbkdf2-sha256$, $pbkdf2-sha384$, $pbkdf2-sha512$). \
                  Plaintext passwords are not allowed for security reasons."
             )));
         }

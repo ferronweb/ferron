@@ -3,9 +3,6 @@ name = "ferron-http-server"
 version = "3.0.0-beta.8"
 edition = "2021"
 
-[features]
-fuzz = []
-
 [dependencies]
 async-channel = "2.5.0"
 send_wrapper = "0.6.0"
@@ -43,3 +40,7 @@ ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http", features = ["util", "mtls"] }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
+
+[features]
+fuzz = []
+fips = ["rustls/fips", "ferron-tls/fips"]

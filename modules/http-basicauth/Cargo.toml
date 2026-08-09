@@ -30,3 +30,6 @@ argon2 = "0.5.3"
 find_git = "1.2.1"
 cc = "1.4.2"
 bindgen = "0.72.1"
+
+[features]
+fips = ["aws-lc-rs/fips"]
