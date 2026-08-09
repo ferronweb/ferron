@@ -7,6 +7,7 @@ edition = "2021"
 fuzz = []
 
 [dependencies]
+subtle = "2.6"
 async-trait = "0.1"
 bytes = "1"
 futures-util = "0.3"

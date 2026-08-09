@@ -117,7 +117,7 @@ Use the `purge_propagation { ... }` block inside a host `cache { ... }` block to
 | Nested directive    | Arguments  | Description                                                                                                                              | Default     |
 | ------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | `control_plane_url` | `<string>` | URL of the external control-plane endpoint to POST purge events to.                                                                      | (none)      |
-| `shared_secret`     | `<string>` | Shared secret included as the `X-Purge-Secret` header when pushing purge events to the control-plane.                                    | (none)      |
+| `shared_secret`     | `<string>` | Shared secret sent as the `X-Purge-Secret` header when pushing purge events to the control-plane, and verified on inbound propagated purges.                                    | (none)      |
 | `node_id`           | `<string>` | Identifier for this edge instance, included in outbound webhook payloads so the control-plane can avoid broadcasting back to the origin. | `"unknown"` |
 
 **Configuration example:**
@@ -399,7 +399,7 @@ When you configure `purge_propagation`, Ferron participates in multi-instance ca
 1. **Local purge occurs**: Either via a `PURGE` HTTP method request or an `X-LiteSpeed-Purge` response header from the upstream.
 2. **Webhook sent**: Ferron sends an HTTP `POST` to the configured `control_plane_url` with a JSON body containing the purged path and the originating node ID.
 3. **Control-plane broadcasts**: The external control-plane sends `PURGE` requests to all other registered edge instances, excluding the origin.
-4. **Edges receive purges**: Other edges receive `PURGE` requests with an `X-Purge-Source: propagation` header and execute the purge locally without re-propagating.
+4. **Edges receive purges**: Other edges receive `PURGE` requests with an `X-Purge-Source: propagation` header, verify the shared secret, and execute the purge locally without re-propagating.
 
 **Webhook protocol (edge to control-plane):**
 
@@ -421,13 +421,16 @@ X-Purge-Secret: <shared_secret>
 PURGE /blog/post-123 HTTP/1.1
 Host: edge-2:80
 X-Purge-Source: propagation
+X-Purge-Secret: <shared_secret>
 ```
+
+An edge rejects a propagation claim (HTTP 403) when the `X-Purge-Secret` value does not match the configured `purge_propagation.shared_secret`. The comparison is constant-time. A claim with no secret configured is also rejected. This makes sure that a client cannot tag its own purge as propagated to skip the normal `PURGE` authorization.
 
 **Loop prevention:**
 
 Ferron uses two mechanisms to prevent infinite purge loops:
 
-- **`X-Purge-Source: propagation` header**: When an edge receives a `PURGE` request with this header, it executes the purge locally. It does not forward the request to the control-plane. This prevents re-propagation loops.
+- **`X-Purge-Source: propagation` header**: When an edge receives a `PURGE` request with this header, it executes the purge locally. It does not forward the request to the control-plane. This prevents re-propagation loops. A propagation claim must also carry a matching `X-Purge-Secret` value.
 - **Origin exclusion**: The control-plane removes the originating node (identified by the `origin` field in the webhook payload) from its broadcast list. This prevents the origin from receiving its own purge back.
 
 **Control-plane requirements:**
@@ -437,7 +440,7 @@ The external control-plane service must:
 1. Accept `POST` requests at the configured URL with a JSON body containing `path` and `origin` fields.
 2. Authenticate requests using the `X-Purge-Secret` header.
 3. Maintain a list of registered edge instance URLs.
-4. Send `PURGE` requests to all registered edges except the origin, including an `X-Purge-Source: propagation` header.
+4. Send `PURGE` requests to all registered edges except the origin, including `X-Purge-Source: propagation` and `X-Purge-Secret: <shared_secret>` headers.
 
 Ferron does not include a built-in control-plane. Operators can implement one using any HTTP framework or use an existing cache coordination service.
 

@@ -679,6 +679,115 @@ async fn test_cache_purge_scoped_to_requesting_host() {
 }
 
 #[tokio::test]
+async fn test_cache_propagation_purge_requires_shared_secret() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      a.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          purge_method
+          purge_allowed_ips "0.0.0.0/0"
+          purge_propagation {
+            shared_secret "hunter2"
+          }
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let url = format!("http://localhost:{}/test.txt", port);
+
+    let propagated_purge = |secret: Option<&str>| {
+        let mut request = client
+            .request(reqwest::Method::from_bytes(b"PURGE").unwrap(), &url)
+            .header("Host", "a.example.com")
+            .header("X-Purge-Source", "propagation");
+        if let Some(secret) = secret {
+            request = request.header("X-Purge-Secret", secret);
+        }
+        request.send()
+    };
+
+    // Prime the cache.
+    let response = client
+        .get(&url)
+        .header("Host", "a.example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    // A propagation claim without the secret is rejected.
+    let response = propagated_purge(None).await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+    // So is a claim with the wrong secret.
+    let response = propagated_purge(Some("wrong")).await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+    // The entry survives both rejections.
+    let response = client
+        .get(&url)
+        .header("Host", "a.example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+
+    // A propagation claim with the matching secret purges.
+    let response = propagated_purge(Some("hunter2")).await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let response = client
+        .get(&url)
+        .header("Host", "a.example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

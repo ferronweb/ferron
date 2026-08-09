@@ -199,6 +199,34 @@ fn purge_allowed_rejects_ip_outside_allowlist() {
 }
 
 #[test]
+fn propagation_secret_must_match_configured_secret() {
+    use http::header::HeaderValue;
+    use http::HeaderMap;
+
+    let mut headers = HeaderMap::new();
+
+    // Missing secret is rejected even when one is configured.
+    assert!(!propagation_secret_verified(&headers, Some("hunter2")));
+
+    // Wrong secret is rejected.
+    headers.insert(
+        super::purge::PURGE_SECRET_HEADER,
+        HeaderValue::from_static("wrong"),
+    );
+    assert!(!propagation_secret_verified(&headers, Some("hunter2")));
+
+    // Matching secret is accepted.
+    headers.insert(
+        super::purge::PURGE_SECRET_HEADER,
+        HeaderValue::from_static("hunter2"),
+    );
+    assert!(propagation_secret_verified(&headers, Some("hunter2")));
+
+    // A propagation claim with no configured secret is never accepted.
+    assert!(!propagation_secret_verified(&headers, None));
+}
+
+#[test]
 fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
     use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::ServerConfigurationBlockBuilder;

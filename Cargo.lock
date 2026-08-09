@@ -1339,6 +1339,7 @@ dependencies = [
  "rustls",
  "rustls-native-certs",
  "serde_json",
+ "subtle",
  "tokio",
  "typemap_rev",
  "webpki-roots",

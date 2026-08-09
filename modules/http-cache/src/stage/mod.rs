@@ -44,7 +44,7 @@ use self::outcome::{
     emit_eviction_metrics, emit_request_metric, emit_singleflight_metrics, emit_store_metric,
     report, CacheOutcome,
 };
-use self::purge::{purge, PURGE_SOURCE_HEADER};
+use self::purge::{purge, PURGE_SECRET_HEADER, PURGE_SOURCE_HEADER};
 use self::response_helpers::{
     annotate_response_headers, append_lsc_cookies_as_set_cookie, collect_body_with_limit,
     response_from_parts, response_from_streaming_parts, strip_internal_headers, CacheHeaderState,
@@ -302,19 +302,20 @@ impl Stage<HttpContext> for HttpCacheStage {
             if !config.purge_method {
                 // PURGE not enabled — fall through to 405 from downstream stages
             } else {
-                // A basic_auth block must be in scope for this request: an
-                // authenticated user from a foreign host's basic_auth must not
-                // be able to purge this host's cache.
-                let has_basic_auth_in_scope =
-                    !ctx.configuration.get_entries("basic_auth", true).is_empty();
-                let purge_allowed = purge_allowed(
-                    ctx.remote_address.ip().to_canonical(),
-                    &config.purge_allowed_ips,
-                    has_basic_auth_in_scope,
-                    ctx.auth_user.as_deref(),
-                );
+                let is_propagated = request_headers
+                    .get(&PURGE_SOURCE_HEADER)
+                    .and_then(|v| v.to_str().ok())
+                    .is_some_and(|v| v.eq_ignore_ascii_case("propagation"));
 
-                if !purge_allowed {
+                // A propagation claim must prove knowledge of the shared
+                // secret. Without this, any client could tag a PURGE as
+                // propagated and bypass the normal authorization (B#9).
+                if is_propagated
+                    && !propagation_secret_verified(
+                        &request_headers,
+                        config.purge_propagation.shared_secret.as_deref(),
+                    )
+                {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
                     report(
                         ctx,
@@ -326,7 +327,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                             items: None,
                             stored: None,
                             evictions: None,
-                            detail: None,
+                            detail: Some("propagation-secret-mismatch"),
                             key_uri: None,
                             key_method: None,
                             bypass_reason: None,
@@ -339,6 +340,47 @@ impl Stage<HttpContext> for HttpCacheStage {
                     return Ok(false);
                 }
 
+                // Non-propagated purges require an allow-listed IP or an
+                // authenticated user with a basic_auth block in scope. A
+                // basic_auth block must be in scope for this request: an
+                // authenticated user from a foreign host's basic_auth must not
+                // be able to purge this host's cache.
+                if !is_propagated {
+                    let has_basic_auth_in_scope =
+                        !ctx.configuration.get_entries("basic_auth", true).is_empty();
+                    let purge_allowed = purge_allowed(
+                        ctx.remote_address.ip().to_canonical(),
+                        &config.purge_allowed_ips,
+                        has_basic_auth_in_scope,
+                        ctx.auth_user.as_deref(),
+                    );
+
+                    if !purge_allowed {
+                        ctx.res = Some(HttpResponse::BuiltinError(403, None));
+                        report(
+                            ctx,
+                            CacheOutcome {
+                                result: "purge_rejected",
+                                zone_id: &zone_id,
+                                key: &purge_url,
+                                scope: None,
+                                items: None,
+                                stored: None,
+                                evictions: None,
+                                detail: None,
+                                key_uri: None,
+                                key_method: None,
+                                bypass_reason: None,
+                                evaluated_cookies: None,
+                                coalesced_wait_ms: None,
+                                mark_uncoalesced: false,
+                                metric_result: None,
+                            },
+                        );
+                        return Ok(false);
+                    }
+                }
+
                 let purge_ops: Vec<PurgeOperation> = [CacheScope::Public, CacheScope::Private]
                     .iter()
                     .map(|scope| PurgeOperation {
@@ -347,10 +389,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                         stale: false,
                     })
                     .collect();
-                let is_propagated = request_headers
-                    .get(&PURGE_SOURCE_HEADER)
-                    .and_then(|v| v.to_str().ok())
-                    .is_some_and(|v| v.eq_ignore_ascii_case("propagation"));
                 purge(
                     ctx,
                     &zone_id,
@@ -1256,6 +1294,28 @@ fn entry_host(hostname: &Option<String>, zone_id: &CacheZoneId) -> Option<String
         CacheZoneId::Host(host) => Some(host.clone()),
         CacheZoneId::Named(_) | CacheZoneId::Global => None,
     })
+}
+
+/// Whether a `X-Purge-Source: propagation` purge proves knowledge of the
+/// configured shared secret.
+///
+/// The secret is required: when none is configured, a propagation claim is
+/// indistinguishable from a replay and is rejected. Comparison is
+/// constant-time.
+#[inline]
+fn propagation_secret_verified(request_headers: &HeaderMap, shared_secret: Option<&str>) -> bool {
+    use subtle::ConstantTimeEq;
+
+    let Some(configured) = shared_secret else {
+        return false;
+    };
+    let Some(received) = request_headers
+        .get(&PURGE_SECRET_HEADER)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    configured.as_bytes().ct_eq(received.as_bytes()).into()
 }
 
 /// Whether a `PURGE` request is authorized to invalidate this cache.

@@ -1204,10 +1204,23 @@ async fn test_lscache_purge_propagation_loop_prevention() {
     // This simulates a broadcast from the control-plane. The edge should purge
     // locally but NOT re-propagate (which would cause a loop).
     let method = Method::from_bytes(b"PURGE").unwrap();
+
+    // A propagation claim without the shared secret is rejected.
+    let resp = ctx
+        .client
+        .request(method.clone(), format!("{}/propagation-loop-test", ctx.base_url))
+        .header("X-Purge-Source", "propagation")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
+
+    // With the matching shared secret it purges.
     let resp = ctx
         .client
         .request(method, format!("{}/propagation-loop-test", ctx.base_url))
         .header("X-Purge-Source", "propagation")
+        .header("X-Purge-Secret", "test-secret")
         .send()
         .await
         .unwrap();
