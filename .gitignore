@@ -35,3 +35,7 @@ Thumbs.db
 
 # QEMU core dumps
 qemu*.core
+
+# Generated CycloneDX SBOMs
+*.cdx.xml
+*.cdx.json
