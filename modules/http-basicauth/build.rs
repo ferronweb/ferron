@@ -31,10 +31,16 @@ fn build_argon2() {
     }
 
     let target = std::env::var("TARGET").unwrap();
+    let target_features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
+
     // SIMD-optimized version of Argon2 C reference impl is tied to x86.
     // While non-SIMD-optimized one is true cross-platform.
-    let enable_simd =
-        target.starts_with("x86_64-") || target.starts_with("i686-") || target.starts_with("i586-");
+    //
+    // Also, compilation fails if SSE2 support isn't declared.
+    let enable_simd = (target.starts_with("x86_64-")
+        || target.starts_with("i686-")
+        || target.starts_with("i586-"))
+        && target_features.split(",").any(|f| f == "sse2");
 
     // Sourced from phc-winner-argon2 Makefile
     // Don't include -march=native to ensure portability
@@ -57,6 +63,15 @@ fn build_argon2() {
         .flag_if_supported("-std=c89")
         .warnings(false)
         .extra_warnings(false);
+
+    if enable_simd {
+        // Different arguments for GCC/Clang and MSVC/clang-cl...
+        if builder.try_get_compiler().is_ok_and(|c| c.is_like_msvc()) {
+            builder.flag_if_supported("/arch:SSE2");
+        } else {
+            builder.flag_if_supported("-msse2");
+        }
+    }
 
     builder.compile("argon2");
 
