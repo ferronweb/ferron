@@ -909,6 +909,59 @@ fn update_entry_headers_recalculates_swr_and_must_revalidate() {
 }
 
 #[test]
+fn update_entry_headers_replaces_not_appends_field_values() {
+    let store = CacheStore::new(4);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    let mut entry = stored_entry(
+        "https://example.com/page",
+        CacheScope::Public,
+        "body",
+        VaryRule::default(),
+    );
+    entry
+        .headers
+        .append(CACHE_CONTROL, HeaderValue::from_static("max-age=999"));
+    entry
+        .headers
+        .append(http::header::SET_COOKIE, HeaderValue::from_static("a=1"));
+    store.insert_with_request(entry, None, &headers, &cookies);
+
+    let mut new_headers = HeaderMap::new();
+    new_headers.insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=120"),
+    );
+    new_headers.insert(http::header::SET_COOKIE, HeaderValue::from_static("b=2"));
+
+    let result = store.update_entry_headers_by_key(
+        "https://example.com/page\nscope=public",
+        new_headers,
+        false,
+    );
+
+    let updated = result.expect("expected header update");
+    let cache_control: Vec<&str> = updated
+        .get_all(CACHE_CONTROL)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect();
+    assert_eq!(cache_control, vec!["public, max-age=120"]);
+    let set_cookie: Vec<&str> = updated
+        .get_all(http::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect();
+    assert_eq!(set_cookie, vec!["b=2"]);
+
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup("https://example.com/page", &headers, &cookies, None);
+    let (lookup, _, _) = lookup.expect("expected cache hit");
+    assert_eq!(lookup.ttl, Duration::from_secs(120));
+}
+
+#[test]
 fn variants_by_base_cleaned_up_after_purge_removes_all_entries() {
     let store = CacheStore::new(8);
     let headers = HeaderMap::new();

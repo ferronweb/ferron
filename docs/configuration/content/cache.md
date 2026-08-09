@@ -314,6 +314,8 @@ When an upstream response includes the `stale-while-revalidate` directive in its
 
 This makes sure that one request still contacts the upstream for fresh content. No background tasks run. Other concurrent requests avoid waiting for revalidation.
 
+When a revalidation returns `304 Not Modified`, Ferron updates the stored entry. Per RFC 9111 §4.3.4, the header field values from the 304 response replace the stored values for the same field names. Field names that the 304 does not include keep their stored values. Ferron then recalculates the freshness lifetime from the merged headers.
+
 > [!note]
 > Ferron 3 does not have an internal route invocation mechanism, so background revalidation is not supported. `stale-while-revalidate` always involves a synchronous upstream request for the leader, and followers receive the stale response.
 

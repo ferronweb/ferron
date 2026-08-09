@@ -32,7 +32,9 @@ use crate::lscache::{
 use crate::policy::{
     evaluate_response_policy, parse_request_policy, CacheScope, RequestCachePolicy,
 };
-use crate::store::{CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry};
+use crate::store::{
+    merge_revalidation_headers, CacheStore, LookupEntry, LookupOutcome, StoreStats, StoredEntry,
+};
 
 use self::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
 use self::outcome::{
@@ -748,7 +750,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     fresh_headers = new_fresh_headers;
                 } else {
                     let mut new_fresh_headers = cached_entry.headers.clone();
-                    new_fresh_headers.extend(fresh_headers);
+                    merge_revalidation_headers(&mut new_fresh_headers, fresh_headers);
                     fresh_headers = new_fresh_headers;
                 }
 

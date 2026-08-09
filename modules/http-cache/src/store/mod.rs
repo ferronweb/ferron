@@ -366,7 +366,7 @@ impl CacheStore {
         litespeed_override_cache_control: bool,
     ) -> Option<HeaderMap> {
         let mut entry = self.entries.get(cache_key)?;
-        entry.headers.extend(new_headers);
+        merge_revalidation_headers(&mut entry.headers, new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
         entry.created_at = Instant::now();
@@ -387,4 +387,18 @@ impl CacheStore {
         let _ = self.entries.replace(cache_key.to_string(), entry2, false);
         Some(entry.headers.clone())
     }
+}
+
+/// Merge 304 revalidation headers into the stored headers.
+///
+/// Per RFC 9111 §4.3.4, field values received in a 304 response replace the
+/// stored values for the same field names. Field names absent from the 304
+/// keep their stored values. `HeaderMap::extend` appends instead, which would
+/// accumulate duplicate `Cache-Control` (and other) values on every revalidation.
+pub(crate) fn merge_revalidation_headers(stored: &mut HeaderMap, update: HeaderMap) {
+    let names: Vec<http::header::HeaderName> = update.keys().cloned().collect();
+    for name in names {
+        stored.remove(name);
+    }
+    stored.extend(update);
 }
