@@ -196,11 +196,27 @@ fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
 }
 
 /// Return a truncated representation of a cache key for use in access logs.
+///
+/// The query string is dropped before truncating: URLs like
+/// `/search?token=<secret>` would otherwise leak up to the truncation limit
+/// into the logs. The scope and `Vary` components after the base URL are
+/// kept, so the fingerprint still distinguishes variants.
 pub(super) fn cache_key_fingerprint(key: &str) -> String {
     const MAX_LEN: usize = 48;
-    if key.len() <= MAX_LEN {
-        key.to_string()
+    let base_end = key.find('\n').unwrap_or(key.len());
+    let query_start = key[..base_end].find('?');
+    let cleaned = match query_start {
+        Some(query_start) => {
+            let mut cleaned = String::with_capacity(key.len());
+            cleaned.push_str(&key[..query_start]);
+            cleaned.push_str(&key[base_end..]);
+            cleaned
+        }
+        None => key.to_string(),
+    };
+    if cleaned.len() <= MAX_LEN {
+        cleaned
     } else {
-        format!("{}...", &key[..MAX_LEN])
+        format!("{}...", &cleaned[..MAX_LEN])
     }
 }

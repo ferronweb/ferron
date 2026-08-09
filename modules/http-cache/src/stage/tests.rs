@@ -411,6 +411,40 @@ fn base_key_falls_back_to_host_header_without_resolved_host() {
 }
 
 #[test]
+fn cache_key_fingerprint_does_not_leak_query_string() {
+    use super::key::cache_key_fingerprint;
+
+    // A short key with a secret query value must drop the query entirely.
+    let key = "https://example.com/search?token=super-secret";
+    let fingerprint = cache_key_fingerprint(key);
+    assert_eq!(fingerprint, "https://example.com/search");
+
+    // A long URL: the query is stripped before truncation, so no part of the
+    // secret query survives even in the truncated prefix.
+    let key = format!(
+        "https://example.com/very/long/path/{}/search?token=super-secret&page={}",
+        "x".repeat(80),
+        123456789,
+    );
+    let fingerprint = cache_key_fingerprint(&key);
+    assert!(
+        !fingerprint.contains('?'),
+        "fingerprint must not contain a query string, got: {fingerprint}"
+    );
+    assert!(
+        !fingerprint.contains("secret"),
+        "fingerprint must not leak the query value, got: {fingerprint}"
+    );
+
+    // The scope/vary tail after the base URL is preserved, so variants stay
+    // distinguishable in logs.
+    let key = "https://example.com/p\nscope=public";
+    let fingerprint = cache_key_fingerprint(key);
+    assert_eq!(fingerprint, "https://example.com/p\nscope=public");
+    assert!(fingerprint.contains("scope=public"));
+}
+
+#[test]
 fn propagation_paths_map_selectors_and_deduplicate() {
     use crate::lscache::{PurgeOperation, PurgeSelector};
     use crate::policy::CacheScope;
