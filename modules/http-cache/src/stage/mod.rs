@@ -924,6 +924,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                 stale_while_revalidate: None,
                 stale_if_error: None,
                 must_revalidate: false,
+                no_cache_field_names: Vec::new(),
                 reason: if state.head_only {
                     "head-no-store"
                 } else if has_unsupported_vary_value {
@@ -979,6 +980,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                     for header_name in &state.config.ignored_store_headers {
                         stored_headers.remove(header_name);
                     }
+                    crate::policy::strip_no_cache_fields(
+                        &mut stored_headers,
+                        &decision.no_cache_field_names,
+                    );
                     crate::store::strip_store_headers(&mut stored_headers);
                     let etag = stored_headers.get(header::ETAG).cloned();
                     let last_modified = stored_headers.get(header::LAST_MODIFIED).cloned();

@@ -150,6 +150,7 @@ example.com {
 - `HEAD` requests reuse cached `GET` representations and return only headers.
 - Non-`GET` responses are not stored, but they may still trigger LSCache-compatible purge headers.
 - Responses with `Vary: *` are never stored.
+- Responses with a bare `no-cache` directive are never stored. A `no-cache="field-names"` directive is different: Ferron stores the response but removes the named fields from the stored copy, per RFC 9111 §5.2.2.3.
 - Built-in error responses generated after the main HTTP pipeline are not currently stored.
 
 Ferron determines the freshness lifetime from the origin response using the directive order defined in RFC 9111 §4.2.1. For a public response, Ferron uses the first applicable directive in this order:

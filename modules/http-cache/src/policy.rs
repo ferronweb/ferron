@@ -36,6 +36,9 @@ pub struct ResponseCacheDecision {
     pub stale_while_revalidate: Option<Duration>,
     pub stale_if_error: Option<Duration>,
     pub must_revalidate: bool,
+    /// Field names listed in a `no-cache="field-names"` directive. The response
+    /// may be stored, but the stored entry must not include these fields.
+    pub no_cache_field_names: Vec<String>,
     pub reason: &'static str,
 }
 
@@ -51,6 +54,7 @@ pub(crate) struct StandardCacheControl {
     stale_if_error: Option<Duration>,
     must_revalidate: bool,
     proxy_revalidate: bool,
+    no_cache_field_names: Vec<String>,
 }
 
 pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
@@ -111,6 +115,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "response-no-store",
         };
     }
@@ -125,6 +130,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "response-no-cache",
         };
     }
@@ -147,6 +153,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "not-cacheable",
         };
     };
@@ -173,6 +180,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "authorization-public",
         };
     }
@@ -185,6 +193,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "public-set-cookie",
         };
     }
@@ -203,6 +212,7 @@ pub fn evaluate_response_policy(
             stale_while_revalidate: None,
             stale_if_error: None,
             must_revalidate: false,
+            no_cache_field_names: Vec::new(),
             reason: "zero-ttl",
         };
     };
@@ -217,6 +227,7 @@ pub fn evaluate_response_policy(
         stale_while_revalidate: standard.stale_while_revalidate,
         stale_if_error: standard.stale_if_error,
         must_revalidate,
+        no_cache_field_names: standard.no_cache_field_names.clone(),
         reason: "storable",
     }
 }
@@ -227,6 +238,7 @@ pub(crate) fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCache
         let Some(text) = value.to_str().ok() else {
             continue;
         };
+        parse_no_cache_field_names(text, &mut parsed);
         for part in text.split(',') {
             let directive = part.trim();
             if directive.is_empty() {
@@ -271,6 +283,36 @@ pub(crate) fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCache
         }
     }
     parsed
+}
+
+/// Extract field names from `no-cache="field-names"` directives.
+///
+/// RFC 9111 §5.2.2.3: when the directive carries field names, the response may
+/// still be stored, but the stored copy must not include those fields. The
+/// quoted list can contain commas, so this runs before the header is split on
+/// commas. `no-cache=""` is treated like bare `no-cache`.
+fn parse_no_cache_field_names(text: &str, parsed: &mut StandardCacheControl) {
+    let lower = text.to_ascii_lowercase();
+    let mut rest = lower.as_str();
+    while let Some(start) = rest.find("no-cache=\"") {
+        let after = &rest[start + "no-cache=\"".len()..];
+        let Some(end) = after.find('"') else {
+            break;
+        };
+        let list = &after[..end];
+        let names: Vec<String> = list
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .collect();
+        if names.is_empty() {
+            parsed.no_cache = true;
+        } else {
+            parsed.no_cache_field_names.extend(names);
+        }
+        rest = &after[end + 1..];
+    }
 }
 
 pub(crate) fn choose_ttl(
@@ -366,6 +408,16 @@ pub(crate) fn recalculate_freshness(
         standard.stale_if_error,
         must_revalidate,
     )
+}
+
+/// Remove the fields listed in a `no-cache="field-names"` directive from the
+/// stored entry's headers.
+pub(crate) fn strip_no_cache_fields(headers: &mut HeaderMap, field_names: &[String]) {
+    for field_name in field_names {
+        if let Ok(name) = http::header::HeaderName::from_bytes(field_name.as_bytes()) {
+            headers.remove(name);
+        }
+    }
 }
 
 #[inline]
@@ -908,6 +960,67 @@ mod tests {
             evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         assert!(decision.store);
         assert_eq!(decision.ttl, Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn no_cache_with_field_names_is_storable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120, no-cache=\"Set-Cookie, X-Origin-Data\""),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
+        assert_eq!(
+            decision.no_cache_field_names,
+            vec!["set-cookie".to_string(), "x-origin-data".to_string()]
+        );
+    }
+
+    #[test]
+    fn bare_no_cache_is_not_storable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120, no-cache"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "response-no-cache");
+    }
+
+    #[test]
+    fn empty_no_cache_field_list_is_bare_no_cache() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120, no-cache=\"\""),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "response-no-cache");
+    }
+
+    #[test]
+    fn strip_no_cache_fields_removes_named_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::SET_COOKIE, HeaderValue::from_static("a=1"));
+        headers.insert(
+            http::header::HeaderName::from_static("x-origin-data"),
+            HeaderValue::from_static("secret"),
+        );
+        headers.insert(header::ETAG, HeaderValue::from_static("\"v1\""));
+        strip_no_cache_fields(
+            &mut headers,
+            &["set-cookie".to_string(), "x-origin-data".to_string()],
+        );
+        assert!(!headers.contains_key(header::SET_COOKIE));
+        assert!(!headers.contains_key("x-origin-data"));
+        assert!(headers.contains_key(header::ETAG));
     }
 
     #[test]
