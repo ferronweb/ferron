@@ -25,6 +25,8 @@ Visit the [Ferron downloads page](/download) and choose the archive that matches
 > [!note]
 > FIPS-certified archives use a `+fips` suffix in the archive name. For example, `ferron+fips-3.0.0-x86_64-unknown-linux-gnu.tar.gz`. A FIPS archive restricts cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). Use a FIPS archive when you must run Ferron in a FIPS-compliant environment.
 
+Every release also publishes a software bill of materials (SBOM) archive. See [Software bill of materials](#software-bill-of-materials-sbom).
+
 ## Installation steps
 
 ### 1. Extract the archive
@@ -120,6 +122,35 @@ If you see a **"Ferron is installed successfully!"** message on the page, the we
 
 > [!tip]
 > If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is in use, change the listen port in `ferron.conf`. Then update your firewall rules.
+
+## Software bill of materials (SBOM)
+
+Ferron publishes a software bill of materials (SBOM) for every release. An SBOM is a machine-readable inventory of the third-party components in a software product. Ferron builds the SBOM from the Rust crates that are compiled into the binaries.
+
+### Download the SBOM archive
+
+Each SBOM archive has the same base name as the matching binary archive, with a `-sbom` suffix. The archive format follows the binary archive: `.tar.gz` for Unix-like systems, `.zip` for Windows.
+
+Examples:
+
+- `ferron-3.0.0-x86_64-unknown-linux-gnu-sbom.tar.gz`
+- `ferron-3.0.0-x86_64-pc-windows-msvc-sbom.zip`
+- `ferron+fips-3.0.0-x86_64-unknown-linux-gnu-sbom.tar.gz`
+
+Download SBOM archives from the same place as the binary archives. GitHub releases attach the SBOM archive next to the binary archive.
+
+### Contents of the SBOM archive
+
+Each archive contains one SBOM document per Ferron binary, in two formats:
+
+- `.cdx.json`: CycloneDX in JSON format.
+- `.cdx.xml`: CycloneDX in XML format.
+
+Each document lists the third-party Rust crates in the binary, with their versions and package URLs (purl). License information appears when the crate declares it.
+
+### Use the SBOM
+
+You can feed the SBOM to software composition analysis tools, for example Grype, Trivy, or Dependency-Track. The tools match the components against vulnerability databases and license policies. Run this scan before you deploy a release.
 
 ## Reloading the configuration (Unix)
 
