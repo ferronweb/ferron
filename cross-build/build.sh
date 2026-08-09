@@ -33,12 +33,12 @@ Targets:
 $(printf '  %s\n' "${SUPPORTED_TARGETS[@]}")
 
 Options:
-  -p, --pgo               Enable Profile-Guided Optimization
-  -s, --sysroot-dir DIR   Custom sysroot directory (default: auto-detect)
-  -o, --output-dir DIR    Output directory (default: dist/)
+  -p, --pgo                Enable Profile-Guided Optimization
+  -f, --fips               Build FIPS-compliant binaries
+  -s, --sysroot-dir DIR    Custom sysroot directory (default: auto-detect)
   -b, --bench-duration SEC Benchmark duration for PGO (default: 30)
-  -d, --debug             Enable debug build (default: release)
-  -h, --help              Show this help message
+  -d, --debug              Enable debug build (default: release)
+  -h, --help               Show this help message
 
 Examples:
   $(basename "$0") x86_64-unknown-linux-gnu
@@ -46,12 +46,12 @@ Examples:
   $(basename "$0") -s /opt/sysroots x86_64-unknown-linux-musl
 
 Environment variables:
-  RUSTFLAGS               Extra Rust compiler flags (will be extended for PGO)
-  SYSROOT_DIR             Override sysroot directory
-  CLANG                   Override clang compiler (default: auto-detect)
-  CLANGXX                 Override clang++ compiler (default: auto-detect)
-  LLVM_PROFDATA           Override llvm-profdata tool (default: auto-detect)
-  BENCH_BASE_PORT         Override base port for benchmarking (default: 8080)
+  RUSTFLAGS                Extra Rust compiler flags (will be extended for PGO)
+  SYSROOT_DIR              Override sysroot directory
+  CLANG                    Override clang compiler (default: auto-detect)
+  CLANGXX                  Override clang++ compiler (default: auto-detect)
+  LLVM_PROFDATA            Override llvm-profdata tool (default: auto-detect)
+  BENCH_BASE_PORT          Override base port for benchmarking (default: 8080)
 EOF
 }
 
@@ -106,21 +106,6 @@ detect_libc() {
 target_to_arch() {
 	local target="$1"
 	echo "${target}" | cut -d'-' -f1
-}
-
-target_to_deb_arch() {
-	local target="$1"
-	case "$target" in
-		x86_64-unknown-linux-gnu) echo "amd64" ;;
-		i686-unknown-linux-gnu) echo "i386" ;;
-		aarch64-unknown-linux-gnu) echo "arm64" ;;
-		armv7-unknown-linux-gnueabihf) echo "armhf" ;;
-		riscv64gc-unknown-linux-gnu) echo "riscv64" ;;
-		loongarch64-unknown-linux-gnu) echo "loong64" ;;
-		s390x-unknown-linux-gnu) echo "s390x" ;;
-		powerpc64le-unknown-linux-gnu) echo "ppc64el" ;;
-		*) echo "" ;;
-	esac
 }
 
 detect_sysroot() {
@@ -275,8 +260,6 @@ setup_env_gnu() {
 		local ranlib_wrapper="${wrapper_dir}/clang-ranlib"
 		local gnu_arch
 		gnu_arch=$(echo "${target}" | cut -d'-' -f1)
-		local deb_arch
-		deb_arch=$(target_to_deb_arch "${target}" 2>/dev/null || echo "${gnu_arch}")
 
 		# Determine GCC install dir in the sysroot
 		local gcc_install_dir=""
@@ -314,12 +297,12 @@ setup_env_gnu() {
 		# 2. /lib/ld*.so*
 		# 3. /lib/${gnu_arch}-linux-gnu/ld*.so*
 		local dynamic_linker_filename
-		dynamic_linker_filename=$((ls -1 ${sysroot}/lib64/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		dynamic_linker_filename=$( (ls -1 ${sysroot}/lib64/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
 		if [[ -n "${dynamic_linker_filename}" ]]; then
 			dynamic_linker_path="/lib64/${dynamic_linker_filename}"
 		fi
 		if [[ -z "${dynamic_linker_filename}" ]]; then
-		    dynamic_linker_filename=$((ls -1 ${sysroot}/lib/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
+		    dynamic_linker_filename=$( (ls -1 ${sysroot}/lib/ld*.so* 2>/dev/null || true) | tail -n 1 | sed 's|.*/||')
 		    if [[ -n "${dynamic_linker_filename}" ]]; then
     			dynamic_linker_path="/lib/${dynamic_linker_filename}"
 			fi
@@ -544,9 +527,6 @@ WRAPPER
 	local cargo_config="${PROJECT_ROOT}/.cargo/config.toml"
 	local linker_wrapper="${wrapper_dir}/musl-gcc-linker"
 
-	# Build sysroot lib paths for linker
-	local sysroot_lib_args="-L${sysroot}/lib"
-
 	# Use clang as linker with lld (LLVM) — avoids any GNU binutils ld
 	# dependency and keeps the build fully clang/lld-based
 	cat > "${linker_wrapper}" <<WRAPPER
@@ -612,6 +592,7 @@ pgo_build() {
 	local pgo_data_dir="/tmp/ferron-pgo-data-$$"
 	local bench_duration="$2"
 	local debug="$3"
+	local fips="$4"
 	local llvm_profdata="${LLVM_PROFDATA:-llvm-profdata}"
 
 	log_step "Phase 1: Building with PGO instrumentation"
@@ -643,13 +624,17 @@ pgo_build() {
 			log_info "  Added profiler init wrapper: ${profiler_fix_obj}"
 		fi
 	fi
+	local cargo_fips_flag=""
+	if [[ "${fips}" == "true" ]]; then
+        cargo_fips_flag="--features=fips"
+	fi
 	# Append to (not replace) the existing RUSTFLAGS so target-specific flags
 	# set by setup_env_* (e.g. musl's -lc++abi / -L<sysroot>/lib) are preserved.
 	if [[ "${debug}" == "true" ]]; then
-		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build --target "${target}" \
+		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build $cargo_fips_flag --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	else
-		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build --release --target "${target}" \
+		RUSTFLAGS="${RUSTFLAGS:-} ${instrument_rustflags}" cargo build $cargo_fips_flag --release --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	fi
 
@@ -721,10 +706,10 @@ pgo_build() {
 	local optimize_rustflags="-Cprofile-use=${pgo_data_dir}/merged.profdata"
 	# Append to (not replace) the existing RUSTFLAGS — see phase 1 note.
 	if [[ "${debug}" == "true" ]]; then
-		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build --target "${target}" \
+		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build $cargo_fips_flag --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	else
-		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build --release --target "${target}" \
+		RUSTFLAGS="${RUSTFLAGS:-} ${optimize_rustflags}" cargo build $cargo_fips_flag --release --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	fi
 
@@ -740,64 +725,32 @@ pgo_build() {
 regular_build() {
 	local target="$1"
 	local debug="$2"
+	local fips="$3"
 
 	log_step "Building Ferron"
 
+	local cargo_fips_flag=""
+	if [[ "${fips}" == "true" ]]; then
+        cargo_fips_flag="--features=fips"
+	fi
+
 	if [[ "${debug}" == "true" ]]; then
-		cargo build --target "${target}" \
+		cargo build $cargo_fips_flag --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	else
-		cargo build --release --target "${target}" \
+		cargo build $cargo_fips_flag --release --target "${target}" \
 			--manifest-path "${PROJECT_ROOT}/Cargo.toml"
 	fi
 
 	log_info "Build complete"
 }
 
-copy_binaries() {
-	local target="$1"
-	local output_dir="$2"
-	local debug="$3"
-	local target_dir="${PROJECT_ROOT}/target/${target}/release"
-	if [[ "${debug}" == "true" ]]; then
-		target_dir="${PROJECT_ROOT}/target/${target}/debug"
-	fi
-	local binaries=(
-		"ferron"
-		"ferron-fmt"
-		"ferron-passwd"
-		"ferron-precompress"
-		"ferron-kdl2ferron"
-		"ferron-serve"
-	)
-
-	mkdir -p "${output_dir}"
-
-	for bin in "${binaries[@]}"; do
-		local src="${target_dir}/${bin}"
-		if [[ -f "${src}" ]]; then
-			cp "${src}" "${output_dir}/"
-			log_info "  Copied: ${bin}"
-		else
-			log_info "  Skipped (not found): ${bin}"
-		fi
-	done
-
-	# Copy config and webroot if present
-	if [[ -f "${PROJECT_ROOT}/configs/ferron.release.conf" ]]; then
-		cp "${PROJECT_ROOT}/configs/ferron.release.conf" "${output_dir}/ferron.conf"
-	fi
-	if [[ -d "${PROJECT_ROOT}/wwwroot" ]]; then
-		cp -r "${PROJECT_ROOT}/wwwroot" "${output_dir}/"
-	fi
-}
-
 main() {
 	local target=""
 	local pgo=false
 	local debug=false
+	local fips=false
 	local sysroot_dir=""
-	local output_dir="${PROJECT_ROOT}/dist"
 	local bench_duration=30
 
 	while [[ $# -gt 0 ]]; do
@@ -806,12 +759,12 @@ main() {
 				pgo=true
 				shift
 				;;
+			-f | --fips)
+			    fips=true
+				shift
+				;;
 			-s | --sysroot-dir)
 				sysroot_dir="$2"
-				shift 2
-				;;
-			-o | --output-dir)
-				output_dir="$2"
 				shift 2
 				;;
 			-b | --bench-duration)
@@ -900,25 +853,21 @@ main() {
 
 	# Build
 	if [[ "${pgo}" == "true" ]]; then
-		pgo_build "${target}" "${bench_duration}" "${debug}"
+		pgo_build "${target}" "${bench_duration}" "${debug}" "${fips}"
 	else
-		regular_build "${target}" "${debug}"
+		regular_build "${target}" "${debug}" "${fips}"
 	fi
 
-	# Copy binaries
-	local target_output="${output_dir}/${target}"
-	mkdir -p "${target_output}"
-	copy_binaries "${target}" "${target_output}" "${debug}"
-
 	log_step "Build Summary"
-	log_info "Target: ${target}"
-	log_info "Libc: ${libc}"
-	log_info "Sysroot: ${sysroot_dir}"
-	log_info "PGO: ${pgo}"
-	log_info "Output: ${target_output}"
-	log_info ""
-	log_info "Binaries:"
-	ls -lh "${target_output}/" | grep -v "^total" | awk '{print "  " $NF " (" $5 ")"}'
+	log_info "  Target: ${target}"
+	log_info "  Libc: ${libc}"
+	log_info "  Sysroot: ${sysroot_dir}"
+	log_info "  PGO: ${pgo}"
+	if [[ "${debug}" == "true" ]]; then
+	    log_info "  Output: ${PROJECT_ROOT}/target/${target}/debug"
+	else
+	    log_info "  Output: ${PROJECT_ROOT}/target/${target}/release"
+	fi
 }
 
 main "$@"
