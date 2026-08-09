@@ -176,9 +176,6 @@ jobs:
         if: matrix.cross-build != true && matrix.cross-rs != true
         shell: bash
         run: |
-          if [[ "$OSTYPE" == msys* ]]; then
-              export CMAKE_GENERATOR="NMake Makefiles" # Fix CMake issue with Ninja not supporting `-A ARM64`
-          fi
           cargo build --release --target ${{ matrix.target }} --verbose --features=fips
 
       - name: Create a release archive
