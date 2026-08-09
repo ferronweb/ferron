@@ -157,7 +157,9 @@ async fn test_private_scope_requires_identity_not_ip() {
     // Two clients on the same public IP with no identifying cookie must not
     // share private data: every request is served from origin, never cached.
     self::common::write_file(webroot_dir.path().join("private.txt"), "one".as_bytes()).unwrap();
-    let first = reqwest::get(format!("{base_url}private.txt")).await.unwrap();
+    let first = reqwest::get(format!("{base_url}private.txt"))
+        .await
+        .unwrap();
     assert_eq!(first.status(), reqwest::StatusCode::OK);
     assert!(
         String::from_utf8_lossy(first.headers().get("Cache-Status").unwrap().as_bytes())
@@ -166,7 +168,9 @@ async fn test_private_scope_requires_identity_not_ip() {
     assert_eq!(&*first.bytes().await.unwrap(), b"one");
 
     self::common::write_file(webroot_dir.path().join("private.txt"), "two".as_bytes()).unwrap();
-    let second = reqwest::get(format!("{base_url}private.txt")).await.unwrap();
+    let second = reqwest::get(format!("{base_url}private.txt"))
+        .await
+        .unwrap();
     assert_eq!(second.status(), reqwest::StatusCode::OK);
     assert!(
         String::from_utf8_lossy(second.headers().get("Cache-Status").unwrap().as_bytes())
@@ -486,10 +490,9 @@ async fn test_cache_request_no_store() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let cache_status = String::from_utf8_lossy(
-        response.headers().get("Cache-Status").unwrap().as_bytes(),
-    )
-    .to_string();
+    let cache_status =
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .to_string();
     assert!(cache_status.contains("fwd=miss"));
     assert!(cache_status.contains("stored=false"));
     assert_eq!(&*response.bytes().await.unwrap(), b"f1");
@@ -501,10 +504,9 @@ async fn test_cache_request_no_store() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let cache_status = String::from_utf8_lossy(
-        response.headers().get("Cache-Status").unwrap().as_bytes(),
-    )
-    .to_string();
+    let cache_status =
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .to_string();
     assert!(cache_status.contains("fwd=miss"));
     assert!(cache_status.contains("stored=true"));
 
@@ -578,18 +580,15 @@ async fn test_cache_purge_authorization() {
         .get_host_port_ipv4(ContainerPort::Tcp(80))
         .await
         .unwrap();
-    let url = |host: &str| format!("http://localhost:{}/test.txt", port);
+    let url = || format!("http://localhost:{}/test.txt", port);
     let purge = |host: &str| {
         client
-            .request(
-                reqwest::Method::from_bytes(b"PURGE").unwrap(),
-                url(host),
-            )
+            .request(reqwest::Method::from_bytes(b"PURGE").unwrap(), url())
             .header("Host", host)
     };
     let auth_get = |host: &str| {
         client
-            .get(url(host))
+            .get(url())
             .header("Host", host)
             .basic_auth("alice", Some("secret123"))
     };
@@ -704,10 +703,7 @@ async fn test_cache_purge_scoped_to_requesting_host() {
     let get = |host: &str| client.get(&url).header("Host", host).send();
     let purge = |host: &str| {
         client
-            .request(
-                reqwest::Method::from_bytes(b"PURGE").unwrap(),
-                &url,
-            )
+            .request(reqwest::Method::from_bytes(b"PURGE").unwrap(), &url)
             .header("Host", host)
             .send()
     };
@@ -1899,7 +1895,11 @@ async fn test_fresh_hit_serves_local_304_for_client_conditionals() {
 
     // Request 1: miss, capture the ETag of the stored representation.
     let client = reqwest::Client::new();
-    let resp1 = client.get(format!("{base_url}cond.txt")).send().await.unwrap();
+    let resp1 = client
+        .get(format!("{base_url}cond.txt"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp1.status(), reqwest::StatusCode::OK);
     let etag = resp1
         .headers()
