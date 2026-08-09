@@ -157,12 +157,6 @@ fn validate_cache_block(
         }
     }
 
-    if let Some(entries) = block.directives.get("max_entries") {
-        for entry in entries {
-            validate_single_non_negative_integer(entry, "max_entries")?;
-        }
-    }
-
     if let Some(entries) = block.directives.get("max_response_size") {
         for entry in entries {
             validate_single_non_negative_integer(entry, "max_response_size")?;
