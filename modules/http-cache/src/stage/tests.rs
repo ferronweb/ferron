@@ -48,6 +48,72 @@ fn parses_private_key_from_cookies() {
 }
 
 #[test]
+fn report_emits_exactly_one_request_metric_per_outcome() {
+    use std::sync::Mutex;
+
+    use ferron_observability::{Event, EventSink, MetricAttributeValue, MetricEvent};
+
+    #[derive(Default)]
+    struct CapturingSink(Mutex<Vec<Event>>);
+    impl EventSink for CapturingSink {
+        fn emit(&self, event: Event) {
+            self.0.lock().unwrap().push(event);
+        }
+    }
+
+    let zone = CacheZoneId::Host("example.com".to_string());
+
+    for result in ["hit", "stale", "miss", "revalidated"] {
+        let sink = Arc::new(CapturingSink::default());
+        let mut ctx = test_context("/metric");
+        ctx.events.add_sink(sink.clone());
+
+        report(
+            &mut ctx,
+            CacheOutcome {
+                result,
+                zone_id: &zone,
+                key: "https://example.com/metric",
+                scope: None,
+                items: Some(7),
+                stored: None,
+                evictions: None,
+                detail: None,
+                key_uri: None,
+                key_method: None,
+                bypass_reason: None,
+                evaluated_cookies: None,
+                coalesced_wait_ms: None,
+                mark_uncoalesced: true,
+                metric_result: None,
+            },
+        );
+
+        let events = sink.0.lock().unwrap();
+        let request_metrics: Vec<&MetricEvent> = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Metric(metric) if metric.name == "ferron.cache.requests" => Some(metric),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            request_metrics.len(),
+            1,
+            "report must emit exactly one request metric for result `{result}`"
+        );
+        let is_labeled = request_metrics[0].attributes.iter().any(|(key, value)| {
+            *key == "ferron.cache.result"
+                && matches!(value, MetricAttributeValue::StaticStr(label) if *label == result)
+        });
+        assert!(
+            is_labeled,
+            "request metric for `{result}` must carry the matching result label"
+        );
+    }
+}
+
+#[test]
 fn private_key_requires_identity_without_falling_back_to_ip() {
     // No auth, no private cookie, no declared vary cookie: no identity, so no
     // key. The caller must treat the response as not storable in private scope

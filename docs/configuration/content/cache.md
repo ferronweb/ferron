@@ -466,7 +466,7 @@ The cache module emits the following metrics:
 
 | Metric                                   | Type    | Attributes                                                             | Description                                                   |
 | ---------------------------------------- | ------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `ferron.cache.requests`                  | Counter | `ferron.cache.zone`, `ferron.cache.result`, `ferron.cache.scope`       | Cache hits, misses, and bypasses                              |
+| `ferron.cache.requests`                  | Counter | `ferron.cache.zone`, `ferron.cache.result`, `ferron.cache.scope`       | Cache hits, misses, bypasses, and revalidations. Each request contributes exactly one counter increment, labeled with the final outcome (`hit`, `stale`, `revalidated`, `miss`, or `bypass`). |
 | `ferron.cache.entries`                   | Gauge   | `ferron.cache.zone`                                                    | Current number of cached entries                              |
 | `ferron.cache.stores`                    | Counter | `ferron.cache.zone`, `ferron.cache.scope`, `http.response.status_code` | Responses stored in the cache                                 |
 | `ferron.cache.evictions`                 | Counter | `ferron.cache.zone`, `ferron.cache.reason` (`"expired"` or `"size"`)   | Entries evicted from the cache                                |

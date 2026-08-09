@@ -458,7 +458,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                 if request_policy.reason == "request-revalidation"
                     || !satisfies_freshness_constraints(&request_policy, entry.age, entry.ttl)
                 {
-                    emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                     LookupResult::Revalidate {
                         entry: Box::new(entry),
                         cache_key,
@@ -476,7 +475,6 @@ impl Stage<HttpContext> for HttpCacheStage {
                             items,
                         }
                     } else {
-                        emit_request_metric(ctx, &zone_id, "hit", Some(scope), items);
                         LookupResult::Revalidate {
                             entry: Box::new(entry),
                             cache_key,
@@ -764,11 +762,10 @@ impl Stage<HttpContext> for HttpCacheStage {
                 items,
                 ..
             } => {
-                if inflight_key.is_some() {
-                    let mut stats = *stats;
-                    stats.expired_evictions += 1;
-                    emit_eviction_metrics(ctx, &state.zone_id, stats);
-                } else {
+                // The leader revalidates with the upstream; the store path
+                // below emits the canonical eviction/store/request metrics
+                // once. The follower serves the stale entry immediately.
+                if inflight_key.is_none() {
                     emit_eviction_metrics(ctx, &state.zone_id, *stats);
                     ctx.res = Some(if entry.body.is_none() {
                         HttpResponse::BuiltinError(
