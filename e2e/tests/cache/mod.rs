@@ -447,6 +447,137 @@ async fn test_cache_request_no_store() {
 }
 
 #[tokio::test]
+async fn test_cache_purge_authorization() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    // Host a requires basic auth (alice/secret123). Host b has no basic_auth
+    // and no allow list. Host c purges via an allow-listed IP.
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      a.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          purge_method
+        }
+        basic_auth {
+          users {
+            alice "$argon2id$v=19$m=19456,t=2,p=1$1XZH7AjwFRBV5f1z+BirSw$aHX2OgWWGHjtMy07YE+a6YOK0UQKS7GK5ZUMEcWGE74"
+          }
+        }
+      }
+
+      b.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          purge_method
+        }
+      }
+
+      c.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          purge_method
+          purge_allowed_ips "0.0.0.0/0"
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let url = |host: &str| format!("http://localhost:{}/test.txt", port);
+    let purge = |host: &str| {
+        client
+            .request(
+                reqwest::Method::from_bytes(b"PURGE").unwrap(),
+                url(host),
+            )
+            .header("Host", host)
+    };
+    let auth_get = |host: &str| {
+        client
+            .get(url(host))
+            .header("Host", host)
+            .basic_auth("alice", Some("secret123"))
+    };
+
+    // Prime host a's cache.
+    let response = auth_get("a.example.com").send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+
+    // PURGE with matching basic auth succeeds.
+    let response = purge("a.example.com")
+        .basic_auth("alice", Some("secret123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    // The entry was removed: the next request misses again.
+    let response = auth_get("a.example.com").send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+
+    // PURGE without credentials on a protected host is rejected by basic_auth.
+    let response = purge("a.example.com").send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    // Foreign basic auth (valid on a.example.com) cannot purge host b, which
+    // has no basic_auth block in scope.
+    let response = purge("b.example.com")
+        .basic_auth("alice", Some("secret123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+    // Unauthenticated PURGE on host b is also rejected.
+    let response = purge("b.example.com").send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+    // An allow-listed IP purges without credentials.
+    let response = purge("c.example.com").send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

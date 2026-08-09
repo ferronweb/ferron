@@ -278,10 +278,10 @@ When you enable the `purge_method` subdirective, Ferron accepts the `PURGE` HTTP
 
 PURGE requests must be either:
 
-- Authenticated via HTTP basic authentication (the `basic_auth` directive), or
+- Authenticated via HTTP basic authentication, where the `basic_auth` block is configured in the same scope as the `cache` block, or
 - Originating from an IP address matching the `purge_allowed_ips` list.
 
-If neither condition is met, Ferron returns a **403 Forbidden** response. This makes sure that Ferron never accidentally leaves cache purging unsecured.
+The basic-auth requirement is scoped: credentials that authenticate a user on one host do not authorize a `PURGE` on another host that has no `basic_auth` block in scope. If neither condition is met, Ferron returns a **403 Forbidden** response. This makes sure that Ferron never accidentally leaves cache purging unsecured.
 
 **Example using trusted IP list:**
 

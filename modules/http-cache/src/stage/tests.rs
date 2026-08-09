@@ -162,6 +162,41 @@ fn purge_reports_purged_and_remaining_entry_counts() {
 }
 
 #[test]
+fn purge_allowed_rejects_unauthenticated_without_allowlist() {
+    let ip: std::net::IpAddr = "192.0.2.10".parse().unwrap();
+    assert!(!purge_allowed(ip, &[], false, None));
+    assert!(!purge_allowed(ip, &[], true, None));
+}
+
+#[test]
+fn purge_allowed_rejects_foreign_authenticated_user() {
+    // An authenticated user alone must not authorize a purge: the request's
+    // basic_auth block must be in scope.
+    let ip: std::net::IpAddr = "192.0.2.10".parse().unwrap();
+    assert!(!purge_allowed(ip, &[], false, Some("alice")));
+}
+
+#[test]
+fn purge_allowed_accepts_in_scope_authenticated_user() {
+    let ip: std::net::IpAddr = "192.0.2.10".parse().unwrap();
+    assert!(purge_allowed(ip, &[], true, Some("alice")));
+}
+
+#[test]
+fn purge_allowed_accepts_allowlisted_ip_without_auth() {
+    let ip: std::net::IpAddr = "192.0.2.10".parse().unwrap();
+    let allowlist = vec!["192.0.2.0/24".parse::<cidr::IpCidr>().unwrap()];
+    assert!(purge_allowed(ip, &allowlist, false, None));
+}
+
+#[test]
+fn purge_allowed_rejects_ip_outside_allowlist() {
+    let ip: std::net::IpAddr = "198.51.100.5".parse().unwrap();
+    let allowlist = vec!["192.0.2.0/24".parse::<cidr::IpCidr>().unwrap()];
+    assert!(!purge_allowed(ip, &allowlist, false, None));
+}
+
+#[test]
 fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
     use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::ServerConfigurationBlockBuilder;

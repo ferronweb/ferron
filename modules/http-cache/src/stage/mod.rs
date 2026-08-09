@@ -6,12 +6,14 @@ mod served;
 #[cfg(test)]
 mod tests;
 
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use ahash::AHashMap;
 use async_trait::async_trait;
 use bytes::Bytes;
+use cidr::IpCidr;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
@@ -300,15 +302,17 @@ impl Stage<HttpContext> for HttpCacheStage {
             if !config.purge_method {
                 // PURGE not enabled — fall through to 405 from downstream stages
             } else {
-                let ip_allowed = if !config.purge_allowed_ips.is_empty() {
-                    config
-                        .purge_allowed_ips
-                        .iter()
-                        .any(|cidr| cidr.contains(&ctx.remote_address.ip().to_canonical()))
-                } else {
-                    false
-                };
-                let purge_allowed = ctx.auth_user.is_some() || ip_allowed;
+                // A basic_auth block must be in scope for this request: an
+                // authenticated user from a foreign host's basic_auth must not
+                // be able to purge this host's cache.
+                let has_basic_auth_in_scope =
+                    !ctx.configuration.get_entries("basic_auth", true).is_empty();
+                let purge_allowed = purge_allowed(
+                    ctx.remote_address.ip().to_canonical(),
+                    &config.purge_allowed_ips,
+                    has_basic_auth_in_scope,
+                    ctx.auth_user.as_deref(),
+                );
 
                 if !purge_allowed {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
@@ -1236,4 +1240,27 @@ fn resolve_zone_id(
     } else {
         CacheZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()))
     }
+}
+
+/// Whether a `PURGE` request is authorized to invalidate this cache.
+///
+/// An allow-listed client IP always authorizes a purge. Otherwise the request
+/// must carry an authenticated user (`ctx.auth_user`) **and** a `basic_auth`
+/// block must be in scope for the request. Requiring the in-scope `basic_auth`
+/// block prevents a user authenticated by a foreign host's `basic_auth` from
+/// purging a host that does not own those credentials.
+#[inline]
+fn purge_allowed(
+    remote_ip: IpAddr,
+    purge_allowed_ips: &[IpCidr],
+    has_basic_auth_in_scope: bool,
+    auth_user: Option<&str>,
+) -> bool {
+    if purge_allowed_ips
+        .iter()
+        .any(|cidr| cidr.contains(&remote_ip))
+    {
+        return true;
+    }
+    auth_user.is_some() && has_basic_auth_in_scope
 }
