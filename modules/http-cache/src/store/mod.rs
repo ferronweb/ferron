@@ -88,14 +88,16 @@ struct StoreLifecycle;
 #[derive(Default)]
 struct StoreRequestState {
     size_evictions: usize,
+    evicted_base_keys: Vec<String>,
 }
 
 impl Lifecycle<String, StoredEntry> for StoreLifecycle {
     type RequestState = StoreRequestState;
 
     #[inline]
-    fn on_evict(&self, state: &mut Self::RequestState, _key: String, _val: StoredEntry) {
+    fn on_evict(&self, state: &mut Self::RequestState, _key: String, val: StoredEntry) {
         state.size_evictions += 1;
+        state.evicted_base_keys.push(val.base_key);
     }
 }
 
@@ -337,6 +339,9 @@ impl CacheStore {
         self.entries
             .insert_with_lifecycle(key, entry, &mut request_state);
         stats.size_evictions = request_state.size_evictions;
+        for base_key in request_state.evicted_base_keys {
+            self.remove_orphaned_base_key(&base_key);
+        }
         (stats, self.entries.len())
     }
 
@@ -367,16 +372,24 @@ impl CacheStore {
         }
 
         for base_key in &affected_base_keys {
-            let has_remaining = self
-                .entries
-                .iter()
-                .any(|(_, entry)| entry.base_key == *base_key);
-            if !has_remaining {
-                self.variants_by_base.remove(base_key);
-            }
+            self.remove_orphaned_base_key(base_key);
         }
 
         (stats, self.entries.len())
+    }
+
+    /// Drop a base key's variant registry once no entry references it, so the
+    /// map does not leak orphaned base keys after expiry, size eviction, or
+    /// purge.
+    #[inline]
+    fn remove_orphaned_base_key(&self, base_key: &str) {
+        let has_remaining = self
+            .entries
+            .iter()
+            .any(|(_, entry)| entry.base_key == base_key);
+        if !has_remaining {
+            self.variants_by_base.remove(base_key);
+        }
     }
 
     #[inline]
@@ -393,10 +406,15 @@ impl CacheStore {
             .collect();
 
         let mut count = 0;
+        let mut orphaned_base_keys = AHashSet::default();
         for key in expired_keys {
-            if self.entries.remove(&key).is_some() {
+            if let Some((_, entry)) = self.entries.remove(&key) {
                 count += 1;
+                orphaned_base_keys.insert(entry.base_key);
             }
+        }
+        for base_key in orphaned_base_keys {
+            self.remove_orphaned_base_key(&base_key);
         }
         count
     }

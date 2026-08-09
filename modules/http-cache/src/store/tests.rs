@@ -569,42 +569,28 @@ fn stored_entry_keeps_lsc_cookies_but_drops_origin_set_cookie() {
 }
 
 #[test]
-fn had_expired_is_true_when_entry_expired() {
+fn had_expired_when_variants_exist_but_no_request_matches() {
     let store = CacheStore::new(4);
-    let headers = HeaderMap::new();
+    let vary = VaryRule {
+        header_names: vec![HeaderName::from_static("accept-language")],
+        cookie_names: Vec::new(),
+        value: None,
+    };
+    let en_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);
+    let fr_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "fr-FR")]);
     let cookies = AHashMap::default();
 
     store.insert_with_request(
-        stored_entry(
-            "https://example.com/expired",
-            CacheScope::Public,
-            "expired",
-            VaryRule::default(),
-        ),
+        stored_entry("https://example.com/vary", CacheScope::Public, "en", vary),
         None,
-        &headers,
+        &en_headers,
         &cookies,
     );
 
-    {
-        let mut expired_entry = store
-            .entries
-            .get("https://example.com/expired\nscope=public")
-            .expect("expected inserted expired entry");
-        expired_entry.created_at = Instant::now() - Duration::from_secs(5);
-        expired_entry.ttl = Duration::from_secs(1);
-        assert!(store
-            .entries
-            .replace(
-                "https://example.com/expired\nscope=public".to_string(),
-                expired_entry,
-                false,
-            )
-            .is_ok());
-    }
-
+    // A request whose headers match no stored variant still reports the base
+    // as expired-so-fetch, because variants exist for it.
     let LookupOutcome { had_expired, .. } =
-        store.lookup("https://example.com/expired", &headers, &cookies, None);
+        store.lookup("https://example.com/vary", &fr_headers, &cookies, None);
     assert!(had_expired);
 }
 
@@ -776,9 +762,13 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
             .ok();
     }
 
-    // Verify lookup returns had_expired
-    let LookupOutcome { had_expired, .. } = store.lookup(base_key, &headers, &cookies, None);
-    assert!(had_expired);
+    // A fully expired entry is cleaned up on lookup; its base key is dropped
+    // too, so the miss no longer reports had_expired.
+    let LookupOutcome {
+        stats, had_expired, ..
+    } = store.lookup(base_key, &headers, &cookies, None);
+    assert!(!had_expired);
+    assert_eq!(stats.expired_evictions, 1);
 
     let fetch_count = Arc::new(AtomicUsize::new(0));
     let mut handles = Vec::new();
@@ -1294,7 +1284,7 @@ fn variants_by_base_cleaned_up_after_purge_removes_all_entries() {
 }
 
 #[test]
-fn variants_by_base_preserved_after_expiry_for_thundering_herd() {
+fn variants_by_base_removed_after_expiry_cleanup() {
     let store = CacheStore::new(8);
     let headers = HeaderMap::new();
     let cookies = AHashMap::default();
@@ -1307,7 +1297,7 @@ fn variants_by_base_preserved_after_expiry_for_thundering_herd() {
     );
     store.insert_with_request(entry, None, &headers, &cookies);
 
-    // Expire the entry
+    // Expire the entry beyond its TTL and SWR window
     {
         let mut expired_entry = store
             .entries
@@ -1325,16 +1315,17 @@ fn variants_by_base_preserved_after_expiry_for_thundering_herd() {
             .is_ok());
     }
 
-    // Lookup triggers cleanup, but variants should be preserved for thundering herd
-    let _ = store.lookup("https://example.com/page", &headers, &cookies, None);
-
-    assert!(store
+    // Lookup triggers cleanup, which must drop the orphaned base key
+    let outcome = store.lookup("https://example.com/page", &headers, &cookies, None);
+    assert_eq!(outcome.stats.expired_evictions, 1);
+    assert!(outcome.entry.is_none());
+    assert!(!store
         .variants_by_base
         .contains_key("https://example.com/page"));
 }
 
 #[test]
-fn variants_by_base_preserved_after_lru_eviction() {
+fn variants_by_base_removed_after_size_eviction() {
     let store = CacheStore::new(1);
     let headers = HeaderMap::new();
     let cookies = AHashMap::default();
@@ -1353,16 +1344,55 @@ fn variants_by_base_preserved_after_lru_eviction() {
         "b",
         VaryRule::default(),
     );
-    store.insert_with_request(entry2, None, &headers, &cookies);
+    let (stats, _) = store.insert_with_request(entry2, None, &headers, &cookies);
 
-    // After inserting b, a should be evicted but variants_by_base for a should be preserved
-    // (only cleaned up by purge, not by LRU eviction)
+    // Inserting b evicts a; a's orphaned base key must be dropped
+    assert_eq!(stats.size_evictions, 1);
+    assert!(!store.variants_by_base.contains_key("https://example.com/a"));
+    assert!(store.variants_by_base.contains_key("https://example.com/b"));
+}
+
+#[test]
+fn variants_by_base_kept_when_other_variant_survives_eviction() {
+    let store = CacheStore::new(1);
+    let vary = VaryRule {
+        header_names: vec![HeaderName::from_static("accept-language")],
+        cookie_names: Vec::new(),
+        value: None,
+    };
+    let en_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);
+    let fr_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "fr-FR")]);
+    let cookies = AHashMap::default();
+
+    store.insert_with_request(
+        stored_entry(
+            "https://example.com/page",
+            CacheScope::Public,
+            "en",
+            vary.clone(),
+        ),
+        None,
+        &en_headers,
+        &cookies,
+    );
+    let (stats, _) = store.insert_with_request(
+        stored_entry("https://example.com/page", CacheScope::Public, "fr", vary),
+        None,
+        &fr_headers,
+        &cookies,
+    );
+
+    // The en variant is evicted, but the fr variant still references the base
+    assert_eq!(stats.size_evictions, 1);
     assert!(store
-        .lookup("https://example.com/a", &headers, &cookies, None)
-        .entry
-        .is_none());
+        .variants_by_base
+        .contains_key("https://example.com/page"));
     assert!(store
-        .lookup("https://example.com/b", &headers, &cookies, None)
+        .lookup("https://example.com/page", &fr_headers, &cookies, None)
         .entry
         .is_some());
+    assert!(store
+        .lookup("https://example.com/page", &en_headers, &cookies, None)
+        .entry
+        .is_none());
 }

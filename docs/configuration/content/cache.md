@@ -351,6 +351,8 @@ Ferron coordinates concurrent upstream fetches with a singleflight mechanism: wh
 
 A follower waits up to `coalesce_timeout` seconds for the leader. If the leader does not complete within that window, the follower stops coalescing and fetches from the upstream itself. This makes sure one hung upstream request does not stall every concurrent request for the same entry.
 
+When an entry falls outside both its `max-age` and its `stale-while-revalidate` window, Ferron removes it from the cache on the next access. If no other variant of the same URL remains, Ferron also drops the URL's variant registry, so a later request is a plain miss rather than a stale-triggered revalidation. Size-based eviction does the same.
+
 The `stale-while-revalidate` duration comes from the origin `Cache-Control` header. For example:
 
 ```http
