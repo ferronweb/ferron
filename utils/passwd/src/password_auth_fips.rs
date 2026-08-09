@@ -9,7 +9,7 @@ pub fn generate_hash(password: impl AsRef<[u8]>) -> String {
 
     aws_lc_rs::pbkdf2::derive(
         aws_lc_rs::pbkdf2::PBKDF2_HMAC_SHA256,
-        NonZeroU32::new(iterations).unwrap(),
+        NonZeroU32::new(iterations).expect("zero pbkdf2 iterations"),
         &salt,
         password.as_ref(),
         &mut derived,
