@@ -213,9 +213,14 @@ pub fn evaluate_response_policy(
         };
     }
 
-    let explicit_private = ls_control.is_some_and(|control| control.private)
+    // LiteSpeed headers drive the scope only when they override the policy.
+    // Without the override flag, they may still reject storage (no-store /
+    // no-cache), but they must not decide scope or TTL.
+    let explicit_private = (litespeed_overrides_response_policy
+        && ls_control.is_some_and(|control| control.private))
         || (!litespeed_overrides_response_policy && standard.private);
-    let explicit_public = ls_control.is_some_and(|control| control.public || control.shared)
+    let explicit_public = (litespeed_overrides_response_policy
+        && ls_control.is_some_and(|control| control.public || control.shared))
         || (!litespeed_overrides_response_policy
             && (standard.public || standard.s_maxage.is_some()));
 
@@ -420,7 +425,7 @@ pub(crate) fn choose_ttl(
     }
 
     // Standard Cache-Control is the authority. LiteSpeed headers act only as
-    // a fallback when the standard directives are silent.
+    // a fallback when they override the policy; otherwise they never drive TTL.
     if scope == CacheScope::Public {
         if let Some(ttl) = standard.s_maxage {
             return Some(ttl);
@@ -443,14 +448,16 @@ pub(crate) fn choose_ttl(
         return None;
     }
 
-    if scope == CacheScope::Public {
-        if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
+    if litespeed_overrides_response_policy {
+        if scope == CacheScope::Public {
+            if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
+                return Some(ttl);
+            }
+        }
+
+        if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
             return Some(ttl);
         }
-    }
-
-    if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
-        return Some(ttl);
     }
 
     Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
@@ -871,7 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn litespeed_fallback_after_silent_standard() {
+    fn litespeed_ttl_ignored_without_override() {
         let mut headers = HeaderMap::new();
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public"));
         let ls_control = LiteSpeedCacheControl {
@@ -889,8 +896,66 @@ mod tests {
             false,
         );
         assert!(decision.store);
-        // standard directives are silent, so the LS s-maxage fallback applies first
-        assert_eq!(decision.ttl, Some(Duration::from_secs(600)));
+        // Standard directives are silent, so the LS TTL must not apply; the
+        // response falls back to the heuristic lifetime instead.
+        assert_eq!(
+            decision.ttl,
+            Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+        );
+    }
+
+    #[test]
+    fn litespeed_headers_do_not_drive_scope_without_override() {
+        // No standard directives at all: only the LS header marks the
+        // response public with a long TTL.
+        let headers = HeaderMap::new();
+        let ls_control = LiteSpeedCacheControl {
+            public: true,
+            max_age: Some(Duration::from_secs(3600)),
+            ..LiteSpeedCacheControl::default()
+        };
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            Some(&ls_control),
+            false,
+        );
+        // 200 OK is still cacheable by the default heuristic, but not as a
+        // 3600-second public response.
+        assert!(decision.store);
+        assert_eq!(
+            decision.ttl,
+            Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+        );
+        assert_ne!(decision.ttl, Some(Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn litespeed_private_ignored_without_override() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120"),
+        );
+        let ls_control = LiteSpeedCacheControl {
+            private: true,
+            ..LiteSpeedCacheControl::default()
+        };
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            Some(&ls_control),
+            false,
+        );
+        // Without the override, the LS `private` directive does not turn the
+        // standard public response into a private one.
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
+        assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
     }
 
     #[test]

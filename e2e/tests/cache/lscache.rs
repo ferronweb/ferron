@@ -225,7 +225,7 @@ async fn test_lscache_hop_by_hop_headers_stripped_on_serve() {
 
 #[tokio::test]
 async fn test_lscache_private_cache() {
-    let ctx = LSCacheTestContext::new("private", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("private", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -268,7 +268,7 @@ async fn test_lscache_private_cache() {
 
 #[tokio::test]
 async fn test_lscache_private_hit_rehydrates_lsc_cookie_but_not_origin_set_cookie() {
-    let ctx = LSCacheTestContext::new("private-cookie", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("private-cookie", BASE_CONFIG_OVERRIDE_LS).await;
 
     let headers = [
         ("X-Test-Cache-Control", "private,max-age=60"),
@@ -783,7 +783,7 @@ async fn test_lscache_s_maxage() {
 
 #[tokio::test]
 async fn test_lscache_public_tag_with_private_cache() {
-    let ctx = LSCacheTestContext::new("public-tag-private", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("public-tag-private", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -888,7 +888,7 @@ async fn test_lscache_shared_cache_control() {
 
 #[tokio::test]
 async fn test_lscache_purge_private_scope() {
-    let ctx = LSCacheTestContext::new("purge-private", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("purge-private", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(

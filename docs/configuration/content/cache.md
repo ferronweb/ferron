@@ -162,7 +162,7 @@ Ferron determines the freshness lifetime from the origin response using the dire
 3. `Expires` header minus the `Date` header
 4. The default heuristic of 300 seconds
 
-`X-LiteSpeed-Cache-Control` acts as a fallback only when the standard directives are silent. Ferron does not take the minimum of all candidates.
+`X-LiteSpeed-Cache-Control` never decides the TTL or cache scope unless `litespeed_override_cache_control` is enabled. Without the override, the header may still make a response uncacheable (`no-store` or `no-cache`), but standard HTTP caching rules evaluate everything else. Ferron does not take the minimum of all candidates.
 
 Per RFC 9111 §4.2.4, Ferron does not generate a heuristic freshness lifetime when the response carries `must-revalidate`, `proxy-revalidate`, or `s-maxage` without an explicit lifetime. Such a response is not stored. An explicit `max-age=0` or `s-maxage=0` is different: Ferron stores it with a zero TTL, so the entry always revalidates.
 
