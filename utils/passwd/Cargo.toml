@@ -11,5 +11,15 @@ clap = { version = "4.5.28", features = ["derive"] }
 password-auth = "1.0.0"
 rpassword = "7.4.0"
 
+# These are used instead of password-auth when FIPS is enabled.
+# This is because RustCrypto doesn't seem to have FIPS-certified version,
+# so we have to use AWS-LC FIPS instead, and use only PBKDF2...
+aws-lc-rs = { optional = true, version = "1", features = ["fips"] }
+base64 = { optional = true, version = "0.23.1"}
+rand = { version = "0.10.2", optional = true }
+
 [build-dependencies]
 winresource = "0.1.19"
+
+[features]
+fips = ["aws-lc-rs", "base64", "rand"]

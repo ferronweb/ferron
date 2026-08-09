@@ -1923,8 +1923,11 @@ dependencies = [
 name = "ferron-passwd"
 version = "3.0.0-beta.8"
 dependencies = [
+ "aws-lc-rs",
+ "base64 0.23.1",
  "clap",
  "password-auth",
+ "rand 0.10.2",
  "rpassword",
  "winresource",
 ]

@@ -1,5 +1,11 @@
+#[cfg(feature = "fips")]
+mod password_auth_fips;
+
 use clap::Parser;
+#[cfg(not(feature = "fips"))]
 use password_auth::generate_hash;
+#[cfg(feature = "fips")]
+use password_auth_fips::generate_hash;
 use rpassword::prompt_password;
 use std::process;
 
