@@ -110,8 +110,10 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
     }
 
     if contains_token(cache_control, "no-store") {
+        // RFC 9111 §5.2.1.5: request `no-store` forbids storing the request
+        // and its response, but does not forbid serving a stored response.
         return RequestCachePolicy {
-            allow_lookup: false,
+            allow_lookup: true,
             allow_store: false,
             max_age,
             min_fresh,
@@ -529,6 +531,17 @@ fn contains_token(value: &str, token: &str) -> bool {
 mod tests {
     use super::*;
     use http::HeaderValue;
+
+    #[test]
+    fn request_no_store_allows_lookup_but_not_store() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        let policy = parse_request_policy(&headers);
+        // RFC 9111 §5.2.1.5: no-store forbids storing, not serving.
+        assert!(policy.allow_lookup);
+        assert!(!policy.allow_store);
+        assert_eq!(policy.reason, "request-no-store");
+    }
 
     #[test]
     fn request_no_cache_enables_revalidation() {

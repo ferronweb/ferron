@@ -348,6 +348,105 @@ async fn test_cache_request_max_age_revalidates() {
 }
 
 #[tokio::test]
+async fn test_cache_request_no_store() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache true
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("cached.txt"), "v1".as_bytes()).unwrap();
+    self::common::write_file(webroot_dir.path().join("fresh.txt"), "f1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+
+    // Prime the cache for cached.txt.
+    let response = client
+        .get(format!("http://localhost:{}/cached.txt", port))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // A no-store request still serves the fresh stored entry (RFC 9111 §5.2.1.5).
+    let response = client
+        .get(format!("http://localhost:{}/cached.txt", port))
+        .header("Cache-Control", "no-store")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+    assert_eq!(&*response.bytes().await.unwrap(), b"v1");
+
+    // A no-store request that misses is forwarded but its response is not stored.
+    let response = client
+        .get(format!("http://localhost:{}/fresh.txt", port))
+        .header("Cache-Control", "no-store")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let cache_status = String::from_utf8_lossy(
+        response.headers().get("Cache-Status").unwrap().as_bytes(),
+    )
+    .to_string();
+    assert!(cache_status.contains("fwd=miss"));
+    assert!(cache_status.contains("stored=false"));
+    assert_eq!(&*response.bytes().await.unwrap(), b"f1");
+
+    // The following request misses again: the no-store response left no entry.
+    let response = client
+        .get(format!("http://localhost:{}/fresh.txt", port))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let cache_status = String::from_utf8_lossy(
+        response.headers().get("Cache-Status").unwrap().as_bytes(),
+    )
+    .to_string();
+    assert!(cache_status.contains("fwd=miss"));
+    assert!(cache_status.contains("stored=true"));
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

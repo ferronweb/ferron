@@ -170,7 +170,7 @@ Per RFC 9111 §4.2.4, Ferron does not generate a heuristic freshness lifetime wh
 Ferron honors the request `Cache-Control` directives defined in RFC 9111 §5.2.1 when they apply to a cache lookup:
 
 - `no-cache`: Ferron revalidates the stored response with the origin before serving it. The `Pragma: no-cache` header has the same effect.
-- `no-store`: Ferron ignores the stored response and does not store the response to this request. It still forwards the request to the origin.
+- `no-store`: Ferron does not store the response to this request. It may still serve a fresh stored response, because `no-store` only forbids storing, per RFC 9111 §5.2.1.5.
 - `max-age=<n>`: Ferron serves the stored response only when its current age is at most `<n>` seconds. An older entry is revalidated with the origin. A value of `0` forces revalidation.
 - `min-fresh=<n>`: Ferron serves the stored response only when at least `<n>` seconds of freshness remain. An entry with less remaining freshness is revalidated with the origin.
 - `only-if-cached`: Ferron serves the stored response only when a fresh entry exists. On a miss or when the entry is stale, Ferron returns `504 Gateway Timeout` without contacting the origin.
