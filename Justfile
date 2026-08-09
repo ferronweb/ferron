@@ -1,13 +1,13 @@
 set windows-shell := ["powershell.exe", "-c"]
 
 # Build the project
-build:
-    cargo build -r
+build fips="false":
+    cargo build -r {{ if fips == "true" { "--features=fips" } else { "" } }}
 
 # Cross-build the optimized binaries for the project (+ optional PGO)
 [linux]
-cross-build target pgo="false":
-    ./cross-build/build.sh {{ target }} {{ if pgo == "true" { "--pgo" } else { "" } }}
+cross-build target pgo="false" fips="false":
+    ./cross-build/build.sh {{ target }} {{ if fips == "true" { "--fips" } else { "" } }} {{ if pgo == "true" { "--pgo" } else { "" } }}
 
 # Run the project for testing
 run:
@@ -25,26 +25,26 @@ prepare-config:
 
 # Package the release binaries
 [unix]
-package target="":
-    ./packaging/archive/package.sh {{ target }}
+package target="" fips="false":
+    {{ if fips == "true" { "./packaging/archive/package-fips.sh" } else { "./packaging/archive/package.sh" } }} {{ target }}
 
 # Package the release binaries
 [windows]
-package target="":
-    powershell -ExecutionPolicy Bypass -File packaging/archive/package.ps1 {{ target }}
+package target="" fips="false":
+    powershell -ExecutionPolicy Bypass -File {{ if fips == "true" { "packaging/archive/package-fips.ps1" } else { "packaging/archive/package.ps1" } }} {{ target }}
 
 # Package the release binaries as a Debian package
-package-deb target="":
-    ./packaging/deb/package-docker.sh {{ target }}
+package-deb target="" fips="false":
+    {{ if fips == "true" { "FIPS=1" } else { "" } }} ./packaging/deb/package-docker.sh {{ target }}
 
 # Package the release binaries as an RPM package
-package-rpm target="":
-    ./packaging/rpm/package-docker.sh {{ target }}
+package-rpm target="" fips="false":
+    {{ if fips == "true" { "FIPS=1" } else { "" } }} ./packaging/rpm/package-docker.sh {{ target }}
 
 # Package the release binaries as a Windows installer
 [windows]
-package-windows target="":
-    powershell -ExecutionPolicy Bypass -File packaging/windows/package.ps1 {{ target }}
+package-windows target="" fips="false":
+    powershell -ExecutionPolicy Bypass -File {{ if fips == "true" { "packaging/windows/package-fips.ps1" } else { "packaging/windows/package.ps1" } }} {{ target }}
 
 # Build the installer for Linux
 [unix]
