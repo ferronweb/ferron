@@ -54,14 +54,11 @@ fn resolve_log_placeholder(
     "status_code" => status_code.to_string(),
     "content_length" => content_length.map_or_else(|| "-".to_string(), |len| len.to_string()),
     _ => {
-      if let Some(header_name) = placeholder.strip_prefix("header:") {
-        if let Some(header_value) = request_parts.headers.get(header_name) {
-          header_value.to_str().unwrap_or("").to_string()
-        } else {
-          "-".to_string()
-        }
+      let header_name = placeholder.strip_prefix("header:")?;
+      if let Some(header_value) = request_parts.headers.get(header_name) {
+        header_value.to_str().unwrap_or("").to_string()
       } else {
-        return None;
+        "-".to_string()
       }
     }
   })

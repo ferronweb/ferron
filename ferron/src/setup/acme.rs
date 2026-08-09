@@ -314,7 +314,7 @@ pub async fn background_on_demand_acme_task(
           acme_logger
             .log(&format!(
               "The TLS certificate cannot be issued for \"{}\" hostname",
-              &received_data.0
+              received_data.0
             ))
             .await;
           continue;
@@ -323,7 +323,7 @@ pub async fn background_on_demand_acme_task(
           acme_logger
             .log(&format!(
               "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}",
-              &received_data.0
+              received_data.0
             ))
             .await;
           continue;
