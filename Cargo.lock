@@ -138,25 +138,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "argon2-rs"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9aa47f96ca0c1800ddcd702d71da0a61b3a84c2472affbfe8b05716441e2c1b"
-dependencies = [
- "argon2-sys",
-]
-
-[[package]]
-name = "argon2-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "190bcd1a5417d25c2fff051cd443de3c9c348094d1cb5760d28ecf88428b76a0"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -496,9 +477,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.4.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5add81bb678e6cb321aff7fa0dc7689ad82b112dbc032cea19f91d6b8e3582b9"
+checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1295,16 +1276,19 @@ dependencies = [
 name = "ferron-http-basicauth"
 version = "3.0.0-beta.8"
 dependencies = [
- "argon2-rs",
+ "argon2",
  "async-trait",
  "aws-lc-rs",
  "aws-lc-sys",
  "base64 0.23.1",
+ "bindgen",
  "bytes",
+ "cc",
  "dashmap",
  "ferron-core",
  "ferron-http",
  "ferron-observability",
+ "find_git",
  "http",
  "http-body-util",
  "rustc-hash",
@@ -2099,9 +2083,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
+checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
 
 [[package]]
 name = "find_git"

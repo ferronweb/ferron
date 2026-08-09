@@ -1,3 +1,6 @@
 [submodule "modules/observability-otlp/opentelemetry-proto"]
 	path = modules/observability-otlp/opentelemetry-proto
 	url = https://github.com/open-telemetry/opentelemetry-proto
+[submodule "modules/http-basicauth/phc-winner-argon2"]
+	path = modules/http-basicauth/phc-winner-argon2
+	url = https://github.com/P-H-C/phc-winner-argon2

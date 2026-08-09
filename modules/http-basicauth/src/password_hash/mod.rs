@@ -11,6 +11,8 @@
 //!
 //! Base64 salt and hash fields accept both padded and unpadded encodings.
 
+mod argon2_sys;
+
 use std::num::NonZeroU32;
 
 use base64::engine::general_purpose::STANDARD_NO_PAD;
@@ -56,9 +58,9 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
     }
 
     let algorithm = match segments[1] {
-        "argon2id" => argon2_rs::Algorithm::Argon2id,
-        "argon2i" => argon2_rs::Algorithm::Argon2i,
-        "argon2d" => argon2_rs::Algorithm::Argon2d,
+        "argon2id" => self::argon2_sys::Argon2_type_Argon2_id,
+        "argon2i" => self::argon2_sys::Argon2_type_Argon2_i,
+        "argon2d" => self::argon2_sys::Argon2_type_Argon2_d,
         _ => return false,
     };
     let version = match parse_argon2_version(segments[2]) {
@@ -75,7 +77,7 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
         return false;
     }
 
-    let salt = match decode_b64_ignore_padding(segments[4]) {
+    let mut salt = match decode_b64_ignore_padding(segments[4]) {
         Some(salt) if !salt.is_empty() && salt.len() <= MAX_SALT_LEN => salt,
         _ => return false,
     };
@@ -84,27 +86,46 @@ fn verify_argon2(plain: &str, hash: &str) -> bool {
         _ => return false,
     };
 
-    // `argon2-rs` has no verify function, so re-derive the hash and compare
-    // the result in constant time.
-    let argon2 = argon2_rs::Argon2::new(m_cost, t_cost, p_cost)
-        .with_algorithm(algorithm)
-        .with_version(version)
-        .with_hash_length(expected.len() as u64);
-    let derived = match argon2.hash_password(plain, salt) {
-        Ok(derived) => derived,
-        Err(_) => return false,
+    let mut derived = vec![0u8; expected.len()];
+    let plain_bytes = plain.as_bytes();
+    let mut ctx = self::argon2_sys::Argon2_Context {
+        out: derived.as_mut_ptr(),
+        outlen: derived.len() as u32,
+        salt: salt.as_mut_ptr(),
+        saltlen: salt.len() as u32,
+        pwd: plain_bytes.as_ptr() as *mut u8,
+        pwdlen: plain_bytes.len() as u32,
+        secret: std::ptr::null_mut(),
+        secretlen: 0,
+        ad: std::ptr::null_mut(),
+        adlen: 0,
+        t_cost,
+        m_cost,
+        lanes: p_cost,
+        threads: p_cost,
+        version,
+        allocate_cbk: None,
+        free_cbk: None,
+        flags: 0, // ARGON2_DEFAULT_FLAGS
     };
+    // SAFETY: `ctx` is initialized with valid pointers and parameters.
+    // Also, `rc` will be set to `0` on success, so we check it for equality with `0`.
+    // See https://github.com/P-H-C/phc-winner-argon2 README
+    let rc = unsafe { self::argon2_sys::argon2_ctx(&mut ctx, algorithm) };
+    if rc != 0 {
+        return false;
+    }
 
     aws_lc_rs::constant_time::verify_slices_are_equal(&derived, &expected).is_ok()
 }
 
 /// Parse an Argon2 version segment of the form `v=<version>`.
 #[inline]
-fn parse_argon2_version(segment: &str) -> Option<argon2_rs::Version> {
+fn parse_argon2_version(segment: &str) -> Option<u32> {
     let value = segment.strip_prefix("v=")?;
     match value.parse::<u32>().ok()? {
-        0x10 => Some(argon2_rs::Version::V0x10),
-        0x13 => Some(argon2_rs::Version::V0x13),
+        0x10 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_10),
+        0x13 => Some(self::argon2_sys::Argon2_version_ARGON2_VERSION_13),
         _ => None,
     }
 }
@@ -422,8 +443,8 @@ mod tests {
     /// Encode an Argon2 hash as a PHC string.
     #[inline]
     fn argon2_phc_string(
-        algorithm: argon2_rs::Algorithm,
-        version: argon2_rs::Version,
+        algorithm: argon2::Algorithm,
+        version: argon2::Version,
         m_cost: u32,
         t_cost: u32,
         p_cost: u32,
@@ -431,13 +452,13 @@ mod tests {
         hash: &[u8],
     ) -> String {
         let ident = match algorithm {
-            argon2_rs::Algorithm::Argon2id => "argon2id",
-            argon2_rs::Algorithm::Argon2i => "argon2i",
-            argon2_rs::Algorithm::Argon2d => "argon2d",
+            argon2::Algorithm::Argon2id => "argon2id",
+            argon2::Algorithm::Argon2i => "argon2i",
+            argon2::Algorithm::Argon2d => "argon2d",
         };
         let version = match version {
-            argon2_rs::Version::V0x10 => 16,
-            argon2_rs::Version::V0x13 => 19,
+            argon2::Version::V0x10 => 16,
+            argon2::Version::V0x13 => 19,
         };
         format!(
             "${ident}$v={version}$m={m_cost},t={t_cost},p={p_cost}${}${}",
@@ -450,14 +471,22 @@ mod tests {
     #[inline]
     fn verifies_roundtripped_argon2_variants() {
         let salt = b"argon2 roundtrip salt";
+        let version = argon2::Version::default();
         for (algorithm, ident) in [
-            (argon2_rs::Algorithm::Argon2id, "argon2id"),
-            (argon2_rs::Algorithm::Argon2i, "argon2i"),
-            (argon2_rs::Algorithm::Argon2d, "argon2d"),
+            (argon2::Algorithm::Argon2id, "argon2id"),
+            (argon2::Algorithm::Argon2i, "argon2i"),
+            (argon2::Algorithm::Argon2d, "argon2d"),
         ] {
-            let argon2 = argon2_rs::Argon2::new(19_456, 2, 1).with_algorithm(algorithm);
-            let derived = argon2.hash_password(PASSWORD, salt.to_vec()).unwrap();
-            let hash = argon2_phc_string(algorithm, argon2.version, 19_456, 2, 1, salt, &derived);
+            let argon2 = argon2::Argon2::new(
+                algorithm,
+                version,
+                argon2::Params::new(19_456, 2, 1, Some(64)).unwrap(),
+            );
+            let mut derived = vec![0u8; 64];
+            argon2
+                .hash_password_into(PASSWORD.as_bytes(), salt, &mut derived)
+                .unwrap();
+            let hash = argon2_phc_string(algorithm, version, 19_456, 2, 1, salt, &derived);
             assert!(verify(PASSWORD, &hash), "failed for {ident}");
             assert!(!verify("wrong", &hash), "failed for {ident}");
         }
@@ -467,20 +496,18 @@ mod tests {
     #[inline]
     fn verifies_roundtripped_argon2_v16() {
         let salt = b"argon2 v16 roundtrip";
-        let argon2 = argon2_rs::Argon2::new(19_456, 2, 1)
-            .with_algorithm(argon2_rs::Algorithm::Argon2id)
-            .with_version(argon2_rs::Version::V0x10);
-        let derived = argon2.hash_password(PASSWORD, salt.to_vec()).unwrap();
-        let hash = argon2_phc_string(
-            argon2.algorithm,
-            argon2.version,
-            19_456,
-            2,
-            1,
-            salt,
-            &derived,
+        let algorithm = argon2::Algorithm::Argon2id;
+        let version = argon2::Version::V0x10;
+        let argon2 = argon2::Argon2::new(
+            algorithm,
+            version,
+            argon2::Params::new(19_456, 2, 1, Some(64)).unwrap(),
         );
-        assert_eq!(argon2_rs::Version::V0x10, argon2.version);
+        let mut derived = vec![0u8; 64];
+        argon2
+            .hash_password_into(PASSWORD.as_bytes(), salt, &mut derived)
+            .unwrap();
+        let hash = argon2_phc_string(algorithm, version, 19_456, 2, 1, salt, &derived);
         assert!(verify(PASSWORD, &hash));
         assert!(!verify("wrong", &hash));
     }
