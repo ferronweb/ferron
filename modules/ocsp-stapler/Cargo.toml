@@ -29,3 +29,6 @@ x509-parser = { version = "0.18", features = ["verify-aws"] }
 hex = "0.4"
 chrono = "0.4.44"
 aws-lc-rs = { version = "1", features = ["bindgen"] }
+
+[features]
+fips = ["aws-lc-rs/fips", "rustls/fips"]

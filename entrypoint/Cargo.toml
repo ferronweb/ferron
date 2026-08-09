@@ -121,4 +121,5 @@ profile-default = [
 fips = [
     "ferron-http-basicauth/fips",
     "ferron-http-server/fips"
+    "ferron-ocsp-stapler/fips"
 ]

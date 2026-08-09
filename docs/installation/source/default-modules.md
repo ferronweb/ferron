@@ -39,6 +39,7 @@ cargo build -r -p ferron --features=fips
 
 A FIPS build restricts the cryptography that Ferron uses:
 
+- OCSP stapling disables SHA1, Ed25519 and secp256k1 algorithms.
 - TLS cipher suites and key exchange groups are filtered to FIPS-approved algorithms.
 - HTTP basic auth password verification accepts only PBKDF2 password hashes. Argon2 and scrypt hashes are rejected, because those algorithms are not FIPS-approved.
 

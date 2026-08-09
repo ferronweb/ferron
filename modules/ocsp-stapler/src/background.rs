@@ -111,11 +111,13 @@ fn verify_ocsp_signature(
             [1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
             [1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
             [1, 2, 840, 113549, 1, 1, 13] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA512,
+            #[cfg(not(feature = "fips"))]
             [1, 2, 840, 113549, 1, 1, 5] => {
                 &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
             }
 
             // Ed25519
+            #[cfg(not(feature = "fips"))]
             [1, 3, 101, 112] => &aws_lc_rs::signature::ED25519,
 
             // ECDSA
@@ -151,6 +153,7 @@ fn verify_ocsp_signature(
                     (Some([1, 3, 132, 0, 35]), 4) => &aws_lc_rs::signature::ECDSA_P521_SHA512_ASN1,
 
                     // secp256k1 (not common in OCSP but handle just in case)
+                    #[cfg(not(feature = "fips"))]
                     (Some([1, 3, 132, 0, 10]), 2) => {
                         &aws_lc_rs::signature::ECDSA_P256K1_SHA256_ASN1
                     }
@@ -245,7 +248,17 @@ fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec
     } else if oid == *rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA512 {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA512)
     } else if oid == *rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1 {
-        aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
+        #[cfg(not(feature = "fips"))]
+        {
+            aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
+        }
+        #[cfg(feature = "fips")]
+        {
+            return Err(anyhow::anyhow!(
+                "Unsupported hash algorithm OID in OCSP response: {}",
+                oid
+            ));
+        }
     } else {
         return Err(anyhow::anyhow!(
             "Unsupported hash algorithm OID in OCSP response: {}",
@@ -699,17 +712,20 @@ async fn fetch_ocsp_response(
         return response;
     }
 
-    // Only try SHA-1 fallback for specific error types
-    let should_try_sha1 = response.as_ref().is_err_and(|e| {
-        let e_message = e.to_string();
-        e_message.starts_with("OCSP request failed with status ")
-            || e_message.starts_with("Failed to decode OCSP response:")
-            || e_message.starts_with("OCSP response status unsuccessful:")
-    });
+    #[cfg(not(feature = "fips"))]
+    {
+        // Only try SHA-1 fallback for specific error types
+        let should_try_sha1 = response.as_ref().is_err_and(|e| {
+            let e_message = e.to_string();
+            e_message.starts_with("OCSP request failed with status ")
+                || e_message.starts_with("Failed to decode OCSP response:")
+                || e_message.starts_with("OCSP response status unsuccessful:")
+        });
 
-    if should_try_sha1 {
-        if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
-            return Ok(sha1_response);
+        if should_try_sha1 {
+            if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
+                return Ok(sha1_response);
+            }
         }
     }
 
@@ -844,21 +860,27 @@ fn create_ocsp_request(
     use_sha256: bool,
 ) -> anyhow::Result<Vec<u8>> {
     // Hash issuer subject DN
+    #[cfg(not(feature = "fips"))]
     let mut issuer_name_ctx = if use_sha256 {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
     } else {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
     };
+    #[cfg(feature = "fips")]
+    let mut issuer_name_ctx = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256);
     issuer_name_ctx.update(issuer.subject().as_raw());
     let issuer_name_hash = issuer_name_ctx.finish().as_ref().to_vec();
 
     // Hash issuer public key value (excluding tag/length per RFC 6960)
     let pub_key_bytes = &issuer.public_key().subject_public_key.data;
+    #[cfg(not(feature = "fips"))]
     let mut issuer_key_ctx = if use_sha256 {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
     } else {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY)
     };
+    #[cfg(feature = "fips")]
+    let mut issuer_key_ctx = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256);
     issuer_key_ctx.update(pub_key_bytes);
     let issuer_key_hash = issuer_key_ctx.finish().as_ref().to_vec();
 
@@ -871,12 +893,16 @@ fn create_ocsp_request(
 
     let cert_id = CertId {
         hash_algorithm: rasn_pkix::AlgorithmIdentifier {
+            #[cfg(not(feature = "fips"))]
             algorithm: if use_sha256 {
                 rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256
                     .to_owned()
             } else {
                 rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1.to_owned()
             },
+            #[cfg(feature = "fips")]
+            algorithm: rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256
+                .to_owned(),
             parameters: None,
         },
         issuer_name_hash: rasn::types::OctetString::from(issuer_name_hash),

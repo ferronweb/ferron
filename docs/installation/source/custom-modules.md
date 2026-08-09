@@ -75,7 +75,7 @@ To build a custom binary that uses only FIPS-approved cryptography, enable the `
 ferron-entrypoint = { git = "https://github.com/ferronweb/ferron.git", branch = "3.x", features = ["profile-default", "fips"] }
 ```
 
-A FIPS build restricts cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). The `ferron version` command on a FIPS binary prints `This build is configured to use FIPS-certified cryptography.`
+A FIPS build restricts cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). The `ferron version` command on a FIPS binary prints `This build is configured to use FIPS-certified cryptography.`
 
 > [!note]
 > Use the `fips` feature when you must run Ferron in a FIPS-compliant environment. The default build uses a broader set of algorithms and is not FIPS-certified.

@@ -13,7 +13,7 @@
 
 #### Build & packaging
 
-- **FIPS-certified cryptography builds**: the `fips` Cargo feature enables FIPS-certified cryptography via AWS-LC and rustls. When enabled, TLS cipher suites and key exchange groups are restricted to FIPS-approved algorithms, and HTTP basic auth password verification supports only PBKDF2 (Argon2 and scrypt hashes are rejected). You can enable the feature with `cargo build --features=fips`, or through the build tooling: `just build fips=true`, `cross-build/build.sh --fips`, the `FIPS=1` Docker build argument, and the FIPS packaging scripts for archive, Debian, RPM, and Windows installer artifacts. FIPS artifacts are named with a `+fips` suffix (for example, `ferron+fips-<version>-<target>.tar.gz`), and FIPS Docker images use the `-fips` tag suffix.
+- **FIPS-certified cryptography builds**: the `fips` Cargo feature enables FIPS-certified cryptography via AWS-LC and rustls. When enabled, OCSP stapling, TLS cipher suites and key exchange groups are restricted to FIPS-approved algorithms, and HTTP basic auth password verification supports only PBKDF2 (Argon2 and scrypt hashes are rejected). You can enable the feature with `cargo build --features=fips`, or through the build tooling: `just build fips=true`, `cross-build/build.sh --fips`, the `FIPS=1` Docker build argument, and the FIPS packaging scripts for archive, Debian, RPM, and Windows installer artifacts. FIPS artifacts are named with a `+fips` suffix (for example, `ferron+fips-<version>-<target>.tar.gz`), and FIPS Docker images use the `-fips` tag suffix.
 
 #### Observability & tracing
 

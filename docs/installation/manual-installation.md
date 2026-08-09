@@ -23,7 +23,7 @@ Visit the [Ferron downloads page](/download) and choose the archive that matches
 - **FreeBSD**: `.tar.gz` archive (for example, `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`)
 
 > [!note]
-> FIPS-certified archives use a `+fips` suffix in the archive name. For example, `ferron+fips-3.0.0-x86_64-unknown-linux-gnu.tar.gz`. A FIPS archive restricts cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). Use a FIPS archive when you must run Ferron in a FIPS-compliant environment.
+> FIPS-certified archives use a `+fips` suffix in the archive name. For example, `ferron+fips-3.0.0-x86_64-unknown-linux-gnu.tar.gz`. A FIPS archive restricts cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). Use a FIPS archive when you must run Ferron in a FIPS-compliant environment.
 
 ## Installation steps
 

@@ -185,7 +185,7 @@ docker pull ferronserver/ferron:3-fips
 docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:3-fips
 ```
 
-FIPS images restrict cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
+FIPS images restrict cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
 
 If you build the Ferron image yourself, pass the `FIPS=1` build argument to enable the FIPS build:
 
