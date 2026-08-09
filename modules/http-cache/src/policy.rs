@@ -175,14 +175,13 @@ pub fn evaluate_response_policy(
         };
     }
 
-    let ttl = choose_ttl(
+    let Some(ttl) = choose_ttl(
         scope,
         headers,
         &standard,
         ls_control,
         litespeed_overrides_response_policy,
-    );
-    if ttl.is_zero() {
+    ) else {
         return ResponseCacheDecision {
             store: false,
             scope: None,
@@ -192,7 +191,7 @@ pub fn evaluate_response_policy(
             must_revalidate: false,
             reason: "zero-ttl",
         };
-    }
+    };
 
     let must_revalidate =
         standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some();
@@ -266,52 +265,61 @@ pub(crate) fn choose_ttl(
     standard: &StandardCacheControl,
     ls_control: Option<&LiteSpeedCacheControl>,
     litespeed_overrides_response_policy: bool,
-) -> Duration {
+) -> Option<Duration> {
     // RFC 9111 §4.2.1: freshness lifetime is the FIRST applicable directive,
     // not the minimum of all candidates. A shared cache uses, in order:
     // s-maxage, max-age, Expires-Date, then the heuristic.
+    // `None` signals that no freshness lifetime can be derived (not storable).
     if litespeed_overrides_response_policy {
         // LiteSpeed headers fully replace standard Cache-Control.
         if scope == CacheScope::Public {
             if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
-                return ttl;
+                return Some(ttl);
             }
         }
 
         if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
-            return ttl;
+            return Some(ttl);
         }
 
-        return Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS);
+        return Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS));
     }
 
     // Standard Cache-Control is the authority. LiteSpeed headers act only as
     // a fallback when the standard directives are silent.
     if scope == CacheScope::Public {
         if let Some(ttl) = standard.s_maxage {
-            return ttl;
+            return Some(ttl);
         }
     }
 
     if let Some(ttl) = standard.max_age {
-        return ttl;
+        return Some(ttl);
     }
 
     if let Some(ttl) = expires_delta(headers) {
-        return ttl;
+        return Some(ttl);
+    }
+
+    // RFC 9111 §4.2.4: a cache MUST NOT generate a heuristic freshness
+    // lifetime when must-revalidate (or proxy-revalidate / s-maxage) is
+    // present. This also suppresses the LiteSpeed fallback, which would
+    // otherwise generate a lifetime the origin did not authorize.
+    if standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some() {
+        return None;
     }
 
     if scope == CacheScope::Public {
         if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
-            return ttl;
+            return Some(ttl);
         }
     }
 
     if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
-        return ttl;
+        return Some(ttl);
     }
 
-    Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS)
+    Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
 }
 
 /// Recalculate freshness parameters from updated headers during 304 revalidation.
@@ -329,7 +337,11 @@ pub(crate) fn recalculate_freshness(
     let standard = parse_standard_cache_control(headers);
     let litespeed_overrides = litespeed_override_cache_control && ls_control.is_some();
 
-    let ttl = choose_ttl(scope, headers, &standard, ls_control, litespeed_overrides);
+    // A stored entry whose merged headers carry no explicit freshness (for
+    // example must-revalidate without a lifetime) becomes perpetually stale:
+    // it stays stored but must revalidate on every request.
+    let ttl = choose_ttl(scope, headers, &standard, ls_control, litespeed_overrides)
+        .unwrap_or(Duration::ZERO);
 
     let must_revalidate =
         standard.must_revalidate || standard.proxy_revalidate || standard.s_maxage.is_some();
@@ -727,5 +739,117 @@ mod tests {
             recalculate_freshness(CacheScope::Public, &headers, Some(&ls_control), true);
         // LiteSpeed override: LS max_age (300) takes precedence
         assert_eq!(ttl, Duration::from_secs(300));
+    }
+
+    #[test]
+    fn must_revalidate_without_lifetime_is_not_storable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, must-revalidate"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "zero-ttl");
+    }
+
+    #[test]
+    fn proxy_revalidate_without_lifetime_is_not_storable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, proxy-revalidate"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "zero-ttl");
+    }
+
+    #[test]
+    fn must_revalidate_suppresses_litespeed_fallback() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, must-revalidate"),
+        );
+        let ls_control = LiteSpeedCacheControl {
+            public: true,
+            max_age: Some(Duration::from_secs(120)),
+            ..LiteSpeedCacheControl::default()
+        };
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            Some(&ls_control),
+            false,
+        );
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "zero-ttl");
+    }
+
+    #[test]
+    fn must_revalidate_with_expires_uses_expires() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, must-revalidate"),
+        );
+        headers.insert(
+            header::DATE,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"),
+        );
+        headers.insert(
+            header::EXPIRES,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:29:00 GMT"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        // Expires is an explicit lifetime, not a heuristic, so it still applies
+        assert_eq!(decision.ttl, Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn explicit_zero_s_maxage_is_stored_with_zero_ttl() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, s-maxage=0"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.ttl, Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn explicit_zero_max_age_is_stored_with_zero_ttl() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=0"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.ttl, Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn recalculate_freshness_must_revalidate_without_lifetime_keeps_zero_ttl() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, must-revalidate"),
+        );
+
+        let (ttl, _swr, _sire, must_revalidate) =
+            recalculate_freshness(CacheScope::Public, &headers, None, false);
+        assert_eq!(ttl, Duration::ZERO);
+        assert!(must_revalidate);
     }
 }
