@@ -1,0 +1,155 @@
+name: Cross-platform compilation test (Ferron 3.x; FIPS-certified cryptography)
+
+on:
+  push:
+    branches: ["develop-3.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Cross.toml"
+      - "bin/**"
+      - "core/**"
+      - "cross-build/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/crossplatform-fips.yml"
+  pull_request:
+    branches: ["develop-3.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Cross.toml"
+      - "bin/**"
+      - "core/**"
+      - "cross-build/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/crossplatform-fips.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross-build: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross-build: true
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross-build: true
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross-build: true
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+          - target: aarch64-pc-windows-msvc
+            runner: windows-latest
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Setup sysroot cache
+        if: matrix.cross-build == true
+        uses: actions/cache@v5
+        with:
+          path: |
+            cross-build/sysroots/prepared
+          key: SysrootsFerron3F-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('cross-build/sysroots/prepare-*.sh') }}
+          restore-keys: SysrootsFerron3F-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Setup cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: CompileTestFerron3F-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: CompileTestFerron3F-${{ runner.os }}-${{ matrix.target }}-
+
+      # AWS-LC FIPS requires Go...
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Setup NASM
+        if: matrix.runner == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install packages for cross-compilation
+        if: matrix.cross-build == true
+        uses: eclipse-score/apt-install@main
+        with:
+          packages: debootstrap clang-20 lld-20 libclang-20-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake curl
+
+      - name: Install Cross
+        if: matrix.cross-rs == true
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross --force
+
+      - name: Install bindgen-cli
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm bindgen-cli --force
+
+      - name: Build binaries (cross-build)
+        if: matrix.cross-build == true && matrix.cross-rs != true
+        shell: bash
+        run: |
+          # Before building, a sysroot has to be prepared
+          LIBC=gnu
+          if echo ${{ matrix.target }} | grep -q 'musl'; then
+            LIBC=musl
+          fi
+          if ! [ -d ./cross-build/sysroots/prepared/${LIBC}-${{ matrix.target }} ]; then
+            # Sysroot doesn't exist, prepare it
+            ./cross-build/sysroots/prepare-${LIBC}.sh ${{ matrix.target }}
+          fi
+          export CLANG=/usr/bin/clang-20
+          export CLANGXX=/usr/bin/clang++-20
+          export LLVM_PROFDATA=/usr/bin/llvm-profdata-20
+          ./cross-build/build.sh ${{ matrix.target }} --debug --fips
+
+      - name: Build binaries (cross-rs)
+        if: matrix.cross-rs == true && matrix.cross-build != true
+        shell: bash
+        run: |
+          cross build --target ${{ matrix.target }} --verbose --features=fips
+
+      - name: Build binaries (native)
+        if: matrix.cross-build != true && matrix.cross-rs != true
+        shell: bash
+        run: |
+          cargo build --target ${{ matrix.target }} --verbose --features=fips
