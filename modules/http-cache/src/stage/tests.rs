@@ -227,6 +227,31 @@ fn propagation_secret_must_match_configured_secret() {
 }
 
 #[test]
+fn get_or_build_retries_failed_builds() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::OnceLock;
+
+    let attempts = AtomicUsize::new(0);
+    let cell: OnceLock<i32> = OnceLock::new();
+    let build = || {
+        let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+        if attempt == 0 {
+            Err("first build fails")
+        } else {
+            Ok(42)
+        }
+    };
+
+    // A failed build is not cached; the next call retries and succeeds.
+    assert!(super::purge::get_or_build(&cell, build).is_err());
+    assert_eq!(super::purge::get_or_build(&cell, build), Ok(&42));
+
+    // Once built, the value is cached and the builder does not run again.
+    assert_eq!(super::purge::get_or_build(&cell, build), Ok(&42));
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+}
+
+#[test]
 fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
     use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::ServerConfigurationBlockBuilder;

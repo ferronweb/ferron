@@ -23,11 +23,26 @@ type PropagationClient = hyper_util::client::legacy::Client<
     http_body_util::Full<bytes::Bytes>,
 >;
 
-/// Outbound HTTPS client for purge propagation webhooks, built once per
-/// process.
-static PROPAGATION_CLIENT: OnceLock<
-    Result<PropagationClient, Box<dyn std::error::Error + Send + Sync>>,
-> = OnceLock::new();
+/// Outbound HTTPS client for purge propagation webhooks. Only a successfully
+/// built client is cached; a failed build is retried on the next call.
+static PROPAGATION_CLIENT: OnceLock<PropagationClient> = OnceLock::new();
+
+/// Get a value from a `OnceLock`, building it on first use.
+///
+/// A failed build is **not** cached, so the next call retries. Only a
+/// successful value is stored, so the builder runs at most once in the
+/// success path (modulo a benign race between concurrent first calls).
+pub(super) fn get_or_build<T, E>(
+    cell: &OnceLock<T>,
+    build: impl Fn() -> Result<T, E>,
+) -> Result<&T, E> {
+    if let Some(value) = cell.get() {
+        return Ok(value);
+    }
+    let value = build()?;
+    let _ = cell.set(value);
+    Ok(cell.get().expect("value was just stored"))
+}
 
 /// Result of a purge run against the store.
 pub(super) struct PurgeStats {
@@ -186,8 +201,7 @@ fn spawn_propagation_webhooks(
         return;
     };
 
-    let client = PROPAGATION_CLIENT.get_or_init(build_propagation_client);
-    let client = match client {
+    let client = match get_or_build(&PROPAGATION_CLIENT, build_propagation_client) {
         Ok(client) => client,
         Err(error) => {
             ctx.events.emit(Event::Log(LogEvent {
