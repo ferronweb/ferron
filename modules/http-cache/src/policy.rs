@@ -267,7 +267,11 @@ pub(crate) fn choose_ttl(
     ls_control: Option<&LiteSpeedCacheControl>,
     litespeed_overrides_response_policy: bool,
 ) -> Duration {
+    // RFC 9111 §4.2.1: freshness lifetime is the FIRST applicable directive,
+    // not the minimum of all candidates. A shared cache uses, in order:
+    // s-maxage, max-age, Expires-Date, then the heuristic.
     if litespeed_overrides_response_policy {
+        // LiteSpeed headers fully replace standard Cache-Control.
         if scope == CacheScope::Public {
             if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
                 return ttl;
@@ -281,31 +285,33 @@ pub(crate) fn choose_ttl(
         return Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS);
     }
 
-    let mut ttl_candidates = Vec::new();
-
+    // Standard Cache-Control is the authority. LiteSpeed headers act only as
+    // a fallback when the standard directives are silent.
     if scope == CacheScope::Public {
         if let Some(ttl) = standard.s_maxage {
-            ttl_candidates.push(ttl);
-        }
-        if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
-            ttl_candidates.push(ttl);
+            return ttl;
         }
     }
 
     if let Some(ttl) = standard.max_age {
-        ttl_candidates.push(ttl);
-    }
-    if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
-        ttl_candidates.push(ttl);
-    }
-    if let Some(ttl) = expires_delta(headers) {
-        ttl_candidates.push(ttl);
+        return ttl;
     }
 
-    ttl_candidates
-        .into_iter()
-        .min()
-        .unwrap_or_else(|| Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+    if let Some(ttl) = expires_delta(headers) {
+        return ttl;
+    }
+
+    if scope == CacheScope::Public {
+        if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
+            return ttl;
+        }
+    }
+
+    if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
+        return ttl;
+    }
+
+    Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS)
 }
 
 /// Recalculate freshness parameters from updated headers during 304 revalidation.
@@ -583,8 +589,84 @@ mod tests {
         let decision =
             evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
         assert!(decision.store);
-        // s-maxage (120) should be the minimum among candidates
+        // RFC 9111 §4.2.1: s-maxage is the first applicable directive for a shared cache
         assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn s_maxage_beats_smaller_max_age() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=60, s-maxage=3600"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        // s-maxage is first-match, not the minimum of all candidates
+        assert_eq!(decision.ttl, Some(Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn max_age_beats_expires() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=120"),
+        );
+        headers.insert(
+            header::DATE,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"),
+        );
+        headers.insert(
+            header::EXPIRES,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:29:00 GMT"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        // max-age precedes Expires even when Expires-Date would be shorter
+        assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn expires_used_when_no_max_age() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::DATE,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"),
+        );
+        headers.insert(
+            header::EXPIRES,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:29:00 GMT"),
+        );
+        let decision =
+            evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.ttl, Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn litespeed_fallback_after_silent_standard() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public"));
+        let ls_control = LiteSpeedCacheControl {
+            public: true,
+            s_maxage: Some(Duration::from_secs(600)),
+            max_age: Some(Duration::from_secs(120)),
+            ..LiteSpeedCacheControl::default()
+        };
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            false,
+            false,
+            Some(&ls_control),
+            false,
+        );
+        assert!(decision.store);
+        // standard directives are silent, so the LS s-maxage fallback applies first
+        assert_eq!(decision.ttl, Some(Duration::from_secs(600)));
     }
 
     #[test]

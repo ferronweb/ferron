@@ -152,6 +152,15 @@ example.com {
 - Responses with `Vary: *` are never stored.
 - Built-in error responses generated after the main HTTP pipeline are not currently stored.
 
+Ferron determines the freshness lifetime from the origin response using the directive order defined in RFC 9111 §4.2.1. For a public response, Ferron uses the first applicable directive in this order:
+
+1. `s-maxage`
+2. `max-age`
+3. `Expires` header minus the `Date` header
+4. The default heuristic of 300 seconds
+
+`X-LiteSpeed-Cache-Control` acts as a fallback only when the standard directives are silent. Ferron does not take the minimum of all candidates.
+
 ### Cache zones
 
 Cache zones determine which hosts share a physical cache store. There are three zone types:
