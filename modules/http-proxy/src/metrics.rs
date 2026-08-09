@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
-use ferron_observability::TraceAttributeValue;
+use ferron_observability::{
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue,
+};
 use types::circuit::circuit_breaker_state_label;
 
 use crate::types;
@@ -247,5 +250,195 @@ pub(crate) fn emit_backend_excluded(
             "Backend excluded from selection due to health, circuit breaker, or retry state.",
         ),
         trace_context,
+    }));
+}
+
+/// Background task that periodically emits reverse proxy pool depth and DNS
+/// cache metrics on the secondary runtime.
+///
+/// Spawned once from `ReverseProxyModule::start()`.
+pub(crate) async fn emit_pool_and_dns_metrics(pool_sink: Arc<CompositeEventSink>) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+    loop {
+        interval.tick().await;
+        emit_pool_depth_gauges(&pool_sink);
+        emit_pool_limit_gauges(&pool_sink);
+        emit_dns_cache_metrics(&pool_sink);
+    }
+}
+
+/// Background task that periodically purges expired DNS cache entries.
+///
+/// Spawned once from `ReverseProxyModule::start()`.
+pub(crate) async fn cleanup_dns_cache_task() {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    loop {
+        interval.tick().await;
+        crate::types::dns_cache::cleanup_expired();
+    }
+}
+
+/// Attributes describing a backend: the upstream URL and, when present, the
+/// unix socket path.
+fn backend_attrs(
+    upstream: &Arc<crate::types::upstream::UpstreamInner>,
+) -> Vec<(&'static str, MetricAttributeValue)> {
+    let mut attrs = Vec::with_capacity(2);
+    attrs.push((
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(upstream.proxy_to.clone()),
+    ));
+    if let Some(ref unix_path) = upstream.proxy_unix {
+        attrs.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    attrs
+}
+
+/// Emit idle/outstanding connection gauges for each backend and worker thread.
+fn emit_pool_depth_gauges(pool_sink: &CompositeEventSink) {
+    let snapshot = crate::connections::POOL_STATS.snapshot();
+    for ((thread_id, upstream), (idle, outstanding)) in snapshot {
+        let mut attrs = backend_attrs(&upstream);
+        attrs.push((
+            "worker",
+            MetricAttributeValue::String(format!("{:?}", thread_id)),
+        ));
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.pool.idle",
+            attributes: attrs.clone(),
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(idle as u64),
+            unit: Some("{connection}"),
+            description: Some("Current number of idle connections in the pool."),
+            trace_context: None,
+        }));
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.pool.outstanding",
+            attributes: attrs,
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(outstanding as u64),
+            unit: Some("{connection}"),
+            description: Some("Current number of outstanding (in-use) connections in the pool."),
+            trace_context: None,
+        }));
+    }
+}
+
+/// Emit the per-upstream local connection limit and the global connection limit.
+fn emit_pool_limit_gauges(pool_sink: &CompositeEventSink) {
+    let local_limit_snapshot = crate::connections::POOL_STATS.snapshot_local_limits();
+    for (upstream, limit) in local_limit_snapshot {
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.pool.local_limit",
+            attributes: vec![(
+                "ferron.proxy.backend_url",
+                MetricAttributeValue::String(upstream.proxy_to.clone()),
+            )],
+            ty: MetricType::Gauge,
+            value: MetricValue::U64(limit as u64),
+            unit: Some("{connection}"),
+            description: Some("Current per-upstream local connection limit for this worker."),
+            trace_context: None,
+        }));
+    }
+
+    let global_limit =
+        crate::GLOBAL_CONCURRENT_CONNECTIONS.load(std::sync::atomic::Ordering::Relaxed);
+    pool_sink.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.pool.global_limit",
+        attributes: Vec::new(),
+        ty: MetricType::Gauge,
+        value: MetricValue::U64(global_limit as u64),
+        unit: Some("{connection}"),
+        description: Some("Current global connection limit for reverse proxy."),
+        trace_context: None,
+    }));
+}
+
+/// Emit DNS result cache hit/miss counters and TTL gauges.
+fn emit_dns_cache_metrics(pool_sink: &CompositeEventSink) {
+    let hits =
+        crate::types::dns_cache::DNS_CACHE_HITS.swap(0, std::sync::atomic::Ordering::Relaxed);
+    let misses =
+        crate::types::dns_cache::DNS_CACHE_MISSES.swap(0, std::sync::atomic::Ordering::Relaxed);
+    if hits > 0 {
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.dns.cache_hit",
+            attributes: Vec::new(),
+            ty: MetricType::Counter,
+            value: MetricValue::U64(hits),
+            unit: Some("{request}"),
+            description: Some("DNS result cache hits."),
+            trace_context: None,
+        }));
+    }
+    if misses > 0 {
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.dns.cache_miss",
+            attributes: Vec::new(),
+            ty: MetricType::Counter,
+            value: MetricValue::U64(misses),
+            unit: Some("{request}"),
+            description: Some("DNS result cache misses."),
+            trace_context: None,
+        }));
+    }
+
+    if let Some(ttl_stats) = crate::types::dns_cache::strict_dns_ttl_stats() {
+        emit_dns_ttl_gauges(pool_sink, ttl_stats);
+    }
+}
+
+/// Emit remaining-TTL and entry-count gauges for the DNS result cache.
+fn emit_dns_ttl_gauges(
+    pool_sink: &CompositeEventSink,
+    ttl_stats: crate::types::dns_cache::DnsCacheTtlStats,
+) {
+    let (min, max, avg) = (
+        ttl_stats.min_remaining_secs,
+        ttl_stats.max_remaining_secs,
+        ttl_stats.avg_remaining_secs,
+    );
+    for (aggregation, value, description) in [
+        (
+            "min",
+            min,
+            "Minimum remaining TTL across all DNS cache entries.",
+        ),
+        (
+            "max",
+            max,
+            "Maximum remaining TTL across all DNS cache entries.",
+        ),
+        (
+            "avg",
+            avg,
+            "Average remaining TTL across all DNS cache entries.",
+        ),
+    ] {
+        pool_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.dns.cache_ttl_remaining_seconds",
+            attributes: vec![(
+                "aggregation",
+                MetricAttributeValue::String(aggregation.into()),
+            )],
+            ty: MetricType::Gauge,
+            value: MetricValue::F64(value),
+            unit: Some("{second}"),
+            description: Some(description),
+            trace_context: None,
+        }));
+    }
+    pool_sink.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.dns.cache_entries",
+        attributes: Vec::new(),
+        ty: MetricType::Gauge,
+        value: MetricValue::U64(ttl_stats.entry_count as u64),
+        unit: Some("{entry}"),
+        description: Some("Number of active entries in the DNS cache."),
+        trace_context: None,
     }));
 }
