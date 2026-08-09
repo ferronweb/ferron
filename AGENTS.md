@@ -104,7 +104,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
 - **Runtime**: dual model, primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. Release binaries are produced by `cross-build/build.sh` (PGO by default; `.cargo/config.toml` pins an i686-musl linker). `bindgen-cli` required for non-`cross` builds.
-- **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim) plus matching `-nopgo` variants.
+- **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim). No-PGO variants could be built with `--build-arg NOPGO=1`
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
 - **Idiomatic Ferron 3 configuration style**: When writing `.conf` examples in documentation, follow the new ferronconf spec conventions:
   - **No semicolons**: directives are terminated by newlines, not semicolons.

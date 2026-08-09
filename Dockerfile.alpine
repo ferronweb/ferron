@@ -5,6 +5,10 @@ FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
+# Custom ARGs
+ARG FIPS
+ARG NOPGO
+
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     --mount=type=cache,sharing=locked,target=/var/lib/apt \
@@ -64,16 +68,21 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     # Prepare the sysroot with lockfile protection
     flock -x /usr/src/ferron/cross-build/sysroots/prepared/prepare.lock \
       ./cross-build/sysroots/prepare-musl.sh $TARGET_TRIPLE && \
+    # FIPS compliance check
+    FIPS_ADD_ARG="" && \
+    if [ "${FIPS:-0}" == "1" ]; then \
+      FIPS_ADD_ARG="--fips"; \
+    fi \
     # Build Ferron binaries
     # Check if PGO would be enabled based on target triple
-    if [ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
-      || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]; then \
+    if [ "${NOPGO:-0}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
+        || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]); then \
       BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-      ./cross-build/build.sh $TARGET_TRIPLE --pgo; \
+      ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
     else \
       # These targets would fail with PGO, due to missing libprofiler_builtins
       BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-      ./cross-build/build.sh $TARGET_TRIPLE; \
+      ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG; \
     fi && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-fmt $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-kdl2ferron $TARGET_PATH/ferron-serve .dist
