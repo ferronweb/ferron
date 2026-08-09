@@ -329,6 +329,19 @@ example.com {
 | `httponly`       | `[bool]`     | Prevent JavaScript access to cookie.            | `true`                   |
 | `samesite`       | `<mode>`     | SameSite attribute: `strict`, `lax`, or `none`. | `lax`                    |
 
+> [!important]
+> If using reverse proxying with cookie affinity along with HTTP caching (caching reverse proxy), configure the cache `vary_cookies` setting to use the same cookie name as configured in the `proxy` block, otherwise cookie-based affinity will not work correctly.
+>
+> **Example cache configuration:**
+>
+> ```ferron
+> example.com {
+>     cache {
+>         vary_cookies ferron_sticky
+>     }
+> }
+> ```
+
 ### Header affinity
 
 Routes based on a specific request header value using consistent hashing.
@@ -346,6 +359,19 @@ example.com {
 }
 ```
 
+> [!important]
+> If using reverse proxy with header affinity along with HTTP caching (caching reverse proxy), configure the cache `vary` setting to use the same header name as configured in the `proxy` block, otherwise cookie-based affinity will not work correctly.
+>
+> **Example cache configuration:**
+>
+> ```ferron
+> example.com {
+>     cache {
+>         vary "X-Backend-Id"
+>     }
+> }
+> ```
+
 ### IP affinity
 
 Routes based on the client's IP address using consistent hashing. The same IP always routes to the same backend (while it remains healthy).
@@ -360,6 +386,9 @@ example.com {
     }
 }
 ```
+
+> [!warning]
+> Using HTTP caching alongside reverse proxying with IP affinity is not supported and may lead to correctness issues related to session affinity.
 
 ### Hash affinity
 
