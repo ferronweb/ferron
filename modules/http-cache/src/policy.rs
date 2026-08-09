@@ -151,7 +151,21 @@ pub fn evaluate_response_policy(
         };
     };
 
-    if has_authorization && scope == CacheScope::Public && !explicit_public {
+    // RFC 9111 §3.5: a shared cache may store a response to an authorized
+    // request when the response explicitly authorizes shared caching
+    // (must-revalidate, proxy-revalidate, public, or s-maxage). When
+    // LiteSpeed overrides the policy, only the LiteSpeed scope directives
+    // authorize shared caching; standard directives are ignored.
+    let shared_cache_authorized = if litespeed_overrides_response_policy {
+        explicit_public
+    } else {
+        explicit_public
+            || standard.must_revalidate
+            || standard.proxy_revalidate
+            || standard.s_maxage.is_some()
+    };
+
+    if has_authorization && scope == CacheScope::Public && !shared_cache_authorized {
         return ResponseCacheDecision {
             store: false,
             scope: None,
@@ -513,6 +527,63 @@ mod tests {
         );
         let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
         assert!(decision.store);
+    }
+
+    #[test]
+    fn authorization_with_must_revalidate_is_cacheable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("must-revalidate, max-age=3600"),
+        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
+    }
+
+    #[test]
+    fn authorization_with_proxy_revalidate_is_cacheable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("proxy-revalidate, max-age=3600"),
+        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
+    }
+
+    #[test]
+    fn authorization_with_s_maxage_is_cacheable() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("s-maxage=3600"),
+        );
+        let decision = evaluate_response_policy(StatusCode::OK, &headers, true, false, None, false);
+        assert!(decision.store);
+        assert_eq!(decision.scope, Some(CacheScope::Public));
+    }
+
+    #[test]
+    fn authorization_rejected_when_litespeed_overrides_and_standard_must_revalidate() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("must-revalidate, max-age=3600"),
+        );
+        // Under override, the standard directives are ignored; the LS control
+        // does not authorize shared caching, so the authorized response is rejected.
+        let decision = evaluate_response_policy(
+            StatusCode::OK,
+            &headers,
+            true,
+            false,
+            Some(&LiteSpeedCacheControl::default()),
+            true,
+        );
+        assert!(!decision.store);
+        assert_eq!(decision.reason, "authorization-public");
     }
 
     #[test]

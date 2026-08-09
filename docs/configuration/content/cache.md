@@ -306,6 +306,7 @@ Host: example.com
 - Ferron does not store public responses containing `Set-Cookie`.
 - Ferron partitions private responses by client context. It currently uses the client IP address, the authenticated username when available, and detected private cookies.
 - If Ferron cannot determine a narrower private cookie set, it falls back to all request cookies for the cache key.
+- Per RFC 9111 §3.5, Ferron does not store responses to authorized requests unless the response explicitly authorizes shared caching. The response must include `public`, `s-maxage`, `must-revalidate`, or `proxy-revalidate`. A bare `max-age` without one of these directives does not authorize shared caching.
 
 ### Stale-while-revalidate
 
