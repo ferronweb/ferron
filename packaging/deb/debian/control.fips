@@ -1,0 +1,10 @@
+Package: ferron3-fips
+Version: $VERSION
+Architecture: $ARCHITECTURE
+Essential: no
+Priority: optional
+Depends: libc6 (>= 2.31), ca-certificates
+Conflicts: ferron, ferron-lts, ferron3
+Maintainer: Dorian Niemiec
+Section: httpd
+Description: A fast, modern web server built for production debugging (with FIPS-certified cryptography).

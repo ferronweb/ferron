@@ -1,7 +1,7 @@
-Name:           ferron3
+Name:           ferron3-fips
 Version:        $VERSION
 Release:        1%{?dist}
-Summary:        A fast, modern web server built for production debugging.
+Summary:        A fast, modern web server built for production debugging (with FIPS-certified cryptography).
 
 License:        MIT
 URL:            https://ferron.sh
@@ -13,7 +13,7 @@ Requires(pre):  shadow-utils
 Requires(postun): systemd
 Conflicts:      ferron
 Conflicts:      ferron-lts
-Conflicts:      ferron3-fips
+Conflicts:      ferron3
 
 Provides:       webserver
 

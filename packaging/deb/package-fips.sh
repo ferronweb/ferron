@@ -25,7 +25,7 @@ mkdir -p $PROJECT_ROOT_DIR/dist
 pushd "$(dirname "$0")"
 
 # Clean up the workspace
-rm -rf ferron3_*/ md5sums.tmp
+rm -rf ferron3-fips_*/ md5sums.tmp
 
 # Determine the target triple based on the target architecture
 DEB_ARCHITECTURE=""
@@ -48,7 +48,7 @@ esac
 DEB_VERSION="$(echo $FERRON_VERSION | sed 's/-/~/g')"
 
 # Create the directory, from which the .deb package is built
-DEB_BUILD_DIRECTORY_NAME="ferron3_${DEB_VERSION}_${DEB_ARCHITECTURE}"
+DEB_BUILD_DIRECTORY_NAME="ferron3-fips_${DEB_VERSION}_${DEB_ARCHITECTURE}"
 mkdir $DEB_BUILD_DIRECTORY_NAME
 
 # Move the webroot
@@ -83,14 +83,14 @@ find $DEB_BUILD_DIRECTORY_NAME -type f -exec md5sum {} \; | sed -E 's|([0-9a-fA-
 # Copy the Debian package control files
 cp -r debian $DEB_BUILD_DIRECTORY_NAME/DEBIAN
 mv md5sums.tmp $DEB_BUILD_DIRECTORY_NAME/DEBIAN/md5sums
-rm $DEB_BUILD_DIRECTORY_NAME/control.fips
+mv $DEB_BUILD_DIRECTORY_NAME/control.fips $DEB_BUILD_DIRECTORY_NAME/control
 
 # Replace the version and architecture in the control file
 sed -i "s/^Version: .*/Version: $DEB_VERSION/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
 sed -i "s/^Architecture: .*/Architecture: $DEB_ARCHITECTURE/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
 
 # Build the Debian package
-dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron3_${DEB_VERSION}_${DEB_ARCHITECTURE}.deb"
+dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron3-fips_${DEB_VERSION}_${DEB_ARCHITECTURE}.deb"
 
 # Pop the working directory
 popd
