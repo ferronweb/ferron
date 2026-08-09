@@ -30,6 +30,16 @@ sudo yum install ferron3
 > [!note]
 > Keep Ferron up to date by running `sudo yum update ferron3`.
 
+#### FIPS-certified cryptography variant
+
+A FIPS-certified variant is available as the `ferron3-fips` package. Install it if you must run Ferron in a FIPS-compliant environment:
+
+```bash
+sudo yum install ferron3-fips
+```
+
+The `ferron3-fips` package conflicts with the standard `ferron3` package, so you cannot install both at the same time. A FIPS build restricts cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
+
 ### 3. Enable and start the service
 
 To enable and start the Ferron service, run the following commands:

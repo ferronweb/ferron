@@ -36,6 +36,16 @@ sudo apt install ferron3
 > [!tip]
 > Keep Ferron up to date by running `sudo apt update && sudo apt upgrade ferron3`.
 
+#### FIPS-certified cryptography variant
+
+A FIPS-certified variant is available as the `ferron3-fips` package. Install it if you must run Ferron in a FIPS-compliant environment:
+
+```bash
+sudo apt install ferron3-fips
+```
+
+The `ferron3-fips` package conflicts with the standard `ferron3` package, so you cannot install both at the same time. A FIPS build restricts cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
+
 ### 3. Access the web server
 
 By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server works and serves the default `index.html` file.

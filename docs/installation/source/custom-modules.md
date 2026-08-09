@@ -66,6 +66,20 @@ fn main() {
 > [!note]
 > Make sure your custom modules work with the version of `ferron-core` and `ferron-entrypoint` you use. Ferron statically links modules. Any change to your module list requires you to recompile the binary.
 
+## Building with FIPS-certified cryptography
+
+To build a custom binary that uses only FIPS-approved cryptography, enable the `fips` feature on `ferron-entrypoint`:
+
+```toml
+[dependencies]
+ferron-entrypoint = { git = "https://github.com/ferronweb/ferron.git", branch = "3.x", features = ["profile-default", "fips"] }
+```
+
+A FIPS build restricts cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected). The `ferron version` command on a FIPS binary prints `This build is configured to use FIPS-certified cryptography.`
+
+> [!note]
+> Use the `fips` feature when you must run Ferron in a FIPS-compliant environment. The default build uses a broader set of algorithms and is not FIPS-certified.
+
 ## Building and running
 
 Build your custom binary using Cargo:

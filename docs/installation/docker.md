@@ -169,3 +169,29 @@ The Ferron 3 image has the following tags:
 - `3` - Based on Distroless, statically-linked binaries
 - `3-alpine` - Based on Alpine Linux, statically-linked binaries
 - `3-debian` - Based on Debian GNU/Linux, dynamically-linked binaries (GNU libc required)
+
+## Images with FIPS-certified cryptography
+
+Ferron publishes FIPS-certified image variants for deployments that require FIPS-approved cryptography. These use the same base images but with the `-fips` suffix on the tag. For example:
+
+- `3-fips`
+- `3-alpine-fips`
+- `3-debian-fips`
+
+Pull and run a FIPS image the same way as the standard images:
+
+```sh
+docker pull ferronserver/ferron:3-fips
+docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:3-fips
+```
+
+FIPS images restrict cryptography to FIPS-approved algorithms: TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
+
+If you build the Ferron image yourself, pass the `FIPS=1` build argument to enable the FIPS build:
+
+```sh
+docker build --build-arg FIPS=1 -t ferronserver/ferron:3-fips .
+```
+
+> [!note]
+> Use FIPS image variants when you must run Ferron in a FIPS-compliant environment. The standard images use a broader set of algorithms and are not FIPS-certified.

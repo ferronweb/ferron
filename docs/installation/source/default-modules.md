@@ -29,6 +29,24 @@ cargo build -r --workspace
 
 This compiles all crates in the workspace, including the `ferron` binary and all module crates.
 
+## Building with FIPS-certified cryptography
+
+You can compile Ferron to use only FIPS-approved cryptographic algorithms. Enable the `fips` feature when you build the `ferron` binary:
+
+```sh
+cargo build -r -p ferron --features=fips
+```
+
+A FIPS build restricts the cryptography that Ferron uses:
+
+- TLS cipher suites and key exchange groups are filtered to FIPS-approved algorithms.
+- HTTP basic auth password verification accepts only PBKDF2 password hashes. Argon2 and scrypt hashes are rejected, because those algorithms are not FIPS-approved.
+
+> [!note]
+> Use a FIPS build when you need to run Ferron in a FIPS-compliant environment. The default build uses a broader set of algorithms and is not FIPS-certified.
+
+To confirm that your binary is a FIPS build, run `ferron version`. It prints `This build is configured to use FIPS-certified cryptography.`.
+
 > [!note]
 > The first build will take longer as Cargo downloads and compiles all dependencies. Later builds are faster.
 
