@@ -8,6 +8,12 @@ use crate::store::VaryRule;
 pub(super) const PRIVATE_COOKIE_NAMES: &[&str] =
     &["frontend", "phpsessid", "xf_session", "lsc_private"];
 
+/// Maximum number of cookie components admitted into a private cache key.
+const MAX_PRIVATE_KEY_COOKIE_COMPONENTS: usize = 8;
+
+/// Maximum length of a cookie value admitted into a private cache key.
+const MAX_PRIVATE_KEY_COOKIE_VALUE_LEN: usize = 256;
+
 pub(super) fn build_base_key(
     encrypted: bool,
     headers: &HeaderMap,
@@ -60,34 +66,62 @@ pub(super) fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
     cookies
 }
 
+/// Build the private-scope key component for a request, or `None` when the
+/// request carries no client identity.
+///
+/// The key requires at least one identifying component: an authenticated user,
+/// a recognized private cookie, or a cookie explicitly declared as a `Vary`
+/// cookie. When none is present the caller must not store in private scope
+/// (`private-no-identity`); the key must never be derived from the client IP
+/// alone, otherwise a CGNAT-shared address would leak one user's private
+/// response to another.
 pub(super) fn build_private_cache_key(
     cookies: &AHashMap<String, String>,
-    remote_ip: std::net::IpAddr,
     auth_user: Option<&str>,
-) -> String {
-    let mut components = Vec::with_capacity(cookies.len() + 2);
-    components.push(format!("ip={remote_ip}"));
+    vary_cookie_names: &[String],
+) -> Option<String> {
+    let mut components = Vec::new();
     if let Some(auth_user) = auth_user {
         components.push(format!("auth={auth_user}"));
     }
 
     let mut matched_private_cookie = false;
     for (name, value) in cookies {
-        let is_private = is_private_cookie_name(name);
-        if is_private && value.len() >= 16 {
+        if is_private_cookie_name(name) && value.len() >= 16 {
             matched_private_cookie = true;
-            components.push(format!("cookie:{name}={value}"));
+            components.push(format!("cookie:{name}={}", truncate_cookie_value(value)));
         }
     }
 
+    // Without an authenticated user or a recognized private cookie, an explicit
+    // Vary cookie still identifies the client. Do not fall back to every cookie:
+    // arbitrary cookies would explode the private-key space.
     if !matched_private_cookie {
         for (name, value) in cookies {
-            components.push(format!("cookie:{name}={value}"));
+            if vary_cookie_names
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(name))
+            {
+                components.push(format!("cookie:{name}={}", truncate_cookie_value(value)));
+            }
         }
+    }
+
+    if components.is_empty() {
+        return None;
     }
 
     components.sort_unstable();
-    components.join("\0")
+    components.truncate(MAX_PRIVATE_KEY_COOKIE_COMPONENTS);
+    Some(components.join("\0"))
+}
+
+fn truncate_cookie_value(value: &str) -> &str {
+    if value.len() <= MAX_PRIVATE_KEY_COOKIE_VALUE_LEN {
+        value
+    } else {
+        &value[..value.floor_char_boundary(MAX_PRIVATE_KEY_COOKIE_VALUE_LEN)]
+    }
 }
 
 pub(super) fn build_vary_rule(

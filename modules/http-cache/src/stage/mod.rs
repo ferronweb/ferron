@@ -289,11 +289,11 @@ impl Stage<HttpContext> for HttpCacheStage {
             request.uri(),
             ctx.hostname.as_deref(),
         );
-        let private_key = Some(build_private_cache_key(
+        let private_key = build_private_cache_key(
             &request_cookies,
-            ctx.remote_address.ip(),
             ctx.auth_user.as_deref(),
-        ));
+            &config.vary_cookies,
+        );
         let head_only = request.method() == Method::HEAD;
 
         let method_cacheable = matches!(request.method(), &Method::GET | &Method::HEAD);
@@ -1025,6 +1025,27 @@ impl Stage<HttpContext> for HttpCacheStage {
                 ls_control.as_ref(),
                 state.config.litespeed_override_cache_control,
             )
+        };
+        // Private scope must never be keyed on the client IP alone: behind
+        // CGNAT one user's private response would be served to another user on
+        // the same public address. Without an identifying component the
+        // response cannot be partitioned per client, so serve it uncached.
+        let decision = if decision.store
+            && decision.scope == Some(CacheScope::Private)
+            && state.private_key.is_none()
+        {
+            crate::policy::ResponseCacheDecision {
+                store: false,
+                scope: None,
+                ttl: None,
+                stale_while_revalidate: None,
+                stale_if_error: None,
+                must_revalidate: false,
+                no_cache_field_names: Vec::new(),
+                reason: "private-no-identity",
+            }
+        } else {
+            decision
         };
 
         let vary_rule = build_vary_rule(response.headers(), &state.config, &ls_vary)?;

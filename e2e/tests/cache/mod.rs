@@ -113,6 +113,71 @@ async fn test_cache_hit() {
 }
 
 #[tokio::test]
+async fn test_private_scope_requires_identity_not_ip() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      *:80 {
+        root "/var/www/ferron"
+        file_cache_control "private, max-age=60"
+        cache true
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+    let base_url = format!(
+        "http://localhost:{}/",
+        container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .unwrap()
+    );
+
+    // Two clients on the same public IP with no identifying cookie must not
+    // share private data: every request is served from origin, never cached.
+    self::common::write_file(webroot_dir.path().join("private.txt"), "one".as_bytes()).unwrap();
+    let first = reqwest::get(format!("{base_url}private.txt")).await.unwrap();
+    assert_eq!(first.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(first.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*first.bytes().await.unwrap(), b"one");
+
+    self::common::write_file(webroot_dir.path().join("private.txt"), "two".as_bytes()).unwrap();
+    let second = reqwest::get(format!("{base_url}private.txt")).await.unwrap();
+    assert_eq!(second.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(second.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+    assert_eq!(&*second.bytes().await.unwrap(), b"two");
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_expiry() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

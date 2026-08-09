@@ -23,6 +23,10 @@ pub use self::types::{
     LookupEntry, LookupHit, LookupOutcome, StoreStats, StoredEntry, StoredVariant, VaryRule,
 };
 
+/// Maximum number of variants tracked per base key. Bounds the variant map so
+/// arbitrary `Vary` combinations cannot grow it without limit.
+const MAX_VARIANTS_PER_BASE: usize = 64;
+
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
     variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
@@ -285,6 +289,12 @@ impl CacheStore {
                 .entry(entry.base_key.clone())
                 .or_default();
             if !variants.contains(&variant) {
+                if variants.len() >= MAX_VARIANTS_PER_BASE {
+                    // Bound variant cardinality per base: drop the oldest
+                    // variant (front of the insertion-ordered Vec) before
+                    // admitting a new one.
+                    variants.remove(0);
+                }
                 variants.push(variant);
             }
         }

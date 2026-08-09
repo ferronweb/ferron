@@ -204,6 +204,7 @@ async fn test_lscache_private_cache() {
             &[
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Body", "private-content"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -222,6 +223,7 @@ async fn test_lscache_private_cache() {
             &[
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Body", "private-content"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -713,6 +715,7 @@ async fn test_lscache_public_tag_with_private_cache() {
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Tag", "public:PubTag,PrivTag"),
                 ("X-Test-Body", "priv-with-pub-tag"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -733,6 +736,7 @@ async fn test_lscache_public_tag_with_private_cache() {
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Tag", "public:PubTag,PrivTag"),
                 ("X-Test-Body", "priv-with-pub-tag-hit"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -777,6 +781,7 @@ async fn test_lscache_shared_cache_control() {
             &[
                 ("X-Test-Cache-Control", "shared,private,max-age=60"),
                 ("X-Test-Body", "shared-content"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -796,6 +801,7 @@ async fn test_lscache_shared_cache_control() {
             &[
                 ("X-Test-Cache-Control", "shared,private,max-age=60"),
                 ("X-Test-Body", "shared-content-hit"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -813,6 +819,7 @@ async fn test_lscache_purge_private_scope() {
             &[
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Body", "private-v1"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -825,6 +832,7 @@ async fn test_lscache_purge_private_scope() {
             &[
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Body", "private-v1-verify"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -837,6 +845,7 @@ async fn test_lscache_purge_private_scope() {
             &[
                 ("X-Test-Purge", "private,*"),
                 ("X-Test-Body", "purge-private"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;
@@ -848,6 +857,7 @@ async fn test_lscache_purge_private_scope() {
             &[
                 ("X-Test-Cache-Control", "private,max-age=60"),
                 ("X-Test-Body", "private-v2"),
+                ("Cookie", "phpsessid=abcdef1234567890"),
             ],
         )
         .await;

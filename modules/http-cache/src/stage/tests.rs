@@ -41,9 +41,63 @@ fn test_context(path: &str) -> HttpContext {
 fn parses_private_key_from_cookies() {
     let mut cookies = ahash::AHashMap::default();
     cookies.insert("PHPSESSID".to_string(), "1234567890abcdef".to_string());
-    let key = build_private_cache_key(&cookies, "127.0.0.1".parse().unwrap(), Some("user"));
+    let key = build_private_cache_key(&cookies, Some("user"), &[]).unwrap();
     assert!(key.contains("auth=user"));
     assert!(key.contains("cookie:PHPSESSID=1234567890abcdef"));
+    assert!(!key.contains("ip="));
+}
+
+#[test]
+fn private_key_requires_identity_without_falling_back_to_ip() {
+    // No auth, no private cookie, no declared vary cookie: no identity, so no
+    // key. The caller must treat the response as not storable in private scope
+    // rather than keying on the client IP alone (F12).
+    let empty = ahash::AHashMap::default();
+    assert!(build_private_cache_key(&empty, None, &[]).is_none());
+
+    let mut cookies = ahash::AHashMap::default();
+    cookies.insert("visitor_id".to_string(), "abcdef1234567890".to_string());
+    assert!(build_private_cache_key(&cookies, None, &[]).is_none());
+
+    // A declared vary cookie is an identifying component.
+    let key = build_private_cache_key(&cookies, None, &["visitor_id".to_string()]);
+    assert_eq!(key.as_deref(), Some("cookie:visitor_id=abcdef1234567890"));
+}
+
+#[test]
+fn private_key_caps_cookie_components_and_value_length() {
+    let mut cookies = ahash::AHashMap::default();
+    for index in 0..20 {
+        cookies.insert(
+            format!("session_{index}"),
+            format!("cookie_value_for_user_{index}_abcdefgh"),
+        );
+    }
+    // With a declared vary cookie each one is an identity candidate, but the
+    // key must cap the number of cookie components (F13).
+    let vary_names: Vec<String> = (0..20).map(|i| format!("session_{i}")).collect();
+    let key = build_private_cache_key(&cookies, None, &vary_names).unwrap();
+    assert_eq!(key.matches("cookie:").count(), 8);
+
+    // Individual cookie values longer than the cap are truncated.
+    let mut long = ahash::AHashMap::default();
+    let long_value = "x".repeat(1000);
+    long.insert("lsc_private".to_string(), long_value.clone());
+    let key = build_private_cache_key(&long, None, &[]).unwrap();
+    assert!(key.contains("cookie:lsc_private="));
+    assert!(key.split('=').next_back().unwrap().len() <= 256);
+}
+
+#[test]
+fn private_key_ignores_arbitrary_cookies_without_vary_declaration() {
+    // Arbitrary cookies must not appear in the key unless declared as vary or
+    // private cookie names (F13).
+    let mut cookies = ahash::AHashMap::default();
+    cookies.insert("visitor_id".to_string(), "abcdef1234567890".to_string());
+    cookies.insert("tracking".to_string(), "uuid_value_16chars".to_string());
+    let key = build_private_cache_key(&cookies, None, &["tracking".to_string()]).unwrap();
+    assert!(key.contains("cookie:tracking="));
+    assert!(!key.contains("visitor_id"));
 }
 
 #[test]

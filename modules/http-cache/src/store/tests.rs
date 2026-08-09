@@ -206,6 +206,50 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
 }
 
 #[test]
+fn variant_map_per_base_is_bounded_and_evicts_oldest() {
+    let store = CacheStore::new(1024);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+    let base_key = "https://example.com/resource";
+
+    for index in 0..(super::MAX_VARIANTS_PER_BASE + 20) {
+        let vary = VaryRule {
+            header_names: Vec::new(),
+            cookie_names: vec![format!("variant_{index}")],
+            value: None,
+        };
+        store.insert_with_request(
+            stored_entry(base_key, CacheScope::Public, "body", vary),
+            None,
+            &headers,
+            &cookies,
+        );
+    }
+
+    let variants = store
+        .variants_by_base
+        .get(base_key)
+        .map(|variants| variants.len())
+        .unwrap_or(0);
+    assert_eq!(variants, super::MAX_VARIANTS_PER_BASE);
+
+    // The oldest variants were evicted, so their entries are unreachable.
+    let oldest = StoredVariant {
+        scope: CacheScope::Public,
+        vary: VaryRule {
+            header_names: Vec::new(),
+            cookie_names: vec!["variant_0".to_string()],
+            value: None,
+        },
+    };
+    let evicted = store
+        .variants_by_base
+        .get(base_key)
+        .is_some_and(|variants| !variants.value().contains(&oldest));
+    assert!(evicted, "oldest variant should be evicted");
+}
+
+#[test]
 fn set_max_entries_trims_entries_to_capacity() {
     let store = CacheStore::new(3);
     let headers = HeaderMap::new();
