@@ -361,6 +361,12 @@ fn lookup_cleans_up_expired_entries() {
             .is_ok());
     }
 
+    // Force the next scan: the insert above already ran one within the
+    // one-second throttle window.
+    store
+        .last_cleanup
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+
     let LookupOutcome {
         entry: lookup,
         stats,
@@ -761,15 +767,14 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
             .replace(format!("{base_key}\nscope=public"), entry, false)
             .ok();
     }
-
     // A fully expired entry is cleaned up on lookup; its base key is dropped
     // too, so the miss no longer reports had_expired.
+    store.last_cleanup.store(0, Ordering::Relaxed);
     let LookupOutcome {
         stats, had_expired, ..
     } = store.lookup(base_key, &headers, &cookies, None);
     assert!(!had_expired);
     assert_eq!(stats.expired_evictions, 1);
-
     let fetch_count = Arc::new(AtomicUsize::new(0));
     let mut handles = Vec::new();
 
@@ -1316,6 +1321,9 @@ fn variants_by_base_removed_after_expiry_cleanup() {
     }
 
     // Lookup triggers cleanup, which must drop the orphaned base key
+    store
+        .last_cleanup
+        .store(0, std::sync::atomic::Ordering::Relaxed);
     let outcome = store.lookup("https://example.com/page", &headers, &cookies, None);
     assert_eq!(outcome.stats.expired_evictions, 1);
     assert!(outcome.entry.is_none());
@@ -1395,4 +1403,96 @@ fn variants_by_base_kept_when_other_variant_survives_eviction() {
         .lookup("https://example.com/page", &en_headers, &cookies, None)
         .entry
         .is_none());
+}
+
+#[test]
+fn cleanup_expired_runs_at_most_once_per_second() {
+    let store = CacheStore::new(4);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    store.insert_with_request(
+        stored_entry(
+            "https://example.com/expired",
+            CacheScope::Public,
+            "expired",
+            VaryRule::default(),
+        ),
+        None,
+        &headers,
+        &cookies,
+    );
+    {
+        let mut expired_entry = store
+            .entries
+            .get("https://example.com/expired\nscope=public")
+            .expect("expected inserted entry");
+        expired_entry.created_at = Instant::now() - Duration::from_secs(120);
+        expired_entry.ttl = Duration::from_secs(1);
+        assert!(store
+            .entries
+            .replace(
+                "https://example.com/expired\nscope=public".to_string(),
+                expired_entry,
+                false,
+            )
+            .is_ok());
+    }
+
+    // First lookup scans and removes the expired entry.
+    store
+        .last_cleanup
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+    let first = store.lookup("https://example.com/expired", &headers, &cookies, None);
+    assert_eq!(first.stats.expired_evictions, 1);
+
+    // A second lookup within the throttle window must not re-scan.
+    let second = store.lookup("https://example.com/expired", &headers, &cookies, None);
+    assert_eq!(second.stats.expired_evictions, 0);
+}
+
+#[test]
+fn expired_entry_not_served_while_cleanup_throttled() {
+    let store = CacheStore::new(4);
+    let headers = HeaderMap::new();
+    let cookies = AHashMap::default();
+
+    // The insert runs the scan, so the throttle window starts now.
+    store.insert_with_request(
+        stored_entry(
+            "https://example.com/page",
+            CacheScope::Public,
+            "body",
+            VaryRule::default(),
+        ),
+        None,
+        &headers,
+        &cookies,
+    );
+    {
+        let mut expired_entry = store
+            .entries
+            .get("https://example.com/page\nscope=public")
+            .expect("expected inserted entry");
+        expired_entry.created_at = Instant::now() - Duration::from_secs(120);
+        expired_entry.ttl = Duration::from_secs(1);
+        assert!(store
+            .entries
+            .replace(
+                "https://example.com/page\nscope=public".to_string(),
+                expired_entry,
+                false,
+            )
+            .is_ok());
+    }
+
+    // Lookup happens inside the throttle window: the expired entry is still
+    // present in the cache, but the age checks skip it and it is not served.
+    let outcome = store.lookup("https://example.com/page", &headers, &cookies, None);
+    assert_eq!(outcome.stats.expired_evictions, 0);
+    assert!(outcome.entry.is_none());
+    assert!(store
+        .entries
+        .get("https://example.com/page\nscope=public")
+        .is_some());
 }

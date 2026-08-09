@@ -3,9 +3,9 @@ mod purge;
 mod tests;
 pub mod types;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use ahash::{AHashMap, AHashSet, RandomState};
 use http::header::{self, HeaderMap};
@@ -26,6 +26,12 @@ pub use self::types::{
 /// Maximum number of variants tracked per base key. Bounds the variant map so
 /// arbitrary `Vary` combinations cannot grow it without limit.
 const MAX_VARIANTS_PER_BASE: usize = 64;
+
+/// Minimum interval between full expired-entry scans. `cleanup_expired`
+/// iterates the whole entry cache, so it runs at most once per second.
+/// Entries that fall outside their TTL plus stale-while-revalidate window are
+/// skipped lazily at lookup time even while the scan is throttled.
+const CLEANUP_INTERVAL_SECS: u64 = 1;
 
 /// Build the candidate entry keys for a request under a set of registered
 /// variants, in lookup order: private variants (when a private key is present)
@@ -73,6 +79,7 @@ pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
     variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
+    last_cleanup: AtomicU64,
     inflight: dashmap::DashMap<String, InflightEntry, FxBuildHasher>,
     active_locks: AtomicUsize,
 }
@@ -114,6 +121,7 @@ impl CacheStore {
             ),
             variants_by_base: dashmap::DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
+            last_cleanup: AtomicU64::new(0),
             inflight: dashmap::DashMap::with_hasher(FxBuildHasher),
             active_locks: AtomicUsize::new(0),
         }
@@ -392,8 +400,29 @@ impl CacheStore {
         }
     }
 
+    /// Run the full expired-entry scan only if at least `CLEANUP_INTERVAL_SECS`
+    /// elapsed since the last scan. Returns true when the caller's thread won
+    /// the right to scan this interval.
+    #[inline]
+    fn should_cleanup(&self) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = self.last_cleanup.load(Ordering::Relaxed);
+        if now.saturating_sub(last) < CLEANUP_INTERVAL_SECS {
+            return false;
+        }
+        self.last_cleanup
+            .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    }
+
     #[inline]
     fn cleanup_expired(&self) -> usize {
+        if !self.should_cleanup() {
+            return 0;
+        }
         let expired_keys: Vec<String> = self
             .entries
             .iter()
