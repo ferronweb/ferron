@@ -788,6 +788,71 @@ async fn test_cache_propagation_purge_requires_shared_secret() {
 }
 
 #[tokio::test]
+async fn test_cache_key_uses_resolved_vhost_case_insensitively() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+      a.example.com:80 {
+        root "/var/www/ferron"
+        file_cache_control "public, max-age=60"
+        cache {
+          purge_method
+        }
+      }
+  "#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
+    let client = reqwest::Client::new();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let url = format!("http://localhost:{}/test.txt", port);
+
+    let get = |host: &str| client.get(&url).header("Host", host).send();
+
+    // Prime with a lowercase host, then request with mixed case. Both must
+    // resolve to the same vhost and produce the same cache key.
+    let response = get("a.example.com").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("miss")
+    );
+
+    let response = get("A.Example.COM").await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
+            .contains("hit")
+    );
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 

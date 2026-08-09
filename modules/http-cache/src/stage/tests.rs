@@ -50,7 +50,13 @@ fn parses_private_key_from_cookies() {
 fn base_key_uses_scheme_host_and_path() {
     let ctx = test_context("/test?q=1");
     let request = ctx.req.as_ref().unwrap();
-    let key = build_base_key(ctx.encrypted, request.headers(), None, request.uri());
+    let key = build_base_key(
+        ctx.encrypted,
+        request.headers(),
+        None,
+        request.uri(),
+        ctx.hostname.as_deref(),
+    );
     assert_eq!(key, "https://example.com/test?q=1");
 }
 
@@ -64,8 +70,68 @@ fn base_key_prefers_original_uri() {
         request.headers(),
         ctx.original_uri.as_ref(),
         request.uri(),
+        ctx.hostname.as_deref(),
     );
     assert_eq!(key, "https://example.com/canonical/path");
+}
+
+#[test]
+fn base_key_prefers_resolved_host_over_host_header() {
+    let ctx = test_context("/page");
+
+    // A spoofed Host header must not change the key.
+    let mut headers = http::HeaderMap::new();
+    headers.insert(http::header::HOST, "attacker.example".parse().unwrap());
+    let key = build_base_key(
+        ctx.encrypted,
+        &headers,
+        None,
+        ctx.req.as_ref().unwrap().uri(),
+        ctx.hostname.as_deref(),
+    );
+    assert_eq!(key, "https://example.com/page");
+}
+
+#[test]
+fn base_key_normalizes_host_case() {
+    let ctx = test_context("/page");
+
+    // Resolved host with mixed case is lowercased.
+    let key = build_base_key(
+        ctx.encrypted,
+        &http::HeaderMap::new(),
+        None,
+        ctx.req.as_ref().unwrap().uri(),
+        Some("EXAMPLE.COM"),
+    );
+    assert_eq!(key, "https://example.com/page");
+
+    // Host header differing in case from the vhost still hits the same key.
+    let mut headers = http::HeaderMap::new();
+    headers.insert(http::header::HOST, "Example.COM".parse().unwrap());
+    let key = build_base_key(
+        ctx.encrypted,
+        &headers,
+        None,
+        ctx.req.as_ref().unwrap().uri(),
+        None,
+    );
+    assert_eq!(key, "https://example.com/page");
+}
+
+#[test]
+fn base_key_falls_back_to_host_header_without_resolved_host() {
+    let mut ctx = test_context("/page");
+    ctx.hostname = None;
+    let request = ctx.req.as_ref().unwrap();
+    let key = build_base_key(
+        ctx.encrypted,
+        request.headers(),
+        None,
+        request.uri(),
+        ctx.hostname.as_deref(),
+    );
+    assert_eq!(key, "https://example.com/page");
 }
 
 #[test]

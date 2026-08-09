@@ -258,7 +258,7 @@ admin.example.com {
 Here `admin.example.com` gets its own 2048-entry cache, while `example.com` shares the global 4096-entry store.
 
 > [!note]
-> Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries.
+> Cache keys still include the full URL (including hostname), so `https://example.com/page` and `https://www.example.com/page` are distinct cache entries even within the same zone. The zone only determines which physical cache store holds the entries. The key uses the resolved vhost (the host Ferron matched in configuration), not the raw `Host` header, and is lowercased. A `Host` header that differs in case, carries a trailing dot, or spoofs another vhost cannot fragment or leak a tenant's entries.
 
 > [!important]
 > When using named zones, define the `max_entries` capacity in the global `zone` block, not in the host-level `cache` block. Specifying `max_entries` in a host block that also uses `zone` triggers a validation warning.

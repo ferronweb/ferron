@@ -13,13 +13,21 @@ pub(super) fn build_base_key(
     headers: &HeaderMap,
     original_uri: Option<&http::Uri>,
     fallback_uri: &http::Uri,
+    resolved_host: Option<&str>,
 ) -> String {
     let uri = original_uri.unwrap_or(fallback_uri);
     let scheme = if encrypted { "https" } else { "http" };
-    let host = headers
-        .get(http::header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+    // Prefer the resolved vhost: the client-supplied Host header can be
+    // spoofed or differ in case, which would otherwise fragment the cache
+    // and let a client miss other tenants' entries.
+    let host = resolved_host
+        .or_else(|| {
+            headers
+                .get(http::header::HOST)
+                .and_then(|value| value.to_str().ok())
+        })
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let path_and_query = uri
         .path_and_query()
         .map(|value| value.as_str())
@@ -27,7 +35,7 @@ pub(super) fn build_base_key(
     let mut key = String::with_capacity(scheme.len() + host.len() + path_and_query.len() + 3);
     key.push_str(scheme);
     key.push_str("://");
-    key.push_str(host);
+    key.push_str(&host);
     key.push_str(path_and_query);
     key
 }

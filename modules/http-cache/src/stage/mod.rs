@@ -287,6 +287,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             &request_headers,
             ctx.original_uri.as_ref(),
             request.uri(),
+            ctx.hostname.as_deref(),
         );
         let private_key = Some(build_private_cache_key(
             &request_cookies,
