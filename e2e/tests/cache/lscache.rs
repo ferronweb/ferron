@@ -195,6 +195,35 @@ async fn test_lscache_miss_then_hit() {
 }
 
 #[tokio::test]
+async fn test_lscache_hop_by_hop_headers_stripped_on_serve() {
+    let ctx = LSCacheTestContext::new("hop-by-hop", BASE_CONFIG_EMIT_LS).await;
+
+    // Origin sends hop-by-hop headers, with Connection naming an extra field.
+    let headers = [
+        ("X-Test-Cache-Control", "public,max-age=60"),
+        ("X-Test-Headers", "Connection: X-Custom|X-Custom: 1|Keep-Alive: timeout=5"),
+    ];
+    let resp = ctx.get_with_headers("/cache-test", &headers).await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+    let resp = ctx.get_with_headers("/cache-test", &headers).await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert_eq!(ls_cache, "hit");
+    for name in ["Connection", "X-Custom", "Keep-Alive"] {
+        assert!(
+            resp.headers().get(name).is_none(),
+            "cached response must not replay hop-by-hop header {name}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_lscache_private_cache() {
     let ctx = LSCacheTestContext::new("private", BASE_CONFIG_EMIT_LS).await;
 

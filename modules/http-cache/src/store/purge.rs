@@ -49,7 +49,56 @@ pub(crate) fn entry_matches_purge(
     })
 }
 
+/// Hop-by-hop headers a proxy must not forward or store (RFC 9110 §7.6.1).
+///
+/// A proxy consumes these headers and must not pass them on. `Connection` is
+/// handled separately because it also names additional hop-by-hop fields.
+const HOP_BY_HOP_HEADERS: &[&str] = &[
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+];
+
+/// Remove all hop-by-hop headers from `headers`, including any field named in
+/// the `Connection` header.
 #[inline]
-pub fn strip_store_headers(headers: &mut HeaderMap) {
+pub fn remove_hop_by_hop_headers(headers: &mut HeaderMap) {
+    let mut connection_names = Vec::new();
+    for value in headers.get_all(header::CONNECTION) {
+        let Some(text) = value.to_str().ok() else {
+            continue;
+        };
+        for token in text.split(',') {
+            let token = token.trim();
+            if !token.is_empty() {
+                connection_names.push(token.to_string());
+            }
+        }
+    }
+    for name in &connection_names {
+        if let Ok(name) = http::header::HeaderName::from_bytes(name.as_bytes()) {
+            headers.remove(name);
+        }
+    }
+    for name in HOP_BY_HOP_HEADERS {
+        headers.remove(http::header::HeaderName::from_static(name));
+    }
+}
+
+/// Strip headers from an upstream response before storing it.
+///
+/// Removes hop-by-hop headers, the proxy-added `Age`, and `Set-Cookie` on
+/// shared (public) responses, which a shared cache must not store.
+#[inline]
+pub fn strip_store_headers(headers: &mut HeaderMap, scope: CacheScope) {
+    remove_hop_by_hop_headers(headers);
     headers.remove(header::AGE);
+    if scope == CacheScope::Public {
+        headers.remove(header::SET_COOKIE);
+    }
 }

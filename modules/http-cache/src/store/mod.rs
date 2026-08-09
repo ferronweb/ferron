@@ -18,7 +18,7 @@ use crate::lscache::PurgeOperation;
 use crate::policy::{recalculate_freshness, CacheScope};
 
 pub use self::key::build_entry_key;
-pub use self::purge::strip_store_headers;
+pub use self::purge::{remove_hop_by_hop_headers, strip_store_headers};
 pub use self::types::{
     LookupEntry, LookupHit, LookupOutcome, StoreStats, StoredEntry, StoredVariant, VaryRule,
 };
@@ -376,6 +376,8 @@ impl CacheStore {
         litespeed_override_cache_control: bool,
     ) -> Option<HeaderMap> {
         let mut entry = self.entries.get(cache_key)?;
+        let mut new_headers = new_headers;
+        remove_hop_by_hop_headers(&mut new_headers);
         merge_revalidation_headers(&mut entry.headers, new_headers);
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();

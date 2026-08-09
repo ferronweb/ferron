@@ -5,7 +5,10 @@ use super::*;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::header::{AGE, CACHE_CONTROL, COOKIE};
+use http::header::{
+    AGE, CACHE_CONTROL, CONNECTION, COOKIE, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, SET_COOKIE,
+    TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
+};
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 
 use crate::lscache::{PurgeSelector, ScopedTag};
@@ -484,15 +487,55 @@ fn zero_capacity_store_skips_insert() {
 }
 
 #[test]
-fn strip_store_headers_removes_age_only() {
+fn strip_store_headers_removes_hop_by_hop_and_age() {
     let mut headers = HeaderMap::new();
     headers.insert(AGE, HeaderValue::from_static("60"));
     headers.insert(COOKIE, HeaderValue::from_static("a=b"));
+    headers.insert(CONNECTION, HeaderValue::from_static("X-Custom"));
+    headers.insert(
+        "X-Custom".parse::<HeaderName>().unwrap(),
+        HeaderValue::from_static("1"),
+    );
+    headers.insert(
+        HeaderName::from_static("keep-alive"),
+        HeaderValue::from_static("timeout=5"),
+    );
+    headers.insert(
+        PROXY_AUTHENTICATE,
+        HeaderValue::from_static("Basic realm=test"),
+    );
+    headers.insert(PROXY_AUTHORIZATION, HeaderValue::from_static("Basic abc"));
+    headers.insert(TE, HeaderValue::from_static("trailers"));
+    headers.insert(TRAILER, HeaderValue::from_static("X-Checksum"));
+    headers.insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+    headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
 
-    strip_store_headers(&mut headers);
+    strip_store_headers(&mut headers, CacheScope::Public);
 
     assert!(!headers.contains_key(AGE));
     assert!(headers.contains_key(COOKIE));
+    assert!(!headers.contains_key(CONNECTION));
+    assert!(!headers.contains_key("X-Custom"));
+    assert!(!headers.contains_key("keep-alive"));
+    assert!(!headers.contains_key(PROXY_AUTHENTICATE));
+    assert!(!headers.contains_key(PROXY_AUTHORIZATION));
+    assert!(!headers.contains_key(TE));
+    assert!(!headers.contains_key(TRAILER));
+    assert!(!headers.contains_key(TRANSFER_ENCODING));
+    assert!(!headers.contains_key(UPGRADE));
+}
+
+#[test]
+fn strip_store_headers_removes_set_cookie_only_for_shared_scope() {
+    let mut shared = HeaderMap::new();
+    shared.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
+    strip_store_headers(&mut shared, CacheScope::Public);
+    assert!(!shared.contains_key(SET_COOKIE));
+
+    let mut private = HeaderMap::new();
+    private.insert(SET_COOKIE, HeaderValue::from_static("session=abc"));
+    strip_store_headers(&mut private, CacheScope::Private);
+    assert!(private.contains_key(SET_COOKIE));
 }
 
 #[test]

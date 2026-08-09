@@ -48,6 +48,17 @@ const server = http.createServer((req, res) => {
     res.setHeader("Cache-Control", cacheControl);
   }
 
+  // Arbitrary response headers (from X-Test-Headers, pipe-separated "Name: Value" pairs)
+  const testHeaders = headers["x-test-headers"];
+  if (testHeaders) {
+    for (const pair of testHeaders.split("|")) {
+      const colon = pair.indexOf(":");
+      if (colon !== -1) {
+        res.setHeader(pair.slice(0, colon).trim(), pair.slice(colon + 1).trim());
+      }
+    }
+  }
+
   // Custom response body (from X-Test-Body header)
   const testBody = headers["x-test-body"];
   if (testBody) {

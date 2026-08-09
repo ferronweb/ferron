@@ -8,7 +8,7 @@ use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, Full};
 
 use crate::lscache::LS_CACHE;
-use crate::store::LookupEntry;
+use crate::store::{remove_hop_by_hop_headers, LookupEntry};
 
 use super::response_helpers::{
     annotate_response_headers, append_lsc_cookies_as_set_cookie, CacheHeaderState,
@@ -53,9 +53,13 @@ pub(super) fn serve(
     });
     *response.status_mut() = entry.status;
     let mut headers = entry.headers.clone();
+    remove_hop_by_hop_headers(&mut headers);
     headers.remove(&LS_CACHE);
     headers.remove(header::AGE);
     headers.remove(CACHE_STATUS_HEADER);
+    // Never replay a stored `Set-Cookie` verbatim: a cached hit must only
+    // rehydrate cookies tracked separately in `lsc_cookies`.
+    headers.remove(header::SET_COOKIE);
     if !matches!(state, ServedState::Revalidated) {
         append_lsc_cookies_as_set_cookie(&mut headers, &entry.lsc_cookies);
     }
@@ -90,7 +94,7 @@ pub(super) fn serve(
 mod tests {
     use std::time::Duration;
 
-    use http::{HeaderMap, HeaderValue, StatusCode};
+    use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 
     use crate::policy::CacheScope;
 
@@ -202,6 +206,48 @@ mod tests {
             response.headers().get(CACHE_STATUS_HEADER).unwrap(),
             "FerronCache; hit; detail=public; age=5"
         );
+    }
+
+    #[test]
+    fn serve_strips_hop_by_hop_headers_and_connection_named_fields() {
+        let mut entry = test_entry();
+        entry
+            .headers
+            .insert(header::CONNECTION, HeaderValue::from_static("X-Custom"));
+        entry.headers.insert(
+            "X-Custom".parse::<HeaderName>().unwrap(),
+            HeaderValue::from_static("1"),
+        );
+        entry.headers.insert(
+            header::TRANSFER_ENCODING,
+            HeaderValue::from_static("chunked"),
+        );
+        entry
+            .headers
+            .insert(header::UPGRADE, HeaderValue::from_static("websocket"));
+        let response = serve(entry, ServedState::Hit, false, false).unwrap();
+        assert!(response.headers().get(header::CONNECTION).is_none());
+        assert!(response.headers().get("X-Custom").is_none());
+        assert!(response.headers().get(header::TRANSFER_ENCODING).is_none());
+        assert!(response.headers().get(header::UPGRADE).is_none());
+    }
+
+    #[test]
+    fn serve_never_replays_set_cookie_but_rehydrates_lsc_cookies() {
+        let mut entry = test_entry();
+        entry.headers.insert(
+            header::SET_COOKIE,
+            HeaderValue::from_static("origin_session=stale"),
+        );
+        entry.lsc_cookies = vec![HeaderValue::from_static("ferron_session=abc")];
+        let response = serve(entry, ServedState::Hit, false, false).unwrap();
+        let set_cookies: Vec<_> = response
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect();
+        assert_eq!(set_cookies, vec!["ferron_session=abc"]);
     }
 
     #[test]

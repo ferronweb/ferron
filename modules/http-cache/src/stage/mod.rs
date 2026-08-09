@@ -875,9 +875,11 @@ impl Stage<HttpContext> for HttpCacheStage {
                         let stale_response = if let Some(body) = stale_entry.body {
                             let mut builder = Response::builder().status(stale_entry.status);
                             let mut headers = stale_entry.headers.clone();
+                            crate::store::remove_hop_by_hop_headers(&mut headers);
                             headers.remove(&LS_CACHE);
                             headers.remove(header::AGE);
                             headers.remove(CACHE_STATUS_HEADER);
+                            headers.remove(header::SET_COOKIE);
                             append_lsc_cookies_as_set_cookie(
                                 &mut headers,
                                 &stale_entry.lsc_cookies,
@@ -1088,7 +1090,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                         &mut stored_headers,
                         &decision.no_cache_field_names,
                     );
-                    crate::store::strip_store_headers(&mut stored_headers);
+                    crate::store::strip_store_headers(&mut stored_headers, scope);
                     let etag = stored_headers.get(header::ETAG).cloned();
                     let last_modified = stored_headers.get(header::LAST_MODIFIED).cloned();
                     let stored_entry = StoredEntry {

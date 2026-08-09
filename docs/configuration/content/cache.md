@@ -326,6 +326,12 @@ Host: example.com
 - The private cache key uses at most 8 cookie components and truncates each cookie value to 256 characters. This bounds the key space against arbitrary session cookies.
 - Per RFC 9111 §3.5, Ferron does not store responses to authorized requests unless the response explicitly authorizes shared caching. The response must include `public`, `s-maxage`, `must-revalidate`, or `proxy-revalidate`. A bare `max-age` without one of these directives does not authorize shared caching.
 
+### Hop-by-hop header stripping
+
+Ferron removes hop-by-hop headers from responses before storing them and before serving a cached response. This follows RFC 9110 §7.6.1. The hop-by-hop headers are `Connection`, `Keep-Alive`, `Proxy-Authenticate`, `Proxy-Authorization`, `TE`, `Trailer`, `Transfer-Encoding`, and `Upgrade`. Ferron also removes any header field named in a `Connection` header value. For example, a response with `Connection: X-Custom` loses the `X-Custom` header too.
+
+Ferron also removes `Age` before storing a response, so a stored entry always carries a fresh age. For shared-cache responses, Ferron removes `Set-Cookie` before storing. When Ferron serves a cached response, it never replays a stored `Set-Cookie` verbatim; only `LSC-Cookie` metadata is converted back into `Set-Cookie` on a cache hit.
+
 ### Stale-while-revalidate
 
 When an upstream response includes the `stale-while-revalidate` directive in its `Cache-Control` header, Ferron extends the cached entry lifetime beyond `max-age`. The behavior differs depending on concurrent request patterns:
