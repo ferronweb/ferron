@@ -40,14 +40,14 @@ pub fn transform_observability_alias(
             );
 
             // If first arg is a string, it's the access_log path
-            if let Some(path_value) = directive.args.first().and_then(|v| v.as_str()) {
+            if let Some(path_value) = directive.args.first().and_then(|v| {
+                v.as_string_with_interpolations(&HashMap::new())
+                    .map(|_| v.to_owned())
+            }) {
                 directives.insert(
                     "access_log".to_string(),
                     vec![ServerConfigurationDirectiveEntry {
-                        args: vec![ServerConfigurationValue::String(
-                            path_value.to_string(),
-                            None,
-                        )],
+                        args: vec![path_value],
                         children: None,
                         span: directive.span.clone(),
                     }],
@@ -73,14 +73,14 @@ pub fn transform_observability_alias(
             );
 
             // If first arg is a string, it's the error_log path
-            if let Some(path_value) = directive.args.first().and_then(|v| v.as_str()) {
+            if let Some(path_value) = directive.args.first().and_then(|v| {
+                v.as_string_with_interpolations(&HashMap::new())
+                    .map(|_| v.to_owned())
+            }) {
                 directives.insert(
                     "error_log".to_string(),
                     vec![ServerConfigurationDirectiveEntry {
-                        args: vec![ServerConfigurationValue::String(
-                            path_value.to_string(),
-                            None,
-                        )],
+                        args: vec![path_value],
                         children: None,
                         span: directive.span.clone(),
                     }],
