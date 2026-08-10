@@ -130,10 +130,16 @@ impl FileWriter {
         rotation: Option<RotationConfig>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if !self.handles.contains_key(path) {
+            let path_buf: std::path::PathBuf = path.into();
+
+            if let Some(parent) = path_buf.parent() {
+                let _ = tokio::fs::create_dir_all(&parent).await;
+            }
+
             let file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(path)
+                .open(path_buf)
                 .await;
 
             match file {

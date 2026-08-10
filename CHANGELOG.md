@@ -42,6 +42,10 @@
 - **`.ferron` file extension**: `.ferron` files are now supported as an alternative to `.conf` (which is a generic file extension) files for configuration ([GitHub issue](https://github.com/ferronweb/ferron/issues/838)).
 - **Panic hook improvements**: panic hook has been simplified (removing backtraces that are likely unhelpful), and it now logs the Ferron version and build target.
 
+#### Observability & tracing
+
+- **Non-existent directory handling for log files**: when a log file path contains a non-existent parent directory, Ferron now creates it automatically before writing to the log file.
+
 #### Configuration validation
 
 - **Diagnostic span location improvements**: diagnostic span location in error messages is now more accurate, showing the exact line and column where the error occurred in the configuration file.
