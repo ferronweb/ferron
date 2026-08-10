@@ -509,6 +509,12 @@
     "sub": true
   },
   {
+    "href": "/docs/v3/configuration/observability/statsd",
+    "target": "_self",
+    "label": "StatsD metrics",
+    "sub": true
+  },
+  {
     "href": "/docs/v3/configuration/observability/grafana-dashboard",
     "target": "_self",
     "label": "Grafana reference dashboard",

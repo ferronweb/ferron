@@ -19,6 +19,7 @@ This page documents the metrics emitted by Ferron. Ferron emits OpenTelemetry-st
 > - This page lists core metrics emitted by Ferron. For per-module metrics, see respective configuration pages.
 > - For native Prometheus metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
 > - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
+> - For StatsD export configuration, see [StatsD metrics](/docs/v3/configuration/observability/statsd).
 
 ## Understanding metric types
 
