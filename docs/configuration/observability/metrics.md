@@ -45,19 +45,19 @@ The Prometheus observability backend also supports native exponential histograms
 
 ## Metric exemplars
 
-Ferron supports **metric exemplars** in the Prometheus observability backend. When a request carries an active trace context (W3C trace ID and span ID), the Prometheus module attaches an exemplar to the observation. The exemplar links the observation to the specific trace.
+Ferron supports **metric exemplars** in Prometheus and OTLP observability backends. When a request carries an active trace context (W3C trace ID and span ID), the observability module attaches an exemplar to the observation. The exemplar links the observation to the specific trace.
 
 Each exemplar contains:
 
 - `trace_id`: the W3C trace ID of the request
 - `span_id`: the W3C span ID of the request
 
-Exemplars are available for **all counter metrics** by default. For histograms, exemplars are active only when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive. When you enable native histograms, histogram metrics no longer carry exemplars.
-
-The OTLP observability backend does not currently support metric exemplars because of OpenTelemetry SDK limitations. Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate OTLP metrics using their semantic attributes, resource attributes, and timestamps.
+Exemplars are available for **all counter metrics** by default. For Prometheus histograms, exemplars are active only when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive for this module. When you enable native histograms, histogram metrics no longer carry exemplars.
 
 > [!note]
-> For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus#metric-exemplars).
+>
+> - For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus#metric-exemplars).
+> - For OTLP exemplar configuration options and format details, see [OTLP observability](/docs/v3/configuration/observability/otlp#metrics).
 
 ## Process metrics
 
