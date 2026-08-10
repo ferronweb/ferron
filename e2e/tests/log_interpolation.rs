@@ -77,7 +77,7 @@ async fn test_access_log_per_host_interpolation() {
             r#"
 *:80 {
     root "/var/www/ferron"
-    access_log "/var/log/ferron/{{accesslog.header_host}}/access.log"
+    log "/var/log/ferron/{{accesslog.header_host}}/access.log"
 }
 "#
             .as_bytes(),
@@ -172,7 +172,7 @@ async fn test_access_log_env_variable_interpolation() {
             r#"
 *:80 {
     root "/var/www/ferron"
-    access_log "/var/log/ferron/{{env.LOG_SUBDIR}}/access.log"
+    log "/var/log/ferron/{{env.LOG_SUBDIR}}/access.log"
 }
 "#
             .as_bytes(),
@@ -212,7 +212,10 @@ async fn test_access_log_env_variable_interpolation() {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    assert!(log_file.exists(), "Expected custom-subdir/access.log to exist");
+    assert!(
+        log_file.exists(),
+        "Expected custom-subdir/access.log to exist"
+    );
 
     let content = std::fs::read_to_string(&log_file).unwrap_or_default();
     assert!(!content.is_empty(), "Log file should contain entries");
