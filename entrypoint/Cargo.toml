@@ -50,6 +50,7 @@ ferron-observability-consolelog = { path = "../modules/observability-consolelog"
 ferron-observability-logfile = { path = "../modules/observability-logfile", optional = true }
 ferron-observability-otlp = { path = "../modules/observability-otlp", optional = true }
 ferron-observability-prometheus = { path = "../modules/observability-prometheus", optional = true }
+ferron-observability-statsd = { path = "../modules/observability-statsd", optional = true }
 ferron-logformat-json = { path = "../modules/logformat-json", optional = true }
 ferron-logformat-text = { path = "../modules/logformat-text", optional = true }
 ferron-metrics-process = { path = "../modules/metrics-process", optional = true }
@@ -111,6 +112,7 @@ profile-default = [
     "ferron-observability-logfile",
     "ferron-observability-otlp",
     "ferron-observability-prometheus",
+    "ferron-observability-statsd",
     "ferron-logformat-json",
     "ferron-logformat-text",
     "ferron-metrics-process",

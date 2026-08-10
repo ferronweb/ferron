@@ -76,6 +76,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_observability_logfile::LogFileObservabilityModuleLoader::default()),
         Box::new(ferron_observability_otlp::OtlpObservabilityModuleLoader::default()),
         Box::new(ferron_observability_prometheus::PrometheusObservabilityModuleLoader::default()),
+        Box::new(ferron_observability_statsd::StatsdObservabilityModuleLoader::default()),
         Box::new(ferron_logformat_json::JsonFormatObservabilityModuleLoader),
         Box::new(ferron_logformat_text::TextFormatObservabilityModuleLoader),
         Box::new(ferron_metrics_process::ProcessMetricsModuleLoader::default()),

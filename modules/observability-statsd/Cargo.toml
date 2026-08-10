@@ -1,0 +1,12 @@
+[package]
+name = "ferron-observability-statsd"
+version = "3.0.0-beta.8"
+edition = "2021"
+
+[dependencies]
+ferron-observability = { path = "../../types/observability" }
+ferron-core = { path = "../../core" }
+
+async-channel = "2.5.0"
+tokio = { version = "1", features = ["net", "rt", "sync", "macros", "time"] }
+tokio-util = "0.7"

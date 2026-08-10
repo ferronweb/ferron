@@ -1209,6 +1209,7 @@ dependencies = [
  "ferron-observability-logfile",
  "ferron-observability-otlp",
  "ferron-observability-prometheus",
+ "ferron-observability-statsd",
  "ferron-ocsp-stapler",
  "ferron-tls-acme",
  "ferron-tls-http",
@@ -1874,6 +1875,17 @@ dependencies = [
  "http",
  "prometheus-client",
  "subtle",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "ferron-observability-statsd"
+version = "3.0.0-beta.8"
+dependencies = [
+ "async-channel",
+ "ferron-core",
+ "ferron-observability",
  "tokio",
  "tokio-util",
 ]
