@@ -67,6 +67,10 @@ name = "http"
 path = "tests/http/mod.rs"
 
 [[test]]
+name = "log_interpolation"
+path = "tests/log_interpolation.rs"
+
+[[test]]
 name = "log_rotation"
 path = "tests/log_rotation.rs"
 

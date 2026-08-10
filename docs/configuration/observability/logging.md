@@ -288,6 +288,77 @@ Ferron includes the `client.address` and `server.address` attributes in:
 > [!note]
 > Connection-level errors (for example, accept failures, PROXY protocol errors) do not include IP attributes. These errors occur before the server resolves the socket address.
 
+## Variable interpolation in log filenames
+
+The `access_log` and `error_log` directives support variable interpolation in file paths using the `{{variable}}` syntax. This enables use cases like per-host access logs or per-target error logs.
+
+```ferron
+example.com {
+    access_log "/var/log/ferron/{{accesslog.header_host}}/access.log"
+}
+```
+
+### Access log filename variables
+
+When the server resolves an `access_log` filename, it uses the access log event fields as variables. All variable names are prefixed with `accesslog.`.
+
+| Variable                     | Description                                                       |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `accesslog.path`             | The request URI path (e.g. `/index.html`)                         |
+| `accesslog.path_and_query`   | The request URI with path and query                               |
+| `accesslog.method`           | The HTTP request method (e.g. `GET`, `POST`)                      |
+| `accesslog.version`          | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`)                    |
+| `accesslog.scheme`           | The request scheme (`http` or `https`)                            |
+| `accesslog.client_ip`        | The client IP address                                             |
+| `accesslog.client_port`      | The client port number                                            |
+| `accesslog.client_ip_canonical` | The client IP in canonical form                                |
+| `accesslog.server_ip`        | The server IP address                                             |
+| `accesslog.server_port`      | The server port number                                            |
+| `accesslog.server_ip_canonical` | The server IP in canonical form                                |
+| `accesslog.auth_user`        | The authenticated username, or `-` if not authenticated            |
+| `accesslog.status`           | The HTTP response status code                                     |
+| `accesslog.content_length`   | The response content length, or `-` if not available              |
+| `accesslog.duration_secs`    | Request processing duration in seconds                            |
+| `accesslog.timestamp`        | Request timestamp in CLF format                                   |
+| `accesslog.header_<name>`    | Request header values (one field per header, lowercase, hyphens replaced with underscores) |
+| `accesslog.trace_id`         | Optional trace ID (if W3C trace context is available)             |
+| `accesslog.span_id`          | Optional trace span ID (if W3C trace context is available)        |
+
+> [!important]
+> Access log filename interpolation does not include sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.
+
+> [!info]
+> Pipeline modules can contribute additional access log fields when active. These fields are available as `accesslog.<field_name>` variables when the corresponding module handles the request.
+
+### Application log filename variables
+
+When the server resolves an `error_log` filename, it uses the application log event fields as variables. All variable names are prefixed with `log.`.
+
+| Variable              | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| `log.level`           | Log severity level (`ERROR`, `WARN`, `INFO`, `DEBUG`)             |
+| `log.target`          | The web server module target that emitted the log                 |
+| `log.message`         | The full-text log message                                         |
+| `log.summary`         | The short summary used by OTLP `log_style modern`                 |
+| `log.trace_id`        | Optional trace ID (if W3C trace context is available)             |
+| `log.span_id`         | Optional trace span ID (if W3C trace context is available)        |
+| `log.<attribute>`     | Any structured attribute attached to the log event                |
+
+Common attribute keys used across the server include `error.type`, `error.message`, `client.address`, `server.address`, and `upstream.address`. The available attributes depend on the log event source.
+
+### Environment variables
+
+You can also use environment variables in log filenames with the `env.` prefix:
+
+```ferron
+example.com {
+    access_log "/var/log/ferron/{{env.CUSTOMER_NAME}}/access.log"
+}
+```
+
+> [!warning]
+> Using high-cardinality variables (such as `{{accesslog.client_ip}}` or `{{accesslog.timestamp}}`) in log filenames creates a separate file for each unique value. This can lead to a large number of open file handles. Use variables with bounded value sets (such as `{{accesslog.header_host}}` or `{{log.level}}`).
+
 ## Trace ID in console and file logs
 
 Console and file loggers prefix log messages with `[trace=<trace_id>]` when a trace context exists. This enables grep-based filtering by trace ID without requiring an OTLP backend.

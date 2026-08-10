@@ -12,8 +12,8 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::Registry;
 use ferron_core::{log_error, Module};
 use ferron_observability::{
-    AccessEvent, ApplicationLogFormatterContext, Event, EventSink, LogEvent, LogFormatterContext,
-    ObservabilityContext,
+    AccessEvent, AccessVisitor, ApplicationLogFormatterContext, Event, EventSink,
+    LogAttributeValue, LogEvent, LogFormatterContext, ObservabilityContext,
 };
 
 use crate::rotate::{rotate_log_file, RotationConfig};
@@ -272,10 +272,11 @@ impl Module for LogFileObservabilityModule {
 
                             match &*msg.event {
                                 Event::Access(ae) => {
+                                    let access_variables = access_event_variables(ae);
                                     if let Some(access_log_path) =
                                       msg.log_config.get_value("access_log")
                                           .and_then(|v|
-                                           v.as_string_with_interpolations(&HashMap::new())) {
+                                           v.as_string_with_interpolations(&access_variables)) {
                                         if let Some(message) =
                                           format_access_event(ae, &msg.log_config, &registry) {
                                             // Prefer event-level metadata over provider-level metadata
@@ -304,10 +305,11 @@ impl Module for LogFileObservabilityModule {
                                     }
                                 }
                                 Event::Log(le) => {
+                                    let log_variables = log_event_variables(le);
                                     let log_path = msg.log_config
                                         .get_value("error_log")
                                         .and_then(|v| v
-                                            .as_string_with_interpolations(&HashMap::new()));
+                                            .as_string_with_interpolations(&log_variables));
 
                                     if let Some(log_path) = log_path {
                                         if let Some(mut message) =
@@ -357,6 +359,84 @@ impl Drop for LogFileObservabilityModule {
     fn drop(&mut self) {
         self.cancel_token.cancel();
     }
+}
+
+/// Collects access event fields into a HashMap for variable interpolation in log filenames.
+/// All variable names are prefixed with `accesslog.`.
+fn access_event_variables(access_event: &Arc<dyn AccessEvent>) -> HashMap<String, String> {
+    struct Collector {
+        fields: HashMap<String, String>,
+    }
+
+    impl AccessVisitor for Collector {
+        fn field_string(&mut self, name: &str, value: &str) {
+            self.fields
+                .insert(format!("accesslog.{}", name), value.to_string());
+        }
+
+        fn field_u64(&mut self, name: &str, value: u64) {
+            self.fields
+                .insert(format!("accesslog.{}", name), value.to_string());
+        }
+
+        fn field_f64(&mut self, name: &str, value: f64) {
+            self.fields
+                .insert(format!("accesslog.{}", name), value.to_string());
+        }
+
+        fn field_bool(&mut self, name: &str, value: bool) {
+            self.fields
+                .insert(format!("accesslog.{}", name), value.to_string());
+        }
+    }
+
+    let mut collector = Collector {
+        fields: HashMap::new(),
+    };
+    access_event.visit(&mut collector);
+    collector.fields
+}
+
+/// Collects log event fields into a HashMap for variable interpolation in log filenames.
+/// All variable names are prefixed with `log.`.
+fn log_event_variables(log_event: &LogEvent) -> HashMap<String, String> {
+    let mut fields = HashMap::new();
+
+    fields.insert(
+        "log.level".to_string(),
+        match log_event.level {
+            ferron_observability::LogLevel::Error => "ERROR",
+            ferron_observability::LogLevel::Warn => "WARN",
+            ferron_observability::LogLevel::Info => "INFO",
+            ferron_observability::LogLevel::Debug => "DEBUG",
+        }
+        .to_string(),
+    );
+    fields.insert("log.target".to_string(), log_event.target.to_string());
+    fields.insert("log.message".to_string(), log_event.message.clone());
+    fields.insert("log.summary".to_string(), log_event.summary.to_string());
+
+    for (name, value) in &log_event.attributes {
+        let value_str = match value {
+            LogAttributeValue::String(s) => s.clone(),
+            LogAttributeValue::StaticStr(s) => s.to_string(),
+            LogAttributeValue::Bool(b) => b.to_string(),
+            LogAttributeValue::I64(i) => i.to_string(),
+            LogAttributeValue::F64(f) => f.to_string(),
+        };
+        fields.insert(format!("log.{}", name), value_str);
+    }
+
+    if let Some(trace_context) = &log_event.trace_context {
+        if let Ok(trace_id) = std::str::from_utf8(&trace_context.trace_id) {
+            fields.insert("log.trace_id".to_string(), trace_id.to_string());
+        }
+        if let Ok(span_id) = std::str::from_utf8(&trace_context.span_id) {
+            fields.insert("log.span_id".to_string(), span_id.to_string());
+        }
+    }
+
+    fields
 }
 
 fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {

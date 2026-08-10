@@ -24,6 +24,7 @@
 - **OTLP gzip compression**: the `logs`, `metrics`, and `traces` OTLP signal sub-blocks now accept `gzip [bool]` (default `false`). When enabled, export requests are compressed with gzip (HTTP `Content-Encoding: gzip`, gRPC gzip compression).
 - **OTLP exemplar toggle**: the `metrics` sub-block now accepts `exemplars [bool]` (default `true`). Set it to `false` to stop attaching the last sampled measurement per series as an exemplar.
 - **OTLP native histogram toggle**: the `metrics` sub-block now accepts `native_histograms [bool]` (default `true`). Set it to `false` to aggregate histograms with explicit bucket boundaries instead of the exponential layout.
+- **Variable interpolation in log filenames**: the `access_log` and `error_log` directives now support `{{variable}}` interpolation in file paths. Access log filenames use the `accesslog.` prefix (e.g. `{{accesslog.header_host}}`) and resolve against access log event fields. Application log filenames use the `log.` prefix (e.g. `{{log.level}}`, `{{log.error.type}}`) and resolve against log event attributes. Environment variables are also available via the `env.` prefix. This enables use cases like per-host access logs (`access_log /var/log/ferron/{{accesslog.header_host}}/access.log`). ([GitHub issue](https://github.com/ferronweb/ferron/issues/442))
 
 #### HTTP server core
 
