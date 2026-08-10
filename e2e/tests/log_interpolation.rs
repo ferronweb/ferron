@@ -135,6 +135,8 @@ async fn test_access_log_per_host_interpolation() {
         "Expected host2.example.com log directory to exist"
     );
 
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await; // Wait until logs flush
+
     let host1_log = host1_dir.join("access.log");
     let host2_log = host2_dir.join("access.log");
     assert!(
@@ -216,6 +218,8 @@ async fn test_access_log_env_variable_interpolation() {
         log_file.exists(),
         "Expected custom-subdir/access.log to exist"
     );
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await; // Wait until logs flush
 
     let content = std::fs::read_to_string(&log_file).unwrap_or_default();
     assert!(!content.is_empty(), "Log file should contain entries");
