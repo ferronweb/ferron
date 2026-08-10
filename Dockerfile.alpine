@@ -72,7 +72,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     FIPS_ADD_ARG="" && \
     if [ "${FIPS:-0}" == "1" ]; then \
       FIPS_ADD_ARG="--fips"; \
-    fi \
+    fi && \
     # Build Ferron binaries
     # Check if PGO would be enabled based on target triple
     if [ "${NOPGO:-0}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
