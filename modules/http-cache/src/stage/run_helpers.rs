@@ -469,16 +469,19 @@ pub(super) async fn run_forward(
     };
 
     if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
-        if let Some(ref mut request) = ctx.req {
-            if let Some(etag) = &entry.etag {
-                request
-                    .headers_mut()
-                    .insert(header::IF_NONE_MATCH, etag.clone());
-            }
-            if let Some(last_modified) = &entry.last_modified {
-                request
-                    .headers_mut()
-                    .insert(header::IF_MODIFIED_SINCE, last_modified.clone());
+        if entry.status != http::StatusCode::NOT_MODIFIED {
+            // Don't add caching headers if status is 304, otherwise browsers won't load a page!
+            if let Some(ref mut request) = ctx.req {
+                if let Some(etag) = &entry.etag {
+                    request
+                        .headers_mut()
+                        .insert(header::IF_NONE_MATCH, etag.clone());
+                }
+                if let Some(last_modified) = &entry.last_modified {
+                    request
+                        .headers_mut()
+                        .insert(header::IF_MODIFIED_SINCE, last_modified.clone());
+                }
             }
         }
     }
