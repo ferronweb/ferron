@@ -11,5 +11,6 @@ mod otlp_logs;
 mod otlp_metrics;
 mod otlp_native_histograms;
 mod otlp_setup;
+mod statsd;
 mod trace_id;
 mod traces;

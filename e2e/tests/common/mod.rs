@@ -29,6 +29,8 @@ static FCGIWRAP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static OTLP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
+static STATSD_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
+    LazyLock::new(|| Mutex::new(None));
 static OCSP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
     LazyLock::new(|| Mutex::new(None));
 static BIND9_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> =
@@ -207,6 +209,23 @@ pub async fn build_otlp_image() -> Result<GenericImage, TestcontainersError> {
         .await?;
     otlp_image.replace(otlp_image_built.clone());
     Ok(otlp_image_built)
+}
+
+pub async fn build_statsd_image() -> Result<GenericImage, TestcontainersError> {
+    let mut statsd_image = STATSD_IMAGE.lock().await;
+    if let Some(image) = statsd_image.as_ref() {
+        return Ok(image.clone());
+    }
+    let statsd_image_built = GenericBuildableImage::new("e2e-test-statsd", "latest")
+        .with_dockerfile(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/images/statsd/Dockerfile"
+        ))
+        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/statsd"), ".")
+        .build_image()
+        .await?;
+    statsd_image.replace(statsd_image_built.clone());
+    Ok(statsd_image_built)
 }
 
 pub async fn build_ocsp_image() -> Result<GenericImage, TestcontainersError> {
