@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
-use std::ops::Sub;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use ferron_observability::CompositeEventSink;
 use rcgen::{
@@ -12,7 +12,6 @@ use rustls::sign::CertifiedKey;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use time::{Duration, OffsetDateTime};
-use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::cache::LocalTlsCache;
 use ferron_core::config::ServerConfigurationHostFilters;
@@ -23,12 +22,28 @@ const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
 pub fn check_certificate_validity(
     certificate: &CertificateDer,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-    let validity = x509_certificate.validity();
-    if let Some(time_to_expiration) = validity.time_to_expiration() {
+    let x509_certificate = rasn::der::decode::<rasn_pkix::Certificate>(certificate)?;
+    let validity = &x509_certificate.tbs_certificate.validity;
+    let time_to_expiration_delta = match &validity.not_after {
+        rasn_pkix::Time::Utc(t) => {
+            t.signed_duration_since(chrono::DateTime::<chrono::Utc>::from(SystemTime::now()))
+        }
+        rasn_pkix::Time::General(t) => {
+            t.signed_duration_since(chrono::DateTime::<chrono::Utc>::from(SystemTime::now()))
+        }
+    };
+    if let Some(time_to_expiration) = time_to_expiration_delta.to_std().ok() {
+        let valid_duration_delta = match (&validity.not_before, &validity.not_after) {
+            (rasn_pkix::Time::Utc(b), rasn_pkix::Time::Utc(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::Utc(b), rasn_pkix::Time::General(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::General(b), rasn_pkix::Time::Utc(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::General(b), rasn_pkix::Time::General(a)) => {
+                a.signed_duration_since(b)
+            }
+        };
         let time_before_expiration =
-            if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-                (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+            if let Some(valid_duration) = valid_duration_delta.to_std().ok() {
+                (valid_duration.as_secs() / 2).min(SECONDS_BEFORE_RENEWAL)
             } else {
                 SECONDS_BEFORE_RENEWAL
             };

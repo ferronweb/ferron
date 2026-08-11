@@ -2059,16 +2059,18 @@ version = "3.0.0-beta.8"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "dirs",
  "ferron-core",
  "ferron-observability",
  "ferron-tls",
+ "rasn",
+ "rasn-pkix",
  "rcgen",
  "rustls",
  "rustls-pki-types",
  "tempfile",
  "time",
- "x509-parser",
 ]
 
 [[package]]
@@ -2076,14 +2078,15 @@ name = "ferron-tls-manual"
 version = "3.0.0-beta.8"
 dependencies = [
  "async-trait",
- "der-parser",
  "ferron-core",
  "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
+ "num-traits",
+ "rasn",
+ "rasn-pkix",
  "rustls",
  "rustls-pki-types",
- "x509-parser",
 ]
 
 [[package]]

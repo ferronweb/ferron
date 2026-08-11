@@ -8,6 +8,7 @@ use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
 use ferron_tls::{observability, validate_tls_common, TcpTlsContext, TcpTlsResolver};
+use num_traits::ToPrimitive;
 use rustls::ServerConfig;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -40,25 +41,24 @@ fn resolve_host(ctx: &TcpTlsContext<'_>) -> String {
 /// Per RFC 7633, the TLS Feature extension contains a SEQUENCE of feature values.
 /// The `status_request` feature (value 5) indicates OCSP Must-Staple.
 fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
-    use x509_parser::prelude::*;
-
-    let Ok((_, cert)) = X509Certificate::from_der(leaf.as_ref()) else {
+    let Ok(cert) = rasn::der::decode::<rasn_pkix::Certificate>(leaf.as_ref()) else {
         return false;
     };
 
-    for ext in cert.extensions() {
-        // ext.oid.as_bytes() returns BER-encoded OID bytes
-        // BER encoding of 1.3.6.1.5.5.7.1.24: 2b 06 01 05 05 07 01 18
-        if ext.oid.as_bytes() == [0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x01, 0x18] {
-            if let Ok((_, root)) = der_parser::der::parse_der(ext.value) {
-                if let Ok(items) = root.as_sequence() {
-                    return items
-                        .iter()
-                        .any(|item: &der_parser::ber::BerObject| item.as_u32().ok() == Some(5));
-                }
+    let Some(extensions) = &cert.tbs_certificate.extensions else {
+        return false;
+    };
+
+    for ext in extensions.iter() {
+        if ext.extn_id == rasn::oid!("1.3.6.1.5.5.7.1.24") {
+            if let Ok(items) =
+                rasn::der::decode::<rasn::types::SequenceOf<rasn::types::Integer>>(&*ext.extn_value)
+            {
+                return items.iter().any(|item| item.to_u32() == Some(5));
             }
         }
     }
+
     false
 }
 
