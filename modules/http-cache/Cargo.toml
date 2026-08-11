@@ -33,6 +33,8 @@ crc32fast = "1.4"
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
+parking_lot = "0.12.5"
+vibeio = "0.2.19"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }

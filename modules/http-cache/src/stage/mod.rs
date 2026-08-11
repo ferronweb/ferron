@@ -149,33 +149,36 @@ impl HttpCacheStage {
 
     /// Get or create a `CacheStore` for the given zone, updating `max_entries`
     /// only when the configuration generation changes (not on every request).
-    fn get_or_create_zone(
+    async fn get_or_create_zone(
         &self,
         zone_id: &CacheZoneId,
         configuration: &ferron_core::config::layer::LayeredConfiguration,
     ) -> Arc<CacheStore> {
         let persist_config = resolve_persist_config(zone_id, configuration);
-        let store = self
-            .zones
-            .entry(zone_id.clone())
-            .or_insert_with(|| {
-                let store = Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES));
-                if let Some(dir) = persist_config.dir {
-                    let label = zone_id.label().to_string();
-                    let zone_dir = dir.join(sanitize_zone_label(&label));
-                    let persist = self.persist.register_zone(
-                        label,
-                        zone_dir.clone(),
-                        persist_config.include_private,
-                        persist_config.interval,
-                    );
-                    store.attach_persistence(persist);
-                    self.restore_zone_from_disk(&store, &zone_dir);
+        let store_ent = if let Some(e) = self.zones.get(zone_id) {
+            e
+        } else {
+            match self.zones.entry(zone_id.clone()) {
+                dashmap::Entry::Occupied(oe) => oe.into_ref().downgrade(),
+                dashmap::Entry::Vacant(ve) => {
+                    let store = Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES));
+                    if let Some(dir) = persist_config.dir {
+                        let label = zone_id.label().to_string();
+                        let zone_dir = dir.join(sanitize_zone_label(&label));
+                        let persist = self.persist.register_zone(
+                            label,
+                            zone_dir.clone(),
+                            persist_config.include_private,
+                            persist_config.interval,
+                        );
+                        store.attach_persistence(persist);
+                        self.restore_zone_from_disk(&store, &zone_dir).await;
+                    }
+                    ve.insert(store).downgrade()
                 }
-                store
-            })
-            .value()
-            .clone();
+            }
+        };
+        let store = store_ent.clone();
 
         let current_gen = active_config_generation();
 
@@ -207,12 +210,13 @@ impl HttpCacheStage {
     }
 
     /// Replay a zone's snapshot and journal into a freshly created store.
-    fn restore_zone_from_disk(&self, store: &Arc<CacheStore>, zone_dir: &Path) {
+    async fn restore_zone_from_disk(&self, store: &Arc<CacheStore>, zone_dir: &Path) {
         let stats = restore_zone(
             zone_dir,
             |key, entry| store.restore_entry(key, entry),
             |key| store.restore_delete(&key),
-        );
+        )
+        .await;
         ferron_core::log_debug!(
             "cache persistence: restored zone `{}`: {} records, {} entries, {} tombstones",
             zone_dir.display(),

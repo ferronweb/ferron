@@ -129,7 +129,11 @@ pub fn decode_next(data: &[u8], pos: usize) -> Result<Option<(DecodedRecord, usi
         };
     }
 
-    let total_len = u32::from_be_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
+    let total_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| DecodeError::Eof)?,
+    ) as usize;
     // Field must cover at least crc(4) + kind(1) + key prefix(2).
     if total_len < 7 || total_len > MAX_RECORD_LEN as usize {
         return Err(DecodeError::BadLength);
@@ -141,7 +145,11 @@ pub fn decode_next(data: &[u8], pos: usize) -> Result<Option<(DecodedRecord, usi
 
     let crc_start = pos + 4;
     let payload_start = pos + 8;
-    let expected_crc = u32::from_be_bytes(data[crc_start..payload_start].try_into().unwrap());
+    let expected_crc = u32::from_be_bytes(
+        data[crc_start..payload_start]
+            .try_into()
+            .map_err(|_| DecodeError::Eof)?,
+    );
     let kind = data[payload_start];
     let payload = &data[payload_start + 1..end];
     if crc32fast::hash(&data[payload_start..end]) != expected_crc {
@@ -481,19 +489,27 @@ impl<'a> Decoder<'a> {
     }
 
     fn u16(&mut self) -> Result<u16, DecodeError> {
-        Ok(u16::from_be_bytes(self.take(2)?.try_into().unwrap()))
+        Ok(u16::from_be_bytes(
+            self.take(2)?.try_into().map_err(|_| DecodeError::Eof)?,
+        ))
     }
 
     fn u32(&mut self) -> Result<u32, DecodeError> {
-        Ok(u32::from_be_bytes(self.take(4)?.try_into().unwrap()))
+        Ok(u32::from_be_bytes(
+            self.take(4)?.try_into().map_err(|_| DecodeError::Eof)?,
+        ))
     }
 
     fn u64(&mut self) -> Result<u64, DecodeError> {
-        Ok(u64::from_be_bytes(self.take(8)?.try_into().unwrap()))
+        Ok(u64::from_be_bytes(
+            self.take(8)?.try_into().map_err(|_| DecodeError::Eof)?,
+        ))
     }
 
     fn i64(&mut self) -> Result<i64, DecodeError> {
-        Ok(i64::from_be_bytes(self.take(8)?.try_into().unwrap()))
+        Ok(i64::from_be_bytes(
+            self.take(8)?.try_into().map_err(|_| DecodeError::Eof)?,
+        ))
     }
 
     fn raw(&mut self, len: usize) -> Result<&'a [u8], DecodeError> {

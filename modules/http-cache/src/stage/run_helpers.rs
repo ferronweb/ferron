@@ -50,7 +50,7 @@ pub(super) async fn run_forward(
     }
 
     let zone_id = resolve_zone_id(&ctx.hostname, &config, &ctx.configuration);
-    let store = stage.get_or_create_zone(&zone_id, &ctx.configuration);
+    let store = stage.get_or_create_zone(&zone_id, &ctx.configuration).await;
 
     let Some(request) = ctx.req.as_ref() else {
         return Ok(true);

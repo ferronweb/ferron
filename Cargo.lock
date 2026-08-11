@@ -1329,6 +1329,7 @@ dependencies = [
  "httpdate",
  "hyper-rustls",
  "hyper-util",
+ "parking_lot",
  "quick_cache 0.7.0",
  "rustc-hash",
  "rustls",
@@ -1337,6 +1338,7 @@ dependencies = [
  "subtle",
  "tokio",
  "typemap_rev",
+ "vibeio",
  "webpki-roots",
 ]
 

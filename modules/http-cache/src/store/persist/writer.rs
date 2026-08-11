@@ -24,9 +24,11 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+
+use parking_lot::{Condvar, Mutex};
 
 use crate::policy::CacheScope;
 use crate::store::persist::record::{
@@ -156,7 +158,7 @@ impl ZonePersistState {
 
     /// First flush error, if any.
     pub fn last_error(&self) -> Option<String> {
-        self.last_error.lock().unwrap().clone()
+        self.last_error.lock().clone()
     }
 
     /// Queue a `Put` record. Private entries are skipped unless
@@ -183,7 +185,7 @@ impl ZonePersistState {
     }
 
     fn push(&self, record: Vec<u8>) {
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock();
         let capacity = self.queue_capacity;
         if queue.len() >= capacity {
             // Drop the oldest prefix, never a tail: the newest record for
@@ -206,14 +208,14 @@ impl ZonePersistState {
 
     fn wake(&self) {
         let (lock, condvar) = &*self.wake;
-        *lock.lock().unwrap() = true;
+        *lock.lock() = true;
         condvar.notify_one();
     }
 
     /// Whether the interval since the last flush has elapsed.
     pub fn flush_due(&self) -> bool {
         self.active.load(Ordering::Relaxed)
-            && self.last_flush.lock().unwrap().elapsed() >= self.persist_interval
+            && self.last_flush.lock().elapsed() >= self.persist_interval
     }
 
     /// Drain the queue and append the batch to the journal. Returns early
@@ -222,7 +224,7 @@ impl ZonePersistState {
         if !self.active.load(Ordering::Relaxed) {
             return Ok(());
         }
-        let records: Vec<Vec<u8>> = self.queue.lock().unwrap().drain(..).collect();
+        let records: Vec<Vec<u8>> = self.queue.lock().drain(..).collect();
         if records.is_empty() {
             return Ok(());
         }
@@ -231,7 +233,7 @@ impl ZonePersistState {
             buf.extend_from_slice(record);
         }
 
-        let mut slot = self.journal.lock().unwrap();
+        let mut slot = self.journal.lock();
         let file = match slot.as_mut() {
             Some(file) => file,
             None => {
@@ -242,7 +244,7 @@ impl ZonePersistState {
         };
         file.write_all(&buf)?;
         drop(slot);
-        *self.last_flush.lock().unwrap() = Instant::now();
+        *self.last_flush.lock() = Instant::now();
         Ok(())
     }
 
@@ -250,7 +252,7 @@ impl ZonePersistState {
     /// shutdown path and by tests.
     pub fn flush_all_sync(&self) -> io::Result<()> {
         self.flush()?;
-        if let Some(file) = self.journal.lock().unwrap().as_ref() {
+        if let Some(file) = self.journal.lock().as_ref() {
             file.sync_all()?;
         }
         Ok(())
@@ -259,13 +261,13 @@ impl ZonePersistState {
     /// Point the compaction source at the live cache entries. The store
     /// calls this once at zone creation; compaction is a no-op without it.
     pub fn register_entry_source(&self, source: EntrySource) {
-        *self.entry_source.lock().unwrap() = Some(source);
+        *self.entry_source.lock() = Some(source);
     }
 
     /// Whether the interval since the last compaction has elapsed.
     pub fn compact_due(&self) -> bool {
         self.active.load(Ordering::Relaxed)
-            && self.last_compact.lock().unwrap().elapsed() >= self.compact_interval
+            && self.last_compact.lock().elapsed() >= self.compact_interval
     }
 
     /// Compact when due: flush the queue, dump a fresh snapshot of the live
@@ -290,13 +292,13 @@ impl ZonePersistState {
         self.flush()?;
         // Take the source out so it can run without a lock held; only the
         // writer thread reads or replaces it.
-        let source = self.entry_source.lock().unwrap().take();
+        let source = self.entry_source.lock().take();
         let Some(source) = source else {
             return Ok(CompactionStats::default());
         };
 
         let result = self.compact_with(&source);
-        *self.entry_source.lock().unwrap() = Some(source);
+        *self.entry_source.lock() = Some(source);
         result
     }
 
@@ -321,17 +323,17 @@ impl ZonePersistState {
         sync_dir(&self.dir)?;
 
         // Truncate the journal in place, keeping the open handle for appends.
-        let mut slot = self.journal.lock().unwrap();
+        let mut slot = self.journal.lock();
         let file = open_truncate(&self.journal_path())?;
         *slot = Some(file);
-        *self.last_compact.lock().unwrap() = Instant::now();
+        *self.last_compact.lock() = Instant::now();
         Ok(CompactionStats { entries })
     }
 
     fn on_flush_error(&self, error: io::Error) {
         self.active.store(false, Ordering::Relaxed);
         if !self.warned.swap(true, Ordering::Relaxed) {
-            *self.last_error.lock().unwrap() = Some(format!("{error}"));
+            *self.last_error.lock() = Some(format!("{error}"));
         }
     }
 }
@@ -374,19 +376,19 @@ pub struct RestoreStats {
 /// return value is counted in [`RestoreStats::skipped`]. A truncated tail is
 /// reported through [`RestoreStop`] but is not an error: it is the expected
 /// artifact of a crash between a flush and a sync.
-pub fn restore_zone(
+pub async fn restore_zone(
     dir: &Path,
     mut on_put: impl FnMut(String, StoredEntry) -> bool,
     mut on_delete: impl FnMut(String),
 ) -> RestoreStats {
-    fn replay_file(
+    async fn replay_file(
         path: &Path,
         on_put: &mut impl FnMut(String, StoredEntry) -> bool,
         on_delete: &mut impl FnMut(String),
         trunc_stop: RestoreStop,
         corrupt_stop: RestoreStop,
     ) -> Result<(u64, u64, u64, Option<RestoreStop>), io::Error> {
-        let data = match fs::read(path) {
+        let data = match vibeio::fs::read(path).await {
             Ok(data) => data,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((0, 0, 0, None)),
             Err(error) => return Err(error),
@@ -435,7 +437,9 @@ pub fn restore_zone(
         &mut on_delete,
         RestoreStop::SnapshotTruncated,
         RestoreStop::SnapshotCorrupt,
-    ) {
+    )
+    .await
+    {
         Ok((records, puts, deletes, stop)) => {
             stats.records += records;
             stats.puts += puts;
@@ -450,7 +454,9 @@ pub fn restore_zone(
         &mut on_delete,
         RestoreStop::JournalTruncated,
         RestoreStop::JournalCorrupt,
-    ) {
+    )
+    .await
+    {
         Ok((records, puts, deletes, stop)) => {
             stats.records += records;
             stats.puts += puts;
@@ -548,7 +554,7 @@ impl PersistManager {
         include_private: bool,
         persist_interval: Duration,
     ) -> Arc<ZonePersistState> {
-        let mut zones = self.zones.lock().unwrap();
+        let mut zones = self.zones.lock();
         if let Some(existing) = zones.get(&label) {
             return existing.clone();
         }
@@ -562,14 +568,14 @@ impl PersistManager {
         ));
         zones.insert(label, state.clone());
         let (lock, condvar) = &*self.wake;
-        *lock.lock().unwrap() = true;
+        *lock.lock() = true;
         condvar.notify_one();
         state
     }
 
     /// Remove a zone's persistence state, e.g. when a zone is dropped.
     pub fn remove_zone(&self, label: &str) {
-        self.zones.lock().unwrap().remove(label);
+        self.zones.lock().remove(label);
     }
 
     /// Idempotently start the writer thread. The module start hook runs on
@@ -590,14 +596,13 @@ impl PersistManager {
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Relaxed);
         let (lock, condvar) = &*self.wake;
-        *lock.lock().unwrap() = true;
+        *lock.lock() = true;
         condvar.notify_one();
     }
 
     /// Flush every zone and sync its journal. Blocks until done.
     pub fn flush_all(&self) {
-        let zones: Vec<Arc<ZonePersistState>> =
-            self.zones.lock().unwrap().values().cloned().collect();
+        let zones: Vec<Arc<ZonePersistState>> = self.zones.lock().values().cloned().collect();
         for zone in zones {
             if let Err(error) = zone.flush_all_sync() {
                 zone.on_flush_error(error);
@@ -606,8 +611,7 @@ impl PersistManager {
     }
 
     fn drain_due(&self) {
-        let zones: Vec<Arc<ZonePersistState>> =
-            self.zones.lock().unwrap().values().cloned().collect();
+        let zones: Vec<Arc<ZonePersistState>> = self.zones.lock().values().cloned().collect();
         for zone in zones {
             if zone.flush_due() {
                 if let Err(error) = zone.flush() {
@@ -618,8 +622,7 @@ impl PersistManager {
     }
 
     fn maybe_compact_all(&self) {
-        let zones: Vec<Arc<ZonePersistState>> =
-            self.zones.lock().unwrap().values().cloned().collect();
+        let zones: Vec<Arc<ZonePersistState>> = self.zones.lock().values().cloned().collect();
         for zone in zones {
             match zone.maybe_compact() {
                 Ok(true) => {
@@ -654,8 +657,8 @@ fn writer_main(manager: Arc<PersistManager>) {
         manager.drain_due();
         manager.maybe_compact_all();
         let (lock, condvar) = &*manager.wake;
-        let guard = lock.lock().unwrap();
-        let _ = condvar.wait_timeout(guard, WRITER_POLL_INTERVAL);
+        let mut guard = lock.lock();
+        let _ = condvar.wait_for(&mut guard, WRITER_POLL_INTERVAL);
     }
 }
 
@@ -666,13 +669,14 @@ mod tests {
     use std::io::Read;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Condvar, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
 
     use bytes::Bytes;
     use http::header::CACHE_CONTROL;
     use http::HeaderMap;
     use http::HeaderValue;
+    use parking_lot::{Condvar, Mutex};
 
     use super::{
         restore_zone, sanitize_zone_label, PersistManager, RestoreStop, ZonePersistState,
@@ -1095,150 +1099,178 @@ mod tests {
 
     #[test]
     fn restore_replays_snapshot_then_journal() {
-        let dir = TempDir::new();
-        let zone = ZonePersistState::new(
-            "zone".to_string(),
-            dir.path().clone(),
-            false,
-            Duration::from_secs(1),
-            8,
-            wake_pair(),
-        );
-        let mut live = HashMap::new();
-        live.insert("k1".to_string(), public_entry());
-        live.insert("k2".to_string(), public_entry());
-        zone.register_entry_source(Box::new(move |visit| {
-            for (key, entry) in &live {
-                visit(key, entry);
-            }
-        }));
-        zone.compact().unwrap();
-        zone.record_put("k3", &public_entry());
-        zone.record_delete("k1");
-        zone.flush_all_sync().unwrap();
+        vibeio::RuntimeBuilder::new()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let dir = TempDir::new();
+                let zone = ZonePersistState::new(
+                    "zone".to_string(),
+                    dir.path().clone(),
+                    false,
+                    Duration::from_secs(1),
+                    8,
+                    wake_pair(),
+                );
+                let mut live = HashMap::new();
+                live.insert("k1".to_string(), public_entry());
+                live.insert("k2".to_string(), public_entry());
+                zone.register_entry_source(Box::new(move |visit| {
+                    for (key, entry) in &live {
+                        visit(key, entry);
+                    }
+                }));
+                zone.compact().unwrap();
+                zone.record_put("k3", &public_entry());
+                zone.record_delete("k1");
+                zone.flush_all_sync().unwrap();
 
-        let mut puts = Vec::new();
-        let mut deletes = Vec::new();
-        let stats = restore_zone(
-            dir.path(),
-            |key, _entry| {
-                puts.push(key);
-                true
-            },
-            |key| deletes.push(key),
-        );
-        assert_eq!(stats.records, 4);
-        assert_eq!(stats.puts, 3);
-        assert_eq!(stats.deletes, 1);
-        assert_eq!(stats.skipped, 0);
-        assert_eq!(stats.stopped, None);
-        puts.sort();
-        deletes.sort();
-        assert_eq!(puts, vec!["k1", "k2", "k3"]);
-        assert_eq!(deletes, vec!["k1"]);
+                let mut puts = Vec::new();
+                let mut deletes = Vec::new();
+                let stats = restore_zone(
+                    dir.path(),
+                    |key, _entry| {
+                        puts.push(key);
+                        true
+                    },
+                    |key| deletes.push(key),
+                )
+                .await;
+                assert_eq!(stats.records, 4);
+                assert_eq!(stats.puts, 3);
+                assert_eq!(stats.deletes, 1);
+                assert_eq!(stats.skipped, 0);
+                assert_eq!(stats.stopped, None);
+                puts.sort();
+                deletes.sort();
+                assert_eq!(puts, vec!["k1", "k2", "k3"]);
+                assert_eq!(deletes, vec!["k1"]);
+            });
     }
 
     #[test]
     fn restore_absent_files_is_clean() {
-        let dir = TempDir::new();
-        let stats = restore_zone(dir.path(), |_, _| true, |_| {});
-        assert_eq!(stats.records, 0);
-        assert_eq!(stats.puts, 0);
-        assert_eq!(stats.stopped, None);
+        vibeio::RuntimeBuilder::new()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let dir = TempDir::new();
+                let stats = restore_zone(dir.path(), |_, _| true, |_| {}).await;
+                assert_eq!(stats.records, 0);
+                assert_eq!(stats.puts, 0);
+                assert_eq!(stats.stopped, None);
+            });
     }
 
     #[test]
     fn restore_reports_corrupt_journal() {
-        let dir = TempDir::new();
-        let zone = ZonePersistState::new(
-            "zone".to_string(),
-            dir.path().clone(),
-            false,
-            Duration::from_secs(1),
-            8,
-            wake_pair(),
-        );
-        zone.record_put("k1", &public_entry());
-        zone.flush_all_sync().unwrap();
-        {
-            use std::io::Write;
-            let mut file = OpenOptions::new()
-                .append(true)
-                .open(zone.journal_path())
-                .unwrap();
-            // 12 garbage bytes: the length field is implausible.
-            file.write_all(&[0xffu8; 12]).unwrap();
-        }
-        let mut puts = 0;
-        let stats = restore_zone(
-            dir.path(),
-            |_, _| {
-                puts += 1;
-                true
-            },
-            |_| {},
-        );
-        assert_eq!(puts, 1);
-        assert_eq!(stats.stopped, Some(RestoreStop::JournalCorrupt));
+        vibeio::RuntimeBuilder::new()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let dir = TempDir::new();
+                let zone = ZonePersistState::new(
+                    "zone".to_string(),
+                    dir.path().clone(),
+                    false,
+                    Duration::from_secs(1),
+                    8,
+                    wake_pair(),
+                );
+                zone.record_put("k1", &public_entry());
+                zone.flush_all_sync().unwrap();
+                {
+                    use std::io::Write;
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .open(zone.journal_path())
+                        .unwrap();
+                    // 12 garbage bytes: the length field is implausible.
+                    file.write_all(&[0xffu8; 12]).unwrap();
+                }
+                let mut puts = 0;
+                let stats = restore_zone(
+                    dir.path(),
+                    |_, _| {
+                        puts += 1;
+                        true
+                    },
+                    |_| {},
+                )
+                .await;
+                assert_eq!(puts, 1);
+                assert_eq!(stats.stopped, Some(RestoreStop::JournalCorrupt));
+            });
     }
 
     #[test]
     fn restore_reports_truncated_tail() {
-        let dir = TempDir::new();
-        let zone = ZonePersistState::new(
-            "zone".to_string(),
-            dir.path().clone(),
-            false,
-            Duration::from_secs(1),
-            8,
-            wake_pair(),
-        );
-        zone.record_put("k1", &public_entry());
-        zone.record_put("k2", &public_entry());
-        zone.flush_all_sync().unwrap();
-        // Cut into the middle of the second record.
-        let path = zone.journal_path();
-        let data = std::fs::read(&path).unwrap();
-        std::fs::write(&path, &data[..data.len() - 5]).unwrap();
+        vibeio::RuntimeBuilder::new()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let dir = TempDir::new();
+                let zone = ZonePersistState::new(
+                    "zone".to_string(),
+                    dir.path().clone(),
+                    false,
+                    Duration::from_secs(1),
+                    8,
+                    wake_pair(),
+                );
+                zone.record_put("k1", &public_entry());
+                zone.record_put("k2", &public_entry());
+                zone.flush_all_sync().unwrap();
+                // Cut into the middle of the second record.
+                let path = zone.journal_path();
+                let data = std::fs::read(&path).unwrap();
+                std::fs::write(&path, &data[..data.len() - 5]).unwrap();
 
-        let mut puts = 0;
-        let stats = restore_zone(
-            dir.path(),
-            |_, _| {
-                puts += 1;
-                true
-            },
-            |_| {},
-        );
-        assert_eq!(puts, 1);
-        assert_eq!(stats.stopped, Some(RestoreStop::JournalTruncated));
+                let mut puts = 0;
+                let stats = restore_zone(
+                    dir.path(),
+                    |_, _| {
+                        puts += 1;
+                        true
+                    },
+                    |_| {},
+                )
+                .await;
+                assert_eq!(puts, 1);
+                assert_eq!(stats.stopped, Some(RestoreStop::JournalTruncated));
+            });
     }
 
     #[test]
     fn restore_counts_skipped_entries() {
-        let dir = TempDir::new();
-        let zone = ZonePersistState::new(
-            "zone".to_string(),
-            dir.path().clone(),
-            false,
-            Duration::from_secs(1),
-            8,
-            wake_pair(),
-        );
-        let mut live = HashMap::new();
-        live.insert("k1".to_string(), public_entry());
-        live.insert("k2".to_string(), public_entry());
-        zone.register_entry_source(Box::new(move |visit| {
-            for (key, entry) in &live {
-                visit(key, entry);
-            }
-        }));
-        zone.compact().unwrap();
+        vibeio::RuntimeBuilder::new()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let dir = TempDir::new();
+                let zone = ZonePersistState::new(
+                    "zone".to_string(),
+                    dir.path().clone(),
+                    false,
+                    Duration::from_secs(1),
+                    8,
+                    wake_pair(),
+                );
+                let mut live = HashMap::new();
+                live.insert("k1".to_string(), public_entry());
+                live.insert("k2".to_string(), public_entry());
+                zone.register_entry_source(Box::new(move |visit| {
+                    for (key, entry) in &live {
+                        visit(key, entry);
+                    }
+                }));
+                zone.compact().unwrap();
 
-        let stats = restore_zone(dir.path(), |key, _entry| key != "k1", |_| {});
-        assert_eq!(stats.records, 2);
-        assert_eq!(stats.puts, 1);
-        assert_eq!(stats.skipped, 1);
-        assert_eq!(stats.stopped, None);
+                let stats = restore_zone(dir.path(), |key, _entry| key != "k1", |_| {}).await;
+                assert_eq!(stats.records, 2);
+                assert_eq!(stats.puts, 1);
+                assert_eq!(stats.skipped, 1);
+                assert_eq!(stats.stopped, None);
+            });
     }
 }
