@@ -3076,13 +3076,11 @@ version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201dbdd8b709e91a226532ef2bc532b1f4afb4c438179489914646bb8601f917"
 dependencies = [
- "async-channel",
  "crossbeam-queue",
  "futures-util",
  "io-uring",
  "libc",
  "mio",
- "once_cell",
  "oneshot",
  "rusty_pool",
  "slab",
