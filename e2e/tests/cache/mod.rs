@@ -11,6 +11,7 @@ use testcontainers::{
 mod common;
 
 mod lscache;
+mod persistence;
 mod zones;
 
 async fn create_ferron_container(

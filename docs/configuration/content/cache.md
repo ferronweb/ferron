@@ -492,6 +492,8 @@ The cache module emits the following metrics:
 
 The `ferron.cache.zone` attribute identifies which cache zone the request belongs to. Ferron sets it to `"global"` for the shared global zone. For named zones, it uses the zone name. For per-host zones, it uses the hostname.
 
+Persistence runs on a background thread and does not emit request-scoped metrics. Its health is visible through the log lines in the structured logs table below. The `persist_interval` directive controls how often the journal is written, which is the main knob for the trade-off between write amplification and data loss on a crash.
+
 ### Logs
 
 - `DEBUG`: Logged when Ferron skips cache storage because `X-LiteSpeed-Vary: value=...` is not supported yet.
@@ -511,6 +513,14 @@ The `ferron.cache.zone` attribute identifies which cache zone the request belong
 | Cache purged via PURGE method                                      | DEBUG | `cache.purged.count` (purged cache entries)                                          |
 | LSCache stale purge marker ignored                                 | DEBUG | -                                                                                    |
 | Cache entries evicted                                              | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
+| Cache entries restored from disk at startup                        | DEBUG | -                                                                                    |
+| Truncated tail in the persistence files, treated as a clean stop   | DEBUG | -                                                                                    |
+| Snapshot compaction completed                                      | DEBUG | -                                                                                    |
+| Could not read the persistence files on disk                       | WARN  | -                                                                                    |
+| Corrupted record in the persistence files; replay stopped          | WARN  | -                                                                                    |
+| Cache persistence journal flush failed                             | WARN  | -                                                                                    |
+| Snapshot compaction failed                                         | WARN  | -                                                                                    |
+| Journal records dropped because the write queue exceeded capacity  | WARN  | -                                                                                    |
 
 ### Access log fields
 
