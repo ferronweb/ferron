@@ -89,15 +89,17 @@ pub async fn endpoint_listener_fn(
             let auth_token = auth_token.clone();
             let endpoint_state = endpoint_state.clone();
 
-            let _ = hyper::server::conn::http1::Builder::new()
-                .timer(hyper_util::rt::TokioTimer::default())
-                .serve_connection(
-                    hyper_util::rt::TokioIo::new(sock),
-                    service_fn(|request| {
-                        request_fn(request, auth_token.clone(), endpoint_state.clone())
-                    }),
-                )
-                .await;
+            tokio::spawn(async move {
+                let _ = hyper::server::conn::http1::Builder::new()
+                    .timer(hyper_util::rt::TokioTimer::default())
+                    .serve_connection(
+                        hyper_util::rt::TokioIo::new(sock),
+                        service_fn(|request| {
+                            request_fn(request, auth_token.clone(), endpoint_state.clone())
+                        }),
+                    )
+                    .await;
+            });
         }
     };
 

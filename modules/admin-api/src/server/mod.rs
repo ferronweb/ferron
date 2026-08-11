@@ -114,7 +114,15 @@ impl Module for AdminApiModule {
                     ferron_core::log_info!("Admin API listening on {}", config.listen);
                     let mut server = Box::pin(async {
                         loop {
-                            let Ok((sock, _)) = listener.accept().await else {
+                            let Ok((sock, _)) = (tokio::select! {
+                                _ = reload_token.cancelled() => {
+                                    let _ = listener;
+                                    break;
+                                }
+                                r = listener.accept() => {
+                                    r
+                                }
+                            }) else {
                                 continue;
                             };
 
@@ -122,23 +130,26 @@ impl Module for AdminApiModule {
 
                             let state = state.clone();
                             let config = config.clone();
+                            let reload_token = reload_token.clone();
 
-                            let mut conn_fut = hyper::server::conn::http1::Builder::new()
-                                .timer(hyper_util::rt::TokioTimer::default())
-                                .serve_connection(
-                                    hyper_util::rt::TokioIo::new(sock),
-                                    service_fn(|request| {
-                                        request_fn(request, state.clone(), config.clone())
-                                    }),
-                                );
-                            let mut conn_fut_pin = std::pin::Pin::new(&mut conn_fut);
-                            tokio::select! {
-                                _ = reload_token.cancelled() => {
-                                    conn_fut_pin.graceful_shutdown();
-                                    let _ = conn_fut.await;
+                            tokio::spawn(async move {
+                                let mut conn_fut = hyper::server::conn::http1::Builder::new()
+                                    .timer(hyper_util::rt::TokioTimer::default())
+                                    .serve_connection(
+                                        hyper_util::rt::TokioIo::new(sock),
+                                        service_fn(|request| {
+                                            request_fn(request, state.clone(), config.clone())
+                                        }),
+                                    );
+                                let mut conn_fut_pin = std::pin::Pin::new(&mut conn_fut);
+                                tokio::select! {
+                                    _ = reload_token.cancelled() => {
+                                        conn_fut_pin.graceful_shutdown();
+                                        let _ = conn_fut.await;
+                                    }
+                                    _ = &mut conn_fut_pin => {}
                                 }
-                                _ = &mut conn_fut_pin => {}
-                            }
+                            });
                         }
                     });
                     tokio::select! {
