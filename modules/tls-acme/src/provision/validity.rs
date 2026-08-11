@@ -38,12 +38,11 @@ pub fn check_certificate_validity(
                 a.signed_duration_since(b)
             }
         };
-        let time_before_expiration =
-            if let Ok(valid_duration) = valid_duration_delta.to_std() {
-                (valid_duration.as_secs() / 2).min(SECONDS_BEFORE_RENEWAL)
-            } else {
-                SECONDS_BEFORE_RENEWAL
-            };
+        let time_before_expiration = if let Ok(valid_duration) = valid_duration_delta.to_std() {
+            (valid_duration.as_secs() / 2).min(SECONDS_BEFORE_RENEWAL)
+        } else {
+            SECONDS_BEFORE_RENEWAL
+        };
         if time_to_expiration >= Duration::from_secs(time_before_expiration) {
             return Ok(true);
         }
