@@ -112,7 +112,7 @@ impl Module for AdminApiModule {
             match tokio::net::TcpListener::bind(config.listen).await {
                 Ok(listener) => {
                     ferron_core::log_info!("Admin API listening on {}", config.listen);
-                    let server = async {
+                    let mut server = Box::pin(async {
                         loop {
                             let Ok((sock, _)) = listener.accept().await else {
                                 continue;
@@ -123,22 +123,30 @@ impl Module for AdminApiModule {
                             let state = state.clone();
                             let config = config.clone();
 
-                            let _ = hyper::server::conn::http1::Builder::new()
+                            let mut conn_fut = hyper::server::conn::http1::Builder::new()
                                 .timer(hyper_util::rt::TokioTimer::default())
                                 .serve_connection(
                                     hyper_util::rt::TokioIo::new(sock),
                                     service_fn(|request| {
                                         request_fn(request, state.clone(), config.clone())
                                     }),
-                                )
-                                .await;
+                                );
+                            let mut conn_fut_pin = std::pin::Pin::new(&mut conn_fut);
+                            tokio::select! {
+                                _ = reload_token.cancelled() => {
+                                    conn_fut_pin.graceful_shutdown();
+                                    let _ = conn_fut.await;
+                                }
+                                _ = &mut conn_fut_pin => {}
+                            }
                         }
-                    };
+                    });
                     tokio::select! {
                         _ = reload_token.cancelled() => {
                             ferron_core::log_info!("Admin API shutting down (reload)");
+                            server.await
                         }
-                        _ = server => {}
+                        _ = &mut server => {}
                     }
                 }
                 Err(e) => {
