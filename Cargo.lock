@@ -1971,6 +1971,9 @@ dependencies = [
  "ferron-core",
  "ferron-observability",
  "getrandom 0.4.3",
+ "num-bigint",
+ "rasn",
+ "rasn-pkix",
  "rustls",
  "rustls-native-certs",
  "rustls-pki-types",
@@ -1978,7 +1981,6 @@ dependencies = [
  "tokio-rustls",
  "vibeio",
  "webpki-roots",
- "x509-parser",
 ]
 
 [[package]]

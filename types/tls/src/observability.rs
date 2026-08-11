@@ -11,9 +11,8 @@ use std::time::Duration;
 use ferron_observability::{
     CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
 };
+use num_bigint::ToBigInt;
 use rustls_pki_types::CertificateDer;
-use x509_parser::certificate::X509Certificate;
-use x509_parser::prelude::FromDer;
 
 /// Name of the unified certificate `notAfter` gauge emitted by every TLS
 /// provider when a certificate is mounted into the in-memory context.
@@ -40,15 +39,27 @@ pub fn emit_certificate_not_after(
         return;
     }
 
-    let Ok((_, cert)) = X509Certificate::from_der(leaf.as_ref()) else {
+    let Ok(cert) = rasn::der::decode::<rasn_pkix::Certificate>(leaf.as_ref()) else {
         return;
     };
 
-    let not_after = match cert.validity().not_after.timestamp() {
+    let not_after = match cert.tbs_certificate.validity.not_after {
+        rasn_pkix::Time::General(t) => t.timestamp(),
+        rasn_pkix::Time::Utc(t) => t.timestamp(),
+    };
+    let not_after = match not_after {
         ts if ts < 0 => 0u64,
         ts => ts as u64,
     };
-    let serial_hex = cert.tbs_certificate.serial.to_str_radix(16);
+    let Some(serial) = cert
+        .tbs_certificate
+        .serial_number
+        .to_bigint()
+        .and_then(|i| i.to_biguint())
+    else {
+        return;
+    };
+    let serial_hex = serial.to_str_radix(16);
 
     event_sink.emit(Event::Metric(MetricEvent {
         name: METRIC_NAME,
