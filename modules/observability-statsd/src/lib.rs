@@ -392,7 +392,10 @@ async fn run_statsd_consumer(
         if let Err(err) = socket.send(datagram.as_bytes()).await {
             FAILED_DATAGRAM_SEND.call_once(move || {
                 ferron_core::log_warn!(
-                    "Failed to send StatsD datagram (further errors suppressed): {}",
+                    "Failed to send StatsD datagram to {} (further errors suppressed): {}",
+                    socket
+                        .peer_addr()
+                        .map_or("<unknown address>".into(), |s| s.to_string()),
                     err
                 );
             });
