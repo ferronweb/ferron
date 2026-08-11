@@ -2822,7 +2822,6 @@ dependencies = [
  "thiserror 2.0.19",
  "time",
  "tokio",
- "x509-parser",
 ]
 
 [[package]]

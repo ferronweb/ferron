@@ -13,11 +13,9 @@ ferron-ocsp = { path = "../../types/ocsp" }
 
 # ACME protocol
 instant-acme = { version = "0.8.4", default-features = false, features = [
-    "hyper-rustls",
+    "hyper-rustls", # Required for HTTP client in ACME, it also gives some convenience...
     "aws-lc-rs",
-    "rcgen",
-    "time",
-    "x509-parser",
+    "time" # Required for renewal info
 ] }
 
 # TLS
