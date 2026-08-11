@@ -21,6 +21,7 @@ use ferron_observability::{
 use crate::config::StatsdBackendConfig;
 
 static DROPPED_EVENT: Once = Once::new();
+static FAILED_DATAGRAM_SEND: Once = Once::new();
 
 /// Maximum length of a UDP datagram carrying StatsD metrics. 1432 bytes stays
 /// safely below the typical 1500-byte MTU even with IP and UDP headers.
@@ -389,7 +390,12 @@ async fn run_statsd_consumer(
         }
 
         if let Err(err) = socket.send(datagram.as_bytes()).await {
-            ferron_core::log_warn!("Failed to send StatsD datagram: {}", err);
+            FAILED_DATAGRAM_SEND.call_once(move || {
+                ferron_core::log_warn!(
+                    "Failed to send StatsD datagram (further errors suppressed): {}",
+                    err
+                );
+            });
         }
     }
 }
