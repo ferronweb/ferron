@@ -1595,6 +1595,8 @@ async fn test_cache_stale_while_revalidate() {
     // with the backend (v2), the other becomes a follower and is served the
     // stale entry (v1) while the leader is in flight.
     let (leader, follower) = tokio::join!(
+        biased;
+
         ctx.get("/cache-swr?id=swr-test"),
         ctx.get("/cache-swr?id=swr-test")
     );
