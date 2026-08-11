@@ -52,7 +52,7 @@ fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
     for ext in extensions.iter() {
         if ext.extn_id == rasn::oid!("1.3.6.1.5.5.7.1.24") {
             if let Ok(items) =
-                rasn::der::decode::<rasn::types::SequenceOf<rasn::types::Integer>>(&*ext.extn_value)
+                rasn::der::decode::<rasn::types::SequenceOf<rasn::types::Integer>>(&ext.extn_value)
             {
                 return items.iter().any(|item| item.to_u32() == Some(5));
             }

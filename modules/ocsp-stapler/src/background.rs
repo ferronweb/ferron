@@ -151,8 +151,7 @@ fn verify_signature(
                     .and_then(|v| rasn::der::decode::<RSASSAPSSParams>(&v).ok());
                 let halgorithm = params.and_then(|p| p.hash_algorithm);
                 let algorithm_oid = halgorithm.as_ref().map(|a| &a.algorithm);
-                let algorithm_oid_u32: Option<&[u32]> =
-                    algorithm_oid.map(|oid| oid.as_ref());
+                let algorithm_oid_u32: Option<&[u32]> = algorithm_oid.map(|oid| oid.as_ref());
                 match algorithm_oid_u32 {
                     Some([2, 16, 840, 1, 101, 3, 4, 2, 1]) => {
                         &aws_lc_rs::signature::RSA_PSS_2048_8192_SHA256

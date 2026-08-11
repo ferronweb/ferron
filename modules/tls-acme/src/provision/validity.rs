@@ -29,7 +29,7 @@ pub fn check_certificate_validity(
             t.signed_duration_since(chrono::DateTime::<chrono::Utc>::from(SystemTime::now()))
         }
     };
-    if let Some(time_to_expiration) = time_to_expiration_delta.to_std().ok() {
+    if let Ok(time_to_expiration) = time_to_expiration_delta.to_std() {
         let valid_duration_delta = match (&validity.not_before, &validity.not_after) {
             (rasn_pkix::Time::Utc(b), rasn_pkix::Time::Utc(a)) => a.signed_duration_since(b),
             (rasn_pkix::Time::Utc(b), rasn_pkix::Time::General(a)) => a.signed_duration_since(b),
@@ -39,7 +39,7 @@ pub fn check_certificate_validity(
             }
         };
         let time_before_expiration =
-            if let Some(valid_duration) = valid_duration_delta.to_std().ok() {
+            if let Ok(valid_duration) = valid_duration_delta.to_std() {
                 (valid_duration.as_secs() / 2).min(SECONDS_BEFORE_RENEWAL)
             } else {
                 SECONDS_BEFORE_RENEWAL

@@ -106,7 +106,7 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                 .get::<crate::mtls::MtlsCertificates>()
                 .and_then(|certs| certs.0.first());
             let mtls_leaf_parsed =
-                mtls_leaf.and_then(|c| rasn::der::decode::<rasn_pkix::Certificate>(&*c).ok());
+                mtls_leaf.and_then(|c| rasn::der::decode::<rasn_pkix::Certificate>(c).ok());
             let mtls_cn = mtls_leaf_parsed.and_then(|cert| {
                 let rasn_pkix::Name::RdnSequence(s) = cert.tbs_certificate.subject;
                 if let Some(sf) = s.first() {
