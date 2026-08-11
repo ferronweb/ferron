@@ -68,6 +68,7 @@ pub struct ZonePersistState {
     last_compact: Mutex<Instant>,
     entry_source: Mutex<Option<EntrySource>>,
     dropped: AtomicU64,
+    drop_warned: AtomicBool,
     active: AtomicBool,
     /// Only the first flush failure is surfaced to avoid log spam.
     warned: AtomicBool,
@@ -122,6 +123,7 @@ impl ZonePersistState {
             last_compact: Mutex::new(Instant::now() - compact_interval),
             entry_source: Mutex::new(None),
             dropped: AtomicU64::new(0),
+            drop_warned: AtomicBool::new(false),
             active: AtomicBool::new(true),
             warned: AtomicBool::new(false),
             last_error: Mutex::new(None),
@@ -191,6 +193,13 @@ impl ZonePersistState {
                 queue.pop_front();
             }
             self.dropped.fetch_add(drop as u64, Ordering::Relaxed);
+            if !self.drop_warned.swap(true, Ordering::Relaxed) {
+                ferron_core::log_warn!(
+                    "cache persistence: dropping {} journal record(s) for zone `{}`: the write queue exceeded its capacity and the oldest records were discarded",
+                    drop,
+                    self.label
+                );
+            }
         }
         queue.push_back(record);
     }
@@ -568,6 +577,7 @@ impl PersistManager {
     pub fn start(self: &Arc<Self>) {
         let _ = self.thread.get_or_init(|| {
             let manager = Arc::clone(self);
+            ferron_core::log_debug!("cache persistence: writer thread started");
             thread::Builder::new()
                 .name("cache-persist".to_string())
                 .spawn(move || writer_main(manager))
