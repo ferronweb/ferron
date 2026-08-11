@@ -26,9 +26,7 @@ async fn bearer_auth_middleware(
     request: &Request<Incoming>,
     auth_token: Option<&str>,
 ) -> Option<Response<Full<Bytes>>> {
-    let Some(required_token) = auth_token else {
-        return None;
-    };
+    let required_token = auth_token?;
 
     // Exempt /health from authentication (needed for load balancer / orchestrator probes)
     if request.uri().path() == "/health" {

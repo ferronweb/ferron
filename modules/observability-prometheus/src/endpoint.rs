@@ -25,9 +25,7 @@ async fn bearer_auth_middleware(
     request: &Request<Incoming>,
     auth_token: Option<&str>,
 ) -> Option<Response<Full<Bytes>>> {
-    let Some(required_token) = auth_token else {
-        return None;
-    };
+    let required_token = auth_token?;
 
     let auth_header = request
         .headers()
