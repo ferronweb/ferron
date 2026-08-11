@@ -15,6 +15,7 @@ use crate::lscache::{PurgeSelector, ScopedTag};
 
 mod basic;
 mod coalesce;
+mod persist;
 mod update;
 
 fn request_headers(pairs: &[(&HeaderName, &str)]) -> HeaderMap {

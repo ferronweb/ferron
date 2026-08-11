@@ -5,7 +5,7 @@ mod tests;
 pub mod types;
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use ahash::{AHashMap, AHashSet, RandomState};
@@ -17,6 +17,7 @@ use tokio::sync::Notify;
 
 use crate::lscache::PurgeOperation;
 use crate::policy::{recalculate_freshness, CacheScope};
+use crate::store::persist::writer::ZonePersistState;
 
 pub use self::key::build_entry_key;
 pub use self::key::normalize_key_value;
@@ -84,6 +85,7 @@ pub struct CacheStore {
     last_cleanup: AtomicU64,
     inflight: dashmap::DashMap<String, InflightEntry, FxBuildHasher>,
     active_locks: AtomicUsize,
+    persist: OnceLock<Arc<ZonePersistState>>,
 }
 
 /// Tracks an in-flight upstream fetch for a specific cache key.
@@ -91,8 +93,13 @@ struct InflightEntry {
     notify: Arc<Notify>,
 }
 
+/// Cache lifecycle hook. Holds the optional persistence state so evictions
+/// (size pressure, capacity shrink, rejected overweight inserts) produce
+/// `Delete` records without touching the store's hot path.
 #[derive(Clone, Default)]
-struct StoreLifecycle;
+struct StoreLifecycle {
+    persist: Option<Arc<ZonePersistState>>,
+}
 
 #[derive(Default)]
 struct StoreRequestState {
@@ -104,28 +111,75 @@ impl Lifecycle<String, StoredEntry> for StoreLifecycle {
     type RequestState = StoreRequestState;
 
     #[inline]
-    fn on_evict(&self, state: &mut Self::RequestState, _key: String, val: StoredEntry) {
+    fn on_evict(&self, state: &mut Self::RequestState, key: String, val: StoredEntry) {
         state.size_evictions += 1;
         state.evicted_base_keys.push(val.base_key);
+        if let Some(persist) = &self.persist {
+            persist.record_delete(&key);
+        }
     }
 }
 
 impl CacheStore {
     #[inline]
     pub fn new(max_entries: usize) -> Self {
+        Self::with_persistence(max_entries, None)
+    }
+
+    /// Create a store that mirrors mutations to the given persistence state.
+    #[inline]
+    pub fn with_persistence(max_entries: usize, persist: Option<Arc<ZonePersistState>>) -> Self {
         Self {
             entries: Cache::with(
                 max_entries.max(1),
                 max_entries as u64,
                 UnitWeighter,
                 DefaultHashBuilder::default(),
-                StoreLifecycle,
+                StoreLifecycle {
+                    persist: persist.clone(),
+                },
             ),
             variants_by_base: dashmap::DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
             last_cleanup: AtomicU64::new(0),
             inflight: dashmap::DashMap::with_hasher(FxBuildHasher),
             active_locks: AtomicUsize::new(0),
+            persist: OnceLock::new(),
+        }
+    }
+
+    /// Attach a persistence state after creation. Only meaningful before the
+    /// store is shared; callers create the store and attach in one step.
+    #[inline]
+    pub fn attach_persistence(self: &Arc<Self>, persist: Arc<ZonePersistState>) {
+        // Weak reference so the store can be dropped: the persistence state
+        // outlives the store through the manager's zone registry.
+        let weak = Arc::downgrade(self);
+        let entry_source: crate::store::persist::writer::EntrySource = Box::new(move |visit| {
+            let Some(store) = weak.upgrade() else {
+                return;
+            };
+            for (key, entry) in store.entries.iter() {
+                visit(&key, &entry);
+            }
+        });
+        persist.register_entry_source(entry_source);
+        let _ = self.persist.set(persist);
+    }
+
+    /// Queue a `Put` record for a stored entry.
+    #[inline]
+    fn record_put(&self, key: &str, entry: &StoredEntry) {
+        if let Some(persist) = self.persist.get() {
+            persist.record_put(key, entry);
+        }
+    }
+
+    /// Queue a `Delete` tombstone for a removed key.
+    #[inline]
+    fn record_delete(&self, key: &str) {
+        if let Some(persist) = self.persist.get() {
+            persist.record_delete(key);
         }
     }
 
@@ -325,6 +379,11 @@ impl CacheStore {
             entry.private_key = private_key.map(str::to_string);
         }
 
+        // Record before the insert: the lifecycle produces a `Delete` for the
+        // same key exactly when the entry is not admitted (overweight), so
+        // replay converges to the in-memory state either way.
+        self.record_put(&key, &entry);
+
         {
             let variant = StoredVariant {
                 scope: entry.scope,
@@ -377,6 +436,7 @@ impl CacheStore {
         stats.purged = keys_to_remove.len();
         for key in keys_to_remove {
             if let Some((_, entry)) = self.entries.remove(&key) {
+                self.record_delete(&key);
                 affected_base_keys.insert(entry.base_key);
             }
         }
@@ -440,6 +500,7 @@ impl CacheStore {
         let mut orphaned_base_keys = AHashSet::default();
         for key in expired_keys {
             if let Some((_, entry)) = self.entries.remove(&key) {
+                self.record_delete(&key);
                 count += 1;
                 orphaned_base_keys.insert(entry.base_key);
             }
@@ -480,8 +541,56 @@ impl CacheStore {
         entry.must_revalidate = must_revalidate;
 
         let entry2 = entry.clone();
-        let _ = self.entries.replace(cache_key.to_string(), entry2, false);
+        let replaced = self
+            .entries
+            .replace(cache_key.to_string(), entry2.clone(), false);
+        // Only mirror the revalidated state when it was actually admitted;
+        // an overweight replacement is evicted again by the lifecycle, so
+        // replaying a Put here would diverge from memory.
+        if replaced.is_ok() {
+            self.record_put(cache_key, &entry2);
+        }
         Some(entry.headers.clone())
+    }
+
+    /// Replay a restored `Put` record into the store. Returns `false` when
+    /// the entry was skipped (persistence disabled by `max_entries 0`, or
+    /// the entry is already expired beyond its stale window).
+    pub fn restore_entry(&self, key: String, mut entry: StoredEntry) -> bool {
+        if self.max_entries.load(Ordering::Relaxed) == 0 {
+            return false;
+        }
+        let elapsed = entry.created_at.elapsed();
+        let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+        if elapsed > entry.ttl + swr_window {
+            return false;
+        }
+
+        let variant = StoredVariant {
+            scope: entry.scope,
+            vary: entry.vary.clone(),
+        };
+        let mut variants = self
+            .variants_by_base
+            .entry(entry.base_key.clone())
+            .or_default();
+        if !variants.contains(&variant) {
+            if variants.len() >= MAX_VARIANTS_PER_BASE {
+                variants.remove(0);
+            }
+            variants.push(variant);
+        }
+
+        entry.access_at = 0;
+        self.entries.insert(key, entry);
+        true
+    }
+
+    /// Replay a restored `Delete` tombstone into the store.
+    pub fn restore_delete(&self, key: &str) {
+        if let Some((_, entry)) = self.entries.remove(key) {
+            self.remove_orphaned_base_key(&entry.base_key);
+        }
     }
 }
 

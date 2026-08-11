@@ -11,10 +11,6 @@
 //!     snapshot        complete image produced by compaction
 //!     journal         append-only mutation log since the last compaction
 //! ```
-//!
-//! The record API is unused until the store wires persistence in (mutation
-//! journal writer), which removes this allow.
-#![allow(dead_code)]
 
-mod record;
-mod writer;
+pub(crate) mod record;
+pub(crate) mod writer;

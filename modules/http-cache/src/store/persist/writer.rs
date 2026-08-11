@@ -29,7 +29,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::policy::CacheScope;
-use crate::store::persist::record::{encode_delete, encode_put};
+use crate::store::persist::record::{
+    decode_next, encode_delete, encode_put, DecodeError, DecodedRecord,
+};
 use crate::store::types::StoredEntry;
 
 pub const SNAPSHOT_FILE: &str = "snapshot";
@@ -40,10 +42,17 @@ pub const JOURNAL_FILE: &str = "journal";
 /// fills the queue; this only guards pathological bursts or a wedged disk.
 pub const DEFAULT_QUEUE_CAPACITY: usize = 8192;
 
+/// How often the writer compacts a zone's journal into a fresh snapshot.
+const COMPACT_INTERVAL: Duration = Duration::from_secs(300);
+
 /// How long the writer sleeps at most when there is nothing to do. Bounds
 /// how quickly shutdown is observed and how promptly a freshly registered
 /// zone is picked up when no mutation ever wakes the thread.
 const WRITER_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Enumerates the live cache entries of a zone. Used by the writer thread to
+/// dump a snapshot without knowing anything about the in-memory store.
+pub type EntrySource = Box<dyn Fn(&mut dyn FnMut(&str, &StoredEntry)) + Send + Sync>;
 
 /// Per-zone persistence state shared between the request path (producer)
 /// and the writer thread (consumer).
@@ -52,9 +61,12 @@ pub struct ZonePersistState {
     dir: PathBuf,
     include_private: bool,
     persist_interval: Duration,
+    compact_interval: Duration,
     queue_capacity: usize,
     queue: Mutex<VecDeque<Vec<u8>>>,
     last_flush: Mutex<Instant>,
+    last_compact: Mutex<Instant>,
+    entry_source: Mutex<Option<EntrySource>>,
     dropped: AtomicU64,
     active: AtomicBool,
     /// Only the first flush failure is surfaced to avoid log spam.
@@ -74,6 +86,27 @@ impl ZonePersistState {
         queue_capacity: usize,
         wake: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
+        Self::with_compact_interval(
+            label,
+            dir,
+            include_private,
+            persist_interval,
+            COMPACT_INTERVAL,
+            queue_capacity,
+            wake,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_compact_interval(
+        label: String,
+        dir: PathBuf,
+        include_private: bool,
+        persist_interval: Duration,
+        compact_interval: Duration,
+        queue_capacity: usize,
+        wake: Arc<(Mutex<bool>, Condvar)>,
+    ) -> Self {
         // First flush is due immediately so the journal is written promptly
         // after the first mutation instead of after a full interval.
         let last_flush = Instant::now() - persist_interval;
@@ -82,9 +115,12 @@ impl ZonePersistState {
             dir,
             include_private,
             persist_interval,
+            compact_interval,
             queue_capacity: queue_capacity.max(1),
             queue: Mutex::new(VecDeque::new()),
             last_flush: Mutex::new(last_flush),
+            last_compact: Mutex::new(Instant::now() - compact_interval),
+            entry_source: Mutex::new(None),
             dropped: AtomicU64::new(0),
             active: AtomicBool::new(true),
             warned: AtomicBool::new(false),
@@ -211,10 +247,76 @@ impl ZonePersistState {
         Ok(())
     }
 
-    /// Reopen the journal file, dropping any cached handle. Used by
-    /// compaction after the journal was replaced by rename.
-    pub(crate) fn reopen_journal(&self) {
-        *self.journal.lock().unwrap() = None;
+    /// Point the compaction source at the live cache entries. The store
+    /// calls this once at zone creation; compaction is a no-op without it.
+    pub fn register_entry_source(&self, source: EntrySource) {
+        *self.entry_source.lock().unwrap() = Some(source);
+    }
+
+    /// Whether the interval since the last compaction has elapsed.
+    pub fn compact_due(&self) -> bool {
+        self.active.load(Ordering::Relaxed)
+            && self.last_compact.lock().unwrap().elapsed() >= self.compact_interval
+    }
+
+    /// Compact when due: flush the queue, dump a fresh snapshot of the live
+    /// entries, then truncate the journal. Returns whether a compaction ran.
+    ///
+    /// Crash-safety: the snapshot is written to a temp file, fsynced, and
+    /// renamed over the old snapshot before the journal is truncated. A crash
+    /// at any point replays to the same state, because the old journal still
+    /// covers the pre-compaction records and the snapshot is idempotent with
+    /// them (re-putting the same keys converges).
+    pub(crate) fn maybe_compact(&self) -> io::Result<bool> {
+        if !self.compact_due() {
+            return Ok(false);
+        }
+        self.compact()?;
+        Ok(true)
+    }
+
+    /// Write a full snapshot of the live entries and truncate the journal.
+    /// Writer thread only.
+    pub fn compact(&self) -> io::Result<CompactionStats> {
+        self.flush()?;
+        // Take the source out so it can run without a lock held; only the
+        // writer thread reads or replaces it.
+        let source = self.entry_source.lock().unwrap().take();
+        let Some(source) = source else {
+            return Ok(CompactionStats::default());
+        };
+
+        let result = self.compact_with(&source);
+        *self.entry_source.lock().unwrap() = Some(source);
+        result
+    }
+
+    fn compact_with(&self, source: &EntrySource) -> io::Result<CompactionStats> {
+        fs::create_dir_all(&self.dir)?;
+        let tmp_path = self.dir.join("snapshot.tmp");
+        let mut entries = 0u64;
+        {
+            let mut file = File::create(&tmp_path)?;
+            let mut result = Ok(());
+            source(&mut |key, entry| {
+                let record = encode_put(key, entry);
+                if let Err(error) = file.write_all(&record) {
+                    result = Err(error);
+                }
+                entries += 1;
+            });
+            result?;
+            file.sync_all()?;
+        }
+        fs::rename(&tmp_path, self.dir.join(SNAPSHOT_FILE))?;
+        sync_dir(&self.dir)?;
+
+        // Truncate the journal in place, keeping the open handle for appends.
+        let mut slot = self.journal.lock().unwrap();
+        let file = open_truncate(&self.journal_path())?;
+        *slot = Some(file);
+        *self.last_compact.lock().unwrap() = Instant::now();
+        Ok(CompactionStats { entries })
     }
 
     fn on_flush_error(&self, error: io::Error) {
@@ -223,6 +325,144 @@ impl ZonePersistState {
             *self.last_error.lock().unwrap() = Some(format!("{error}"));
         }
     }
+}
+
+/// How replay of a zone's on-disk state ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestoreStop {
+    /// The snapshot file could not be read.
+    SnapshotIo,
+    /// The snapshot contains a corrupted record; replay stopped there.
+    SnapshotCorrupt,
+    /// The snapshot ends with a truncated record (normal crash artifact).
+    SnapshotTruncated,
+    /// The journal file could not be read.
+    JournalIo,
+    /// The journal contains a corrupted record; replay stopped there.
+    JournalCorrupt,
+    /// The journal ends with a truncated record (normal crash artifact).
+    JournalTruncated,
+}
+
+/// Outcome of a zone restore.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RestoreStats {
+    /// Records read from snapshot and journal combined.
+    pub records: u64,
+    /// Entries accepted into the store.
+    pub puts: u64,
+    /// Entries skipped by the store (e.g. already expired).
+    pub skipped: u64,
+    /// Delete tombstones replayed.
+    pub deletes: u64,
+    /// Where replay stopped, if not a clean end of both files.
+    pub stopped: Option<RestoreStop>,
+}
+
+/// Replay a zone's snapshot and then its journal into the store.
+///
+/// `on_put` returns whether the entry was accepted (e.g. not expired); the
+/// return value is counted in [`RestoreStats::skipped`]. A truncated tail is
+/// reported through [`RestoreStop`] but is not an error: it is the expected
+/// artifact of a crash between a flush and a sync.
+pub fn restore_zone(
+    dir: &Path,
+    mut on_put: impl FnMut(String, StoredEntry) -> bool,
+    mut on_delete: impl FnMut(String),
+) -> RestoreStats {
+    fn replay_file(
+        path: &Path,
+        on_put: &mut impl FnMut(String, StoredEntry) -> bool,
+        on_delete: &mut impl FnMut(String),
+        trunc_stop: RestoreStop,
+        corrupt_stop: RestoreStop,
+    ) -> Result<(u64, u64, u64, Option<RestoreStop>), io::Error> {
+        let data = match fs::read(path) {
+            Ok(data) => data,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((0, 0, 0, None)),
+            Err(error) => return Err(error),
+        };
+        let mut records = 0u64;
+        let mut puts = 0u64;
+        let mut deletes = 0u64;
+        let mut stop = None;
+        let mut pos = 0;
+        loop {
+            match decode_next(&data, pos) {
+                Ok(Some((record, next))) => {
+                    match record {
+                        DecodedRecord::Put { key, entry } => {
+                            records += 1;
+                            if on_put(key, *entry) {
+                                puts += 1;
+                            }
+                        }
+                        DecodedRecord::Delete { key } => {
+                            records += 1;
+                            deletes += 1;
+                            on_delete(key);
+                        }
+                    }
+                    pos = next;
+                }
+                Ok(None) => break,
+                Err(DecodeError::Eof) => {
+                    stop = Some(trunc_stop);
+                    break;
+                }
+                Err(_) => {
+                    stop = Some(corrupt_stop);
+                    break;
+                }
+            }
+        }
+        Ok((records, puts, deletes, stop))
+    }
+
+    let mut stats = RestoreStats::default();
+    match replay_file(
+        &dir.join(SNAPSHOT_FILE),
+        &mut on_put,
+        &mut on_delete,
+        RestoreStop::SnapshotTruncated,
+        RestoreStop::SnapshotCorrupt,
+    ) {
+        Ok((records, puts, deletes, stop)) => {
+            stats.records += records;
+            stats.puts += puts;
+            stats.deletes += deletes;
+            stats.stopped = stop;
+        }
+        Err(_) => stats.stopped = Some(RestoreStop::SnapshotIo),
+    }
+    match replay_file(
+        &dir.join(JOURNAL_FILE),
+        &mut on_put,
+        &mut on_delete,
+        RestoreStop::JournalTruncated,
+        RestoreStop::JournalCorrupt,
+    ) {
+        Ok((records, puts, deletes, stop)) => {
+            stats.records += records;
+            stats.puts += puts;
+            stats.deletes += deletes;
+            // Journal replay runs after the snapshot; a snapshot stop is
+            // superseded by whatever the journal reported.
+            if stop.is_some() {
+                stats.stopped = stop;
+            }
+        }
+        Err(_) => stats.stopped = Some(RestoreStop::JournalIo),
+    }
+    stats.skipped = stats.records - stats.puts - stats.deletes;
+    stats
+}
+
+/// Result of a snapshot compaction.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CompactionStats {
+    /// Entries written into the snapshot.
+    pub entries: u64,
 }
 
 /// Replace characters that are unsafe in file names with `_` so the zone
@@ -251,6 +491,23 @@ fn open_append(path: &Path) -> io::Result<File> {
         options.mode(0o600);
     }
     options.open(path)
+}
+
+/// Open (creating or truncating) the journal for a fresh compaction cycle.
+fn open_truncate(path: &Path) -> io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.create(true).write(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Fsync a directory so a rename within it is durable.
+fn sync_dir(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
 }
 
 /// Registry of per-zone persistence states plus the writer thread. One
@@ -349,6 +606,31 @@ impl PersistManager {
             }
         }
     }
+
+    fn maybe_compact_all(&self) {
+        let zones: Vec<Arc<ZonePersistState>> =
+            self.zones.lock().unwrap().values().cloned().collect();
+        for zone in zones {
+            match zone.maybe_compact() {
+                Ok(true) => {
+                    ferron_core::log_debug!(
+                        "cache persistence: compacted zone `{}` snapshot",
+                        zone.label()
+                    );
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    // Compaction is a durability optimization, not the source
+                    // of truth: the journal keeps working, so warn and retry
+                    // on the next cycle instead of disabling the zone.
+                    ferron_core::log_warn!(
+                        "cache persistence: snapshot compaction failed for zone `{}`: {error}",
+                        zone.label()
+                    );
+                }
+            }
+        }
+    }
 }
 
 fn writer_main(manager: Arc<PersistManager>) {
@@ -360,6 +642,7 @@ fn writer_main(manager: Arc<PersistManager>) {
             return;
         }
         manager.drain_due();
+        manager.maybe_compact_all();
         let (lock, condvar) = &*manager.wake;
         let guard = lock.lock().unwrap();
         let _ = condvar.wait_timeout(guard, WRITER_POLL_INTERVAL);
@@ -368,6 +651,8 @@ fn writer_main(manager: Arc<PersistManager>) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::fs::OpenOptions;
     use std::io::Read;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -379,7 +664,10 @@ mod tests {
     use http::HeaderMap;
     use http::HeaderValue;
 
-    use super::{sanitize_zone_label, PersistManager, ZonePersistState, JOURNAL_FILE};
+    use super::{
+        restore_zone, sanitize_zone_label, PersistManager, RestoreStop, ZonePersistState,
+        JOURNAL_FILE, SNAPSHOT_FILE,
+    };
     use crate::policy::CacheScope;
     use crate::store::persist::record::{decode_next, DecodedRecord};
     use crate::store::types::StoredEntry;
@@ -700,5 +988,247 @@ mod tests {
         }
         assert!(found, "writer thread did not flush the journal");
         manager.stop();
+    }
+
+    #[test]
+    fn compact_writes_snapshot_and_truncates_journal() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        let mut live = HashMap::new();
+        live.insert("k1".to_string(), public_entry());
+        live.insert("k2".to_string(), public_entry());
+        zone.register_entry_source(Box::new(move |visit| {
+            for (key, entry) in &live {
+                visit(key, entry);
+            }
+        }));
+
+        zone.record_put("k1", &public_entry());
+        zone.record_put("k2", &public_entry());
+        zone.record_put("k3", &public_entry());
+        zone.flush_all_sync().unwrap();
+        assert_eq!(decode_file(&zone.journal_path()).len(), 3);
+
+        let stats = zone.compact().unwrap();
+        assert_eq!(stats.entries, 2);
+
+        // The snapshot holds only the live entries, the journal is empty.
+        let mut snapshot_keys: Vec<String> = decode_file(&dir.path().join(SNAPSHOT_FILE))
+            .iter()
+            .map(|record| match record {
+                DecodedRecord::Put { key, .. } => key.clone(),
+                DecodedRecord::Delete { key } => key.clone(),
+            })
+            .collect();
+        snapshot_keys.sort();
+        assert_eq!(snapshot_keys, vec!["k1", "k2"]);
+        assert!(decode_file(&zone.journal_path()).is_empty());
+
+        // Appends continue in the truncated journal.
+        zone.record_put("k4", &public_entry());
+        zone.flush_all_sync().unwrap();
+        let journal = decode_file(&zone.journal_path());
+        assert_eq!(journal.len(), 1);
+        match &journal[0] {
+            DecodedRecord::Put { key, .. } => assert_eq!(key, "k4"),
+            _ => panic!("expected Put"),
+        }
+    }
+
+    #[test]
+    fn compact_without_source_is_noop() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        zone.record_put("k1", &public_entry());
+        zone.flush_all_sync().unwrap();
+        zone.compact().unwrap();
+        assert!(!dir.path().join(SNAPSHOT_FILE).exists());
+        assert_eq!(decode_file(&zone.journal_path()).len(), 1);
+    }
+
+    #[test]
+    fn maybe_compact_respects_interval() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::with_compact_interval(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            Duration::from_millis(10),
+            8,
+            wake_pair(),
+        );
+        zone.register_entry_source(Box::new(|visit| {
+            let _ = visit;
+        }));
+        assert!(zone.compact_due());
+        assert!(zone.maybe_compact().unwrap());
+        assert!(!zone.compact_due());
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(zone.compact_due());
+        assert!(zone.maybe_compact().unwrap());
+    }
+
+    #[test]
+    fn restore_replays_snapshot_then_journal() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        let mut live = HashMap::new();
+        live.insert("k1".to_string(), public_entry());
+        live.insert("k2".to_string(), public_entry());
+        zone.register_entry_source(Box::new(move |visit| {
+            for (key, entry) in &live {
+                visit(key, entry);
+            }
+        }));
+        zone.compact().unwrap();
+        zone.record_put("k3", &public_entry());
+        zone.record_delete("k1");
+        zone.flush_all_sync().unwrap();
+
+        let mut puts = Vec::new();
+        let mut deletes = Vec::new();
+        let stats = restore_zone(
+            dir.path(),
+            |key, _entry| {
+                puts.push(key);
+                true
+            },
+            |key| deletes.push(key),
+        );
+        assert_eq!(stats.records, 4);
+        assert_eq!(stats.puts, 3);
+        assert_eq!(stats.deletes, 1);
+        assert_eq!(stats.skipped, 0);
+        assert_eq!(stats.stopped, None);
+        puts.sort();
+        deletes.sort();
+        assert_eq!(puts, vec!["k1", "k2", "k3"]);
+        assert_eq!(deletes, vec!["k1"]);
+    }
+
+    #[test]
+    fn restore_absent_files_is_clean() {
+        let dir = TempDir::new();
+        let stats = restore_zone(dir.path(), |_, _| true, |_| {});
+        assert_eq!(stats.records, 0);
+        assert_eq!(stats.puts, 0);
+        assert_eq!(stats.stopped, None);
+    }
+
+    #[test]
+    fn restore_reports_corrupt_journal() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        zone.record_put("k1", &public_entry());
+        zone.flush_all_sync().unwrap();
+        {
+            use std::io::Write;
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(zone.journal_path())
+                .unwrap();
+            // 12 garbage bytes: the length field is implausible.
+            file.write_all(&[0xffu8; 12]).unwrap();
+        }
+        let mut puts = 0;
+        let stats = restore_zone(
+            dir.path(),
+            |_, _| {
+                puts += 1;
+                true
+            },
+            |_| {},
+        );
+        assert_eq!(puts, 1);
+        assert_eq!(stats.stopped, Some(RestoreStop::JournalCorrupt));
+    }
+
+    #[test]
+    fn restore_reports_truncated_tail() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        zone.record_put("k1", &public_entry());
+        zone.record_put("k2", &public_entry());
+        zone.flush_all_sync().unwrap();
+        // Cut into the middle of the second record.
+        let path = zone.journal_path();
+        let data = std::fs::read(&path).unwrap();
+        std::fs::write(&path, &data[..data.len() - 5]).unwrap();
+
+        let mut puts = 0;
+        let stats = restore_zone(
+            dir.path(),
+            |_, _| {
+                puts += 1;
+                true
+            },
+            |_| {},
+        );
+        assert_eq!(puts, 1);
+        assert_eq!(stats.stopped, Some(RestoreStop::JournalTruncated));
+    }
+
+    #[test]
+    fn restore_counts_skipped_entries() {
+        let dir = TempDir::new();
+        let zone = ZonePersistState::new(
+            "zone".to_string(),
+            dir.path().clone(),
+            false,
+            Duration::from_secs(1),
+            8,
+            wake_pair(),
+        );
+        let mut live = HashMap::new();
+        live.insert("k1".to_string(), public_entry());
+        live.insert("k2".to_string(), public_entry());
+        zone.register_entry_source(Box::new(move |visit| {
+            for (key, entry) in &live {
+                visit(key, entry);
+            }
+        }));
+        zone.compact().unwrap();
+
+        let stats = restore_zone(dir.path(), |key, _entry| key != "k1", |_| {});
+        assert_eq!(stats.records, 2);
+        assert_eq!(stats.puts, 1);
+        assert_eq!(stats.skipped, 1);
+        assert_eq!(stats.stopped, None);
     }
 }

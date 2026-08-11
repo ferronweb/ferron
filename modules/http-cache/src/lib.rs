@@ -28,12 +28,23 @@ use ferron_http::HttpContext;
 pub use stage::HttpCacheStage;
 pub use validator::HttpCacheConfigurationValidator;
 
+use crate::store::persist::writer::PersistManager;
+
 pub static SECONDARY_RUNTIME: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 
 /// Module loader for the HTTP cache module.
-#[derive(Default)]
 pub struct HttpCacheModuleLoader {
     cache: Option<Arc<HttpCacheModule>>,
+    persist: Arc<PersistManager>,
+}
+
+impl Default for HttpCacheModuleLoader {
+    fn default() -> Self {
+        Self {
+            cache: None,
+            persist: PersistManager::new(),
+        }
+    }
 }
 
 impl ModuleLoader for HttpCacheModuleLoader {
@@ -68,7 +79,7 @@ impl ModuleLoader for HttpCacheModuleLoader {
 
     #[inline]
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        let stage = Arc::new(HttpCacheStage::new());
+        let stage = Arc::new(HttpCacheStage::new(self.persist.clone()));
         registry.with_stage::<HttpContext, _>(move || stage.clone())
     }
 
@@ -80,7 +91,9 @@ impl ModuleLoader for HttpCacheModuleLoader {
         _config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.cache.is_none() {
-            let module = Arc::new(HttpCacheModule);
+            let module = Arc::new(HttpCacheModule {
+                persist: self.persist.clone(),
+            });
             modules.push(module.clone());
             self.cache = Some(module);
         }
@@ -317,8 +330,9 @@ fn register_cache_purge_directives(registry: &mut ferron_core::directives::Direc
         );
 }
 
-#[derive(Default)]
-pub struct HttpCacheModule;
+pub struct HttpCacheModule {
+    persist: Arc<PersistManager>,
+}
 
 impl ferron_core::Module for HttpCacheModule {
     #[inline]
@@ -338,6 +352,7 @@ impl ferron_core::Module for HttpCacheModule {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = SECONDARY_RUNTIME
             .set(runtime.block_on(async move { tokio::runtime::Handle::current() }));
+        self.persist.start();
         Ok(())
     }
 }

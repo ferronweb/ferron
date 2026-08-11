@@ -8,6 +8,7 @@ mod served;
 #[cfg(test)]
 mod tests;
 
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -20,8 +21,13 @@ use ferron_http::HttpContext;
 use http::HeaderMap;
 use typemap_rev::TypeMapKey;
 
-use crate::config::{parse_cache_config, parse_max_entries, CacheConfig, CacheZoneId};
+use crate::config::{
+    parse_cache_config, parse_max_entries, resolve_persist_config, CacheConfig, CacheZoneId,
+};
 use crate::policy::{CacheScope, RequestCachePolicy};
+use crate::store::persist::writer::{
+    restore_zone, sanitize_zone_label, PersistManager, RestoreStop,
+};
 use crate::store::{CacheStore, LookupEntry, StoreStats};
 
 use self::helpers::active_config_generation;
@@ -100,16 +106,19 @@ pub struct HttpCacheStage {
     configs: Arc<DashMap<String, Arc<CacheConfig>>>,
     /// Config generation at which `configs` was last filled.
     config_generation: Arc<AtomicU64>,
+    /// Process-wide persistence manager (journal writer thread).
+    persist: Arc<PersistManager>,
 }
 
 impl HttpCacheStage {
     #[inline]
-    pub fn new() -> Self {
+    pub fn new(persist: Arc<PersistManager>) -> Self {
         Self {
             zones: Arc::new(DashMap::new()),
             zone_generations: Arc::new(DashMap::new()),
             configs: Arc::new(DashMap::new()),
             config_generation: Arc::new(AtomicU64::new(0)),
+            persist,
         }
     }
 
@@ -145,10 +154,26 @@ impl HttpCacheStage {
         zone_id: &CacheZoneId,
         configuration: &ferron_core::config::layer::LayeredConfiguration,
     ) -> Arc<CacheStore> {
+        let persist_config = resolve_persist_config(zone_id, configuration);
         let store = self
             .zones
             .entry(zone_id.clone())
-            .or_insert_with(|| Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES)))
+            .or_insert_with(|| {
+                let store = Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES));
+                if let Some(dir) = persist_config.dir {
+                    let label = zone_id.label().to_string();
+                    let zone_dir = dir.join(sanitize_zone_label(&label));
+                    let persist = self.persist.register_zone(
+                        label,
+                        zone_dir.clone(),
+                        persist_config.include_private,
+                        persist_config.interval,
+                    );
+                    store.attach_persistence(persist);
+                    self.restore_zone_from_disk(&store, &zone_dir);
+                }
+                store
+            })
             .value()
             .clone();
 
@@ -180,12 +205,49 @@ impl HttpCacheStage {
 
         store
     }
+
+    /// Replay a zone's snapshot and journal into a freshly created store.
+    fn restore_zone_from_disk(&self, store: &Arc<CacheStore>, zone_dir: &Path) {
+        let stats = restore_zone(
+            zone_dir,
+            |key, entry| store.restore_entry(key, entry),
+            |key| store.restore_delete(&key),
+        );
+        ferron_core::log_debug!(
+            "cache persistence: restored zone `{}`: {} records, {} entries, {} tombstones",
+            zone_dir.display(),
+            stats.records,
+            stats.puts,
+            stats.deletes,
+        );
+        match stats.stopped {
+            None => {}
+            Some(RestoreStop::SnapshotIo | RestoreStop::JournalIo) => {
+                ferron_core::log_warn!(
+                    "cache persistence: could not read on-disk state for `{}`",
+                    zone_dir.display()
+                );
+            }
+            Some(RestoreStop::SnapshotCorrupt | RestoreStop::JournalCorrupt) => {
+                ferron_core::log_warn!(
+                    "cache persistence: corrupted record in `{}`; replay stopped, newer records were ignored",
+                    zone_dir.display()
+                );
+            }
+            Some(RestoreStop::SnapshotTruncated | RestoreStop::JournalTruncated) => {
+                ferron_core::log_debug!(
+                    "cache persistence: truncated tail in `{}`; treating as a clean crash stop",
+                    zone_dir.display()
+                );
+            }
+        }
+    }
 }
 
 impl Default for HttpCacheStage {
     #[inline]
     fn default() -> Self {
-        Self::new()
+        Self::new(PersistManager::new())
     }
 }
 

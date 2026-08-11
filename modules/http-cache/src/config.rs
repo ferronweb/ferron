@@ -1,7 +1,3 @@
-// TODO: remove this allow once the cache store wires persistence (persist config
-// resolution is used by the store wiring commit).
-#![allow(dead_code)]
-
 use std::path::PathBuf;
 use std::time::Duration;
 

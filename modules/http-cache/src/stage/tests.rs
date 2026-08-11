@@ -731,7 +731,7 @@ fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
         layered
     }
 
-    let stage = HttpCacheStage::new();
+    let stage = HttpCacheStage::new(crate::store::persist::writer::PersistManager::new());
     let mut ctx_a = test_context("/a");
     ctx_a.hostname = Some("a.example.com".to_string());
     ctx_a.configuration = layered_config(1024);
