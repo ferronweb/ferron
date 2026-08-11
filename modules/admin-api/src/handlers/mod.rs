@@ -5,15 +5,15 @@ mod status;
 
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
-use axum::http::StatusCode;
-use axum::middleware::Next;
-use axum::response::Response;
 use ferron_core::config::ServerConfiguration;
 use ferron_observability::{
     CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue,
 };
+use http_body_util::Full;
+use hyper::body::Bytes;
+use hyper::body::Incoming;
+use hyper::{Request, Response};
 use tokio_util::sync::CancellationToken;
 
 use self::status::StatusResponse;
@@ -30,16 +30,20 @@ pub struct AdminState {
 /// Axum middleware that emits per-request metrics for the admin API.
 ///
 /// Skips metrics for `/health` (high-frequency probe, low signal).
-pub(crate) async fn admin_metrics_middleware(
-    State(state): State<AdminState>,
-    request: Request,
-    next: Next,
-) -> Response {
+pub(crate) async fn admin_metrics_middleware<F, Fut>(
+    request: Request<Incoming>,
+    state: AdminState,
+    request_fn: F,
+) -> Response<Full<Bytes>>
+where
+    F: FnOnce(Request<Incoming>) -> Fut,
+    Fut: std::future::Future<Output = Response<Full<Bytes>>>,
+{
     let path = request.uri().path().to_string();
     let method = request.method().to_string();
 
     let start = std::time::Instant::now();
-    let response = next.run(request).await;
+    let response = request_fn(request).await;
     let duration = start.elapsed().as_secs_f64();
     let status_code = response.status().as_u16();
 
@@ -113,34 +117,49 @@ fn emit_log(events: &CompositeEventSink, level: LogLevel, message: String, summa
 }
 
 /// `GET /health` — returns 200 OK if the server is running, or 503 during shutdown.
-pub async fn health_handler(State(_state): State<AdminState>) -> (StatusCode, &'static str) {
+pub async fn health_handler() -> Response<Full<Bytes>> {
     let shutdown_token = ferron_core::shutdown::SHUTDOWN_TOKEN.load();
     if shutdown_token.is_cancelled() {
-        (StatusCode::SERVICE_UNAVAILABLE, "Service Unavailable")
+        http::Response::builder()
+            .status(http::StatusCode::SERVICE_UNAVAILABLE)
+            .body(Full::new(Bytes::from_static(
+                "Service unavailable".as_bytes(),
+            )))
+            .expect("invalid HTTP response state")
     } else {
-        (StatusCode::OK, "OK")
+        http::Response::builder()
+            .status(http::StatusCode::OK)
+            .body(Full::new(Bytes::from_static("OK".as_bytes())))
+            .expect("invalid HTTP response state")
     }
 }
 
 /// `GET /status` — returns JSON with uptime, connection counts, and reload stats.
-pub async fn status_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
+pub async fn status_handler() -> Response<Full<Bytes>> {
     let metrics = StatusResponse::from_global();
-    axum::Json(serde_json::json!({
-        "uptime_sec": metrics.uptime_sec,
-        "connections_active": metrics.connections_active,
-        "requests_total": metrics.requests_total,
-        "reloads": metrics.reloads,
-        "observability_events_dropped": metrics.observability_events_dropped,
-        "observability_event_queue_len": metrics.observability_event_queue_len,
-        "config_file_hash": metrics.config_file_hash,
-        "config_file_mtime": metrics.config_file_mtime,
-        "config_drift": metrics.config_drift,
-        "config_drift_hints_enabled": metrics.config_drift_hints_enabled,
-    }))
+    http::Response::builder()
+        .status(http::StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Full::new(Bytes::from_owner(
+            serde_json::json!({
+                "uptime_sec": metrics.uptime_sec,
+                "connections_active": metrics.connections_active,
+                "requests_total": metrics.requests_total,
+                "reloads": metrics.reloads,
+                "observability_events_dropped": metrics.observability_events_dropped,
+                "observability_event_queue_len": metrics.observability_event_queue_len,
+                "config_file_hash": metrics.config_file_hash,
+                "config_file_mtime": metrics.config_file_mtime,
+                "config_drift": metrics.config_drift,
+                "config_drift_hints_enabled": metrics.config_drift_hints_enabled,
+            })
+            .to_string(),
+        )))
+        .expect("invalid HTTP response state")
 }
 
 /// `GET /config` — returns the current effective configuration as sanitized JSON.
-pub async fn config_handler(State(state): State<AdminState>) -> axum::Json<serde_json::Value> {
+pub async fn config_handler(state: AdminState) -> Response<Full<Bytes>> {
     let sanitized = config::sanitize_config(&state.full_config);
     emit_log(
         &state.events,
@@ -148,13 +167,15 @@ pub async fn config_handler(State(state): State<AdminState>) -> axum::Json<serde
         "Admin config queried".to_string(),
         "Admin config queried",
     );
-    axum::Json(sanitized)
+    http::Response::builder()
+        .status(http::StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Full::new(Bytes::from_owner(sanitized.to_string())))
+        .expect("invalid HTTP response state")
 }
 
 /// `POST /reload` — triggers a configuration reload by cancelling the global reload token.
-pub async fn reload_handler(
-    State(state): State<AdminState>,
-) -> (StatusCode, axum::Json<serde_json::Value>) {
+pub async fn reload_handler(state: AdminState) -> Response<Full<Bytes>> {
     let start = std::time::Instant::now();
     {
         let previous_state = ferron_core::shutdown::RELOAD_STATE.load();
@@ -182,10 +203,13 @@ pub async fn reload_handler(
             description: Some("Total admin config reload attempts"),
             trace_context: None,
         }));
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            axum::Json(serde_json::json!({ "status": "reload_failed", "error": error })),
-        )
+        http::Response::builder()
+            .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(Full::new(Bytes::from_owner(
+                serde_json::json!({ "status": "reload_failed", "error": error }).to_string(),
+            )))
+            .expect("invalid HTTP response state")
     } else {
         emit_log(
             &state.events,
@@ -202,29 +226,46 @@ pub async fn reload_handler(
             description: Some("Total admin config reload attempts"),
             trace_context: None,
         }));
-        (
-            StatusCode::OK,
-            axum::Json(serde_json::json!({ "status": "reload_initiated", "error": null })),
-        )
+        http::Response::builder()
+            .status(http::StatusCode::OK)
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(Full::new(Bytes::from_owner(
+                serde_json::json!({ "status": "reload_initiated", "error": null }).to_string(),
+            )))
+            .expect("invalid HTTP response state")
     }
 }
 
 /// `GET /reload` — returns the status of the reload operation.
-pub async fn reload_get_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
+pub async fn reload_get_handler() -> Response<Full<Bytes>> {
     let metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.read();
-    axum::Json(serde_json::json!({
-        "last_reload_time": chrono::DateTime::<chrono::Utc>::from(metrics.last_reload_time).to_rfc3339(), // ISO 8601 format
-        "last_reload_error": metrics.last_reload_error,
-        "active_generation": metrics.active_generation,
-    }))
+    http::Response::builder()
+        .status(http::StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Full::new(Bytes::from_owner(
+            serde_json::json!({
+                "last_reload_time": chrono::DateTime::<chrono::Utc>::from(metrics.last_reload_time).to_rfc3339(), // ISO 8601 format
+                "last_reload_error": metrics.last_reload_error,
+                "active_generation": metrics.active_generation,
+            })
+            .to_string(),
+        )))
+        .expect("invalid HTTP response state")
 }
 
 /// `GET /runtime` — returns the runtime status.
-pub async fn runtime_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
+pub async fn runtime_handler() -> Response<Full<Bytes>> {
     let metrics = ferron_core::admin::ADMIN_METRICS.runtime_metrics.read();
-    axum::Json(serde_json::json!({
-        "primary_threads": metrics.primary_threads,
-        "io_uring_supported": metrics.io_uring_supported,
-        "io_uring_runtime_enabled": metrics.io_uring_runtime_enabled,
-    }))
+    http::Response::builder()
+        .status(http::StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Full::new(Bytes::from_owner(
+            serde_json::json!({
+                "primary_threads": metrics.primary_threads,
+                "io_uring_supported": metrics.io_uring_supported,
+                "io_uring_runtime_enabled": metrics.io_uring_runtime_enabled,
+            })
+            .to_string(),
+        )))
+        .expect("invalid HTTP response state")
 }

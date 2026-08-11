@@ -3,13 +3,13 @@
 //! Constructs the axum `Router` with routes and middleware
 //! based on the parsed `AdminConfig`.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::Router;
+use http_body_util::Full;
+use hyper::body::Bytes;
+use hyper::body::Incoming;
+use hyper::{Request, Response};
 use subtle::ConstantTimeEq;
 
 use crate::config::AdminConfig;
@@ -18,31 +18,21 @@ use crate::handlers::{
     runtime_handler, status_handler, AdminState,
 };
 
-/// Shared state for the bearer token auth middleware.
-#[derive(Clone)]
-pub struct AuthState {
-    /// The bearer token required for authentication.
-    /// `None` means authentication is disabled.
-    pub auth_token: Option<Arc<str>>,
-}
-
-/// Axum middleware that enforces Bearer token authentication.
+/// A middleware that enforces Bearer token authentication.
 ///
 /// Extracts the `Authorization` header and validates it against the configured token.
 /// Requests to `/health` are always exempt from authentication.
 async fn bearer_auth_middleware(
-    State(auth_state): State<AuthState>,
-    request: Request,
-    next: Next,
-) -> Response {
-    // If no token is configured, allow all requests
-    let Some(required_token) = &auth_state.auth_token else {
-        return next.run(request).await;
+    request: &Request<Incoming>,
+    auth_token: Option<&str>,
+) -> Option<Response<Full<Bytes>>> {
+    let Some(required_token) = auth_token else {
+        return None;
     };
 
     // Exempt /health from authentication (needed for load balancer / orchestrator probes)
     if request.uri().path() == "/health" {
-        return next.run(request).await;
+        return None;
     }
 
     let auth_header = request
@@ -52,73 +42,85 @@ async fn bearer_auth_middleware(
 
     match auth_header {
         Some(header_value) => {
-            // Validate "Bearer <token>" format
             if let Some(token) = header_value.strip_prefix("Bearer ") {
-                // Constant-time comparison to prevent timing attacks
                 if token.as_bytes().ct_eq(required_token.as_bytes()).into() {
-                    return next.run(request).await;
+                    return None;
                 }
             }
-            // Invalid token or format
-            (
-                axum::http::StatusCode::UNAUTHORIZED,
-                [(http::header::WWW_AUTHENTICATE, "Bearer")],
-                "Unauthorized",
+            Some(
+                http::Response::builder()
+                    .status(http::StatusCode::UNAUTHORIZED)
+                    .header(http::header::WWW_AUTHENTICATE, "Bearer")
+                    .body(Full::new(Bytes::from_static("Unauthorized".as_bytes())))
+                    .expect("invalid HTTP response state"),
             )
-                .into_response()
         }
-        None => (
-            axum::http::StatusCode::UNAUTHORIZED,
-            [(http::header::WWW_AUTHENTICATE, "Bearer")],
-            "Unauthorized",
-        )
-            .into_response(),
+        None => Some(
+            http::Response::builder()
+                .status(http::StatusCode::UNAUTHORIZED)
+                .header(http::header::WWW_AUTHENTICATE, "Bearer")
+                .body(Full::new(Bytes::from_static("Unauthorized".as_bytes())))
+                .expect("invalid HTTP response state"),
+        ),
     }
 }
 
-/// Build the admin API axum router.
-///
-/// Routes are registered based on endpoint enable flags in `AdminConfig`.
-/// Disabled endpoints return 404.
-pub fn build_admin_router(config: &AdminConfig, state: AdminState) -> Router {
-    let mut router = Router::new();
+pub async fn request_fn(
+    request: Request<Incoming>,
+    state: AdminState,
+    config: Arc<AdminConfig>,
+) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
+    let state2 = state.clone();
+    Ok(
+        admin_metrics_middleware(request, state2, |request| async move {
+            if let Some(auth_res) =
+                bearer_auth_middleware(&request, config.auth_token.as_deref()).await
+            {
+                return auth_res;
+            }
 
-    if config.health {
-        router = router.route("/health", get(health_handler));
-    }
-    if config.status {
-        router = router.route("/status", get(status_handler));
-    }
-    if config.config {
-        router = router.route("/config", get(config_handler));
-    }
-    if config.reload {
-        router = router.route("/reload", post(reload_handler));
-    }
-    if config.reload_get {
-        router = router.route("/reload", get(reload_get_handler));
-    }
-    if config.runtime {
-        router = router.route("/runtime", get(runtime_handler));
-    }
+            if config.health
+                && request.uri().path() == "/health"
+                && request.method() == hyper::Method::GET
+            {
+                return health_handler().await;
+            }
+            if config.status
+                && request.uri().path() == "/status"
+                && request.method() == hyper::Method::GET
+            {
+                return status_handler().await;
+            }
+            if config.config
+                && request.uri().path() == "/config"
+                && request.method() == hyper::Method::GET
+            {
+                return config_handler(state).await;
+            }
+            if config.reload_get
+                && request.uri().path() == "/reload"
+                && request.method() == hyper::Method::POST
+            {
+                return reload_handler(state).await;
+            }
+            if config.reload_get
+                && request.uri().path() == "/reload"
+                && request.method() == hyper::Method::GET
+            {
+                return reload_get_handler().await;
+            }
+            if config.runtime
+                && request.uri().path() == "/runtime"
+                && request.method() == hyper::Method::GET
+            {
+                return runtime_handler().await;
+            }
 
-    // Fallback for any unmatched admin paths
-    router = router.fallback(|| async { (axum::http::StatusCode::NOT_FOUND, "Not Found") });
-
-    // Apply bearer token auth middleware
-    let auth_state = AuthState {
-        auth_token: config.auth_token.as_deref().map(Arc::from),
-    };
-    router = router.layer(middleware::from_fn_with_state(
-        auth_state,
-        bearer_auth_middleware,
-    ));
-
-    // Apply admin metrics middleware
-    router = router.layer(middleware::from_fn_with_state(
-        state.clone(),
-        admin_metrics_middleware,
-    ));
-
-    router.with_state(state)
+            http::Response::builder()
+                .status(http::StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::from_static("Not found".as_bytes())))
+                .expect("invalid HTTP response state")
+        })
+        .await,
+    )
 }

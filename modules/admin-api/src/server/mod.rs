@@ -13,11 +13,12 @@ use ferron_core::registry::Registry;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_observability::CompositeEventSink;
+use hyper::service::service_fn;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AdminConfig;
 use crate::handlers::AdminState;
-use crate::server::router::build_admin_router;
+use crate::server::router::request_fn;
 
 /// Admin API module implementing the `Module` trait.
 ///
@@ -107,21 +108,37 @@ impl Module for AdminApiModule {
                 full_config,
                 events,
             };
-            let app = build_admin_router(&config, state);
 
             match tokio::net::TcpListener::bind(config.listen).await {
                 Ok(listener) => {
                     ferron_core::log_info!("Admin API listening on {}", config.listen);
-                    let server = axum::serve(listener, app);
+                    let server = async {
+                        loop {
+                            let Ok((sock, _)) = listener.accept().await else {
+                                continue;
+                            };
+
+                            let _ = sock.set_nodelay(true);
+
+                            let state = state.clone();
+                            let config = config.clone();
+
+                            let _ = hyper::server::conn::http1::Builder::new()
+                                .timer(hyper_util::rt::TokioTimer::default())
+                                .serve_connection(
+                                    hyper_util::rt::TokioIo::new(sock),
+                                    service_fn(|request| {
+                                        request_fn(request, state.clone(), config.clone())
+                                    }),
+                                )
+                                .await;
+                        }
+                    };
                     tokio::select! {
                         _ = reload_token.cancelled() => {
                             ferron_core::log_info!("Admin API shutting down (reload)");
                         }
-                        result = server => {
-                            if let Err(e) = result {
-                                ferron_core::log_error!("Admin API server error: {}", e);
-                            }
-                        }
+                        _ = server => {}
                     }
                 }
                 Err(e) => {
