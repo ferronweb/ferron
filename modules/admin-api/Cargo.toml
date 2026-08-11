@@ -14,7 +14,6 @@ subtle = "2.6.1"
 hyper = { version = "1.11.0", features = ["server", "http1"] }
 hyper-util = { version = "0.1.20", features = ["tokio"] }
 http-body-util = "0.1.4"
-anyhow = "1.0.104"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }

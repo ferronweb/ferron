@@ -1077,7 +1077,6 @@ dependencies = [
 name = "ferron-admin-api"
 version = "3.0.0-beta.8"
 dependencies = [
- "anyhow",
  "arc-swap",
  "chrono",
  "ferron-core",
