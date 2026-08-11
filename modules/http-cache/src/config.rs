@@ -1,13 +1,23 @@
+// TODO: remove this allow once the cache store wires persistence (persist config
+// resolution is used by the store wiring commit).
+#![allow(dead_code)]
+
+use std::path::PathBuf;
+use std::time::Duration;
+
 use cidr::IpCidr;
 use http::header::HeaderName;
 
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::util::parse_duration;
 
 pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;
 pub const DEFAULT_MAX_CACHE_AGE_SECS: u64 = 300;
 pub const DEFAULT_COALESCE_TIMEOUT_SECS: u64 = 5;
+pub const DEFAULT_PERSIST_INTERVAL: Duration = Duration::from_secs(30);
+pub const MIN_PERSIST_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Identifies which cache store a request belongs to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -403,4 +413,331 @@ pub fn has_global_zone(configuration: &LayeredConfiguration) -> bool {
         }
     }
     false
+}
+
+/// To-disk persistence settings for a cache zone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PersistConfig {
+    /// Directory the zone's snapshot and journal live in. `None` disables
+    /// to-disk persistence for the zone.
+    pub dir: Option<PathBuf>,
+    /// How often queued mutations are flushed to the journal.
+    pub interval: Duration,
+    /// Whether private-scoped entries are written to disk.
+    pub include_private: bool,
+}
+
+impl Default for PersistConfig {
+    fn default() -> Self {
+        Self {
+            dir: None,
+            interval: DEFAULT_PERSIST_INTERVAL,
+            include_private: false,
+        }
+    }
+}
+
+/// Resolve persistence settings for `zone` from the layered configuration.
+///
+/// Each directive is taken from the first block, in precedence order, that
+/// defines it:
+///
+/// 1. The host-level `cache` block (never for the global zone, whose store is
+///    shared and must not depend on any single host's block).
+/// 2. The named zone's `zone "name" { ... }` block inside the global cache.
+/// 3. The global `cache` block.
+///
+/// Durations below `MIN_PERSIST_INTERVAL` are clamped up to it.
+pub fn resolve_persist_config(
+    zone: &CacheZoneId,
+    configuration: &LayeredConfiguration,
+) -> PersistConfig {
+    // The global layer is always added first (see the http-server resolver);
+    // any later layers are host/path scopes.
+    let layers = &configuration.layers;
+
+    let mut blocks: Vec<&ServerConfigurationBlock> = Vec::new();
+    match zone {
+        CacheZoneId::Global => {
+            if let Some(global) = layers.first() {
+                blocks.extend(cache_block_children(global));
+            }
+        }
+        CacheZoneId::Host(_) => {
+            for layer in layers.iter().rev() {
+                blocks.extend(cache_block_children(layer));
+            }
+        }
+        CacheZoneId::Named(name) => {
+            // Host/path scopes first (everything but the global layer at
+            // index 0), in priority order.
+            for layer in layers.iter().skip(1).rev() {
+                blocks.extend(cache_block_children(layer));
+            }
+            if let Some(block) = named_zone_block(configuration, name) {
+                blocks.push(block);
+            }
+            if let Some(global) = layers.first() {
+                blocks.extend(cache_block_children(global));
+            }
+        }
+    }
+
+    let mut dir = None;
+    let mut interval = None;
+    let mut include_private = None;
+    for block in blocks {
+        if dir.is_none() {
+            dir = block_persist_dir(block);
+        }
+        if interval.is_none() {
+            interval = block_persist_interval(block);
+        }
+        if include_private.is_none() {
+            include_private = block_persist_private(block);
+        }
+    }
+
+    PersistConfig {
+        dir,
+        interval: interval
+            .unwrap_or(DEFAULT_PERSIST_INTERVAL)
+            .max(MIN_PERSIST_INTERVAL),
+        include_private: include_private.unwrap_or(false),
+    }
+}
+
+/// The `cache` blocks declared by a single configuration layer.
+fn cache_block_children<'a>(
+    layer: &'a ServerConfigurationBlock,
+) -> impl Iterator<Item = &'a ServerConfigurationBlock> + 'a {
+    layer
+        .directives
+        .get("cache")
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.children.as_ref())
+}
+
+/// The `zone "name" { ... }` block inside the global `cache` block, if any.
+fn named_zone_block<'a>(
+    configuration: &'a LayeredConfiguration,
+    zone_name: &str,
+) -> Option<&'a ServerConfigurationBlock> {
+    for entry in configuration.get_entries("cache", true) {
+        let Some(children) = &entry.children else {
+            continue;
+        };
+        let Some(zone_entries) = children.directives.get("zone") else {
+            continue;
+        };
+        for zone_entry in zone_entries {
+            if zone_entry
+                .args
+                .first()
+                .and_then(|v| v.as_str())
+                .is_some_and(|name| name == zone_name)
+            {
+                return zone_entry.children.as_ref();
+            }
+        }
+    }
+    None
+}
+
+fn block_persist_dir(block: &ServerConfigurationBlock) -> Option<PathBuf> {
+    block
+        .directives
+        .get("persist")?
+        .first()?
+        .args
+        .first()?
+        .as_str()
+        .map(PathBuf::from)
+}
+
+fn block_persist_interval(block: &ServerConfigurationBlock) -> Option<Duration> {
+    let value = block
+        .directives
+        .get("persist_interval")?
+        .first()?
+        .args
+        .first()?
+        .as_str()?;
+    parse_duration(value).ok()
+}
+
+fn block_persist_private(block: &ServerConfigurationBlock) -> Option<bool> {
+    block
+        .directives
+        .get("persist_private")?
+        .first()?
+        .args
+        .first()
+        .and_then(|value| value.as_boolean())
+        .or(Some(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use ferron_core::config::layer::LayeredConfiguration;
+    use ferron_core::config::{
+        ServerConfigurationBlockBuilder, ServerConfigurationDirectiveEntry,
+        ServerConfigurationValue,
+    };
+
+    use super::{
+        resolve_persist_config, CacheZoneId, PersistConfig, DEFAULT_PERSIST_INTERVAL,
+        MIN_PERSIST_INTERVAL,
+    };
+
+    fn string_arg(value: &str) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValue::String(value.to_string(), None)],
+            children: None,
+            span: None,
+        }
+    }
+
+    fn flag_arg(value: Option<bool>) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: value
+                .map(|b| vec![ServerConfigurationValue::Boolean(b, None)])
+                .unwrap_or_default(),
+            children: None,
+            span: None,
+        }
+    }
+
+    fn cache_block(
+        entries: Vec<(&str, ServerConfigurationDirectiveEntry)>,
+    ) -> LayeredConfiguration {
+        let mut builder = ServerConfigurationBlockBuilder::new();
+        for (name, entry) in entries {
+            builder = builder.directive(name, entry);
+        }
+        let block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block("cache", Vec::<String>::new(), builder.build())
+            .build();
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(block));
+        layered
+    }
+
+    #[test]
+    fn persist_defaults_when_absent() {
+        let configuration = cache_block(vec![]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert_eq!(config, PersistConfig::default());
+        assert_eq!(config.dir, None);
+        assert_eq!(config.interval, DEFAULT_PERSIST_INTERVAL);
+        assert!(!config.include_private);
+    }
+
+    #[test]
+    fn persist_parses_from_global_block() {
+        let configuration = cache_block(vec![
+            ("persist", string_arg("/var/cache/ferron")),
+            ("persist_interval", string_arg("90s")),
+            ("persist_private", flag_arg(Some(true))),
+        ]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert_eq!(config.dir, Some(PathBuf::from("/var/cache/ferron")));
+        assert_eq!(config.interval, std::time::Duration::from_secs(90));
+        assert!(config.include_private);
+    }
+
+    #[test]
+    fn persist_interval_supports_units_and_clamps() {
+        let configuration = cache_block(vec![
+            ("persist", string_arg("/tmp/cache")),
+            ("persist_interval", string_arg("2m")),
+        ]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert_eq!(config.interval, std::time::Duration::from_secs(120));
+
+        let configuration = cache_block(vec![
+            ("persist", string_arg("/tmp/cache")),
+            ("persist_interval", string_arg("0s")),
+        ]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert_eq!(config.interval, MIN_PERSIST_INTERVAL);
+    }
+
+    #[test]
+    fn persist_private_bare_flag_defaults_true() {
+        let configuration = cache_block(vec![("persist_private", flag_arg(None))]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert!(config.include_private);
+    }
+
+    #[test]
+    fn host_block_overrides_global_block() {
+        let mut global_builder = ServerConfigurationBlockBuilder::new();
+        global_builder = global_builder.directive("persist", string_arg("/global-dir"));
+        let global_block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block("cache", Vec::<String>::new(), global_builder.build())
+            .build();
+
+        let mut host_builder = ServerConfigurationBlockBuilder::new();
+        host_builder = host_builder.directive("persist", string_arg("/host-dir"));
+        let host_block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block("cache", Vec::<String>::new(), host_builder.build())
+            .build();
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(global_block));
+        layered.add_layer(std::sync::Arc::new(host_block));
+
+        let config = resolve_persist_config(&CacheZoneId::Host("example.com".into()), &layered);
+        assert_eq!(config.dir, Some(PathBuf::from("/host-dir")));
+
+        // The global zone ignores host-level blocks.
+        let config = resolve_persist_config(&CacheZoneId::Global, &layered);
+        assert_eq!(config.dir, Some(PathBuf::from("/global-dir")));
+    }
+
+    #[test]
+    fn named_zone_block_beats_global_block() {
+        let mut global_builder = ServerConfigurationBlockBuilder::new();
+        global_builder = global_builder.directive("persist", string_arg("/global-dir"));
+        let zone_entry = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValue::String("api".to_string(), None)],
+            children: Some(
+                ServerConfigurationBlockBuilder::new()
+                    .directive("persist", string_arg("/api-dir"))
+                    .build(),
+            ),
+            span: None,
+        };
+        global_builder = global_builder.directive("zone", zone_entry);
+        let global_block = ServerConfigurationBlockBuilder::new()
+            .directive_with_block("cache", Vec::<String>::new(), global_builder.build())
+            .build();
+
+        // Realistic host context: an (empty) host layer sits on top of the
+        // global layer.
+        let host_block = ServerConfigurationBlockBuilder::new().build();
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(global_block));
+        layered.add_layer(std::sync::Arc::new(host_block));
+
+        let config = resolve_persist_config(&CacheZoneId::Named("api".into()), &layered);
+        assert_eq!(config.dir, Some(PathBuf::from("/api-dir")));
+
+        let config = resolve_persist_config(&CacheZoneId::Named("other".into()), &layered);
+        assert_eq!(config.dir, Some(PathBuf::from("/global-dir")));
+    }
+
+    #[test]
+    fn malformed_interval_falls_back_to_default() {
+        let configuration = cache_block(vec![
+            ("persist", string_arg("/tmp/cache")),
+            ("persist_interval", string_arg("not-a-duration")),
+        ]);
+        let config = resolve_persist_config(&CacheZoneId::Global, &configuration);
+        assert_eq!(config.interval, DEFAULT_PERSIST_INTERVAL);
+    }
 }

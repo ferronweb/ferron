@@ -5,7 +5,10 @@ use ferron_core::config::validator::{
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
+use ferron_core::util::parse_duration;
 use http::header::HeaderName;
+
+use crate::config::MIN_PERSIST_INTERVAL;
 
 const GLOBAL_CACHE_DIRECTIVES: &[&str] = &["max_entries", "zone"];
 const HOST_CACHE_DIRECTIVES: &[&str] = &[
@@ -23,6 +26,9 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "coalesce_timeout",
     "zone",
     "max_entries",
+    "persist",
+    "persist_interval",
+    "persist_private",
 ];
 
 #[derive(Default)]
@@ -278,6 +284,30 @@ fn validate_cache_block(
         }
     }
 
+    if let Some(entries) = block.directives.get("persist") {
+        for entry in entries {
+            validate_persist_dir(entry)?;
+        }
+    }
+
+    if let Some(entries) = block.directives.get("persist_interval") {
+        for entry in entries {
+            validate_persist_interval(entry)?;
+        }
+    }
+
+    if let Some(entries) = block.directives.get("persist_private") {
+        for entry in entries {
+            validate_boolean_entry(entry, "persist_private")?;
+            if entry.get_flag() {
+                ctx.add_best_practice_violation(
+                    "`persist_private` writes private cache entries to disk; make sure the persistence directory is protected and required by your privacy policy",
+                    entry_span(entry),
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -359,6 +389,55 @@ fn validate_boolean_entry(
             ))
             .with_span(entry_span(entry)));
         }
+    }
+    Ok(())
+}
+
+fn validate_persist_dir(
+    entry: &ServerConfigurationDirectiveEntry,
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+    if entry.args.len() != 1 {
+        return Err(ConfigurationValidationError::from(
+            "Invalid `persist` - expected exactly one string argument (the directory path)",
+        )
+        .with_span(entry_span(entry)));
+    }
+    if entry.args.first().and_then(|v| v.as_str()).is_none() {
+        return Err(ConfigurationValidationError::from(
+            "Invalid `persist` - expected a string value",
+        )
+        .with_span(entry_span(entry)));
+    }
+    Ok(())
+}
+
+fn validate_persist_interval(
+    entry: &ServerConfigurationDirectiveEntry,
+) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+    if entry.args.len() != 1 {
+        return Err(ConfigurationValidationError::from(
+            "Invalid `persist_interval` - expected exactly one duration argument",
+        )
+        .with_span(entry_span(entry)));
+    }
+    let value = entry.args.first().and_then(|v| v.as_str()).ok_or_else(|| {
+        ConfigurationValidationError::from(
+            "Invalid `persist_interval` - expected a duration string",
+        )
+        .with_span(entry_span(entry))
+    })?;
+    let duration = parse_duration(value).map_err(|parse_err| {
+        ConfigurationValidationError::from(format!(
+            "Invalid `persist_interval` duration: {parse_err}"
+        ))
+        .with_span(entry_span(entry))
+    })?;
+    if duration < MIN_PERSIST_INTERVAL {
+        return Err(ConfigurationValidationError::from(format!(
+            "Invalid `persist_interval` - minimum is {} second(s)",
+            MIN_PERSIST_INTERVAL.as_secs()
+        ))
+        .with_span(entry_span(entry)));
     }
     Ok(())
 }
@@ -450,7 +529,12 @@ fn validate_header_name_list(
     Ok(())
 }
 
-const GLOBAL_ZONE_DIRECTIVES: &[&str] = &["max_entries"];
+const GLOBAL_ZONE_DIRECTIVES: &[&str] = &[
+    "max_entries",
+    "persist",
+    "persist_interval",
+    "persist_private",
+];
 
 fn validate_global_zone_block(
     entry: &ServerConfigurationDirectiveEntry,
@@ -507,5 +591,253 @@ fn validate_global_zone_block(
         }
     }
 
+    if let Some(entries) = children.directives.get("persist") {
+        for entry in entries {
+            validate_persist_dir(entry)?;
+        }
+    }
+
+    if let Some(entries) = children.directives.get("persist_interval") {
+        for entry in entries {
+            validate_persist_interval(entry)?;
+        }
+    }
+
+    if let Some(entries) = children.directives.get("persist_private") {
+        for entry in entries {
+            validate_boolean_entry(entry, "persist_private")?;
+        }
+    }
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use ferron_core::config::validator::{
+        ConfigurationValidatorContext, ConfigurationValidatorDiagnosticKind,
+    };
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
+
+    use super::*;
+
+    fn ctx(is_global: bool) -> ConfigurationValidatorContext {
+        ConfigurationValidatorContext {
+            used_directives: std::collections::HashSet::new(),
+            is_global,
+            // Test-only context: the empty validator map is not shared across threads.
+            #[allow(clippy::arc_with_non_send_sync)]
+            scoped_validators: Arc::new(HashMap::new()),
+            diagnostics: Vec::new(),
+            scope: Some(String::from("http.cache")),
+        }
+    }
+
+    fn entry(args: Vec<ServerConfigurationValue>) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args,
+            children: None,
+            span: None,
+        }
+    }
+
+    fn block_with(children: ServerConfigurationBlock) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: Vec::new(),
+            children: Some(children),
+            span: None,
+        }
+    }
+
+    fn make_block(
+        directives: Vec<(&str, ServerConfigurationDirectiveEntry)>,
+    ) -> ServerConfigurationBlock {
+        let mut map: HashMap<String, Vec<ServerConfigurationDirectiveEntry>> = HashMap::new();
+        for (name, directive_entry) in directives {
+            map.entry(name.to_string())
+                .or_default()
+                .push(directive_entry);
+        }
+        ServerConfigurationBlock {
+            directives: Arc::new(map),
+            matchers: HashMap::new(),
+            span: None,
+        }
+    }
+
+    fn cache_block_with(
+        directives: Vec<(&str, ServerConfigurationDirectiveEntry)>,
+    ) -> ServerConfigurationBlock {
+        make_block(vec![("cache", block_with(make_block(directives)))])
+    }
+
+    fn string(value: &str) -> ServerConfigurationValue {
+        ServerConfigurationValue::String(value.to_string(), None)
+    }
+
+    fn number(value: i64) -> ServerConfigurationValue {
+        ServerConfigurationValue::Number(value, None)
+    }
+
+    #[test]
+    fn valid_persist_directives_pass() {
+        let block = cache_block_with(vec![
+            ("max_entries", entry(vec![number(1024)])),
+            ("persist", entry(vec![string("/var/cache")])),
+            ("persist_interval", entry(vec![string("10s")])),
+            (
+                "persist_private",
+                entry(vec![ServerConfigurationValue::Boolean(false, None)]),
+            ),
+        ]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn global_cache_block_accepts_persist_directives() {
+        let block = make_block(vec![(
+            "cache",
+            block_with(make_block(vec![
+                ("max_entries", entry(vec![number(1024)])),
+                ("persist", entry(vec![string("/var/cache")])),
+                ("persist_interval", entry(vec![string("1m")])),
+            ])),
+        )]);
+        let mut context = ctx(true);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn global_zone_block_accepts_persist_directives() {
+        let block = make_block(vec![(
+            "cache",
+            block_with(make_block(vec![
+                ("max_entries", entry(vec![number(1024)])),
+                (
+                    "zone",
+                    ServerConfigurationDirectiveEntry {
+                        args: vec![string("shared_assets")],
+                        children: Some(make_block(vec![
+                            ("max_entries", entry(vec![number(2048)])),
+                            ("persist", entry(vec![string("/var/cache")])),
+                            ("persist_interval", entry(vec![string("1m")])),
+                        ])),
+                        span: None,
+                    },
+                ),
+            ])),
+        )]);
+        let mut context = ctx(true);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn unknown_directive_in_zone_block_is_flagged() {
+        let block = make_block(vec![(
+            "cache",
+            block_with(make_block(vec![
+                ("max_entries", entry(vec![number(1024)])),
+                (
+                    "zone",
+                    ServerConfigurationDirectiveEntry {
+                        args: vec![string("shared_assets")],
+                        children: Some(make_block(vec![("bogus", entry(vec![string("x")]))])),
+                        span: None,
+                    },
+                ),
+            ])),
+        )]);
+        let mut context = ctx(true);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.iter().any(|d| {
+            matches!(
+                d.kind,
+                ConfigurationValidatorDiagnosticKind::UnknownDirective
+                    | ConfigurationValidatorDiagnosticKind::InvalidConfiguration
+            ) && d.message.contains("bogus")
+        }));
+    }
+
+    #[test]
+    fn persist_interval_below_minimum_is_rejected() {
+        let block = cache_block_with(vec![("persist_interval", entry(vec![string("0s")]))]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        let err = validator.validate_block(&block, &mut context).unwrap_err();
+        assert!(err.to_string().contains("minimum"));
+    }
+
+    #[test]
+    fn persist_interval_invalid_duration_is_rejected() {
+        let block = cache_block_with(vec![("persist_interval", entry(vec![string("banana")]))]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        validator
+            .validate_block(&block, &mut context)
+            .expect_err("invalid duration must fail");
+    }
+
+    #[test]
+    fn persist_wrong_arg_count_is_rejected() {
+        let block = cache_block_with(vec![("persist", entry(vec![string("/a"), string("/b")]))]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        let err = validator.validate_block(&block, &mut context).unwrap_err();
+        assert!(err.to_string().contains("persist"));
+    }
+
+    #[test]
+    fn persist_non_string_arg_is_rejected() {
+        let block = cache_block_with(vec![("persist", entry(vec![number(42)]))]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        validator
+            .validate_block(&block, &mut context)
+            .expect_err("non-string persist argument must fail");
+    }
+
+    #[test]
+    fn persist_private_flags_best_practice_violation() {
+        let block = cache_block_with(vec![(
+            "persist_private",
+            entry(vec![ServerConfigurationValue::Boolean(true, None)]),
+        )]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.iter().any(|d| {
+            matches!(
+                d.kind,
+                ConfigurationValidatorDiagnosticKind::BestPracticeViolation
+            ) && d.message.contains("persist_private")
+        }));
+    }
+
+    #[test]
+    fn unknown_directive_in_host_cache_block_is_flagged() {
+        let block = cache_block_with(vec![("bogus", entry(vec![string("x")]))]);
+        let mut context = ctx(false);
+        let validator = HttpCacheConfigurationValidator;
+        validator.validate_block(&block, &mut context).unwrap();
+        assert!(context.diagnostics.iter().any(|d| {
+            matches!(
+                d.kind,
+                ConfigurationValidatorDiagnosticKind::UnknownDirective
+                    | ConfigurationValidatorDiagnosticKind::InvalidConfiguration
+            ) && d.message.contains("bogus")
+        }));
+    }
 }

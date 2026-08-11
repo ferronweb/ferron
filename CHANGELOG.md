@@ -35,6 +35,10 @@
 - **CORS origin interpolations**: CORS origin values can now be interpolated using `{{name}}` variable syntax (previously they were declared invalid).
 - **Request `Cache-Control` directives**: Ferron now honors the RFC 9111 §5.2.1 request directives on cache lookups. `max-age=<n>` and `min-fresh=<n>` revalidate a stored response that does not satisfy the requested freshness window, and `only-if-cached` returns `504 Gateway Timeout` on a miss instead of contacting the origin. `no-transform` is accepted and has no effect. `no-cache` (and `Pragma: no-cache`) already forced revalidation; `no-store` already bypassed the cache.
 
+#### HTTP caching
+
+- **On-disk cache persistence**: the HTTP cache can now survive process restarts. Set `persist <dir>` in a cache block to write cache mutations to a journal and periodic snapshots under `<dir>/<zone>`. On startup, Ferron replays the snapshot and journal back into memory. `persist_interval <duration>` (default `30s`, minimum `1s`) controls how often Ferron flushes queued mutations. By default only public entries are persisted; `persist_private` opts into persisting private entries. Deletions are always persisted. The persistence directory is single-process only — do not share it between instances. A SIGHUP config reload does not touch the on-disk cache.
+
 ### Changed
 
 #### HTTP server core

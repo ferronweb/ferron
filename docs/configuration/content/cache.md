@@ -42,10 +42,13 @@ At HTTP host scope, you can write `cache` either as a block or as a boolean flag
 
 Use the global `cache { ... }` block to configure shared cache capacity and named cache zones.
 
-| Nested directive | Arguments | Description                                                                                                                                                                                                    | Default |
-| ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `max_entries`    | `<int>`   | This directive specifies the maximum number of response entries stored in the shared in-memory HTTP cache. Setting this directive to `0` keeps the module loaded but prevents Ferron from storing new entries. | `1024`  |
-| `zone`           | block     | Defines a named cache zone with custom capacity. See [Cache zones](#cache-zones) below.                                                                                                                        | (none)  |
+| Nested directive    | Arguments   | Description                                                                                                                                                                                                    | Default |
+| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `max_entries`       | `<int>`     | This directive specifies the maximum number of response entries stored in the shared in-memory HTTP cache. Setting this directive to `0` keeps the module loaded but prevents Ferron from storing new entries. | `1024`  |
+| `zone`              | block       | Defines a named cache zone with custom capacity. See [Cache zones](#cache-zones) below.                                                                                                                        | (none)  |
+| `persist`           | `<string>`  | Directory for to-disk cache persistence. See [Disk persistence](#disk-persistence) below.                                                                                                                      | (none)  |
+| `persist_interval`  | `<string>`  | How often Ferron writes queued cache mutations to disk. Minimum is `1s`.                                                                                                                                       | `30s`   |
+| `persist_private`   | `[<bool>]`  | Whether Ferron also writes private-scoped cache entries to disk.                                                                                                                                               | `false` |
 
 **Configuration example:**
 
@@ -84,6 +87,9 @@ Use the HTTP host `cache { ... }` block to enable caching and tune how the syste
 | `purge_propagation`                | block                     | Configures multi-instance cache purge propagation via an external control-plane service. See [Cache purge propagation](#cache-purge-propagation) below.                                                                                                                                                                                                                                                              | (disabled)          |
 | `zone`                             | `<string>`                | Assign this host to a named cache zone. Hosts sharing the same zone name share a single cache store. If omitted, the host uses an implicit per-host zone. See [Cache zones](#cache-zones) below.                                                                                                                                                                                                                     | (implicit per-host) |
 | `max_entries`                      | `<int>`                   | Maximum number of response entries for the host cache. When specified without `zone`, this implicitly creates a per-host zone with the given capacity, even if a global zone exists. See [Cache zones](#cache-zones) below.                                                                                                                                                                                          | (global or `1024`)  |
+| `persist`                          | `<string>`                | Directory for to-disk cache persistence. Overrides the global and named-zone settings. See [Disk persistence](#disk-persistence) below.                                                                                                                                                                                                                                                                             | (inherited)         |
+| `persist_interval`                 | `<string>`                | How often Ferron writes queued cache mutations to disk. Minimum is `1s`. Overrides the global and named-zone settings.                                                                                                                                                                                                                                                                                             | `30s`               |
+| `persist_private`                  | `[<bool>]`                | Whether Ferron also writes private-scoped cache entries to disk. Overrides the global and named-zone settings.                                                                                                                                                                                                                                                                                                     | `false`             |
 
 **Configuration example:**
 
@@ -246,6 +252,54 @@ Zone resolution follows this order:
 2. **Host-level `max_entries`**: If the host specifies `max_entries` in its cache block (without `zone`), Ferron creates an implicit per-host zone with that capacity. This overrides the global zone.
 3. **Global zone**: If the host specifies no `zone` or host-level `max_entries`, a global `cache { max_entries = N }` block must exist (without explicit `zone` blocks). The host then uses the global `CacheStore`. All hosts without an explicit `zone` share this store.
 4. **Per-host zone**: If none of the above apply, Ferron uses the hostname as the zone ID. Capacity comes from the host-level or global `max_entries`.
+
+### Disk persistence
+
+When you set `persist` to a directory, Ferron writes cache mutations to disk as a durability mirror. The in-memory cache remains the only lookup path. When the process restarts, Ferron restores the cache contents from disk. A restart means a full process stop and start. A SIGHUP config reload does not touch the on-disk cache.
+
+Ferron stores each zone under `<persist dir>/<zone>`, where `<zone>` is the zone label (global zones use `global`). Named zones use their zone name, and per-host zones use the hostname. Two files make up the store:
+
+- `journal` holds recent cache mutations (entries stored and deletions).
+- `snapshot` holds a compact dump of all entries. Ferron rebuilds it periodically.
+
+Ferron writes mutations to the journal in batches. The `persist_interval` directive controls how often. The minimum interval is `1s`. Each batch lands in the operating system page cache, so it survives a process crash but not a power loss. During a clean shutdown, Ferron flushes all pending mutations and syncs the files. When the server restarts, Ferron replays the snapshot and then the journal.
+
+Settings apply per zone in this order:
+
+1. The host `cache` block, when the host has its own zone.
+2. The named `zone` block, for named zones.
+3. The global `cache` block, for the global zone.
+
+**Private entries:**
+
+By default Ferron persists only public entries. Set `persist_private` to persist private-scoped entries too. Enabling it triggers a best-practice warning from `ferron doctor`, because private responses can contain personal data. Deletions (for example `PURGE` requests) persist regardless of `persist_private`, so a private entry removed before a restart stays removed.
+
+> [!important]
+> The on-disk format is machine-specific. Do not share a persistence directory between Ferron instances, and do not point two servers at the same directory. One process writes to the directory at a time.
+
+Example with a persistent named zone:
+
+```ferron
+{
+    cache {
+        max_entries 4096
+        persist /var/cache/ferron
+        persist_interval "10s"
+        zone "shared_assets" {
+            max_entries 8192
+            persist /var/cache/ferron-shared
+        }
+    }
+}
+
+example.com {
+    cache {
+        zone "shared_assets"
+    }
+}
+```
+
+`example.com` restores its entries from `/var/cache/ferron-shared` after a restart. Hosts that use the global zone restore from `/var/cache/ferron`.
 
 ### PURGE method cache invalidation
 
@@ -494,3 +548,4 @@ The cache stage sets the following attributes on its `ferron.stage.cache` span:
 - **`purge_allowed_ips` with wildcard**: Allowing every source address for cache purging risks abuse. Restrict this to trusted operators or internal networks.
 - **`control_plane_url` without `shared_secret`**: Purge propagation configured without a shared secret allows any source to trigger cache purges across all edge instances.
 - **`control_plane_url` using HTTP**: Purge webhooks sent over unencrypted HTTP expose the shared secret and purge payloads. Use HTTPS in production environments.
+- **`persist_private`**: Persisting private cache entries writes personal data to disk. Enable it only when the persistence directory is protected and your privacy policy requires it.
