@@ -1990,6 +1990,7 @@ dependencies = [
  "async-trait",
  "base64 0.23.1",
  "bytes",
+ "chrono",
  "dirs",
  "ferron-core",
  "ferron-dns",
@@ -2005,6 +2006,8 @@ dependencies = [
  "instant-acme",
  "nix",
  "parking_lot",
+ "rasn",
+ "rasn-pkix",
  "rcgen",
  "rustls",
  "rustls-native-certs",
@@ -2019,7 +2022,6 @@ dependencies = [
  "urlencoding",
  "vibeio",
  "webpki-roots",
- "x509-parser",
  "xxhash-rust",
 ]
 

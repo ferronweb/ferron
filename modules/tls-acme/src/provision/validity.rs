@@ -1,10 +1,8 @@
-use std::ops::Sub;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::CertificateDer;
-use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::cache::{get_certificate_cache_key, CertificateCacheData};
 use crate::config::AcmeConfig;
@@ -21,12 +19,28 @@ pub fn check_certificate_validity(
     if let Some(renewal_info) = renewal_info {
         return Ok(SystemTime::now() < renewal_info.suggested_window.start);
     }
-    let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-    let validity = x509_certificate.validity();
-    if let Some(time_to_expiration) = validity.time_to_expiration() {
+    let x509_certificate = rasn::der::decode::<rasn_pkix::Certificate>(certificate)?;
+    let validity = &x509_certificate.tbs_certificate.validity;
+    let time_to_expiration_delta = match &validity.not_after {
+        rasn_pkix::Time::Utc(t) => {
+            t.signed_duration_since(chrono::DateTime::<chrono::Utc>::from(SystemTime::now()))
+        }
+        rasn_pkix::Time::General(t) => {
+            t.signed_duration_since(chrono::DateTime::<chrono::Utc>::from(SystemTime::now()))
+        }
+    };
+    if let Some(time_to_expiration) = time_to_expiration_delta.to_std().ok() {
+        let valid_duration_delta = match (&validity.not_before, &validity.not_after) {
+            (rasn_pkix::Time::Utc(b), rasn_pkix::Time::Utc(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::Utc(b), rasn_pkix::Time::General(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::General(b), rasn_pkix::Time::Utc(a)) => a.signed_duration_since(b),
+            (rasn_pkix::Time::General(b), rasn_pkix::Time::General(a)) => {
+                a.signed_duration_since(b)
+            }
+        };
         let time_before_expiration =
-            if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-                (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+            if let Some(valid_duration) = valid_duration_delta.to_std().ok() {
+                (valid_duration.as_secs() / 2).min(SECONDS_BEFORE_RENEWAL)
             } else {
                 SECONDS_BEFORE_RENEWAL
             };
@@ -103,29 +117,37 @@ pub async fn check_certificate_validity_or_install_cached(
 fn cert_id_from_cert<'a>(
     certificate: &CertificateDer<'a>,
 ) -> Result<instant_acme::CertificateIdentifier<'a>, String> {
-    // Implementation taken from `instant-acme` itself
-    // (https://docs.rs/instant-acme/0.8.5/src/instant_acme/types.rs.html#875-903)
-    let (_, parsed) = x509_parser::parse_x509_certificate(certificate.as_ref())
+    let parsed = rasn::der::decode::<rasn_pkix::Certificate>(certificate.as_ref())
         .map_err(|e| format!("failed to parse x509 certificate: {e}"))?;
 
-    let Some(authority_key_identifier) =
-        parsed
-            .iter_extensions()
-            .find_map(|ext| match ext.parsed_extension() {
-                x509_parser::extensions::ParsedExtension::AuthorityKeyIdentifier(aki_ext) => {
-                    aki_ext
-                        .key_identifier
-                        .as_ref()
-                        .map(|aki| rustls_pki_types::Der::from_slice(aki.0))
-                }
-                _ => None,
-            })
-    else {
+    let Some(extensions) = &parsed.tbs_certificate.extensions else {
+        return Err("x509 certificate does not have any extensions".into());
+    };
+
+    let Some(authority_key_identifier) = extensions.iter().find_map(|ext| {
+        if ext.extn_id
+            == rasn::types::Oid::JOINT_ISO_ITU_T_DS_CERTIFICATE_EXTENSION_AUTHORITY_KEY_IDENTIFIER
+        {
+            let Ok(aki_parsed) =
+                rasn::der::decode::<rasn_pkix::AuthorityKeyIdentifier>(&ext.extn_value)
+            else {
+                return None;
+            };
+            Some(rustls_pki_types::Der::from(
+                rasn::der::encode(&aki_parsed).ok()?,
+            ))
+        } else {
+            None
+        }
+    }) else {
         return Err("x509 certificate does not have an AKI extension".into());
     };
 
     Ok(instant_acme::CertificateIdentifier::new(
         authority_key_identifier,
-        rustls_pki_types::Der::from_slice(parsed.tbs_certificate.raw_serial()),
+        rustls_pki_types::Der::from(
+            rasn::der::encode(&parsed.tbs_certificate.serial_number)
+                .map_err(|e| format!("failed to encode serial number: {e}"))?,
+        ),
     ))
 }

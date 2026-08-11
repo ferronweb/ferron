@@ -42,7 +42,8 @@ base64 = "0.23"
 xxhash-rust = { version = "0.8", features = ["std", "xxh3"] }
 
 # Certificate parsing
-x509-parser = "0.18"
+rasn = "0.28.13"
+rasn-pkix = "0.28.13"
 
 # HTTP (for ACME client and HTTP-01 challenge)
 hyper = { version = "1", features = ["client", "http1", "http2"] }
@@ -61,6 +62,7 @@ urlencoding = "2.1.3"
 tokio-util = "0.7.18"
 tld = "2.37.0"
 shlex = "2.0.1"
+chrono = "0.4.45"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.3", features = ["dir"] }
