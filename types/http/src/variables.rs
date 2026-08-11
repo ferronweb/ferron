@@ -1,8 +1,6 @@
 use std::borrow::Cow;
 
 use crate::HttpContext;
-#[cfg(feature = "mtls")]
-use x509_parser::nom::AsBytes;
 
 /// Variable name constants to avoid magic strings throughout the codebase.
 pub mod var {
@@ -107,17 +105,26 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                 .extensions
                 .get::<crate::mtls::MtlsCertificates>()
                 .and_then(|certs| certs.0.first());
-            let mtls_leaf_parsed = mtls_leaf.and_then(|c| {
-                x509_parser::parse_x509_certificate(c.as_bytes())
-                    .ok()
-                    .map(|(_, cert)| cert)
-            });
+            let mtls_leaf_parsed =
+                mtls_leaf.and_then(|c| rasn::der::decode::<rasn_pkix::Certificate>(&*c).ok());
             let mtls_cn = mtls_leaf_parsed.and_then(|cert| {
-                cert.subject()
-                    .iter_common_name()
-                    .next()
-                    .and_then(|cn| cn.as_str().ok())
-                    .map(|s| s.to_string())
+                let rasn_pkix::Name::RdnSequence(s) = cert.tbs_certificate.subject;
+                if let Some(sf) = s.first() {
+                    for satv in sf.to_vec() {
+                        if satv.r#type
+                            == rasn::types::Oid::JOINT_ISO_ITU_T_DS_ATTRIBUTE_TYPE_COMMON_NAME
+                        {
+                            if let Ok(der) = rasn::der::encode(&satv.value) {
+                                if let Ok(cn) = rasn::der::decode::<rasn_pkix::CommonName>(&der) {
+                                    return Some(
+                                        String::from_utf8_lossy(cn.as_bytes()).to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                None
             });
             Some(mtls_cn.unwrap_or_default())
         }

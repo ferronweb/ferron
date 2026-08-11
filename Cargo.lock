@@ -1240,12 +1240,13 @@ dependencies = [
  "http",
  "http-body-util",
  "rand 0.10.2",
+ "rasn",
+ "rasn-pkix",
  "rustc-hash",
  "rustls-pki-types",
  "typemap_rev",
  "urlencoding",
  "vibeio",
- "x509-parser",
 ]
 
 [[package]]
