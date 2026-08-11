@@ -17,3 +17,4 @@
 #![allow(dead_code)]
 
 mod record;
+mod writer;
