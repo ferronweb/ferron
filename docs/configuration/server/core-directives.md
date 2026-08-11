@@ -65,7 +65,7 @@ This page documents directives that belong in top-level global blocks:
 ### Runtime
 
 - `io_uring <bool>`
-  - This directive turns on `io_uring` for the primary runtime when it is available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
+  - This directive turns on `io_uring` for the server when it is available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
 
 **Configuration example:**
 
@@ -202,16 +202,16 @@ The bundled `console` provider (`observability-consolelog`) takes no additional 
 
 The bundled `file` provider (`observability-logfile`) writes observability events to specified log files.
 
-| Additional subdirective | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `access_log` | `<string>` | File path for access log output. | none |
-| `error_log` | `<string>` | File path for error log output. | none |
-| `format` | `<string>` | Access log formatter name (`text` or `json`). | `text` |
-| `error_format` | `<string>` | Application log formatter name (`text` or `json`). | `text` |
-| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled |
-| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep. | none (no limit) |
-| `error_log_rotate_size` | `<number>` | Maximum error log file size in bytes before rotation. | disabled |
-| `error_log_rotate_keep` | `<number>` | Number of rotated error log files to keep. | none (no limit) |
+| Additional subdirective  | Arguments  | Description                                            | Default         |
+| ------------------------ | ---------- | ------------------------------------------------------ | --------------- |
+| `access_log`             | `<string>` | File path for access log output.                       | none            |
+| `error_log`              | `<string>` | File path for error log output.                        | none            |
+| `format`                 | `<string>` | Access log formatter name (`text` or `json`).          | `text`          |
+| `error_format`           | `<string>` | Application log formatter name (`text` or `json`).     | `text`          |
+| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled        |
+| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep.            | none (no limit) |
+| `error_log_rotate_size`  | `<number>` | Maximum error log file size in bytes before rotation.  | disabled        |
+| `error_log_rotate_keep`  | `<number>` | Number of rotated error log files to keep.             | none (no limit) |
 
 **Configuration example:**
 
@@ -352,11 +352,11 @@ The admin API is a **privileged control plane** with full server configuration a
 
 #### Current limitations
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| TLS / HTTPS | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
-| Authentication | Supported | Use `auth_token` to require a bearer token on all endpoints except `/health`. |
-| ACL / allowlists | Not supported | No built-in IP address filtering or access restrictions. |
+| Feature          | Status        | Notes                                                                                   |
+| ---------------- | ------------- | --------------------------------------------------------------------------------------- |
+| TLS / HTTPS      | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
+| Authentication   | Supported     | Use `auth_token` to require a bearer token on all endpoints except `/health`.           |
+| ACL / allowlists | Not supported | No built-in IP address filtering or access restrictions.                                |
 
 #### Risks of binding to `0.0.0.0`
 
@@ -438,14 +438,14 @@ Returns JSON with server metrics:
 }
 ```
 
-| Field | Description |
-| --- | --- |
-| `uptime_sec` | Seconds since the server started. |
-| `connections_active` | Currently open TCP connections across all HTTP listeners. |
-| `requests_total` | Total HTTP requests served across all listeners. |
-| `reloads` | Number of configuration reloads. |
-| `observability_events_dropped` | Total number of observability events dropped due to backpressure. |
-| `observability_event_queue_len` | Approximate current length of the observability event queue. |
+| Field                           | Description                                                       |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `uptime_sec`                    | Seconds since the server started.                                 |
+| `connections_active`            | Currently open TCP connections across all HTTP listeners.         |
+| `requests_total`                | Total HTTP requests served across all listeners.                  |
+| `reloads`                       | Number of configuration reloads.                                  |
+| `observability_events_dropped`  | Total number of observability events dropped due to backpressure. |
+| `observability_event_queue_len` | Approximate current length of the observability event queue.      |
 
 #### `GET /config`
 
@@ -463,11 +463,11 @@ Returns the current reload status as JSON:
 }
 ```
 
-| Field | Description |
-| --- | --- |
-| `last_reload_time` | ISO 8601 timestamp of the last reload attempt. |
+| Field               | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `last_reload_time`  | ISO 8601 timestamp of the last reload attempt.               |
 | `last_reload_error` | Error message from the last reload, or `null` if successful. |
-| `active_generation` | The configuration generation number currently in effect. |
+| `active_generation` | The configuration generation number currently in effect.     |
 
 #### `POST /reload`
 
@@ -482,10 +482,10 @@ Returns the reload status as JSON:
 }
 ```
 
-| Field | Description |
-| --- | --- |
+| Field    | Description                                                                           |
+| -------- | ------------------------------------------------------------------------------------- |
 | `status` | `"reload_initiated"` if the reload is in progress, or `"reload_failed"` if it failed. |
-| `error` | Error message from the last reload attempt, or `null` if successful. |
+| `error`  | Error message from the last reload attempt, or `null` if successful.                  |
 
 #### `GET /runtime`
 
@@ -499,11 +499,11 @@ Returns the runtime status as JSON:
 }
 ```
 
-| Field | Description |
-| --- | --- |
-| `primary_threads` | Number of primary threads (typically equal to CPU count). |
-| `io_uring_supported` | Whether the current system supports `io_uring`. |
-| `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime. |
+| Field                      | Description                                               |
+| -------------------------- | --------------------------------------------------------- |
+| `primary_threads`          | Number of primary threads (typically equal to CPU count). |
+| `io_uring_supported`       | Whether the current system supports `io_uring`.           |
+| `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime.   |
 
 ## Best practices
 
