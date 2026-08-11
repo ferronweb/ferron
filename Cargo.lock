@@ -1868,11 +1868,14 @@ dependencies = [
 name = "ferron-observability-prometheus"
 version = "3.0.0-beta.8"
 dependencies = [
+ "anyhow",
  "async-channel",
- "axum",
  "ferron-core",
  "ferron-observability",
  "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "prometheus-client",
  "subtle",
  "tokio",

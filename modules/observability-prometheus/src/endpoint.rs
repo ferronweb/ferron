@@ -1,8 +1,10 @@
+use std::convert::Infallible;
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
+use http_body_util::Full;
+use hyper::body::{Bytes, Incoming};
+use hyper::service::service_fn;
+use hyper::{Request, Response};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::histogram::Histogram;
 use subtle::ConstantTimeEq;
@@ -18,20 +20,13 @@ type EndpointState = (
     Counter,
 );
 
-/// Shared state for the bearer token auth middleware.
-#[derive(Clone)]
-struct AuthState {
-    auth_token: Option<Arc<str>>,
-}
-
-/// Axum middleware that enforces Bearer token authentication for the metrics endpoint.
+/// A middleware that enforces Bearer token authentication for the metrics endpoint.
 async fn bearer_auth_middleware(
-    State(auth_state): State<AuthState>,
-    request: Request,
-    next: Next,
-) -> Response {
-    let Some(required_token) = &auth_state.auth_token else {
-        return next.run(request).await;
+    request: &Request<Incoming>,
+    auth_token: Option<&str>,
+) -> Option<Response<Full<Bytes>>> {
+    let Some(required_token) = auth_token else {
+        return None;
     };
 
     let auth_header = request
@@ -43,22 +38,24 @@ async fn bearer_auth_middleware(
         Some(header_value) => {
             if let Some(token) = header_value.strip_prefix("Bearer ") {
                 if token.as_bytes().ct_eq(required_token.as_bytes()).into() {
-                    return next.run(request).await;
+                    return None;
                 }
             }
-            (
-                axum::http::StatusCode::UNAUTHORIZED,
-                [(http::header::WWW_AUTHENTICATE, "Bearer")],
-                "Unauthorized",
+            Some(
+                http::Response::builder()
+                    .status(http::StatusCode::UNAUTHORIZED)
+                    .header(http::header::WWW_AUTHENTICATE, "Bearer")
+                    .body(Full::new(Bytes::from_static("Unauthorized".as_bytes())))
+                    .expect("invalid HTTP response state"),
             )
-                .into_response()
         }
-        None => (
-            axum::http::StatusCode::UNAUTHORIZED,
-            [(http::header::WWW_AUTHENTICATE, "Bearer")],
-            "Unauthorized",
-        )
-            .into_response(),
+        None => Some(
+            http::Response::builder()
+                .status(http::StatusCode::UNAUTHORIZED)
+                .header(http::header::WWW_AUTHENTICATE, "Bearer")
+                .body(Full::new(Bytes::from_static("Unauthorized".as_bytes())))
+                .expect("invalid HTTP response state"),
+        ),
     }
 }
 
@@ -71,48 +68,78 @@ pub async fn endpoint_listener_fn(
     scrape_errors: Counter,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let auth_token = config.auth_token.as_deref().map(Arc::from);
-
-    let app = axum::Router::new()
-        .route("/metrics", axum::routing::get(endpoint_fn))
-        .with_state((
-            registry,
-            config.format,
-            scrape_duration,
-            scrape_total,
-            scrape_errors,
-        ));
-
-    let app = if let Some(token) = auth_token {
-        let auth_state = AuthState {
-            auth_token: Some(token),
-        };
-        app.layer(middleware::from_fn_with_state(
-            auth_state,
-            bearer_auth_middleware,
-        ))
-    } else {
-        app
-    };
+    let endpoint_state = (
+        registry,
+        config.format,
+        scrape_duration,
+        scrape_total,
+        scrape_errors,
+    );
 
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     ferron_core::log_info!("Prometheus endpoint listening on {}", config.listen);
-    let server = axum::serve(listener, app.into_make_service());
+    let server = async {
+        loop {
+            let Ok((sock, _)) = listener.accept().await else {
+                continue;
+            };
+
+            let _ = sock.set_nodelay(true);
+
+            let auth_token = auth_token.clone();
+            let endpoint_state = endpoint_state.clone();
+
+            let _ = hyper::server::conn::http1::Builder::new()
+                .timer(hyper_util::rt::TokioTimer::default())
+                .serve_connection(
+                    hyper_util::rt::TokioIo::new(sock),
+                    service_fn(|request| {
+                        request_fn(request, auth_token.clone(), endpoint_state.clone())
+                    }),
+                )
+                .await;
+        }
+    };
 
     tokio::select! {
         _ = reload_token.cancelled() => {
             ferron_core::log_info!("Prometheus endpoint shutting down (reload)");
         }
-        result = server => {
-            result?;
-        }
+        _ = server => {}
     }
 
     Ok(())
 }
 
+async fn request_fn(
+    request: Request<Incoming>,
+    auth_token: Option<Arc<str>>,
+    endpoint_state: EndpointState,
+) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
+    if let Some(auth_res) = bearer_auth_middleware(&request, auth_token.as_deref()).await {
+        return Ok(auth_res);
+    }
+
+    if request.uri().path() == "/metrics" {
+        return Ok(endpoint_fn(endpoint_state).await.unwrap_or_else(|_| {
+            http::Response::builder()
+                .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from_static(
+                    "Internal server error".as_bytes(),
+                )))
+                .expect("invalid HTTP response state")
+        }));
+    }
+
+    Ok(http::Response::builder()
+        .status(http::StatusCode::NOT_FOUND)
+        .body(Full::new(Bytes::from_static("Not found".as_bytes())))
+        .expect("invalid HTTP response state"))
+}
+
 async fn endpoint_fn(
-    State((registry, format, scrape_duration, scrape_total, _scrape_errors)): State<EndpointState>,
-) -> Result<axum::response::Response, axum::http::StatusCode> {
+    (registry, format, scrape_duration, scrape_total, _scrape_errors): EndpointState,
+) -> anyhow::Result<hyper::Response<Full<Bytes>>> {
     let start = std::time::Instant::now();
     scrape_total.inc();
 
@@ -120,35 +147,33 @@ async fn endpoint_fn(
         "protobuf" => {
             let buffer = prometheus_client::encoding::prometheus_protobuf::encode_to_vec(
                 &*registry.read().await,
-            )
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            )?;
 
             let duration = start.elapsed().as_secs_f64();
             scrape_duration.observe(duration);
 
-            axum::response::Response::builder()
-                .header(
-                    axum::http::header::CONTENT_TYPE,
-                    "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encode=delimited",
-                )
-                .body(axum::body::Body::from(buffer))
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+            Ok(http::Response::builder()
+                    .status(http::StatusCode::OK)
+                    .header(
+                        http::header::CONTENT_TYPE,
+                        "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encode=delimited",
+                    )
+                    .body(Full::new(Bytes::from_owner(buffer)))?)
         }
         _ => {
             let mut buffer = String::new();
-            prometheus_client::encoding::text::encode(&mut buffer, &*registry.read().await)
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            prometheus_client::encoding::text::encode(&mut buffer, &*registry.read().await)?;
 
             let duration = start.elapsed().as_secs_f64();
             scrape_duration.observe(duration);
 
-            axum::response::Response::builder()
+            Ok(http::Response::builder()
+                .status(http::StatusCode::OK)
                 .header(
-                    axum::http::header::CONTENT_TYPE,
+                    http::header::CONTENT_TYPE,
                     "application/openmetrics-text; version=1.0.0; charset=utf-8",
                 )
-                .body(axum::body::Body::from(buffer))
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from_owner(buffer)))?)
         }
     }
 }

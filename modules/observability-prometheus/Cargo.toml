@@ -7,10 +7,13 @@ edition = "2021"
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
 
-axum = "0.8"
 async-channel = "2.5.0"
 http = "1"
 tokio = { version = "1", features = ["net", "rt", "sync", "macros"] }
 tokio-util = "0.7"
 prometheus-client = { version = "0.25.0", features = ["prometheus_protobuf", "protobuf-protox"] }
 subtle = "2.6.1"
+hyper = { version = "1.11.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
+http-body-util = "0.1.4"
+anyhow = "1.0.104"
