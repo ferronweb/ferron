@@ -22,10 +22,8 @@ rustls = { version = "0.23", default-features = false, features = ["std", "aws_l
 rustls-pki-types = "1"
 parking_lot = "0.12"
 anyhow = "1"
-num-bigint = "0.4"
 rand = "0.10"
 tokio-util = "0.7"
-x509-parser = { version = "0.18", features = ["verify-aws"] }
 hex = "0.4"
 chrono = "0.4.44"
 aws-lc-rs = { version = "1", features = ["bindgen"] }

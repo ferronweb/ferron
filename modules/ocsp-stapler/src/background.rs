@@ -19,7 +19,6 @@ use hyper::body::Bytes;
 use hyper::Request;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use num_bigint::BigInt;
 use parking_lot::RwLock;
 use rasn::prelude::*;
 use rasn_ocsp::{
@@ -29,14 +28,24 @@ use rasn_ocsp::{
 use rustls_pki_types::CertificateDer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use x509_parser::asn1_rs::ToDer;
-use x509_parser::prelude::*;
 
 // Type alias for the OCSP cache to reduce type complexity
 type OcspCache = Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 
 /// Maps certificate leaf bytes to hostname for per-host OCSP metrics.
 type OcspHostMap = Arc<RwLock<HashMap<Vec<u8>, String>>>;
+
+#[derive(AsnType, Clone, Debug, Decode, Encode, PartialEq, Eq, Hash)]
+pub struct RSASSAPSSParams {
+    #[rasn(tag(context, 0))]
+    pub hash_algorithm: Option<rasn_pkix::AlgorithmIdentifier>,
+    #[rasn(tag(context, 1))]
+    pub mask_gen_algorithm: Option<rasn_pkix::AlgorithmIdentifier>,
+    #[rasn(tag(context, 2))]
+    pub salt_length: Option<Integer>,
+    #[rasn(tag(context, 3))]
+    pub trailer_field: Option<Integer>,
+}
 
 /// Build an `HttpsConnector` with native certificate store and webpki-roots fallback
 fn build_https_connector() -> Result<
@@ -100,13 +109,30 @@ fn build_https_connector() -> Result<
 }
 
 /// Verify the signature on the OCSP response using the issuer's public key.
+#[inline]
 fn verify_ocsp_signature(
     basic_response: &BasicOcspResponse,
-    issuer_cert: &X509Certificate,
+    issuer_cert: &rasn_pkix::Certificate,
 ) -> anyhow::Result<()> {
-    let spki = issuer_cert.public_key();
+    verify_signature(
+        &basic_response.signature,
+        &basic_response.signature_algorithm,
+        &rasn::der::encode(&basic_response.tbs_response_data)
+            .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?,
+        issuer_cert,
+    )
+}
+
+/// Verify a signature on the OCSP response using the issuer's public key.
+fn verify_signature(
+    signature: &rasn::types::BitString,
+    signature_algorithm: &rasn_pkix::AlgorithmIdentifier,
+    message: &[u8],
+    issuer_cert: &rasn_pkix::Certificate,
+) -> anyhow::Result<()> {
+    let spki = &issuer_cert.tbs_certificate.subject_public_key_info;
     let alg: &dyn aws_lc_rs::signature::VerificationAlgorithm =
-        match *basic_response.signature_algorithm.algorithm.deref().deref() {
+        match *signature_algorithm.algorithm.deref().deref() {
             // RSA + PKCS#1
             [1, 2, 840, 113549, 1, 1, 11] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256,
             [1, 2, 840, 113549, 1, 1, 12] => &aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA384,
@@ -116,18 +142,47 @@ fn verify_ocsp_signature(
                 &aws_lc_rs::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
             }
 
+            // RSA-PSS
+            [1, 2, 840, 113549, 1, 1, 10] => {
+                let params: Option<RSASSAPSSParams> = signature_algorithm
+                    .parameters
+                    .as_ref()
+                    .and_then(|v| rasn::der::encode(&v).ok())
+                    .and_then(|v| rasn::der::decode::<RSASSAPSSParams>(&v).ok());
+                let halgorithm = params.and_then(|p| p.hash_algorithm);
+                let algorithm_oid = halgorithm.as_ref().map(|a| &a.algorithm);
+                let algorithm_oid_u32: Option<&[u32]> =
+                    algorithm_oid.map(|oid| oid.as_ref());
+                match algorithm_oid_u32 {
+                    Some([2, 16, 840, 1, 101, 3, 4, 2, 1]) => {
+                        &aws_lc_rs::signature::RSA_PSS_2048_8192_SHA256
+                    }
+                    Some([2, 16, 840, 1, 101, 3, 4, 2, 2]) => {
+                        &aws_lc_rs::signature::RSA_PSS_2048_8192_SHA384
+                    }
+                    Some([2, 16, 840, 1, 101, 3, 4, 2, 3]) => {
+                        &aws_lc_rs::signature::RSA_PSS_2048_8192_SHA512
+                    }
+
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "Unsupported signature algorithm OID: {}",
+                            signature_algorithm.algorithm
+                        ))
+                    }
+                }
+            }
+
             // Ed25519
             #[cfg(not(feature = "fips"))]
             [1, 3, 101, 112] => &aws_lc_rs::signature::ED25519,
 
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
-                let curve_oid: Option<ObjectIdentifier> = issuer_cert
-                    .public_key()
-                    .algorithm
+                let curve_oid: Option<ObjectIdentifier> = signature_algorithm
                     .parameters
                     .as_ref()
-                    .and_then(|v| v.to_der_vec().ok())
+                    .and_then(|v| rasn::der::encode(&v).ok())
                     .and_then(|v| rasn::der::decode::<ObjectIdentifier>(&v).ok());
                 let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
                 match (curve_oid_u32, algo) {
@@ -152,7 +207,7 @@ fn verify_ocsp_signature(
                     (Some([1, 3, 132, 0, 35]), 3) => &aws_lc_rs::signature::ECDSA_P521_SHA384_ASN1,
                     (Some([1, 3, 132, 0, 35]), 4) => &aws_lc_rs::signature::ECDSA_P521_SHA512_ASN1,
 
-                    // secp256k1 (not common in OCSP but handle just in case)
+                    // secp256k1 (not common but handle just in case)
                     #[cfg(not(feature = "fips"))]
                     (Some([1, 3, 132, 0, 10]), 2) => {
                         &aws_lc_rs::signature::ECDSA_P256K1_SHA256_ASN1
@@ -160,8 +215,8 @@ fn verify_ocsp_signature(
 
                     _ => {
                         return Err(anyhow::anyhow!(
-                            "Unsupported OCSP signature algorithm OID: {}",
-                            basic_response.signature_algorithm.algorithm
+                            "Unsupported signature algorithm OID: {}",
+                            signature_algorithm.algorithm
                         ))
                     }
                 }
@@ -169,21 +224,16 @@ fn verify_ocsp_signature(
 
             _ => {
                 return Err(anyhow::anyhow!(
-                    "Unsupported OCSP signature algorithm OID: {}",
-                    basic_response.signature_algorithm.algorithm
+                    "Unsupported signature algorithm OID: {}",
+                    signature_algorithm.algorithm
                 ))
             }
         };
 
-    let signature = basic_response.signature.as_raw_slice();
+    let signature = signature.as_raw_slice();
 
-    alg.verify_sig(
-        spki.subject_public_key.data.as_ref(),
-        &rasn::der::encode(&basic_response.tbs_response_data)
-            .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?,
-        signature,
-    )
-    .map_err(|_| anyhow::anyhow!("OCSP response signature verification failed"))?;
+    alg.verify_sig(spki.subject_public_key.as_raw_slice(), message, signature)
+        .map_err(|_| anyhow::anyhow!("Signature verification failed"))?;
 
     Ok(())
 }
@@ -191,7 +241,7 @@ fn verify_ocsp_signature(
 /// Verify OCSP signature, trying certificates in the certs field if initial verification fails.
 fn verify_ocsp_signature_with_certs_field(
     basic_response: &BasicOcspResponse,
-    issuer_cert: &X509Certificate,
+    issuer_cert: &rasn_pkix::Certificate,
 ) -> anyhow::Result<()> {
     let Err(mut last_error) = verify_ocsp_signature(basic_response, issuer_cert) else {
         return Ok(());
@@ -199,35 +249,42 @@ fn verify_ocsp_signature_with_certs_field(
 
     if let Some(ref certs) = basic_response.certs {
         for cert in certs {
-            // Re-encode the cert to DER and parse with x509-parser to get
-            // an X509Certificate struct for signature verification
-            let Ok(cert_der) = rasn::der::encode(cert) else {
+            let Ok(raw_tbs) = rasn::der::encode(&cert.tbs_certificate) else {
+                // Invalid certificate?
                 continue;
             };
-            let Ok((_, cert)) = X509Certificate::from_der(&cert_der) else {
-                continue;
-            };
-
-            if cert
-                .verify_signature(Some(issuer_cert.public_key()))
-                .is_err()
+            if verify_signature(
+                &cert.signature_value,
+                &cert.signature_algorithm,
+                &raw_tbs,
+                issuer_cert,
+            )
+            .is_err()
             {
                 // The certificate is not signed by the issuer, skip verification
                 continue;
             }
 
-            if !cert.extensions().iter().any(|e| {
-                let parsed = e.parsed_extension();
-                match parsed {
-                    ParsedExtension::ExtendedKeyUsage(eku) => eku.ocsp_signing,
-                    _ => false,
+            let Some(extensions) = &cert.tbs_certificate.extensions else {
+                // No extensions, no EKU, no OCSP...
+                continue;
+            };
+
+            if !extensions.iter().any(|e| {
+                if e.extn_id == rasn::types::Oid::JOINT_ISO_ITU_T_DS_CERTIFICATE_EXTENSION_AUTHORITY_EXT_KEY_USAGE {
+                    let Ok(ekus_parsed) = rasn::der::decode::<rasn_pkix::ExtKeyUsageSyntax>(&e.extn_value) else {
+                        return false;
+                    };
+                    ekus_parsed.iter().any(|eku| eku == rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SECURITY_MECHANISMS_PKIX_KP_OCSP_SIGNING)
+                } else {
+                    false
                 }
             }) {
                 // The certificate does not have OCSP Extended Key Usage, skip verification
                 continue;
             }
 
-            let Err(new_last_error) = verify_ocsp_signature(basic_response, &cert) else {
+            let Err(new_last_error) = verify_ocsp_signature(basic_response, cert) else {
                 return Ok(());
             };
             last_error = new_last_error;
@@ -276,12 +333,12 @@ fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> anyhow::Result<Vec
 /// for a different certificate.
 fn verify_single_res(
     single_res: &rasn_ocsp::SingleResponse,
-    leaf_cert: &X509Certificate,
-    issuer_cert: &X509Certificate,
+    leaf_cert: &rasn_pkix::Certificate,
+    issuer_cert: &rasn_pkix::Certificate,
 ) -> anyhow::Result<()> {
     if single_res.cert_id.issuer_name_hash.as_ref()
         != hash_oid(
-            issuer_cert.subject().as_raw(),
+            rasn::der::encode(&issuer_cert.tbs_certificate.subject)?,
             single_res.cert_id.hash_algorithm.algorithm.clone(),
         )?
     {
@@ -292,16 +349,18 @@ fn verify_single_res(
 
     if single_res.cert_id.issuer_key_hash.as_ref()
         != hash_oid(
-            issuer_cert.public_key().subject_public_key.data.as_ref(),
+            issuer_cert
+                .tbs_certificate
+                .subject_public_key_info
+                .subject_public_key
+                .as_raw_slice(),
             single_res.cert_id.hash_algorithm.algorithm.clone(),
         )?
     {
         return Err(anyhow::anyhow!("Issuer key hash mismatch in OCSP response"));
     }
 
-    let serial_number = &leaf_cert.tbs_certificate.serial;
-    let serial_int = BigInt::from_biguint(num_bigint::Sign::Plus, serial_number.to_owned());
-    if single_res.cert_id.serial_number != rasn::types::Integer::from(serial_int) {
+    if single_res.cert_id.serial_number != leaf_cert.tbs_certificate.serial_number {
         return Err(anyhow::anyhow!("Serial number mismatch in OCSP response"));
     }
 
@@ -414,11 +473,49 @@ pub async fn background_ocsp_task(
                             .as_secs() as i64;
                         let primary_san = cert
                             .first()
-                            .and_then(|leaf| X509Certificate::from_der(leaf).ok())
+                            .and_then(|leaf| {
+                                rasn::der::decode::<rasn_pkix::Certificate>(leaf).ok()
+                            })
                             .as_ref()
-                            .and_then(|leaf| leaf.1.subject_alternative_name().ok().flatten())
-                            .and_then(|san| san.value.general_names.first())
-                            .map(|san| san.to_string());
+                            .and_then(|leaf| {
+                                let Some(extensions) = &leaf.tbs_certificate.extensions else {
+                                    return None;
+                                };
+
+                                extensions.iter().find_map(|e| {
+                                    if e.extn_id == rasn::types::Oid::JOINT_ISO_ITU_T_DS_CERTIFICATE_EXTENSION_AUTHORITY_EXT_KEY_USAGE {
+                                        let Ok(sans_parsed) = rasn::der::decode::<rasn_pkix::SubjectAltName>(&e.extn_value) else {
+                                            return None;
+                                        };
+                                        sans_parsed.first().cloned()
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
+                            .and_then(|san| match san {
+                                rasn_pkix::GeneralName::DnsName(dns) => {
+                                    Some(dns.to_string())
+                                },
+                                rasn_pkix::GeneralName::IpAddress(ip) => {
+                                    if let Ok(ipv6_octets) = {
+                                        let v: &[u8] = &ip;
+                                        let v: Result<[u8; 16], _> = v.try_into();
+                                        v
+                                    } {
+                                        Some(std::net::IpAddr::from(ipv6_octets).to_string())
+                                    } else if let Ok(ipv4_octets) = {
+                                        let v: &[u8] = &ip;
+                                        let v: Result<[u8; 4], _> = v.try_into();
+                                        v
+                                    } {
+                                        Some(std::net::IpAddr::from(ipv4_octets).to_string())
+                                    } else {
+                                        None
+                                    }
+                                },
+                                _ => None
+                            });
                         let primary_san_formatted = if let Some(san) = &primary_san {
                             let mut fmtd = String::new();
                             fmtd.push_str(" (");
@@ -680,14 +777,28 @@ fn emit_metric(
 
 fn cert_identifier(chain: &[CertificateDer<'_>]) -> String {
     if let Some(leaf) = chain.first() {
-        if let Ok((_, cert)) = X509Certificate::from_der(leaf) {
-            if let Some(cn) = cert.subject().iter_common_name().next() {
-                if let Ok(cn_str) = cn.as_str() {
-                    return cn_str.to_string();
+        if let Ok(cert) = rasn::der::decode::<rasn_pkix::Certificate>(leaf) {
+            let rasn_pkix::Name::RdnSequence(s) = cert.tbs_certificate.subject;
+            if let Some(sf) = s.first() {
+                for satv in sf.to_vec() {
+                    if satv.r#type
+                        == rasn::types::Oid::JOINT_ISO_ITU_T_DS_ATTRIBUTE_TYPE_COMMON_NAME
+                    {
+                        if let Ok(der) = rasn::der::encode(&satv.value) {
+                            if let Ok(cn) = rasn::der::decode::<rasn_pkix::CommonName>(&der) {
+                                return String::from_utf8_lossy(cn.as_bytes()).to_string();
+                            }
+                        }
+                    }
                 }
             }
+
             // Fallback: first 8 bytes of SHA-256 SPKI hash
-            let pub_key = &cert.public_key().subject_public_key.data;
+            let pub_key = &cert
+                .tbs_certificate
+                .subject_public_key_info
+                .subject_public_key
+                .as_raw_slice();
             let mut hash_ctx = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256);
             hash_ctx.update(pub_key);
             let hash = hash_ctx.finish().as_ref().to_vec();
@@ -747,9 +858,9 @@ async fn fetch_ocsp_response_inner(
     let leaf = &chain[0];
     let issuer = &chain[1];
 
-    let (_, leaf_cert) = X509Certificate::from_der(leaf)
+    let leaf_cert = rasn::der::decode::<rasn_pkix::Certificate>(leaf)
         .map_err(|e| anyhow::anyhow!("Failed to parse leaf cert: {e}"))?;
-    let (_, issuer_cert) = X509Certificate::from_der(issuer)
+    let issuer_cert = rasn::der::decode::<rasn_pkix::Certificate>(issuer)
         .map_err(|e| anyhow::anyhow!("Failed to parse issuer cert: {e}"))?;
 
     let Some(ocsp_url) = extract_ocsp_url(&leaf_cert) else {
@@ -833,30 +944,31 @@ async fn fetch_ocsp_response_inner(
     Ok(Some((response_der, next_update)))
 }
 
-fn extract_ocsp_url(cert: &X509Certificate) -> Option<String> {
-    for ext in cert.extensions() {
-        if let x509_parser::extensions::ParsedExtension::AuthorityInfoAccess(aia) =
-            ext.parsed_extension()
-        {
-            for access_desc in &aia.accessdescs {
-                if access_desc.access_method
-                    == x509_parser::oid_registry::OID_PKIX_ACCESS_DESCRIPTOR_OCSP
-                {
-                    if let x509_parser::extensions::GeneralName::URI(uri) =
-                        access_desc.access_location
-                    {
-                        return Some(uri.to_string());
-                    }
+fn extract_ocsp_url(cert: &rasn_pkix::Certificate) -> Option<String> {
+    let extensions = cert.tbs_certificate.extensions.as_ref()?;
+
+    extensions.iter().find_map(|e| {
+        if e.extn_id == rasn::oid!("1.3.6.1.5.5.7.1.1") {
+            let Ok(aia_parsed) = rasn::der::decode::<rasn_pkix::AuthorityInfoAccessSyntax>(&e.extn_value) else {
+                return None;
+            };
+            aia_parsed.iter().find(|aia| aia.access_method == rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SECURITY_MECHANISMS_PKIX_AD_OCSP).and_then(|aia| {
+                match &aia.access_location {
+                    rasn_pkix::GeneralName::Uri(uri) => {
+                        Some(uri.to_string())
+                    },
+                    _ => None
                 }
-            }
+            })
+        } else {
+            None
         }
-    }
-    None
+    })
 }
 
 fn create_ocsp_request(
-    leaf: &X509Certificate,
-    issuer: &X509Certificate,
+    leaf: &rasn_pkix::Certificate,
+    issuer: &rasn_pkix::Certificate,
     use_sha256: bool,
 ) -> anyhow::Result<Vec<u8>> {
     // Hash issuer subject DN
@@ -868,11 +980,15 @@ fn create_ocsp_request(
     };
     #[cfg(feature = "fips")]
     let mut issuer_name_ctx = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256);
-    issuer_name_ctx.update(issuer.subject().as_raw());
+    issuer_name_ctx.update(&rasn::der::encode(&issuer.tbs_certificate.subject)?);
     let issuer_name_hash = issuer_name_ctx.finish().as_ref().to_vec();
 
     // Hash issuer public key value (excluding tag/length per RFC 6960)
-    let pub_key_bytes = &issuer.public_key().subject_public_key.data;
+    let pub_key_bytes = &issuer
+        .tbs_certificate
+        .subject_public_key_info
+        .subject_public_key
+        .as_raw_slice();
     #[cfg(not(feature = "fips"))]
     let mut issuer_key_ctx = if use_sha256 {
         aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256)
@@ -885,11 +1001,7 @@ fn create_ocsp_request(
     let issuer_key_hash = issuer_key_ctx.finish().as_ref().to_vec();
 
     // Serial number
-    let serial_number = &leaf.tbs_certificate.serial;
-    let serial_int = rasn::types::Integer::from(BigInt::from_biguint(
-        num_bigint::Sign::Plus,
-        serial_number.to_owned(),
-    ));
+    let serial_int = leaf.tbs_certificate.serial_number.clone();
 
     let cert_id = CertId {
         hash_algorithm: rasn_pkix::AlgorithmIdentifier {

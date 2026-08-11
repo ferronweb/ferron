@@ -1915,7 +1915,6 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "hyper-util",
- "num-bigint",
  "parking_lot",
  "rand 0.10.2",
  "rasn",
@@ -1927,7 +1926,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "webpki-roots",
- "x509-parser",
 ]
 
 [[package]]
