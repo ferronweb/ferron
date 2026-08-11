@@ -28,6 +28,7 @@ rustls = { version = "0.23", default-features = false, features = ["std", "aws_l
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 serde_json = "1"
+crc32fast = "1.4"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }

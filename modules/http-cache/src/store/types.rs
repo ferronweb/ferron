@@ -26,7 +26,7 @@ pub struct StoredVariant {
     pub vary: VaryRule,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StoredEntry {
     pub scope: CacheScope,
     pub base_key: String,

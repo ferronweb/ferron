@@ -1317,6 +1317,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "cidr",
+ "crc32fast",
  "dashmap",
  "ferron-core",
  "ferron-http",

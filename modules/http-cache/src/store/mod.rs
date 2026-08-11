@@ -1,4 +1,5 @@
 mod key;
+pub(crate) mod persist;
 mod purge;
 mod tests;
 pub mod types;
