@@ -86,10 +86,15 @@ impl ModuleLoader for HttpCacheModuleLoader {
     #[inline]
     fn register_modules(
         &mut self,
-        _registry: Arc<ferron_core::registry::Registry>,
+        registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Rebuild the event sink handle on every load so persistence log
+        // events follow the latest observability configuration.
+        let events =
+            ferron_observability::build_composite_sink(&registry, &config.global_config, None)?;
+        self.persist.attach_events(events);
         if self.cache.is_none() {
             let module = Arc::new(HttpCacheModule {
                 persist: self.persist.clone(),
@@ -350,9 +355,13 @@ impl ferron_core::Module for HttpCacheModule {
         &self,
         runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let _ = SECONDARY_RUNTIME
-            .set(runtime.block_on(async move { tokio::runtime::Handle::current() }));
-        self.persist.start();
+        let persist = self.persist.clone();
+        let _ = SECONDARY_RUNTIME.set(runtime.block_on(async move {
+            // `start` grabs the current tokio handle, which is the secondary
+            // runtime while running inside `block_on`.
+            persist.start();
+            tokio::runtime::Handle::current()
+        }));
         Ok(())
     }
 }

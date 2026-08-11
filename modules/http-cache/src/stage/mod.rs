@@ -165,14 +165,17 @@ impl HttpCacheStage {
                     if let Some(dir) = persist_config.dir {
                         let label = zone_id.label().to_string();
                         let zone_dir = dir.join(sanitize_zone_label(&label));
+                        // Replay the on-disk state before registering the zone
+                        // with the writer: once registered, the writer can
+                        // compact (and truncate) the journal at any time.
+                        self.restore_zone_from_disk(&store, &label, &zone_dir).await;
                         let persist = self.persist.register_zone(
                             label,
-                            zone_dir.clone(),
+                            zone_dir,
                             persist_config.include_private,
                             persist_config.interval,
                         );
                         store.attach_persistence(persist);
-                        self.restore_zone_from_disk(&store, &zone_dir).await;
                     }
                     ve.insert(store).downgrade()
                 }
@@ -210,38 +213,62 @@ impl HttpCacheStage {
     }
 
     /// Replay a zone's snapshot and journal into a freshly created store.
-    async fn restore_zone_from_disk(&self, store: &Arc<CacheStore>, zone_dir: &Path) {
+    async fn restore_zone_from_disk(&self, store: &Arc<CacheStore>, label: &str, zone_dir: &Path) {
         let stats = restore_zone(
             zone_dir,
             |key, entry| store.restore_entry(key, entry),
             |key| store.restore_delete(&key),
         )
         .await;
-        ferron_core::log_debug!(
-            "cache persistence: restored zone `{}`: {} records, {} entries, {} tombstones",
-            zone_dir.display(),
-            stats.records,
-            stats.puts,
-            stats.deletes,
+        self.persist.emit_log(
+            ferron_observability::LogLevel::Debug,
+            format!(
+                "cache persistence: restored zone `{label}`: {} records, {} entries, {} tombstones",
+                stats.records, stats.puts, stats.deletes,
+            ),
+            "Cache entries restored from disk at startup",
+            vec![(
+                "ferron.cache.zone",
+                ferron_observability::LogAttributeValue::String(label.to_string()),
+            )],
         );
         match stats.stopped {
             None => {}
             Some(RestoreStop::SnapshotIo | RestoreStop::JournalIo) => {
-                ferron_core::log_warn!(
-                    "cache persistence: could not read on-disk state for `{}`",
-                    zone_dir.display()
+                self.persist.emit_log(
+                    ferron_observability::LogLevel::Warn,
+                    format!("cache persistence: could not read on-disk state for `{label}`"),
+                    "Could not read the persistence files on disk",
+                    vec![(
+                        "ferron.cache.zone",
+                        ferron_observability::LogAttributeValue::String(label.to_string()),
+                    )],
                 );
             }
             Some(RestoreStop::SnapshotCorrupt | RestoreStop::JournalCorrupt) => {
-                ferron_core::log_warn!(
-                    "cache persistence: corrupted record in `{}`; replay stopped, newer records were ignored",
-                    zone_dir.display()
+                self.persist.emit_log(
+                    ferron_observability::LogLevel::Warn,
+                    format!(
+                        "cache persistence: corrupted record in `{label}`; replay stopped, newer records were ignored"
+                    ),
+                    "Corrupted record in the persistence files; replay stopped",
+                    vec![(
+                        "ferron.cache.zone",
+                        ferron_observability::LogAttributeValue::String(label.to_string()),
+                    )],
                 );
             }
             Some(RestoreStop::SnapshotTruncated | RestoreStop::JournalTruncated) => {
-                ferron_core::log_debug!(
-                    "cache persistence: truncated tail in `{}`; treating as a clean crash stop",
-                    zone_dir.display()
+                self.persist.emit_log(
+                    ferron_observability::LogLevel::Debug,
+                    format!(
+                        "cache persistence: truncated tail in `{label}`; treating as a clean crash stop"
+                    ),
+                    "Truncated tail in the persistence files, treated as a clean stop",
+                    vec![(
+                        "ferron.cache.zone",
+                        ferron_observability::LogAttributeValue::String(label.to_string()),
+                    )],
                 );
             }
         }

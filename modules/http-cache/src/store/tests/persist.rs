@@ -5,7 +5,7 @@ use super::*;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use parking_lot::{Condvar, Mutex};
+use tokio::sync::Notify;
 
 use crate::store::persist::writer::{restore_zone, ZonePersistState};
 
@@ -35,8 +35,8 @@ impl Drop for TempDir {
     }
 }
 
-fn wake_pair() -> Arc<(Mutex<bool>, Condvar)> {
-    Arc::new((Mutex::new(false), Condvar::new()))
+fn wake_pair() -> Arc<Notify> {
+    Arc::new(Notify::new())
 }
 
 fn persist_zone(dir: PathBuf) -> Arc<ZonePersistState> {
@@ -47,6 +47,7 @@ fn persist_zone(dir: PathBuf) -> Arc<ZonePersistState> {
         Duration::from_secs(1),
         1024,
         wake_pair(),
+        None,
     ))
 }
 

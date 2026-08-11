@@ -1,11 +1,11 @@
 //! Mutation journal writer for cache persistence.
 //!
 //! Request threads feed fully encoded records into a bounded per-zone queue
-//! (`record_put` / `record_delete`); a single writer thread is the only
-//! consumer and appends batches to the per-zone journal file. Batches go to
-//! the page cache without a per-batch fsync; durability is provided by the
-//! snapshot compaction (which fsyncs) and by the graceful final flush on
-//! shutdown, which syncs the journal.
+//! (`record_put` / `record_delete`); a single writer task on the secondary
+//! runtime is the only consumer and appends batches to the per-zone journal
+//! file. Batches go to the page cache without a per-batch fsync; durability
+//! is provided by the snapshot compaction (which fsyncs) and by the graceful
+//! final flush on shutdown, which syncs the journal.
 //!
 //! Crash-safety rules:
 //!
@@ -19,22 +19,26 @@
 //! - A flush failure disables the zone's persistence (memory caching keeps
 //!   serving) and is reported once.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
-use std::thread::{self, JoinHandle};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
-use parking_lot::{Condvar, Mutex};
+use ferron_observability::{CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel};
+use parking_lot::Mutex;
+use tokio::sync::Notify;
 
 use crate::policy::CacheScope;
 use crate::store::persist::record::{
     decode_next, encode_delete, encode_put, DecodeError, DecodedRecord,
 };
 use crate::store::types::StoredEntry;
+
+const LOG_TARGET: &str = "ferron-http-cache";
 
 pub const SNAPSHOT_FILE: &str = "snapshot";
 pub const JOURNAL_FILE: &str = "journal";
@@ -76,7 +80,11 @@ pub struct ZonePersistState {
     warned: AtomicBool,
     last_error: Mutex<Option<String>>,
     journal: Mutex<Option<File>>,
-    wake: Arc<(Mutex<bool>, Condvar)>,
+    /// Wakes the writer task when a record is queued or a zone is registered.
+    wake: Arc<Notify>,
+    /// Back-reference to the manager, used to reach the configured event
+    /// sinks for log events. `None` for states built directly in tests.
+    manager: Option<Weak<PersistManager>>,
 }
 
 impl ZonePersistState {
@@ -87,7 +95,8 @@ impl ZonePersistState {
         include_private: bool,
         persist_interval: Duration,
         queue_capacity: usize,
-        wake: Arc<(Mutex<bool>, Condvar)>,
+        wake: Arc<Notify>,
+        manager: Option<Weak<PersistManager>>,
     ) -> Self {
         Self::with_compact_interval(
             label,
@@ -97,6 +106,7 @@ impl ZonePersistState {
             COMPACT_INTERVAL,
             queue_capacity,
             wake,
+            manager,
         )
     }
 
@@ -108,7 +118,8 @@ impl ZonePersistState {
         persist_interval: Duration,
         compact_interval: Duration,
         queue_capacity: usize,
-        wake: Arc<(Mutex<bool>, Condvar)>,
+        wake: Arc<Notify>,
+        manager: Option<Weak<PersistManager>>,
     ) -> Self {
         // First flush is due immediately so the journal is written promptly
         // after the first mutation instead of after a full interval.
@@ -131,6 +142,7 @@ impl ZonePersistState {
             last_error: Mutex::new(None),
             journal: Mutex::new(None),
             wake,
+            manager,
         }
     }
 
@@ -196,10 +208,20 @@ impl ZonePersistState {
             }
             self.dropped.fetch_add(drop as u64, Ordering::Relaxed);
             if !self.drop_warned.swap(true, Ordering::Relaxed) {
-                ferron_core::log_warn!(
-                    "cache persistence: dropping {} journal record(s) for zone `{}`: the write queue exceeded its capacity and the oldest records were discarded",
-                    drop,
-                    self.label
+                self.emit_log(
+                    LogLevel::Warn,
+                    format!(
+                        "cache persistence: dropping {drop} journal record(s) for zone `{}`: the write queue exceeded its capacity and the oldest records were discarded",
+                        self.label
+                    ),
+                    "Journal records dropped because the write queue exceeded capacity",
+                    vec![
+                        (
+                            "ferron.cache.zone",
+                            LogAttributeValue::String(self.label.clone()),
+                        ),
+                        ("cache.dropped.count", LogAttributeValue::I64(drop as i64)),
+                    ],
                 );
             }
         }
@@ -207,9 +229,20 @@ impl ZonePersistState {
     }
 
     fn wake(&self) {
-        let (lock, condvar) = &*self.wake;
-        *lock.lock() = true;
-        condvar.notify_one();
+        self.wake.notify_one();
+    }
+
+    /// Emit a structured log event through the configured event sinks.
+    fn emit_log(
+        &self,
+        level: LogLevel,
+        message: String,
+        summary: &'static str,
+        attributes: Vec<(&'static str, LogAttributeValue)>,
+    ) {
+        if let Some(manager) = self.manager.as_ref().and_then(Weak::upgrade) {
+            manager.emit_log(level, message, summary, attributes);
+        }
     }
 
     /// Whether the interval since the last flush has elapsed.
@@ -334,6 +367,21 @@ impl ZonePersistState {
         self.active.store(false, Ordering::Relaxed);
         if !self.warned.swap(true, Ordering::Relaxed) {
             *self.last_error.lock() = Some(format!("{error}"));
+            self.emit_log(
+                LogLevel::Warn,
+                format!(
+                    "cache persistence: journal flush failed for zone `{}`: {error}",
+                    self.label
+                ),
+                "Cache persistence journal flush failed",
+                vec![
+                    (
+                        "ferron.cache.zone",
+                        LogAttributeValue::String(self.label.clone()),
+                    ),
+                    ("error", LogAttributeValue::String(format!("{error}"))),
+                ],
+            );
         }
     }
 }
@@ -525,30 +573,58 @@ fn sync_dir(path: &Path) -> io::Result<()> {
     File::open(path)?.sync_all()
 }
 
-/// Registry of per-zone persistence states plus the writer thread. One
+/// Registry of per-zone persistence states plus the writer task. One
 /// instance lives for the whole process (the module loader), surviving
 /// config reloads.
 pub struct PersistManager {
     zones: Mutex<HashMap<String, Arc<ZonePersistState>>>,
-    wake: Arc<(Mutex<bool>, Condvar)>,
+    wake: Arc<Notify>,
     stop: Arc<AtomicBool>,
-    thread: OnceLock<JoinHandle<()>>,
+    task: OnceLock<tokio::task::JoinHandle<()>>,
+    /// Configured event sinks for persistence log events. Swapped on config
+    /// reload so events follow the latest observability configuration.
+    events: Mutex<Arc<CompositeEventSink>>,
 }
 
 impl PersistManager {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             zones: Mutex::new(HashMap::new()),
-            wake: Arc::new((Mutex::new(false), Condvar::new())),
+            wake: Arc::new(Notify::new()),
             stop: Arc::new(AtomicBool::new(false)),
-            thread: OnceLock::new(),
+            task: OnceLock::new(),
+            events: Mutex::new(Arc::new(CompositeEventSink::new(Vec::new()))),
         })
+    }
+
+    /// Replace the configured event sink handle, e.g. after a config reload
+    /// rebuilt the sinks. Log events are emitted into the latest handle.
+    pub fn attach_events(&self, events: Arc<CompositeEventSink>) {
+        *self.events.lock() = events;
+    }
+
+    /// Emit a structured log event through the configured event sinks.
+    pub(crate) fn emit_log(
+        &self,
+        level: LogLevel,
+        message: String,
+        summary: &'static str,
+        attributes: Vec<(&'static str, LogAttributeValue)>,
+    ) {
+        self.events.lock().emit(Event::Log(LogEvent {
+            level,
+            message,
+            summary: Cow::Borrowed(summary),
+            target: LOG_TARGET,
+            attributes,
+            trace_context: None,
+        }));
     }
 
     /// Get or create the persistence state for `label`. Idempotent: the same
     /// label always maps to the same state for the process lifetime.
     pub fn register_zone(
-        &self,
+        self: &Arc<Self>,
         label: String,
         dir: PathBuf,
         include_private: bool,
@@ -565,11 +641,10 @@ impl PersistManager {
             persist_interval,
             DEFAULT_QUEUE_CAPACITY,
             self.wake.clone(),
+            Some(Arc::downgrade(self)),
         ));
         zones.insert(label, state.clone());
-        let (lock, condvar) = &*self.wake;
-        *lock.lock() = true;
-        condvar.notify_one();
+        self.wake.notify_one();
         state
     }
 
@@ -578,26 +653,27 @@ impl PersistManager {
         self.zones.lock().remove(label);
     }
 
-    /// Idempotently start the writer thread. The module start hook runs on
-    /// every config reload, so this must be safe to call repeatedly.
-    pub fn start(self: &Arc<Self>) {
-        let _ = self.thread.get_or_init(|| {
+    /// Idempotently spawn the writer task on `handle`. The module start hook
+    /// runs on every config reload, so this must be safe to call repeatedly.
+    pub fn start_on(self: &Arc<Self>, handle: &tokio::runtime::Handle) {
+        let _ = self.task.get_or_init(|| {
             let manager = Arc::clone(self);
-            ferron_core::log_debug!("cache persistence: writer thread started");
-            thread::Builder::new()
-                .name("cache-persist".to_string())
-                .spawn(move || writer_main(manager))
-                .expect("failed to spawn cache persistence writer thread")
+            handle.spawn(async move { manager.run().await })
         });
     }
 
-    /// Ask the writer thread to exit after a final flush. Used by tests; the
+    /// Spawn the writer task on the current tokio handle. Call this from
+    /// inside the secondary runtime (e.g. wrapped in `Runtime::block_on`).
+    pub fn start(self: &Arc<Self>) {
+        let handle = tokio::runtime::Handle::current();
+        self.start_on(&handle);
+    }
+
+    /// Ask the writer task to exit after a final flush. Used by tests; the
     /// production path observes the process shutdown token instead.
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Relaxed);
-        let (lock, condvar) = &*self.wake;
-        *lock.lock() = true;
-        condvar.notify_one();
+        self.wake.notify_one();
     }
 
     /// Flush every zone and sync its journal. Blocks until done.
@@ -626,9 +702,17 @@ impl PersistManager {
         for zone in zones {
             match zone.maybe_compact() {
                 Ok(true) => {
-                    ferron_core::log_debug!(
-                        "cache persistence: compacted zone `{}` snapshot",
-                        zone.label()
+                    self.emit_log(
+                        LogLevel::Debug,
+                        format!(
+                            "cache persistence: compacted zone `{}` snapshot",
+                            zone.label()
+                        ),
+                        "Snapshot compaction completed",
+                        vec![(
+                            "ferron.cache.zone",
+                            LogAttributeValue::String(zone.label().to_string()),
+                        )],
                     );
                 }
                 Ok(false) => {}
@@ -636,29 +720,46 @@ impl PersistManager {
                     // Compaction is a durability optimization, not the source
                     // of truth: the journal keeps working, so warn and retry
                     // on the next cycle instead of disabling the zone.
-                    ferron_core::log_warn!(
-                        "cache persistence: snapshot compaction failed for zone `{}`: {error}",
-                        zone.label()
+                    self.emit_log(
+                        LogLevel::Warn,
+                        format!(
+                            "cache persistence: snapshot compaction failed for zone `{}`: {error}",
+                            zone.label()
+                        ),
+                        "Snapshot compaction failed",
+                        vec![(
+                            "ferron.cache.zone",
+                            LogAttributeValue::String(zone.label().to_string()),
+                        )],
                     );
                 }
             }
         }
     }
-}
 
-fn writer_main(manager: Arc<PersistManager>) {
-    loop {
-        if manager.stop.load(Ordering::Relaxed)
-            || ferron_core::shutdown::SHUTDOWN_TOKEN.load().is_cancelled()
-        {
-            manager.flush_all();
-            return;
+    /// Writer task body: flush due zones and compact due zones, then wait
+    /// for a queued record, the poll interval, or shutdown.
+    async fn run(self: Arc<Self>) {
+        self.emit_log(
+            LogLevel::Debug,
+            "cache persistence: writer task started".to_string(),
+            "Cache persistence writer task started",
+            vec![],
+        );
+        loop {
+            if self.stop.load(Ordering::Relaxed)
+                || ferron_core::shutdown::SHUTDOWN_TOKEN.load().is_cancelled()
+            {
+                self.flush_all();
+                return;
+            }
+            self.drain_due();
+            self.maybe_compact_all();
+            tokio::select! {
+                _ = self.wake.notified() => {}
+                _ = tokio::time::sleep(WRITER_POLL_INTERVAL) => {}
+            }
         }
-        manager.drain_due();
-        manager.maybe_compact_all();
-        let (lock, condvar) = &*manager.wake;
-        let mut guard = lock.lock();
-        let _ = condvar.wait_for(&mut guard, WRITER_POLL_INTERVAL);
     }
 }
 
@@ -676,7 +777,7 @@ mod tests {
     use http::header::CACHE_CONTROL;
     use http::HeaderMap;
     use http::HeaderValue;
-    use parking_lot::{Condvar, Mutex};
+    use tokio::sync::Notify;
 
     use super::{
         restore_zone, sanitize_zone_label, PersistManager, RestoreStop, ZonePersistState,
@@ -712,8 +813,8 @@ mod tests {
         }
     }
 
-    fn wake_pair() -> Arc<(Mutex<bool>, Condvar)> {
-        Arc::new((Mutex::new(false), Condvar::new()))
+    fn wake_pair() -> Arc<Notify> {
+        Arc::new(Notify::new())
     }
 
     fn public_entry() -> StoredEntry {
@@ -770,6 +871,7 @@ mod tests {
             Duration::from_secs(1),
             4,
             wake_pair(),
+            None,
         );
         zone.record_put("k1", &public_entry());
         zone.record_delete("k2");
@@ -840,6 +942,7 @@ mod tests {
             Duration::from_secs(1),
             8,
             wake_pair(),
+            None,
         );
         zone.record_put("k1", &entry);
         zone.flush_all_sync().unwrap();
@@ -862,6 +965,7 @@ mod tests {
             Duration::from_secs(1),
             8,
             wake_pair(),
+            None,
         );
         zone.record_put("k2", &entry);
         zone.flush_all_sync().unwrap();
@@ -888,6 +992,7 @@ mod tests {
             Duration::from_secs(1),
             4,
             wake_pair(),
+            None,
         );
         // Fill to capacity, then overflow.
         for i in 0..6 {
@@ -944,6 +1049,7 @@ mod tests {
             Duration::from_secs(3600),
             8,
             wake_pair(),
+            None,
         );
         // Due immediately after creation (no flush yet this "interval").
         assert!(zone.flush_due());
@@ -958,6 +1064,7 @@ mod tests {
             Duration::from_millis(10),
             8,
             wake_pair(),
+            None,
         );
         assert!(zone.flush_due());
         zone.flush_all_sync().unwrap();
@@ -976,10 +1083,15 @@ mod tests {
     }
 
     #[test]
-    fn writer_thread_flushes_periodically() {
+    fn writer_task_flushes_periodically() {
         let dir = TempDir::new();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
         let manager = PersistManager::new();
-        manager.start();
+        manager.start_on(rt.handle());
         let zone = manager.register_zone(
             "zone".to_string(),
             dir.path().clone(),
@@ -988,7 +1100,7 @@ mod tests {
         );
         zone.record_put("k1", &public_entry());
 
-        // Poll until the writer thread has written the journal.
+        // Poll until the writer task has written the journal.
         let mut found = false;
         for _ in 0..100 {
             std::thread::sleep(Duration::from_millis(20));
@@ -1000,8 +1112,10 @@ mod tests {
                 }
             }
         }
-        assert!(found, "writer thread did not flush the journal");
+        assert!(found, "writer task did not flush the journal");
         manager.stop();
+        // Give the task a chance to observe the stop and exit cleanly.
+        std::thread::sleep(Duration::from_millis(50));
     }
 
     #[test]
@@ -1014,6 +1128,7 @@ mod tests {
             Duration::from_secs(1),
             8,
             wake_pair(),
+            None,
         );
         let mut live = HashMap::new();
         live.insert("k1".to_string(), public_entry());
@@ -1066,6 +1181,7 @@ mod tests {
             Duration::from_secs(1),
             8,
             wake_pair(),
+            None,
         );
         zone.record_put("k1", &public_entry());
         zone.flush_all_sync().unwrap();
@@ -1085,6 +1201,7 @@ mod tests {
             Duration::from_millis(10),
             8,
             wake_pair(),
+            None,
         );
         zone.register_entry_source(Box::new(|visit| {
             let _ = visit;
@@ -1111,6 +1228,7 @@ mod tests {
                     Duration::from_secs(1),
                     8,
                     wake_pair(),
+                    None,
                 );
                 let mut live = HashMap::new();
                 live.insert("k1".to_string(), public_entry());
@@ -1176,6 +1294,7 @@ mod tests {
                     Duration::from_secs(1),
                     8,
                     wake_pair(),
+                    None,
                 );
                 zone.record_put("k1", &public_entry());
                 zone.flush_all_sync().unwrap();
@@ -1217,6 +1336,7 @@ mod tests {
                     Duration::from_secs(1),
                     8,
                     wake_pair(),
+                    None,
                 );
                 zone.record_put("k1", &public_entry());
                 zone.record_put("k2", &public_entry());
@@ -1255,6 +1375,7 @@ mod tests {
                     Duration::from_secs(1),
                     8,
                     wake_pair(),
+                    None,
                 );
                 let mut live = HashMap::new();
                 live.insert("k1".to_string(), public_entry());

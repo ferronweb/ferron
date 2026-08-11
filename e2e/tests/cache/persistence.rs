@@ -132,13 +132,20 @@ async fn test_cache_persistence_survives_restart() {
     );
     drop(response);
 
-    // Wait for the writer thread to flush the journal (interval is 1s).
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-    // The journal must now exist on the mounted persist directory.
+    // Wait for the writer task to flush the journal (interval is 1s).
     let journal = persist_dir.path().join("global").join("journal");
+    let journal_written = async {
+        for _ in 0..25 {
+            if std::fs::metadata(&journal).is_ok_and(|meta| meta.len() > 0) {
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+        false
+    }
+    .await;
     assert!(
-        std::fs::metadata(&journal).is_ok_and(|meta| meta.len() > 0),
+        journal_written,
         "expected a non-empty journal at {}",
         journal.display()
     );
