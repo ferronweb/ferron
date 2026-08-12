@@ -779,16 +779,22 @@ fn cert_identifier(chain: &[CertificateDer<'_>]) -> String {
         if let Ok(cert) = rasn::der::decode::<rasn_pkix::Certificate>(leaf) {
             let rasn_pkix::Name::RdnSequence(s) = cert.tbs_certificate.subject;
             if let Some(sf) = s.first() {
-                for satv in sf.to_vec() {
-                    if satv.r#type
-                        == rasn::types::Oid::JOINT_ISO_ITU_T_DS_ATTRIBUTE_TYPE_COMMON_NAME
-                    {
-                        if let Ok(der) = rasn::der::encode(&satv.value) {
-                            if let Ok(cn) = rasn::der::decode::<rasn_pkix::CommonName>(&der) {
-                                return String::from_utf8_lossy(cn.as_bytes()).to_string();
-                            }
-                        }
-                    }
+                if let Some(cn) = sf
+                    .to_vec()
+                    .iter()
+                    .filter(|satv| {
+                        satv.r#type
+                            == rasn::types::Oid::JOINT_ISO_ITU_T_DS_ATTRIBUTE_TYPE_COMMON_NAME
+                    })
+                    .filter_map(|satv| {
+                        // Transform Any -> DER -> CommonName
+                        rasn::der::encode(&satv.value)
+                            .ok()
+                            .and_then(|der| rasn::der::decode::<rasn_pkix::CommonName>(&der).ok())
+                    })
+                    .next()
+                {
+                    return String::from_utf8_lossy(cn.as_bytes()).to_string();
                 }
             }
 
