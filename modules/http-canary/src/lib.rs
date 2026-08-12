@@ -4,6 +4,8 @@
 //! testing. The `canary` directive assigns each request to a named variant
 //! through a consistent hash ring and exposes the selected variant as
 //! interpolation variables (`canary.variant`, `canary.weight`, `canary.key`).
+//! With `set_cookie`, Ferron persists the sticky key in a cookie on the
+//! response, so the assignment survives client IP changes.
 //!
 //! The ring uses consistent hashing, so changing variant weights only moves
 //! the requests whose nearest virtual node was added or removed. Existing
@@ -25,11 +27,12 @@ use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::variables::{resolve_variable, var};
-use ferron_http::HttpContext;
+use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{
     Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
 };
 use parking_lot::RwLock;
+use typemap_rev::TypeMapKey;
 
 use crate::config::{parse_canary_config, CanaryAffinity, CanaryConfig};
 use crate::ring::VariantRing;
@@ -43,6 +46,29 @@ const CANARY_WEIGHT_VAR: &str = "canary.weight";
 
 /// Variable holding the sticky key value used for assignment.
 const CANARY_KEY_VAR: &str = "canary.key";
+
+/// Pending `Set-Cookie` to apply to the response in the inverse phase.
+///
+/// The canary stage runs before the response exists, so the cookie is
+/// staged here and written by [`CanaryStage::run_inverse`].
+struct PendingCanaryCookie {
+    name: String,
+    value: String,
+}
+
+impl TypeMapKey for PendingCanaryCookie {
+    type Value = PendingCanaryCookie;
+}
+
+/// Resolved sticky key for a request.
+struct AffinityKey {
+    /// The value hashed into the variant ring.
+    value: String,
+    /// Where the key came from: `ip`, `cookie`, `header`, `hash`, or `generated`.
+    source: &'static str,
+    /// Whether Ferron must persist the key in the affinity cookie.
+    set_cookie: bool,
+}
 
 /// Compiled canary configuration for a specific configuration generation.
 struct CanaryCompiled {
@@ -198,19 +224,29 @@ impl Stage<HttpContext> for CanaryStage {
 
         let compiled = self.state.get_or_insert(&config_key, &config);
 
-        let (key_value, key_source) = affinity_key(&compiled.config.affinity, ctx);
-        let variant_index = compiled.ring.get(key_value.as_bytes());
+        let resolution = affinity_key(&compiled.config.affinity, ctx, compiled.config.set_cookie);
+        let variant_index = compiled.ring.get(resolution.value.as_bytes());
         let Some(variant) = variant_index.and_then(|i| compiled.config.variants.get(i)) else {
             // No variants configured — nothing to branch on.
             return Ok(true);
         };
 
         let variant_name = variant.name.clone();
+        if resolution.set_cookie {
+            if let CanaryAffinity::Cookie(name) = &compiled.config.affinity {
+                ctx.extensions
+                    .insert::<PendingCanaryCookie>(PendingCanaryCookie {
+                        name: name.clone(),
+                        value: resolution.value.clone(),
+                    });
+            }
+        }
         ctx.variables
             .insert(CANARY_VARIANT_VAR.to_string(), variant_name.clone());
         ctx.variables
             .insert(CANARY_WEIGHT_VAR.to_string(), variant.weight.to_string());
-        ctx.variables.insert(CANARY_KEY_VAR.to_string(), key_value);
+        ctx.variables
+            .insert(CANARY_KEY_VAR.to_string(), resolution.value);
 
         custom_access_log_fields(ctx).insert(
             "ferron.canary.variant".into(),
@@ -246,7 +282,7 @@ impl Stage<HttpContext> for CanaryStage {
         );
         ctx.get_span_attributes().insert(
             "ferron.canary.key_source",
-            TraceAttributeValue::String(key_source),
+            TraceAttributeValue::String(resolution.source.to_string()),
         );
         ctx.get_span_attributes().insert(
             "ferron.canary.weight",
@@ -254,6 +290,36 @@ impl Stage<HttpContext> for CanaryStage {
         );
 
         Ok(true)
+    }
+
+    async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
+        let Some(pending) = ctx.extensions.remove::<PendingCanaryCookie>() else {
+            return Ok(());
+        };
+
+        let cookie_value = format!("{}={}; Path=/", pending.name, pending.value);
+        let Ok(header_value) = http::HeaderValue::from_str(&cookie_value) else {
+            return Ok(());
+        };
+
+        if ctx.res.is_none() {
+            ctx.res = Some(HttpResponse::BuiltinError(404, None));
+        }
+
+        match &mut ctx.res {
+            Some(HttpResponse::Custom(resp)) => {
+                resp.headers_mut()
+                    .insert(http::header::SET_COOKIE, header_value);
+            }
+            Some(HttpResponse::BuiltinError(_, headers)) => {
+                headers
+                    .get_or_insert(http::HeaderMap::default())
+                    .insert(http::header::SET_COOKIE, header_value);
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 }
 
@@ -284,9 +350,10 @@ impl CanaryState {
 ///
 /// When the source is missing (no cookie, no header, unresolvable variable),
 /// the client IP is hashed instead, so every client still receives a stable
-/// variant.
+/// variant. With `set_cookie` enabled and a missing cookie, a random key is
+/// generated instead and flagged for persistence in the response cookie.
 #[inline]
-fn affinity_key(affinity: &CanaryAffinity, ctx: &HttpContext) -> (String, String) {
+fn affinity_key(affinity: &CanaryAffinity, ctx: &HttpContext, set_cookie: bool) -> AffinityKey {
     let candidate = match affinity {
         CanaryAffinity::Ip => None,
         CanaryAffinity::Cookie(name) => Some(resolve_variable(
@@ -302,12 +369,41 @@ fn affinity_key(affinity: &CanaryAffinity, ctx: &HttpContext) -> (String, String
 
     match candidate {
         Some(Some(value)) if !value.is_empty() && !is_unresolved(&value, affinity, ctx) => {
-            (value, affinity.describe())
+            AffinityKey {
+                value,
+                source: affinity_source(affinity),
+                set_cookie: false,
+            }
         }
-        _ => (
-            resolve_variable(var::REMOTE_IP, ctx).unwrap_or_default(),
-            "ip".to_string(),
-        ),
+        Some(None) if set_cookie && matches!(affinity, CanaryAffinity::Cookie(_)) => {
+            // No cookie in the request: generate a fresh sticky key and
+            // persist it in a Set-Cookie response header.
+            let random_bytes: [u8; 16] = rand::random();
+            AffinityKey {
+                value: random_bytes
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<String>(),
+                source: "generated",
+                set_cookie: true,
+            }
+        }
+        _ => AffinityKey {
+            value: resolve_variable(var::REMOTE_IP, ctx).unwrap_or_default(),
+            source: "ip",
+            set_cookie: false,
+        },
+    }
+}
+
+/// Plain-text source label for the span attribute.
+#[inline]
+fn affinity_source(affinity: &CanaryAffinity) -> &'static str {
+    match affinity {
+        CanaryAffinity::Ip => "ip",
+        CanaryAffinity::Cookie(_) => "cookie",
+        CanaryAffinity::Header(_) => "header",
+        CanaryAffinity::Hash(_) => "hash",
     }
 }
 
@@ -384,6 +480,14 @@ mod tests {
     }
 
     fn make_canary_config(affinity: &[&str], variants: &[(&str, i64)]) -> LayeredConfiguration {
+        make_canary_config_with_set_cookie(affinity, variants, false)
+    }
+
+    fn make_canary_config_with_set_cookie(
+        affinity: &[&str],
+        variants: &[(&str, i64)],
+        set_cookie: bool,
+    ) -> LayeredConfiguration {
         let mut block_directives = StdHashMap::new();
         if !affinity.is_empty() {
             block_directives.insert(
@@ -406,6 +510,9 @@ mod tests {
                 })
                 .collect(),
         );
+        if set_cookie {
+            block_directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        }
 
         let mut top_directives = StdHashMap::new();
         top_directives.insert(
@@ -613,5 +720,160 @@ mod tests {
 
         // Identical configuration must keep identical assignments.
         assert_eq!(first_variant, second_variant);
+    }
+
+    #[tokio::test]
+    async fn set_cookie_generates_key_and_persists_cookie() {
+        let config = make_canary_config_with_set_cookie(
+            &["cookie", "ab_variant"],
+            &[("stable", 1), ("new", 1)],
+            true,
+        );
+        let mut ctx = make_test_context("/any", Some(config));
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+        stage.run(&mut ctx).await.unwrap();
+        stage.run_inverse(&mut ctx).await.unwrap();
+
+        // A random key was generated and used for the assignment.
+        let key = ctx.variables.get(CANARY_KEY_VAR).cloned().unwrap();
+        assert_eq!(key.len(), 32);
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+
+        // The response carries the affinity cookie.
+        let cookie = ctx
+            .res
+            .as_ref()
+            .and_then(|res| match res {
+                HttpResponse::Custom(resp) => resp
+                    .headers()
+                    .get(http::header::SET_COOKIE)
+                    .and_then(|h| h.to_str().ok())
+                    .map(str::to_string),
+                HttpResponse::BuiltinError(_, headers) => headers
+                    .as_ref()
+                    .and_then(|map| map.get(http::header::SET_COOKIE))
+                    .and_then(|h| h.to_str().ok())
+                    .map(str::to_string),
+                _ => None,
+            })
+            .expect("Set-Cookie header expected");
+        assert_eq!(cookie, format!("ab_variant={key}; Path=/"));
+
+        // The generated key must map to the same variant on the next request
+        // when the client sends the cookie back.
+        let mut ctx2 = make_test_context(
+            "/other",
+            Some(make_canary_config_with_set_cookie(
+                &["cookie", "ab_variant"],
+                &[("stable", 1), ("new", 1)],
+                true,
+            )),
+        );
+        if let Some(req) = &mut ctx2.req {
+            req.headers_mut()
+                .insert("cookie", format!("ab_variant={key}").parse().unwrap());
+        }
+        stage.run(&mut ctx2).await.unwrap();
+        assert_eq!(
+            ctx2.variables.get(CANARY_VARIANT_VAR),
+            ctx.variables.get(CANARY_VARIANT_VAR)
+        );
+        assert_eq!(
+            ctx2.variables.get(CANARY_KEY_VAR).unwrap(),
+            &ctx.variables.get(CANARY_KEY_VAR).unwrap().clone()
+        );
+    }
+
+    #[tokio::test]
+    async fn set_cookie_generates_fresh_keys_per_client() {
+        let config = make_canary_config_with_set_cookie(
+            &["cookie", "ab_variant"],
+            &[("stable", 1), ("new", 1)],
+            true,
+        );
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+
+        let mut ctx = make_test_context("/any", Some(config.clone()));
+        stage.run(&mut ctx).await.unwrap();
+        let first = ctx.variables.get(CANARY_KEY_VAR).cloned().unwrap();
+
+        let mut ctx2 = make_test_context("/any", Some(config));
+        stage.run(&mut ctx2).await.unwrap();
+        let second = ctx2.variables.get(CANARY_KEY_VAR).cloned().unwrap();
+
+        assert_ne!(first, second);
+    }
+
+    #[tokio::test]
+    async fn set_cookie_skips_existing_cookie() {
+        let config = make_canary_config_with_set_cookie(
+            &["cookie", "ab_variant"],
+            &[("stable", 1), ("new", 1)],
+            true,
+        );
+        let mut ctx = make_test_context("/any", Some(config));
+        if let Some(req) = &mut ctx.req {
+            req.headers_mut()
+                .insert("cookie", "ab_variant=experiment-42".parse().unwrap());
+        }
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+        stage.run(&mut ctx).await.unwrap();
+        stage.run_inverse(&mut ctx).await.unwrap();
+
+        assert_eq!(
+            ctx.variables.get(CANARY_KEY_VAR),
+            Some(&"experiment-42".to_string())
+        );
+        assert!(ctx
+            .res
+            .as_ref()
+            .and_then(|res| match res {
+                HttpResponse::Custom(resp) => resp.headers().get(http::header::SET_COOKIE),
+                _ => None,
+            })
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn set_cookie_disabled_keeps_ip_fallback() {
+        let config = make_canary_config(&["cookie", "ab_variant"], &[("stable", 1), ("new", 1)]);
+        let mut ctx = make_test_context("/any", Some(config));
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+        stage.run(&mut ctx).await.unwrap();
+        stage.run_inverse(&mut ctx).await.unwrap();
+
+        // Without set_cookie the fallback key is the client IP and no
+        // Set-Cookie header is emitted.
+        assert_eq!(
+            ctx.variables.get(CANARY_KEY_VAR),
+            Some(&"192.0.2.1".to_string())
+        );
+        assert!(ctx.res.as_ref().is_none());
+    }
+
+    #[tokio::test]
+    async fn set_cookie_without_cookie_affinity_never_generates() {
+        let config =
+            make_canary_config_with_set_cookie(&["ip"], &[("stable", 1), ("new", 1)], true);
+        let mut ctx = make_test_context("/any", Some(config));
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+        stage.run(&mut ctx).await.unwrap();
+        stage.run_inverse(&mut ctx).await.unwrap();
+
+        assert_eq!(
+            ctx.variables.get(CANARY_KEY_VAR),
+            Some(&"192.0.2.1".to_string())
+        );
+        assert!(ctx.res.as_ref().is_none());
     }
 }

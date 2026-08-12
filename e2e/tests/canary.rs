@@ -257,3 +257,82 @@ fn create_dir_with_variants() -> tempfile::TempDir {
     common::write_file(next.join("index.html"), b"NEXT CONTENT").unwrap();
     webroot_dir
 }
+
+#[tokio::test]
+async fn test_canary_ferron_sets_sticky_cookie() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    let webroot_dir = create_dir_with_variants();
+    let mut config_file = common::create_temp_file();
+    config_file
+        .as_file_mut()
+        .write_all(
+            canary_config("set_cookie\n    variant stable 50\n    variant next 50").as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let client = reqwest::Client::new();
+
+    // First request without a cookie: Ferron assigns a variant and sets the
+    // affinity cookie on the response.
+    let first = client
+        .get(format!("http://localhost:{}/", port))
+        .send()
+        .await
+        .unwrap();
+    let first_cookie = first
+        .headers()
+        .get(reqwest::header::SET_COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .expect("Set-Cookie header expected")
+        .to_string();
+    let first_body = first.text().await.unwrap();
+    assert!(first_body == "STABLE CONTENT" || first_body == "NEXT CONTENT");
+    let key = first_cookie
+        .strip_prefix("ab_variant=")
+        .and_then(|v| v.strip_suffix("; Path=/"))
+        .expect("unexpected Set-Cookie format")
+        .to_string();
+    assert_eq!(key.len(), 32);
+    assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+
+    // A second fresh client gets a different random key.
+    let second_cookie = client
+        .get(format!("http://localhost:{}/", port))
+        .send()
+        .await
+        .unwrap()
+        .headers()
+        .get(reqwest::header::SET_COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .expect("Set-Cookie header expected")
+        .to_string();
+    assert!(!second_cookie.contains(&key), "random keys must differ");
+
+    // Follow-up requests with the returned cookie stay on the variant and
+    // do not trigger a new Set-Cookie.
+    for _ in 0..3 {
+        let response = client
+            .get(format!("http://localhost:{}/", port))
+            .header(reqwest::header::COOKIE, format!("ab_variant={key}"))
+            .send()
+            .await
+            .unwrap();
+        let has_set_cookie = response.headers().get(reqwest::header::SET_COOKIE).is_none();
+        let body = response.text().await.unwrap();
+        assert_eq!(body, first_body);
+        assert!(has_set_cookie);
+    }
+
+    container.stop().await.unwrap();
+}

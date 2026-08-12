@@ -4,7 +4,7 @@ use ferron_core::config::validator::{
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 /// Recognized sub-directives inside a `canary { ... }` block.
-const CANARY_BLOCK_DIRECTIVES: &[&str] = &["affinity", "variant"];
+const CANARY_BLOCK_DIRECTIVES: &[&str] = &["affinity", "variant", "set_cookie"];
 
 /// Recognized affinity keywords.
 const AFFINITY_KEYWORDS: &[&str] = &["ip", "cookie", "header", "hash"];
@@ -28,6 +28,18 @@ impl ConfigurationValidator for CanaryValidator {
 
         Ok(())
     }
+}
+
+/// Whether the block declares a `cookie`-based affinity.
+#[inline]
+fn has_cookie_affinity(block: &ServerConfigurationBlock) -> bool {
+    block
+        .directives
+        .get("affinity")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.args.first())
+        .and_then(|arg| arg.as_str())
+        == Some("cookie")
 }
 
 impl CanaryValidator {
@@ -100,6 +112,7 @@ impl CanaryValidator {
                             }
                         }
                     }
+                    "set_cookie" => self.validate_set_cookie_entry(entry)?,
                     _ => unreachable!(),
                 }
             }
@@ -116,6 +129,28 @@ impl CanaryValidator {
                 "Invalid `canary` — at least one `variant` entry is required",
             )
             .with_span(block.span.clone()));
+        }
+
+        if sub.contains("set_cookie") && !has_cookie_affinity(block) {
+            return Err(ConfigurationValidationError::from(
+                "Invalid `canary` — `set_cookie` requires `affinity cookie <name>` in the same block",
+            )
+            .with_span(block.span.clone()));
+        }
+
+        Ok(())
+    }
+
+    fn validate_set_cookie_entry(
+        &self,
+        entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+    ) -> Result<(), ConfigurationValidationError> {
+        if entry.args.len() > 1 {
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `set_cookie` — takes at most one boolean argument, got {}",
+                entry.args.len()
+            ))
+            .with_span(entry_span(entry)));
         }
 
         Ok(())
@@ -386,5 +421,76 @@ mod tests {
         let block = make_block(directives);
         let err = run_validator(&block).unwrap_err();
         assert!(err.to_string().contains("exactly one argument"));
+    }
+
+    #[test]
+    fn accepts_set_cookie_with_cookie_affinity() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(
+                vec![make_value_string("cookie"), make_value_string("ab_variant")],
+                None,
+            )],
+        );
+        directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        let block = make_config_block(make_block(directives));
+        assert!(run_validator(&block).is_ok());
+    }
+
+    #[test]
+    fn rejects_set_cookie_without_cookie_affinity() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(vec![make_value_string("ip")], None)],
+        );
+        directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        let block = make_config_block(make_block(directives));
+        let err = run_validator(&block).unwrap_err();
+        assert!(err.to_string().contains("requires `affinity cookie"));
+    }
+
+    #[test]
+    fn rejects_set_cookie_with_too_many_arguments() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(
+                vec![make_value_string("cookie"), make_value_string("ab_variant")],
+                None,
+            )],
+        );
+        directives.insert(
+            "set_cookie".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_string("b")],
+                None,
+            )],
+        );
+        directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        let block = make_config_block(make_block(directives));
+        let err = run_validator(&block).unwrap_err();
+        assert!(err.to_string().contains("at most one boolean argument"));
     }
 }

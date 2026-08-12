@@ -6,8 +6,11 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 ahash = "0.8"
+http = "1"
 parking_lot = "0.12"
+rand = "0.10"
 rustc-hash = "2.1.2"
+typemap_rev = "0.4"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
@@ -15,7 +18,5 @@ ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
-typemap_rev = "0.4"
 bytes = "1"
-http = "1"
 http-body-util = "0.1.3"

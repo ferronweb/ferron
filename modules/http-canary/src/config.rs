@@ -16,19 +16,6 @@ pub enum CanaryAffinity {
     Hash(String),
 }
 
-impl CanaryAffinity {
-    /// Human-readable description of the source, e.g. `cookie:ab_variant`.
-    #[inline]
-    pub fn describe(&self) -> String {
-        match self {
-            CanaryAffinity::Ip => "ip".to_string(),
-            CanaryAffinity::Cookie(name) => format!("cookie:{name}"),
-            CanaryAffinity::Header(name) => format!("header:{name}"),
-            CanaryAffinity::Hash(variable) => format!("hash:{variable}"),
-        }
-    }
-}
-
 /// A canary variant with its configured weight.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CanaryVariant {
@@ -43,6 +30,8 @@ pub struct CanaryConfig {
     pub name: String,
     /// Where the sticky key comes from.
     pub affinity: CanaryAffinity,
+    /// Whether Ferron sets the affinity cookie itself when the request has none.
+    pub set_cookie: bool,
     /// Configured variants; the ring maps every key to one of them.
     pub variants: Vec<CanaryVariant>,
 }
@@ -95,9 +84,17 @@ pub fn parse_canary_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<C
         }
     }
 
+    let set_cookie = block
+        .directives
+        .get("set_cookie")
+        .and_then(|entries| entries.first())
+        .map(|entry| entry.get_flag())
+        .unwrap_or(false);
+
     Some(CanaryConfig {
         name,
         affinity,
+        set_cookie,
         variants,
     })
 }
@@ -261,6 +258,48 @@ mod tests {
             parse_canary_entry(&entry).unwrap().affinity,
             CanaryAffinity::Hash("request.uri.query.bucket".to_string())
         );
+    }
+
+    #[test]
+    fn parses_set_cookie_flag() {
+        let mut block_directives = StdHashMap::new();
+        block_directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(
+                vec![make_value_string("cookie"), make_value_string("ab_variant")],
+                None,
+            )],
+        );
+        block_directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        block_directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("stable"), make_value_number(50)],
+                None,
+            )],
+        );
+
+        let entry = make_entry(
+            vec![make_value_string("ab_test")],
+            Some(make_block(block_directives)),
+        );
+        let config = parse_canary_entry(&entry).unwrap();
+        assert!(config.set_cookie);
+
+        // Absent `set_cookie` defaults to false.
+        let mut block_directives = StdHashMap::new();
+        block_directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("stable"), make_value_number(50)],
+                None,
+            )],
+        );
+        let entry = make_entry(
+            vec![make_value_string("ab_test")],
+            Some(make_block(block_directives)),
+        );
+        assert!(!parse_canary_entry(&entry).unwrap().set_cookie);
     }
 
     #[test]

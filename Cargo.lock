@@ -1357,6 +1357,7 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
+ "rand 0.10.2",
  "rustc-hash",
  "tokio",
  "typemap_rev",

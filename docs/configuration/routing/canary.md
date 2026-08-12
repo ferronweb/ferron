@@ -18,6 +18,7 @@ This page documents the `canary` directive. It assigns each request a variant fr
 | Sub-directive | Arguments                                                    | Description                                                                                                                                                      | Default |
 | ------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `affinity`    | `ip`, `cookie <name>`, `header <name>`, or `hash <variable>` | The sticky key source. With `cookie` or `header`, Ferron uses the value of the named cookie or header. With `hash`, Ferron uses the value of the named variable. | `ip`    |
+| `set_cookie`  | `[bool]`                                                     | When `true`, Ferron sets the affinity cookie itself when the request has none. Valid only with `cookie` affinity.                                                | `false` |
 | `variant`     | `<value: string> <weight: number>`                           | Declares one variant with its weight. Repeat the directive to declare more variants. Weights must be at least 1.                                                 | none    |
 
 **Configuration example:**
@@ -96,7 +97,22 @@ example.com {
 Ferron hashes the `ab_variant` cookie value. If the cookie is missing, Ferron falls back to the client IP. This is useful for A/B tests where the client application sets the cookie.
 
 > [!note]
-> Ferron does not set the cookie itself. The client application sets it before the first request.
+> Ferron does not set the cookie itself. The client application sets it before the first request. To make Ferron set the cookie, add `set_cookie` (see below).
+
+**Making Ferron set the cookie:**
+
+```ferron
+example.com {
+    canary rollout {
+        affinity cookie ab_variant
+        set_cookie
+        variant stable 90
+        variant next 10
+    }
+}
+```
+
+When the request has no `ab_variant` cookie, Ferron generates a random sticky key, assigns the variant from the ring, and writes the cookie to the response (`ab_variant=<key>; Path=/`). The client sends the cookie back on later requests, so the assignment survives IP changes. Use `set_cookie false` to disable, and note that `set_cookie` works only with `cookie` affinity.
 
 **Using a request header:**
 
@@ -145,7 +161,7 @@ The canary stage sets the following attributes on its `ferron.stage.canary` span
 | -------------------------- | ------ | --------------------------------------------------------------- |
 | `ferron.canary.variant`    | string | The selected variant name.                                      |
 | `ferron.canary.name`       | string | The canary block name.                                          |
-| `ferron.canary.key_source` | string | The affinity type in use (`ip`, `cookie`, `header`, or `hash`). |
+| `ferron.canary.key_source` | string | Where the key came from: `ip`, `cookie`, `header`, `hash`, or `generated` (a random key persisted in the affinity cookie). |
 | `ferron.canary.weight`     | int    | The weight of the selected variant.                             |
 
 ### Metrics
