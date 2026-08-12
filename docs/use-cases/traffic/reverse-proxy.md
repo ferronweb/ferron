@@ -90,6 +90,9 @@ example.com {
 
 Ferron supports A/B testing (traffic splitting) between multiple backends using weighted load balancing and session affinity. This helps a lot when you migrate between tech stacks. There, application-level routing logic would be difficult or impossible to implement.
 
+> [!note]
+> To split traffic between static content variants on the same server, use the [canary deployment](/docs/v3/configuration/routing/canary) directive instead. It needs no backend server.
+
 ### Weighted traffic splitting
 
 You can split traffic between backends using the `weight` directive with the `round_robin` or `least_conn` algorithm. This helps for gradual rollouts or A/B tests where you want precise control over traffic distribution.

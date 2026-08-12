@@ -31,6 +31,10 @@ name = "cache"
 path = "tests/cache/mod.rs"
 
 [[test]]
+name = "canary"
+path = "tests/canary.rs"
+
+[[test]]
 name = "cgi"
 path = "tests/cgi.rs"
 

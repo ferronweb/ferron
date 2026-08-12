@@ -1175,6 +1175,7 @@ dependencies = [
  "ferron-http-basicauth",
  "ferron-http-buffer",
  "ferron-http-cache",
+ "ferron-http-canary",
  "ferron-http-cgi",
  "ferron-http-compression",
  "ferron-http-fauth",
@@ -1341,6 +1342,24 @@ dependencies = [
  "typemap_rev",
  "vibeio",
  "webpki-roots",
+]
+
+[[package]]
+name = "ferron-http-canary"
+version = "3.0.0-beta.8"
+dependencies = [
+ "ahash",
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "parking_lot",
+ "rustc-hash",
+ "tokio",
+ "typemap_rev",
 ]
 
 [[package]]

@@ -329,6 +329,12 @@
     "label": "Variable setting"
   },
   {
+    "href": "/docs/v3/configuration/routing/canary",
+    "target": "_self",
+    "sub": true,
+    "label": "Canary deployments"
+  },
+  {
     "label": "Proxying"
   },
   {

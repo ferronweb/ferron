@@ -9,7 +9,8 @@ This page documents directives that configure static file serving, directory lis
 > The `http-static` module handles static file serving.
 > For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing),
 > [HTTP cache](/docs/v3/configuration/content/cache), [HTTP response control](/docs/v3/configuration/routing/response),
-> [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP compression](/docs/v3/configuration/content/compression).
+> [URL rewriting](/docs/v3/configuration/routing/rewrite), [HTTP compression](/docs/v3/configuration/content/compression),
+> and [Canary deployments](/docs/v3/configuration/routing/canary).
 
 ## Directives
 
@@ -169,8 +170,8 @@ The static file serving module and the file resolution stage contribute the foll
 | ----------------------------------------- | ------ | ------------------------------------------------------------------------------ |
 | `ferron.static.file_path`                 | string | Absolute file path served.                                                     |
 | `ferron.static.file_path_precompressed`   | string | The precompressed file path (if applicable).                                   |
-| `ferron.static.dir_path`                  | string | Directory path when Ferron serves a listing.                                  |
-| `ferron.file_resolve.request_path`        | string | Decoded request path that Ferron resolves (error paths only).                 |
+| `ferron.static.dir_path`                  | string | Directory path when Ferron serves a listing.                                   |
+| `ferron.file_resolve.request_path`        | string | Decoded request path that Ferron resolves (error paths only).                  |
 | `ferron.file_resolve.root_path`           | string | Configured document root (error paths only).                                   |
 | `ferron.file_resolve.outcome`             | string | Resolution outcome: `forbidden`, `bad_request`, or `error` (error paths only). |
 | `ferron.file_resolve.last_candidate_path` | string | Last filesystem path attempted before failure (error paths only).              |
@@ -189,19 +190,19 @@ The file resolution span (`ferron.pipeline.file_resolve`) captures the resolutio
 
 The static file stage sets the following attributes on its `ferron.stage.static_file` span:
 
-| Attribute                               | Type   | Description                                             |
-| --------------------------------------- | ------ | ------------------------------------------------------- |
-| `http.response.status_code`             | int    | HTTP status code of the file response.                  |
-| `ferron.static.file_path`               | string | The file path relative to the document root.            |
-| `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable).            |
-| `ferron.static.precompressed`           | bool   | Whether Ferron served a precompressed variant of the file.                   |
+| Attribute                               | Type   | Description                                                |
+| --------------------------------------- | ------ | ---------------------------------------------------------- |
+| `http.response.status_code`             | int    | HTTP status code of the file response.                     |
+| `ferron.static.file_path`               | string | The file path relative to the document root.               |
+| `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable).               |
+| `ferron.static.precompressed`           | bool   | Whether Ferron served a precompressed variant of the file. |
 
 The directory listing stage sets the following attributes on its `ferron.stage.directory_listing` span:
 
-| Attribute                   | Type   | Description                       |
-| --------------------------- | ------ | --------------------------------- |
-| `http.response.status_code` | int    | HTTP status code of the response. |
-| `ferron.static.dir_path`    | string | The directory path that Ferron lists.  |
+| Attribute                   | Type   | Description                           |
+| --------------------------- | ------ | ------------------------------------- |
+| `http.response.status_code` | int    | HTTP status code of the response.     |
+| `ferron.static.dir_path`    | string | The directory path that Ferron lists. |
 
 ## Best practices
 
