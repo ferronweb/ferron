@@ -7,6 +7,7 @@
 ### Fixed
 
 - Fixed OCSP stapling not working properly for ECDSA issuer certificates.
+- Hardened HTTP/3 settings.
 
 ## Ferron 2.6.4 LTS
 

@@ -738,23 +738,26 @@ async fn http_quic_handler_fn(
   match connection_attempt.await {
     Ok(connection) => {
       let connection_reference = Arc::downgrade(&connection_reference);
-      let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
-        match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
-          Ok(h3_conn) => h3_conn,
-          Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
-            return;
+      let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> = match h3::server::builder()
+        .max_field_section_size(65536)
+        .build(h3_quinn::Connection::new(connection))
+        .await
+      {
+        Ok(h3_conn) => h3_conn,
+        Err(err) => {
+          for logging_tx in configurations
+            .find_global_configuration()
+            .as_ref()
+            .map_or(&vec![], |c| &c.observability.log_channels)
+          {
+            logging_tx
+              .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+              .await
+              .unwrap_or_default();
           }
-        };
+          return;
+        }
+      };
 
       loop {
         match crate::runtime::select! {
