@@ -5371,7 +5371,7 @@ dependencies = [
 [[package]]
 name = "vibeio-http"
 version = "0.3.5"
-source = "git+https://github.com/ferronweb/vibeio-http.git#8fbabecdf437a8e97223ef4dc4fbd9ae39716a92"
+source = "git+https://github.com/ferronweb/vibeio-http.git#3c80f0a1026464e92a1eb3d37043b51d0735c10b"
 dependencies = [
  "bytes",
  "futures-util",
