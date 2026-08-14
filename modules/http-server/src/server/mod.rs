@@ -295,23 +295,18 @@ fn resolve_http_connection_options(
             }),
         protocols: resolve_http_protocols(http_config)?,
         h1_enable_early_hints: http_config
-            .and_then(|config| config.get_value("h1_enable_early_hints"))
-            .and_then(|value| value.as_boolean())
-            .unwrap_or(false),
+            .map_or(false, |config| config.get_flag("h1_enable_early_hints")),
         h2: common::Http2Settings {
             initial_window_size: resolve_http_u32(http_config, "h2_initial_window_size")?,
             max_frame_size: resolve_http_u32(http_config, "h2_max_frame_size")?,
             max_concurrent_streams: resolve_http_u32(http_config, "h2_max_concurrent_streams")?,
             max_header_list_size: resolve_http_u32(http_config, "h2_max_header_list_size")?,
-            enable_connect_protocol: http_config
-                .and_then(|config| config.get_value("h2_enable_connect_protocol"))
-                .and_then(|value| value.as_boolean())
-                .unwrap_or(false),
+            enable_connect_protocol: http_config.map_or(false, |config| {
+                config.get_flag("h2_enable_connect_protocol")
+            }),
         },
         proxy_protocol_enabled: http_config
-            .and_then(|config| config.get_value("protocol_proxy"))
-            .and_then(|value| value.as_boolean())
-            .unwrap_or(false),
+            .map_or(false, |config| config.get_flag("protocol_proxy")),
     })
 }
 
