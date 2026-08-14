@@ -697,7 +697,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "vibeio",
- "vibeio-http 0.3.4",
+ "vibeio-http",
  "vibeio-hyper",
  "webpki-roots",
 ]
@@ -752,7 +752,7 @@ dependencies = [
  "typemap_rev",
  "urlencoding",
  "vibeio",
- "vibeio-http 0.3.5",
+ "vibeio-http",
  "xxhash-rust",
 ]
 
@@ -3112,28 +3112,6 @@ dependencies = [
  "slab",
  "tokio",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "vibeio-http"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "419f3b2ac3b397f5fdd61403f69466a7f49638f377adb4143340dd117afa3427"
-dependencies = [
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "http-body-util",
- "httparse",
- "httpdate",
- "kanal",
- "memchr",
- "oneshot",
- "send_wrapper",
- "tokio",
- "tokio-util",
- "vibeio",
 ]
 
 [[package]]
