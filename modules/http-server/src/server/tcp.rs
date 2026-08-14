@@ -1051,22 +1051,20 @@ fn build_http1_options(connection_options: &HttpConnectionOptions) -> Http1Optio
 #[inline]
 fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Options {
     let mut options = Http2Options::default();
-    let builder = options.h2_builder();
     if let Some(initial_window_size) = connection_options.h2.initial_window_size {
-        builder.initial_window_size(initial_window_size);
+        options = options.initial_connection_window_size(initial_window_size);
+        options = options.initial_stream_window_size(initial_window_size);
     }
     if let Some(max_frame_size) = connection_options.h2.max_frame_size {
-        builder.max_frame_size(max_frame_size);
+        options = options.max_frame_size(max_frame_size);
     }
     if let Some(max_concurrent_streams) = connection_options.h2.max_concurrent_streams {
-        builder.max_concurrent_streams(max_concurrent_streams);
+        options = options.max_concurrent_streams(max_concurrent_streams);
     }
     if let Some(max_header_list_size) = connection_options.h2.max_header_list_size {
-        builder.max_header_list_size(max_header_list_size);
+        options = options.max_header_list_size(max_header_list_size);
     }
-    if connection_options.h2.enable_connect_protocol {
-        builder.enable_connect_protocol();
-    }
+    options = options.enable_connect_protocol(connection_options.h2.enable_connect_protocol);
     options
 }
 

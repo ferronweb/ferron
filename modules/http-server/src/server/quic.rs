@@ -518,9 +518,12 @@ async fn handle_http3_connection(
         host_control_plane_span_links,
     });
     let mut connection_future = Box::pin(
-        Http3::new(h3_quinn::Connection::new(conn), Http3Options::default())
-            .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(handler_state.clone())),
+        Http3::new(
+            vibeio_http::quinn::Connection::new(conn),
+            Http3Options::default(),
+        )
+        .graceful_shutdown_token(graceful_shutdown.clone())
+        .handle(build_request_handler(handler_state.clone())),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
