@@ -152,10 +152,22 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
   - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset
 
 - `h2_max_header_list_size <size: integer>`
-  - This directive specifies the HTTP/2 maximum header list size. Default: unset
+  - This directive specifies the HTTP/2 maximum header list size. It is not recommended to set the value high, as this leads to HPACK memory exhaustion vulnerabilities. Default: unset
 
-- `h2_enable_connect_protocol <bool>`
+- `h2_enable_connect_protocol [bool: boolean]`
   - This directive enables or disables the HTTP/2 extended CONNECT protocol setting. Default: `h2_enable_connect_protocol false`
+
+- `h3_qpack_max_table_capacity <size: integer>`
+  - This directive specifies the maximum QPACK table capacity for HTTP/3. Default: unset
+
+- `h3_qpack_blocked_streams <count: integer>`
+  - This directive specifies the number of blocked streams for HTTP/3. Default: unset
+
+- `h3_max_field_section_size <size: integer>`
+  - This directive specifies the maximum field section size for HTTP/3. It is not recommended to set the value high, as this leads to QPACK memory exhaustion vulnerabilities. Default: unset
+
+- `h3_enable_connect_protocol [bool: boolean]`
+  - This directive enables or disables the HTTP/3 extended CONNECT protocol setting. Default: `h3_enable_connect_protocol false`
 
 - `url_sanitize [bool: boolean]`
   - This directive enables or disables URL path sanitization. When enabled (the default), Ferron removes or normalizes dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings. This directive applies only to global scope. Default: `url_sanitize true`

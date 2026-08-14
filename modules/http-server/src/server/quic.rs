@@ -25,8 +25,8 @@ use vibeio_http::{Http3, Http3Options, HttpProtocol};
 use crate::config::ThreeStageResolver;
 use crate::server::common::{
     build_request_handler, emit_error, normalize_host_for_lookup, resolve_http_connection_options,
-    resolve_observability_sink, ConfigArcSwap, ConnectionCountGuard, NoCertResolver,
-    ObservabilityProviderEntry, RequestHandlerState,
+    resolve_observability_sink, ConfigArcSwap, ConnectionCountGuard, HttpConnectionOptions,
+    NoCertResolver, ObservabilityProviderEntry, RequestHandlerState,
 };
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
@@ -388,12 +388,11 @@ impl QuicListenerHandle {
                             &ip_observability,
                         );
 
-                        let timeout_duration = resolve_http_connection_options(
+                        let connection_options = resolve_http_connection_options(
                             &server_config.http_connection_options_resolver,
                             local_addr.ip(),
                             hinted_hostname.as_deref(),
-                        )
-                        .timeout;
+                        );
                         handle_http3_connection(
                             connection,
                             remote_addr,
@@ -409,7 +408,7 @@ impl QuicListenerHandle {
                             tls_observability,
                             (*connection_cancel_token).clone(),
                             server_config.reload_token.clone(),
-                            timeout_duration,
+                            connection_options,
                             peer_identity,
                         )
                         .await;
@@ -467,6 +466,22 @@ fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
     Ok(listener_socket2.into())
 }
 
+#[inline]
+fn build_http3_options(connection_options: &HttpConnectionOptions) -> Http3Options {
+    let mut options = Http3Options::default();
+    if let Some(qpack_max_table_capacity) = connection_options.h3.qpack_max_table_capacity {
+        options = options.qpack_max_table_capacity(qpack_max_table_capacity);
+    }
+    if let Some(qpack_blocked_streams) = connection_options.h3.qpack_blocked_streams {
+        options = options.qpack_blocked_streams(qpack_blocked_streams);
+    }
+    if let Some(max_field_section_size) = connection_options.h3.max_field_section_size {
+        options = options.max_field_section_size(Some(max_field_section_size));
+    }
+    options = options.enable_connect_protocol(connection_options.h3.enable_connect_protocol);
+    options
+}
+
 #[allow(clippy::too_many_arguments)]
 #[inline]
 async fn handle_http3_connection(
@@ -484,7 +499,7 @@ async fn handle_http3_connection(
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
-    timeout_duration: Option<std::time::Duration>,
+    connection_options: HttpConnectionOptions,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 ) {
     let graceful_shutdown = CancellationToken::new();
@@ -511,7 +526,7 @@ async fn handle_http3_connection(
         encrypted,
         https_port,
         http3_alt_svc: false,
-        timeout_duration,
+        timeout_duration: connection_options.timeout,
         peer_identity,
         tls_params: None,
         host_control_plane_metadata,
@@ -520,7 +535,7 @@ async fn handle_http3_connection(
     let mut connection_future = Box::pin(
         Http3::new(
             vibeio_http::quinn::Connection::new(conn),
-            Http3Options::default(),
+            build_http3_options(&connection_options),
         )
         .graceful_shutdown_token(graceful_shutdown.clone())
         .handle(build_request_handler(handler_state.clone())),

@@ -97,6 +97,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, used(sub), h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, used(sub), h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
 
+            // HTTP/3 settings
+            validate_nested!(http, used(sub), h3_qpack_max_table_capacity, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h3_qpack_blocked_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h3_max_field_section_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, used(sub), h3_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+
             // W3C Trace Context
             validate_nested!(http, used(sub), trace, {
                 let mut trace_sub = std::collections::HashSet::new();

@@ -479,6 +479,34 @@ fn register_http_server_http_protocol_directives(registry: &mut DirectiveRegistr
         http,
     );
     reg(registry, "h2_enable_connect_protocol", "h2_enable_connect_protocol [bool]", "This directive specifies whether the HTTP/2 extended CONNECT protocol is enabled. Default: disabled", false, None, http);
+    reg(
+        registry,
+        "h3_qpack_max_table_capacity",
+        "h3_qpack_max_table_capacity <size>",
+        "This directive specifies the maximum QPACK table capacity for HTTP/3.",
+        false,
+        None,
+        http,
+    );
+    reg(
+        registry,
+        "h3_qpack_blocked_streams",
+        "h3_qpack_blocked_streams [bool]",
+        "This directive specifies whether blocked streams are enabled in HTTP/3.",
+        false,
+        None,
+        http,
+    );
+    reg(
+        registry,
+        "h3_max_field_section_size",
+        "h3_max_field_section_size <size>",
+        "This directive specifies the maximum field section size for HTTP/3.",
+        false,
+        None,
+        http,
+    );
+    reg(registry, "h3_enable_connect_protocol", "h3_enable_connect_protocol [bool]", "This directive specifies whether the HTTP/3 extended CONNECT protocol is enabled. Default: disabled", false, None, http);
     reg(registry, "protocol_proxy", "protocol_proxy [bool]", "This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header before processing the HTTP request. Default: disabled", false, None, http);
     reg(registry, "trusted_proxy", "trusted_proxy <ip-or-cidr>...", "This directive specifies trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. Repeatable — each occurrence adds one entry.", false, None, DirectiveSubblock::custom("client_ip"));
 }
