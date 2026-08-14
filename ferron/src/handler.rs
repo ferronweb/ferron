@@ -1137,14 +1137,17 @@ async fn http_quic_handler_fn(
   };
 
   let connection_reference = Arc::downgrade(&connection_reference);
-  let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
-    match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
-      Ok(h3_conn) => h3_conn,
-      Err(err) => {
-        log_http_connection_error(&configurations, "HTTP/3", err).await;
-        return;
-      }
-    };
+  let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> = match h3::server::builder()
+    .max_field_section_size(65536)
+    .build(h3_quinn::Connection::new(connection))
+    .await
+  {
+    Ok(h3_conn) => h3_conn,
+    Err(err) => {
+      log_http_connection_error(&configurations, "HTTP/3", err).await;
+      return;
+    }
+  };
 
   loop {
     match crate::runtime::select! {
