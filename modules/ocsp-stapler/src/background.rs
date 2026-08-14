@@ -182,10 +182,7 @@ fn verify_signature(
                     .parameters
                     .as_ref()
                     .and_then(|v| rasn::der::encode(&v).ok())
-                    .and_then(|v| {
-                        rasn::der::decode::<rasn::types::SequenceOf<ObjectIdentifier>>(&v).ok()
-                    })
-                    .and_then(|v| v.into_iter().next());
+                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(&v).ok());
                 let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
                 match (curve_oid_u32, algo) {
                     // P-256
