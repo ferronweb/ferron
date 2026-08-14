@@ -54,9 +54,19 @@ fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsCon
     }
 
     let builder = if root_store.is_empty() {
-        rustls::ClientConfig::builder().with_root_certificates(rustls::RootCertStore::empty())
+        rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::aws_lc_rs::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("failed to initialize Rustls client builder")
+        .with_root_certificates(rustls::RootCertStore::empty())
     } else {
-        rustls::ClientConfig::builder().with_root_certificates(root_store)
+        rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::aws_lc_rs::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("failed to initialize Rustls client builder")
+        .with_root_certificates(root_store)
     };
     let tls_config = if let Some(mtls) = mtls {
         builder
@@ -126,9 +136,13 @@ fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsC
         }
     }
 
-    let builder = rustls::ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier));
+    let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("failed to initialize Rustls client builder")
+    .dangerous()
+    .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier));
     let tls_config = if let Some(mtls) = mtls {
         builder
             .clone()

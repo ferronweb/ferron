@@ -258,7 +258,8 @@ fn build_propagation_client() -> Result<PropagationClient, Box<dyn std::error::E
     let tls_config = rustls::ClientConfig::builder_with_provider(
         rustls::crypto::aws_lc_rs::default_provider().into(),
     )
-    .with_safe_default_protocol_versions()?
+    .with_safe_default_protocol_versions()
+    .expect("failed to initialize Rustls client builder")
     .with_root_certificates(root_store)
     .with_no_client_auth();
 

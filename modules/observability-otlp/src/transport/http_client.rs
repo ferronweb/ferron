@@ -296,14 +296,16 @@ pub fn build_tonic_channel(
             }
         }
         rustls::ClientConfig::builder_with_provider(crypto)
-            .with_safe_default_protocol_versions()?
+            .with_safe_default_protocol_versions()
+            .expect("failed to initialize Rustls client builder")
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
             .with_no_client_auth()
     } else {
         let root_store = build_root_cert_store()?;
         rustls::ClientConfig::builder_with_provider(crypto)
-            .with_safe_default_protocol_versions()?
+            .with_safe_default_protocol_versions()
+            .expect("failed to initialize Rustls client builder")
             .with_root_certificates(root_store)
             .with_no_client_auth()
     };

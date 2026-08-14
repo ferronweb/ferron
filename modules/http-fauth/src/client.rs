@@ -213,10 +213,14 @@ pub async fn establish_connection(
 
         let tls_config = if no_verification {
             Arc::new(
-                ClientConfig::builder()
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
-                    .with_no_client_auth(),
+                ClientConfig::builder_with_provider(Arc::new(
+                    rustls::crypto::aws_lc_rs::default_provider(),
+                ))
+                .with_safe_default_protocol_versions()
+                .expect("failed to initialize Rustls client builder")
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
+                .with_no_client_auth(),
             )
         } else {
             // Use the default config with verification
@@ -273,9 +277,13 @@ impl ForwardedAuthClient {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
         let tls_config = Arc::new(
-            ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth(),
+            ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::aws_lc_rs::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .expect("failed to initialize Rustls client builder")
+            .with_root_certificates(root_store)
+            .with_no_client_auth(),
         );
 
         Self {
@@ -320,10 +328,14 @@ impl ForwardedAuthClient {
                         .to_owned();
                     let tls_config = if no_verification {
                         Arc::new(
-                            ClientConfig::builder()
-                                .dangerous()
-                                .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
-                                .with_no_client_auth(),
+                            ClientConfig::builder_with_provider(Arc::new(
+                                rustls::crypto::aws_lc_rs::default_provider(),
+                            ))
+                            .with_safe_default_protocol_versions()
+                            .expect("failed to initialize Rustls client builder")
+                            .dangerous()
+                            .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
+                            .with_no_client_auth(),
                         )
                     } else {
                         // Use the default config with verification

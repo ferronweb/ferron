@@ -19,7 +19,11 @@ fn build_tls_config(
     no_verification: bool,
     mtls_credentials: Option<Arc<MtlsCredentials>>,
 ) -> ClientConfig {
-    let builder = rustls::ClientConfig::builder();
+    let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("failed to initialize Rustls client builder");
     let builder = if no_verification {
         builder
             .dangerous()

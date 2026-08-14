@@ -968,7 +968,8 @@ pub fn build_rustls_client_config(
         }
 
         Ok(ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()?
+            .with_safe_default_protocol_versions()
+            .expect("failed to initialize Rustls client builder")
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
             .with_no_client_auth())
@@ -976,7 +977,8 @@ pub fn build_rustls_client_config(
         let root_store = build_root_cert_store()?;
 
         Ok(ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()?
+            .with_safe_default_protocol_versions()
+            .expect("failed to initialize Rustls client builder")
             .with_root_certificates(root_store)
             .with_no_client_auth())
     }
