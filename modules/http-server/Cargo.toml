@@ -9,8 +9,7 @@ send_wrapper = "0.6.0"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.19", default-features = false, features = ["time"] }
-#vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3"] }
-vibeio-http = { git = "https://github.com/ferronweb/vibeio-http.git", ref = "31fc488c5e05358ab6eb61ad9bfdba84ec8e4f90", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] } # TODO: swap to vibeio-http 0.4.0 once it's released
+vibeio-http = { version = "0.3.5", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] }
 parking_lot = "0.12"
 arc-swap = "1.7"
 http = "1"

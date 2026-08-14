@@ -1476,7 +1476,7 @@ dependencies = [
  "ipnet",
  "tokio",
  "vibeio",
- "vibeio-http 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vibeio-http",
  "vibeio-hyper",
 ]
 
@@ -1556,7 +1556,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "vibeio",
- "vibeio-http 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vibeio-http",
  "vibeio-hyper",
  "webpki-roots",
 ]
@@ -1618,7 +1618,7 @@ dependencies = [
  "rustc-hash",
  "tokio",
  "typemap_rev",
- "vibeio-http 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vibeio-http",
 ]
 
 [[package]]
@@ -1691,7 +1691,7 @@ dependencies = [
  "typemap_rev",
  "urlencoding",
  "vibeio",
- "vibeio-http 0.3.5 (git+https://github.com/ferronweb/vibeio-http.git)",
+ "vibeio-http",
  "xxhash-rust",
 ]
 
@@ -1722,7 +1722,7 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "vibeio",
- "vibeio-http 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vibeio-http",
 ]
 
 [[package]]
@@ -5365,30 +5365,6 @@ checksum = "43b550c142965578d3463fb69519f560dec529feaf9112ee54c49bc1329d21a5"
 dependencies = [
  "cegla-cgi",
  "cegla-scgi",
- "vibeio",
-]
-
-[[package]]
-name = "vibeio-http"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdc12afa428bdd8eaaf2edbd43864fc4691c04c1036bfcdab797c242e52b7890"
-dependencies = [
- "bytes",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "http-body-util",
- "httparse",
- "httpdate",
- "kanal",
- "memchr",
- "oneshot",
- "pin-project-lite",
- "send_wrapper",
- "tokio",
- "tokio-util",
  "vibeio",
 ]
 
