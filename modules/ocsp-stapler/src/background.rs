@@ -147,8 +147,8 @@ fn verify_signature(
                 let params: Option<RSASSAPSSParams> = signature_algorithm
                     .parameters
                     .as_ref()
-                    .and_then(|v| rasn::der::encode(&v).ok())
-                    .and_then(|v| rasn::der::decode::<RSASSAPSSParams>(&v).ok());
+                    .map(|v| v.as_bytes())
+                    .and_then(|v| rasn::der::decode::<RSASSAPSSParams>(v).ok());
                 let halgorithm = params.and_then(|p| p.hash_algorithm);
                 let algorithm_oid = halgorithm.as_ref().map(|a| &a.algorithm);
                 let algorithm_oid_u32: Option<&[u32]> = algorithm_oid.map(|oid| oid.as_ref());
@@ -181,8 +181,8 @@ fn verify_signature(
                 let curve_oid: Option<ObjectIdentifier> = signature_algorithm
                     .parameters
                     .as_ref()
-                    .and_then(|v| rasn::der::encode(&v).ok())
-                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(&v).ok());
+                    .map(|v| v.as_bytes())
+                    .and_then(|v| rasn::der::decode::<ObjectIdentifier>(v).ok());
                 let curve_oid_u32: Option<&[u32]> = curve_oid.as_deref().map(|oid| oid.as_ref());
                 match (curve_oid_u32, algo) {
                     // P-256
