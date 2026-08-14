@@ -123,7 +123,7 @@ fn verify_ocsp_signature(
     )
 }
 
-/// Verify a signature on the OCSP response using the issuer's public key.
+/// Verify a signature using the issuer's public key.
 fn verify_signature(
     signature: &rasn::types::BitString,
     signature_algorithm: &rasn_pkix::AlgorithmIdentifier,
@@ -144,7 +144,8 @@ fn verify_signature(
 
             // RSA-PSS
             [1, 2, 840, 113549, 1, 1, 10] => {
-                let params: Option<RSASSAPSSParams> = signature_algorithm
+                let params: Option<RSASSAPSSParams> = spki
+                    .algorithm
                     .parameters
                     .as_ref()
                     .map(|v| v.as_bytes())
@@ -178,7 +179,8 @@ fn verify_signature(
 
             // ECDSA
             [1, 2, 840, 10045, 4, 3, algo] => {
-                let curve_oid: Option<ObjectIdentifier> = signature_algorithm
+                let curve_oid: Option<ObjectIdentifier> = spki
+                    .algorithm
                     .parameters
                     .as_ref()
                     .map(|v| v.as_bytes())
