@@ -392,11 +392,20 @@ pub struct Http2Settings {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Http3Settings {
+    pub qpack_max_table_capacity: Option<u64>,
+    pub qpack_blocked_streams: Option<u64>,
+    pub max_field_section_size: Option<u64>,
+    pub enable_connect_protocol: bool,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HttpConnectionOptions {
     pub timeout: Option<std::time::Duration>,
     pub protocols: HttpProtocols,
     pub h1_enable_early_hints: bool,
     pub h2: Http2Settings,
+    pub h3: Http3Settings,
     pub proxy_protocol_enabled: bool,
 }
 

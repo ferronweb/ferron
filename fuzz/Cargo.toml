@@ -86,3 +86,6 @@ name = "fuzz_otlp_histogram"
 path = "fuzz_targets/fuzz_otlp_histogram.rs"
 test = false
 doc = false
+
+[patch.crates-io]
+vibeio-http = { git = "https://github.com/ferronweb/vibeio-http.git" } # TODO: swap to upstream vibeio-http 0.4.0 once it's released

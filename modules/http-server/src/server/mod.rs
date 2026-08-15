@@ -244,6 +244,23 @@ fn resolve_http_u32(
     })?))
 }
 
+fn resolve_http_u64(
+    http_config: Option<&ServerConfigurationBlock>,
+    directive: &str,
+) -> anyhow::Result<Option<u64>> {
+    let Some(value) = http_config.and_then(|config| config.get_value(directive)) else {
+        return Ok(None);
+    };
+
+    let Some(size) = value.as_number() else {
+        anyhow::bail!("http.{directive} must be a number");
+    };
+
+    Ok(Some(u64::try_from(size).map_err(|_| {
+        anyhow::anyhow!("http.{directive} must be a non-negative integer")
+    })?))
+}
+
 fn resolve_http_protocols(
     http_config: Option<&ServerConfigurationBlock>,
 ) -> anyhow::Result<common::HttpProtocols> {
@@ -304,7 +321,16 @@ fn resolve_http_connection_options(
             enable_connect_protocol: http_config
                 .is_some_and(|config| config.get_flag("h2_enable_connect_protocol")),
         },
-        proxy_protocol_enabled: http_config.is_some_and(|config| config.get_flag("protocol_proxy")),
+        h3: common::Http3Settings {
+            qpack_max_table_capacity: resolve_http_u64(http_config, "h3_qpack_max_table_capacity")?,
+            qpack_blocked_streams: resolve_http_u64(http_config, "h3_qpack_blocked_streams")?,
+            max_field_section_size: resolve_http_u64(http_config, "h3_max_field_section_size")?,
+            enable_connect_protocol: http_config.map_or(false, |config| {
+                config.get_flag("h3_enable_connect_protocol")
+            }),
+        },
+        proxy_protocol_enabled: http_config
+            .is_some_and(|config| config.get_flag("protocol_proxy")),
     })
 }
 
