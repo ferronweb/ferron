@@ -6,10 +6,8 @@ ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
 # Custom ARGs
-ARG FIPS
-ARG NOPGO
-ENV FIPS=${FIPS}
-ENV NOPGO=${NOPGO}
+ARG FIPS=0
+ARG NOPGO=1
 
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
@@ -72,12 +70,12 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
       ./cross-build/sysroots/prepare-musl.sh $TARGET_TRIPLE && \
     # FIPS compliance check
     FIPS_ADD_ARG="" && \
-    if [ "${FIPS:-0}" == "1" ]; then \
+    if [ "${FIPS}" == "1" ]; then \
       FIPS_ADD_ARG="--fips"; \
     fi && \
     # Build Ferron binaries
     # Check if PGO would be enabled based on target triple
-    if [ "${NOPGO:-0}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
+    if [ "${NOPGO}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
         || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]); then \
       BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
       ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
