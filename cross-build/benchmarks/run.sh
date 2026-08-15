@@ -580,7 +580,7 @@ main() {
 		log_info "  Scenario: Reverse proxy (HTTP/3 + TLS)"
 		for i in $(seq 1 200); do
 		    for j in $(seq 1 20); do
-				curl --http3-only -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+				curl --http3-only --max-time 0.1 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
 			# Wait for first 5 curl processes to complete
@@ -629,7 +629,7 @@ main() {
 	    local curl_pids=()
 		for i in $(seq 1 200); do
 			for j in $(seq 1 20); do
-				curl --http3-only -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+				curl --http3-only --max-time 0.1 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 				curl_pids+=($!)
 			done
 			# Wait for first 5 curl processes to complete
