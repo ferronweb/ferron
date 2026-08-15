@@ -1,12 +1,7 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
-use std::future::Future;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
 
 use super::common::resolve_host_control_plane_metadata;
 use super::common::resolve_host_control_plane_span_links;
@@ -16,10 +11,8 @@ use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
     MetricValue,
 };
-use quinn::{AsyncTimer, AsyncUdpSocket, Incoming, Runtime};
-use send_wrapper::SendWrapper;
+use quinn::Incoming;
 use tokio_util::sync::CancellationToken;
-use vibeio::time::Sleep;
 use vibeio_http::{Http3, Http3Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
@@ -30,6 +23,7 @@ use crate::server::common::{
 };
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
+use crate::util::quinn_mt::{QuinnMTChannels, QuinnMTConnectionIdGenerator, QuinnMTRuntime};
 
 fn emit_connection_error_metric(
     observability: &CompositeEventSink,
@@ -125,58 +119,6 @@ impl TryFrom<QuicTlsSniResolvers> for QuicTlsResolver {
     }
 }
 
-/// A timer for Quinn that utilizes `vibeio`'s timer.
-struct CustomAsyncTimer {
-    inner: SendWrapper<Pin<Box<Sleep>>>,
-}
-
-impl AsyncTimer for CustomAsyncTimer {
-    #[inline]
-    fn reset(mut self: Pin<&mut Self>, t: Instant) {
-        (*self.inner).as_mut().reset(t)
-    }
-
-    #[inline]
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
-        (*self.inner).as_mut().poll(cx)
-    }
-}
-
-impl Debug for CustomAsyncTimer {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CustomAsyncTimer").finish()
-    }
-}
-
-/// A runtime for Quinn that utilizes Tokio, if under Tokio runtime, and otherwise Monoio with async_io.
-#[derive(Debug)]
-struct EnterTokioRuntime;
-
-impl Runtime for EnterTokioRuntime {
-    fn new_timer(&self, t: Instant) -> Pin<Box<dyn AsyncTimer>> {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            Box::pin(tokio::time::sleep_until(t.into()))
-        } else {
-            Box::pin(CustomAsyncTimer {
-                inner: SendWrapper::new(Box::pin(vibeio::time::sleep_until(t))),
-            })
-        }
-    }
-
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(future);
-        } else {
-            vibeio::spawn(future);
-        }
-    }
-
-    fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
-        quinn::TokioRuntime::wrap_udp_socket(&quinn::TokioRuntime, sock)
-    }
-}
-
 pub struct QuicListenerHandle {
     cancel_token: Arc<CancellationToken>,
 }
@@ -187,32 +129,58 @@ impl QuicListenerHandle {
         config: ConfigArcSwap,
         runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<Self, std::io::Error> {
+        let udp_socket = bind_udp_socket(address)?;
+        ferron_core::log_info!("HTTP/3 server listening on {address}");
+        // Fan a single UDP socket out to one independent quinn endpoint per
+        // primary (per-CPU) thread. QuinnMTRuntime routes each datagram to the
+        // endpoint that owns the connection; the CID generator below makes sure
+        // the server connection IDs it issues route back to the same endpoint.
+        // `spawn_primary_task_on` pins exactly one endpoint to each primary
+        // thread, so the number of endpoints must match the thread count.
+        let endpoint_count = runtime.primary_thread_count();
+        // Server connection ID length; must match what the CID generator issues
+        // and what the router expects when parsing short-header packets.
+        let cid_len = 8;
+        let channels = QuinnMTChannels::new(endpoint_count, cid_len);
+
         let cancel_token = Arc::new(CancellationToken::new());
 
-        let (tx, rx) = async_channel::unbounded::<Incoming>();
-        let (listen_error_tx, listen_error_rx) = oneshot::channel::<Option<io::Error>>();
+        let (listen_error_tx, mut listen_error_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Option<io::Error>>();
+
         let config_clone = config.clone();
         let cancel_token_clone = cancel_token.clone();
-        let cancel_token_clone2 = cancel_token.clone();
 
-        std::thread::Builder::new()
-            .name("QUIC listener".to_string())
-            .spawn(move || {
-                let tokio_runtime = match tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(runtime) => runtime,
-                    Err(error) => {
-                        listen_error_tx
-                            .send(Some(io::Error::other(format!(
-                                "Failed to create Tokio runtime for QUIC listener: {error}"
-                            ))))
-                            .unwrap_or_default();
-                        return;
-                    }
-                };
-                tokio_runtime.block_on(async move {
+        for id in 0..endpoint_count {
+            let udp_socket = match udp_socket.try_clone() {
+                Ok(udp_socket) => udp_socket,
+                Err(error) => {
+                    listen_error_tx
+                        .send(Some(io::Error::other(format!(
+                            "Failed to clone UDP socket for HTTP/3 endpoint {id}: {error}"
+                        ))))
+                        .unwrap_or_default();
+                    continue;
+                }
+            };
+            let quinn_runtime = Arc::new(QuinnMTRuntime::new(
+                vibeio_quinn::VibeioRuntime,
+                channels.clone(),
+                id,
+            ));
+            let channels_for_cid = channels.clone();
+            let config = config_clone.clone();
+            let cancel_token = cancel_token_clone.clone();
+            let listen_error_tx = listen_error_tx.clone();
+
+            runtime.spawn_primary_task_on(id, move || {
+                let config = config.clone();
+                let cancel_token = cancel_token.clone();
+                let listen_error_tx = listen_error_tx.clone();
+                let udp_socket = udp_socket.try_clone();
+                let quinn_runtime = quinn_runtime.clone();
+                let channels_for_cid = channels_for_cid.clone();
+                Box::pin(async move {
                     let rustls_server_config = (match rustls::ServerConfig::builder_with_provider(
                         Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
                     )
@@ -245,36 +213,22 @@ impl QuicListenerHandle {
                     let server_config =
                         quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
 
-                    let udp_socket;
-                    let mut tries: u64 = 0;
-                    loop {
-                        if let Ok(socket) = bind_udp_socket(address) {
-                            udp_socket = socket;
-                            break;
-                        }
-                        tries += 1;
-                        let duration = Duration::from_millis(1000);
-                        if tries >= 10 {
-                            ferron_core::log_warn!(
-                                "HTTP/3 port is used at try #{tries}, skipping..."
-                            );
-                            listen_error_tx.send(None).unwrap_or_default();
-                            return;
-                        }
-                        ferron_core::log_warn!(
-                            "HTTP/3 port is used at try #{tries}, retrying in {duration:?}..."
-                        );
-                        if cancel_token_clone.is_cancelled() {
-                            return;
-                        }
-                        tokio::time::sleep(duration).await;
-                    }
-                    let endpoint = match quinn::Endpoint::new(
-                        quinn::EndpointConfig::default(),
-                        Some(server_config),
-                        udp_socket,
-                        Arc::new(EnterTokioRuntime),
-                    ) {
+                    let mut endpoint_config = quinn::EndpointConfig::default();
+                    endpoint_config.cid_generator(move || {
+                        Box::new(QuinnMTConnectionIdGenerator::new(
+                            id,
+                            channels_for_cid.clone(),
+                        ))
+                    });
+
+                    let endpoint = match udp_socket.and_then(|udp_socket| {
+                        quinn::Endpoint::new(
+                            endpoint_config,
+                            Some(server_config),
+                            udp_socket,
+                            quinn_runtime,
+                        )
+                    }) {
                         Ok(endpoint) => endpoint,
                         Err(err) => {
                             listen_error_tx
@@ -285,139 +239,14 @@ impl QuicListenerHandle {
                             return;
                         }
                     };
-                    ferron_core::log_info!("HTTP/3 server listening on {address}");
-                    listen_error_tx.send(None).unwrap_or_default();
 
-                    while let Some(incoming) = tokio::select! {
-                        incoming = endpoint.accept() => incoming,
-                        _ = cancel_token_clone.cancelled() => None,
-                    } {
-                        if tx.send(incoming).await.is_err() {
-                            break;
-                        }
-                    }
+                    run_endpoint(endpoint, config, cancel_token, address).await;
+                })
+            });
+        }
 
-                    endpoint.wait_idle().await;
-                });
-            })?;
-
-        runtime.spawn_primary_task(move || {
-            let rx = rx.clone();
-            let cancel_token = cancel_token_clone2.clone();
-            let config = config_clone.clone();
-            Box::pin(async move {
-                while let Some(incoming) = tokio::select! {
-                    incoming = rx.recv() => incoming.ok(),
-                    _ = cancel_token.cancelled() => None,
-                } {
-                    let config = config.clone();
-                    let connection_cancel_token = cancel_token.clone();
-
-                    vibeio::spawn(async move {
-                        let _conn_guard = ConnectionCountGuard::new();
-
-                        let server_config = config.load_full();
-
-                        let local_ip = incoming.local_ip().unwrap_or(address.ip());
-                        let local_addr = SocketAddr::new(local_ip, address.port());
-
-                        let quic_resolver =
-                            server_config.quic_tls_resolver.clone().unwrap_or_default();
-                        let tls_config = quic_resolver.resolve(&address.ip());
-                        let ip_observability = resolve_observability_sink(
-                            &server_config.observability_resolver,
-                            Some(local_addr.ip()),
-                            None,
-                            &CompositeEventSink::with_sampler(
-                                vec![],
-                                Some(ferron_observability::TraceSampler::new(
-                                    &server_config.trace_sampling,
-                                )),
-                            ),
-                        );
-
-                        let connection = match accept_quic(incoming, tls_config.clone()).await {
-                            Ok(conn) => conn,
-                            Err(error) => {
-                                emit_error(
-                                    &ip_observability,
-                                    format!("Failed to accept HTTP/3 connection: {error}"),
-                                    vec![
-                                        (
-                                            "error.type",
-                                            LogAttributeValue::String("quic_accept_error".into()),
-                                        ),
-                                        (
-                                            "error.message",
-                                            LogAttributeValue::String(error.to_string()),
-                                        ),
-                                    ],
-                                );
-                                emit_connection_error_metric(
-                                    &ip_observability,
-                                    "quic",
-                                    "http3_accept",
-                                );
-                                return;
-                            }
-                        };
-
-                        let remote_addr = connection.remote_address();
-
-                        let sni = connection.handshake_data().and_then(|data| {
-                            data.downcast_ref::<quinn::crypto::rustls::HandshakeData>()
-                                .and_then(|data| data.server_name.to_owned())
-                        });
-                        let peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>> =
-                            connection.peer_identity().and_then(|data| {
-                                data.downcast_ref::<Vec<rustls::pki_types::CertificateDer>>()
-                                    .and_then(|v| {
-                                        if v.is_empty() {
-                                            None
-                                        } else {
-                                            Some(v.to_owned())
-                                        }
-                                    })
-                            });
-                        let hinted_hostname = sni.as_deref().and_then(normalize_host_for_lookup);
-
-                        let tls_observability = resolve_observability_sink(
-                            &server_config.observability_resolver,
-                            Some(local_addr.ip()),
-                            hinted_hostname.as_deref(),
-                            &ip_observability,
-                        );
-
-                        let connection_options = resolve_http_connection_options(
-                            &server_config.http_connection_options_resolver,
-                            local_addr.ip(),
-                            hinted_hostname.as_deref(),
-                        );
-                        handle_http3_connection(
-                            connection,
-                            remote_addr,
-                            server_config.pipeline.clone(),
-                            server_config.file_pipeline.clone(),
-                            server_config.error_pipeline.clone(),
-                            server_config.config_resolver.clone(),
-                            local_addr,
-                            hinted_hostname,
-                            tls_config.is_some(),
-                            server_config.https_port,
-                            server_config.observability_resolver.clone(),
-                            tls_observability,
-                            (*connection_cancel_token).clone(),
-                            server_config.reload_token.clone(),
-                            connection_options,
-                            peer_identity,
-                        )
-                        .await;
-                    });
-                }
-            })
-        });
-
-        if let Some(error) = listen_error_rx.recv().unwrap_or(None) {
+        listen_error_tx.send(None).unwrap_or_default();
+        if let Some(error) = listen_error_rx.blocking_recv().unwrap_or(None) {
             return Err(error);
         }
 
@@ -431,6 +260,122 @@ impl QuicListenerHandle {
 }
 
 #[inline]
+async fn run_endpoint(
+    endpoint: quinn::Endpoint,
+    config: ConfigArcSwap,
+    cancel_token: Arc<CancellationToken>,
+    address: SocketAddr,
+) {
+    while let Some(incoming) = tokio::select! {
+        incoming = endpoint.accept() => incoming,
+        _ = cancel_token.cancelled() => None,
+    } {
+        let config = config.clone();
+        let connection_cancel_token = cancel_token.clone();
+
+        vibeio::spawn(async move {
+            let _conn_guard = ConnectionCountGuard::new();
+
+            let server_config = config.load_full();
+
+            let local_ip = incoming.local_ip().unwrap_or(address.ip());
+            let local_addr = SocketAddr::new(local_ip, address.port());
+
+            let quic_resolver =
+                server_config.quic_tls_resolver.clone().unwrap_or_default();
+            let tls_config = quic_resolver.resolve(&address.ip());
+            let ip_observability = resolve_observability_sink(
+                &server_config.observability_resolver,
+                Some(local_addr.ip()),
+                None,
+                &CompositeEventSink::with_sampler(
+                    vec![],
+                    Some(ferron_observability::TraceSampler::new(
+                        &server_config.trace_sampling,
+                    )),
+                ),
+            );
+
+            let connection = match accept_quic(incoming, tls_config.clone()).await {
+                Ok(conn) => conn,
+                Err(error) => {
+                    emit_error(
+                        &ip_observability,
+                        format!("Failed to accept HTTP/3 connection: {error}"),
+                        vec![
+                            (
+                                "error.type",
+                                LogAttributeValue::String("quic_accept_error".into()),
+                            ),
+                            (
+                                "error.message",
+                                LogAttributeValue::String(error.to_string()),
+                            ),
+                        ],
+                    );
+                    emit_connection_error_metric(
+                        &ip_observability,
+                        "quic",
+                        "http3_accept",
+                    );
+                    return;
+                }
+            };
+
+            let remote_addr = connection.remote_address();
+
+            let sni = connection.handshake_data().and_then(|data| {
+                data.downcast_ref::<quinn::crypto::rustls::HandshakeData>()
+                    .and_then(|data| data.server_name.to_owned())
+            });
+            let peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>> =
+                connection.peer_identity().and_then(|data| {
+                    data.downcast_ref::<Vec<rustls::pki_types::CertificateDer>>()
+                        .and_then(|v| {
+                            if v.is_empty() {
+                                None
+                            } else {
+                                Some(v.to_owned())
+                            }
+                        })
+                });
+            let hinted_hostname = sni.as_deref().and_then(normalize_host_for_lookup);
+
+            let tls_observability = resolve_observability_sink(
+                &server_config.observability_resolver,
+                Some(local_addr.ip()),
+                hinted_hostname.as_deref(),
+                &ip_observability,
+            );
+
+            let connection_options = resolve_http_connection_options(
+                &server_config.http_connection_options_resolver,
+                local_addr.ip(),
+                hinted_hostname.as_deref(),
+            );
+            handle_http3_connection(
+                connection,
+                remote_addr,
+                server_config.pipeline.clone(),
+                server_config.file_pipeline.clone(),
+                server_config.error_pipeline.clone(),
+                server_config.config_resolver.clone(),
+                local_addr,
+                hinted_hostname,
+                tls_config.is_some(),
+                server_config.https_port,
+                server_config.observability_resolver.clone(),
+                tls_observability,
+                (*connection_cancel_token).clone(),
+                server_config.reload_token.clone(),
+                connection_options,
+                peer_identity,
+            )
+            .await;
+        });
+    }
+}
+
 async fn accept_quic(
     incoming: Incoming,
     server_config: Option<Arc<quinn::ServerConfig>>,

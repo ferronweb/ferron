@@ -10,6 +10,7 @@ async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.19", default-features = false, features = ["time"] }
 vibeio-http = { version = "0.4.0", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] }
+vibeio-quinn = { version = "0.2.19" }
 parking_lot = "0.12"
 arc-swap = "1.7"
 http = "1"
@@ -27,6 +28,7 @@ typemap_rev = "0.4"
 chrono = "0.4"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2"
+rand = "0.10"
 cidr = "0.3"
 quinn = { version = "0.11.8", default-features = false, features = [
     "aws-lc-rs",
@@ -34,6 +36,7 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
 ] }
 oneshot = { version = "0.2.1", features = ["std", "async"] }
+smallvec = "1.15.2"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
