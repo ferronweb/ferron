@@ -22,7 +22,7 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 ### Required
 
 - **Rust toolchain** with `rustup`
-- **curl** (for Alpine package downloads, and cross-compiled PGO)
+- **curl** (for Alpine package downloads, cross-compiled PGO, and HTTP/3)
 - **clang**
 - **lld**
 
@@ -199,14 +199,15 @@ RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build -r --target <target>
 
 #### Phase 2: Training benchmarks
 
-The benchmark script (`benchmarks/run.sh`) runs 4 scenarios:
+The benchmark script (`benchmarks/run.sh`) runs 5 scenarios:
 
-| Scenario           | Tool   | Protocol     | Purpose                        |
-| ------------------ | ------ | ------------ | ------------------------------ |
-| Small static files | wrk    | HTTP/1.1     | Tests small response handling  |
-| Large static files | wrk    | HTTP/1.1     | Tests large response streaming |
-| Reverse proxy      | wrk    | HTTP/1.1     | Tests proxy request forwarding |
-| Reverse proxy      | h2load | HTTP/2 + TLS | Tests multiplexed connections  |
+| Scenario           | Tool   | Protocol      | Purpose                        |
+| ------------------ | ------ | ------------- | ------------------------------ |
+| Small static files | wrk    | HTTP/1.1      | Tests small response handling  |
+| Large static files | wrk    | HTTP/1.1      | Tests large response streaming |
+| Reverse proxy      | wrk    | HTTP/1.1      | Tests proxy request forwarding |
+| Reverse proxy      | h2load | HTTP/2 + TLS  | Tests multiplexed connections  |
+| Reverse proxy      | curl   | HTTP/3 + QUIC | Tests QUIC connections         |
 
 For cross-compiled targets, the benchmark script uses `curl` instead of `wrk` and `h2load`.
 

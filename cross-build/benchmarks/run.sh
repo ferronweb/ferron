@@ -197,6 +197,9 @@ create_ferron_config() {
     runtime {
         io_uring false
     }
+    http {
+        protocols h1 h2 h3
+    }
 }
 
 *:${ferron_port} {
@@ -219,6 +222,9 @@ EOF
 {
     log /dev/null
     error_log /dev/null
+    http {
+        protocols h1 h2 h3
+    }
 }
 
 *:${ferron_port} {
@@ -571,6 +577,20 @@ main() {
 			done
 		done
 
+		log_info "  Scenario: Reverse proxy (HTTP/3 + TLS)"
+		for i in $(seq 1 200); do
+		    for j in $(seq 1 20); do
+				curl --http3-only -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+			    curl_pids+=($!)
+		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}" || true
+			done
+		done
+
 		log_info "Waiting for curl processes to complete"
 		for pid in "${curl_pids[@]}"; do
 			wait "${pid}" || true
@@ -602,6 +622,26 @@ main() {
 			"https://127.0.0.1:${tls_port}/proxy/static/1k.txt" \
 			"${duration}" \
 			"Reverse proxy - HTTP/2 + TLS"
+
+        # Scenario 5: Reverse proxy (HTTP/3 + TLS)
+        log_info "Running curl --http3-only: Reverse proxy - HTTP/3"
+	    log_info "  URL: https://127.0.0.1:${tls_port}/proxy/static/1k.txt"
+	    local curl_pids=()
+		for i in $(seq 1 200); do
+			for j in $(seq 1 20); do
+				curl --http3-only -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
+				curl_pids+=($!)
+			done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}" || true
+			done
+		done
+		for pid in "${curl_pids[@]}"; do
+			wait "${pid}" || true
+		done
 	fi
 
 	log_step "Benchmark complete"
