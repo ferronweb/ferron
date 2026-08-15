@@ -137,6 +137,26 @@ impl Runtime {
         }
     }
 
+    /// Number of primary (per-CPU) threads backing this runtime.
+    pub fn primary_thread_count(&self) -> usize {
+        self.primary_task_channels.len()
+    }
+
+    /// Spawn a task factory on a single primary thread, indexed by `index`.
+    ///
+    /// Unlike [`Runtime::spawn_primary_task`], the factory runs exactly once, on
+    /// the primary thread at `index`. Use this to pin a distinct task (such as
+    /// one of several QUIC endpoints) to a specific CPU.
+    pub fn spawn_primary_task_on<F>(&mut self, index: usize, task_factory: F)
+    where
+        F: Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static,
+    {
+        let task_factory = Arc::new(task_factory);
+        if let Some(channel) = self.primary_task_channels.get(index) {
+            let _ = channel.send(task_factory.clone());
+        }
+    }
+
     /// Spawn a task on the secondary (tokio) runtime.
     pub fn spawn_secondary_task<F>(&self, task: F)
     where
