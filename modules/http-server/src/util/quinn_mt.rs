@@ -269,7 +269,7 @@ impl quinn::AsyncUdpSocket for QuinnMTUdpSocket {
                     Some(target) => {
                         let data = bufs[src][..len].to_smallvec();
                         let m = meta[src];
-                        let _ = target.send(QuinnMTDatagram { data, meta: m });
+                        target.send(QuinnMTDatagram { data, meta: m });
                     }
                 }
             }
@@ -388,7 +388,7 @@ impl QuinnMTDatagramQueue {
     #[inline]
     fn try_recv(&self) -> Option<QuinnMTDatagram> {
         let mut inner = self.inner.lock();
-        inner.pop_front().map(|datagram| datagram)
+        inner.pop_front()
     }
 
     #[inline]
