@@ -8,6 +8,8 @@ ARG BUILDPLATFORM
 # Custom ARGs
 ARG FIPS
 ARG NOPGO
+ENV FIPS=${FIPS}
+ENV NOPGO=${NOPGO}
 
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
