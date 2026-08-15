@@ -24,6 +24,3 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
-
-[patch.crates-io]
-vibeio-http = { git = "https://github.com/ferronweb/vibeio-http.git" } # TODO: swap to upstream vibeio-http 0.4.0 once it's released

@@ -2435,7 +2435,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3116,8 +3116,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-http"
-version = "0.3.5"
-source = "git+https://github.com/ferronweb/vibeio-http.git#26d9ee51a3725fddf808978c3d3091065db86f32"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fd9e8a0044077940165873a0de35c148c23fd9f8da7ca3aebef56c7598166c3"
 dependencies = [
  "bytes",
  "futures-util",
@@ -3653,3 +3654,8 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[patch.unused]]
+name = "vibeio-http"
+version = "0.3.5"
+source = "git+https://github.com/ferronweb/vibeio-http.git#26d9ee51a3725fddf808978c3d3091065db86f32"
