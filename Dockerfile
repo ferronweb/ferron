@@ -7,7 +7,7 @@ ARG BUILDPLATFORM
 
 # Custom ARGs
 ARG FIPS=0
-ARG NOPGO=1
+ARG NOPGO=0
 
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
