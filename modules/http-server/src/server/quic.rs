@@ -281,8 +281,7 @@ async fn run_endpoint(
             let local_ip = incoming.local_ip().unwrap_or(address.ip());
             let local_addr = SocketAddr::new(local_ip, address.port());
 
-            let quic_resolver =
-                server_config.quic_tls_resolver.clone().unwrap_or_default();
+            let quic_resolver = server_config.quic_tls_resolver.clone().unwrap_or_default();
             let tls_config = quic_resolver.resolve(&address.ip());
             let ip_observability = resolve_observability_sink(
                 &server_config.observability_resolver,
@@ -313,11 +312,7 @@ async fn run_endpoint(
                             ),
                         ],
                     );
-                    emit_connection_error_metric(
-                        &ip_observability,
-                        "quic",
-                        "http3_accept",
-                    );
+                    emit_connection_error_metric(&ip_observability, "quic", "http3_accept");
                     return;
                 }
             };
