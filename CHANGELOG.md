@@ -48,6 +48,8 @@
 - **PGO for GNU/Linux and some Linux with musl**: PGO (profiled-guided optimization) is now enabled for GNU/Linux targets and some Linux targets with musl libc (64-bit x86, ARM64), for pre-built Ferron binaries. This mainly improves tail (p90/p99/max) latency for web requests.
 - **`.ferron` file extension**: `.ferron` files are now supported as an alternative to `.conf` (which is a generic file extension) files for configuration ([GitHub issue](https://github.com/ferronweb/ferron/issues/838)).
 - **Panic hook improvements**: panic hook has been simplified (removing backtraces that are likely unhelpful), and it now logs the Ferron version and build target.
+- **HTTP/2 and HTTP/3 implementations**: HTTP/2 and HTTP/3 functionality in Ferron now depends on `vibeio-http`'s in-house protocol implementations instead of `h2` and `h3` from Hyperium. New HTTP/2 implementation features higher space savings for headers (~95%, versus ~91% with the previous implementation for a "Hello World" application), while new HTTP/3 implementation features improved protocol compliance (46/48 on `h3spec`, versus 43/48 with the previous implementation).
+- **QUIC performance optimizations**: QUIC "endpoints" are now per-thread instead of single-threaded, improving throughput and tail (p90, p99) latency for HTTP/3 requests.
 
 #### Observability & tracing
 
@@ -74,7 +76,6 @@
 - **Connection accept fix for `poll`**: previously, connections at TCP listeners (including HTTP/1.x and HTTP/2) accepted only a single connection when using `poll` (not `epoll`), stalling afterwards. This has been fixed to be able to accept multiple connections (see [`vibeio` changelog](https://github.com/ferronweb/vibeio/blob/main/CHANGELOG.md#vibeio-0217)).
 - **HTTP/2 host header handling correctness**: previously, if both `host` and `:authority` HTTP/2 headers were present, the web server would return a 400 error, which might not be correct according to the HTTP/2 specification (RFC 9113, section 8.3.1). This has been fixed to override `Host` header value with `:authority` header value instead of appending a new value.
 - **Symlink ownership check**: previously, symlink ownership check (`disable_symlinks if_not_owner`) was effectively a stub that effectively disabled all symlinks. This has been replaced with a proper implementation.
-- **HTTP/2 and HTTP/3 implementations**: HTTP/2 and HTTP/3 functionality in Ferron now depends on `vibeio-http`'s in-house protocol implementations instead of `h2` and `h3` from Hyperium. New HTTP/2 implementation features higher space savings for headers (~95%, versus ~91% with the previous implementation for a "Hello World" application), while new HTTP/3 implementation features improved protocol compliance (46/48 on `h3spec`, versus 43/48 with the previous implementation).
 
 #### HTTP caching
 
