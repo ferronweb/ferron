@@ -325,12 +325,11 @@ fn resolve_http_connection_options(
             qpack_max_table_capacity: resolve_http_u64(http_config, "h3_qpack_max_table_capacity")?,
             qpack_blocked_streams: resolve_http_u64(http_config, "h3_qpack_blocked_streams")?,
             max_field_section_size: resolve_http_u64(http_config, "h3_max_field_section_size")?,
-            enable_connect_protocol: http_config.map_or(false, |config| {
+            enable_connect_protocol: http_config.is_some_and(|config| {
                 config.get_flag("h3_enable_connect_protocol")
             }),
         },
-        proxy_protocol_enabled: http_config
-            .is_some_and(|config| config.get_flag("protocol_proxy")),
+        proxy_protocol_enabled: http_config.is_some_and(|config| config.get_flag("protocol_proxy")),
     })
 }
 
