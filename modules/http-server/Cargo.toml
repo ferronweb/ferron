@@ -4,8 +4,6 @@ version = "3.0.0-beta.8"
 edition = "2021"
 
 [dependencies]
-async-channel = "2.5.0"
-send_wrapper = "0.6.0"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.19", default-features = false, features = ["time"] }
@@ -35,7 +33,6 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "rustls-aws-lc-rs",
     "runtime-tokio",
 ] }
-oneshot = { version = "0.2.1", features = ["std", "async"] }
 smallvec = "1.15.2"
 
 ferron-core = { path = "../../core" }
