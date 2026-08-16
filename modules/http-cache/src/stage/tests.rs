@@ -473,32 +473,6 @@ fn propagation_paths_map_selectors_and_deduplicate() {
 }
 
 #[test]
-fn vary_rule_ignores_conditional_and_range_headers() {
-    use super::key::build_vary_rule;
-
-    let mut response_headers = http::HeaderMap::new();
-    response_headers.insert(
-        http::header::VARY,
-        http::HeaderValue::from_static(
-            "Accept-Encoding, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range",
-        ),
-    );
-
-    let config = crate::config::CacheConfig::default();
-    let rule = build_vary_rule(
-        &response_headers,
-        &config,
-        &crate::lscache::LiteSpeedVary::default(),
-    )
-    .unwrap()
-    .expect("a vary rule should be built");
-
-    assert_eq!(rule.header_names.len(), 1, "only Accept-Encoding survives");
-    assert_eq!(rule.header_names[0].as_str(), "accept-encoding");
-    assert!(rule.cookie_names.is_empty());
-}
-
-#[test]
 fn purge_reports_purged_and_remaining_entry_counts() {
     use std::time::Duration;
 

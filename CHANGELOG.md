@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### HTTP cache
+
+- **HTTP cache `Vary` correctness fix**: a bug introduced in Ferron 3.0.0-beta.9 led to some header names in `Vary` header values (`If-Match`, `If-Modified-Since`, `If-None-Match`, `If-Range`, `If-Unmodified-Since`, `Range`) being ignored by the cache, which might lead to wrong 304 responses being served. This has been fixed to properly handle these headers in `Vary` values.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**
