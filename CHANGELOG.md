@@ -4,7 +4,7 @@
 
 **Not yet released**
 
-### Changes
+### Changed
 
 #### HTTP server core
 
