@@ -297,11 +297,21 @@ pub(super) fn add_http3_alt_svc_header(headers: &mut HeaderMap, http3_alt_port: 
                     format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                 if header_value_old != header_value_new {
-                    HeaderValue::from_bytes(
-                        format!("{header_value_old}, {header_value_new}").as_bytes(),
-                    )
+                    let header_value_old_sanitized = header_value_old
+                        .split(",")
+                        .map(|v| v.trim())
+                        .filter(|v| !v.starts_with("h3=") && !v.starts_with("h3-29="))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    if header_value_old_sanitized.is_empty() {
+                        HeaderValue::from_bytes(header_value_new.as_bytes())
+                    } else {
+                        HeaderValue::from_bytes(
+                            format!("{header_value_old_sanitized}, {header_value_new}").as_bytes(),
+                        )
+                    }
                 } else {
-                    HeaderValue::from_bytes(header_value_old.as_bytes())
+                    HeaderValue::from_bytes(header_value_new.as_bytes())
                 }
             }
             None => HeaderValue::from_bytes(
