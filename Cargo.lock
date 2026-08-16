@@ -5384,9 +5384,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-http"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fd9e8a0044077940165873a0de35c148c23fd9f8da7ca3aebef56c7598166c3"
+checksum = "21b2efb675b7c9f9e15b67d51acd81393616a8bcae94c8cf3188a095d30af75c"
 dependencies = [
  "bytes",
  "futures-util",
