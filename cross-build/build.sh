@@ -23,6 +23,15 @@ SUPPORTED_TARGETS=(
 	"loongarch64-unknown-linux-musl"
 )
 
+restore_cargo_config() {
+    local cargo_config="$1"
+    if [[ -f "${cargo_config}.bak" ]]; then
+        mv "${cargo_config}.bak" "$cargo_config"
+    else
+        rm "$cargo_config"
+    fi
+}
+
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") [OPTIONS] <TARGET>
@@ -372,12 +381,14 @@ WRAPPER
 			echo "[target.${target}]" > "${cargo_config}"
 			echo "${linker_line}" >> "${cargo_config}"
 		else
+		    cp "${cargo_config}" "${cargo_config}.bak"
 			if ! grep -q "\[target\.${target}\]" "${cargo_config}"; then
 				echo "" >> "${cargo_config}"
 				echo "[target.${target}]" >> "${cargo_config}"
 				echo "${linker_line}" >> "${cargo_config}"
 			fi
 		fi
+		trap "restore_cargo_config ${cargo_config}" EXIT
 
 		cc_bin="${cc_wrapper}"
 		cxx_bin="${cxx_wrapper}"
@@ -544,6 +555,8 @@ WRAPPER
 		echo "${linker_line}" >> "${cargo_config}"
 		echo "rustflags = [\"${rustflags_linker}\"]" >> "${cargo_config}"
 	else
+	    # Backup (to restore on exit)
+		cp "${cargo_config}" "${cargo_config}.bak"
 		# Check if target section already exists
 		if ! grep -q "\[target\.${target}\]" "${cargo_config}"; then
 			echo "" >> "${cargo_config}"
@@ -552,6 +565,7 @@ WRAPPER
 			echo "rustflags = [\"${rustflags_linker}\"]" >> "${cargo_config}"
 		fi
 	fi
+	trap "restore_cargo_config ${cargo_config}" EXIT
 
 	# CXXFLAGS matching the project's Dockerfile
 	export CXXFLAGS="-U TCMALLOC_INTERNAL_METHODS_ONLY -isystem ${sysroot}/include -I${sysroot}/include/c++/v1 -stdlib=libc++ -std=c++17 -nostdinc++ -static --target=${llvm_target}"
