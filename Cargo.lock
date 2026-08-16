@@ -2845,6 +2845,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-uring"
+version = "0.7.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d64d8ca234d152948ceaede1f419b6a83983a5ecccaac05fb337a809c96d3aa6"
+dependencies = [
+ "bitflags 2.13.1",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5340,18 +5351,20 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vibeio"
-version = "0.2.19"
+version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "201dbdd8b709e91a226532ef2bc532b1f4afb4c438179489914646bb8601f917"
+checksum = "38bd92ee1ca08a43adc9c6675247774e8375a639125d64baba67d2ef75e1f1b6"
 dependencies = [
  "async-channel",
  "crossbeam-queue",
  "futures-util",
- "io-uring",
+ "io-uring 0.6.4",
+ "io-uring 0.7.14",
  "libc",
  "mio",
  "once_cell",
  "oneshot",
+ "rustc-hash",
  "rusty_pool",
  "slab",
  "tokio",
@@ -5397,9 +5410,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-hyper"
-version = "0.2.19"
+version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2beafb9220911006480de43c2fbb76f9672f48574d3cc8253aea950a09e4c"
+checksum = "a6a3705dee4482773cb67a1cab04088824dd190b8b876c219d0624c0dffd79d9"
 dependencies = [
  "hyper",
  "tokio",
@@ -5408,12 +5421,11 @@ dependencies = [
 
 [[package]]
 name = "vibeio-quinn"
-version = "0.2.19"
+version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5018054de7401d151d4ff04c379ff3dc420b1835b715d01d4994a1afd003c6ec"
+checksum = "16448fa03d034ebe3c5c905c0460b2a9210bf7e02def212a81f6610fc490b102"
 dependencies = [
  "quinn",
- "quinn-udp",
  "vibeio",
 ]
 
