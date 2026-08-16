@@ -83,7 +83,7 @@ find $DEB_BUILD_DIRECTORY_NAME -type f -exec md5sum {} \; | sed -E 's|([0-9a-fA-
 # Copy the Debian package control files
 cp -r debian $DEB_BUILD_DIRECTORY_NAME/DEBIAN
 mv md5sums.tmp $DEB_BUILD_DIRECTORY_NAME/DEBIAN/md5sums
-rm $DEB_BUILD_DIRECTORY_NAME/control.fips
+rm $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control.fips
 
 # Replace the version and architecture in the control file
 sed -i "s/^Version: .*/Version: $DEB_VERSION/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
