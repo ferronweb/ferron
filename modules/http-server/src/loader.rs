@@ -427,7 +427,7 @@ fn register_http_server_http_protocol_directives(registry: &mut DirectiveRegistr
         Some(http),
         DirectiveSubblock::default(),
     );
-    reg(registry, "protocols", "protocols <name>...", "This directive specifies the enabled HTTP protocols. Supported values: h1 (HTTP/1.1), h2 (HTTP/2), h3 (HTTP/3, experimental). Default: h1 h2", false, None, http);
+    reg(registry, "protocols", "protocols <name>...", "This directive specifies the enabled HTTP protocols. Supported values: h1 (HTTP/1.1), h2 (HTTP/2), h3 (HTTP/3). Default: h1 h2 h3", false, None, http);
     reg(registry, "options_allowed_methods", "options_allowed_methods <methods>", "This directive specifies the HTTP methods advertised in the Allow header for OPTIONS * requests. Default: GET, HEAD, POST, OPTIONS", false, None, http);
     reg(registry, "timeout", "timeout <duration>", "This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. 30m, 90s), a number in milliseconds, or false to disable. Default: 5m", false, None, http);
     reg(registry, "url_sanitize", "url_sanitize [bool]", "This directive specifies whether URL path sanitization is enabled. When enabled, dangerous sequences such as path traversal attempts, null bytes, and invalid percent-encodings are removed or normalized. Default: enabled", true, Some(http), http);

@@ -348,21 +348,6 @@ fn add_http_block_best_practice_diagnostics(
         }
     }
 
-    if let Some(entries) = http.directives.get("protocols") {
-        for entry in entries {
-            if entry
-                .args
-                .iter()
-                .any(|value| value.as_str().is_some_and(|protocol| protocol == "h3"))
-            {
-                ctx.add_best_practice_violation(
-                    "`protocols` enables experimental HTTP/3; verify client compatibility and operational monitoring before using it in production",
-                    entry_span(entry),
-                );
-            }
-        }
-    }
-
     // Detect "location" block duplicates
     let mut unique_pathnames = std::collections::HashSet::new();
 

@@ -17,7 +17,7 @@ http example.com:8080 {
 >
 > - Ferron scopes these directives to individual hosts, not globally.
 > - The HTTP server engine (`http-server` module) handles connection management, request routing, and TLS termination.
-> - The engine supports HTTP/1, HTTP/2, and experimental HTTP/3.
+> - The engine supports HTTP/1, HTTP/2, and HTTP/3.
 
 > [!info]
 > For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme). For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
@@ -131,7 +131,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
 ### HTTP protocol settings
 
 - `protocols <protocols: string>...`
-  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3, experimental). Default: `protocols h1 h2`
+  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3). Default: `protocols h1 h2 h3`
 
 - `options_allowed_methods <methods: string>`
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
@@ -191,7 +191,7 @@ example.com {
 > [!note]
 >
 > - `protocols` must leave at least one supported protocol enabled.
-> - HTTP/3 (`h3`) is currently **experimental**. When you enable it, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
+> - When you enable HTTP/3, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
 
 > [!note]
 >
@@ -269,10 +269,6 @@ All metrics include attributes for `http.request.method`, `url.scheme`, `network
 ### HTTP methods
 
 - **`options_allowed_methods` with TRACE or CONNECT**: Advertising TRACE or CONNECT in OPTIONS responses may expose unintended attack surface. Remove these methods unless intentionally supported.
-
-### HTTP/3
-
-- **`protocols` includes `h3`**: HTTP/3 is experimental. Verify client compatibility and operational monitoring before enabling in production.
 
 ### TLS deployment
 

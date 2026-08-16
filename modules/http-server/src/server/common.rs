@@ -108,7 +108,7 @@ impl Default for HttpProtocols {
         Self {
             http1: true,
             http2: true,
-            http3: false,
+            http3: true,
         }
     }
 }

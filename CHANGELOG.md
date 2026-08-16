@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changes
+
+#### HTTP server core
+
+- **HTTP/3 enabled by default**: HTTP/3 is now enabled by default in Ferron, as it's also no longer declared experimental (it was declared such, because the previous HTTP/3 implementation, `h3`, was declared experimental as well).
+
 ### Fixed
 
 #### HTTP cache
