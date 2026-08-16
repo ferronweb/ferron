@@ -53,8 +53,8 @@ tls {
 | `x25519`         | ECDH                   | Fast, widely supported, recommended default        |
 | `secp256r1`      | ECDH                   | NIST P-256, required for some compliance standards |
 | `secp384r1`      | ECDH                   | NIST P-384, higher security level                  |
-| `x25519mlkem768` | Hybrid (ECDH + ML-KEM) | Post-quantum hybrid, experimental                  |
-| `mlkem768`       | ML-KEM                 | Pure post-quantum KEM, experimental                |
+| `x25519mlkem768` | Hybrid (ECDH + ML-KEM) | Post-quantum hybrid with `x25519`                  |
+| `mlkem768`       | ML-KEM                 | Pure post-quantum KEM                              |
 
 ### TLS protocol version
 
@@ -127,7 +127,6 @@ api.example.com {
 
 - Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`). They are simpler and avoid known TLS 1.2 weaknesses.
 - `x25519` is the recommended default for ECDH curves: fast, secure, and widely supported.
-- Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only in testing environments.
 
 ## Troubleshooting
 
@@ -150,7 +149,6 @@ api.example.com {
 - **`max_version TLSv1.2`**: Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
 - **`client_auth` with public trust store**: Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
 - **`ocsp` disabled**: OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
-- **Experimental ECDH curves**: Post-quantum curves (`x25519mlkem768`, `mlkem768`) are experimental. Use them only when all clients support them.
 - **`ticket_keys` without `auto_rotate`**: Session ticket keys should rotate automatically in production to limit the impact of key compromise.
 - **`ticket_keys.max_keys` outside 2–5**: The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
 - **`ticket_keys.rotation_interval` > 24h**: Rotate session ticket keys every 12–24 hours in production.

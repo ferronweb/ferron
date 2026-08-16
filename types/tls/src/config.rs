@@ -493,23 +493,6 @@ pub fn add_tls_common_best_practice_diagnostics(
         );
     }
 
-    if let Some(entries) = config.directives.get("ecdh_curve") {
-        for entry in entries {
-            for value in &entry.args {
-                if let Some(curve) = value.as_str() {
-                    if curve == "x25519mlkem768" || curve == "mlkem768" {
-                        validator_ctx.add_best_practice_violation(
-                            format!(
-                                "`ecdh_curve {curve}` is experimental; use it only when all clients are expected to support post-quantum key exchange"
-                            ),
-                            entry_span(entry),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
     if let Some(entry) = config
         .directives
         .get("ticket_keys")
