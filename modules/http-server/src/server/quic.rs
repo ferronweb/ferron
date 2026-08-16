@@ -369,6 +369,8 @@ async fn run_endpoint(
             .await;
         });
     }
+
+    endpoint.wait_idle().await;
 }
 
 async fn accept_quic(
@@ -395,6 +397,9 @@ fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
     )?;
 
     // Set socket options
+    listener_socket2
+        .set_reuse_address(!cfg!(windows))
+        .unwrap_or_default();
     if address.is_ipv6() {
         listener_socket2.set_only_v6(false).unwrap_or_default();
     }
