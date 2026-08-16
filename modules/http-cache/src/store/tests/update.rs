@@ -185,7 +185,7 @@ fn update_entry_headers_replaces_not_appends_field_values() {
         .filter_map(|value| value.to_str().ok())
         .collect();
     assert_eq!(cache_control, vec!["public, max-age=120"]);
-    // A 304 `Set-Cookie` must not merge into the stored entry (F10).
+    // A 304 `Set-Cookie` must not merge into the stored entry.
     assert!(!updated.contains_key(http::header::SET_COOKIE));
 
     let LookupOutcome { entry: lookup, .. } =

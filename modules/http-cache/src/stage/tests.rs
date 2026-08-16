@@ -279,7 +279,7 @@ fn report_emits_exactly_one_request_metric_per_outcome() {
 fn private_key_requires_identity_without_falling_back_to_ip() {
     // No auth, no private cookie, no declared vary cookie: no identity, so no
     // key. The caller must treat the response as not storable in private scope
-    // rather than keying on the client IP alone (F12).
+    // rather than keying on the client IP alone.
     let empty = ahash::AHashMap::default();
     assert!(build_private_cache_key(&empty, None, &[]).is_none());
 
@@ -302,7 +302,7 @@ fn private_key_caps_cookie_components_and_value_length() {
         );
     }
     // With a declared vary cookie each one is an identity candidate, but the
-    // key must cap the number of cookie components (F13).
+    // key must cap the number of cookie components.
     let vary_names: Vec<String> = (0..20).map(|i| format!("session_{i}")).collect();
     let key = build_private_cache_key(&cookies, None, &vary_names).unwrap();
     assert_eq!(key.matches("cookie:").count(), 8);
@@ -319,7 +319,7 @@ fn private_key_caps_cookie_components_and_value_length() {
 #[test]
 fn private_key_ignores_arbitrary_cookies_without_vary_declaration() {
     // Arbitrary cookies must not appear in the key unless declared as vary or
-    // private cookie names (F13).
+    // private cookie names.
     let mut cookies = ahash::AHashMap::default();
     cookies.insert("visitor_id".to_string(), "abcdef1234567890".to_string());
     cookies.insert("tracking".to_string(), "uuid_value_16chars".to_string());

@@ -909,7 +909,7 @@ pub(super) async fn run_inverse_handler(
                     // entry with the upstream and stored the fresh
                     // response. Serve the fresh response to the leader
                     // instead of the stale entry it triggered the
-                    // revalidation for (F19).
+                    // revalidation for.
                     annotate_response_headers(
                         match &mut outgoing_response {
                             HttpResponse::Custom(r) => r.headers_mut(),
