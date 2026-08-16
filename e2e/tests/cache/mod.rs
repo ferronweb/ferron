@@ -1544,7 +1544,7 @@ async fn test_cache_no_cache_triggers_revalidation() {
 /// Test stale-while-revalidate behavior.
 ///
 /// After the entry expires, a concurrent follower is served the stale body
-/// while the leader revalidates upstream and receives the fresh body (F19).
+/// while the leader revalidates upstream and receives the fresh body.
 #[tokio::test]
 async fn test_cache_stale_while_revalidate() {
     let ctx = CacheRevalidationTestContext::new("swr").await;
@@ -1702,7 +1702,7 @@ async fn test_cache_stale_if_error() {
         .to_string();
     assert_eq!(cache_status, "hit", "SIE should serve stale as hit");
 
-    // Verify Cache-Status header labels stale-if-error correctly (F25)
+    // Verify Cache-Status header labels stale-if-error correctly
     let cache_status_header = resp
         .headers()
         .get("Cache-Status")
