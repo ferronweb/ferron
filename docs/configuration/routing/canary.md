@@ -11,7 +11,6 @@ This page documents the `canary` directive. It assigns each request a variant fr
 
 - `canary <name: string> { ... }` (`http-canary`)
   - Assigns a variant to each request based on a sticky key and the configured variant weights. Ferron evaluates the block in declaration order and selects the first block that matches the current host. Default: none
-  - Valid in `http` blocks, `server` blocks, and named locations.
 
 #### Block sub-directives
 
@@ -157,12 +156,12 @@ For weighted load balancing across multiple backend servers, see [HTTP reverse p
 
 The canary stage sets the following attributes on its `ferron.stage.canary` span:
 
-| Attribute                  | Type   | Description                                                     |
-| -------------------------- | ------ | --------------------------------------------------------------- |
-| `ferron.canary.variant`    | string | The selected variant name.                                      |
-| `ferron.canary.name`       | string | The canary block name.                                          |
+| Attribute                  | Type   | Description                                                                                                                |
+| -------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `ferron.canary.variant`    | string | The selected variant name.                                                                                                 |
+| `ferron.canary.name`       | string | The canary block name.                                                                                                     |
 | `ferron.canary.key_source` | string | Where the key came from: `ip`, `cookie`, `header`, `hash`, or `generated` (a random key persisted in the affinity cookie). |
-| `ferron.canary.weight`     | int    | The weight of the selected variant.                             |
+| `ferron.canary.weight`     | int    | The weight of the selected variant.                                                                                        |
 
 ### Metrics
 
