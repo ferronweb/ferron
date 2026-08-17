@@ -138,6 +138,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     volumes:
       - "./ferron-conf.d:/etc/ferron/conf.d" # Ferron configuration file
       - "ferron-acme:/var/cache/ferron-acme" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
