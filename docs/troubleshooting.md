@@ -113,6 +113,20 @@ ACME validation can fail when a firewall, cloud policy, or proxy path blocks the
 
 `localhost`, `127.0.0.1`, and `::1` use Ferron's local TLS provider, not ACME. That certificate is for local development only.
 
+### Could this be bot or scanner traffic?
+
+On public servers, some TLS and HTTP errors are just background Internet scanning noise.
+
+- Requests like `/wp-login.php`, `/.env`, or `/phpmyadmin` are common bot probes against non-WordPress/non-PHP sites.
+- Some TLS handshake failures happen before HTTP request parsing, so they may appear in error logs without a matching access-log line.
+- If legitimate traffic works and failures come from random IPs/paths, this is often not a Ferron misconfiguration.
+
+If noise is high, reduce impact with targeted controls:
+
+- Add route-specific `limit` rules for sensitive endpoints.
+- Use `allow`/`block` rules where appropriate.
+- Keep authentication and admin paths narrow and explicit.
+
 ## Static file issues
 
 ### Incorrect root path
