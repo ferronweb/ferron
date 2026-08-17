@@ -103,7 +103,17 @@ URL rewritten from "/old-path/users" to "/new-path/users"
 
 ## Regex syntax
 
-The regular expression engine used is [`fancy-regex`](https://crates.io/crates/fancy-regex), which supports most PCRE-like features including lookahead, lookbehind, and non-capturing groups. The matching is case-insensitive on Windows and case-sensitive on other platforms.
+The regular expression engine used is [`regex`](https://crates.io/crates/regex), which executes regular expressions in linear time (no support for backtracking). This means that regular expressions are executed efficiently without backtracking, mitigating potential ReDoS and catastrophic backtracking attacks.
+
+However, this also means you cannot use syntax listed below:
+
+- Lookahead statements (`(?= ...)`, `(?! ...)`)
+- Lookbehind statements (`(?<= ...)`, `(?<! ...)`)
+- Backreferences to capture groups (`\1`)
+
+If you have to negate a condition, you can use negated variants of some directives, such as `if_not` blocks instead of `if`, or `!~` in matchers instead of `~`.
+
+The matching is case-insensitive on Windows and case-sensitive on other platforms.
 
 ## Observability
 

@@ -4,9 +4,9 @@
 //! configuration into typed `MapRule` structures and evaluates them
 //! at request time to set destination variables.
 
-use fancy_regex::{Regex, RegexBuilder};
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry, Variables};
+use regex::{Regex, RegexBuilder};
 
 /// A compiled mapping rule from configuration.
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
     let mut best_wildcard_len = 0usize;
     for entry in entries {
         if let MapEntry::Wildcard { regex, .. } = entry {
-            if let Ok(true) = regex.is_match(source) {
+            if regex.is_match(source) {
                 let pattern_str = regex.as_str();
                 // Approximate: use regex pattern length as proxy for specificity
                 if pattern_str.len() > best_wildcard_len {
@@ -91,7 +91,7 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
 
     for entry in entries {
         if let MapEntry::Regex { regex, value } = entry {
-            if let Ok(Some(captures)) = regex.captures(source) {
+            if let Some(captures) = regex.captures(source) {
                 let resolved = resolve_captures(value, &captures);
                 return resolved;
             }
@@ -102,7 +102,7 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
 }
 
 /// Resolve capture group references ($1, $2, etc.) in the result value.
-fn resolve_captures(value: &str, captures: &fancy_regex::Captures<'_, str>) -> String {
+fn resolve_captures(value: &str, captures: &regex::Captures) -> String {
     let mut result = String::new();
     let mut chars = value.chars().peekable();
 

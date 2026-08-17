@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-fancy-regex = "0.19"
+regex = "1.13.1"
 cidr = "0.3"
 http = "1"
 http-body-util = "0.1.3"

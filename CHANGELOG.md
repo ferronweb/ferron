@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Breaking changes
+
+#### HTTP server core
+
+- **Linear-time regular expression engine**: The regular expression engine used by Ferron has been replaced by one using a linear-time algorithm, which means that backtracking regex patterns are no longer supported. This change was made to avoid potential ReDoS and catastrophic backtracking issues. If you are using syntax such as `(?= ...)`, `(?! ...)`, `(?<= ...)`, `(?<! ...)`, or `\1`, you need to rewrite the regexes.
+
 ### Added
 
 #### CLI utilities

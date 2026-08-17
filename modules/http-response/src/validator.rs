@@ -123,7 +123,7 @@ impl ConfigurationValidator for HttpResponseValidator {
                             if let Some(regex_str) =
                                 regex_entry.args.first().and_then(|v| v.as_str())
                             {
-                                if fancy_regex::Regex::new(regex_str).is_err() {
+                                if regex::Regex::new(regex_str).is_err() {
                                     return Err(ConfigurationValidationError::from(format!(
                                         "Invalid `regex` — invalid regular expression: {regex_str}"
                                     ))

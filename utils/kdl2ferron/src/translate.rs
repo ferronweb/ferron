@@ -1151,6 +1151,12 @@ pub fn process_block(
                                 }
                                 "regex" => {
                                     if let kdlite::dom::Value::String(s) = &entry.value {
+                                        if is_backtracking_regex(&s) {
+                                            diagnostics.todo(format!(
+                                                "Directive 'status' may not work correctly, \
+                                                as it uses backtracking regex syntax.",
+                                            ));
+                                        }
                                         status_block.statements.push(
                                             ferronconf::Statement::Directive(
                                                 ferronconf::Directive {
@@ -3250,6 +3256,14 @@ pub fn process_block(
                                     .ok_or_else(|| {
                                         anyhow::anyhow!("right operand is not a string")
                                     })?;
+                                if let ferronconf::Operand::String(r, _) = &right {
+                                    if is_backtracking_regex(r) {
+                                        diagnostics.todo(format!(
+                                            "Condition 'if_regex' may not work correctly, \
+                                        as it uses backtracking regex syntax.",
+                                        ));
+                                    }
+                                }
                                 ferron3_conditions.push(ferronconf::MatcherExpression {
                                     left,
                                     right,
@@ -3327,6 +3341,14 @@ pub fn process_block(
                                     .ok_or_else(|| {
                                         anyhow::anyhow!("right operand is not a string")
                                     })?;
+                                if let ferronconf::Operand::String(r, _) = &right {
+                                    if is_backtracking_regex(r) {
+                                        diagnostics.todo(format!(
+                                            "Condition 'if_not_regex' may not work correctly, \
+                                        as it uses backtracking regex syntax.",
+                                        ));
+                                    }
+                                }
                                 ferron3_conditions.push(ferronconf::MatcherExpression {
                                     left,
                                     right,
@@ -4056,6 +4078,12 @@ pub fn process_block(
                 });
 
                 if let (Some(regex), Some(replacement)) = (regex, replacement) {
+                    if is_backtracking_regex(&regex) {
+                        diagnostics.todo(format!(
+                            "Directive 'rewrite' may not work correctly, \
+                            as it uses backtracking regex syntax.",
+                        ));
+                    }
                     let mut block = ferronconf::Block {
                         trailing_comments: HashMap::new(),
                         blank_lines_before: HashMap::new(),
@@ -4166,6 +4194,16 @@ pub fn process_block(
         statements,
         span: ferronconf::Span { line: 0, column: 0 },
     })
+}
+
+fn is_backtracking_regex(regex_str: &str) -> bool {
+    regex_str.contains("(?=")
+        || regex_str.contains("(?<")
+        || regex_str.contains("(?!")
+        || regex_str
+            .chars()
+            .zip(regex_str.chars().skip(1))
+            .any(|(ch1, ch2)| ch1 == '\\' && ch2.is_ascii_digit())
 }
 
 fn duration_kdl_to_ferron(duration: &kdlite::dom::Value) -> Option<ferronconf::Value> {

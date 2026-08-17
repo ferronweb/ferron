@@ -1,11 +1,11 @@
 //! Configuration parsing for the `set_var` and `log_field` directives.
 
-use fancy_regex::{Regex, RegexBuilder};
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
     Variables,
 };
+use regex::{Regex, RegexBuilder};
 
 /// A compiled `set_var` rule from configuration.
 #[derive(Debug, Clone)]
@@ -149,7 +149,7 @@ pub fn evaluate_set_var_rules(
     let mut results = Vec::new();
     for rule in rules {
         let source_value = variables.resolve(&rule.source).unwrap_or_default();
-        let matched = rule.pattern.is_match(&source_value).unwrap_or(false);
+        let matched = rule.pattern.is_match(&source_value);
         if rule.negate != matched {
             results.push((rule.variable.clone(), rule.value.clone()));
         }

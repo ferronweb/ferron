@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use fancy_regex::{Regex, RegexBuilder};
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
+use regex::{Regex, RegexBuilder};
 
 use crate::RewriteEngine;
 

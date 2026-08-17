@@ -1,8 +1,8 @@
-use fancy_regex::Regex;
 use ferron_core::config::validator::{
     entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
+use regex::Regex;
 
 /// Recognized sub-directives inside a `map { ... }` block.
 const MAP_BLOCK_DIRECTIVES: &[&str] = &["default", "exact", "regex"];
