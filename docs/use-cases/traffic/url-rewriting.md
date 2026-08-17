@@ -65,6 +65,29 @@ example.com {
 }
 ```
 
+## Clean URLs without `.html` for static files
+
+To serve clean URLs (without `.html`) for static files, you can use a regex pattern that matches any path except those ending with `.html`:
+
+```ferron
+example.com {
+    root /var/www/html
+
+    # Rewrite /test?a=b&c=d -> /test.html?a=b&c=d
+    rewrite "^/([^?#]*[^?#/])($|[?#].*)" "/$1.html$2" {
+        file false
+    }
+
+    # Redirect /test/?a=b&c=d -> /test?a=b&c=d
+    status 301 {
+        regex "^/([^?#]*[^?#/])/($|[?#].*)"
+        location /$1$2
+    }
+}
+```
+
+This is useful when serving websites generated with a static site generator (SSG) such as Jekyll, Hugo, or Astro.
+
 ## Chained rules without `last`
 
 Without `last true`, multiple rewrite rules can chain together:
