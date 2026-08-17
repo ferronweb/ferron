@@ -96,7 +96,7 @@ Plain numbers without a suffix count as seconds.
 
 ### Raw string literals
 
-Raw string literals (`r"..."` or `r'...'`) handle escape processing: use them for values that contain regex patterns or similar content. Raw strings process no escape sequences. Backslashes stay literal:
+Raw string literals (`r"..."`) handle escape processing: use them for values that contain regex patterns or similar content. Raw strings process no escape sequences. Backslashes stay literal:
 
 ```ferron
 match api_request {
