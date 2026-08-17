@@ -18,7 +18,6 @@ pub(crate) static SECONDARY_RUNTIME_HANDLE: OnceLock<(
 /// configuration, avoiding repeated allocation of DNS client state and
 /// connection pools. The key is a sorted `Vec<IpAddr>` so that different
 /// orderings of the same servers share one resolver.
-#[cfg(feature = "srv-lookup")]
 pub(crate) static RESOLVER_CACHE: OnceLock<
     parking_lot::RwLock<
         rustc_hash::FxHashMap<Vec<std::net::IpAddr>, Arc<hickory_resolver::TokioResolver>>,
@@ -71,7 +70,6 @@ pub fn get_secondary_runtime_handle(
 ///
 /// Returns `None` if the secondary runtime handle hasn't been captured yet
 /// (i.e., `Module::start()` hasn't been called).
-#[cfg(feature = "srv-lookup")]
 #[inline]
 pub(crate) fn get_or_create_resolver(
     dns_servers: &[std::net::IpAddr],

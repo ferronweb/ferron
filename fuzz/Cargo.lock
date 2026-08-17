@@ -816,9 +816,11 @@ dependencies = [
  "rasn",
  "rasn-pkix",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "tokio-rustls",
  "vibeio",
+ "webpki-roots",
 ]
 
 [[package]]

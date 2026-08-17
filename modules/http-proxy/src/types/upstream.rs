@@ -131,7 +131,6 @@ pub struct UpstreamConfig {
 ///
 /// The DNS resolver and runtime handle are obtained lazily at resolution time
 /// from the globally-captured secondary runtime handle.
-#[cfg(feature = "srv-lookup")]
 #[derive(Clone)]
 pub struct SrvUpstreamData {
     /// SRV record name (e.g. `_http._tcp.example.com`).
@@ -162,7 +161,6 @@ pub enum Upstream {
     /// Static upstream with a fixed URL and configuration.
     Static(UpstreamConfig),
     /// SRV-based upstream resolved via DNS.
-    #[cfg(feature = "srv-lookup")]
     Srv(SrvUpstreamData),
 }
 
@@ -180,25 +178,7 @@ impl Upstream {
                     !cfg.logical_dns && cfg.unix_socket.is_none() && !is_ip_literal(&cfg.url);
 
                 if needs_dns {
-                    #[cfg(feature = "srv-lookup")]
-                    {
-                        super::strict_dns::resolve_strict_dns(cfg).await
-                    }
-                    #[cfg(not(feature = "srv-lookup"))]
-                    {
-                        // Fallback: no DNS resolution available, return as-is
-                        vec![Arc::new(UpstreamInner {
-                            proxy_to: cfg.url.clone(),
-                            connect_to: None,
-                            proxy_unix: cfg.unix_socket.clone(),
-                            weight: cfg.weight,
-                            mtls: cfg.mtls.clone(),
-                            priority: cfg.priority,
-                            connection_timeout: cfg.connection_timeout,
-                            idle_timeout: cfg.idle_timeout,
-                            dns_status: DnsResolutionStatus::NotApplicable,
-                        })]
-                    }
+                    super::strict_dns::resolve_strict_dns(cfg).await
                 } else {
                     let dns_status = if cfg.logical_dns {
                         DnsResolutionStatus::LogicalDns
@@ -219,7 +199,6 @@ impl Upstream {
                     })]
                 }
             }
-            #[cfg(feature = "srv-lookup")]
             Upstream::Srv(srv_data) => super::srv::resolve_srv(srv_data).await,
         }
     }

@@ -82,7 +82,7 @@ If you omit both, Ferron uses the safe default range (TLS 1.2 to 1.3). Setting o
 - `client_auth [bool: boolean]`
   - This directive turns client certificate authentication on or off. When `true`, clients **must** present a valid certificate. Default: `client_auth false`
 - `client_auth_ca <source: string>`
-  - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle, requires `webpki-roots` feature). Default: `client_auth_ca webpki`
+  - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle). Default: `client_auth_ca webpki`
 
 **Configuration example: full mTLS**
 

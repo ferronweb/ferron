@@ -6,7 +6,6 @@
 //! here, `upstream/resolution.rs` can call it via `crate::types::resolve_srv`
 //! without creating a cycle.
 
-#[cfg(feature = "srv-lookup")]
 #[inline]
 pub async fn resolve_srv(
     srv_data: &super::upstream::SrvUpstreamData,
@@ -43,7 +42,6 @@ pub async fn resolve_srv(
         .collect()
 }
 
-#[cfg(feature = "srv-lookup")]
 #[inline]
 pub async fn resolve_srv_inner(
     srv_data: &super::upstream::SrvUpstreamData,

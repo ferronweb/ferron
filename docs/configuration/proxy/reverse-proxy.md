@@ -255,7 +255,7 @@ example.com {
 | `logical_dns`        | `[bool: boolean]`   | When `true`, disables strict A/AAAA DNS resolution and uses the system's logical DNS resolution instead. Ferron passes the upstream URL through as-is without per-IP backend splitting.                     | `false`   |
 | `dns_servers`        | `<string>`          | Comma-separated DNS server IPs used for strict A/AAAA resolution. Uses Hickory's default resolvers if empty.                                                                                                | system    |
 
-### `srv` (feature-gated)
+### `srv`
 
 Defines a dynamic upstream that Ferron resolves via DNS SRV records.
 

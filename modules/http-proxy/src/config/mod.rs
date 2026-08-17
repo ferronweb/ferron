@@ -102,7 +102,6 @@ fn parse_proxy_block(
                     parse_upstream_entry(entry, cfg, ctx)?;
                 }
             }
-            #[cfg(feature = "srv-lookup")]
             "srv" => {
                 for entry in entries {
                     upstream::parse_srv_entry(entry, cfg, ctx)?;

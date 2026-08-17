@@ -108,7 +108,6 @@ fn validate_proxy_block(
     }
     validate_number(block, "proxy_concurrent_conns", 0)?;
     validate_upstream_directives(block, ctx, &mut sub)?;
-    #[cfg(feature = "srv-lookup")]
     validate_srv_directives(block, ctx, &mut sub)?;
 
     ferron_core::check_unused_subdirectives!(block, sub, &mut ctx.diagnostics, ctx.scope.clone());
@@ -276,7 +275,6 @@ fn validate_upstream_block(
     Ok(())
 }
 
-#[cfg(feature = "srv-lookup")]
 fn validate_srv_directives(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
@@ -299,7 +297,6 @@ fn validate_srv_directives(
     Ok(())
 }
 
-#[cfg(feature = "srv-lookup")]
 fn validate_srv_block(
     block: &ServerConfigurationBlock,
     ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,

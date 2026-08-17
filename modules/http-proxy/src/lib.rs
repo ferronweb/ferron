@@ -39,7 +39,6 @@ use types::retry_budget::SharedRetryBudget;
 
 use crate::per_config::{PerConfigCache, TaskRegistry};
 use crate::stage::ReverseProxyStage;
-#[cfg(feature = "srv-lookup")]
 use crate::types::upstream::Upstream;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
@@ -183,7 +182,6 @@ impl ProxyState {
         // Check if any upstream has health checks enabled
         let has_health_checks = upstreams.iter().any(|u| match u {
             Upstream::Static(cfg) => cfg.health_check_config.enabled,
-            #[cfg(feature = "srv-lookup")]
             Upstream::Srv(cfg) => cfg.health_check_config.enabled,
         });
 

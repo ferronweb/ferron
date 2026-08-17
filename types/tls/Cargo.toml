@@ -9,8 +9,8 @@ aws-lc-rs = { version = "1", features = ["bindgen"] }
 getrandom = "0.4"
 rustls = { version = "0.23.37", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 rustls-pki-types = "1"
-rustls-native-certs = { version = "0.8", optional = true }
-webpki-roots = { version = "1", optional = true }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
 vibeio = { version = "0.2.6", default-features = false }
 tokio-rustls = { version = "0.26.4", default-features = false }
 rasn = { version = "0.28.13", optional = true }
@@ -21,8 +21,6 @@ ferron-core = { path = "../../core" }
 
 [features]
 default = []
-native-certs = ["dep:rustls-native-certs"]
-webpki-roots = ["dep:webpki-roots"]
 observability = ["dep:rasn", "dep:rasn-pkix", "dep:num-bigint", "dep:ferron-observability"]
 fips = ["rustls/fips"]
 

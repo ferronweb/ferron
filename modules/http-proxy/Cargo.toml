@@ -26,8 +26,8 @@ rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 rand = "0.10"
 ahash = "0.8"
-hickory-resolver = { version = "0.26", optional = true }
-hickory-proto = { version = "0.26", optional = true }
+hickory-resolver = "0.26"
+hickory-proto = "0.26"
 parking_lot = "0.12"
 ppp = "2.2"
 rustc-hash = "2.1.2"
@@ -37,6 +37,5 @@ crossbeam-queue = "0.3.12"
 arc-swap = "1.9.1"
 
 [features]
-default = ["srv-lookup"]
-srv-lookup = ["hickory-resolver", "hickory-proto"]
+default = []
 fuzz = []

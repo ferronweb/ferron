@@ -331,40 +331,20 @@ pub fn build_root_cert_store(
             }
         }
         TlsClientAuthCaSource::SystemRoots => {
-            #[cfg(feature = "native-certs")]
-            {
-                let native_certs = rustls_native_certs::load_native_certs();
-                for err in native_certs.errors {
-                    ferron_core::log_warn!("Failed to load native root cert: {}", err);
-                }
-                let count = native_certs.certs.len();
-                root_store.add_parsable_certificates(native_certs.certs);
-                ferron_core::log_info!("Loaded {} native root certificates", count);
+            let native_certs = rustls_native_certs::load_native_certs();
+            for err in native_certs.errors {
+                ferron_core::log_warn!("Failed to load native root cert: {}", err);
             }
-            #[cfg(not(feature = "native-certs"))]
-            {
-                return Err(
-                    "native-certs feature not enabled; recompile with --features native-certs"
-                        .into(),
-                );
-            }
+            let count = native_certs.certs.len();
+            root_store.add_parsable_certificates(native_certs.certs);
+            ferron_core::log_info!("Loaded {} native root certificates", count);
         }
         TlsClientAuthCaSource::WebPkiRoots => {
-            #[cfg(feature = "webpki-roots")]
-            {
-                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-                ferron_core::log_info!(
-                    "Loaded {} webpki root certificates",
-                    webpki_roots::TLS_SERVER_ROOTS.len()
-                );
-            }
-            #[cfg(not(feature = "webpki-roots"))]
-            {
-                return Err(
-                    "webpki-roots feature not enabled; recompile with --features webpki-roots"
-                        .into(),
-                );
-            }
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            ferron_core::log_info!(
+                "Loaded {} webpki root certificates",
+                webpki_roots::TLS_SERVER_ROOTS.len()
+            );
         }
     }
 

@@ -1,5 +1,4 @@
 use std::error::Error;
-#[cfg(feature = "srv-lookup")]
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -10,7 +9,6 @@ use super::resilience::parse_active_health_check;
 use super::types::ProxyConfig;
 use super::{DEFAULT_CONNECTION_TIMEOUT_MS, DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS, MTLS_FILE_CACHE};
 use crate::types::health::UpstreamHealthCheckConfig;
-#[cfg(feature = "srv-lookup")]
 use crate::types::upstream::SrvUpstreamData;
 use crate::types::upstream::{MtlsCredentials, Upstream, UpstreamConfig};
 
@@ -214,7 +212,6 @@ pub(super) fn parse_upstream_entry(
     Ok(())
 }
 
-#[cfg(feature = "srv-lookup")]
 #[inline]
 pub(super) fn parse_srv_entry(
     entry: &ServerConfigurationDirectiveEntry,

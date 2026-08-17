@@ -168,9 +168,7 @@ pub type UnhealthyCallback = Arc<dyn Fn(&str, bool) + Send + Sync>;
 #[derive(Hash, Eq, PartialEq)]
 enum UpstreamHealthCheckType {
     Static(String),
-    #[cfg(feature = "srv-lookup")]
     Srv((String, Vec<std::net::IpAddr>, u32)),
-    #[cfg(feature = "srv-lookup")]
     StrictDns((String, u16, Vec<std::net::IpAddr>)),
 }
 
@@ -546,7 +544,6 @@ pub fn spawn_health_check_task(
                         }
                     }
                 }
-                #[cfg(feature = "srv-lookup")]
                 Upstream::Srv(cfg) => {
                     if cfg.health_check_config.enabled {
                         probe_configs.push((
@@ -572,9 +569,7 @@ pub fn spawn_health_check_task(
             let (upstream_type, config, _) = probe_config;
             let upstream_desc = match upstream_type {
                 UpstreamHealthCheckType::Static(url) => format!("Static({})", url),
-                #[cfg(feature = "srv-lookup")]
                 UpstreamHealthCheckType::Srv((srv_name, _, _)) => format!("SRV({})", srv_name),
-                #[cfg(feature = "srv-lookup")]
                 UpstreamHealthCheckType::StrictDns((host, port, _)) => {
                     format!("StrictDns({}:{})", host, port)
                 }
@@ -621,7 +616,6 @@ pub fn spawn_health_check_task(
             for (upstream_url, config, mtls) in &probe_configs {
                 let upstreams = match upstream_url {
                     UpstreamHealthCheckType::Static(url) => vec![url.clone()],
-                    #[cfg(feature = "srv-lookup")]
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
@@ -666,7 +660,6 @@ pub fn spawn_health_check_task(
                             .map(|upstream| upstream.0.proxy_to.clone())
                             .collect()
                     }
-                    #[cfg(feature = "srv-lookup")]
                     UpstreamHealthCheckType::StrictDns((host, port, dns_servers)) => {
                         let temp_cfg = crate::types::upstream::UpstreamConfig {
                             url: format!("http://{}:{}", host, port),
