@@ -102,7 +102,7 @@ example.com {
         copy X-Auth-User X-Auth-Roles X-Auth-Email
     }
 
-    # The copied headers are now available in the request
+    # The copied headers are available in the request
     proxy http://backend:8080
 }
 ```

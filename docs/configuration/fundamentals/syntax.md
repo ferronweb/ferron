@@ -113,7 +113,7 @@ match api_request {
 ```
 
 > [!warning]
-> Invalid escape sequences in strings (for example, `\z`, `\$`) are now parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regexes.
+> Invalid escape sequences in strings (for example, `\z`, `\$`) cause parse errors. Use raw strings (`r"..."`) if you need literal backslashes in values like regexes.
 
 > [!note]
 > Raw strings do not support interpolation (`{{...}}`). Use standard strings if you need variable substitution.
