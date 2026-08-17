@@ -12,11 +12,6 @@ exclude = [
     "doctest",
     "e2e",
     "fuzz",
-    # Fuzzing targets
-    "modules/http-server/fuzz",
-    "modules/http-ratelimit/fuzz",
-    "modules/http-proxy/fuzz",
-    "modules/http-cache/fuzz"
 ]
 
 [profile.release]
