@@ -105,14 +105,6 @@ URL rewritten from "/old-path/users" to "/new-path/users"
 
 The regular expression engine used is [`fancy-regex`](https://crates.io/crates/fancy-regex), which supports most PCRE-like features including lookahead, lookbehind, and non-capturing groups. The matching is case-insensitive on Windows and case-sensitive on other platforms.
 
-## URL sanitation interaction
-
-When URL sanitization is on (the default), Ferron normalizes dangerous path sequences like `/../` before it applies rewrite rules. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./url-processing.md)).
-
-## Pipeline position
-
-Ferron applies rewrite rules after client IP resolution and before reverse proxying, static file serving, and response generation. This means all later routing decisions use rewritten URLs.
-
 ## Observability
 
 ### Metrics
