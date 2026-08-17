@@ -16,6 +16,10 @@
 
 - **HTTP cache `Vary` correctness fix**: a bug introduced in Ferron 3.0.0-beta.9 led to some header names in `Vary` header values (`If-Match`, `If-Modified-Since`, `If-None-Match`, `If-Range`, `If-Unmodified-Since`, `Range`) being ignored by the cache, which might lead to wrong 304 responses being served. This has been fixed to properly handle these headers in `Vary` values.
 
+#### HTTP server core
+
+- **Configured HTTP responses after HTTP -> HTTPS redirects**: HTTP responses configured to be served after the `https_redirect` stage will now only be served after a successful HTTP-to-HTTPS redirection. This ensures that these responses are not served before the client is redirected, which could lead to unexpected behavior or security issues.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**
