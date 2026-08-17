@@ -170,7 +170,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
   - This directive enables or disables the HTTP/3 extended CONNECT protocol setting. Default: `h3_enable_connect_protocol false`
 
 - `url_sanitize [bool: boolean]`
-  - This directive enables or disables URL path sanitization. When enabled (the default), Ferron removes or normalizes dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings. This directive applies only to global scope. Default: `url_sanitize true`
+  - This directive enables or disables URL path sanitization based on URL canonicalization. When enabled (the default), Ferron removes or normalizes dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings. This directive applies only to global scope. Default: `url_sanitize true`
 
 - `url_reject_backslash [bool: boolean]`
   - This directive controls whether Ferron rejects URLs containing backslashes. When enabled (the default), Ferron responds with 400 Bad Request for requests containing literal `\` or percent-encoded backslashes (`%5C`) in the path. This prevents path interpretation issues on Windows backends where systems may treat backslashes as path separators. This directive applies only to global scope. Default: `url_reject_backslash true`
@@ -201,7 +201,7 @@ example.com {
 > [!note] Notes for "url_sanitize"
 >
 > - Ferron applies URL sanitization early in request processing, before configuration resolution.
-> - This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+> - This directive is only read from the **global** configuration block. Per-host settings are not supported.
 
 > [!note]
 >
