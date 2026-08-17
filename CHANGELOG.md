@@ -20,6 +20,10 @@
 
 - **Configured HTTP responses after HTTP -> HTTPS redirects**: HTTP responses configured to be served after the `https_redirect` stage will now only be served after a successful HTTP-to-HTTPS redirection. This ensures that these responses are not served before the client is redirected, which could lead to unexpected behavior or security issues.
 
+#### TLS
+
+- **Local TLS with ALPN + OCSP**: local TLS now supports ALPN and OCSP stapling properly, for HTTP/2 to work properly.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**

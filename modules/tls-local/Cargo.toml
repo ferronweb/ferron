@@ -11,6 +11,7 @@ rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "a
 dirs = "6.0"
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
+ferron-ocsp = { path = "../../types/ocsp" }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
 time = "0.3"
 rasn = "0.28.13"

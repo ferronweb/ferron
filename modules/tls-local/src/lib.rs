@@ -88,12 +88,32 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsLocalProvider {
         let config_builder =
             build_server_config_builder(&tls_config.crypto, &tls_config.client_auth)?;
 
+        let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
+
         // Install the certificate via a custom resolver since we have a CertifiedKey
-        let server_config =
+        let mut config_with_tickets =
             config_builder.with_cert_resolver(Arc::new(LocalSingleCertResolver(certified_key)));
 
+        // Attach the ticketer
+        if let Some(ticketer) = ticketer {
+            config_with_tickets.ticketer = ticketer;
+        }
+
+        if let Some(alpn_protocols) = ctx.alpn.as_ref() {
+            config_with_tickets.alpn_protocols = alpn_protocols.clone();
+        }
+
+        // Wrap cert_resolver with OCSP stapler if enabled
+        if tls_config.ocsp.enabled {
+            let ocsp_handle = ferron_ocsp::get_service_handle()
+                .expect("OCSP service handle should always be available");
+            let inner_resolver = config_with_tickets.cert_resolver.clone();
+            config_with_tickets.cert_resolver =
+                Arc::new(ferron_ocsp::OcspStapler::new(inner_resolver, &ocsp_handle));
+        }
+
         ctx.resolver = Some(Arc::new(TcpTlsLocalResolver {
-            config: Arc::new(server_config),
+            config: Arc::new(config_with_tickets),
         }));
 
         Ok(())

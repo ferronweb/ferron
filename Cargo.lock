@@ -2097,6 +2097,7 @@ dependencies = [
  "dirs",
  "ferron-core",
  "ferron-observability",
+ "ferron-ocsp",
  "ferron-tls",
  "rasn",
  "rasn-pkix",
