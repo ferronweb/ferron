@@ -125,32 +125,6 @@ example.com {
 }
 ```
 
-## Scoping
-
-You can place the `replace`, `replace_last_modified`, and `replace_filter_types` directives at different configuration levels:
-
-- **Host level**: applies to all requests for that host
-- **`location` block**: applies only to requests matching that path prefix
-- **`if` / `if_not` blocks**: applies conditionally based on a matcher
-
-```ferron
-example.com {
-    # Global replacements for all requests
-    replace "old-brand" "new-brand"
-
-    location /api {
-        # API-specific replacements
-        replace_filter_types "application/json"
-        replace "v1" "v2"
-    }
-
-    location /legacy {
-        replace "deprecated" "archived"
-        replace_last_modified false
-    }
-}
-```
-
 ## HTTP compression interaction
 
 String replacement **requires you to disable HTTP compression** for the affected responses. When a response has a `Content-Encoding` header, the data is already compressed with gzip, brotli, or another algorithm. Ferron skips the replacement to avoid corrupting the compressed data.

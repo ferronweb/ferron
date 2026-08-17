@@ -14,11 +14,11 @@ This page documents the `json_errors` directive for generating structured JSON e
 
 #### Block options
 
-| Option | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `format` | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`). `"simple"` uses plain JSON (`application/json`). | `"problem"` |
-| `type_uri` | `<string>` | URI for the `type` field in RFC 9457 format. Ferron replaces the `{status}` placeholder with the HTTP status code. | `"about:blank"` |
-| `trace_id` | `<bool>` | Include the trace ID of the request in the response when available. | `true` |
+| Option     | Arguments                 | Description                                                                                                                             | Default         |
+| ---------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `format`   | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`). `"simple"` uses plain JSON (`application/json`). | `"problem"`     |
+| `type_uri` | `<string>`                | URI for the `type` field in RFC 9457 format. Ferron replaces the `{status}` placeholder with the HTTP status code.                      | `"about:blank"` |
+| `trace_id` | `<bool>`                  | Include the trace ID of the request in the response when available.                                                                     | `true`          |
 
 **Configuration example:**
 
@@ -91,30 +91,6 @@ example.com {
 }
 ```
 
-## Scoping
-
-You can place the `json_errors` directive at different configuration levels:
-
-- **Host level**: applies to all requests for that host
-- **`location` block**: applies only to requests matching that path prefix
-- **`if` / `if_not` blocks**: applies conditionally based on a matcher
-
-```ferron
-example.com {
-    # All errors are JSON for this host
-    json_errors
-
-    match BLOG {
-        request.uri.path ~ "^/blog($|/)"
-    }
-    
-    if BLOG {
-        # Override: HTML error pages for the blog
-        json_errors false
-    }
-}
-```
-
 ## Interaction with error pages
 
 When you enable `json_errors`, the JSON error stage runs **before** the `error_page` stage, which serves custom HTML error pages. This means:
@@ -129,7 +105,7 @@ When you enable `json_errors`, the JSON error stage runs **before** the `error_p
 
 The stage sets the following attributes on its `ferron.stage.json_error` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.json_error.format` | string | Output format (`"problem"` or `"simple"`) |
-| `ferron.json_error.status_code` | i64 | HTTP status code of the error response |
+| Attribute                       | Type   | Description                               |
+| ------------------------------- | ------ | ----------------------------------------- |
+| `ferron.json_error.format`      | string | Output format (`"problem"` or `"simple"`) |
+| `ferron.json_error.status_code` | i64    | HTTP status code of the error response    |

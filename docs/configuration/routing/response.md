@@ -147,22 +147,6 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 > [!note]
 > 103 Early Hints is only effective on HTTP/2+ connections by default. For HTTP/1.1, enable `h1_enable_early_hints true` in your `http` block. If `send_early_hints` fails, Ferron logs a warning and the request continues normally.
 
-#### Scoping
-
-You can place the `early_hints` directive at different configuration levels:
-
-- **Host level**: applies to all requests for that host
-- **`location` block**: applies only to requests matching that path prefix
-- **`if` / `if_not` blocks**: applies conditionally based on a matcher
-
-## Scoping
-
-You can place all directives (`status`, `abort`, `block`, `allow`, `early_hints`) at different configuration levels:
-
-- **Host level**: applies to all requests for that host
-- **`location` block**: applies only to requests matching that path prefix
-- **`if` / `if_not` blocks**: applies conditionally based on a matcher
-
 ## Observability
 
 ### Metrics
