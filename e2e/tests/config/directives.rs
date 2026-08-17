@@ -29,6 +29,10 @@ async fn test_host_configuration() {
         request.header.user-agent ~ "^somescanner(/|$)"
       }
 
+      match NOT_BASIC_TXT {
+        request.uri.path != "/basic.txt"
+      }
+
       aunrel:80 {
         status 403
       }
@@ -49,9 +53,10 @@ async fn test_host_configuration() {
         }
 
         handle_error 404 {
-          status 302 {
-            regex r"^/(?!basic\.txt(?:$|[?#]))"
-            location "/basic.txt"
+          if NOT_BASIC_TXT {
+            status 302 {
+              location "/basic.txt"
+            }
           }
         }
       }
