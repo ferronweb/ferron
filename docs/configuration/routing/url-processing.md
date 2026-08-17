@@ -66,24 +66,6 @@ example.com {
 }
 ```
 
-### Web root
-
-- `root <path: string>`
-  - This directive specifies the webroot that the HTTP file-handler pipeline uses after regular HTTP stages leave the request without a response. Ferron canonicalizes the resolved path before file stages run. Ferron rejects requests that try to escape the webroot. Default: not configured
-
-**Configuration example:**
-
-```ferron
-example.com {
-    root /srv/www/example
-}
-```
-
-> [!note]
->
-> - If a request continues below a matched file path, Ferron carries the unmatched suffix into the file-stage context as `path_info`.
-> - Separate directives control additional static file behavior (index resolution, compression, ETags, directory listings, MIME types). See [Static file serving](/docs/v3/configuration/content/static-files).
-
 ### URL redirects
 
 - `trailing_slash_redirect [bool: boolean]`

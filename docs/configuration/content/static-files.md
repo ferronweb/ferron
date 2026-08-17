@@ -14,6 +14,22 @@ This page documents directives that configure static file serving, directory lis
 
 ## Directives
 
+### Web root
+
+- `root <path: string>`
+  - This directive specifies the webroot that the HTTP file-handler pipeline uses after regular HTTP stages leave the request without a response. Ferron canonicalizes the resolved path before file stages run. Ferron rejects requests that try to escape the webroot. Default: not configured
+
+**Configuration example:**
+
+```ferron
+example.com {
+    root /srv/www/example
+}
+```
+
+> [!note]
+> If a request continues below a matched file path, Ferron carries the unmatched suffix into the file-stage context as `path_info` (for PHP, CGI and FastCGI).
+
 ### Index and directory listings
 
 - `index <filename: string>...`
