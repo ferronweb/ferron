@@ -144,7 +144,7 @@ example.com {
 
 Comments start with `#`.
 
-## Host snake
+## Host blocks
 
 Host blocks appear only at the top level. Supported selectors include:
 
