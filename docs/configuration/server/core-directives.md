@@ -350,14 +350,6 @@ The admin API is a built-in HTTP interface for server health checks, status moni
 
 The admin API is a **privileged control plane** with full server configuration access and reload capability. It has no encryption and no authentication by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
 
-#### Current limitations
-
-| Feature          | Status        | Notes                                                                                   |
-| ---------------- | ------------- | --------------------------------------------------------------------------------------- |
-| TLS / HTTPS      | Not supported | The admin listener accepts plain HTTP only. No TLS configuration options are available. |
-| Authentication   | Supported     | Use `auth_token` to require a bearer token on all endpoints except `/health`.           |
-| ACL / allowlists | Not supported | No built-in IP address filtering or access restrictions.                                |
-
 #### Risks of binding to `0.0.0.0`
 
 Setting `listen "0.0.0.0:<port>"` makes the admin API **completely open to any client that can reach the host**. Omitting the bind address defaults to all interfaces and has the same effect. This can happen accidentally in containerized environments (for example, Docker with bridge networking) or misconfigured networks.
