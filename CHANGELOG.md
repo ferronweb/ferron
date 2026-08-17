@@ -24,6 +24,10 @@
 
 - **Local TLS with ALPN + OCSP**: local TLS now supports ALPN and OCSP stapling properly, for HTTP/2 to work properly.
 
+#### Observability and tracing
+
+- **High-cardinality metric removed**: the `ferron.proxy.lb.selections` with high-cardinality `ferron.proxy.lb.score` attribute has been removed to prevent exhaustion of metric storage.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**

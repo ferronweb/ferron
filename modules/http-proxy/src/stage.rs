@@ -731,27 +731,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     trace_context: current_event_trace_context(ctx),
 
                 }));
-
-                if ewma_latency > 0.0 {
-                    let score = p2c_ewma::compute_score(ewma_latency, active_conns, &params);
-                    let mut sel_attrs = upstream_attrs.clone();
-                    sel_attrs.push((
-                        "ferron.proxy.lb.reason",
-                        MetricAttributeValue::String("p2c_ewma".to_string()),
-                    ));
-                    sel_attrs.push(("ferron.proxy.lb.score", MetricAttributeValue::F64(score)));
-                    ctx.events
-                        .emit(ferron_observability::Event::Metric(MetricEvent {
-                            name: "ferron.proxy.lb.selections",
-                            attributes: sel_attrs,
-                            ty: MetricType::Counter,
-                            value: MetricValue::U64(1),
-                            unit: Some("{selection}"),
-                            description: Some("P2C+EWMA backend selection with combined score."),
-
-                            trace_context: current_event_trace_context(ctx),
-                        }));
-                }
             }
 
             if !metrics.candidate_scores.is_empty() {
