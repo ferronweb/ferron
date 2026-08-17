@@ -139,15 +139,6 @@ Default: `auth_to_concurrent_conns 16384`
 5. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
 6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client. The pipeline stops.
 
-## Stage ordering
-
-The `forwarded_auth` stage runs in the following position in the pipeline:
-
-- **After** `cache` (caching occurs before authentication)
-- **After** `basicauth` (basic auth check runs before forwarded auth)
-- **Before** `reverse_proxy` (authentication before proxying)
-- **Before** `forward_proxy` (authentication before forwarding)
-
 ## Configuration examples
 
 ### Basic forwarded authentication
