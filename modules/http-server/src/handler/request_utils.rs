@@ -8,6 +8,7 @@ use ferron_observability::{
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -230,6 +231,7 @@ pub(super) async fn execute_error_pipeline(
     events: &CompositeEventSink,
     parent_span_key: Option<&str>,
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
+    variables: FxHashMap<String, String>,
 ) -> Option<Response<ResponseBody>> {
     let has_traces = events.has_trace_sinks();
     let span_key = has_traces.then(|| {
@@ -261,6 +263,7 @@ pub(super) async fn execute_error_pipeline(
         configuration,
         trace_context,
         res: None,
+        variables,
     };
 
     if let Err(error) = error_pipeline.execute_without_inverse(&mut error_ctx).await {

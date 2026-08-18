@@ -112,6 +112,7 @@ pub async fn bad_request_handler(
         &events,
         request_span_key.as_deref(),
         control_plane_metadata.clone(),
+        Default::default(),
     )
     .await
     {

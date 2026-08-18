@@ -511,6 +511,7 @@ async fn request_handler_inner(
             &events,
             request_span_key.as_deref(),
             host_control_plane_metadata.clone(),
+            Default::default(),
         )
         .await
         {
@@ -624,6 +625,7 @@ async fn request_handler_inner(
                 &events,
                 request_span_key.as_deref(),
                 host_control_plane_metadata.clone(),
+                Default::default(),
             )
             .await
             {
@@ -684,6 +686,7 @@ async fn request_handler_inner(
                             &events,
                             request_span_key.as_deref(),
                             host_control_plane_metadata.clone(),
+                            Default::default(),
                         )
                         .await
                         {
@@ -743,6 +746,7 @@ async fn request_handler_inner(
                     &events,
                     request_span_key.as_deref(),
                     host_control_plane_metadata.clone(),
+                    Default::default(),
                 )
                 .await
                 {
@@ -818,6 +822,7 @@ async fn request_handler_inner(
             &events,
             request_span_key.as_deref(),
             host_control_plane_metadata.clone(),
+            ctx.variables.clone(),
         )
         .await
         {
@@ -976,6 +981,7 @@ async fn request_handler_inner(
                     &events,
                     request_span_key.as_deref(),
                     resolved_control_plane_metadata.clone(),
+                    ctx.variables,
                 )
                 .await
                 {

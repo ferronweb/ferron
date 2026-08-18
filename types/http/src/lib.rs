@@ -103,4 +103,14 @@ pub struct HttpErrorContext {
     pub configuration: LayeredConfiguration,
     pub trace_context: Option<crate::trace_context::TraceContext>,
     pub res: Option<Response<UnsyncBoxBody<bytes::Bytes, std::io::Error>>>,
+    pub variables: FxHashMap<String, String>,
+}
+
+impl Variables for HttpErrorContext {
+    fn resolve(&self, name: &str) -> Option<String> {
+        self.variables
+            .get(name)
+            .cloned()
+            .or_else(|| Some(name.to_string()))
+    }
 }

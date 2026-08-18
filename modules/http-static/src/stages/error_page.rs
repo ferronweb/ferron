@@ -63,9 +63,12 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             }
 
             // The last argument is the file path
-            let file_path = match entry.args.last() {
-                Some(ServerConfigurationValue::String(path, _)) => path.as_str(),
-                _ => continue,
+            let Some(file_path) = entry
+                .args
+                .last()
+                .and_then(|v| v.as_string_with_interpolations(ctx))
+            else {
+                continue;
             };
 
             // All preceding arguments are status codes
@@ -90,7 +93,7 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             }
 
             // Try to open the error page file
-            let path = Path::new(file_path);
+            let path = Path::new(&file_path);
 
             // Open file for reading
             let Ok(file) = ReusedFile::open(path).await else {
