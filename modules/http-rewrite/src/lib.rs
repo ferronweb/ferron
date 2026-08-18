@@ -198,6 +198,11 @@ impl Stage<HttpContext> for RewriteStage {
             return Ok(true);
         }
 
+        let root = ctx
+            .configuration
+            .get_value("root", true)
+            .and_then(|v| v.as_string_with_interpolations(ctx));
+
         // We need a mutable request reference to mutate the URI
         let Some(req) = ctx.req.as_mut() else {
             return Ok(true);
@@ -208,14 +213,6 @@ impl Stage<HttpContext> for RewriteStage {
             req.uri().path(),
             req.uri().query().map_or(String::new(), |q| format!("?{q}"))
         );
-
-        let root = ctx
-            .configuration
-            .get_value("root", true)
-            .and_then(|v| match v {
-                ServerConfigurationValue::String(s, _) => Some(s.clone()),
-                _ => None,
-            });
 
         let result = apply_rewrite_rules(&original_url, &rules, root.as_deref());
 
