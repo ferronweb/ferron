@@ -4,7 +4,11 @@ use ferron_core::config::validator::{
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 /// Recognized sub-directives inside a `canary { ... }` block.
-const CANARY_BLOCK_DIRECTIVES: &[&str] = &["affinity", "variant", "set_cookie"];
+const CANARY_BLOCK_DIRECTIVES: &[&str] = &["affinity", "variant", "set_cookie", "cookie"];
+
+/// Recognized sub-directives inside a `cookie { ... }` block.
+const COOKIE_BLOCK_DIRECTIVES: &[&str] =
+    &["ttl", "path", "domain", "secure", "httponly", "samesite"];
 
 /// Recognized affinity keywords.
 const AFFINITY_KEYWORDS: &[&str] = &["ip", "cookie", "header", "hash"];
@@ -113,6 +117,7 @@ impl CanaryValidator {
                         }
                     }
                     "set_cookie" => self.validate_set_cookie_entry(entry)?,
+                    "cookie" => self.validate_cookie_entry(entry, ctx)?,
                     _ => unreachable!(),
                 }
             }
@@ -151,6 +156,82 @@ impl CanaryValidator {
                 entry.args.len()
             ))
             .with_span(entry_span(entry)));
+        }
+
+        Ok(())
+    }
+
+    fn validate_cookie_entry(
+        &self,
+        entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+        _ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), ConfigurationValidationError> {
+        let Some(children) = &entry.children else {
+            return Ok(());
+        };
+
+        for (key, entries) in children.directives.iter() {
+            if !COOKIE_BLOCK_DIRECTIVES.contains(&key.as_str()) {
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `cookie` — unknown sub-directive `{key}` inside cookie block (recognized: {})",
+                    COOKIE_BLOCK_DIRECTIVES.join(", ")
+                ))
+                .with_span(entry_span(entries.first().expect("non-empty block directives"))));
+            }
+
+            for entry in entries {
+                match key.as_str() {
+                    "ttl" => {
+                        if entry.args.len() != 1 {
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid `ttl` — requires exactly one duration argument, got {}",
+                                entry.args.len()
+                            ))
+                            .with_span(entry_span(entry)));
+                        }
+                        if entry.args[0].as_duration().is_none() {
+                            return Err(ConfigurationValidationError::from(
+                                "Invalid `ttl` — the value must be a duration",
+                            )
+                            .with_span(entry_span(entry)));
+                        }
+                    }
+                    "path" | "domain" | "samesite" => {
+                        if entry.args.len() != 1 {
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid `{key}` — requires exactly one argument, got {}",
+                                entry.args.len()
+                            ))
+                            .with_span(entry_span(entry)));
+                        }
+                        if entry.args[0].as_str().is_none() {
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid `{key}` — the value must be a string"
+                            ))
+                            .with_span(entry_span(entry)));
+                        }
+                        if key.as_str() == "samesite" {
+                            let val = entry.args[0].as_str().unwrap().to_lowercase();
+                            if !matches!(val.as_str(), "strict" | "lax" | "none") {
+                                return Err(ConfigurationValidationError::from(
+                                    "Invalid `samesite` — must be one of strict, lax, or none",
+                                )
+                                .with_span(entry_span(entry)));
+                            }
+                        }
+                    }
+                    "secure" | "httponly" => {
+                        if entry.args.len() > 1 {
+                            return Err(ConfigurationValidationError::from(format!(
+                                "Invalid `{key}` — takes at most one boolean argument, got {}",
+                                entry.args.len()
+                            ))
+                            .with_span(entry_span(entry)));
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
         }
 
         Ok(())
@@ -492,5 +573,82 @@ mod tests {
         let block = make_config_block(make_block(directives));
         let err = run_validator(&block).unwrap_err();
         assert!(err.to_string().contains("at most one boolean argument"));
+    }
+
+    #[test]
+    fn accepts_valid_cookie_block() {
+        let mut cookie_directives = StdHashMap::new();
+        cookie_directives.insert(
+            "ttl".to_string(),
+            vec![make_entry(vec![make_value_string("1h")], None)],
+        );
+        cookie_directives.insert(
+            "domain".to_string(),
+            vec![make_entry(vec![make_value_string("example.com")], None)],
+        );
+        cookie_directives.insert("secure".to_string(), vec![make_entry(vec![], None)]);
+        cookie_directives.insert(
+            "samesite".to_string(),
+            vec![make_entry(vec![make_value_string("strict")], None)],
+        );
+
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(
+                vec![make_value_string("cookie"), make_value_string("ab_variant")],
+                None,
+            )],
+        );
+        directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        directives.insert(
+            "cookie".to_string(),
+            vec![make_entry(
+                vec![],
+                Some(make_block(cookie_directives)),
+            )],
+        );
+        let block = make_config_block(make_block(directives));
+        assert!(run_validator(&block).is_ok());
+    }
+
+    #[test]
+    fn rejects_unknown_cookie_sub_directive() {
+        let mut cookie_directives = StdHashMap::new();
+        cookie_directives.insert(
+            "expires".to_string(),
+            vec![make_entry(vec![make_value_string("1h")], None)],
+        );
+
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "affinity".to_string(),
+            vec![make_entry(
+                vec![make_value_string("cookie"), make_value_string("ab_variant")],
+                None,
+            )],
+        );
+        directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        directives.insert(
+            "cookie".to_string(),
+            vec![make_entry(vec![], Some(make_block(cookie_directives)))],
+        );
+        let block = make_config_block(make_block(directives));
+        let err = run_validator(&block).unwrap_err();
+        assert!(err.to_string().contains("unknown sub-directive"));
     }
 }

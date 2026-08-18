@@ -54,6 +54,7 @@ const CANARY_KEY_VAR: &str = "canary.key";
 struct PendingCanaryCookie {
     name: String,
     value: String,
+    cookie: crate::config::CookieConfig,
 }
 
 impl TypeMapKey for PendingCanaryCookie {
@@ -133,6 +134,83 @@ impl ModuleLoader for HttpCanaryModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("http_canary"),
+            )
+            .register(
+                Directive {
+                    name: "cookie",
+                    usage: "cookie <affinity> { ... }",
+                    description: "This directive configures the attributes of the canary affinity cookie set when `set_cookie` is enabled.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_canary_cookie")),
+                },
+                DirectiveSubblock::custom("http_canary"),
+            )
+            .register(
+                Directive {
+                    name: "ttl",
+                    usage: "ttl <duration>",
+                    description: "This directive sets the lifetime of the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
+            )
+            .register(
+                Directive {
+                    name: "path",
+                    usage: "path <value>",
+                    description: "This directive sets the path of the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
+            )
+            .register(
+                Directive {
+                    name: "domain",
+                    usage: "domain <value>",
+                    description: "This directive sets the domain of the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
+            )
+            .register(
+                Directive {
+                    name: "secure",
+                    usage: "secure [bool]",
+                    description: "This directive sets the Secure flag on the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
+            )
+            .register(
+                Directive {
+                    name: "httponly",
+                    usage: "httponly [bool]",
+                    description: "This directive sets the HttpOnly flag on the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
+            )
+            .register(
+                Directive {
+                    name: "samesite",
+                    usage: "samesite <policy>",
+                    description: "This directive sets the SameSite policy of the canary affinity cookie.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_canary_cookie"),
             );
     }
 
@@ -238,6 +316,7 @@ impl Stage<HttpContext> for CanaryStage {
                     .insert::<PendingCanaryCookie>(PendingCanaryCookie {
                         name: name.clone(),
                         value: resolution.value.clone(),
+                        cookie: compiled.config.cookie.clone(),
                     });
             }
         }
@@ -297,7 +376,27 @@ impl Stage<HttpContext> for CanaryStage {
             return Ok(());
         };
 
-        let cookie_value = format!("{}={}; Path=/", pending.name, pending.value);
+        let cookie = &pending.cookie;
+        let mut cookie_value = format!("{}={}; Path={}", pending.name, pending.value, cookie.path);
+
+        if let Some(ttl) = cookie.ttl {
+            cookie_value.push_str(&format!("; Max-Age={}", ttl.as_secs()));
+        }
+
+        if let Some(ref domain) = cookie.domain {
+            cookie_value.push_str(&format!("; Domain={domain}"));
+        }
+
+        if cookie.secure {
+            cookie_value.push_str("; Secure");
+        }
+
+        if cookie.httponly {
+            cookie_value.push_str("; HttpOnly");
+        }
+
+        cookie_value.push_str(&format!("; SameSite={}", cookie.samesite.as_str()));
+
         let Ok(header_value) = http::HeaderValue::from_str(&cookie_value) else {
             return Ok(());
         };
@@ -512,6 +611,84 @@ mod tests {
         );
         if set_cookie {
             block_directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        }
+
+        let mut top_directives = StdHashMap::new();
+        top_directives.insert(
+            "canary".to_string(),
+            vec![make_entry(
+                vec![make_value_string("ab_test")],
+                Some(ServerConfigurationBlock {
+                    directives: Arc::new(block_directives),
+                    matchers: StdHashMap::new(),
+                    span: None,
+                }),
+            )],
+        );
+
+        let mut config = LayeredConfiguration::new();
+        config.layers.push(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(top_directives),
+            matchers: StdHashMap::new(),
+            span: None,
+        }));
+        config
+    }
+
+    fn make_canary_config_with_cookie(
+        affinity: &[&str],
+        variants: &[(&str, i64)],
+        set_cookie: bool,
+        cookie: Vec<(&str, Option<&str>)>,
+    ) -> LayeredConfiguration {
+        let mut block_directives = StdHashMap::new();
+        if !affinity.is_empty() {
+            block_directives.insert(
+                "affinity".to_string(),
+                vec![make_entry(
+                    affinity.iter().map(|a| make_value_string(a)).collect(),
+                    None,
+                )],
+            );
+        }
+        block_directives.insert(
+            "variant".to_string(),
+            variants
+                .iter()
+                .map(|(name, weight)| {
+                    make_entry(
+                        vec![make_value_string(name), make_value_number(*weight)],
+                        None,
+                    )
+                })
+                .collect(),
+        );
+        if set_cookie {
+            block_directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
+        }
+
+        let cookie_directives: StdHashMap<String, Vec<ServerConfigurationDirectiveEntry>> = cookie
+            .into_iter()
+            .map(|(name, value)| {
+                let entry = match value {
+                    Some(v) => make_entry(vec![make_value_string(v)], None),
+                    None => make_entry(vec![], None),
+                };
+                (name.to_string(), vec![entry])
+            })
+            .collect();
+        if !cookie_directives.is_empty() {
+            block_directives.insert(
+                "cookie".to_string(),
+                vec![make_entry(
+                    vec![],
+                    Some(ServerConfigurationBlock {
+                        directives: Arc::new(cookie_directives),
+                        matchers: StdHashMap::new(),
+                        span: None,
+                    }),
+                )],
+            );
         }
 
         let mut top_directives = StdHashMap::new();
@@ -759,7 +936,10 @@ mod tests {
                 _ => None,
             })
             .expect("Set-Cookie header expected");
-        assert_eq!(cookie, format!("ab_variant={key}; Path=/"));
+        assert_eq!(
+            cookie,
+            format!("ab_variant={key}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax")
+        );
 
         // The generated key must map to the same variant on the next request
         // when the client sends the cookie back.
@@ -875,5 +1055,53 @@ mod tests {
             Some(&"192.0.2.1".to_string())
         );
         assert!(ctx.res.as_ref().is_none());
+    }
+
+    #[tokio::test]
+    async fn set_cookie_honors_cookie_block() {
+        // A `cookie` block overrides the default attributes: a 1-hour TTL,
+        // an explicit domain, the Secure flag, and a Strict SameSite policy.
+        let config = make_canary_config_with_cookie(
+            &["cookie", "ab_variant"],
+            &[("stable", 1), ("new", 1)],
+            true,
+            vec![
+                ("ttl", Some("1h")),
+                ("domain", Some("example.com")),
+                ("secure", None),
+                ("samesite", Some("strict")),
+            ],
+        );
+        let mut ctx = make_test_context("/any", Some(config));
+        let stage = CanaryStage {
+            state: Arc::new(CanaryState::default()),
+        };
+        stage.run(&mut ctx).await.unwrap();
+        stage.run_inverse(&mut ctx).await.unwrap();
+
+        let key = ctx.variables.get(CANARY_KEY_VAR).cloned().unwrap();
+        let cookie = ctx
+            .res
+            .as_ref()
+            .and_then(|res| match res {
+                HttpResponse::Custom(resp) => resp
+                    .headers()
+                    .get(http::header::SET_COOKIE)
+                    .and_then(|h| h.to_str().ok())
+                    .map(str::to_string),
+                HttpResponse::BuiltinError(_, headers) => headers
+                    .as_ref()
+                    .and_then(|map| map.get(http::header::SET_COOKIE))
+                    .and_then(|h| h.to_str().ok())
+                    .map(str::to_string),
+                _ => None,
+            })
+            .expect("Set-Cookie header expected");
+        assert_eq!(
+            cookie,
+            format!(
+                "ab_variant={key}; Path=/; Max-Age=3600; Domain=example.com; Secure; HttpOnly; SameSite=Strict"
+            )
+        );
     }
 }

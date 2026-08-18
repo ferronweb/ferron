@@ -1,7 +1,66 @@
 //! Configuration parsing for the `canary` directive.
 
+use std::time::Duration;
+
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationDirectiveEntry;
+
+/// SameSite attribute mode for the canary affinity cookie.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SameSiteMode {
+    Strict,
+    #[default]
+    Lax,
+    None,
+}
+
+impl SameSiteMode {
+    /// Return the string representation for the `Set-Cookie` header.
+    #[inline]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SameSiteMode::Strict => "Strict",
+            SameSiteMode::Lax => "Lax",
+            SameSiteMode::None => "None",
+        }
+    }
+}
+
+/// Cookie attribute configuration for the canary affinity cookie.
+///
+/// Instead of a browser-session cookie, Ferron emits a persistent cookie by
+/// default (see [`CookieConfig::default`]), so the canary assignment survives
+/// a browser restart. Every attribute can be overridden through the `cookie`
+/// block inside a `canary` directive.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CookieConfig {
+    /// Cookie TTL (`None` = browser-session cookie).
+    pub ttl: Option<Duration>,
+    /// Cookie path.
+    pub path: String,
+    /// Optional cookie domain.
+    pub domain: Option<String>,
+    /// Whether to set the `Secure` flag.
+    pub secure: bool,
+    /// Whether to set the `HttpOnly` flag.
+    pub httponly: bool,
+    /// SameSite attribute.
+    pub samesite: SameSiteMode,
+}
+
+impl Default for CookieConfig {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            ttl: Some(Duration::from_secs(7 * 24 * 3600)),
+            path: "/".to_string(),
+            domain: None,
+            secure: false,
+            httponly: true,
+            samesite: SameSiteMode::Lax,
+        }
+    }
+}
 
 /// Affinity source for canary variant selection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,6 +91,9 @@ pub struct CanaryConfig {
     pub affinity: CanaryAffinity,
     /// Whether Ferron sets the affinity cookie itself when the request has none.
     pub set_cookie: bool,
+    /// Cookie attributes for the affinity cookie. Ferron emits a persistent
+    /// cookie by default; this controls its lifetime and other attributes.
+    pub cookie: CookieConfig,
     /// Configured variants; the ring maps every key to one of them.
     pub variants: Vec<CanaryVariant>,
 }
@@ -91,12 +153,75 @@ pub fn parse_canary_entry(entry: &ServerConfigurationDirectiveEntry) -> Option<C
         .map(|entry| entry.get_flag())
         .unwrap_or(false);
 
+    let cookie = parse_cookie_config(block);
+
     Some(CanaryConfig {
         name,
         affinity,
         set_cookie,
+        cookie,
         variants,
     })
+}
+
+/// Parse the `cookie { ... }` sub-block of a `canary` directive.
+///
+/// Starts from the persistent default and overrides only the attributes the
+/// user explicitly set, so an omitted `ttl` still yields a long-lived cookie.
+fn parse_cookie_config(block: &ferron_core::config::ServerConfigurationBlock) -> CookieConfig {
+    let mut cookie = CookieConfig::default();
+
+    let Some(cookie_entries) = block.directives.get("cookie") else {
+        return cookie;
+    };
+
+    for cookie_entry in cookie_entries {
+        let Some(cookie_block) = &cookie_entry.children else {
+            continue;
+        };
+
+        for (key, entries) in cookie_block.directives.iter() {
+            let Some(entry) = entries.first() else {
+                continue;
+            };
+            match key.as_str() {
+                "ttl" => {
+                    if let Some(val) = entry.args.first().and_then(|v| v.as_duration()) {
+                        cookie.ttl = Some(val);
+                    }
+                }
+                "path" => {
+                    if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
+                        cookie.path = val.to_string();
+                    }
+                }
+                "domain" => {
+                    if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
+                        cookie.domain = Some(val.to_string());
+                    }
+                }
+                "secure" => {
+                    cookie.secure = entry.get_flag();
+                }
+                "httponly" => {
+                    cookie.httponly = entry.get_flag();
+                }
+                "samesite" => {
+                    if let Some(val) = entry.args.first().and_then(|v| v.as_str()) {
+                        cookie.samesite = match val.to_lowercase().as_str() {
+                            "strict" => SameSiteMode::Strict,
+                            "lax" => SameSiteMode::Lax,
+                            "none" => SameSiteMode::None,
+                            _ => SameSiteMode::Lax,
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    cookie
 }
 
 /// Parse all `canary` directives from the layered configuration.
@@ -342,5 +467,76 @@ mod tests {
             Some(make_block(block_directives)),
         );
         assert!(parse_canary_entry(&entry).unwrap().variants.is_empty());
+    }
+
+    #[test]
+    fn defaults_to_persistent_cookie() {
+        let mut block_directives = StdHashMap::new();
+        block_directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        let entry = make_entry(
+            vec![make_value_string("x")],
+            Some(make_block(block_directives)),
+        );
+        let config = parse_canary_entry(&entry).unwrap();
+        // The default cookie is persistent (longer than the browser session).
+        assert_eq!(
+            config.cookie,
+            CookieConfig {
+                ttl: Some(Duration::from_secs(7 * 24 * 3600)),
+                path: "/".to_string(),
+                domain: None,
+                secure: false,
+                httponly: true,
+                samesite: SameSiteMode::Lax,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_cookie_block() {
+        let mut block_directives = StdHashMap::new();
+        block_directives.insert(
+            "variant".to_string(),
+            vec![make_entry(
+                vec![make_value_string("a"), make_value_number(1)],
+                None,
+            )],
+        );
+        let mut cookie_directives = StdHashMap::new();
+        cookie_directives.insert(
+            "ttl".to_string(),
+            vec![make_entry(vec![make_value_string("1h")], None)],
+        );
+        cookie_directives.insert(
+            "domain".to_string(),
+            vec![make_entry(vec![make_value_string("example.com")], None)],
+        );
+        cookie_directives.insert("secure".to_string(), vec![make_entry(vec![], None)]);
+        cookie_directives.insert("httponly".to_string(), vec![make_entry(vec![], None)]);
+        cookie_directives.insert(
+            "samesite".to_string(),
+            vec![make_entry(vec![make_value_string("strict")], None)],
+        );
+        block_directives.insert(
+            "cookie".to_string(),
+            vec![make_entry(vec![], Some(make_block(cookie_directives)))],
+        );
+
+        let entry = make_entry(
+            vec![make_value_string("x")],
+            Some(make_block(block_directives)),
+        );
+        let config = parse_canary_entry(&entry).unwrap();
+        assert_eq!(config.cookie.ttl, Some(Duration::from_secs(3600)));
+        assert_eq!(config.cookie.domain, Some("example.com".to_string()));
+        assert!(config.cookie.secure);
+        assert!(config.cookie.httponly);
+        assert_eq!(config.cookie.samesite, SameSiteMode::Strict);
     }
 }

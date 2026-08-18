@@ -6,6 +6,10 @@
 
 ### Changed
 
+#### HTTP canary
+
+- **Persistent affinity cookie by default**: the `canary` module now writes a persistent affinity cookie (7-day `Max-Age`, `HttpOnly`, `SameSite=Lax`) when `set_cookie` is enabled, instead of a browser-session cookie. A new `cookie` block lets you configure the cookie lifetime and attributes (`ttl`, `path`, `domain`, `secure`, `httponly`, `samesite`), matching the HTTP proxy's affinity cookie settings.
+
 #### HTTP server core
 
 - **HTTP/3 enabled by default**: HTTP/3 is now enabled by default in Ferron, as it's also no longer declared experimental (it was declared such, because the previous HTTP/3 implementation, `h3`, was declared experimental as well).
