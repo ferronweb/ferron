@@ -19,7 +19,7 @@ This page documents the `canary` directive. It assigns each request a variant fr
 | `affinity`    | `ip`, `cookie <name>`, `header <name>`, or `hash <variable>` | The sticky key source. With `cookie` or `header`, Ferron uses the value of the named cookie or header. With `hash`, Ferron uses the value of the named variable. | `ip`    |
 | `set_cookie`  | `[bool]`                                                     | When `true`, Ferron sets the affinity cookie itself when the request has none. Valid only with `cookie` affinity.                                                | `false` |
 | `variant`     | `<value: string> <weight: number>`                           | Declares one variant with its weight. Repeat the directive to declare more variants. Weights must be at least 1.                                                 | none    |
-| `cookie`      | `{ ... }`                                                    | Configures the affinity cookie attributes used with `set_cookie`. See the [`cookie` block](#cookie-block) section.                                              | none    |
+| `cookie`      | `{ ... }`                                                    | Configures the affinity cookie attributes used with `set_cookie`. See the [`cookie` block](#cookie-block) section.                                               | none    |
 
 **Configuration example:**
 
@@ -41,14 +41,14 @@ The `cookie` block sets the attributes of the affinity cookie that Ferron writes
 > [!note]
 > The `cookie` block takes effect only with `set_cookie` and `cookie` affinity. It does not change how Ferron reads an existing cookie.
 
-| Sub-directive | Arguments        | Description                                                                                    | Default               |
-| ------------- | ---------------- | ---------------------------------------------------------------------------------------------- | --------------------- |
-| `ttl`         | `<duration>`     | How long the cookie lasts. Ferron writes it as `Max-Age`. Omit it to keep the browser-session default. | `7d` (persistent)     |
-| `path`        | `<value: string>` | The cookie path.                                                                               | `/`                   |
-| `domain`      | `<value: string>` | The cookie domain. Omit it to scope the cookie to the current host.                            | none (current host)   |
-| `secure`      | `[bool]`         | Sets the `Secure` flag so the cookie is sent only over HTTPS.                                   | `false`               |
-| `httponly`    | `[bool]`         | Sets the `HttpOnly` flag so client scripts cannot read the cookie.                             | `true`                |
-| `samesite`    | `<policy>`       | The `SameSite` policy: `strict`, `lax`, or `none`.                                              | `lax`                 |
+| Sub-directive | Arguments         | Description                                                                                            | Default             |
+| ------------- | ----------------- | ------------------------------------------------------------------------------------------------------ | ------------------- |
+| `ttl`         | `<duration>`      | How long the cookie lasts. Ferron writes it as `Max-Age`. Omit it to keep the browser-session default. | `7d` (persistent)   |
+| `path`        | `<value: string>` | The cookie path.                                                                                       | `/`                 |
+| `domain`      | `<value: string>` | The cookie domain. Omit it to scope the cookie to the current host.                                    | none (current host) |
+| `secure`      | `[bool]`          | Sets the `Secure` flag so the cookie is sent only over HTTPS.                                          | `false`             |
+| `httponly`    | `[bool]`          | Sets the `HttpOnly` flag so client scripts cannot read the cookie.                                     | `true`              |
+| `samesite`    | `<policy>`        | The `SameSite` policy: `strict`, `lax`, or `none`.                                                     | `lax`               |
 
 **Example:**
 
@@ -60,7 +60,7 @@ example.com {
         variant stable 90
         variant next 10
         cookie {
-            ttl 30d
+            ttl "30d"
             domain example.com
             secure
             samesite lax
