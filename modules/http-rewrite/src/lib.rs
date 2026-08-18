@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use ferron_core::config::ServerConfigurationValue;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
