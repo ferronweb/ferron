@@ -211,8 +211,8 @@ impl CanaryValidator {
                             .with_span(entry_span(entry)));
                         }
                         if key.as_str() == "samesite" {
-                            let val = entry.args[0].as_str().unwrap().to_lowercase();
-                            if !matches!(val.as_str(), "strict" | "lax" | "none") {
+                            let val = entry.args[0].as_str().map(|v| v.to_lowercase());
+                            if !matches!(val.as_deref(), Some("strict" | "lax" | "none")) {
                                 return Err(ConfigurationValidationError::from(
                                     "Invalid `samesite` — must be one of strict, lax, or none",
                                 )
