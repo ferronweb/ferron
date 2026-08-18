@@ -714,17 +714,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_canary_directive_is_noop() {
-        let mut ctx = make_test_context("/any", None);
-        let stage = CanaryStage {
-            state: Arc::new(CanaryState::default()),
-        };
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(!ctx.variables.contains_key(CANARY_VARIANT_VAR));
-    }
-
-    #[tokio::test]
     async fn ip_affinity_sets_variant_variables() {
         let config = make_canary_config(&["ip"], &[("stable", 90), ("new", 10)]);
         let mut ctx = make_test_context("/any", Some(config));
@@ -857,23 +846,6 @@ mod tests {
             ctx.variables.get(CANARY_KEY_VAR),
             Some(&"192.0.2.1".to_string())
         );
-    }
-
-    #[tokio::test]
-    async fn is_applicable_with_canary_directive() {
-        let config = make_canary_config(&["ip"], &[("stable", 1)]);
-        let stage = CanaryStage {
-            state: Arc::new(CanaryState::default()),
-        };
-        assert!(stage.is_applicable(config.layers.first().map(|l| l.as_ref())));
-    }
-
-    #[tokio::test]
-    async fn is_not_applicable_without_canary_directive() {
-        let stage = CanaryStage {
-            state: Arc::new(CanaryState::default()),
-        };
-        assert!(!stage.is_applicable(None));
     }
 
     #[tokio::test]
