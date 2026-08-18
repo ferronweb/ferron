@@ -213,39 +213,3 @@ async fn test_grpc_reverse_proxy_basic() {
 
     assert_eq!(response, "Hello Ferron");
 }
-
-// TODO: gRPC over TLS backend
-/*
-#[tokio::test]
-async fn test_grpc_reverse_proxy_tls_backend() {
-  let _ = rustls::crypto::ring::default_provider().install_default();
-
-  let config = br#"
-{
-  http {
-    protocols "h1" "h2"
-  }
-}
-
-*:443 {
-  tls {
-    provider manual
-    cert "/etc/certs/server.crt"
-    key "/etc/certs/server.key"
-  }
-  proxy "https://backend:50051/" {
-    http2_only true
-    no_verification true
-  }
-}
-"#;
-
-  let ctx = GRpcRProxyTestContext::new("tls-backend", config).await;
-
-  let response = call_say_hello("localhost".to_string(), ctx.ferron_port, "Ferron TLS".to_string())
-    .await
-    .expect("Failed to call SayHello");
-
-  assert_eq!(response, "Hello Ferron TLS");
-}
-*/

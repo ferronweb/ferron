@@ -113,8 +113,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             // If placeholders are enabled and trace context is available,
             // read the file into memory and perform substitution
             if placeholders_enabled {
-                // FIXME: use streaming instead of buffering?
-                //        Though big error pages aren't as common...
                 if let Some(ref trace_context) = ctx.trace_context {
                     if let Ok(content) = vibeio::fs::read_to_string(path).await {
                         let content = content
