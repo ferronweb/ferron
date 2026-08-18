@@ -19,6 +19,7 @@ const HOST_CACHE_DIRECTIVES: &[&str] = &[
     "purge_allowed_ips",
     "purge_propagation",
     "vary",
+    "vary_cookies",
     "ignore",
     "ignore_request_cache_control",
     "enable_stale_while_revalidate",
