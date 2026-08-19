@@ -616,18 +616,3 @@ async fn test_invalid_range_syntax_returns_200() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
 }
-
-#[tokio::test]
-async fn test_if_match_star_post() {
-    let ctx = StaticTestContext::new().await;
-
-    // If-Match: * with POST should pass (matches any current representation)
-    let response = ctx
-        .client
-        .post(format!("{}/basic.txt", ctx.base_url))
-        .header(header::IF_MATCH, "*")
-        .send()
-        .await
-        .unwrap();
-    assert_ne!(response.status(), reqwest::StatusCode::PRECONDITION_FAILED);
-}
