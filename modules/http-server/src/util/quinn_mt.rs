@@ -67,19 +67,19 @@ impl QuinnMTChannels {
         guard[id] = Some(queue);
     }
 
-    /// Map a connection ID to the endpoint that should handle it.
+    /// Map a hashable key to the endpoint that should handle it.
     ///
     /// Returns `None` when the datagram belongs to the endpoint calling this
     /// method (`inner_id`), or `Some(sender)` for the owning endpoint.
     #[inline]
-    fn select(&self, conn_id: &[u8], inner_id: usize) -> Option<Arc<QuinnMTDatagramQueue>> {
+    fn select(&self, hashable: impl Hash, inner_id: usize) -> Option<Arc<QuinnMTDatagramQueue>> {
         let guard = self.inner.lock();
         let len = guard.len();
         if len == 0 {
             return None;
         }
         let mut hasher = rustc_hash::FxHasher::default();
-        conn_id.hash(&mut hasher);
+        hashable.hash(&mut hasher);
         let selected = (hasher.finish() as usize) % len;
         if selected == inner_id {
             None
@@ -245,10 +245,10 @@ impl quinn::AsyncUdpSocket for QuinnMTUdpSocket {
             for src in 0..n {
                 let len = meta[src].len;
                 let packet = &bufs[src][..len];
-                // `None` means the packet is unparseable: keep it locally rather
-                // than drop it, so this endpoint can reject it itself.
-                let routed = match extract_conn_id(packet, cid_len) {
-                    None => None,
+                // `None` means the packet is unparseable or it's connection establishment:
+                // IP-hash it rather than drop it, so this endpoint can reject it itself.
+                let routed = match extract_short_conn_id(packet, cid_len) {
+                    None => self.channels.select(meta[src].addr, self.id),
                     Some(cid) => self.channels.select(cid, self.id),
                 };
                 match routed {
@@ -335,35 +335,23 @@ impl quinn::ConnectionIdGenerator for QuinnMTConnectionIdGenerator {
     }
 }
 
-/// Extract the connection ID used for routing from a raw QUIC packet.
-///
-/// For long headers the destination connection ID length is encoded in the
-/// packet, so it is read directly. For short headers the connection ID has no
-/// length prefix; the server-issued length (`cid_len`) is used instead.
+/// Extract the connection ID used for routing from a raw QUIC packet,
+/// from a short header packet.
 ///
 /// The destination connection ID is the server's chosen connection ID, which is
 /// the stable key that maps an incoming packet to the endpoint that owns the
-/// connection, and is present in both long and short header packets.
+/// connection.
 #[inline]
-fn extract_conn_id(packet: &[u8], cid_len: usize) -> Option<&[u8]> {
+fn extract_short_conn_id(packet: &[u8], cid_len: usize) -> Option<&[u8]> {
     let &first = packet.first()?;
-    if first & 0x80 != 0 {
-        // Long header: flag (1) + version (4) + DCID len (1) + DCID ...
-        if packet.len() < 6 {
-            return None;
-        }
-        let dcid_len = packet[5] as usize;
-        let off = 6;
-        if packet.len() < off + dcid_len {
-            return None;
-        }
-        Some(&packet[off..off + dcid_len])
-    } else {
+    if first & 0x80 == 0 {
         // Short header: flag (1) + DCID (cid_len) ...
         if packet.len() < 1 + cid_len {
             return None;
         }
         Some(&packet[1..1 + cid_len])
+    } else {
+        None
     }
 }
 

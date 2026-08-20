@@ -25,6 +25,7 @@
 
 - **Configured HTTP responses after HTTP -> HTTPS redirects**: HTTP responses configured to be served after the `https_redirect` stage will now only be served after a successful HTTP-to-HTTPS redirection. This ensures that these responses are not served before the client is redirected, which could lead to unexpected behavior or security issues.
 - **Webroots with interpolations in URL rewrites**: webroot paths can now contain string interpolations when using with URL rewrite rules.
+- **Less QUIC packet loss and retransmissions**: previously, QUIC packet loss and retransmissions were higher due to improper routing of packets by the QUIC transport. This has been fixed to improve packet routing (via IP hashing when initializing and connection ID hashing later on) and reduce packet loss.
 
 #### TLS
 
