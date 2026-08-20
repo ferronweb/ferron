@@ -93,7 +93,10 @@ async fn test_canary_sticky_cookie_affinity() {
     let mut seen_stable = false;
     let mut seen_next = false;
     for i in 0..24 {
-        match fetch(&client, port, Some(&format!("user-{i}"))).await.as_str() {
+        match fetch(&client, port, Some(&format!("user-{i}")))
+            .await
+            .as_str()
+        {
             "STABLE CONTENT" => seen_stable = true,
             "NEXT CONTENT" => seen_next = true,
             other => panic!("unexpected variant content: {other}"),
@@ -111,7 +114,7 @@ async fn test_canary_ip_fallback_without_cookie() {
     #[cfg(unix)]
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
-let webroot_dir = create_dir_with_variants();
+    let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();
     config_file
         .as_file_mut()
@@ -242,7 +245,10 @@ async fn test_canary_reload_weight_change_moves_few_keys() {
     }
     // A 5-point weight change re-maps roughly 5% of keys. Out of 12 keys,
     // allow a margin and require at least 10 to keep their variant.
-    assert!(unchanged >= 10, "expected at least 10 of 12 keys to keep their variant, got {unchanged}");
+    assert!(
+        unchanged >= 10,
+        "expected at least 10 of 12 keys to keep their variant, got {unchanged}"
+    );
 
     container.stop().await.unwrap();
 }
@@ -300,7 +306,8 @@ async fn test_canary_ferron_sets_sticky_cookie() {
     assert!(first_body == "STABLE CONTENT" || first_body == "NEXT CONTENT");
     let key = first_cookie
         .strip_prefix("ab_variant=")
-        .and_then(|v| v.strip_suffix("; Path=/"))
+        .and_then(|v| v.split_once(";"))
+        .map(|(k, _)| k)
         .expect("unexpected Set-Cookie format")
         .to_string();
     assert_eq!(key.len(), 32);
@@ -328,7 +335,10 @@ async fn test_canary_ferron_sets_sticky_cookie() {
             .send()
             .await
             .unwrap();
-        let has_set_cookie = response.headers().get(reqwest::header::SET_COOKIE).is_none();
+        let has_set_cookie = response
+            .headers()
+            .get(reqwest::header::SET_COOKIE)
+            .is_none();
         let body = response.text().await.unwrap();
         assert_eq!(body, first_body);
         assert!(has_set_cookie);
