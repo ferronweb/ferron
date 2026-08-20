@@ -210,8 +210,23 @@ impl QuicListenerHandle {
                                 return;
                             }
                         };
-                    let server_config =
+                    let mut server_config =
                         quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
+
+                    // Use BBR to optimize for high-latency network links
+                    let mut transport_config = quinn::TransportConfig::default();
+                    transport_config.congestion_controller_factory(Arc::new(
+                        quinn::congestion::BbrConfig::default(),
+                    ));
+                    // See https://blog.litespeedtech.com/2020/10/19/improve-performance-with-dplpmtud/
+                    // Quinn already supports DPLPMTUD, but we set an upper bound to avoid fragmentation,
+                    // and because LiteSpeed's benchmarks demonstrate faster timing with upper bound
+                    // of 4096 vs. the default of 1472.
+                    let mut mtu_config = quinn::MtuDiscoveryConfig::default();
+                    mtu_config.upper_bound(4096);
+                    transport_config.mtu_discovery_config(Some(mtu_config));
+
+                    server_config.transport_config(Arc::new(transport_config));
 
                     let mut endpoint_config = quinn::EndpointConfig::default();
                     endpoint_config.cid_generator(move || {
