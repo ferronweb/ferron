@@ -81,6 +81,17 @@ smallvec = { version = "1.15.0", features = [
     "const_generics",
 ] }
 
+# OpenID Connect authentication
+openidconnect = { version = "4.0.1", optional = true, default-features = false }
+reqwest = { version = "0.13.4", optional = true, default-features = false, features = [
+    "rustls",
+] }
+chacha20poly1305 = { version = "0.10.1", optional = true }
+hkdf = { version = "0.12.4", optional = true }
+sha2 = { version = "0.10.9", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
 # Gateway interfaces
 cegla = { version = "0.2.0", optional = true, default-features = false, features = ["client"] }
 cegla-cgi = { version = "0.2.0", optional = true, default-features = false, features = ["client"] }
@@ -101,6 +112,7 @@ default = [
     "fproxy",
     "fproxyauth",
     "limit",
+    "oidc",
     "replace",
     "rproxy",
     "runtime-monoio",
@@ -116,6 +128,7 @@ default-tokio = [
     "fproxy",
     "fproxyauth",
     "limit",
+    "oidc",
     "replace",
     "rproxy",
     "runtime-tokio",
@@ -131,6 +144,7 @@ default-vibeio = [
     "fproxy",
     "fproxyauth",
     "limit",
+    "oidc",
     "replace",
     "rproxy",
     "runtime-vibeio",
@@ -145,6 +159,7 @@ fcgi = ["tokio-util/codec", "cegla"]
 fproxy = []
 fproxyauth = []
 limit = ["tokenbucket"]
+oidc = ["openidconnect", "reqwest", "chacha20poly1305", "hkdf", "sha2", "serde", "serde_json"]
 replace = ["memchr"]
 rproxy = ["ferron-common/http-proxy"]
 runtime-vibeio = ["vibeio", "vibeio-hyper", "send_wrapper", "ferron-common/runtime-vibeio", "vibeio-http"]

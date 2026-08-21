@@ -14,6 +14,8 @@ mod fproxy;
 mod fproxyauth;
 #[cfg(feature = "limit")]
 mod limit;
+#[cfg(feature = "oidc")]
+mod oidc;
 #[cfg(feature = "replace")]
 mod replace;
 #[cfg(feature = "rproxy")]
@@ -39,6 +41,8 @@ pub use fproxy::*;
 pub use fproxyauth::*;
 #[cfg(feature = "limit")]
 pub use limit::*;
+#[cfg(feature = "oidc")]
+pub use oidc::*;
 #[cfg(feature = "static")]
 pub use r#static::*;
 #[cfg(feature = "replace")]

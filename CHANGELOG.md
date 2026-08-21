@@ -4,6 +4,10 @@
 
 **Not yet released**
 
+### Added
+
+- Added the `oidc` authentication module, implementing an OpenID Connect relying party with the authorization code flow and PKCE (works with providers like Authelia and Keycloak).
+
 ### Fixed
 
 - Fixed OCSP stapling not working properly for ECDSA issuer certificates.

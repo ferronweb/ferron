@@ -27,6 +27,9 @@ modules:
     cargo_feature: fauth
     loader: ForwardedAuthenticationModuleLoader
   - builtin: true
+    cargo_feature: oidc
+    loader: OidcModuleLoader
+  - builtin: true
     cargo_feature: cache
     loader: CacheModuleLoader
   - builtin: true

@@ -23,6 +23,10 @@ app.get("/header", (req, res, _next) => {
   res.send(req.headers["x-some-header"]);
 });
 
+app.get("/remote-user", (req, res, _next) => {
+  res.send(req.headers["remote-user"] || "");
+});
+
 app.get("/unsafe", (req, _res, _next) => {
   req.socket.destroy();
 });

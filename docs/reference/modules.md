@@ -15,6 +15,7 @@ The following modules are built into Ferron and are enabled by default:
 - _fproxy_ - this module enables forward proxy functionality.
 - _fproxyauth_ (Ferron 2.4.0 and newer) - this module enables forward proxy authentication via HTTP Basic authentication.
 - _limit_ (Ferron 2.0.0 and newer) - this module enables rate limits.
+- _oidc_ (Ferron 2.9.0 and newer) - this module enables authentication with an OpenID Connect provider.
 - _replace_ (Ferron 2.0.0 and newer) - this module enables replacement of strings in response bodies.
 - _rproxy_ - this module enables reverse proxy functionality.
 - _scgi_ - this module enables the support for connecting to SCGI servers.
@@ -64,6 +65,19 @@ If you are using the _fproxy_ module, then hosts on the local network and local 
 ### _limit_ module
 
 This module uses a Token Bucket algorithm. The rate limitation is on per-IP address basis.
+
+### _oidc_ module
+
+This module implements an OpenID Connect relying party using the authorization code flow with PKCE, comparable to tools like oauth2-proxy. It works with any spec-compliant OpenID Connect provider (for example Authelia or Keycloak). The user's identity is kept in an encrypted session cookie; no server-side session store is needed, so sessions work across multiple worker threads and (with a configured cookie secret) across multiple server instances.
+
+For authenticated users, the following request headers are provided to backend servers (the same headers used by Authelia's forward authentication):
+
+- **Remote-User** - the authenticated username
+- **Remote-Groups** - the user's groups (comma-separated)
+- **Remote-Email** - the user's email address
+- **Remote-Name** - the user's display name
+
+These headers are always removed from incoming client requests, so clients can't spoof them.
 
 ### _replace_ module
 

@@ -125,6 +125,57 @@ example.com {
 }
 ```
 
+### OpenID Connect authentication
+
+The directives below configure the `oidc` module (Ferron 2.9.0 or newer), which protects websites by authenticating users against an OpenID Connect provider (such as Authelia or Keycloak) using the authorization code flow with PKCE. The user's session is kept in an encrypted cookie, and identity request headers are provided to backend servers.
+
+- `auth_oidc <issuer_url: string>`
+  - This directive enables OpenID Connect authentication and specifies the OIDC issuer URL (without the `/.well-known/openid-configuration` suffix). The OIDC provider metadata is fetched through OpenID Connect Discovery. Default: none
+- `auth_oidc_client_id <client_id: string>`
+  - This directive specifies the OAuth2 client ID registered at the OIDC provider. Default: none
+- `auth_oidc_client_secret <client_secret: string>`
+  - This directive specifies the OAuth2 client secret. It's recommended to use an environment variable placeholder instead of writing the secret into the configuration file. Default: none
+- `auth_oidc_scopes <scope: string> [<scope: string> ...]`
+  - This directive specifies the requested scopes. Add the `"groups"` scope to receive the user's groups from OIDC providers that support it (such as Authelia). Default: `auth_oidc_scopes "openid" "profile" "email"`
+- `auth_oidc_cookie_secret <cookie_secret: string>`
+  - This directive specifies the Base64-encoded secret (at least 32 bytes after decoding) used to encrypt the session and state cookies. If not specified, a random secret is generated at server startup; sessions then don't survive server restarts and can't be shared between multiple server instances, so configuring this directive is strongly recommended. A secret can be generated with `openssl rand -base64 32`. Default: none (random secret)
+- `auth_oidc_cookie_name <cookie_name: string>`
+  - This directive specifies the session cookie name. The state cookie used during the login flow is named after the session cookie with a `_state` suffix. Default: `auth_oidc_cookie_name "ferron_oidc_session"`
+- `auth_oidc_session_ttl <session_ttl: integer>`
+  - This directive specifies the session time-to-live in seconds. Default: `auth_oidc_session_ttl 86400`
+- `auth_oidc_redirect_path <redirect_path: string>`
+  - This directive specifies the path of the OIDC callback (redirect URI) handled by Ferron. The full redirect URI registered at the OIDC provider is this path appended to the website's base URL. Default: `auth_oidc_redirect_path "/.ferron/oidc/callback"`
+- `auth_oidc_logout_path <logout_path: string|null>`
+  - This directive specifies a path that logs the user out by expiring the session cookie. If set as `auth_oidc_logout_path #null`, the logout path is disabled. Default: `auth_oidc_logout_path #null`
+- `auth_oidc_post_logout_redirect <post_logout_redirect: string>`
+  - This directive specifies the local path to redirect to after logging out. Default: `auth_oidc_post_logout_redirect "/"`
+- `auth_oidc_headers [inject_headers: bool]`
+  - This directive specifies whether the `Remote-User`, `Remote-Groups`, `Remote-Email`, and `Remote-Name` request headers are provided to backend servers for authenticated users. These headers are always removed from incoming client requests. Default: `auth_oidc_headers #true`
+- `auth_oidc_user_claim <user_claim: string>`
+  - This directive specifies the ID token claim used as the authenticated username (either `"preferred_username"`, `"email"`, or `"sub"`), with a fallback to other claims if the specified claim isn't present. Default: `auth_oidc_user_claim "preferred_username"`
+- `auth_oidc_allowed_groups <group: string> [<group: string> ...]`
+  - This directive restricts access to users belonging to at least one of the specified groups (determined from the `groups` ID token claim). If not specified, all authenticated users are allowed. Default: none
+- `auth_oidc_audience <audience: string> [<audience: string> ...]`
+  - This directive specifies additional accepted ID token audiences besides the client ID. Default: none
+- `auth_oidc_no_verification [no_verification: bool]`
+  - This directive specifies whether the server should not verify the TLS certificate of the OIDC provider. Default: `auth_oidc_no_verification #false`
+
+**Configuration example:**
+
+```kdl
+app.example.com {
+    auth_oidc "https://auth.example.com"
+    auth_oidc_client_id "ferron"
+    auth_oidc_client_secret "{env.FERRON_OIDC_CLIENT_SECRET}"
+    auth_oidc_scopes "openid" "profile" "email" "groups"
+    auth_oidc_cookie_secret "{env.FERRON_OIDC_COOKIE_SECRET}"
+    auth_oidc_logout_path "/.ferron/oidc/logout"
+    auth_oidc_allowed_groups "admins" "developers"
+
+    proxy "http://127.0.0.1:3000/"
+}
+```
+
 ## DNS providers for ACME DNS-01 challenge
 
 When using `auto_tls_challenge "dns-01"` directive, you can specify the DNS provider to be used for the ACME DNS-01 challenge with the `provider` prop. Below is the list of supported DNS providers and their additional configuration props.

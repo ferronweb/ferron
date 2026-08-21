@@ -5,6 +5,8 @@ mod body_replacer;
 pub mod cache_control;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
+#[cfg(feature = "oidc")]
+pub mod oidc;
 #[cfg(any(feature = "dcompress", feature = "fcgi"))]
 mod split_stream_by_map;
 
