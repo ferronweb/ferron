@@ -69,10 +69,11 @@ impl DnsProvider for OvhDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .create(
+      .add_to_rrset(
         full_domain,
-        dns_update::DnsRecord::TXT(dns_value.to_string()),
+        dns_update::DnsRecordType::TXT,
         300,
+        vec![dns_update::DnsRecord::TXT(dns_value.to_string())],
         domain_name,
       )
       .await
@@ -90,7 +91,7 @@ impl DnsProvider for OvhDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .set_rrset(full_domain, dns_update::DnsRecordType::TXT, 300, vec![], domain_name)
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())

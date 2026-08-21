@@ -64,7 +64,7 @@ The providers are defined in the `dns` section, which is a list of DNS providers
 - **crate** (_String_)
   - The name of the Rust crate corresponding to the module. Used with modules from Git or local paths. Default: none
 - **provider** (_String_)
-  - The name of the struct name that will be used to initialize the DNS provider (usually ends with `Provider`). The struct must have a `with_parameters` method. Default: none
+  - The name of the struct name that will be used to initialize the DNS provider (usually ends with `Provider`). The struct must have a `from_parameters` method. Default: none
 
 For example, you can specify a provider from a Git repository:
 

@@ -12,9 +12,9 @@ pub struct CloudflareDnsProvider {
 
 impl CloudflareDnsProvider {
   /// Create a new Cloudflare DNS provider
-  fn new(api_key: &str, email: Option<&str>) -> dns_update::Result<Self> {
+  fn new(api_key: &str) -> dns_update::Result<Self> {
     Ok(Self {
-      client: DnsUpdater::new_cloudflare(api_key, email, None)?,
+      client: DnsUpdater::new_cloudflare(api_key, None)?,
     })
   }
 
@@ -23,8 +23,9 @@ impl CloudflareDnsProvider {
     let api_key = challenge_params
       .get("api_key")
       .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
-    let email = challenge_params.get("email").map(|x| x as &str);
-    Ok(Self::new(api_key, email).map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?)
+    // The "email" property (used by Cloudflare global API keys) is deprecated and ignored;
+    // dns-update 0.5.x supports only API tokens.
+    Ok(Self::new(api_key).map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?)
   }
 }
 
@@ -44,10 +45,11 @@ impl DnsProvider for CloudflareDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .create(
+      .add_to_rrset(
         full_domain,
-        dns_update::DnsRecord::TXT(dns_value.to_string()),
+        dns_update::DnsRecordType::TXT,
         300,
+        vec![dns_update::DnsRecord::TXT(dns_value.to_string())],
         domain_name,
       )
       .await
@@ -65,7 +67,7 @@ impl DnsProvider for CloudflareDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .set_rrset(full_domain, dns_update::DnsRecordType::TXT, 300, vec![], domain_name)
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())

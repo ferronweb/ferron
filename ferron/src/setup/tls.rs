@@ -321,6 +321,16 @@ pub fn handle_automatic_tls(
     None
   };
 
+  // Optional DNS propagation wait time (in seconds) for the DNS-01 challenge
+  let dns_01_propagation_wait = challenge_params
+    .get("propagation_wait")
+    .map(|v| {
+      v.parse::<u64>()
+        .map(std::time::Duration::from_secs)
+        .map_err(|_| anyhow::anyhow!("Invalid DNS propagation wait time: \"{v}\""))
+    })
+    .transpose()?;
+
   if on_demand {
     build_on_demand_acme(
       ctx,
@@ -330,6 +340,7 @@ pub fn handle_automatic_tls(
       sni_hostname,
       challenge_type,
       dns_provider,
+      dns_01_propagation_wait,
       crypto_provider,
     )?;
   } else {
@@ -341,6 +352,7 @@ pub fn handle_automatic_tls(
       sni_hostname,
       challenge_type,
       dns_provider,
+      dns_01_propagation_wait,
       crypto_provider,
       memory_acme_account_cache_data,
     )?;
@@ -363,6 +375,7 @@ fn build_on_demand_acme(
   sni_hostname: Option<String>,
   challenge_type: ChallengeType,
   dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>>,
+  dns_01_propagation_wait: Option<std::time::Duration>,
   crypto_provider: Arc<CryptoProvider>,
 ) -> anyhow::Result<()> {
   // TLS-ALPN-01 requires a dedicated resolver
@@ -412,6 +425,7 @@ fn build_on_demand_acme(
       .unwrap_or_else(|| Arc::new(RwLock::new(Vec::new()))),
     http_01_resolver_lock: ctx.acme_http_01_resolvers.clone(),
     dns_provider,
+    dns_01_propagation_wait,
     sni_hostname,
     port,
   };
@@ -436,6 +450,7 @@ fn build_eager_acme(
   sni_hostname: Option<String>,
   challenge_type: ChallengeType,
   dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>>,
+  dns_01_propagation_wait: Option<std::time::Duration>,
   crypto_provider: Arc<CryptoProvider>,
   memory_acme_account_cache_data: Arc<RwLock<HashMap<String, Vec<u8>>>>,
 ) -> anyhow::Result<()> {
@@ -497,6 +512,7 @@ fn build_eager_acme(
     tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
     http_01_data_lock: http_01_data_lock.clone(),
     dns_provider,
+    dns_01_propagation_wait,
     renewal_info: None,
     account: None,
     save_paths,

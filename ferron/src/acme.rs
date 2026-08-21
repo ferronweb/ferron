@@ -70,6 +70,8 @@ pub struct AcmeConfig {
   pub http_01_data_lock: Http01DataLock,
   /// The ACME DNS provider.
   pub dns_provider: Option<Arc<dyn DnsProvider + Send + Sync>>,
+  /// The DNS propagation wait time for the DNS-01 challenge.
+  pub dns_01_propagation_wait: Option<Duration>,
   /// The certificate renewal information.
   pub renewal_info: Option<(RenewalInfo, Instant)>,
   /// The ACME account information
@@ -165,6 +167,8 @@ pub struct AcmeOnDemandConfig {
   pub http_01_resolver_lock: Arc<RwLock<Vec<Http01DataLock>>>,
   /// The ACME DNS provider.
   pub dns_provider: Option<Arc<dyn DnsProvider + Send + Sync>>,
+  /// The DNS propagation wait time for the DNS-01 challenge.
+  pub dns_01_propagation_wait: Option<Duration>,
   /// The SNI hostname.
   pub sni_hostname: Option<String>,
   /// The port to use for ACME communication.
@@ -510,7 +514,12 @@ pub async fn provision_certificate(
             .set_acme_txt_record(&identifier, &key_authorization.dns_value())
             .await?;
           // Wait for DNS propagation
-          tokio::time::sleep(Duration::from_secs(60)).await;
+          tokio::time::sleep(
+            config
+              .dns_01_propagation_wait
+              .unwrap_or_else(|| Duration::from_secs(60)),
+          )
+          .await;
           dns_01_identifiers.push(identifier.clone());
         } else {
           Err(anyhow::anyhow!("No DNS provider configured."))?;
@@ -712,6 +721,7 @@ pub async fn convert_on_demand_config(
     tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
     http_01_data_lock: http_01_data_lock.clone(),
     dns_provider: config.dns_provider.clone(),
+    dns_01_propagation_wait: config.dns_01_propagation_wait,
     renewal_info: None,
     account: None,
     save_paths: None,

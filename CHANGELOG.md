@@ -4,6 +4,16 @@
 
 **Not yet released**
 
+### Added
+
+- Added 59 DNS providers for DNS-01 ACME challenges (via the updated "dns-update" crate): Akamai Edge DNS, Alibaba Cloud DNS, Amazon Lightsail, ArvanCloud, AutoDNS, Azure DNS, Baidu Cloud DNS, BlueCat, ClouDNS, Constellix, cPanel, DDNSS.de, DNS Made Easy, Domeneshop, DreamHost, Duck DNS, Dynu, easyDNS, Exoscale, freemyip.com, Gandi, Gcore, GleSYS, GoDaddy, Hetzner, hosting.de, Hostinger, Huawei Cloud DNS, Hurricane Electric, IBM Cloud DNS, Infoblox, Infomaniak, INWX, IONOS, IPv64.net, Joker.com, Linode, LuaDNS, Mythic Beasts, Name.com, Namecheap, NameSilo, netcup, Netlify, NIFCLOUD, NS1, Oracle Cloud, Plesk, SafeDNS, Scaleway, Simply.com, Tencent Cloud DNS, TransIP, UltraDNS, Vercel, Volcengine, Vultr, Websupport, and Yandex Cloud DNS.
+- Added the `propagation_wait` prop for the `auto_tls_challenge` directive, which configures the DNS propagation wait time (in seconds) for DNS-01 ACME challenges.
+
+### Changed
+
+- Updated the "dns-update" crate from 0.3.1 to 0.5.6.
+- The `email` prop of the Cloudflare DNS provider is deprecated and ignored, since Cloudflare global API keys are no longer supported; use an API token instead.
+
 ### Fixed
 
 - Fixed OCSP stapling not working properly for ECDSA issuer certificates.

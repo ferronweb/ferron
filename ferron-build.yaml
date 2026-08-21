@@ -108,6 +108,242 @@ dns:
     id: spaceship
     cargo_feature: spaceship
     provider: SpaceshipDnsProvider
+  - builtin: true
+    id: alidns
+    cargo_feature: alidns
+    provider: AlidnsDnsProvider
+  - builtin: true
+    id: arvancloud
+    cargo_feature: arvancloud
+    provider: ArvanCloudDnsProvider
+  - builtin: true
+    id: autodns
+    cargo_feature: autodns
+    provider: AutoDnsDnsProvider
+  - builtin: true
+    id: azuredns
+    cargo_feature: azuredns
+    provider: AzureDnsProvider
+  - builtin: true
+    id: baiducloud
+    cargo_feature: baiducloud
+    provider: BaiduCloudDnsProvider
+  - builtin: true
+    id: bluecatv2
+    cargo_feature: bluecatv2
+    provider: BluecatV2DnsProvider
+  - builtin: true
+    id: cloudns
+    cargo_feature: cloudns
+    provider: ClouDnsDnsProvider
+  - builtin: true
+    id: constellix
+    cargo_feature: constellix
+    provider: ConstellixDnsProvider
+  - builtin: true
+    id: cpanel
+    cargo_feature: cpanel
+    provider: CpanelDnsProvider
+  - builtin: true
+    id: ddnss
+    cargo_feature: ddnss
+    provider: DdnssDnsProvider
+  - builtin: true
+    id: dnsmadeeasy
+    cargo_feature: dnsmadeeasy
+    provider: DnsMadeEasyDnsProvider
+  - builtin: true
+    id: domeneshop
+    cargo_feature: domeneshop
+    provider: DomeneshopDnsProvider
+  - builtin: true
+    id: dreamhost
+    cargo_feature: dreamhost
+    provider: DreamHostDnsProvider
+  - builtin: true
+    id: duckdns
+    cargo_feature: duckdns
+    provider: DuckDnsDnsProvider
+  - builtin: true
+    id: dynu
+    cargo_feature: dynu
+    provider: DynuDnsProvider
+  - builtin: true
+    id: easydns
+    cargo_feature: easydns
+    provider: EasyDnsDnsProvider
+  - builtin: true
+    id: edgedns
+    cargo_feature: edgedns
+    provider: EdgeDnsProvider
+  - builtin: true
+    id: exoscale
+    cargo_feature: exoscale
+    provider: ExoscaleDnsProvider
+  - builtin: true
+    id: freemyip
+    cargo_feature: freemyip
+    provider: FreeMyIpDnsProvider
+  - builtin: true
+    id: gandiv5
+    cargo_feature: gandiv5
+    provider: GandiV5DnsProvider
+  - builtin: true
+    id: gcore
+    cargo_feature: gcore
+    provider: GcoreDnsProvider
+  - builtin: true
+    id: glesys
+    cargo_feature: glesys
+    provider: GlesysDnsProvider
+  - builtin: true
+    id: godaddy
+    cargo_feature: godaddy
+    provider: GoDaddyDnsProvider
+  - builtin: true
+    id: hetzner
+    cargo_feature: hetzner
+    provider: HetznerDnsProvider
+  - builtin: true
+    id: hostingde
+    cargo_feature: hostingde
+    provider: HostingdeDnsProvider
+  - builtin: true
+    id: hostinger
+    cargo_feature: hostinger
+    provider: HostingerDnsProvider
+  - builtin: true
+    id: huaweicloud
+    cargo_feature: huaweicloud
+    provider: HuaweiCloudDnsProvider
+  - builtin: true
+    id: hurricane
+    cargo_feature: hurricane
+    provider: HurricaneDnsProvider
+  - builtin: true
+    id: ibmcloud
+    cargo_feature: ibmcloud
+    provider: IbmCloudDnsProvider
+  - builtin: true
+    id: infoblox
+    cargo_feature: infoblox
+    provider: InfobloxDnsProvider
+  - builtin: true
+    id: infomaniak
+    cargo_feature: infomaniak
+    provider: InfomaniakDnsProvider
+  - builtin: true
+    id: inwx
+    cargo_feature: inwx
+    provider: InwxDnsProvider
+  - builtin: true
+    id: ionos
+    cargo_feature: ionos
+    provider: IonosDnsProvider
+  - builtin: true
+    id: ipv64
+    cargo_feature: ipv64
+    provider: Ipv64DnsProvider
+  - builtin: true
+    id: joker
+    cargo_feature: joker
+    provider: JokerDnsProvider
+  - builtin: true
+    id: lightsail
+    cargo_feature: lightsail
+    provider: LightsailDnsProvider
+  - builtin: true
+    id: linode
+    cargo_feature: linode
+    provider: LinodeDnsProvider
+  - builtin: true
+    id: luadns
+    cargo_feature: luadns
+    provider: LuaDnsDnsProvider
+  - builtin: true
+    id: mythicbeasts
+    cargo_feature: mythicbeasts
+    provider: MythicBeastsDnsProvider
+  - builtin: true
+    id: namecheap
+    cargo_feature: namecheap
+    provider: NamecheapDnsProvider
+  - builtin: true
+    id: namedotcom
+    cargo_feature: namedotcom
+    provider: NameDotComDnsProvider
+  - builtin: true
+    id: namesilo
+    cargo_feature: namesilo
+    provider: NameSiloDnsProvider
+  - builtin: true
+    id: netcup
+    cargo_feature: netcup
+    provider: NetcupDnsProvider
+  - builtin: true
+    id: netlify
+    cargo_feature: netlify
+    provider: NetlifyDnsProvider
+  - builtin: true
+    id: nifcloud
+    cargo_feature: nifcloud
+    provider: NifcloudDnsProvider
+  - builtin: true
+    id: ns1
+    cargo_feature: ns1
+    provider: Ns1DnsProvider
+  - builtin: true
+    id: oraclecloud
+    cargo_feature: oraclecloud
+    provider: OracleCloudDnsProvider
+  - builtin: true
+    id: plesk
+    cargo_feature: plesk
+    provider: PleskDnsProvider
+  - builtin: true
+    id: safedns
+    cargo_feature: safedns
+    provider: SafeDnsDnsProvider
+  - builtin: true
+    id: scaleway
+    cargo_feature: scaleway
+    provider: ScalewayDnsProvider
+  - builtin: true
+    id: simplycom
+    cargo_feature: simplycom
+    provider: SimplyComDnsProvider
+  - builtin: true
+    id: tencentcloud
+    cargo_feature: tencentcloud
+    provider: TencentCloudDnsProvider
+  - builtin: true
+    id: transip
+    cargo_feature: transip
+    provider: TransIpDnsProvider
+  - builtin: true
+    id: ultradns
+    cargo_feature: ultradns
+    provider: UltraDnsDnsProvider
+  - builtin: true
+    id: vercel
+    cargo_feature: vercel
+    provider: VercelDnsProvider
+  - builtin: true
+    id: volcengine
+    cargo_feature: volcengine
+    provider: VolcengineDnsProvider
+  - builtin: true
+    id: vultr
+    cargo_feature: vultr
+    provider: VultrDnsProvider
+  - builtin: true
+    id: websupport
+    cargo_feature: websupport
+    provider: WebsupportDnsProvider
+  - builtin: true
+    id: yandexcloud
+    cargo_feature: yandexcloud
+    provider: YandexCloudDnsProvider
   # Mock DNS provider
   # Copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines
   # - git: https://github.com/ferronweb/ferron-dns-mock.git
