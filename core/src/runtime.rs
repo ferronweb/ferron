@@ -106,7 +106,7 @@ impl Runtime {
                             }
                         }
                         while let Some(task_factory) = rx.recv().await {
-                            vibeio::spawn((task_factory.as_ref())());
+                            vibeio::spawn_detached((task_factory.as_ref())());
                         }
                     });
                 })?;

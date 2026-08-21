@@ -23,7 +23,7 @@ where
     I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let (sender, conn) = cegla_fcgi::client::handshake(io, keepalive).await?;
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(sender)

@@ -171,7 +171,7 @@ where
     I: hyper::rt::Read + hyper::rt::Write + Unpin + 'static,
 {
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(SendRequestWrapper::http1(sender))
@@ -187,7 +187,7 @@ where
 {
     let executor = vibeio_hyper::VibeioExecutor;
     let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(SendRequestWrapper::http2(sender))

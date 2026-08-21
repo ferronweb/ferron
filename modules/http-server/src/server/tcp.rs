@@ -204,7 +204,7 @@ impl TcpListenerHandle {
 
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
-                    vibeio::spawn(async move {
+                    vibeio::spawn_detached(async move {
                         let _conn_guard = ConnectionCountGuard::new();
 
                         // Read PROXY protocol header

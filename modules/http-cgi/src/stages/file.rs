@@ -349,7 +349,7 @@ impl Stage<HttpFileContext> for CgiStage {
         }
 
         let events = ctx.http.events.clone();
-        vibeio::spawn(async move {
+        vibeio::spawn_detached(async move {
             if let Some(mut stderr) = stderr {
                 let mut stderr_string = String::new();
                 stderr

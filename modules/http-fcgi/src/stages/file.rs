@@ -258,7 +258,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             .map_err(|e| PipelineError::custom(e.to_string()))?;
 
         let events = ctx.http.events.clone();
-        vibeio::spawn(async move {
+        vibeio::spawn_detached(async move {
             let mut stderr_string = String::new();
             stderr
                 .read_to_string(&mut stderr_string)

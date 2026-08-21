@@ -139,7 +139,7 @@ async fn handle_connect(
     };
 
     // Spawn the tunnel
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         // Wait for the upgrade
         let upgraded = match upgrade_future {
             Some(future) => match future.await {
@@ -485,7 +485,7 @@ async fn http_proxy_forward(
         }
     };
 
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn.await;
     });
 

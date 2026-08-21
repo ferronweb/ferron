@@ -622,7 +622,7 @@ pub async fn handle_upgrade(
     let _wrapper = item.inner_mut().take();
 
     let upgrade_future = vibeio_http::prepare_upgrade(&mut upgrade_request);
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         match hyper::upgrade::on(resp_for_upgrade).await {
             Ok(upgraded_backend) => {
                 if let Some(upgraded_future) = upgrade_future {

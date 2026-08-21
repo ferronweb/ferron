@@ -157,7 +157,7 @@ where
     let io = VibeioIo::new(io);
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
     let conn_with_upgrades = conn.with_upgrades();
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn_with_upgrades.await;
         drop(drop_guard);
     });
@@ -177,7 +177,7 @@ where
     let io = VibeioIo::new(io);
     let executor = vibeio_hyper::VibeioExecutor;
     let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn(async move {
+    vibeio::spawn_detached(async move {
         let _ = conn.await;
         drop(drop_guard);
     });
