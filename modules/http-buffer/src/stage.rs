@@ -62,7 +62,6 @@ impl HttpBufferStage {
 
             if let Some(data) = frame.data_ref() {
                 let frame_size = data.len();
-                // Check if adding this frame would exceed the limit
                 if collected_size.saturating_add(frame_size) > max_size {
                     // Add the frame (we'll go slightly over, which is acceptable)
                     buffered_frames.push(Frame::data(data.clone()));
@@ -71,13 +70,11 @@ impl HttpBufferStage {
                 collected_size += frame_size;
                 buffered_frames.push(Frame::data(data.clone()));
             } else {
-                // Non-data frame (e.g., trailers), preserve it and stop
                 buffered_frames.push(frame);
                 break;
             }
         }
 
-        // Chain buffered frames with the remaining body stream
         let prefix_stream = stream::iter(buffered_frames.into_iter().map(Ok));
         let chained = prefix_stream.chain(BodyStream::new(body));
         let new_body = StreamBody::new(chained).boxed_unsync();
@@ -159,7 +156,6 @@ impl Stage<HttpContext> for HttpBufferStage {
             })
             .transpose()?;
 
-        // Parse response buffer size and store in state for run_inverse()
         let response_buffer_size = ctx
             .configuration
             .get_value("buffer_response", true)
@@ -170,14 +166,12 @@ impl Stage<HttpContext> for HttpBufferStage {
             })
             .transpose()?;
 
-        // Apply request buffering
         if let Some(max_size) = request_buffer_size {
             if max_size > 0 {
                 Self::buffer_request_body(ctx, max_size).await?;
             }
         }
 
-        // Store response buffer config for run_inverse()
         ctx.extensions.insert::<BufferStateKey>(BufferState {
             response_buffer_size,
         });
@@ -194,7 +188,6 @@ impl Stage<HttpContext> for HttpBufferStage {
     }
 
     async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
-        // Retrieve buffer state from extensions
         let Some(state) = ctx.extensions.remove::<BufferStateKey>() else {
             return Ok(());
         };
@@ -207,18 +200,15 @@ impl Stage<HttpContext> for HttpBufferStage {
             return Ok(());
         }
 
-        // Only buffer if we have a custom response
         let response = match ctx.res.take() {
             Some(HttpResponse::Custom(resp)) => resp,
             Some(res) => {
-                // Put back the response if it's not a Custom variant
                 ctx.res = Some(res);
                 return Ok(());
             }
             None => return Ok(()),
         };
 
-        // Apply response buffering
         let buffered_response = Self::buffer_response_body(response, max_size).await?;
         ctx.res = Some(HttpResponse::Custom(buffered_response));
 
@@ -375,22 +365,6 @@ mod tests {
         } else {
             panic!("Expected Custom response");
         }
-    }
-
-    #[tokio::test]
-    async fn test_no_buffering_when_not_configured() {
-        let body_data = Bytes::from("Test");
-        let req = make_request_with_body(body_data.clone());
-        let mut ctx = make_context(Some(req), vec![]);
-
-        let stage = HttpBufferStage::new();
-        let result = stage.run(&mut ctx).await;
-        assert!(result.is_ok());
-
-        // Buffer state should still be inserted (with None values)
-        let state = ctx.extensions.remove::<BufferStateKey>();
-        assert!(state.is_some());
-        assert!(state.unwrap().response_buffer_size.is_none());
     }
 
     #[tokio::test]

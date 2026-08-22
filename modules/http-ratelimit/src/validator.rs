@@ -68,14 +68,11 @@ impl RateLimitValidator {
         block: &ServerConfigurationBlock,
         ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
-        // Check if this block defines named zones
         let has_zones = block.directives.contains_key("zone");
 
         if has_zones {
-            // Zone definition block: validate zone directives
             if let Some(entries) = block.directives.get("zone") {
                 for entry in entries {
-                    // Zone must have exactly one string argument
                     if entry.args.len() != 1 {
                         return Err(ConfigurationValidationError::from(
                             "Invalid `zone` — expected exactly one string argument (the zone name)",
@@ -88,7 +85,6 @@ impl RateLimitValidator {
                         )
                         .with_span(entry_span(entry)));
                     }
-                    // Zone definition should not have a block
                     if entry.children.is_some() {
                         return Err(ConfigurationValidationError::from(
                             "Invalid `zone` — zone definition should not have a nested block",
@@ -132,7 +128,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `rate` — required, must be a positive integer
         let rate_entry = block.directives.get("rate");
         if rate_entry.is_none() {
             return Err(ConfigurationValidationError::from(
@@ -146,7 +141,6 @@ impl RateLimitValidator {
         }
         sub.insert("rate".to_string());
 
-        // Validate `burst` — optional, must be a non-negative integer
         if let Some(entries) = block.directives.get("burst") {
             sub.insert("burst".to_string());
             for entry in entries {
@@ -154,7 +148,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `key` — optional, must be a valid key extractor string
         if let Some(entries) = block.directives.get("key") {
             sub.insert("key".to_string());
             for entry in entries {
@@ -173,7 +166,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `deny_status` — optional, must be a valid HTTP status code
         if let Some(entries) = block.directives.get("deny_status") {
             sub.insert("deny_status".to_string());
             for entry in entries {
@@ -194,7 +186,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `bucket_ttl` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("bucket_ttl") {
             sub.insert("bucket_ttl".to_string());
             for entry in entries {
@@ -202,7 +193,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `max_buckets` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("max_buckets") {
             sub.insert("max_buckets".to_string());
             for entry in entries {
@@ -210,7 +200,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `throttle` — optional, must be a flag
         if let Some(entries) = block.directives.get("throttle") {
             sub.insert("throttle".to_string());
             for entry in entries {
@@ -225,7 +214,6 @@ impl RateLimitValidator {
             }
         }
 
-        // Validate `zone` — optional, must be a string argument (host-level only)
         if let Some(entries) = block.directives.get("zone") {
             sub.insert("zone".to_string());
             for entry in entries {

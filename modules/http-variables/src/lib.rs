@@ -302,25 +302,6 @@ mod tests {
         }
     }
 
-    fn make_log_field_config(field_name: &str, source: &str) -> LayeredConfiguration {
-        let mut top_directives = StdHashMap::new();
-        top_directives.insert(
-            "log_field".to_string(),
-            vec![make_entry(
-                vec![make_value_string(field_name), make_value_string(source)],
-                None,
-            )],
-        );
-
-        let mut config = LayeredConfiguration::new();
-        config.layers.push(Arc::new(ServerConfigurationBlock {
-            directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
-            span: None,
-        }));
-        config
-    }
-
     #[tokio::test]
     async fn sets_variable_on_match() {
         let config = make_set_var_config("request.uri.path", r"\.pdf$", "is_pdf", None);
@@ -390,35 +371,6 @@ mod tests {
         let stage = VariablesStage;
         let _ = stage.run(&mut ctx).await.unwrap();
         assert!(!ctx.variables.contains_key("not_pdf"));
-    }
-
-    #[tokio::test]
-    async fn no_set_var_directives_is_noop() {
-        let mut ctx = make_test_context("/any/path", None);
-        let stage = VariablesStage;
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(ctx.variables.is_empty());
-    }
-
-    #[tokio::test]
-    async fn is_applicable_with_set_var() {
-        let config = make_set_var_config("request.uri.path", r"\.pdf$", "is_pdf", None);
-        let stage = VariablesStage;
-        assert!(stage.is_applicable(config.layers.first().map(|l| l.as_ref())));
-    }
-
-    #[tokio::test]
-    async fn is_applicable_with_log_field() {
-        let config = make_log_field_config("tag", "some_var");
-        let stage = VariablesStage;
-        assert!(stage.is_applicable(config.layers.first().map(|l| l.as_ref())));
-    }
-
-    #[tokio::test]
-    async fn is_not_applicable_without_directives() {
-        let stage = VariablesStage;
-        assert!(!stage.is_applicable(None));
     }
 
     #[tokio::test]

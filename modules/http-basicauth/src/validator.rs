@@ -73,7 +73,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `realm` — optional, must be a string
         if let Some(entries) = block.directives.get("realm") {
             sub.insert("realm".to_string());
             for entry in entries {
@@ -81,7 +80,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `users` block — required, must have at least one user with a hash
         let users_entries = block.directives.get("users");
         if users_entries.is_none() {
             return Err(ConfigurationValidationError::from(
@@ -134,10 +132,8 @@ impl BasicAuthValidator {
 
         for (username, entries) in block.directives.iter() {
             for entry in entries {
-                // Each user must have exactly one string argument (the hash)
                 self.validate_single_string_entry(entry, &format!("user '{username}'"))?;
 
-                // The value must be a supported hash format
                 if let Some(value) = entry.args.first() {
                     if let Some(hash_str) = value.as_str() {
                         Self::validate_password_hash(hash_str, username)?;

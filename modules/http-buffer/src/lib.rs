@@ -19,14 +19,6 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpContext;
 
 /// Module loader for the HTTP buffer module.
-///
-/// Registers:
-/// - Global configuration validator for buffer directives
-/// - Per-protocol (HTTP) configuration validator
-/// - Pipeline stage: HttpBufferStage
-///
-/// Note: This loader does not register any `Module` instances. All functionality
-/// is provided through pipeline stages.
 #[derive(Default)]
 pub struct HttpBufferModuleLoader;
 

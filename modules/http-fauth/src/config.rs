@@ -110,7 +110,6 @@ pub fn parse_forwarded_auth_from_context(
                         } else if let ServerConfigurationValue::String(timeout_str, _) =
                             &entry.args[0]
                         {
-                            // Try to parse as duration string
                             if let Ok(timeout_ms) = timeout_str.parse::<u64>() {
                                 config.idle_timeout = Duration::from_millis(timeout_ms);
                             }

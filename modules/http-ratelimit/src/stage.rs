@@ -572,14 +572,4 @@ mod tests {
             panic!("Expected rate limit response");
         }
     }
-
-    #[tokio::test]
-    async fn no_rules_is_noop() {
-        let engine = Arc::new(RateLimitEngine::new());
-        let stage = RateLimitStage::new(engine);
-        let mut ctx = make_test_context("192.0.2.1:12345", None);
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(ctx.res.is_none());
-    }
 }

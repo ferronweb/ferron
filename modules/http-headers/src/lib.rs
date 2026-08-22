@@ -111,7 +111,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
                         "Number of CORS preflight requests handled before the rest of the HTTP pipeline.",
                     ),
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-
                 }));
                 return Ok(false);
             }
@@ -168,16 +167,13 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             })
             .collect();
 
-        // Set fallback response (404 Not Found default error page)
         if ctx.res.is_none() {
             ctx.res = Some(HttpResponse::BuiltinError(404, None))
         }
 
-        // Apply header actions and CORS to the response
         if let Some(HttpResponse::Custom(ref mut response)) = ctx.res {
             let headers = response.headers_mut();
 
-            // Apply custom header actions using pre-resolved values
             let mut resolved_iter = resolved_headers.iter().peekable();
             for (i, action) in header_ctx.config.header_actions.iter().enumerate() {
                 match action {
@@ -278,13 +274,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
 }
 
 /// Module loader for the HTTP headers module.
-///
-/// Registers:
-/// - Global configuration validator for headers/CORS directives
-/// - Pipeline stage: HeadersStage
-///
-/// Note: This loader does not register any `Module` instances. All functionality
-/// is provided through pipeline stages.
 #[derive(Default)]
 pub struct HttpHeadersModuleLoader;
 

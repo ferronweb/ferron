@@ -85,39 +85,29 @@ pub fn apply_cors_headers(
     if let Ok(val) = HeaderValue::from_str(allow_origin) {
         headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, val);
     }
-
-    // Access-Control-Allow-Credentials
     if cors.credentials && allow_origin != "*" {
         headers.insert(
             ACCESS_CONTROL_ALLOW_CREDENTIALS,
             HeaderValue::from_static("true"),
         );
     }
-
-    // Access-Control-Allow-Methods (only for preflight)
     if !cors.methods.is_empty() {
         let methods = cors.methods.join(", ");
         if let Ok(val) = HeaderValue::from_str(&methods) {
             headers.insert(ACCESS_CONTROL_ALLOW_METHODS, val);
         }
     }
-
-    // Access-Control-Allow-Headers (only for preflight)
     if !cors.headers.is_empty() {
         let allowed = cors.headers.join(", ");
         if let Ok(val) = HeaderValue::from_str(&allowed) {
             headers.insert(ACCESS_CONTROL_ALLOW_HEADERS, val);
         }
     }
-
-    // Access-Control-Max-Age (only for preflight)
     if let Some(max_age) = cors.max_age {
         if let Ok(val) = HeaderValue::from_str(&max_age.to_string()) {
             headers.insert(ACCESS_CONTROL_MAX_AGE, val);
         }
     }
-
-    // Access-Control-Expose-Headers (for actual responses)
     if !cors.expose_headers.is_empty() {
         let exposed = cors.expose_headers.join(", ");
         if let Ok(val) = HeaderValue::from_str(&exposed) {

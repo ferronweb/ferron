@@ -130,16 +130,11 @@ impl ForwardedAuthenticationStage {
             headers.insert(name.clone(), value.clone());
         }
 
-        // X-Forwarded headers
         let client_ip = ctx.remote_address.ip();
         let local_ip = ctx.local_address.ip();
         let proto = if ctx.encrypted { "https" } else { "http" };
-
-        // Pre-format IPs once to avoid repeated allocations in header helpers
         let client_ip_str = client_ip.to_string();
         let local_ip_str = local_ip.to_string();
-
-        // Add X-Forwarded-* headers
         if Self::client_ip_from_header_enabled(ctx) {
             Self::append_x_forwarded_for(headers, &client_ip_str);
             Self::append_forwarded(headers, &client_ip_str, proto, &local_ip_str);
@@ -202,7 +197,6 @@ impl ForwardedAuthenticationStage {
             unix_socket: config.unix_socket.clone(),
         };
 
-        // Set and get local limit for the connection pool
         if let Some(limit) = config.connection_limit {
             self.client.set_local_limit(&pool_key.url, limit).await;
         }
@@ -255,7 +249,6 @@ impl ForwardedAuthenticationStage {
 
         // Check if authentication was successful
         if auth_response.status().is_success() {
-            // Authentication successful - copy headers if configured
             if !config.copy_headers.is_empty() {
                 let original_request = ctx
                     .req
@@ -303,16 +296,13 @@ impl ForwardedAuthenticationStage {
                 "ferron.fauth.backend_url".into(),
                 CustomAccessLogField::String(config.backend_url.clone()),
             );
-            Ok(true) // Continue pipeline
+            Ok(true)
         } else {
             let auth_status = auth_response.status();
             // Authentication failed - return the auth response as the final response
-            ctx.res = Some(ferron_http::HttpResponse::Custom(auth_response.map(
-                |body| {
-                    // Convert body to a type that can be used in HttpResponse
-                    body.map_err(std::io::Error::other).boxed_unsync()
-                },
-            )));
+            ctx.res = Some(ferron_http::HttpResponse::Custom(
+                auth_response.map(|body| body.map_err(std::io::Error::other).boxed_unsync()),
+            ));
 
             self.client.return_connection(pool_key, conn_item);
 
@@ -343,7 +333,7 @@ impl ForwardedAuthenticationStage {
                 CustomAccessLogField::String("failure".into()),
             );
 
-            Ok(false) // Stop pipeline
+            Ok(false)
         }
     }
 }

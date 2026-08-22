@@ -262,7 +262,6 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             .and_then(|v| v.to_str().ok())
             .map(|v| v.split_once(';').map_or(v, |s| s.0).trim());
 
-        // Check if the MIME type is compressible
         let is_compressible = content_type.is_none_or(|t| !NON_COMPRESSIBLE_MIME_TYPES.contains(t));
 
         if !is_compressible {
@@ -276,7 +275,6 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             return Ok(());
         }
 
-        // Determine the best compression algorithm from Accept-Encoding
         let compression = determine_compression(state.accept_encoding.as_deref());
 
         if compression == Compression::Identity {
@@ -317,14 +315,12 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             }
         }
 
-        // Add Content-Encoding header
         if let Some(algo) = compression.header_value() {
             if let Ok(val) = http::HeaderValue::from_str(algo) {
                 parts.headers.insert(header::CONTENT_ENCODING, val);
             }
         }
 
-        // Compress the body
         let compressed_body = compress_body(body, compression);
         let new_response = http::Response::from_parts(parts, compressed_body);
 

@@ -23,7 +23,6 @@ pub struct BruteForceConfig {
 }
 
 impl BruteForceConfig {
-    /// Default: enabled, 5 attempts, 15-minute lockout, 5-minute window.
     pub const DEFAULT_MAX_ATTEMPTS: usize = 5;
     pub const DEFAULT_LOCKOUT_DURATION_SECS: u64 = 900; // 15 minutes
     pub const DEFAULT_WINDOW_SECS: u64 = 300; // 5 minutes
@@ -101,7 +100,9 @@ impl AttemptTracker {
     /// during eviction.
     fn has_recent_attempt(&self, window: Duration) -> bool {
         let cutoff = Instant::now().checked_sub(window).unwrap_or(Instant::now());
-        self.attempts.iter().any(|&t| t >= cutoff)
+        // Optimization: instead of iterating, check the last attempt directly.
+        // since the last attempt is the most recent anyway
+        self.attempts.last().map_or(false, |&t| t >= cutoff)
     }
 }
 
@@ -163,13 +164,9 @@ impl BruteForceEngine {
                 .or_insert_with(AttemptTracker::new)
                 .downgrade()
         };
-
-        // Check lock status (pruning happens implicitly on access)
         if tracker.is_locked() {
             return true;
         }
-
-        // If lockout has expired, reset the tracker
         if tracker.locked_until.is_some() {
             drop(tracker);
             self.trackers
@@ -199,7 +196,6 @@ impl BruteForceEngine {
             .entry(ip.to_canonical())
             .or_insert_with(AttemptTracker::new);
 
-        // Prune old attempts outside the window
         let window = Duration::from_secs(self.config.window_secs);
         tracker.prune_attempts(window);
 
@@ -208,7 +204,6 @@ impl BruteForceEngine {
             return true;
         }
 
-        // Record the failure
         let lockout_duration = Duration::from_secs(self.config.lockout_duration_secs);
         tracker.record_failure(self.config.max_attempts, lockout_duration)
     }
@@ -321,10 +316,8 @@ mod tests {
         };
         let engine = BruteForceEngine::new(config);
 
-        // Record a failure for an IP, which should create a tracker
         engine.record_failure("10.0.0.1".parse().unwrap());
-
-        // Trigger eviction by recording another failure for a different IP
+        // Trigger eviction
         engine.record_failure("10.0.0.2".parse().unwrap());
 
         // The trackers should still exist (they have recent attempts)

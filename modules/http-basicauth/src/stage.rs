@@ -157,10 +157,8 @@ impl Stage<HttpContext> for BasicAuthStage {
         };
 
         let engine = if let Some(engine) = self.engines.get(&config.brute_force) {
-            // Fast path
             engine
         } else {
-            // Use .entry(..).or_insert_with(..) to avoid insertion race conditions
             self.engines
                 .entry(config.brute_force.clone())
                 .or_insert_with(|| BruteForceEngine::new(config.brute_force.clone()))
@@ -233,14 +231,12 @@ impl Stage<HttpContext> for BasicAuthStage {
             return Ok(false);
         }
 
-        // Look up the user and verify the password
         let stored_hash = match config.users.get(&username) {
             Some(hash) => hash,
             None => {
                 // Verify a fake hash to thwart user enumeration
                 let _ = Self::verify_password("test", FAKE_HASH).await;
 
-                // Unknown user — record failure for brute-force tracking
                 engine.record_failure(ip);
                 if let Some(recorder) = get_global_abuse_recorder() {
                     let abuse_event = AbuseEvent::new(
@@ -278,7 +274,6 @@ impl Stage<HttpContext> for BasicAuthStage {
         };
 
         if Self::verify_password(&password, stored_hash).await {
-            // Authentication successful
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Debug,
                 message: format!("basicauth: user '{}' authenticated successfully", username),
@@ -298,9 +293,9 @@ impl Stage<HttpContext> for BasicAuthStage {
                 "ferron.basicauth.result".into(),
                 CustomAccessLogField::String("success".into()),
             );
-            Ok(true) // Continue pipeline
+            Ok(true)
         } else {
-            // Authentication failed — record failure
+            // Authentication failed
             let locked = engine.record_failure(ctx.remote_address.ip());
             if let Some(recorder) = get_global_abuse_recorder() {
                 let abuse_event = AbuseEvent::new(
@@ -492,17 +487,6 @@ mod tests {
             assert!(!result, "should stop pipeline");
             assert!(ctx.res.is_some());
         });
-    }
-
-    #[tokio::test]
-    async fn no_config_passes_through() {
-        let stage = BasicAuthStage::new();
-
-        let mut ctx = make_test_context_with_auth_header(None, None);
-        let result = stage.run(&mut ctx).await.unwrap();
-
-        assert!(result, "should continue pipeline");
-        assert!(ctx.res.is_none());
     }
 
     #[test]

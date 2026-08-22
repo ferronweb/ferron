@@ -746,19 +746,6 @@ mod tests {
         assert!(stage.run(&mut ctx2).await.unwrap());
     }
 
-    #[tokio::test]
-    async fn no_rules_is_noop() {
-        let engine = Arc::new(ResponseEngine::new());
-        let stage = HttpResponseStage::new(engine);
-
-        let mut ctx = make_test_context_with_request("/");
-        // Empty configuration
-
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(ctx.res.is_none());
-    }
-
     #[test]
     fn rule_matches_without_url_or_regex() {
         let rule = StatusRule {

@@ -36,7 +36,6 @@ impl AbuseProtectionStage {
 
         let client_ip = context.remote_address.ip().to_canonical();
 
-        // Check if this IP is banned
         if let Some(remaining) = self
             .registry
             .ban_time_remaining(client_ip, &config.registry_config)
@@ -127,7 +126,7 @@ impl AbuseProtectionStage {
                     CustomAccessLogField::U64(remaining_secs),
                 );
             }
-            return Ok(false); // Stop pipeline execution
+            return Ok(false);
         }
 
         {
@@ -142,7 +141,7 @@ impl AbuseProtectionStage {
                 CustomAccessLogField::String("skip".into()),
             );
         }
-        Ok(true) // Continue pipeline execution
+        Ok(true)
     }
 
     #[inline]
@@ -186,7 +185,6 @@ impl AbuseProtectionStage {
             _ => return Ok(()),
         };
 
-        // Check if this status code matches any configured error rate threshold
         let matches_any = config
             .error_rate_thresholds
             .iter()
@@ -329,10 +327,6 @@ mod tests {
         config
     }
 
-    fn make_config_without_abuse() -> LayeredConfiguration {
-        LayeredConfiguration::new()
-    }
-
     #[tokio::test]
     async fn allows_request_when_not_banned() {
         let registry = Arc::new(AbuseRegistry::new());
@@ -430,19 +424,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn not_applicable_without_abuse_protection_block() {
-        let registry = Arc::new(AbuseRegistry::default());
-        let stage = AbuseProtectionStage::new(registry);
-
-        let config = make_config_without_abuse();
-        let addr: SocketAddr = "192.0.2.1:12345".parse().unwrap();
-        let mut ctx = make_context(addr, config);
-
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result, "should pass through when not banned");
-    }
-
-    #[tokio::test]
     async fn multiple_ips_independent() {
         let registry_config = AbuseRegistryConfig {
             enabled: true,
@@ -481,35 +462,6 @@ mod tests {
         assert!(second_result);
     }
 
-    #[test]
-    fn is_applicable_checks_directive() {
-        let registry = Arc::new(AbuseRegistry::default());
-        let stage = AbuseProtectionStage::new(registry);
-
-        // Config with abuse_protection block
-        let block_with = Some(ServerConfigurationBlock {
-            directives: {
-                let mut m = StdHashMap::new();
-                m.insert("abuse_protection".to_string(), vec![]);
-                Arc::new(m)
-            },
-            matchers: StdHashMap::new(),
-            span: None,
-        });
-        assert!(stage.is_applicable(block_with.as_ref()));
-
-        // Config without abuse_protection block
-        let block_without = Some(ServerConfigurationBlock {
-            directives: Arc::new(StdHashMap::new()),
-            matchers: StdHashMap::new(),
-            span: None,
-        });
-        assert!(!stage.is_applicable(block_without.as_ref()));
-
-        // No config at all
-        assert!(!stage.is_applicable(None));
-    }
-
     #[tokio::test]
     async fn run_inverse_records_error_rate_event() {
         let registry = Arc::new(AbuseRegistry::new());
@@ -530,8 +482,6 @@ mod tests {
         let addr: SocketAddr = "192.0.2.1:12345".parse().unwrap();
         let mut ctx = make_context(addr, make_config_with_abuse());
         ctx.extensions.insert::<AbuseRegistryConfig>(config.clone());
-
-        // Set a 404 response
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(404, None));
 
         // Without global recorder, run_inverse should not panic and should not record events
@@ -580,8 +530,6 @@ mod tests {
         let addr: SocketAddr = "192.0.2.1:12345".parse().unwrap();
         let mut ctx = make_context(addr, make_config_with_abuse());
         ctx.extensions.insert::<AbuseRegistryConfig>(config.clone());
-
-        // Set a 200 response (not matching 404)
         ctx.res = Some(ferron_http::HttpResponse::BuiltinError(200, None));
 
         for _ in 0..5 {

@@ -119,7 +119,8 @@ impl SendRequestWrapper {
                         if self.last_used.elapsed()
                             > dl - std::time::Instant::now() + self.last_used.elapsed()
                         {
-                            // Check actual timeout since creation
+                            // Hmm... This shoudldn't happen since timeout check is in
+                            // Poll::Pending...
                         }
                     }
                     Poll::Ready(true)
@@ -313,14 +314,12 @@ impl ForwardedAuthClient {
 
             #[cfg(unix)]
             {
-                // For Unix sockets, use vibeio's UnixStream directly
                 let stream = vibeio::net::UnixStream::connect(unix_path)
                     .await?
                     .into_poll()?;
 
                 let url: Uri = url.parse()?;
 
-                // For HTTPS over Unix socket, use TLS connector
                 if url.scheme_str() == Some("https") {
                     let hostname = url
                         .host()
@@ -390,10 +389,8 @@ impl ForwardedAuthClient {
             }
         }
 
-        // Establish new connection
         let established = self.establish_connection(key, no_verification).await?;
 
-        // Fill the item
         *item.inner_mut() = Some(established);
 
         Ok(item)

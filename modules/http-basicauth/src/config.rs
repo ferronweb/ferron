@@ -115,7 +115,6 @@ fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForc
         }
     }
 
-    // Parse `lockout_duration` — optional, accepts duration string or seconds
     if let Some(secs) = block
         .get_value("lockout_duration")
         .and_then(|d| d.as_duration())
@@ -126,7 +125,6 @@ fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForc
         }
     }
 
-    // Parse `window` — optional, accepts duration string or seconds
     if let Some(secs) = block
         .get_value("window")
         .and_then(|d| d.as_duration())

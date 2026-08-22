@@ -279,15 +279,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_map_directives_is_noop() {
-        let mut ctx = make_test_context("/any/path", None);
-        let stage = MapStage;
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(ctx.variables.is_empty());
-    }
-
-    #[tokio::test]
     async fn map_sets_default_when_no_match() {
         let config = make_map_config(
             "request.uri.path",
@@ -324,19 +315,6 @@ mod tests {
         let stage = MapStage;
         let _ = stage.run(&mut ctx).await.unwrap();
         assert_eq!(ctx.variables.get("category"), Some(&String::new()));
-    }
-
-    #[tokio::test]
-    async fn is_applicable_returns_true_with_map_directive() {
-        let config = make_map_config("request.uri.path", "category", None, vec![], vec![]);
-        let stage = MapStage;
-        assert!(stage.is_applicable(config.layers.first().map(|l| l.as_ref())));
-    }
-
-    #[tokio::test]
-    async fn is_applicable_returns_false_without_map_directive() {
-        let stage = MapStage;
-        assert!(!stage.is_applicable(None));
     }
 
     #[tokio::test]

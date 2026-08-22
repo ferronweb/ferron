@@ -44,7 +44,6 @@ impl JsonErrorConfig {
         let entries = config.get_entries("json_errors", true);
 
         for entry in &entries {
-            // get_flag() returns true for bare directives, or the boolean value for "json_errors true/false"
             result.enabled = entry.get_flag();
 
             if let Some(children) = &entry.children {
@@ -60,7 +59,6 @@ impl JsonErrorConfig {
                     result.type_uri = val.to_string();
                 }
 
-                // Parse `trace_id` subdirective (default: true)
                 if let Some(val) = children.get_value("trace_id") {
                     if let Some(b) = val.as_boolean() {
                         result.trace_id = b;

@@ -187,7 +187,6 @@ impl AbuseRegistry {
 
         let ip = ip.to_canonical();
 
-        // Allowlisted IPs are never banned
         if Self::is_allowlisted(ip, config) {
             return false;
         }
@@ -340,17 +339,13 @@ impl AbuseRegistry {
         let mut overall_result = EventResult::Recorded;
 
         for error_threshold in &config.error_rate_thresholds {
-            // Check if this status code matches the threshold's configured codes
             if !error_threshold.status_codes.contains(&status_code) {
                 continue;
             }
 
-            // Opportunistically evict stale trackers
             let eviction_window = Duration::from_secs(error_threshold.event_threshold.window_secs);
             self.evict_stale_trackers_with_window(eviction_window);
 
-            // Use a key that includes the threshold index for independent tracking
-            // per error_rate_threshold block
             let key = format!(
                 "{}:{}:{}",
                 event.ip.to_canonical(),
@@ -367,14 +362,9 @@ impl AbuseRegistry {
                 .entry(key.clone())
                 .or_insert_with(EventTracker::new);
 
-            // Prune old events outside the window
             let window = Duration::from_secs(error_threshold.event_threshold.window_secs);
             tracker.prune(window);
-
-            // Record the new event
             tracker.record();
-
-            // Check if threshold is met
             if tracker.count() >= error_threshold.event_threshold.events_count {
                 let ban_duration = Duration::from_secs(config.ban_duration_secs);
                 let ban_entry = BanEntry {
