@@ -312,7 +312,10 @@ pub async fn execute_proxy(
                                     http::HeaderValue::from_str(&retry_after_value.to_string())
                                         .expect("retry-after value should be valid"),
                                 );
-                                return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
+                                return Ok((
+                                    HttpResponse::BuiltinError(503, Some(headers)),
+                                    metrics,
+                                ));
                             }
                             budget.record_retry();
                         }
@@ -379,7 +382,10 @@ pub async fn execute_proxy(
                                     http::HeaderValue::from_str(&retry_after_value.to_string())
                                         .expect("retry-after value should be valid"),
                                 );
-                                return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
+                                return Ok((
+                                    HttpResponse::BuiltinError(503, Some(headers)),
+                                    metrics,
+                                ));
                             }
                             budget.record_retry();
                         }
