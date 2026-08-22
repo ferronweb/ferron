@@ -503,6 +503,7 @@ pub async fn send_via_wrapper(
                 ctx.req.replace(http::Request::from_parts(oparts, body));
                 Some(parts)
             } else {
+                ctx.req.replace(req);
                 None
             }
         } else {
