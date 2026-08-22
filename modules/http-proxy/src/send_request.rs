@@ -41,7 +41,7 @@ impl ProxyBody {
     #[inline]
     pub fn recycle(self) -> Option<UnsyncBoxBody<Bytes, std::io::Error>> {
         let mut guard = self.inner.borrow_mut();
-        if !guard.as_ref().map_or(false, |i| i.recycleable) {
+        if !guard.as_ref().is_some_and(|i| i.recycleable) {
             return None;
         }
         Some(guard.take()?.inner)
@@ -82,7 +82,7 @@ impl hyper::body::Body for ProxyBody {
         self.inner
             .borrow()
             .as_ref()
-            .map_or(false, |i| i.inner.is_end_stream())
+            .is_some_and(|i| i.inner.is_end_stream())
     }
 }
 
