@@ -20,7 +20,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `circuit_breaker [bool: boolean]` (`http-proxy`)
   - This directive enables request-time circuit breaking for backends. Transport failures always count toward tripping the circuit. Upstream `5xx` responses count only when you enable `record_5xx`. Slow responses count when you set `latency_threshold`. It supports nested `max_fails`, `window`, `open_duration`, `consecutive_passes`, `record_5xx`, `latency_threshold`, `flapping_transitions`, `flapping_window`, and `slow_start` directives. Default: `circuit_breaker true`
 - `retry_connection [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether to retry on connection failure if alternative backends are available. Default: `retry_connection true`
+  - This directive specifies whether to retry on connection or HTTP request (if request body wasn't sent yet) failure if alternative backends are available. Default: `retry_connection true`
 - `retry_budget [bool: boolean]` (`http-proxy`)
   - This directive enables a token-bucket retry budget that limits retries to a share of steady-state traffic. When you enable it alongside `retry_connection true`, retries consume tokens from a shared pool. Successful requests replenish the pool. If the retry budget runs out, Ferron refuses further retries and the request immediately returns `503 Service Unavailable`. This prevents cascading retry storms from overwhelming remaining healthy backends. It supports `max_retry_rate`, `max_tokens`, and `refill_rate` nested directives. Default: `retry_budget false`
 - `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
