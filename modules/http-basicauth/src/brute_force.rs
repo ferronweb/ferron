@@ -102,7 +102,7 @@ impl AttemptTracker {
         let cutoff = Instant::now().checked_sub(window).unwrap_or(Instant::now());
         // Optimization: instead of iterating, check the last attempt directly.
         // since the last attempt is the most recent anyway
-        self.attempts.last().map_or(false, |&t| t >= cutoff)
+        self.attempts.last().is_some_and(|&t| t >= cutoff)
     }
 }
 
