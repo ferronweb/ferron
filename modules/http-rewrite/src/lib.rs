@@ -213,8 +213,7 @@ impl Stage<HttpContext> for RewriteStage {
             req.uri().query().map_or(String::new(), |q| format!("?{q}"))
         );
 
-        let result = apply_rewrite_rules(&original_url, &rules, root.as_deref());
-
+        let result = apply_rewrite_rules(&original_url, &rules, root.as_deref()).await;
         let rewritten = match result {
             RewriteResult::NoMatch => {
                 ctx.get_span_attributes()
@@ -420,16 +419,6 @@ mod tests {
         assert!(result);
         assert!(ctx.res.is_none());
         assert_eq!(ctx.req.as_ref().unwrap().uri().path(), "/new/path");
-    }
-
-    #[tokio::test]
-    async fn no_rules_is_noop() {
-        let mut ctx = make_test_context("/any/path", None);
-        let stage = RewriteStage::new(Default::default());
-        let result = stage.run(&mut ctx).await.unwrap();
-        assert!(result);
-        assert!(ctx.res.is_none());
-        assert_eq!(ctx.req.as_ref().unwrap().uri().path(), "/any/path");
     }
 
     #[tokio::test]

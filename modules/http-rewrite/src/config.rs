@@ -15,21 +15,21 @@ use crate::RewriteEngine;
 
 /// A TTL cache for file/directory metadata lookups.
 struct MetadataCache {
-    cache: parking_lot::Mutex<std::collections::HashMap<PathBuf, (bool, bool, std::time::Instant)>>,
+    cache: dashmap::DashMap<PathBuf, (bool, bool, std::time::Instant)>,
     ttl: Duration,
 }
 
 impl MetadataCache {
     fn new(ttl: Duration) -> Self {
         Self {
-            cache: parking_lot::Mutex::new(std::collections::HashMap::new()),
+            cache: dashmap::DashMap::new(),
             ttl,
         }
     }
 
     fn get(&self, path: &Path) -> Option<(bool, bool)> {
-        let guard = self.cache.lock();
-        guard.get(path).and_then(|(is_file, is_dir, ts)| {
+        self.cache.get(path).and_then(|r| {
+            let (is_file, is_dir, ts) = r.value();
             if ts.elapsed() < self.ttl {
                 Some((*is_file, *is_dir))
             } else {
@@ -39,13 +39,13 @@ impl MetadataCache {
     }
 
     fn insert(&self, path: PathBuf, is_file: bool, is_dir: bool) {
-        let mut guard = self.cache.lock();
         // Periodic cleanup
-        if guard.len() > 10_000 {
+        if self.cache.len() > 10_000 {
             let ttl = self.ttl;
-            guard.retain(|_, (_, _, ts)| ts.elapsed() < ttl);
+            self.cache.retain(|_, (_, _, ts)| ts.elapsed() < ttl);
         }
-        guard.insert(path, (is_file, is_dir, std::time::Instant::now()));
+        self.cache
+            .insert(path, (is_file, is_dir, std::time::Instant::now()));
     }
 }
 
@@ -200,7 +200,7 @@ pub fn is_rewrite_log_enabled(config: &LayeredConfiguration) -> bool {
 
 /// Resolve the filesystem path from a URL path and the configured root directory.
 /// Returns the joined path and (is_file, is_directory) metadata.
-fn resolve_path_metadata(url_path: &str, root: &str) -> (PathBuf, Option<(bool, bool)>) {
+async fn resolve_path_metadata(url_path: &str, root: &str) -> (PathBuf, Option<(bool, bool)>) {
     let mut relative = url_path.trim_start_matches('/');
     // Strip query string
     if let Some(pos) = relative.find('?') {
@@ -214,7 +214,7 @@ fn resolve_path_metadata(url_path: &str, root: &str) -> (PathBuf, Option<(bool, 
     }
 
     // Spawn a blocking metadata lookup
-    let result = std::fs::metadata(&joined);
+    let result = vibeio::fs::metadata(&joined).await;
     let meta = result.ok().map(|m| (m.is_file(), m.is_dir()));
     if let Some((is_file, is_dir)) = meta {
         cache.insert(joined.clone(), is_file, is_dir);
@@ -235,12 +235,15 @@ pub enum RewriteResult {
 }
 
 /// Apply rewrite rules to a URL, returning the result.
-pub fn apply_rewrite_rules(url: &str, rules: &[RewriteRule], root: Option<&str>) -> RewriteResult {
+pub async fn apply_rewrite_rules(
+    url: &str,
+    rules: &[RewriteRule],
+    root: Option<&str>,
+) -> RewriteResult {
     let mut rewritten = url.to_string();
     let mut any_rule_matched = false;
 
     for rule in rules {
-        // Normalize double slashes if not allowed
         if !rule.allow_double_slashes {
             while rewritten.contains("//") {
                 rewritten = rewritten.replace("//", "/");
@@ -249,24 +252,12 @@ pub fn apply_rewrite_rules(url: &str, rules: &[RewriteRule], root: Option<&str>)
 
         if !rule.is_file || !rule.is_directory {
             if let Some(root) = root {
-                let (joined, metadata) = resolve_path_metadata(&rewritten, root);
+                let (_joined, metadata) = resolve_path_metadata(&rewritten, root).await;
+                let (is_file, is_directory) = metadata.unwrap_or((false, false));
 
-                let (is_file, is_directory) = match metadata {
-                    Some((f, d)) => (f, d),
-                    None => (false, false),
-                };
-
-                // Skip if constraint says "don't apply for files" and it IS a file
-                if !rule.is_file && is_file {
+                if (!rule.is_file && is_file) || (!rule.is_directory && is_directory) {
                     continue;
                 }
-                // Skip if constraint says "don't apply for directories" and it IS a directory
-                if !rule.is_directory && is_directory {
-                    continue;
-                }
-
-                // Suppress unused variable warning
-                let _ = joined;
             }
         }
 
