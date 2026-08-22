@@ -50,9 +50,15 @@ async fn create_ferron_container(
   ferron_image
     .with_exposed_port(ContainerPort::Tcp(80))
     .with_wait_for(WaitFor::Http(Box::new(
+      // The header makes Ferron respond with 401 instead of redirecting to the OIDC
+      // provider, which the wait strategy's HTTP client would try to follow.
       HttpWaitStrategy::new("/")
         .with_port(ContainerPort::Tcp(80))
-        .with_response_matcher(|_| true),
+        .with_header(
+          "x-requested-with",
+          reqwest::header::HeaderValue::from_static("XMLHttpRequest"),
+        )
+        .with_response_matcher(|response| response.status() == reqwest::StatusCode::UNAUTHORIZED),
     )))
     .with_network(network)
     .with_hostname("ferron")
@@ -198,7 +204,12 @@ async fn test_oidc_full_flow() {
     .unwrap();
   assert_eq!(response.status(), reqwest::StatusCode::FOUND);
   assert_eq!(
-    response.headers().get(reqwest::header::LOCATION).unwrap().to_str().unwrap(),
+    response
+      .headers()
+      .get(reqwest::header::LOCATION)
+      .unwrap()
+      .to_str()
+      .unwrap(),
     "/"
   );
   let session_cookie = get_set_cookie(&response, "ferron_oidc_session").expect("session cookie not set");
