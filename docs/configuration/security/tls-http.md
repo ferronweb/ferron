@@ -99,18 +99,18 @@ The `tls-http` module runs background tasks depending on the mode:
 
 ### Polling mode
 
-1. **Polls** the configured URL at the specified `refresh_interval`
-2. **Parses** the JSON response expecting `certificate` (PEM-encoded chain) and `private_key` (PEM-encoded key) fields
-3. **Replaces** the current TLS certified key if the certificate has changed
-4. **Continues** polling indefinitely until the server shuts down
+1. Polls the configured URL at the specified `refresh_interval`
+2. Parses the JSON response expecting `certificate` (PEM-encoded chain) and `private_key` (PEM-encoded key) fields
+3. Replaces the current TLS certified key if the certificate has changed
+4. Continues polling indefinitely until the server shuts down
 
 ### On-demand mode
 
-1. **Listens** for on-demand requests triggered by TLS handshakes for unknown SNI hostnames
-2. **Checks** the approval endpoint (if configured) to authorize the fetch
-3. **Fetches** the certificate from the configured `url` with `?domain=<encoded>` appended
-4. **Caches** the certificate per SNI hostname in the in-memory resolver
-5. **Refreshes** each certificate independently at the configured `refresh_interval`
+1. Listens for on-demand requests triggered by TLS handshakes for unknown SNI hostnames
+2. Checks the approval endpoint (if configured) to authorize the fetch
+3. Fetches the certificate from the configured `url` with `?domain=<encoded>` appended
+4. Caches the certificate per SNI hostname in the in-memory resolver
+5. Refreshes each certificate independently at the configured `refresh_interval`
 
 The HTTP client supports both HTTP/1.1 and HTTP/2. Ferron enables TLS verification by default. Use `no_verification` only for internal endpoints with self-signed certificates.
 
