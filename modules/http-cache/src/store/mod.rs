@@ -12,7 +12,7 @@ use ahash::{AHashMap, AHashSet, RandomState};
 use http::header::{self, HeaderMap};
 use quick_cache::sync::Cache;
 use quick_cache::{DefaultHashBuilder, Lifecycle, UnitWeighter};
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHashSet};
 use tokio::sync::Notify;
 
 use crate::lscache::PurgeOperation;
@@ -80,6 +80,7 @@ fn build_candidate_keys(
 
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
+    base_key_entries: Arc<dashmap::DashMap<String, FxHashSet<String>, FxBuildHasher>>,
     variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
     last_cleanup: AtomicU64,
@@ -99,6 +100,7 @@ struct InflightEntry {
 #[derive(Clone, Default)]
 struct StoreLifecycle {
     persist: Option<Arc<ZonePersistState>>,
+    base_key_entries: Arc<dashmap::DashMap<String, FxHashSet<String>, FxBuildHasher>>,
 }
 
 #[derive(Default)]
@@ -109,6 +111,21 @@ struct StoreRequestState {
 
 impl Lifecycle<String, StoredEntry> for StoreLifecycle {
     type RequestState = StoreRequestState;
+
+    #[inline]
+    fn before_evict(&self, _state: &mut Self::RequestState, key: &String, val: &mut StoredEntry) {
+        // From quick_cache documentation:
+        // Note that value replacement (e.g. insertions for the same key) won’t call this method.
+        //
+        // This is why base key entry eviction is in `before_evict`, not `on_evict`.
+        if let Some(mut e) = self.base_key_entries.get_mut(&val.base_key) {
+            e.remove(key);
+            if e.is_empty() {
+                drop(e);
+                self.base_key_entries.remove(&val.base_key);
+            }
+        }
+    }
 
     #[inline]
     fn on_evict(&self, state: &mut Self::RequestState, key: String, val: StoredEntry) {
@@ -129,6 +146,7 @@ impl CacheStore {
     /// Create a store that mirrors mutations to the given persistence state.
     #[inline]
     pub fn with_persistence(max_entries: usize, persist: Option<Arc<ZonePersistState>>) -> Self {
+        let base_key_entries = Arc::new(dashmap::DashMap::with_hasher(FxBuildHasher));
         Self {
             entries: Cache::with(
                 max_entries.max(1),
@@ -137,8 +155,10 @@ impl CacheStore {
                 DefaultHashBuilder::default(),
                 StoreLifecycle {
                     persist: persist.clone(),
+                    base_key_entries: base_key_entries.clone(),
                 },
             ),
+            base_key_entries,
             variants_by_base: dashmap::DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
             last_cleanup: AtomicU64::new(0),
@@ -192,6 +212,32 @@ impl CacheStore {
     #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    #[inline]
+    fn insert_base_key_entry(&self, entry_key: &str, base_key: &str) {
+        self.base_key_entries
+            .entry(base_key.to_owned())
+            .or_insert(FxHashSet::default())
+            .insert(entry_key.to_owned());
+    }
+
+    #[inline]
+    fn insert(&self, key: String, entry: StoredEntry) {
+        self.insert_base_key_entry(&key, &entry.base_key);
+        self.entries.insert(key, entry);
+    }
+
+    #[inline]
+    fn insert_with_lifecycle(
+        &self,
+        key: String,
+        entry: StoredEntry,
+        request_state: &mut StoreRequestState,
+    ) {
+        self.insert_base_key_entry(&key, &entry.base_key);
+        self.entries
+            .insert_with_lifecycle(key, entry, request_state);
     }
 
     /// Return the number of active in-flight upstream fetches currently
@@ -405,8 +451,7 @@ impl CacheStore {
         }
 
         let mut request_state = StoreRequestState::default();
-        self.entries
-            .insert_with_lifecycle(key, entry, &mut request_state);
+        self.insert_with_lifecycle(key, entry, &mut request_state);
         stats.size_evictions = request_state.size_evictions;
         for base_key in request_state.evicted_base_keys {
             self.remove_orphaned_base_key(&base_key);
@@ -454,9 +499,9 @@ impl CacheStore {
     #[inline]
     fn remove_orphaned_base_key(&self, base_key: &str) {
         let has_remaining = self
-            .entries
-            .iter()
-            .any(|(_, entry)| entry.base_key == base_key);
+            .base_key_entries
+            .get(base_key)
+            .is_some_and(|keys| !keys.is_empty());
         if !has_remaining {
             self.variants_by_base.remove(base_key);
         }
@@ -582,7 +627,7 @@ impl CacheStore {
         }
 
         entry.access_at = 0;
-        self.entries.insert(key, entry);
+        self.insert(key, entry);
         true
     }
 
