@@ -88,11 +88,11 @@ impl TokenBucket {
     }
 }
 
-/// Thread-safe token bucket using `parking_lot::Mutex`.
+/// Thread-safe token bucket using `parking_lot::RwLock`.
 ///
-/// Wraps a `TokenBucket` in an `Arc<Mutex>` for cheap cloning and concurrent access.
+/// Wraps a `TokenBucket` in an `Arc<RwLock>` for cheap cloning and concurrent access.
 /// Per-key rate limiting naturally shards contention across buckets,
-/// so mutex overhead is minimal in practice.
+/// so rw-lock overhead is minimal in practice.
 #[derive(Clone)]
 pub struct ConcurrentTokenBucket {
     inner: Arc<tokio::sync::RwLock<TokenBucket>>,
