@@ -200,28 +200,6 @@ The `json` formatter produces structured JSON records:
 > [!note]
 > The `error_format` directive is available for the `file` observability provider and the `error_log` shorthand. Console logs always use their native formatting based on the log level.
 
-### Log levels
-
-The `log_level` directive (in the `observability` block or via `console_log`/`error_log` aliases) controls the minimum severity level for application logs:
-
-| Level   | When to use                                      |
-| ------- | ------------------------------------------------ |
-| `error` | Production default. The server logs only errors. |
-| `warn`  | Debugging performance issues.                    |
-| `info`  | Request-level detail. Use for troubleshooting.   |
-| `debug` | Deep debugging. High volume.                     |
-
-**Configuration example:**
-
-```ferron
-example.com {
-    observability {
-        provider console
-        log_level debug
-    }
-}
-```
-
 ### Console vs file vs OTLP
 
 The `format` directive (json/text) applies to **file and console** sinks. OTLP also uses a different mechanism:
