@@ -87,6 +87,10 @@ fn validate_proxy_block(
     validate_circuit_breaker_directives(block, ctx, &mut sub)?;
     ferron_core::validate_nested!(block, used(sub), retry_connection, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     validate_retry_budget_directives(block, ctx, &mut sub)?;
+    if block.directives.contains_key("max_retries_per_upstream") {
+        sub.insert("max_retries_per_upstream".to_string());
+    }
+    validate_number(block, "max_retries_per_upstream", 0)?;
     ferron_core::validate_nested!(block, used(sub), keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);

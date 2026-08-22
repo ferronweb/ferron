@@ -243,6 +243,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 CustomAccessLogField::U64(metrics.retry_count),
             );
             log_fields.insert(
+                "ferron.proxy.same_upstream_retry_count".into(),
+                CustomAccessLogField::U64(metrics.same_upstream_retry_count),
+            );
+            log_fields.insert(
                 "ferron.proxy.retry_budget_exhausted".into(),
                 CustomAccessLogField::Bool(metrics.retry_budget_exhausted),
             );
@@ -578,6 +582,32 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }));
         }
 
+        if metrics.same_upstream_retry_count > 0 {
+            let mut same_attrs = upstream_attrs.clone();
+            if let Some(method) = metrics.request_method {
+                same_attrs.push((
+                    "http.request.method",
+                    MetricAttributeValue::StaticStr(method),
+                ));
+            }
+            if let Some(idempotent) = metrics.method_idempotent {
+                same_attrs.push((
+                    "ferron.proxy.method_idempotent",
+                    MetricAttributeValue::Bool(idempotent),
+                ));
+            }
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.same_upstream_retry.count",
+                    attributes: same_attrs,
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(metrics.same_upstream_retry_count),
+                    unit: Some("{attempt}"),
+                    description: Some("Number of same-upstream retry attempts for a request."),
+                    trace_context: current_event_trace_context(ctx),
+                }));
+        }
+
         if metrics.retry_budget_exhausted {
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
@@ -764,6 +794,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         sa.insert(
             "ferron.proxy.retry_count",
             TraceAttributeValue::I64(metrics.retry_count as i64),
+        );
+        sa.insert(
+            "ferron.proxy.same_upstream_retry_count",
+            TraceAttributeValue::I64(metrics.same_upstream_retry_count as i64),
         );
         if metrics.retry_budget_exhausted {
             sa.insert(

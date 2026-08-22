@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### Reverse proxy
+
+- **Same-upstream retries**: new `max_retries_per_upstream <count>` directive controls how many times the proxy retries the same upstream on a transport or connection failure before it falls back to another backend via `retry_connection`. The retry applies only to idempotent requests with a replayable body and, when `retry_budget` is enabled, each same-upstream retry consumes a retry-budget token. Default: `max_retries_per_upstream 1`.
+
 ### Changed
 
 #### HTTP canary

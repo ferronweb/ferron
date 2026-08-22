@@ -262,6 +262,13 @@ pub(crate) fn register_retry_budget_directives(
         "This directive enables retrying on connection errors.",
         subblock("http_proxy"),
     );
+    register_directive(
+        registry,
+        "max_retries_per_upstream",
+        "max_retries_per_upstream <count>",
+        "This directive sets how many times to retry the same upstream on connection failure before trying another backend.",
+        subblock("http_proxy"),
+    );
 }
 
 #[inline]

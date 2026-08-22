@@ -188,146 +188,147 @@ pub async fn execute_proxy(
         let local_limit = cm.get_local_limit(selected.upstream.clone());
         let idle_timeout = selected.upstream.idle_timeout;
 
-        match pool::try_send_with_pool(
-            ctx,
-            config,
-            cm,
-            selected.upstream.clone(),
-            &proxy_request_url,
-            client_ip,
-            local_limit,
-            idle_timeout,
-            is_https,
-            conn_state,
-            selected.tracker,
-            &mut metrics,
-        )
-        .await
-        {
-            Ok(resp) => {
-                if let Some(status) = metrics.status_code {
-                    record_backend_response(
+        // Same-upstream retry loop: retry the selected backend on transport failure
+        // before falling back to another backend via retry_connection.
+        let mut same_upstream_attempt: u32 = 0;
+        loop {
+            let tracker_for_attempt = selected.tracker.clone();
+            match pool::try_send_with_pool(
+                ctx,
+                config,
+                cm,
+                selected.upstream.clone(),
+                &proxy_request_url,
+                client_ip,
+                local_limit,
+                idle_timeout,
+                is_https,
+                conn_state,
+                tracker_for_attempt,
+                &mut metrics,
+            )
+            .await
+            {
+                Ok(resp) => {
+                    if let Some(status) = metrics.status_code {
+                        record_backend_response(
+                            Some(&circuit_breaker_state),
+                            Some(&flapping_state),
+                            &config.circuit_breaker,
+                            &selected.upstream,
+                            status,
+                            Some(metrics.upstream_time_secs),
+                            &mut metrics,
+                            &ctx.events,
+                            ferron_http::trace_context::current_event_trace_context(ctx),
+                            config.metrics_resolved_ip,
+                        );
+                    }
+
+                    if metrics.upstream_time_secs > 0.0
+                        && matches!(algorithm, LoadBalancerAlgorithmInner::P2cEwma)
+                    {
+                        if let Some(ewma_state) = ewma_state {
+                            crate::upstream::lb::p2c_ewma::update_ewma(
+                                ewma_state,
+                                &selected.upstream,
+                                metrics.upstream_time_secs,
+                                &Default::default(),
+                            );
+                        }
+                    }
+
+                    // Collect active health check unhealthy metrics
+                    if let Some(counter) = active_unhealthy_counter {
+                        let guard = counter.read();
+                        metrics.active_unhealthy_backends =
+                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                    }
+
+                    // Set affinity cookie if needed
+                    let resp = maybe_set_affinity_cookie(
+                        resp,
+                        &config.affinity,
+                        affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
+                    );
+
+                    // Record successful request in retry budget
+                    if let Some(budget) = retry_budget {
+                        budget.record_request();
+                    }
+
+                    return Ok((resp, metrics));
+                }
+                Err(e) => {
+                    record_backend_transport_failure(
                         Some(&circuit_breaker_state),
                         Some(&flapping_state),
                         &config.circuit_breaker,
                         &selected.upstream,
-                        status,
-                        Some(metrics.upstream_time_secs),
                         &mut metrics,
                         &ctx.events,
                         ferron_http::trace_context::current_event_trace_context(ctx),
                         config.metrics_resolved_ip,
                     );
-                }
 
-                if metrics.upstream_time_secs > 0.0
-                    && matches!(algorithm, LoadBalancerAlgorithmInner::P2cEwma)
-                {
-                    if let Some(ewma_state) = ewma_state {
-                        crate::upstream::lb::p2c_ewma::update_ewma(
-                            ewma_state,
-                            &selected.upstream,
-                            metrics.upstream_time_secs,
-                            &Default::default(),
-                        );
-                    }
-                }
-
-                // Collect active health check unhealthy metrics
-                if let Some(counter) = active_unhealthy_counter {
-                    let guard = counter.read();
-                    metrics.active_unhealthy_backends =
-                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                }
-
-                // Set affinity cookie if needed
-                let resp = maybe_set_affinity_cookie(
-                    resp,
-                    &config.affinity,
-                    affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
-                );
-
-                // Record successful request in retry budget
-                if let Some(budget) = retry_budget {
-                    budget.record_request();
-                }
-
-                return Ok((resp, metrics));
-            }
-            Err(e) => {
-                record_backend_transport_failure(
-                    Some(&circuit_breaker_state),
-                    Some(&flapping_state),
-                    &config.circuit_breaker,
-                    &selected.upstream,
-                    &mut metrics,
-                    &ctx.events,
-                    ferron_http::trace_context::current_event_trace_context(ctx),
-                    config.metrics_resolved_ip,
-                );
-
-                // Check if we should retry with another backend
-                if config.retry_connection {
-                    // Check retry budget if configured
-                    if let Some(budget) = retry_budget {
-                        if !budget.try_consume_retry_token() {
-                            // Budget exhausted — fail fast with 503
-                            metrics.retry_budget_exhausted = true;
-                            ctx.events.emit(Event::Log(LogEvent {
-                                level: LogLevel::Warn,
-                                message: format!(
-                                    "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
-                                    url = selected.upstream.proxy_to,
-                                    err = e
-                                ),
-                                summary: "Reverse proxy: retry budget exhausted".into(),
-                                target: LOG_TARGET,
-                                attributes: vec![(
-                                    "upstream.address",
-                                    LogAttributeValue::String(selected.upstream.proxy_to.clone()),
-                                ), (
-                                    "error.message",
-                                    LogAttributeValue::String(e.to_string()),
-                                )],
-                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-
-                            }));
-                            // Collect active health check unhealthy metrics
-                            if let Some(counter) = active_unhealthy_counter {
-                                let guard = counter.read();
-                                metrics.active_unhealthy_backends =
-                                    guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                    // First, try to retry the same upstream on intermittent failures.
+                    // Only idempotent/replayable requests (ctx.req still present after
+                    // body recycle in send_via_wrapper) are retried.
+                    let can_retry_same = same_upstream_attempt < config.max_retries_per_upstream
+                        && ctx.req.is_some();
+                    if can_retry_same {
+                        if let Some(budget) = retry_budget {
+                            if !budget.try_consume_retry_token() {
+                                metrics.retry_budget_exhausted = true;
+                                ctx.events.emit(Event::Log(LogEvent {
+                                    level: LogLevel::Warn,
+                                    message: format!(
+                                        "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
+                                        url = selected.upstream.proxy_to,
+                                        err = e
+                                    ),
+                                    summary: "Reverse proxy: retry budget exhausted".into(),
+                                    target: LOG_TARGET,
+                                    attributes: vec![(
+                                        "upstream.address",
+                                        LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                                    ), (
+                                        "error.message",
+                                        LogAttributeValue::String(e.to_string()),
+                                    )],
+                                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                }));
+                                if let Some(counter) = active_unhealthy_counter {
+                                    let guard = counter.read();
+                                    metrics.active_unhealthy_backends =
+                                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                                }
+                                let retry_after_secs = budget.time_until_available(1);
+                                let retry_after_value =
+                                    retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
+                                let mut headers = http::HeaderMap::new();
+                                headers.insert(
+                                    http::header::RETRY_AFTER,
+                                    http::HeaderValue::from_str(&retry_after_value.to_string())
+                                        .expect("retry-after value should be valid"),
+                                );
+                                return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
                             }
-                            // Add Retry-After header based on when the next token will be available
-                            let retry_after_secs = budget.time_until_available(1);
-                            let retry_after_value =
-                                retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
-                            let mut headers = http::HeaderMap::new();
-                            headers.insert(
-                                http::header::RETRY_AFTER,
-                                http::HeaderValue::from_str(&retry_after_value.to_string())
-                                    .expect("retry-after value should be valid"),
-                            );
-                            return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
+                            budget.record_retry();
                         }
-                        budget.record_retry();
-                    }
-                    // Count how many healthy backends remain
-                    let healthy_count = backend_set.available_count();
-
-                    if healthy_count > 0
-                        && metrics.selected_backends.len() < upstreams.len()
-                        && ctx.req.is_some()
-                    {
+                        same_upstream_attempt += 1;
+                        metrics.same_upstream_retry_count += 1;
                         metrics.retry_count += 1;
                         ctx.events.emit(Event::Log(LogEvent {
                             level: LogLevel::Warn,
                             message: format!(
-                                "Reverse proxy: backend failed, retrying with another — upstream: {url}: {err}",
+                                "Reverse proxy: backend failed, retrying same upstream ({}/{}) — upstream: {url}: {err}",
+                                same_upstream_attempt,
+                                config.max_retries_per_upstream,
                                 url = selected.upstream.proxy_to,
                                 err = e
                             ),
-                            summary: "Reverse proxy: retrying with another backend".into(),
+                            summary: "Reverse proxy: retrying same upstream".into(),
                             target: LOG_TARGET,
                             attributes: vec![(
                                 "upstream.address",
@@ -338,51 +339,119 @@ pub async fn execute_proxy(
                             )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
-                        continue; // Loop back to select next backend
+                        continue; // retry same upstream
                     }
-                }
 
-                // No retry or no more backends — return error
-                let status = e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY);
-                let reason = match status {
-                    StatusCode::SERVICE_UNAVAILABLE => "Service unavailable",
-                    StatusCode::GATEWAY_TIMEOUT => "Gateway timeout",
-                    _ => "Bad gateway",
-                };
-                let attrs = vec![
-                    (
-                        "upstream.address",
-                        LogAttributeValue::String(selected.upstream.proxy_to.clone()),
-                    ),
-                    (
-                        "http.response.status_code",
-                        LogAttributeValue::I64(status.as_u16() as i64),
-                    ),
-                    (
-                        "error.type",
-                        LogAttributeValue::String(e.error_type().to_string()),
-                    ),
-                    ("error.message", LogAttributeValue::String(e.to_string())),
-                ];
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Error,
-                    message: format!(
-                        "Reverse proxy: {reason} — upstream: {url}: {err}",
-                        url = selected.upstream.proxy_to,
-                        err = e
-                    ),
-                    summary: e.summary().into(),
-                    target: LOG_TARGET,
-                    attributes: attrs,
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
-                // Collect active health check unhealthy metrics
-                if let Some(counter) = active_unhealthy_counter {
-                    let guard = counter.read();
-                    metrics.active_unhealthy_backends =
-                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                    // Same-upstream retries exhausted — try another backend if enabled.
+                    if config.retry_connection {
+                        if let Some(budget) = retry_budget {
+                            if !budget.try_consume_retry_token() {
+                                metrics.retry_budget_exhausted = true;
+                                ctx.events.emit(Event::Log(LogEvent {
+                                    level: LogLevel::Warn,
+                                    message: format!(
+                                        "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
+                                        url = selected.upstream.proxy_to,
+                                        err = e
+                                    ),
+                                    summary: "Reverse proxy: retry budget exhausted".into(),
+                                    target: LOG_TARGET,
+                                    attributes: vec![(
+                                        "upstream.address",
+                                        LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                                    ), (
+                                        "error.message",
+                                        LogAttributeValue::String(e.to_string()),
+                                    )],
+                                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                }));
+                                if let Some(counter) = active_unhealthy_counter {
+                                    let guard = counter.read();
+                                    metrics.active_unhealthy_backends =
+                                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                                }
+                                let retry_after_secs = budget.time_until_available(1);
+                                let retry_after_value =
+                                    retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
+                                let mut headers = http::HeaderMap::new();
+                                headers.insert(
+                                    http::header::RETRY_AFTER,
+                                    http::HeaderValue::from_str(&retry_after_value.to_string())
+                                        .expect("retry-after value should be valid"),
+                                );
+                                return Ok((HttpResponse::BuiltinError(503, Some(headers)), metrics));
+                            }
+                            budget.record_retry();
+                        }
+                        let healthy_count = backend_set.available_count();
+                        if healthy_count > 0
+                            && metrics.selected_backends.len() < upstreams.len()
+                            && ctx.req.is_some()
+                        {
+                            metrics.retry_count += 1;
+                            ctx.events.emit(Event::Log(LogEvent {
+                                level: LogLevel::Warn,
+                                message: format!(
+                                    "Reverse proxy: backend failed, retrying with another — upstream: {url}: {err}",
+                                    url = selected.upstream.proxy_to,
+                                    err = e
+                                ),
+                                summary: "Reverse proxy: retrying with another backend".into(),
+                                target: LOG_TARGET,
+                                attributes: vec![(
+                                    "upstream.address",
+                                    LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                                ), (
+                                    "error.message",
+                                    LogAttributeValue::String(e.to_string())
+                                )],
+                                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                            }));
+                            break; // break inner loop → outer selects next backend
+                        }
+                    }
+
+                    // No retry or no more backends — return error
+                    let status = e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY);
+                    let reason = match status {
+                        StatusCode::SERVICE_UNAVAILABLE => "Service unavailable",
+                        StatusCode::GATEWAY_TIMEOUT => "Gateway timeout",
+                        _ => "Bad gateway",
+                    };
+                    let attrs = vec![
+                        (
+                            "upstream.address",
+                            LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                        ),
+                        (
+                            "http.response.status_code",
+                            LogAttributeValue::I64(status.as_u16() as i64),
+                        ),
+                        (
+                            "error.type",
+                            LogAttributeValue::String(e.error_type().to_string()),
+                        ),
+                        ("error.message", LogAttributeValue::String(e.to_string())),
+                    ];
+                    ctx.events.emit(Event::Log(LogEvent {
+                        level: LogLevel::Error,
+                        message: format!(
+                            "Reverse proxy: {reason} — upstream: {url}: {err}",
+                            url = selected.upstream.proxy_to,
+                            err = e
+                        ),
+                        summary: e.summary().into(),
+                        target: LOG_TARGET,
+                        attributes: attrs,
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    }));
+                    if let Some(counter) = active_unhealthy_counter {
+                        let guard = counter.read();
+                        metrics.active_unhealthy_backends =
+                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                    }
+                    return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
                 }
-                return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
             }
         }
     }

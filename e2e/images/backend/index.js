@@ -26,7 +26,7 @@ app.get("/whoami", (_req, res, _next) => {
   res.send(backendName);
 });
 
-app.get("/unstable", (req, res, _next) => {
+app.all("/unstable", (req, res, _next) => {
   const sleep = Number.parseInt(req.query.sleep || "0", 10);
   const unsafe = req.query.unsafe === "true";
   if (sleep > 0) {
@@ -61,7 +61,7 @@ app.get("/header", (req, res, _next) => {
   res.send(req.headers["x-some-header"]);
 });
 
-app.get("/unsafe", (req, _res, _next) => {
+app.all("/unsafe", (req, _res, _next) => {
   req.socket.destroy();
 });
 

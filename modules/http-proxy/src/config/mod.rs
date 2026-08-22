@@ -142,6 +142,17 @@ fn parse_proxy_block(
                     cfg.retry_connection = val;
                 }
             }
+            "max_retries_per_upstream" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v: &ServerConfigurationValue| v.as_number())
+                {
+                    if val >= 0 {
+                        cfg.max_retries_per_upstream = val as u32;
+                    }
+                }
+            }
             "retry_budget" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     if val {
