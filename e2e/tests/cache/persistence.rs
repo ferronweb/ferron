@@ -92,9 +92,10 @@ async fn test_cache_persistence_survives_restart() {
         )
         .unwrap();
 
-    let container = create_persist_container(webroot_dir.path(), persist_dir.path(), config_file.path())
-        .await
-        .unwrap();
+    let container =
+        create_persist_container(webroot_dir.path(), persist_dir.path(), config_file.path())
+            .await
+            .unwrap();
 
     self::common::write_file(webroot_dir.path().join("test.txt"), "persist-v1".as_bytes()).unwrap();
 
@@ -152,9 +153,10 @@ async fn test_cache_persistence_survives_restart() {
 
     // Restart: a new container shares the same persist directory.
     container.stop().await.unwrap();
-    let container = create_persist_container(webroot_dir.path(), persist_dir.path(), config_file.path())
-        .await
-        .unwrap();
+    let container =
+        create_persist_container(webroot_dir.path(), persist_dir.path(), config_file.path())
+            .await
+            .unwrap();
 
     let port = container
         .get_host_port_ipv4(ContainerPort::Tcp(80))

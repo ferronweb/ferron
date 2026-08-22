@@ -127,10 +127,7 @@ async fn test_circuit_breaker_trips_on_slow_upstream() {
     // First request goes to backend-slow (round_robin), which takes 500ms.
     // This exceeds latency_threshold of 100ms, so the circuit should trip.
     let response1 = client
-        .get(format!(
-            "http://localhost:{}/unstable?sleep=500",
-            port
-        ))
+        .get(format!("http://localhost:{}/unstable?sleep=500", port))
         .send()
         .await
         .unwrap();
@@ -213,10 +210,7 @@ async fn test_circuit_breaker_does_not_trip_without_latency_threshold() {
     // Send multiple slow requests — without latency_threshold, the circuit should never trip.
     for _ in 0..3 {
         let response = client
-            .get(format!(
-                "http://localhost:{}/unstable?sleep=200",
-                port
-            ))
+            .get(format!("http://localhost:{}/unstable?sleep=200", port))
             .send()
             .await
             .unwrap();
@@ -303,10 +297,7 @@ async fn test_circuit_breaker_latency_half_open_recovery() {
 
     // Step 1: Request to slow backend — trips the circuit (500ms > 100ms threshold)
     let response = client
-        .get(format!(
-            "http://localhost:{}/unstable?sleep=500",
-            port
-        ))
+        .get(format!("http://localhost:{}/unstable?sleep=500", port))
         .send()
         .await
         .unwrap();

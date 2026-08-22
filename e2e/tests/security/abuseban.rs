@@ -217,7 +217,11 @@ async fn test_abuse_protection_blocks_error_rate_abusers() {
     )
     .unwrap();
 
-    common::write_file(webroot_dir.path().join("exists.txt").to_path_buf(), b"content").unwrap();
+    common::write_file(
+        webroot_dir.path().join("exists.txt").to_path_buf(),
+        b"content",
+    )
+    .unwrap();
 
     let container = crate::create_ferron_container(webroot_dir.path(), config_file.path())
         .await

@@ -1,8 +1,8 @@
 use std::io::Write;
 
 use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::ContainerPort, runners::AsyncRunner,
+    ContainerAsync, GenericImage, ImageExt, TestcontainersError, core::ContainerPort,
+    runners::AsyncRunner,
 };
 
 use crate::otlp_setup::{create_ferron_container, create_test_files, poll_received};
@@ -41,11 +41,11 @@ async fn wait_for_datagram(
     needle: &str,
 ) -> Option<serde_json::Value> {
     poll_received(client, received_url, |json| {
-        json["items"]
-            .as_array()
-            .is_some_and(|items| items.iter().any(|item| {
-                item.as_str().is_some_and(|s| s.contains(needle))
-            }))
+        json["items"].as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.as_str().is_some_and(|s| s.contains(needle)))
+        })
     })
     .await
 }
@@ -116,7 +116,9 @@ async fn test_statsd_metrics_emitted_datadog() {
 
     // Histogram with the DogStatsD `h` type.
     assert!(
-        joined.lines().any(|l| l.ends_with("|h") || l.contains("|h|#")),
+        joined
+            .lines()
+            .any(|l| l.ends_with("|h") || l.contains("|h|#")),
         "no `h` histogram datagram received, got:\n{}",
         joined
     );

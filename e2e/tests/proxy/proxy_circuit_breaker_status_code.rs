@@ -386,7 +386,10 @@ async fn test_circuit_breaker_various_5xx_codes() {
         .send()
         .await
         .unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        response.status(),
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR
+    );
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -407,7 +410,10 @@ async fn test_circuit_breaker_various_5xx_codes() {
         .send()
         .await
         .unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        response.status(),
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR
+    );
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 

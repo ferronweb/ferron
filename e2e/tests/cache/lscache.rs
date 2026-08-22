@@ -201,7 +201,10 @@ async fn test_lscache_hop_by_hop_headers_stripped_on_serve() {
     // Origin sends hop-by-hop headers, with Connection naming an extra field.
     let headers = [
         ("X-Test-Cache-Control", "public,max-age=60"),
-        ("X-Test-Headers", "Connection: X-Custom|X-Custom: 1|Keep-Alive: timeout=5"),
+        (
+            "X-Test-Headers",
+            "Connection: X-Custom|X-Custom: 1|Keep-Alive: timeout=5",
+        ),
     ];
     let resp = ctx.get_with_headers("/cache-test", &headers).await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -305,7 +308,7 @@ async fn test_lscache_private_hit_rehydrates_lsc_cookie_but_not_origin_set_cooki
         .filter_map(|value| value.to_str().ok())
         .collect();
     assert!(
-        set_cookies.iter().any(|cookie| *cookie == "lsc_test=xyz"),
+        set_cookies.contains(&"lsc_test=xyz"),
         "LSC-Cookie must rehydrate into Set-Cookie on a private hit: {set_cookies:?}"
     );
     assert!(
@@ -1295,7 +1298,10 @@ async fn test_lscache_purge_propagation_loop_prevention() {
     // A propagation claim without the shared secret is rejected.
     let resp = ctx
         .client
-        .request(method.clone(), format!("{}/propagation-loop-test", ctx.base_url))
+        .request(
+            method.clone(),
+            format!("{}/propagation-loop-test", ctx.base_url),
+        )
         .header("X-Purge-Source", "propagation")
         .send()
         .await

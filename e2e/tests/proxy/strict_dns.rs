@@ -110,25 +110,24 @@ async fn test_proxy_strict_dns_resolution() {
     let backend_ip = backend.get_bridge_ip_address().await.unwrap();
 
     // Prepare BIND9 config
-    let named_conf = format!(
-        r#"
-options {{
+    let named_conf = r#"
+options {
     directory "/var/lib/bind";
-    allow-query {{ any; }};
+    allow-query { any; };
     dnssec-validation no;
-}};
+};
 
-zone "dns.test" {{
+zone "dns.test" {
     type primary;
     file "/etc/bind/zones/db.dns.test";
-}};
+};
 
-zone "." {{
+zone "." {
     type forward;
-    {{{{FORWARDERS}}}}
+    {{FORWARDERS}}
     forward only;
-}};"#
-    );
+};"#
+    .to_string();
 
     bind9_config
         .as_file_mut()
@@ -151,11 +150,7 @@ backend.dns.test. IN A {backend_ip}
 "#
     );
 
-    std::fs::write(
-        zones_dir.path().join("db.dns.test"),
-        zone_file.as_bytes(),
-    )
-    .unwrap();
+    std::fs::write(zones_dir.path().join("db.dns.test"), zone_file.as_bytes()).unwrap();
 
     // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
@@ -256,25 +251,24 @@ async fn test_proxy_strict_dns_logical_dns_opt_out() {
     let backend_ip = backend.get_bridge_ip_address().await.unwrap();
 
     // Prepare BIND9 config
-    let named_conf = format!(
-        r#"
-options {{
+    let named_conf = r#"
+options {
     directory "/var/lib/bind";
-    allow-query {{ any; }};
+    allow-query { any; };
     dnssec-validation no;
-}};
+};
 
-zone "dns.test" {{
+zone "dns.test" {
     type primary;
     file "/etc/bind/zones/db.dns.test";
-}};
+};
 
-zone "." {{
+zone "." {
     type forward;
-    {{{{FORWARDERS}}}}
+    {{FORWARDERS}}
     forward only;
-}};"#
-    );
+};"#
+    .to_string();
 
     bind9_config
         .as_file_mut()
@@ -297,11 +291,7 @@ backend.dns.test. IN A {backend_ip}
 "#
     );
 
-    std::fs::write(
-        zones_dir.path().join("db.dns.test"),
-        zone_file.as_bytes(),
-    )
-    .unwrap();
+    std::fs::write(zones_dir.path().join("db.dns.test"), zone_file.as_bytes()).unwrap();
 
     // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
@@ -365,10 +355,7 @@ backend.dns.test. IN A {backend_ip}
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    assert!(
-        success,
-        "Failed to proxy request with logical_dns opt-out"
-    );
+    assert!(success, "Failed to proxy request with logical_dns opt-out");
 
     ferron.stop().await.unwrap();
 }

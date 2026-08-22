@@ -152,7 +152,8 @@ async fn test_circuit_breaker_slow_start_config_accepted() {
     assert_eq!(response2.status(), reqwest::StatusCode::OK);
     let body2 = response2.text().await.unwrap();
     assert_eq!(
-        body2, "backend-ok",
+        body2,
+        "backend-ok",
         "Second request should go to backend-ok. Ferron logs:\n{}",
         ferron_logs(&ferron).await
     );
@@ -278,9 +279,9 @@ async fn test_circuit_breaker_slow_start_short_duration() {
 }
 
 async fn ferron_logs(ferron: &ContainerAsync<GenericImage>) -> String {
-    let stdout = String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default())
-        .unwrap_or_default();
-    let stderr = String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default())
-        .unwrap_or_default();
+    let stdout =
+        String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default();
+    let stderr =
+        String::from_utf8(ferron.stderr_to_vec().await.unwrap_or_default()).unwrap_or_default();
     format!("stdout:\n{stdout}\n\nstderr:\n{stderr}")
 }

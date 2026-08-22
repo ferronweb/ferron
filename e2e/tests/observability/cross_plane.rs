@@ -149,23 +149,21 @@ async fn test_control_plane_global_metadata_in_traces() {
         if let Ok(resp) = client.get(&received_url).send().await
             && resp.status().is_success()
             && let Ok(json) = resp.json::<serde_json::Value>().await
+            && let Some(spans) = json.get("spans").and_then(|v| v.as_array())
         {
-            if let Some(spans) = json.get("spans").and_then(|v| v.as_array()) {
-                for span in spans {
-                    if let Some(attrs) = span.get("attributes").and_then(|v| v.as_object()) {
-                        if attrs
-                            .get("ferron.control_plane.org_id")
-                            .and_then(|v| v.as_str())
-                            == Some("12345")
-                            && attrs
-                                .get("ferron.control_plane.team")
-                                .and_then(|v| v.as_str())
-                                == Some("platform")
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
+            for span in spans {
+                if let Some(attrs) = span.get("attributes").and_then(|v| v.as_object())
+                    && attrs
+                        .get("ferron.control_plane.org_id")
+                        .and_then(|v| v.as_str())
+                        == Some("12345")
+                    && attrs
+                        .get("ferron.control_plane.team")
+                        .and_then(|v| v.as_str())
+                        == Some("platform")
+                {
+                    found = true;
+                    break;
                 }
             }
         }
@@ -268,19 +266,17 @@ example.com:80 {
         if let Ok(resp) = client.get(&received_url).send().await
             && resp.status().is_success()
             && let Ok(json) = resp.json::<serde_json::Value>().await
+            && let Some(spans) = json.get("spans").and_then(|v| v.as_array())
         {
-            if let Some(spans) = json.get("spans").and_then(|v| v.as_array()) {
-                for span in spans {
-                    if let Some(attrs) = span.get("attributes").and_then(|v| v.as_object()) {
-                        if attrs
-                            .get("ferron.control_plane.org_id")
-                            .and_then(|v| v.as_str())
-                            == Some("host-specific")
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
+            for span in spans {
+                if let Some(attrs) = span.get("attributes").and_then(|v| v.as_object())
+                    && attrs
+                        .get("ferron.control_plane.org_id")
+                        .and_then(|v| v.as_str())
+                        == Some("host-specific")
+                {
+                    found = true;
+                    break;
                 }
             }
         }
@@ -377,13 +373,11 @@ async fn test_control_plane_span_links_in_traces() {
         if let Ok(resp) = client.get(&received_url).send().await
             && resp.status().is_success()
             && let Ok(json) = resp.json::<serde_json::Value>().await
+            && let Some(spans) = json.get("spans").and_then(|v| v.as_array())
+            && !spans.is_empty()
         {
-            if let Some(spans) = json.get("spans").and_then(|v| v.as_array()) {
-                if !spans.is_empty() {
-                    found = true;
-                    break;
-                }
-            }
+            found = true;
+            break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }

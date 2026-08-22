@@ -880,10 +880,9 @@ async fn test_acme_fallback_provider() {
     ferron_config
         .as_file_mut()
         .write_all(
-            format!(
-                r#"
-ferron-fallback {{
-  tls {{
+            r#"
+ferron-fallback {
+  tls {
     provider acme
     cache "/var/cache/ferron-acme"
     directory "https://nonexistent-acme-ca.example.com/directory"
@@ -891,16 +890,16 @@ ferron-fallback {{
     contact "admin@example.com"
     no_verification true
 
-    fallback {{
+    fallback {
       directory "https://pebble:14000/dir"
       contact "admin@example.com"
       no_verification true
-    }}
-  }}
+    }
+  }
   root "/var/www/ferron"
-}}
+}
 "#
-            )
+            .to_string()
             .as_bytes(),
         )
         .unwrap();
