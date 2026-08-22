@@ -759,16 +759,13 @@ async fn test_proxy_keepalive_metrics() {
     let client = reqwest::Client::new();
 
     // Send requests
-    let _ = client
-        .get(format!("http://localhost:{}/", port))
-        .send()
-        .await
-        .unwrap();
-    let _ = client
-        .get(format!("http://localhost:{}/", port))
-        .send()
-        .await
-        .unwrap();
+    for _ in 0..10 {
+        let _ = client
+            .get(format!("http://localhost:{}/", port))
+            .send()
+            .await
+            .unwrap();
+    }
 
     // Poll the Prometheus endpoint for metrics
     let metrics_url = format!("http://localhost:{}/metrics", metrics_port);
@@ -808,10 +805,7 @@ async fn test_hop_by_hop_headers_stripped() {
     // Send a request with hop-by-hop headers that should be stripped
     let response = ctx
         .client
-        .get(format!(
-            "{}/echo-header?name=keep-alive",
-            ctx.base_url
-        ))
+        .get(format!("{}/echo-header?name=keep-alive", ctx.base_url))
         .header("Keep-Alive", "timeout=5")
         .header("Connection", "keep-alive")
         .send()
