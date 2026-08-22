@@ -21,6 +21,9 @@ Ferron emits two log signals: **access logs** and **application logs**.
 
 Configure access logs per-host with the `log` directive. Configure application logs with the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal. The `error_log` directive is the file sink for the application log signal.
 
+> [!tip]
+> If log files are not written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
+
 ## Directives
 
 ### Access logging
@@ -199,23 +202,6 @@ The `json` formatter produces structured JSON records:
 
 > [!note]
 > The `error_format` directive is available for the `file` observability provider and the `error_log` shorthand. Console logs always use their native formatting based on the log level.
-
-### Console vs file vs OTLP
-
-The `format` directive (json/text) applies to **file and console** sinks. OTLP also uses a different mechanism:
-
-| Sink                         | Formatting directive                                                           | Configuration                           |
-| ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------- |
-| File (`provider file`)       | `format` (access) / `error_format` (application)                               | `observability { provider file }`       |
-| Console (`provider console`) | `format` (access only)                                                         | `observability { provider console }`    |
-| OTLP (`provider otlp`)       | `log_style modern` or `log_style legacy` (with `format json` or `format text`) | `observability { provider otlp }`       |
-| Prometheus                   | N/A (metrics only)                                                             | `observability { provider prometheus }` |
-
-> [!note]
-> Prometheus is metrics-only. It does not export logs. For log export, configure OTLP or use file/console sinks.
-
-> [!tip]
-> If log files are not written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
 
 ## Admin API structured logs
 
