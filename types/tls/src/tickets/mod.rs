@@ -480,7 +480,12 @@ pub fn load_ticket_keys(filename: &str) -> std::io::Result<Vec<TicketKeyComponen
     }
 
     let mut keys = Vec::new();
-    for (i, chunk) in data.as_chunks::<TICKET_KEY_RECORD_SIZE>().0.iter().enumerate() {
+    for (i, chunk) in data
+        .as_chunks::<TICKET_KEY_RECORD_SIZE>()
+        .0
+        .iter()
+        .enumerate()
+    {
         if keys.len() >= MAX_TICKET_KEYS {
             break;
         }
