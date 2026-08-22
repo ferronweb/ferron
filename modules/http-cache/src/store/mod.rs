@@ -82,7 +82,7 @@ fn build_candidate_keys(
 pub struct CacheStore {
     entries: Cache<String, StoredEntry, UnitWeighter, DefaultHashBuilder, StoreLifecycle>,
     base_key_entries: Arc<dashmap::DashMap<String, FxHashSet<String>, FxBuildHasher>>,
-    variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
+    variants_by_base: dashmap::DashMap<String, Arc<Vec<StoredVariant>>, RandomState>,
     max_entries: AtomicUsize,
     inflight: dashmap::DashMap<String, InflightEntry, FxBuildHasher>,
     active_locks: AtomicUsize,
@@ -315,7 +315,7 @@ impl CacheStore {
                 had_expired: false,
             };
         };
-        let variants = variants.value().clone();
+        let variants = Arc::clone(variants.value());
         let has_variants = true;
 
         let candidate_keys =
@@ -331,9 +331,9 @@ impl CacheStore {
                             LookupEntry {
                                 scope: entry.scope,
                                 status: entry.status,
-                                headers: entry.headers.clone(),
+                                headers: Arc::clone(&entry.headers),
                                 body: entry.body.clone(),
-                                lsc_cookies: entry.lsc_cookies.clone(),
+                                lsc_cookies: Arc::clone(&entry.lsc_cookies),
                                 age,
                                 etag: entry.etag.clone(),
                                 last_modified: entry.last_modified.clone(),
@@ -363,9 +363,9 @@ impl CacheStore {
                             LookupEntry {
                                 scope: entry.scope,
                                 status: entry.status,
-                                headers: entry.headers.clone(),
+                                headers: Arc::clone(&entry.headers),
                                 body: entry.body.clone(),
-                                lsc_cookies: entry.lsc_cookies.clone(),
+                                lsc_cookies: Arc::clone(&entry.lsc_cookies),
                                 age,
                                 etag: entry.etag.clone(),
                                 last_modified: entry.last_modified.clone(),
@@ -456,15 +456,16 @@ impl CacheStore {
             let mut variants = self
                 .variants_by_base
                 .entry(entry.base_key.clone())
-                .or_default();
+                .or_insert_with(|| Arc::new(Vec::new()));
             if !variants.contains(&variant) {
-                if variants.len() >= MAX_VARIANTS_PER_BASE {
+                let vec = Arc::make_mut(&mut *variants);
+                if vec.len() >= MAX_VARIANTS_PER_BASE {
                     // Bound variant cardinality per base: drop the oldest
                     // variant (front of the insertion-ordered Vec) before
                     // admitting a new one.
-                    variants.remove(0);
+                    vec.remove(0);
                 }
-                variants.push(variant);
+                vec.push(variant);
             }
         }
 
@@ -564,8 +565,11 @@ impl CacheStore {
         let mut entry = self.entries.get(cache_key)?;
         let mut new_headers = new_headers;
         strip_store_headers(&mut new_headers);
-        entry.headers.remove(header::SET_COOKIE);
-        merge_revalidation_headers(&mut entry.headers, new_headers);
+        {
+            let headers = Arc::make_mut(&mut entry.headers);
+            headers.remove(header::SET_COOKIE);
+            merge_revalidation_headers(headers, new_headers);
+        }
         entry.etag = entry.headers.get(header::ETAG).cloned();
         entry.last_modified = entry.headers.get(header::LAST_MODIFIED).cloned();
         entry.created_at = Instant::now();
@@ -592,7 +596,7 @@ impl CacheStore {
         if replaced.is_ok() {
             self.record_put(cache_key, &entry2);
         }
-        Some(entry.headers.clone())
+        Some((*entry.headers).clone())
     }
 
     /// Replay a restored `Put` record into the store. Returns `false` when
@@ -615,12 +619,13 @@ impl CacheStore {
         let mut variants = self
             .variants_by_base
             .entry(entry.base_key.clone())
-            .or_default();
+            .or_insert_with(|| Arc::new(Vec::new()));
         if !variants.contains(&variant) {
-            if variants.len() >= MAX_VARIANTS_PER_BASE {
-                variants.remove(0);
+            let vec = Arc::make_mut(&mut *variants);
+            if vec.len() >= MAX_VARIANTS_PER_BASE {
+                vec.remove(0);
             }
-            variants.push(variant);
+            vec.push(variant);
         }
 
         entry.access_at = 0;

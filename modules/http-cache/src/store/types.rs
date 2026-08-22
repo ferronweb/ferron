@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -32,9 +33,9 @@ pub struct StoredEntry {
     pub base_key: String,
     pub vary: VaryRule,
     pub status: StatusCode,
-    pub headers: HeaderMap,
+    pub headers: Arc<HeaderMap>,
     pub body: Option<Bytes>,
-    pub lsc_cookies: Vec<HeaderValue>,
+    pub lsc_cookies: Arc<Vec<HeaderValue>>,
     pub created_at: Instant,
     pub ttl: Duration,
     pub access_at: u64,
@@ -53,9 +54,9 @@ pub struct StoredEntry {
 pub struct LookupEntry {
     pub scope: CacheScope,
     pub status: StatusCode,
-    pub headers: HeaderMap,
+    pub headers: Arc<HeaderMap>,
     pub body: Option<Bytes>,
-    pub lsc_cookies: Vec<HeaderValue>,
+    pub lsc_cookies: Arc<Vec<HeaderValue>>,
     pub age: Duration,
     pub etag: Option<HeaderValue>,
     pub last_modified: Option<HeaderValue>,

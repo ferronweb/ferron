@@ -52,13 +52,15 @@ pub(super) fn serve(
             .boxed_unsync()
     });
     *response.status_mut() = entry.status;
-    let mut headers = entry.headers.clone();
+    // Stored headers are pre-cleaned at insert (hop-by-hop and Set-Cookie
+    // stripped), but keep the header hygiene per hit for safety with older
+    // persisted entries or test-constructed entries. The clone is now a
+    // single Arc deref clone instead of two deep HeaderMap clones.
+    let mut headers = (*entry.headers).clone();
     remove_hop_by_hop_headers(&mut headers);
     headers.remove(&LS_CACHE);
     headers.remove(header::AGE);
     headers.remove(CACHE_STATUS_HEADER);
-    // Never replay a stored `Set-Cookie` verbatim: a cached hit must only
-    // rehydrate cookies tracked separately in `lsc_cookies`.
     headers.remove(header::SET_COOKIE);
     if !matches!(state, ServedState::Revalidated) {
         append_lsc_cookies_as_set_cookie(&mut headers, &entry.lsc_cookies);
@@ -107,7 +109,7 @@ pub(super) fn serve_not_modified(
             .boxed_unsync(),
     );
     *response.status_mut() = StatusCode::NOT_MODIFIED;
-    let mut headers = entry.headers.clone();
+    let mut headers = (*entry.headers).clone();
     remove_hop_by_hop_headers(&mut headers);
     headers.remove(&LS_CACHE);
     headers.remove(header::AGE);
@@ -137,9 +139,9 @@ mod tests {
         LookupEntry {
             scope: CacheScope::Public,
             status: StatusCode::OK,
-            headers: HeaderMap::new(),
+            headers: std::sync::Arc::new(HeaderMap::new()),
             body: Some(Bytes::from_static(b"hello")),
-            lsc_cookies: Vec::new(),
+            lsc_cookies: std::sync::Arc::new(Vec::new()),
             age: Duration::from_secs(5),
             etag: None,
             last_modified: None,
@@ -223,13 +225,9 @@ mod tests {
     #[test]
     fn serve_strips_internal_headers() {
         let mut entry = test_entry();
-        entry
-            .headers
-            .insert(&LS_CACHE, HeaderValue::from_static("hit"));
-        entry
-            .headers
-            .insert(header::AGE, HeaderValue::from_static("5"));
-        entry.headers.insert(
+        std::sync::Arc::make_mut(&mut entry.headers).insert(&LS_CACHE, HeaderValue::from_static("hit"));
+        std::sync::Arc::make_mut(&mut entry.headers).insert(header::AGE, HeaderValue::from_static("5"));
+        std::sync::Arc::make_mut(&mut entry.headers).insert(
             CACHE_STATUS_HEADER,
             HeaderValue::from_static("FerronCache; hit"),
         );
@@ -245,19 +243,16 @@ mod tests {
     #[test]
     fn serve_strips_hop_by_hop_headers_and_connection_named_fields() {
         let mut entry = test_entry();
-        entry
-            .headers
-            .insert(header::CONNECTION, HeaderValue::from_static("X-Custom"));
-        entry.headers.insert(
+        std::sync::Arc::make_mut(&mut entry.headers).insert(header::CONNECTION, HeaderValue::from_static("X-Custom"));
+        std::sync::Arc::make_mut(&mut entry.headers).insert(
             "X-Custom".parse::<HeaderName>().unwrap(),
             HeaderValue::from_static("1"),
         );
-        entry.headers.insert(
+        std::sync::Arc::make_mut(&mut entry.headers).insert(
             header::TRANSFER_ENCODING,
             HeaderValue::from_static("chunked"),
         );
-        entry
-            .headers
+        std::sync::Arc::make_mut(&mut entry.headers)
             .insert(header::UPGRADE, HeaderValue::from_static("websocket"));
         let response = serve(entry, ServedState::Hit, false, false).unwrap();
         assert!(response.headers().get(header::CONNECTION).is_none());
@@ -269,11 +264,11 @@ mod tests {
     #[test]
     fn serve_never_replays_set_cookie_but_rehydrates_lsc_cookies() {
         let mut entry = test_entry();
-        entry.headers.insert(
+        std::sync::Arc::make_mut(&mut entry.headers).insert(
             header::SET_COOKIE,
             HeaderValue::from_static("origin_session=stale"),
         );
-        entry.lsc_cookies = vec![HeaderValue::from_static("ferron_session=abc")];
+        entry.lsc_cookies = std::sync::Arc::new(vec![HeaderValue::from_static("ferron_session=abc")]);
         let response = serve(entry, ServedState::Hit, false, false).unwrap();
         let set_cookies: Vec<_> = response
             .headers()

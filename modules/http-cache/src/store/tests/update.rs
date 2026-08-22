@@ -160,8 +160,7 @@ fn update_entry_headers_replaces_not_appends_field_values() {
         "body",
         VaryRule::default(),
     );
-    entry
-        .headers
+    std::sync::Arc::make_mut(&mut entry.headers)
         .append(CACHE_CONTROL, HeaderValue::from_static("max-age=999"));
     store.insert_with_request(entry, None, &headers, &cookies);
 

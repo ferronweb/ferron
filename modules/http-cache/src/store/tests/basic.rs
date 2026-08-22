@@ -435,8 +435,8 @@ fn stored_entry_keeps_lsc_cookies_but_drops_origin_set_cookie() {
         "cached-body",
         VaryRule::default(),
     );
-    entry.headers = upstream_headers;
-    entry.lsc_cookies = lsc_cookies;
+    entry.headers = std::sync::Arc::new(upstream_headers);
+    entry.lsc_cookies = std::sync::Arc::new(lsc_cookies);
     store.insert_with_request(entry, Some("user=1"), &headers, &cookies);
 
     let LookupOutcome { entry: lookup, .. } =

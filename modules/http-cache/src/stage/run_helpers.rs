@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use bytes::Bytes;
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header;
@@ -303,7 +304,7 @@ pub(super) async fn run_forward(
                 ctx.res = Some(if client_conditionals_match {
                     HttpResponse::Custom(serve_not_modified(entry, config.emit_litespeed_headers)?)
                 } else if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+                    HttpResponse::BuiltinError(entry.status.as_u16(), Some((*entry.headers).clone()))
                 } else {
                     HttpResponse::Custom(serve(
                         entry,
@@ -382,7 +383,7 @@ pub(super) async fn run_forward(
                         ctx.res = Some(if entry.body.is_none() {
                             HttpResponse::BuiltinError(
                                 entry.status.as_u16(),
-                                Some(entry.headers.clone()),
+                                Some((*entry.headers).clone()),
                             )
                         } else {
                             HttpResponse::Custom(serve(
@@ -570,7 +571,7 @@ pub(super) async fn run_inverse_handler(
             if inflight_key.is_none() {
                 emit_eviction_metrics(ctx, &state.zone_id, *stats);
                 ctx.res = Some(if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some(entry.headers.clone()))
+                    HttpResponse::BuiltinError(entry.status.as_u16(), Some((*entry.headers).clone()))
                 } else {
                     HttpResponse::Custom(serve(
                         (**entry).clone(),
@@ -649,13 +650,13 @@ pub(super) async fn run_inverse_handler(
             ) {
                 fresh_headers = new_fresh_headers;
             } else {
-                let mut new_fresh_headers = cached_entry.headers.clone();
+                let mut new_fresh_headers = (*cached_entry.headers).clone();
                 merge_revalidation_headers(&mut new_fresh_headers, fresh_headers);
                 fresh_headers = new_fresh_headers;
             }
 
             let mut entry = (**cached_entry).clone();
-            entry.headers = fresh_headers;
+            entry.headers = Arc::new(fresh_headers);
             let response_200 = serve(
                 entry,
                 ServedState::Revalidated,
@@ -874,9 +875,9 @@ pub(super) async fn run_inverse_handler(
                     base_key: state.base_key.clone(),
                     vary: vary_rule_cloned,
                     status,
-                    headers: stored_headers,
+                    headers: Arc::new(stored_headers),
                     body: body_bytes,
-                    lsc_cookies: lsc_cookies.clone(),
+                    lsc_cookies: Arc::new(lsc_cookies.clone()),
                     created_at: std::time::Instant::now(),
                     ttl: decision
                         .ttl

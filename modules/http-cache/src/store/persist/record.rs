@@ -20,6 +20,7 @@
 //! there), but a checksum mismatch or implausible length field inside the
 //! file is reported as corruption.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -80,13 +81,13 @@ pub fn encode_delete(key: &str) -> Vec<u8> {
 /// the in-memory mutation queue rather than the true serialized length.
 pub fn estimate_entry_bytes(entry: &StoredEntry) -> usize {
     let mut size = 2 + entry.base_key.len() + 256;
-    for (name, value) in &entry.headers {
+    for (name, value) in &*entry.headers {
         size += 1 + name.as_str().len() + 2 + value.len();
     }
     if let Some(body) = &entry.body {
         size += body.len();
     }
-    for cookie in &entry.lsc_cookies {
+    for cookie in &*entry.lsc_cookies {
         size += cookie.len();
     }
     for tag in &entry.tags {
@@ -208,7 +209,7 @@ fn encode_entry_payload(out: &mut Vec<u8>, key: &str, entry: &StoredEntry) {
     });
     put_u16(out, entry.status.as_u16());
     put_u16(out, entry.headers.len() as u16);
-    for (name, value) in &entry.headers {
+    for (name, value) in &*entry.headers {
         put_name(out, name);
         put_bytes(out, value.as_bytes());
     }
@@ -298,9 +299,9 @@ fn decode_entry(dec: &mut Decoder<'_>) -> Result<StoredEntry, DecodeError> {
         base_key,
         vary,
         status,
-        headers,
+        headers: Arc::new(headers),
         body,
-        lsc_cookies: Vec::new(),
+        lsc_cookies: Arc::new(Vec::new()),
         created_at,
         ttl,
         access_at,
@@ -575,12 +576,12 @@ mod tests {
             base_key: "https://example.com/page?q=1".to_string(),
             vary,
             status: http::StatusCode::OK,
-            headers,
+            headers: std::sync::Arc::new(headers),
             body: Some(Bytes::from_static(b"response body bytes")),
-            lsc_cookies: vec![
+            lsc_cookies: std::sync::Arc::new(vec![
                 HeaderValue::from_static("lsc-cookie=1"),
                 HeaderValue::from_static("lsc-cookie=2"),
-            ],
+            ]),
             created_at: std::time::Instant::now() - Duration::from_secs(42),
             ttl: Duration::from_secs(3600),
             access_at: 7,
