@@ -421,7 +421,9 @@ pub async fn establish_and_send(
                 .await
             }
             #[cfg(not(unix))]
-            unreachable!()
+            {
+                unreachable!()
+            }
         } else {
             // Use pre-resolved IP from connect_to if available, otherwise parse from proxy_url
             let addr = if let Some(ct) = &upstream.connect_to {
