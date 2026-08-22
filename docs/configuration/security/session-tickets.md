@@ -151,22 +151,6 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 - **Do not rotate all keys at once**: keep old keys for overlap during rotation
 - **Do not commit keys to version control**: add to `.gitignore`
 
-## Debugging
-
-Enable debug logging to see ticket key events:
-
-```bash
-ferron run --verbose
-```
-
-You should see messages like:
-
-```text
-Generating initial ticket keys at /path/to/session_tickets.keys (3 keys)
-Loaded 3 ticket keys from /path/to/session_tickets.keys (rotation interval: 12h)
-TLS session ticket keys rotated successfully
-```
-
 ## See also
 
 - [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
