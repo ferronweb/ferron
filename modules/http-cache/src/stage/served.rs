@@ -225,8 +225,10 @@ mod tests {
     #[test]
     fn serve_strips_internal_headers() {
         let mut entry = test_entry();
-        std::sync::Arc::make_mut(&mut entry.headers).insert(&LS_CACHE, HeaderValue::from_static("hit"));
-        std::sync::Arc::make_mut(&mut entry.headers).insert(header::AGE, HeaderValue::from_static("5"));
+        std::sync::Arc::make_mut(&mut entry.headers)
+            .insert(&LS_CACHE, HeaderValue::from_static("hit"));
+        std::sync::Arc::make_mut(&mut entry.headers)
+            .insert(header::AGE, HeaderValue::from_static("5"));
         std::sync::Arc::make_mut(&mut entry.headers).insert(
             CACHE_STATUS_HEADER,
             HeaderValue::from_static("FerronCache; hit"),
@@ -243,7 +245,8 @@ mod tests {
     #[test]
     fn serve_strips_hop_by_hop_headers_and_connection_named_fields() {
         let mut entry = test_entry();
-        std::sync::Arc::make_mut(&mut entry.headers).insert(header::CONNECTION, HeaderValue::from_static("X-Custom"));
+        std::sync::Arc::make_mut(&mut entry.headers)
+            .insert(header::CONNECTION, HeaderValue::from_static("X-Custom"));
         std::sync::Arc::make_mut(&mut entry.headers).insert(
             "X-Custom".parse::<HeaderName>().unwrap(),
             HeaderValue::from_static("1"),
@@ -268,7 +271,8 @@ mod tests {
             header::SET_COOKIE,
             HeaderValue::from_static("origin_session=stale"),
         );
-        entry.lsc_cookies = std::sync::Arc::new(vec![HeaderValue::from_static("ferron_session=abc")]);
+        entry.lsc_cookies =
+            std::sync::Arc::new(vec![HeaderValue::from_static("ferron_session=abc")]);
         let response = serve(entry, ServedState::Hit, false, false).unwrap();
         let set_cookies: Vec<_> = response
             .headers()

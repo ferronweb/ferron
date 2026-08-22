@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use bytes::Bytes;
 use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header;
 use http::{HeaderMap, Method, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
+use std::sync::Arc;
 
 use ferron_core::pipeline::PipelineError;
 use ferron_http::{HttpContext, HttpResponse};
@@ -304,7 +304,10 @@ pub(super) async fn run_forward(
                 ctx.res = Some(if client_conditionals_match {
                     HttpResponse::Custom(serve_not_modified(entry, config.emit_litespeed_headers)?)
                 } else if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some((*entry.headers).clone()))
+                    HttpResponse::BuiltinError(
+                        entry.status.as_u16(),
+                        Some((*entry.headers).clone()),
+                    )
                 } else {
                     HttpResponse::Custom(serve(
                         entry,
@@ -571,7 +574,10 @@ pub(super) async fn run_inverse_handler(
             if inflight_key.is_none() {
                 emit_eviction_metrics(ctx, &state.zone_id, *stats);
                 ctx.res = Some(if entry.body.is_none() {
-                    HttpResponse::BuiltinError(entry.status.as_u16(), Some((*entry.headers).clone()))
+                    HttpResponse::BuiltinError(
+                        entry.status.as_u16(),
+                        Some((*entry.headers).clone()),
+                    )
                 } else {
                     HttpResponse::Custom(serve(
                         (**entry).clone(),
